@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:orientation="vertical"
+    android:layout_height="match_parent">
+    <TextView
+        android:id="@+id/tv_printTitle"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/dp_40dp"
+        android:gravity="center"
+        android:textStyle="bold"
+        android:text="选择打印机设备"/>
+    <ListView
+        android:layout_marginTop="@dimen/dp_10dp"
+        android:id="@+id/lv_printUsb"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout>

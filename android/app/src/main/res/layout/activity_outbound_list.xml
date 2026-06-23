@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:binding="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+    <data>
+        <variable
+            name="entrity"
+            type="com.xinchen.allInOne.entity.SerialPortEntrity" />
+
+        <variable
+            name="viewModel"
+            type="com.xinchen.allInOne.ui.cSOutStorage.OutboundListModel" />
+    </data>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/white"
+        android:orientation="vertical">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:background="@mipmap/login_bg"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            tools:context="com.xinchen.allInOne.ui.inStorageMange.TransferActivity">
+            <include layout="@layout/include_title"
+                binding:backClick="@{viewModel.backClick}"
+                binding:entrity="@{entrity}"
+                />
+            <RadioGroup
+                android:id="@+id/rg_storageData"
+                android:layout_marginLeft="@dimen/dp_140dp"
+                android:layout_marginRight="@dimen/dp_140dp"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_45dp"
+                android:orientation="horizontal">
+                <RadioButton
+                    android:id="@+id/rb_batchOutbound"
+                    android:layout_margin="@dimen/dp_9dp"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:textColor="@color/white"
+                    android:layout_height="match_parent"
+                    android:button="@null"
+                    android:textSize="@dimen/sp_10"
+                    android:gravity="center"
+                    android:background="@drawable/selector_page_button02"
+                    android:text="批量出库"/>
+                <RadioButton
+                    android:textSize="@dimen/sp_9"
+                    android:id="@+id/rb_scanOutbound"
+                    android:layout_margin="@dimen/dp_10dp"
+                    android:textColor="@color/white"
+                    android:gravity="center"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="match_parent"
+                    android:button="@null"
+                    android:background="@drawable/selector_page_button02"
+                    android:text="单个扫描出库"/>
+            </RadioGroup>
+            <FrameLayout
+                android:id="@+id/frameLayout"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_1dp"
+                android:background="#F0F0F0" />
+        </LinearLayout>
+
+
+
+    </LinearLayout>
+
+</layout>

@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="prints">
+        <item>粗略信息</item>
+        <item>详细信息</item>
+        <item>进出油记录</item>
+        <item>存油记录</item>
+        <item>交班记录</item>
+        <item>测漏记录</item>
+    </string-array>     
+    <string-array name="data_manager">
+        <item>清空报警记录</item>
+        <item>清空进出油记录</item>
+        <item>清空温度记录</item>
+        <item>清空存油记录</item>
+        <item>清空交班记录</item>
+        <item>清空测漏记录</item>
+        <item>清空所有记录</item>
+    </string-array>
+
+    <string-array name="data_service">
+        <item>保存配置信息到云端</item>
+        <item>从云端读取配置信息</item>
+        <item>保存到U盘</item>
+        <item>从U盘读取数据</item>
+    </string-array>
+
+    <string-array name="set_array">
+        <item>权限管理</item>
+        <item>油罐设置</item>
+        <item>罐表设置</item>
+        <item>油气探测</item>
+        <item>用户管理</item>
+        <item>探针设置</item>
+        <item>罐表生成</item>
+        <item>数据管理</item>
+        <item>系统设置</item>
+        <item>关于我们</item>
+        <item>防溢阀管理</item>
+        <item>短信管理</item>
+    </string-array>
+    <!-- 探针类型 -->
+    <string-array name="probeTypeArray">
+        <item>SASEN</item>
+        <item>CZ-GR</item><!--北京仪通-->
+        <item>Censtar</item>
+        <item>北京航天</item>
+        <item>柔性探针2</item>
+        <item>北京雷达</item>
+        <item>北京雷达2</item>
+
+    </string-array>
+
+    <!-- 油罐类型 -->
+    <string-array name="oiltypeArray">
+        <item>未设置类型</item>
+        <item>89#</item>
+        <item>90#</item>
+        <item>92#</item>
+        <item>93#</item>
+        <item>95#</item>
+        <item>97#</item>
+        <item>98#</item>
+        <item>甲苯</item>
+        <item>乙酸</item>
+        <item>乙酯</item>
+        <item>0#</item>
+        <item>-5#</item>
+        <item>-10#</item>
+        <item>-15#</item>
+        <item>-20#</item>
+        <item>-25#</item>
+        <item>-30#</item>
+        <item>-35#</item>
+        <item>-40#</item>
+        <item>-45#</item>
+    </string-array>
+
+    <string-array name="oilcanArray">
+        <item>1号油罐</item>
+        <item>2号油罐</item>
+        <item>3号油罐</item>
+        <item>4号油罐</item>
+        <item>5号油罐</item>
+        <item>6号油罐</item>
+        <item>7号油罐</item>
+        <item>8号油罐</item>
+        <item>9号油罐</item>
+        <item>10号油罐</item>
+        <item>11号油罐</item>
+        <item>12号油罐</item>
+        <item>13号油罐</item>
+        <item>14号油罐</item>
+        <item>15号油罐</item>
+        <item>16号油罐</item>
+    </string-array>
+
+    <string-array name="oilcanTableArray">
+        <item>1号罐表</item>
+        <item>2号罐表</item>
+        <item>3号罐表</item>
+        <item>4号罐表</item>
+        <item>5号罐表</item>
+        <item>6号罐表</item>
+        <item>7号罐表</item>
+        <item>8号罐表</item>
+        <item>9号罐表</item>
+        <item>10号罐表</item>
+        <item>11号罐表</item>
+        <item>12号罐表</item>
+        <item>13号罐表</item>
+        <item>14号罐表</item>
+        <item>15号罐表</item>
+        <item>16号罐表</item>
+    </string-array>
+
+    <string-array name="oilcanSetArray">
+        <item>1号油罐设置表</item>
+        <item>2号油罐设置表</item>
+        <item>3号油罐设置表</item>
+        <item>4号油罐设置表</item>
+        <item>5号油罐设置表</item>
+        <item>6号油罐设置表</item>
+        <item>7号油罐设置表</item>
+        <item>8号油罐设置表</item>
+        <item>9号油罐设置表</item>
+        <item>10号油罐设置表</item>
+        <item>11号油罐设置表</item>
+        <item>12号油罐设置表</item>
+        <item>13号油罐设置表</item>
+        <item>14号油罐设置表</item>
+        <item>15号油罐设置表</item>
+        <item>16号油罐设置表</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>油品</item>
+        <item>油位</item>
+        <item>体积</item>
+        <item>重量</item>
+        <item>空油量</item>
+        <item>水位</item>
+        <item>水体积</item>
+        <item>温度</item>
+    </string-array>
+
+    <string-array name="oilCurItem">
+        <item>油品</item>
+        <item>油位</item>
+        <item>油体积</item>
+        <item>存油重量</item>
+        <item>温度</item>
+    </string-array>
+    <string-array name="mqttAddress">
+        <item>服务器01</item>
+        <item>服务器02</item>
+    </string-array>
+
+
+</resources>

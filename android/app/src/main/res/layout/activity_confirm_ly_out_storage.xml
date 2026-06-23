@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:binding="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+        <import type="com.xinchen.allInOne.utils.TypeUtils"/>
+        <variable
+            name="viewModel"
+            type="com.xinchen.allInOne.ui.outStorageManage.ConfirmLYOutStorageModel" />
+        <variable
+            name="entrity"
+            type="com.xinchen.allInOne.entity.SerialPortEntrity" />
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@mipmap/login_bg"
+        android:orientation="vertical"
+        tools:context="com.xinchen.allInOne.ui.outStorageManage.ConfirmLYOutStorageActivity">
+        <include layout="@layout/include_title"
+            binding:backClick="@{viewModel.backClick}"
+            binding:entrity="@{entrity}"
+            />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:layout_weight="1">
+            <LinearLayout
+                android:layout_marginRight="@dimen/dp_40dp"
+                android:layout_marginLeft="@dimen/dp_40dp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_height="wrap_content">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物名称:   ` +viewModel.wasteData.wasteName}"
+                    android:gravity="center_vertical"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物类别:   ` +viewModel.wasteData.wasteType}"
+                    android:gravity="center_vertical"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物代码:   ` +viewModel.wasteData.wasteCode}"
+                    android:gravity="center_vertical"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物数量:   ` +viewModel.labelNumber}"
+                    android:gravity="center_vertical"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物重量(Kg):   ` +viewModel.labelWeight}"
+                    android:gravity="center_vertical"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+            </LinearLayout>
+         <!--   <LinearLayout
+                android:background="@color/black"
+                android:layout_width="0dp"
+                android:layout_height="@dimen/dp_200dp"
+                android:layout_marginLeft="@dimen/dp_40dp"
+                android:layout_marginRight="@dimen/dp_40dp"
+                android:layout_weight="1"
+                android:gravity="left"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/dp_50dp"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:text="利用处置设施编码: "
+                        android:textColor="@color/white"
+                        android:textSize="@dimen/sp_10" />
+
+                    <Spinner
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/dp_25dp"
+                        android:background="@drawable/rc_1357bc_4"
+                        android:prompt="@string/choose_warehouse"
+                        android:theme="@style/warehouse_spinner"
+                        binding:itemDatas="@{viewModel.facilityName}"
+                        binding:onItemSelectedCommand="@{viewModel.onSelectorCommand}" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_50dp"
+                    android:gravity="left"
+                    android:text="@{`利用处置设施编码:  ` +viewModel.Entity.facilityCode}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_50dp"
+                    android:gravity="left"
+                    android:text="@{`利用处置设施类型:  ` +TypeUtils.ChuZhiType(viewModel.Entity.type)}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_50dp"
+                    android:gravity="left"
+                    android:text="@{`利用处置方式:  ` +viewModel.Entity.useOrDisposalMethod}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+            </LinearLayout>-->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="@dimen/dp_40dp"
+                android:layout_marginRight="@dimen/dp_40dp"
+                android:layout_weight="1"
+                android:gravity="left"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_7dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:text="利用处置设施: "
+                        android:textColor="@color/white"
+                        android:textSize="@dimen/sp_10" />
+
+                    <Spinner
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/dp_20dp"
+                        android:background="@drawable/rc_1357bc_4"
+                        android:prompt="@string/choose_warehouse"
+                        android:theme="@style/warehouse_spinner"
+                        binding:itemDatas="@{viewModel.facilityName}"
+                        android:popupBackground="@color/color_1357BC"
+                        binding:onItemSelectedCommand="@{viewModel.onSelectorCommand}" />
+                </LinearLayout>
+
+                <TextView
+
+                    android:layout_marginTop="@dimen/dp_10dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:gravity="left"
+                    android:text="@{`利用处置设施编码:  ` +viewModel.Entity.facilityCode}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:gravity="left"
+                    android:text="@{`设施类型:  ` +TypeUtils.ChuZhiType(viewModel.Entity.type)}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:gravity="left"
+                    android:text="@{`利用处置方式:  ` +viewModel.Entity.useOrDisposalMethod}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+            </LinearLayout>
+        </LinearLayout>
+        <TextView
+            android:layout_marginTop="@dimen/dp_10dp"
+            android:layout_marginBottom="@dimen/dp_20dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_width="@dimen/dp_100dp"
+            android:layout_height="@dimen/dp_24dp"
+            android:text="确认出库"
+            binding:onClickCommand="@{viewModel.nextPage}"
+            android:gravity="center"
+            android:textColor="@color/white"
+            android:background="@drawable/rc_2291ff_4"
+            android:textSize="@dimen/sp_10"
+            />
+    </LinearLayout>
+</layout>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:binding="http://schemas.android.com/apk/res-auto">
+
+    <data>
+
+        <import type="com.xinchen.allInOne.ui.recycleModel.SanOutboundListRecycleViewModel" />
+
+        <import type="com.xinchen.allInOne.utils.StringUtil" />
+
+        <variable
+            name="viewModel"
+            type="com.xinchen.allInOne.ui.recycleModel.SanOutboundListRecycleViewModel" />
+
+
+    </data>
+
+    <LinearLayout
+        android:id="@+id/ly_inStorageBackground"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/dp_23dp"
+        android:background="@{viewModel.isBackground ?@color/color_2291FF :@color/transform}"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:gravity="center"
+            android:text="@{StringUtil.ellipsize(viewModel.entity.getQrCode)}"
+            android:textColor="#ffffffff"
+            android:textSize="@dimen/sp_6" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@{viewModel.entity.wasteName}"
+            android:textColor="#ffffffff"
+            android:textSize="@dimen/sp_6" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@{viewModel.entity.wasteType}"
+            android:textColor="#ffffffff"
+            android:textSize="@dimen/sp_6" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@{viewModel.entity.wasteCode}"
+            android:textColor="#ffffffff"
+            android:textSize="@dimen/sp_6" />
+
+        <TextView
+
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@{String.valueOf(viewModel.entity.weight)}"
+            android:textColor="#ffffffff"
+            android:textSize="@dimen/sp_6" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="@{viewModel.entity.createdAt}"
+            android:textColor="#ffffffff"
+            android:textSize="@dimen/sp_6" />
+    </LinearLayout>
+</layout>

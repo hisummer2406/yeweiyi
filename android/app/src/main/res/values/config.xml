@@ -1,0 +1,6 @@
+<resources>
+    <string name="apkurl">http://203.171.228.177:8080/SanSenLPL/SanSen/YeWeiYi/Update/update.xml</string>
+	<string name="baseinfo">http://203.171.228.177:8080/SanSenLPL/SanSen/BaseInfo/baseInfo.xml</string>
+	<string name="android_phone_qrcode"></string>
+	<string name="last_user">lastuser</string>
+</resources>

@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:binding="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+        <variable
+            name="viewModel"
+            type="com.xinchen.allInOne.ui.outStorageManage.ConfirmWWOutStorageModel" />
+        <variable
+            name="entrity"
+            type="com.xinchen.allInOne.entity.SerialPortEntrity" />
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@mipmap/login_bg"
+        android:orientation="vertical"
+        tools:context="com.xinchen.allInOne.ui.inStorageMange.ConfirmInStorageActivity">
+        <include layout="@layout/include_title"
+            binding:backClick="@{viewModel.backClick}"
+            binding:entrity="@{entrity}"
+            />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_gravity="center"
+            android:layout_height="@dimen/dp_50dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:layout_width="@dimen/dp_100dp"
+                android:layout_height="@dimen/dp_20dp"
+                android:background="@drawable/selector_button"
+                android:text="省内转移"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_10"
+                app:setSelected="@{viewModel.isSelect}"
+                binding:onClickCommand="@{viewModel.SNOutStorageClick}" />
+
+            <Button
+
+                binding:onClickCommand="@{viewModel.KSOutStorageClick}"
+                android:layout_width="@dimen/dp_100dp"
+                android:background="@drawable/selector_button"
+                app:setSelected="@{!viewModel.isSelect}"
+                android:layout_height="@dimen/dp_20dp"
+                android:textSize="@dimen/sp_10"
+                android:textColor="@color/white"
+                android:text="跨省转移"/>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:orientation="horizontal"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:layout_marginRight="@dimen/dp_40dp"
+                android:layout_gravity="center_vertical"
+                android:gravity="left"
+                android:layout_marginLeft="@dimen/dp_40dp"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_height="@dimen/dp_200dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|right"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物名称:   ` +viewModel.wasteData.wasteName}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10" />
+
+                <TextView
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物类别:   ` +viewModel.wasteData.wasteType}"
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|right"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物代码:   ` +viewModel.wasteData.wasteCode}"
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|right"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|right"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物数量:   ` +viewModel.labelNumber}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|right"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{`废物重量:   ` +viewModel.labelWeight}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+            </LinearLayout>
+            <LinearLayout
+                android:layout_gravity="center_vertical"
+
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_height="@dimen/dp_200dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:orientation="horizontal"
+                    >
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:text="车卡号:   "
+                        android:textSize="@dimen/sp_10"
+                        android:textColor="@color/white"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:gravity="center_vertical|left"
+                        android:layout_height="@dimen/dp_30dp"
+                        android:text="@{viewModel.carCard==null ? @string/scan_car : viewModel.carCard}"
+                        android:textColor="@color/white"
+                        android:textSize="@dimen/sp_10"
+                        />
+                </LinearLayout>
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:orientation="horizontal"
+                    >
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:text="车牌号:   "
+                        android:textSize="@dimen/sp_10"
+                        android:textColor="@color/white"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/dp_20dp"
+                        android:gravity="center_vertical|left"
+
+                        android:textColor="@color/white"
+                        android:text="@{viewModel.cardData.carNumber==null ? @string/scan_car : viewModel.cardData.carNumber}"
+                        android:textSize="@dimen/sp_10"
+                         />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|left"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{@string/sj_name +(viewModel.cardData.driverName==null ? @string/scan_car : viewModel.cardData.driverName)}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|left"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{@string/ys_unit +(viewModel.cardData.ysName==null ? @string/scan_car : viewModel.cardData.ysName)}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    >
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical"
+                        android:text="@string/cz_unit"
+                        android:textSize="@dimen/sp_10"
+                        android:textColor="@color/white"/>
+
+                    <Spinner
+                        android:layout_marginTop="@dimen/dp_2dp"
+                        binding:onItemSelectedCommand="@{viewModel.onCzUnitCommand}"
+                        binding:itemDatas="@{viewModel.CzUnitData}"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="match_parent"
+                        android:text="请选择"
+                        android:theme="@style/warehouse_spinner"
+                        android:background="@drawable/rc_1357bc_4"
+                        android:popupBackground="@color/color_1357BC"
+                        />
+                </LinearLayout>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:gravity="center_vertical|left"
+                    android:layout_height="@dimen/dp_30dp"
+                    android:text="@{@string/xuke_code +viewModel.xuKeCode}"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    />
+            </LinearLayout>
+        </LinearLayout>
+        <Button
+            android:layout_marginTop="@dimen/dp_10dp"
+            android:layout_marginBottom="@dimen/dp_20dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_width="@dimen/dp_100dp"
+            android:layout_height="@dimen/dp_24dp"
+            android:text="确认出库"
+            binding:onClickCommand="@{viewModel.outStorage}"
+            android:gravity="center"
+            android:textColor="@color/white"
+            android:enabled="@{viewModel.btnOutStorage}"
+            android:background="@drawable/selector_button01"
+            android:textSize="@dimen/sp_10"
+            />
+    </LinearLayout>
+</layout>

@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>-
+    <string-array name="prints">
+        <item>ข้อมูลคร่าว</item>
+        <item>รายละเอียดข้อมูล</item>
+        <item>บันทึกน้ำมันเข้าออก</item>
+        <item>บันทึกน้ำมันคงเหลือ</item>
+        <item>บันทึกการเปลี่ยนเวร</item>
+        <item>บันทึกการรั่วไหลด้านข้าง</item>
+    </string-array>
+    <string-array name="data_manager">
+        <item>ลบการบันทึกแจ้งเตือน</item>
+        <item>ลบการบันทึกน้ำมันเข้าออก</item>
+        <item>ลบการบันทึกอุณหภูมิ</item>
+        <item>ลบการบันทึกน้ำมันคงเหลือ</item>
+        <item>ลบการบันทึกเปลี่ยนเวร</item>
+        <item>ลบการบันทึกรั่วไหลด้านข้าง</item>
+        <item>ลบการบันทึกทั้งหมด</item>
+    </string-array>
+    -
+    <string-array name="data_service">
+        <item>บันทึกข้อข้อกำหนดค่าที่คลาวด์</item>
+        <item>อ่านข้อข้อกำหนดค่าจากคลาวด์</item>
+        <item>บันทึกที่USB</item>
+        <item>อ่านข้อมูลจากUSB</item>
+    </string-array>
+    -
+    <string-array name="set_array">
+        <item>บริหารสิทธิ</item>
+        <item>ตั้งค่าถังน้ำมัน</item>
+        <item>ตั้งค่าตารางถัง</item>
+        <item>ตรวจสอบน้ำมันและแก๊ซ</item>
+        <item>บริหารผู้ใช้</item>
+        <item>ตรวจสอบหัวตรวจสอบ</item>
+        <item>ตารางถังสร้างข้อมูล</item>
+        <item>บริหารข้อมูล</item>
+        <item>ตั้งค่าระบบ</item>
+        <item>บริหารวาล์วป้องกันน้ำล้น</item>
+        <item>เกี่ยวกับเรา</item>
+    </string-array>
+    <!-- ประเภทหัวตรวจสอบ -->
+    <string-array name="probeTypeArray">
+        <item>Sasen</item>
+        <item>CZ-GR</item>
+        <item>Censtar</item>
+        <item>Beijing Hangtian</item>
+        <item>Beijing Yitong</item>
+        <item>Beijing Radar</item>
+        <item>Beijing Radar2</item>
+    </string-array>
+    <!-- ประเภทถังน้ำมัน -->
+    -
+    <string-array name="oiltypeArray">
+        <item>ไม่ได้ตั้งค่า</item>
+        <item>89#</item>
+        <item>90#</item>
+        <item>92#</item>
+        <item>93#</item>
+        <item>95#</item>
+        <item>97#</item>
+        <item>98#</item>
+        <item>โทลูอีน</item>
+        <item>กรดอะซิติก </item>
+        <item>เอทิลเอสเตอร์ </item>
+        <item>0#</item>
+        <item>-5#</item>
+        <item>-10#</item>
+        <item>-15#</item>
+        <item>-20#</item>
+        <item>-25#</item>
+        <item>-30#</item>
+        <item>-35#</item>
+        <item>-40#</item>
+        <item>-45#</item>
+    </string-array>
+    -
+    <string-array name="oilcanArray">
+        <item>ถังน้ำมันเบอร์1</item>
+        <item>ถังน้ำมันเบอร์ 2 </item>
+        <item>ถังน้ำมันเบอร์ 3</item>
+        <item>ถังน้ำมันเบอร์ 4</item>
+        <item>ถังน้ำมันเบอร์ 5</item>
+        <item>ถังน้ำมันเบอร์6</item>
+        <item>ถังน้ำมันเบอร์7</item>
+        <item>ถังน้ำมันเบอร์8</item>
+        <item>ถังน้ำมันเบอร์9</item>
+        <item>ถังน้ำมันเบอร์10</item>
+        <item>ถังน้ำมันเบอร์11</item>
+        <item>ถังน้ำมันเบอร์12</item>
+        <item>ถังน้ำมันเบอร์13</item>
+        <item>ถังน้ำมันเบอร์14</item>
+        <item>ถังน้ำมันเบอร์15</item>
+        <item>ถังน้ำมันเบอร์16</item>
+    </string-array>
+    -
+    <string-array name="oilcanTableArray">
+        <item>ตารางถังเบอร์ 1</item>
+        <item>ตารางถังเบอร์ 2</item>
+        <item>ตารางถังเบอร์ 3</item>
+        <item>ตารางถังเบอร์ 4</item>
+        <item>ตารางถังเบอร์ 5</item>
+        <item>ตารางถังเบอร์ 6</item>
+        <item>ตารางถังเบอร์ 7</item>
+        <item>ตารางถังเบอร์ 8</item>
+        <item>ตารางถังเบอร์ 9</item>
+        <item>ตารางถังเบอร์ 10</item>
+        <item>ตารางถังเบอร์ 11</item>
+        <item>ตารางถังเบอร์ 12</item>
+        <item>ตารางถังเบอร์ 13</item>
+        <item>ตารางถังเบอร์ 14</item>
+        <item>ตารางถังเบอร์ 15</item>
+        <item>ตารางถังเบอร์ 16</item>
+    </string-array>
+    -
+    <string-array name="oilcanSetArray">
+        <item>ตั้งค่าตารางถังเบอร์ 1</item>
+        <item>ตั้งค่าตารางถังเบอร์ 2</item>
+        <item>ตั้งค่าตารางถังเบอร์ 3</item>
+        <item>ตั้งค่าตารางถังเบอร์ 4</item>
+        <item>ตั้งค่าตารางถังเบอร์ 5</item>
+        <item>ตั้งค่าตารางถังเบอร์ 6</item>
+        <item>ตั้งค่าตารางถังเบอร์ 7</item>
+        <item>ตั้งค่าตารางถังเบอร์ 8</item>
+        <item>ตั้งค่าตารางถังเบอร์ 9</item>
+        <item>ตั้งค่าตารางถังเบอร์ 10</item>
+        <item>ตั้งค่าตารางถังเบอร์ 11</item>
+        <item>ตั้งค่าตารางถังเบอร์ 12</item>
+        <item>ตั้งค่าตารางถังเบอร์ 13</item>
+        <item>ตั้งค่าตารางถังเบอร์ 14</item>
+        <item>ตั้งค่าตารางถังเบอร์ 15</item>
+        <item>ตั้งค่าตารางถังเบอร์ 16</item>
+    </string-array>
+    -
+    <string-array name="oilcanItem">
+        <item>คุณภาพน้ำมัน </item>
+        <item>ระดับน้ำ </item>
+        <item>ปริมาณ </item>
+        <item>น้ำหนัก</item>
+        <item>ปริมาณน้ำมันเปล่า </item>
+        <item>ระดับน้ำ</item>
+        <item>ปริมาณน้ำ</item>
+        <item>อุณหภูมิ</item>
+    </string-array>
+    -
+    <string-array name="oilCurItem">
+        <item>คุณภาพน้ำมัน</item>
+        <item>ระดับน้ำมัน</item>
+        <item>ปริมาณน้ำมัน</item>
+        <item>ปริมาณน้ำมันคลเหลือ</item>
+        <item>อุณหภูมิ</item>
+    </string-array>
+</resources>

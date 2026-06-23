@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:binding="http://schemas.android.com/apk/res-auto">
+
+    <data>
+        <variable
+            name="viewModel"
+            type="com.xinchen.allInOne.ui.login.LoginViewModel" />
+    </data>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="@mipmap/login_bg">
+
+        <ImageView
+            android:layout_marginTop="@dimen/dp_26dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="@dimen/dp_32dp"
+            binding:onClickCommand="@{viewModel.setUrlCommand}"
+            android:src="@mipmap/login_logo"/>
+        <LinearLayout
+            android:paddingLeft="@dimen/dp_20dp"
+            android:paddingRight="@dimen/dp_20dp"
+            android:paddingTop="@dimen/dp_10dp"
+            android:paddingBottom="@dimen/dp_10dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="@dimen/dp_26dp"
+            android:layout_width="@dimen/dp_240dp"
+            android:layout_height="@dimen/dp_232dp"
+            android:orientation="vertical"
+            android:background="@drawable/rc_gd_login_1e70d8_4">
+            <TextView
+                android:layout_gravity="center_horizontal"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/user_login"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_13"
+                />
+            <LinearLayout
+                android:paddingLeft="@dimen/dp_10dp"
+                android:paddingRight="@dimen/dp_10dp"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_23dp"
+                android:layout_marginTop="@dimen/dp_10dp"
+                android:background="@drawable/rc_st_o83695_4"
+                android:gravity="center"
+                android:orientation="horizontal"
+                >
+
+                <ImageView
+                    android:layout_width="@dimen/dp_9dp"
+                    android:layout_height="@dimen/dp_10dp"
+                    android:src="@mipmap/login_icon_user" />
+
+                <View
+                    android:layout_marginTop="@dimen/dp_5dp"
+                    android:layout_marginBottom="@dimen/dp_5dp"
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginLeft="@dimen/dp_8dp"
+                    android:layout_marginRight="@dimen/dp_8dp"
+                    android:background="@color/color_4893EB" />
+
+                <EditText
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="请输入用户名"
+                    android:text="@={viewModel.userName}"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/color_5FA5FF"
+                    android:textSize="@dimen/sp_9"
+                    binding:onFocusChangeCommand="@{viewModel.onFocusChangeCommand}" />
+
+                <ImageView
+                    android:layout_width="@dimen/dp_20dp"
+                    android:layout_height="@dimen/dp_20dp"
+                    android:padding="@dimen/dp_5dp"
+                    android:src="@mipmap/clean_edit"
+                    android:visibility="@{viewModel.clearBtnVisibility}"
+                    binding:onClickCommand="@{viewModel.clearUserNameOnClickCommand}" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:paddingLeft="@dimen/dp_10dp"
+                android:paddingRight="@dimen/dp_10dp"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_23dp"
+                android:layout_marginTop="@dimen/dp_10dp"
+                android:background="@drawable/rc_st_o83695_4"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="@dimen/dp_8dp"
+                    android:layout_height="@dimen/dp_10dp"
+                    android:src="@mipmap/login_icon_password" />
+
+                <View
+                    android:layout_marginTop="@dimen/dp_5dp"
+                    android:layout_marginBottom="@dimen/dp_5dp"
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginLeft="@dimen/dp_8dp"
+                    android:layout_marginRight="@dimen/dp_8dp"
+                    android:background="@color/color_4893EB" />
+
+                <EditText
+                    android:id="@+id/et_password"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="请输入密码"
+                    android:inputType="textPassword"
+                    android:text="@={viewModel.password}"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/color_5FA5FF"
+                    android:textSize="@dimen/sp_9" />
+
+                <ImageView
+                    android:id="@+id/iv_swich_passwrod"
+                    android:layout_width="@dimen/dp_20dp"
+                    android:layout_height="@dimen/dp_20dp"
+                    android:padding="@dimen/dp_5dp"
+                    android:src="@mipmap/show_psw_press"
+                    binding:onClickCommand="@{viewModel.passwordShowSwitchOnClickCommand}" />
+            </LinearLayout>
+            <LinearLayout
+                android:paddingLeft="@dimen/dp_10dp"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_23dp"
+                android:layout_marginTop="@dimen/dp_10dp"
+                android:background="@drawable/rc_st_o83695_4"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="@dimen/dp_10dp"
+                    android:layout_height="@dimen/dp_10dp"
+                    android:src="@mipmap/login_icon_enterprise" />
+
+                <View
+                    android:layout_marginTop="@dimen/dp_5dp"
+                    android:layout_marginBottom="@dimen/dp_5dp"
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginLeft="@dimen/dp_8dp"
+                    android:layout_marginRight="@dimen/dp_8dp"
+                    android:background="@color/color_4893EB" />
+              <!--  <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:layout_height="match_parent"
+                    android:text="@{viewModel.enterprise}"
+                    android:textColor="@color/color_5FA5FF"
+                    android:textSize="@dimen/sp_9"
+                    />-->
+
+                <Spinner
+                    android:backgroundTint="@color/color_5FA5FF"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_gravity="center"
+                    android:layout_height="match_parent"
+                    android:theme="@style/setting_spinner"
+                    android:entries="@{viewModel.enterpriseType}"
+                    android:spinnerMode="dropdown"
+                    android:gravity="center"
+                    binding:selectedValue="@{viewModel.selectedState}"
+                    />
+            </LinearLayout>
+            <CheckBox
+                android:layout_marginTop="@dimen/dp_13dp"
+                android:layout_width="wrap_content"
+                android:layout_height="@dimen/dp_16dp"
+                android:gravity="center"
+                android:checked="@={viewModel.isSavePassword}"
+                android:text="@string/save_password"
+                android:paddingLeft="@dimen/dp_5dp"
+                android:textColor="@color/white"
+                android:button="@drawable/selector_radio_button"
+                android:onCheckedChanged="@{viewModel::onCheckedChanged}"
+                android:textSize="@dimen/sp_10" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_23dp"
+                android:layout_marginTop="@dimen/dp_16dp"
+                android:background="@drawable/rc_gd_login_2291ff_4"
+                android:orientation="vertical">
+
+                <Button
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="?selectableItemBackground"
+                    android:text="登录"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/sp_10"
+                    binding:onClickCommand="@{viewModel.loginOnClickCommand}" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</layout>

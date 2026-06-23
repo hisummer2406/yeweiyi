@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:binding="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <data>
+        <import type="me.xinchen.mvvmhabit.binding.viewadapter.recyclerview.LayoutManagers" />
+        <import type="me.xinchen.mvvmhabit.binding.viewadapter.recyclerview.LineManagers" />
+        <variable
+            name="viewModel"
+            type="com.xinchen.allInOne.ui.outStorageManage.OutStorageListViewModel" />
+        <variable
+            name="entrity"
+            type="com.xinchen.allInOne.entity.SerialPortEntrity" />
+    </data>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@mipmap/login_bg"
+        android:orientation="vertical"
+        tools:context="com.xinchen.allInOne.ui.label.LabelSearchActivity">
+        <include layout="@layout/include_title"
+            binding:backClick="@{viewModel.backClick}"
+            binding:entrity="@{entrity}"
+            />
+        <LinearLayout
+            android:layout_marginRight="@dimen/dp_20dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="right"
+            android:layout_marginBottom="@dimen/dp_10dp"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_gravity="center_horizontal"
+                android:layout_width="@dimen/dp_100dp"
+                android:layout_height="@dimen/dp_24dp"
+                android:text="委外转移"
+                binding:onClickCommand="@{viewModel.WWOuttount}"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:background="@drawable/rc_2291ff_4"
+                android:textSize="@dimen/sp_10"
+                />
+            <TextView
+                android:layout_marginLeft="@dimen/dp_30dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_width="@dimen/dp_100dp"
+                android:layout_height="@dimen/dp_24dp"
+                android:text="利用处置出库"
+                binding:onClickCommand="@{viewModel.LYOuttount}"
+                android:gravity="center"
+                android:textColor="@color/white"
+                android:background="@drawable/rc_2291ff_4"
+                android:textSize="@dimen/sp_10"
+                />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_marginTop="@dimen/dp_5dp"
+            android:layout_marginLeft="@dimen/dp_20dp"
+            android:layout_marginRight="@dimen/dp_20dp"
+            android:layout_width="match_parent"
+            android:orientation="horizontal"
+            android:background="@drawable/rc_st_2291ff_2"
+            android:layout_height="@dimen/dp_24dp">
+            <TextView
+                android:gravity="center"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:text="出库时间"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_9"
+                />
+           <!-- <TextView
+                android:gravity="center"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:text="接收出库批次"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_9"
+                />-->
+            <TextView
+                android:gravity="center"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:text="出库类型"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_9"
+                />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="出库数量"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_9" />
+
+            <TextView
+                android:gravity="center"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:text="出库重量(Kg)"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_9"
+                />
+            <TextView
+                android:gravity="center"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="match_parent"
+                android:text="操作"
+                android:textColor="#ffffffff"
+                android:textSize="@dimen/sp_9"
+                />
+        </LinearLayout>
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginRight="@dimen/dp_20dp"
+            android:layout_marginLeft="@dimen/dp_20dp"
+            android:layout_weight="1">
+            <com.lcodecore.tkrefreshlayout.TwinklingRefreshLayout
+                android:id="@+id/twinklingRefreshLayout"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                binding:onLoadMoreCommand="@{viewModel.onLoadMoreCommand}"
+                binding:onRefreshCommand="@{viewModel.onRefreshCommand}"
+                binding:tr_head_height="@dimen/dp_80dp"
+                binding:tr_wave_height="@dimen/dp_80dp">
+            <androidx.recyclerview.widget.RecyclerView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                binding:itemBinding="@{viewModel.itemBinding}"
+                binding:items="@{viewModel.observableList}"
+                binding:layoutManager="@{LayoutManagers.linear()}" />
+            </com.lcodecore.tkrefreshlayout.TwinklingRefreshLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="没有更多内容"
+                android:textColor="@color/white"
+                android:visibility="@{viewModel.noContent}" />
+
+        </RelativeLayout>
+
+
+    </LinearLayout>
+</layout>
