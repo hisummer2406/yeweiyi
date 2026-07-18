@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout>
+
+    <data>
+        <import type="com.sansen.yeweiyi.bean.SerialPortEntrity" />
+        <variable
+            name="viewModel"
+            type="com.sansen.yeweiyi.bean.SerialPortEntrity" />
+
+    </data>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/title_bar"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/dp_80"
+    android:background="@drawable/sansen_top_title"
+    android:orientation="horizontal" >
+
+    <!-- 左侧ICON -->
+
+    <!-- 左侧ICON -->
+
+    <ImageView
+        android:id="@+id/bar_iv_icon"
+        android:layout_width="@dimen/dp_296"
+        android:layout_height="@dimen/dp_35"
+        android:scaleType="fitStart"
+        android:background="@drawable/sansen_logo"
+        android:layout_gravity="center_vertical"
+        android:layout_marginLeft="30dp"/>
+    <TextView
+        android:id="@+id/bar_tv_title"
+        style="@style/style_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_weight="8"
+        android:drawablePadding="5dp"
+        android:gravity="center"
+        android:textColor="@color/red"
+        android:singleLine="true"
+        />
+
+
+    <TextView
+        android:visibility="gone"
+        android:id="@+id/bar_tv_filter"
+        android:layout_width="0dp"
+        android:layout_height="50dp"
+        android:layout_weight="2"
+        android:paddingTop="12dp"
+        android:background="@android:color/transparent"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:singleLine="true"
+        android:text="@string/filter"
+        android:textSize="20sp"
+         />
+
+    <TextView
+        android:visibility="gone"
+        android:id="@+id/bar_tv_right"
+        android:layout_width="0dp"
+        android:layout_height="50dp"
+        android:paddingTop="12dp"
+        android:layout_weight="8"
+        android:background="@android:color/transparent"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:singleLine="true"
+
+        android:textSize="20sp" />
+    <!-- 登录图标android:text="@string/save_oilcan" -->
+
+    <ImageButton
+        android:visibility="gone"
+        android:id="@+id/bar_imbut_left"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1.5"
+        android:background="@android:color/transparent"
+        android:paddingTop="12dp"
+        android:src="@drawable/sansen_user_logo" />
+
+    <TextView
+        android:visibility="gone"
+        android:id="@+id/bar_tv_left"
+        android:layout_width="wrap_content"
+        android:layout_height="50dp"
+        android:background="@android:color/transparent"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:paddingTop="6dp"
+        android:singleLine="true"
+        android:paddingRight="30dp"
+        android:textSize="20sp" />
+
+    <TextView
+        android:visibility="gone"
+        android:id="@+id/bar_tv_unlogin"
+        android:layout_width="0dp"
+        android:layout_height="50dp"
+        android:layout_weight="4"
+        android:paddingTop="12dp"
+        android:text="@string/Log_out"
+        android:paddingRight="18dp"
+        android:textSize="20sp" />
+    <ImageView
+        android:layout_gravity="center"
+        android:layout_toLeftOf="@+id/main_time"
+        android:id="@+id/iv_time"
+        android:layout_width="@dimen/dp_30"
+        android:layout_height="match_parent"
+        android:layout_marginRight="@dimen/dp_5"
+        android:src="@drawable/sj_1"
+        />
+    <TextView
+        android:layout_marginRight="@dimen/dp_35"
+        android:id="@+id/bar_tv_time"
+        android:layout_width="wrap_content"
+        android:gravity="center"
+        android:layout_height="match_parent"
+        android:hint="20260122"
+        android:textColor="@color/black"
+        android:text="@{viewModel.time}"
+        android:paddingRight="@dimen/sp_21"
+        android:textSize="20sp" />
+</LinearLayout>
+</layout>

@@ -1,0 +1,312 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main_main_main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E8E5E4"
+     >
+	
+    <LinearLayout
+        android:id="@+id/radio_bar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/dp_80"
+        android:background="@drawable/bg_bottom"
+        android:paddingTop="@dimen/dp_30"
+        android:layout_alignParentBottom="true" >
+
+        <LinearLayout
+            android:id="@+id/alarm_info"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1.5"
+            android:background="@drawable/sansen_dibu_text"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/bar_main_alram"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/sansen_dibu_text"
+                android:gravity="center"
+                android:text="@string/onLoading"
+                android:textColor="@color/main_boom_alarm" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:id="@+id/btn_jieJing"
+            android:background="@color/transparent"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:onClick="btn_jieJing"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_jj" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="解警"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+        <LinearLayout
+            android:background="@color/transparent"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:onClick="bar_but_alarm"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_bj" />
+
+            <TextView
+                android:id="@+id/bar_but_alarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+                android:text="报警记录 "
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+        <LinearLayout
+            android:background="@color/transparent"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:onClick="bar_but_saveoil"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_ck" />
+
+            <TextView
+                android:id="@+id/bar_but_saveoil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+
+                android:text="出库记录"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+        <LinearLayout
+            android:background="@color/transparent"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:onClick="bar_but_inoil"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_rk" />
+
+            <TextView
+                android:id="@+id/bar_but_inoil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+
+                android:text="入库记录"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+        <LinearLayout
+            android:background="@color/transparent"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:onClick="bar_but_commitwork"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_jb" />
+            <TextView
+                android:id="@+id/bar_but_commitwork"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+
+                android:text="交班记录"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+        <LinearLayout
+            android:background="@color/transparent"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:onClick="btn_kuCunRecord"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_bb" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="库存记录"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:background="@color/transparent"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:onClick="main_but_set"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_sz" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="设置"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_22" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <include
+        android:id="@+id/title_bar"
+        layout="@layout/layout_title_bar" />
+
+    <LinearLayout
+        android:visibility="gone"
+        android:id="@+id/menu_right"
+        android:layout_width="@dimen/main_right_width"
+        android:layout_height="match_parent"
+        android:layout_alignParentRight="true"
+        android:background="@drawable/sansen_right_title"
+        android:orientation="vertical" >
+
+        <Button
+            android:id="@+id/main_but_main"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:onClick="main_but_main" />
+
+        <Button
+            android:visibility="gone"
+            android:id="@+id/main_but_driver"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:onClick="main_but_driver" />
+
+        <Button
+            android:id="@+id/main_but_set"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:onClick="main_but_set" />
+
+        <Button
+            android:id="@+id/main_but_commitwork"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:onClick="main_but_commitwork" />
+
+        <Button
+            android:id="@+id/main_but_sidelea"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:background="@drawable/sansen_jiance_but_selector"
+            android:onClick="main_but_sidelea" />
+
+        <Button
+            android:id="@+id/main_but_print"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:onClick="main_but_print" />
+
+        <Button
+            android:id="@+id/main_but_alarm"
+            android:layout_width="match_parent"
+            android:layout_weight="1"
+            android:layout_height="0dp"
+            android:onClick="main_but_alarm" />
+    </LinearLayout>
+<!--    <FrameLayout-->
+<!--        android:id="@+id/fragment_container"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--      />-->
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/title_bar"
+       	android:layout_above="@id/radio_bar"
+        android:layout_toLeftOf="@id/menu_right" />
+<!--	<AbsoluteLayout-->
+<!--	    android:layout_width="match_parent"-->
+<!--	    android:layout_height="match_parent"-->
+<!--	    >-->
+<!--	    <TextView-->
+<!--	        android:id="@+id/main_time"-->
+<!--	        android:layout_x="@dimen/main_time_x"-->
+<!--	        android:layout_y="@dimen/main_time_y"-->
+<!--            android:visibility="gone"-->
+<!--	        android:layout_width="wrap_content"-->
+<!--	        android:layout_height="wrap_content"-->
+<!--	        android:text="12/2/12/555"/>-->
+<!--	</AbsoluteLayout>-->
+</RelativeLayout>

@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#EDF0F7"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/title_bar"
+        layout="@layout/layout_title_bar2" />
+
+    <ScrollView android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginLeft="@dimen/dp_88"
+        android:layout_marginTop="@dimen/dp_40"
+        android:layout_marginRight="@dimen/dp_88"
+        android:layout_marginBottom="@dimen/dp_40"
+        android:layout_weight="1"
+        android:background="#f0f4ff"
+        android:orientation="vertical"
+        android:paddingTop="@dimen/dp_40"
+        android:paddingLeft="@dimen/dp_80"
+        android:paddingRight="@dimen/dp_80"
+        >
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 第一行 三列分组 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <!-- 第一列：报警记录组 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <RelativeLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="生成报警记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_create_alarm"
+                        
+                            android:layout_alignParentEnd="true"
+                            android:checked="true"
+                             />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="删除报警记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_del_alarm"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="清空报警记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_clear_alarm"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+                </LinearLayout>
+
+                <!-- 第二列：出库记录组 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="生成出库记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_create_out"
+                            android:layout_alignParentEnd="true"
+                            android:checked="true"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="删除出库记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_del_out"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="清空出库记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_clear_out"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+                </LinearLayout>
+
+                <!-- 第三列：库存记录组 + 输入框 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="生成库存记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_create_stock"
+                            android:layout_alignParentEnd="true"
+                            android:checked="true"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="删除库存记录"
+                            android:textSize="18sp" />
+
+                        <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_del_stock"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="清空库存记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_clear_stock"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+
+                    <!-- 记录生成时间输入行 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="记录生成时间"
+                            android:textSize="18sp" />
+
+                        <EditText
+                            android:id="@+id/et_time_minute"
+                            android:layout_width="0dp"
+                            android:layout_height="36dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+
+                            android:hint="请输入"
+                            android:inputType="number"
+                            android:paddingHorizontal="8dp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:text="分"
+                            android:textSize="18sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 分割线 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginVertical="16dp"
+                android:background="#E0E0E0" />
+
+            <!-- 第二行 两列分组 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <!-- 第一列：入库记录组 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="生成入库记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_create_in"
+                            android:layout_alignParentEnd="true"
+                            android:checked="true"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="删除入库记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_del_in"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="清空入库记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_clear_in"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+                </LinearLayout>
+
+                <!-- 第二列：交接班记录组 -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="生成交接班记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_create_shift"
+                            android:layout_alignParentEnd="true"
+                            android:checked="true"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="删除交接班记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_del_shift"
+
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center_vertical"
+                            android:text="清空交接班记录"
+                            android:textSize="18sp" />
+
+                       <CheckBox
+                            android:layout_centerInParent="true"
+                            android:layout_width="@dimen/dp_55"
+                            android:layout_height="@dimen/dp_25"
+                            android:button="@drawable/custom_track_selector"
+                            android:id="@+id/sw_clear_shift"
+                            android:layout_alignParentEnd="true"
+                            android:checked="false"
+                            />
+                    </RelativeLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:layout_marginBottom="@dimen/dp_60"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/ly_upper_page"
+            android:layout_width="@dimen/dp_150"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/dp_20"
+            android:layout_marginRight="@dimen/dp_40"
+            android:layout_marginBottom="@dimen/dp_20"
+            android:background="#0066A2"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:src="@drawable/fh" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:text="返回上页"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_20" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/dp_327"
+    android:layout_height="439dp"
+    android:background="#FFFFFF"
+    android:orientation="vertical">
+
+    <!-- 顶部蓝色标题栏：左右箭头 + 年月标题 -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:background="#0066CC">
+
+        <ImageView
+            android:id="@+id/iv_prev_month"
+            android:layout_width="50dp"
+            android:layout_height="match_parent"
+            android:padding="14dp"
+            android:src="@android:drawable/ic_menu_revert" />
+
+        <TextView
+            android:id="@+id/tv_month_title"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_centerInParent="true"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp" />
+
+        <ImageView
+            android:id="@+id/iv_next_month"
+            android:layout_width="50dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentEnd="true"
+            android:padding="14dp"
+             />
+    </RelativeLayout>
+
+    <!-- 星期表头：日 一 二 三 四 五 六 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="45dp"
+        android:orientation="horizontal">
+
+        <TextView
+            style="@style/week_text"
+            android:text="日" />
+
+        <TextView
+            style="@style/week_text"
+            android:text="一" />
+
+        <TextView
+            style="@style/week_text"
+            android:text="二" />
+
+        <TextView
+            style="@style/week_text"
+            android:text="三" />
+
+        <TextView
+            style="@style/week_text"
+            android:text="四" />
+
+        <TextView
+            style="@style/week_text"
+            android:text="五" />
+
+        <TextView
+            style="@style/week_text"
+            android:text="六" />
+    </LinearLayout>
+
+    <!-- 日历日期网格（截图日期格子） -->
+
+    <GridView
+        android:id="@+id/gv_calendar"
+        android:layout_width="match_parent"
+    android:layout_height="200dp"
+        android:numColumns="7"
+    android:horizontalSpacing="0dp"
+    android:verticalSpacing="0dp"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#EEEEEE" />
+
+    <!-- 时分滚轮区域（截图垂直滚动样式） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/dp_80"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <com.contrarywind.view.WheelView
+            android:id="@+id/wheel_hour"
+            android:layout_width="110dp"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="时"
+            android:textSize="18sp" />
+
+        <com.contrarywind.view.WheelView
+            android:id="@+id/wheel_minute"
+            android:layout_width="110dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="分"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <!-- 底部确定取消按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:text="取消"
+            android:textColor="#666666" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="#EEEEEE" />
+
+        <Button
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="?attr/selectableItemBackground"
+            android:text="确定"
+            android:textColor="#0066CC" />
+    </LinearLayout>
+</LinearLayout>

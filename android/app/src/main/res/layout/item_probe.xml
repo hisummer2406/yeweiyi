@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp"
+    >
+		
+        <TextView
+            android:id="@+id/probe_tv_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:textSize="@dimen/fontSize" />
+
+        <android.support.v7.widget.AppCompatEditText
+            android:id="@+id/probe_et_id"
+            android:layout_width="80dp"
+            android:layout_height="wrap_content"        
+            android:layout_marginTop="5dp"
+            android:layout_marginLeft="5dp"
+            android:digits="0123456789"
+            android:imeOptions="actionDone"
+            android:maxLength="2"
+            android:inputType="number"
+            android:gravity="center_horizontal"
+            android:textSize="@dimen/fontSize" />
+      
+        <TextView
+            android:id="@+id/probe_tv_type"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:layout_marginLeft="10dp"
+            android:text="@string/probe_type"
+            android:textSize="@dimen/fontSize" />
+		
+        <TextView
+            android:id="@+id/probe_sp_type"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"    
+            android:layout_marginTop="5dp"
+            android:layout_marginLeft="5dp"
+            android:gravity="center"
+            android:textSize="@dimen/fontSize" 
+            />
+        <TextView 
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="right"
+            android:layout_marginTop="5dp"
+            android:layout_marginLeft="10dp"
+            android:textSize="@dimen/fontSize"
+            android:text="@string/add_probe"/>
+
+          <CheckBox
+                android:id="@+id/probe_cb_showhome"
+                android:layout_width="60dp"
+                android:layout_height="25dp"
+                android:layout_marginLeft="5dp"
+                android:button="@null"
+                android:layout_centerInParent="true"
+                android:background="@drawable/sansen_wifi_checkbox_selector"
+                />
+
+</LinearLayout>

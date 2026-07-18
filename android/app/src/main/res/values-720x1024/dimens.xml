@@ -1,0 +1,21 @@
+<resources>
+    <dimen name="main_headbar_width">820dp</dimen>
+    <dimen name="main_headbar_height">60dp</dimen>
+    <dimen name="main_bottom_lfet">28dp</dimen>
+    <dimen name="main_time_x">750px</dimen>
+    <dimen name="main_time_y">680px</dimen>
+    <dimen name="exploration_left">100dp</dimen>
+    <dimen name="exploration_right">100dp</dimen>
+    <dimen name="probe_left">60dp</dimen>
+    <dimen name="probe_right">60dp</dimen>
+    <dimen name="custom_progress_marginleft">192dp</dimen>
+    <dimen name="custom_progress_margintop">184dp</dimen>
+    <dimen name="tankno_tv_left">80dp</dimen>
+    <dimen name="tankset_tv_size">80dp</dimen>
+    <dimen name="main_right_width">180dp</dimen>
+    <dimen name="oilcan_text_top">198dp</dimen>
+    <dimen name="main_bootombar_height">50dp</dimen>
+    <dimen name="fontSize">20sp</dimen>
+    <dimen name="oilcan_table_list_left">80dp</dimen>
+    <dimen name="oilcan_table_list_right">80dp</dimen>
+</resources>

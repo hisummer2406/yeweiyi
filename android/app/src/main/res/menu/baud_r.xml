@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--波特率-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/item_115200"
+        android:title="115200"
+        android:orderInCategory="100"/>
+    <item
+        android:id="@+id/item_57600"
+        android:title="57600"
+        android:orderInCategory="200"/>
+    <item
+        android:id="@+id/item_38400"
+        android:title="38400"
+        android:orderInCategory="300"/>
+    <item
+        android:id="@+id/item_19200"
+        android:title="19200"
+        android:orderInCategory="300"/>
+    <item
+        android:id="@+id/item_9600"
+        android:title="9600"
+        android:orderInCategory="400"/>
+    <item
+        android:id="@+id/item_4800"
+        android:title="4800"
+        android:orderInCategory="500"/>
+    <item
+        android:id="@+id/item_2400"
+        android:title="2400"
+        android:orderInCategory="600"/>
+    <item
+        android:id="@+id/item_1200"
+        android:title="1200"
+        android:orderInCategory="700"/>
+    <item
+        android:id="@+id/item_250"
+        android:title="250"
+        android:orderInCategory="800"/>
+</menu>

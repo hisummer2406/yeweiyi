@@ -1,0 +1,449 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#EDF0F7"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/title_bar"
+        layout="@layout/layout_title_bar2" />
+
+    <LinearLayout
+        android:layout_marginLeft="@dimen/dp_86"
+        android:layout_marginRight="@dimen/dp_86"
+        android:layout_marginTop="@dimen/dp_50"
+        android:layout_marginBottom="@dimen/dp_50"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#f5f7fc"
+        android:orientation="vertical"
+        android:padding="40dp">
+
+        <!-- 左右两大栏容器 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:weightSum="2">
+
+            <!-- 左侧：入库记录补录 -->
+            <LinearLayout
+                android:layout_marginLeft="@dimen/dp_50"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <!-- 标题带左侧蓝色竖线 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical">
+
+                    <View
+                        android:layout_width="4dp"
+                        android:layout_height="32dp"
+                        android:background="#0088dd" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="入库记录补录"
+                        android:textColor="#111111"
+                        android:textSize="26sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+
+                <!-- 罐号 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_30"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="罐号"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <Spinner
+                        android:id="@+id/sp_in_tank"
+                        android:layout_width="120dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/sansen_drop"
+                        android:entries="@array/oilcanArray" />
+                </LinearLayout>
+
+
+
+                <!-- 入库时间 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_24"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="入库时间"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <TextView
+                       android:gravity="center"
+                        android:id="@+id/tv_in_time"
+                        android:layout_width="180dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/shape_input_border"
+                        android:drawableEnd="@drawable/bl_rq"
+                        android:paddingEnd="12dp" />
+                </LinearLayout>
+
+
+
+                <!-- 入库前高度 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_24"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="入库前高度"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <EditText
+                        android:inputType="number"
+                        android:id="@+id/et_in_height"
+                        android:layout_width="140dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/shape_input_border"
+                        android:hint="请输入"
+                        android:textSize="18sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="毫米"
+                        android:textColor="#444444"
+                        android:textSize="20sp" />
+                </LinearLayout>
+
+
+
+                <!-- 入库升数 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_24"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="入库升数"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <EditText
+                        android:inputType="number"
+                        android:id="@+id/et_in_liter"
+                        android:layout_width="140dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/shape_input_border"
+                        android:hint="请输入"
+                        android:textSize="18sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="升"
+                        android:textColor="#444444"
+                        android:textSize="20sp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- 分割空隙 -->
+
+
+            <!-- 右侧：出库记录补录 -->
+            <LinearLayout
+                android:layout_marginLeft="@dimen/dp_89"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <!-- 标题带左侧蓝色竖线 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical">
+
+                    <View
+                        android:layout_width="4dp"
+                        android:layout_height="32dp"
+                        android:background="#0088dd" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="出库记录补录"
+                        android:textColor="#111111"
+                        android:textSize="26sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+
+
+                <!-- 罐号 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_30"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="罐号"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <Spinner
+                        android:id="@+id/sp_out_tank"
+                        android:layout_width="120dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/sansen_drop"
+                        android:entries="@array/oilcanArray" />
+                </LinearLayout>
+
+
+
+                <!-- 出库时间 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_24"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="出库时间"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:gravity="center"
+                        android:id="@+id/tv_out_time"
+                        android:layout_width="180dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/shape_input_border"
+                        android:drawableEnd="@drawable/bl_rq"
+                        android:paddingEnd="12dp" />
+                </LinearLayout>
+
+
+
+                <!-- 出库前高度 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_24"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="出库前高度"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <EditText
+                        android:inputType="number"
+                        android:id="@+id/et_out_height"
+                        android:layout_width="140dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/shape_input_border"
+                        android:hint="请输入"
+                        android:textSize="18sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="毫米"
+                        android:textColor="#444444"
+                        android:textSize="20sp" />
+                </LinearLayout>
+
+
+
+                <!-- 出库升数 -->
+                <LinearLayout
+                    android:layout_marginTop="@dimen/dp_24"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="出库升数"
+                        android:textColor="#222222"
+                        android:textSize="22sp" />
+
+                    <EditText
+                        android:inputType="number"
+                        android:id="@+id/et_out_liter"
+                        android:layout_width="140dp"
+                        android:layout_height="44dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/shape_input_border"
+                        android:hint="请输入"
+                        android:textSize="18sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="升"
+                        android:textColor="#444444"
+                        android:textSize="20sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+        <!-- 底部提示文字 -->
+        <TextView
+            android:layout_marginTop="@dimen/dp_30"
+            android:gravity="center_vertical"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:drawableStart="@drawable/bl_gt"
+            android:drawablePadding="12dp"
+            android:text="当入库或出库过程中，由于停电或设备故障前导致记录缺失，可手动补录。目前仅支持补录出库记录和入库记录"
+            android:textColor="#666666"
+            android:textSize="18sp" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_marginBottom="@dimen/dp_60"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal">
+        <LinearLayout
+            android:layout_marginRight="@dimen/dp_40"
+            android:layout_marginBottom="@dimen/dp_20"
+            android:layout_marginTop="@dimen/dp_20"
+            android:layout_width="@dimen/dp_150"
+            android:layout_height="wrap_content"
+            android:background="#0066A2"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_gravity="center"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/bl_yl"/>
+            <TextView
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:layout_gravity="center"
+                android:textSize="@dimen/sp_20"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:text="点击预览"/>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_marginRight="@dimen/dp_40"
+            android:id="@+id/ly_saveData"
+            android:layout_marginBottom="@dimen/dp_20"
+            android:layout_marginTop="@dimen/dp_20"
+            android:layout_width="@dimen/dp_150"
+            android:layout_height="wrap_content"
+            android:background="#0066A2"
+
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_gravity="center"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/bc"/>
+            <TextView
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:layout_gravity="center"
+                android:textSize="@dimen/sp_20"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:text="保存数据"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/ly_upper_page"
+            android:layout_width="@dimen/dp_150"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/dp_20"
+            android:layout_marginRight="@dimen/dp_40"
+            android:layout_marginBottom="@dimen/dp_20"
+            android:background="#0066A2"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:src="@drawable/fh" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:text="返回上页"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_20" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main_frame"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+	android:gravity="center"
+	>
+
+    <android.support.v7.widget.RecyclerView
+        android:id="@+id/main_gridview_oilcan"
+		android:layout_marginTop="10dp"
+		android:layout_marginLeft="@dimen/dp_30"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+		android:layout_centerInParent="true"
+	>
+    </android.support.v7.widget.RecyclerView>
+    
+    <GridView
+        android:id="@+id/main_gridview_gas_exploration"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+		android:gravity="center_horizontal"
+		android:listSelector="@null"
+		android:visibility="gone"
+		android:layout_alignParentBottom="true"
+	 >
+    </GridView>
+
+</RelativeLayout>

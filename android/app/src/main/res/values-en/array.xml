@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string-array name="prints">
+        <item>Basic Info</item>
+        <item>Details</item>
+        <item>Oil in and out records</item>
+        <item>Storage records</item>
+        <item>Shift records</item>
+        <item>Leakage records</item>
+    </string-array>
+    <string-array name="data_manager">
+        <item>Clear alarm records</item>
+        <item>Clear oil in and out records</item>
+        <item>Clear temperature records</item>
+        <item>Clear oil storage records</item>
+        <item>Clear shift records</item>
+        <item>Clear leakage records</item>
+        <item>Clear all records</item>
+
+    </string-array>
+
+    <string-array name="data_service">
+        <item>Save configuration info to cloud</item>
+        <item>Read configuration info from cloud</item>
+        <item>Save to local</item>
+        <item>Read local data</item>
+    </string-array>
+
+    <string-array name="set_array">
+        <item>Tank settings</item>
+        <item>Probe settings</item>-
+        <item>Tank table created</item>
+        <item>Tank table settings</item>
+        <item>Overflow valve</item>
+        <item>System settings</item>
+        <item>About us</item>
+        <item>Data</item>
+        <item>Oil gas detection</item>
+        <item>Authority</item>
+        <item>User</item>
+        <item>Oil test</item>
+        <item>Tank set</item>
+    </string-array>
+
+    <!-- 探针类型 -->
+    <string-array name="probeTypeArray">
+        <item>Sasen</item>
+        <item>CZ-GR</item>
+        <item>Censtar</item>
+        <item>Beijing Hangtian</item>
+        <item>Beijing Yitong</item>
+        <item>Beijing Radar</item>
+        <item>Beijing Radar2</item>
+    </string-array>
+
+    <!-- 油罐类型 -->
+    <string-array name="oiltypeArray">
+        <item>Unset type</item>
+        <item>Gasoline</item>
+        <item>Diesel</item>
+        <item>Diesel 4 Star</item>
+        <item>Auto Diesel</item>
+        <item>Super Diesel</item>
+        <item>Petrol</item>
+        <item>Petrol 90</item>
+        <item>Petrol 92</item>
+        <item>Petrol 95</item>
+        <item>Premier XL</item>
+        <item>Kerosene</item>
+        <item>92 Octane</item>
+        <item>95 Octane</item>
+        <item>E10 Gasoline</item>
+    </string-array>
+
+    <string-array name="oilcanArray">
+        <item>No.1 tank</item>
+        <item>No.2 tank</item>
+        <item>No.3 tank</item>
+        <item>No.4 tank</item>
+        <item>No.5 tank</item>
+        <item>No.6 tank</item>
+        <item>No.7 tank</item>
+        <item>No.8 tank</item>
+        <item>No.9 tank</item>
+        <item>No.10 tank</item>
+        <item>No.11 tank</item>
+        <item>No.12 tank</item>
+        <item>No.13 tank</item>
+        <item>No.14 tank</item>
+        <item>No.15 tank</item>
+        <item>No.16 tank</item>
+    </string-array>
+
+    <string-array name="oilcanTableArray">
+        <item>No.1 tank table</item>
+        <item>No.2 tank table</item>
+        <item>No.3 tank table</item>
+        <item>No.4 tank table</item>
+        <item>No.5 tank table</item>
+        <item>No.6 tank table</item>
+        <item>No.7 tank table</item>
+        <item>No.8 tank table</item>
+        <item>No.9 tank table</item>
+        <item>No.10 tank table</item>
+        <item>No.11 tank table</item>
+        <item>No.12 tank table</item>
+        <item>No.13 tank table</item>
+        <item>No.14 tank table</item>
+        <item>No.15 tank table</item>
+        <item>No.16 tank table</item>
+    </string-array>
+
+    <string-array name="oilcanSetArray">
+        <item>No.1 tank settings</item>
+        <item>No.2 tank settings</item>
+        <item>No.3 tank settings</item>
+        <item>No.4 tank settings</item>
+        <item>No.5 tank settings</item>
+        <item>No.6 tank settings</item>
+        <item>No.7 tank settings</item>
+        <item>No.8 tank settings</item>
+        <item>No.9 tank settings</item>
+        <item>No.10 tank settings</item>
+        <item>No.11 tank settings</item>
+        <item>No.12 tank settings</item>
+        <item>No.13 tank settings</item>
+        <item>No.14 tank settings</item>
+        <item>No.15 tank settings</item>
+        <item>No.16 tank settings</item>
+    </string-array>
+
+    <string-array name="oilcanItem">
+        <item>Oil type</item>
+        <item>Level</item>
+        <item>Volume</item>
+        <item>Weight</item>
+        <item>Addible weight</item>
+        <item>Water level</item>
+        <item>Water Volume</item>
+        <item>Temp</item>
+    </string-array>
+
+    <string-array name="oilCurItem">
+        <item>Oil type</item>
+        <item>Level</item>
+        <item>Volume</item>
+        <item>Weight</item>
+        <item>Volume</item>
+    </string-array>
+</resources>
