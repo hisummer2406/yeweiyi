@@ -1,17 +1,20 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
 import android.databinding.ObservableField;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.Window;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -23,17 +26,27 @@ import com.sansen.yeweiyi.bean.OilWork;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.CommitWork;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
+import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.logic.ExportExcel;
+import com.sansen.yeweiyi.manager.DBDataManager;
+import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.Constans;
+import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
 public class CommitWorkRecortFragment extends BaseFragment implements OilCommitWorkAdapter.OnItemClickListener{
 
@@ -44,19 +57,75 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 	private LinearLayoutManager mLinearLayoutManager;
 
 	private boolean isSort = true;
-
 	private int datasize; // 模拟数据集的条数
 	private List<CommitWork> lists = null;// 存放当前的所有数据
 	private List<CommitWork> temps;
-	AlertDialog.Builder builder;
 	LinearLayout ly_startJiaoBan,ly_endJiaoBan,ly_jiaoBanData;
-	boolean IsJiaoBan=false;
 	@Override
 	protected View initView(LayoutInflater inflater) {
 
 		return inflater.inflate(R.layout.fragment_recode_commitwork, null);
 	}
+	@Override
+	protected void processClick(View v) {
+		if (v.getId()==R.id.ly_jiaoBanData){
+//			runOnUiThread(() -> {
+//				// 主线程操作
+//				ly_jiaoBanData.setVisibility(View.GONE);
+//			});
+//			SaveOutOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
+			lists = dbManager.findAllObject(CommitWork.class);
+			//String gsonInfo=lists.get(0).getInfo();
+			for (int i=0;i<lists.size();i++){
+				List<OilWork> oilWorks=dbManager.stringToArray(lists.get(i).getInfo(), OilWork[].class);
+				for (OilWork oilwork :oilWorks) {
+					oilwork.setTime(lists.get(i).getTime());
+					oilwork.setEndTime(lists.get(i).getEndTime());
+					oilwork.setJieZhi(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilwork.getOilId()).getOilType()));
+				}
+				dataset.addAll(oilWorks);
+			}
+			for (CommitWork work:lists) {
+				dataset.addAll(dbManager.stringToArray(work.getInfo(), OilWork[].class));
+			}
+			SaveCommitOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
 
+
+		}
+
+	}
+	List<OilWork> dataset=new ArrayList<>();
+	private void SaveCommitOIl(String path) {
+		Log.e("TAG 路径",path);
+		ExportExcel<OilWork> exportExcel = new ExportExcel<OilWork>();
+		String headers[] = { "介质",SystemUtils.getRsStr(R.string.tank_no),"开始时间", "结束时间",SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","出库量l","出库量kg"};
+		DBDataManager db = MyApplication.getInstance().getmDBManager();
+		// = db.findAllObject(OilWork.class);
+		File file = new File(path);
+		if (!file.exists())
+			file.mkdir();
+		OutputStream out = null;
+		try {
+			file = new File(path + "/" + "Oil_Shilt_record" + ".xls");
+			out = new FileOutputStream(file);
+			exportExcel.exportExcel(headers, dataset,
+					new OilWork().getParams(), out, new ExcelListener() {
+						@Override
+						public void Success(boolean isTrue) {
+							runOnUiThread(() -> {
+								// 主线程操作
+								ly_jiaoBanData.setVisibility(View.VISIBLE);
+							});
+
+						}
+					});
+			out.close();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
+	}
 	@Override
 	protected void initData(Bundle savedInstanceState) {
 		findView();
@@ -76,26 +145,36 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 		commitwork_list_info.setAdapter(myAdapter);
 		myAdapter.setOnItemClickListener(this);
 		View headerView = rootView.findViewById(R.id.title_bar);
-
 // 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
 		tvTitle.setText("交班记录");
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
-		if (Singleton.getInstance().IsJiaoBan){
-			ly_jiaoBanData.setVisibility(View.VISIBLE);
+		ly_jiaoBanData.setOnClickListener(this);
+		if (!Singleton.getInstance().IsJiaoBan){
+			ly_jiaoBanData.setVisibility(View.GONE);
 		}
-		setUIShow();
+		if (!Singleton.getInstance().IsCreatShift){
+			ly_startJiaoBan.setVisibility(View.GONE);
+			ly_endJiaoBan.setVisibility(View.GONE);
+		}else {
+			setUIShow(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan,0)==0?false:true);
+		}
+
 	}
-	public void setUIShow(){
-		IsJiaoBan= SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsJiaoBan,0)==0?false:true;
-		if (!IsJiaoBan){
+	public void setUIShow(boolean isJiaoBan){
+
+		Log.e("方法","是否开始交班"+isJiaoBan);
+		if (!isJiaoBan){
 			ly_startJiaoBan.setVisibility(View.VISIBLE);
 			ly_endJiaoBan.setVisibility(View.GONE);
+
 		}
 		else {
+			isJiaoBan=false;
 			ly_startJiaoBan.setVisibility(View.GONE);
 			ly_endJiaoBan.setVisibility(View.VISIBLE);
+
 		}
 
 	}
@@ -119,23 +198,6 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 
 	public void initTitle() {
 		if (main != null) {
-//			main.tv_right.setVisibility(View.VISIBLE);
-//			main.tv_right.setText(SystemUtils.getRsStr(R.string.record_sort));
-//
-//			main.iv_right.setVisibility(View.GONE);
-//			main.tv_unlogin.setVisibility(View.GONE);
-//			main.tv_left.setVisibility(View.GONE);
-//
-//			main.tv_right.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					isSort = !isSort;
-//					initializeAdapter(isSort);
-//					mLinearLayoutManager.removeAllViews();
-//				}
-//
-//			});
 		}
 
 	}
@@ -242,20 +304,21 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 		super.onHiddenChanged(hidden);
 		if (!hidden) {
 			initializeAdapter(isSort);
-//			main.tv_right.setVisibility(View.VISIBLE);
-		}else {
-//			main.tv_right.setVisibility(View.INVISIBLE);
 		}
 	}
 
 	public void onReflushData() {
 		initializeAdapter(isSort);
+		if (!Singleton.getInstance().IsCreatShift){
+			ly_startJiaoBan.setVisibility(View.GONE);
+			ly_startJiaoBan.setVisibility(View.GONE);
+		}else {
+			setUIShow(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan,0)==0?false:true);
+		}
+
 	}
 
-	@Override
-	protected void processClick(View v) {
 
-	}
 
 	@Override
 	public void onClick(int position) {
@@ -273,38 +336,40 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 	public void onLongClick(int position) {
 		if (Singleton.getInstance().IsDelShift) {
 			initDialog(position);
-			builder.show();
-		}
-		else {
-			//SystemUtils.showRsToast(R.string.authorization_toast_noauth);
 		}
 	}
 	private void initDialog(final int position) {
-		builder = new AlertDialog.Builder(ct);
-		builder.setTitle(SystemUtils.getRsStr(R.string.isDeleteRecord));
-		builder.create();
-		builder.setPositiveButton(SystemUtils.getRsStr(R.string.confirm),
-				new DialogInterface.OnClickListener() {
+		View customView = LayoutInflater.from(main).inflate(R.layout.dialog_custom_alert, null);
+		Button btn_confirm = customView.findViewById(R.id.btn_confirm);
+		Button btn_cancel = customView.findViewById(R.id.btn_cancel);
+		AlertDialog dialog = new AlertDialog.Builder(main)
+				.setView(customView)
+				.create();
+		btn_cancel.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				dialog.dismiss();
+			}
+		});
+		btn_confirm.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				CommitWork oilWork = (CommitWork)myAdapter
+						.getItems(position);
+				dbManager.delteRecord(oilWork);
+				initializeAdapter(isSort);
+				dialog.dismiss();
+			}
+		});
 
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						CommitWork oilWork = (CommitWork)myAdapter
-								.getItems(position);
-						dbManager.delteRecord(oilWork);
-						initializeAdapter(isSort);
+		dialog.show();
 
-					}
-				});
-
-		builder.setNegativeButton(SystemUtils.getRsStr(R.string.cancle),
-				new DialogInterface.OnClickListener() {
-
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						// TODO Auto-generated method stub
-
-					}
-				});
+		Window window = dialog.getWindow();
+		if (window != null) {
+			int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);   // 300dp
+			int height = (int) (230*1.3  * getResources().getDisplayMetrics().density);  // 400dp
+			window.setLayout(width, height);
+		}
 
 	}
 }

@@ -1,12 +1,12 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
 import android.databinding.ObservableField;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
@@ -20,6 +20,7 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
@@ -31,7 +32,9 @@ import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
+import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.logic.ExportExcel;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
@@ -39,6 +42,7 @@ import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DoubleUtil;
+import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -46,6 +50,9 @@ import com.sansen.yeweiyi.view.MyDecoration;
 
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -56,21 +63,20 @@ import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.observers.DisposableObserver;
 import io.reactivex.schedulers.Schedulers;
 
+import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
+
 public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemClickListener{
 
 	private static final String TAG ="InOilFragment";
 	private RecyclerView inout_list_info;
 	private InOutAdapter myAdapter;
 	private LinearLayoutManager mLinearLayoutManager;
-	private int datasize; // 模拟数据集的条数
 	private List<OilInOut> lists = null;// 存放当前的所有数据
 	private List<OilInOut> temps;
 	private boolean isSort = true;
-	private int oilCanId; //筛选油罐号
-
-	AlertDialog.Builder builder;
 	private List<OilCanMapper> mapper;
 	private int account=0;
+	private LinearLayout ly_ruKu;
 	@Override
 	protected View initView(LayoutInflater inflater) {
 		return inflater.inflate(R.layout.fragment_recode_inout, null);
@@ -99,11 +105,16 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		myAdapter.setOnItemClickListener(this);
 		inout_list_info.setAdapter(myAdapter);
 		View headerView = rootView.findViewById(R.id.title_bar);
+		ly_ruKu=rootView.findViewById(R.id.ly_ruKu);
+		ly_ruKu.setOnClickListener(this);
+		if (!Singleton.getInstance().IsRuKu){
+			ly_ruKu.setVisibility(View.GONE);
+		}
 
 // 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
-		tvTitle.setText("设置");
+		tvTitle.setText("入库记录");
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 	}
 	OnPropertyChangedCallback callback = new OnPropertyChangedCallback() {
@@ -124,32 +135,37 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		SerialPortEntrity.time.removeOnPropertyChangedCallback(callback);
 	}
 	private void initDialog(final int position) {
-		builder = new AlertDialog.Builder(ct);
-		builder.setTitle(SystemUtils.getRsStr(R.string.isDeleteRecord));
-		builder.create();
-		builder.setPositiveButton(SystemUtils.getRsStr(R.string.confirm),
-				new android.content.DialogInterface.OnClickListener() {
+		View customView = LayoutInflater.from(main).inflate(R.layout.dialog_custom_alert, null);
+		Button btn_confirm = customView.findViewById(R.id.btn_confirm);
+		Button btn_cancel = customView.findViewById(R.id.btn_cancel);
+		AlertDialog dialog = new AlertDialog.Builder(main)
+				.setView(customView)
+				.create();
+		btn_cancel.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				dialog.dismiss();
+			}
+		});
+		btn_confirm.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				OilInOut oilInOut = (OilInOut) myAdapter
+						.getItem(position);
+				dbManager.delteRecord(oilInOut);
+				initializeAdapter(isSort);
+				dialog.dismiss();
+			}
+		});
 
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						OilInOut oilInOut = (OilInOut) myAdapter
-								.getItem(position);
-						dbManager.delteRecord(oilInOut);
-						initializeAdapter(isSort);
+		dialog.show();
 
-					}
-				});
-
-		builder.setNegativeButton(SystemUtils.getRsStr(R.string.cancle),
-				new android.content.DialogInterface.OnClickListener() {
-
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						// TODO Auto-generated method stub
-
-					}
-				});
-
+		Window window = dialog.getWindow();
+		if (window != null) {
+			int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);   // 300dp
+			int height = (int) (230*1.3  * getResources().getDisplayMetrics().density);  // 400dp
+			window.setLayout(width, height);
+		}
 	}
 
 	public void initTitle() {
@@ -157,33 +173,6 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	
 		if (main != null) {
 
-//			main.tv_filter.setVisibility(View.VISIBLE);
-//			main.tv_right.setVisibility(View.VISIBLE);
-//			main.tv_right.setText(SystemUtils.getRsStr(R.string.record_sort));
-//			main.tv_filter.setText(SystemUtils.getRsStr(R.string.filter));
-//
-//			main.iv_right.setVisibility(View.GONE);
-//			main.tv_unlogin.setVisibility(View.GONE);
-//			main.tv_left.setVisibility(View.GONE);
-//
-//			main.tv_filter.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					Intent intent = new Intent(main,ActivityDialog.class);
-//					startActivityForResult(intent, 0);
-//				}
-//			});
-//
-//			main.tv_right.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					isSort = !isSort;
-//					initializeAdapter(isSort);
-//					mLinearLayoutManager.removeAllViews();
-//				}
-//			});
 		}
 	}
 	@Override
@@ -280,22 +269,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		//Log.i("查询记录","++++++++");
 		temps = new ArrayList<OilInOut>();
 		if (dbManager != null) {
-//			if (SharePrefUtil.getBoolean(ct,SharePrefUtil.TEST_DATA,false)){
-//				lists =new ArrayList<OilInOut>();
-//				List<OilCanMapper> mappers= dbManager.findAllObject(OilCanMapper.class);
-//				for (OilCanMapper map:mappers) {
-//					Log.i("查询记录","-------------"+map.getProbeId());
-//					if (map.isshow()){
-//						lists.addAll(dbManager.<OilInOut>findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des));
-//					}
-//				}
-//			}else {
-//				if (oilCanId != 0) {
-//					temps = dbManager.findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des);
-//				} else {
-//					temps = dbManager.findLimit(OilInOut.class,pageSize,pageIndex,des);
-//				}
-//			}
+
 			if (oilCanId != 0) {
 				temps = dbManager.findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des);
 			} else {
@@ -320,8 +294,46 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	@Override
 	protected void processClick(View v) {
 
+		if (v.getId()==R.id.ly_ruKu){
+			runOnUiThread(() -> {
+				// 主线程操作
+				ly_ruKu.setVisibility(View.GONE);
+			});
+			SaveInOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
+		}
 	}
+	private void SaveInOIl(String path) {
 
+		//path=path+"/" + "Oil_in_record";
+		Log.e("TAG 路径",path);
+		ExportExcel<OilInOut> exportExcel = new ExportExcel<OilInOut>();
+		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","入库量l","入库量kg", "介质"};
+		DBDataManager db = MyApplication.getInstance().getmDBManager();
+		List<OilInOut> dataset = db.findAllObject(OilInOut.class);
+		File file = new File(path);
+		if (!file.exists())
+			file.mkdir();
+		OutputStream out = null;
+		try {
+			file = new File(path + "/" + "Oil_in_record" + ".xls");
+			out = new FileOutputStream(file);
+			exportExcel.exportExcel(headers, dataset,
+					new OilInOut().getParams(), out, new ExcelListener() {
+						@Override
+						public void Success(boolean isTrue) {
+							runOnUiThread(() -> {
+								// 主线程操作
+								ly_ruKu.setVisibility(View.VISIBLE);
+							});
+						}
+					});
+			out.close();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
+	}
 
 
 
@@ -344,6 +356,12 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	public void onReflushData() {
 		initializeAdapter(isSort);
 		mLinearLayoutManager.removeAllViews();
+		if (!Singleton.getInstance().IsRuKu){
+			ly_ruKu.setVisibility(View.GONE);
+		}
+		else {
+			ly_ruKu.setVisibility(View.VISIBLE);
+		}
 
 	}
 
@@ -557,7 +575,6 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		//Log.i(TAG, "onLongClick: 长按"+position);
 		if (Singleton.getInstance().IsDelIn) {
 			initDialog(position);
-			builder.show();
 		} else {
 			//SystemUtils.showRsToast(R.string.authorization_toast_noauth);
 		}

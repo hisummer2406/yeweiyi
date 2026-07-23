@@ -64,8 +64,7 @@
                     android:layout_marginTop="5dp"
                     android:text="管理员密码"
                     android:textColor="#222222"
-                    android:textStyle="bold"
-                    android:textSize="30sp" />
+                    android:textSize="34sp" />
             </LinearLayout>
 
             <!-- 报表设置 -->
@@ -90,8 +89,7 @@
                     android:layout_marginTop="5dp"
                     android:text="报表设置"
                     android:textColor="#222222"
-                    android:textStyle="bold"
-                    android:textSize="30sp" />
+                    android:textSize="34sp" />
             </LinearLayout>
 
             <!-- 补录记录 -->
@@ -116,8 +114,7 @@
                     android:layout_marginTop="5dp"
                     android:text="补录记录"
                     android:textColor="#222222"
-                    android:textStyle="bold"
-                    android:textSize="30sp" />
+                    android:textSize="34sp" />
             </LinearLayout>
         </LinearLayout>
 
@@ -151,8 +148,7 @@
                     android:layout_marginTop="5dp"
                     android:text="串口设置"
                     android:textColor="#222222"
-                    android:textStyle="bold"
-                    android:textSize="30sp" />
+                    android:textSize="34sp" />
             </LinearLayout>
 
             <!-- 演示模式 -->
@@ -177,8 +173,7 @@
                     android:layout_marginTop="5dp"
                     android:text="演示模式"
                     android:textColor="#222222"
-                    android:textStyle="bold"
-                    android:textSize="30sp" />
+                    android:textSize="34sp" />
             </LinearLayout>
 
             <!-- 空白占位，保证两行对齐 -->

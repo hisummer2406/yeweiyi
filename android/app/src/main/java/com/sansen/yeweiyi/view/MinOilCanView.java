@@ -45,8 +45,9 @@ public class MinOilCanView extends View {
 
     float proLeftRoait = (float) 0.13538212;//进度条 左
     float proRightRoait = (float) 0.24023305;//进度条 右
-    float proTopRoait = (float) 0.262340426;//进度条 上
-    float proBootomRoait = (float) 0.94829786;//进度条 下
+    //float proTopRoait = (float) 0.262340426;//进度条 上
+    volatile float proTopRoait = (float) 0.222340426;
+    float proBootomRoait = (float) 0.94829786;//(float) 0.94829786;//进度条 下
     float textLeft = (float) 0.50471493;//具体数据的值
     float textID = (float) 0;//油罐id
 
@@ -115,11 +116,12 @@ public class MinOilCanView extends View {
         if (oilCan!=null&&GunType!=oilCan.getGunType()){
             GunType=oilCan.getGunType();
             if (GunType==1){
-                proTopRoait = (float) 0.222340426;
+               // proTopRoait = (float) 0.222340426;
+               // proTopRoait = (float) 0.562340426;
                 src = BitmapFactory.decodeResource(mResource, R.drawable.sansen_oilcan2);
             }
             else {
-                proTopRoait = (float) 0.262340426;
+              //  proTopRoait = (float)0.422340426;
                 src = BitmapFactory.decodeResource(mResource, R.drawable.sansen_oilcan);
             }
 
@@ -189,9 +191,22 @@ public class MinOilCanView extends View {
 //        int waterRatio=20;
                 //Log.i(TAG, "onDraw: 油比例"+oilRatio+"水比例"+waterRatio);
 
-                oilTopValue = (bootm - top) * (1 - (float) oilRatio / 100);
+
 //        Log.i(TAG, "onDraw: oilTopValue ="+(bootm - top));
-                mOilProRect = new Rect(left, (int) (top + oilTopValue), right, bootm);
+
+               // mOilProRect = new Rect(left, (int) ((int) top+ oilTopValue), right,bootm);
+                if (GunType==1){
+                    //立罐
+                    oilTopValue = (bootm - top) * (1 - (float) oilRatio / 100);
+                    mOilProRect = new Rect(left, (int) ((int) (mTotalHeight * 0.222340426f) + oilTopValue), right, bootm);
+
+                }
+                else {
+                    oilTopValue = (bootm - (int) (mTotalHeight * 0.392340426f)) * (1 - (float) oilRatio / 100);
+
+                    mOilProRect = new Rect(left, (int) ((int) (mTotalHeight * 0.392340426f) + oilTopValue), right, (int) (mTotalHeight * 0.94829786));
+                }
+
 
                 //mOilProRect = new Rect(78, 23, 113, 167);
                 //Log.i(TAG, "onDraw: 比例："+"左："+(float)78/mTotalWidth+" 右:"+(float)113/mTotalWidth+"上:"+(float)23/mTotalHeight+"下"+(float)167/mTotalHeight);
@@ -227,7 +242,7 @@ public class MinOilCanView extends View {
                         float leftBg = right + 120;  // 与标签起始X一致
                         float topBg = top + i * textSize;
                         // 右边界需要包含标签和数值文本的总宽度
-                        String label = String.valueOf(oilCan.getOilCanPos())+"号  :";//content[i] + ":";
+                        String label = String.valueOf(" "+oilCan.getOilCanPos())+"号 ";//content[i] + ":";
                         String value = getTextContent(arrIndex == null ? i : arrIndex[i]);
                         float totalWidth = 125 + mTextPaint.measureText(label) + mTextPaint.measureText(value);
                         float rightBg = 330;//right + totalWidth;
@@ -237,7 +252,7 @@ public class MinOilCanView extends View {
                         int savedColor = mBitPaint.getColor();
 
                         mBitPaint.setColor(bgColor);
-                        canvas.drawRect(leftBg, topBg-45, rightBg+50, bottomBg-35, mBitPaint);
+                        canvas.drawRect(leftBg, topBg-45, rightBg+40, bottomBg-32, mBitPaint);
                         mBitPaint.setColor(savedColor);  // 恢复原画笔颜色
 
                         // 将文字颜色设为白色（确保在蓝色背景上可见）
@@ -255,7 +270,7 @@ public class MinOilCanView extends View {
                     }
 
                     mTextPaint.setColor(tagColor);
-                    canvas.drawText(content[i] + "", right + 120, top + (i*1.35f + 1.2f) * textSize - 35, mTextPaint);
+                    canvas.drawText(content[i] + "", right + 120, top + (i*1.35f + 1.2f) * textSize - 38, mTextPaint);
                     switch (oilCan.getProbeType()) {
                         case 0:
                             ErrorColor(4);
@@ -280,7 +295,7 @@ public class MinOilCanView extends View {
                             break;
                     }
 //                Log.i("显示数据",oilCan.getOilCanPos()+" 油位"+oilCan.getOilLevel()+"补偿  "+oilCan.getLevelCorrection());
-                    canvas.drawText(getTextContent(arrIndex==null?i:arrIndex[i]), right + 125 + mTextPaint.measureText(content[i] + ":"), top + (i*1.35f + 1.2f) * textSize - 35, mTextPaint);
+                    canvas.drawText(getTextContent(arrIndex==null?i:arrIndex[i]), right + 125 + mTextPaint.measureText(content[i] + ""), top + (i*1.35f + 1.2f) * textSize - 38, mTextPaint);
                 }
 //                mTextPaint.setColor(tagColor);
 //                mTextPaint.setTextSize((float) (textSize));
@@ -396,31 +411,32 @@ public class MinOilCanView extends View {
 
             case 1:
                 YeWeiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米");
-                return  ("毫米".equals(YeWeiUnit)?oilCan.getOilLevel():oilCan.getOilLevel()/1000) + "  "+YeWeiUnit;
+                return  ("毫米".equals(YeWeiUnit)?DataUtils.doubleFomentStr(oilCan.getOilLevel()):DataUtils.doubleFomentStr2(oilCan.getOilLevel()/1000)) + "  "+YeWeiUnit;
             case 2:
                 RongJiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升");
-                return  ("升".equals(RongJiUnit)?oilCan.getOilVolume():oilCan.getOilVolume()/1000) + "  "+RongJiUnit;
+                return  ("升".equals(RongJiUnit)?DataUtils.doubleFomentStr(oilCan.getOilVolume()):DataUtils.doubleFomentStr2(oilCan.getOilVolume()/1000)) + "  "+RongJiUnit;
             case 3:
 
                 YeWeiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米");
-                return  ("毫米".equals(YeWeiUnit)?oilCan.getWaterLevel():oilCan.getWaterLevel()/1000) + "  "+YeWeiUnit;
+                return  ("毫米".equals(YeWeiUnit)?DataUtils.doubleFomentStr(oilCan.getWaterLevel()):DataUtils.doubleFomentStr2(oilCan.getWaterLevel()/1000)) + "  "+YeWeiUnit;
 
 
 
             case 4:
                 ZhiLiangUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit,"千克");
-                return  ("千克".equals(ZhiLiangUnit)?oilCan.getCanAddOilWeight() :oilCan.getCanAddOilWeight() /1000) + "  "+ZhiLiangUnit;
+                return  ("千克".equals(ZhiLiangUnit)?DataUtils.doubleFomentStr(oilCan.getCanAddOilWeight()) :DataUtils.doubleFomentStr2(oilCan.getCanAddOilWeight() /1000)) + "  "+ZhiLiangUnit;
 
             case 5:
                 ZhiLiangUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit,"千克");
-                return  ("千克".equals(ZhiLiangUnit)?oilCan.getOilWeight() :oilCan.getOilWeight() /1000) + "  "+ZhiLiangUnit;
+                return  ("千克".equals(ZhiLiangUnit)?DataUtils.doubleFomentStr(oilCan.getOilWeight()) :DataUtils.doubleFomentStr2(oilCan.getOilWeight() /1000)) + "  "+ZhiLiangUnit;
 
 
             case 6:
                 RongJiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升");
-                return  ("升".equals(RongJiUnit)?oilCan.getWaterVolume():oilCan.getWaterVolume()/1000) + "  "+RongJiUnit;
+                return  ("升".equals(RongJiUnit)?DataUtils.doubleFomentStr(oilCan.getWaterVolume()):DataUtils.doubleFomentStr2(oilCan.getWaterVolume()/1000)) + "  "+RongJiUnit;
             case 7:
                 return oilCan.getTemper() + "  ℃";
+
 
             case 8:
                 return oilCan.getAlarmState()+"";
@@ -449,6 +465,7 @@ public class MinOilCanView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+
         mTotalHeight = h;
         mTotalWidth = w;
         //Log.i(TAG, "onSizeChanged: 宽"+w+"高"+h);

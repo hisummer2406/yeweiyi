@@ -14,7 +14,6 @@ import com.sansen.yeweiyi.utils.DataUtils;
 import java.util.List;
 
 import atg.jni.ATGJNI;
-import serialport.help.SerialPortHelper;
 
 public class TestSet extends AndroidTestCase {
 	DbUtils db;

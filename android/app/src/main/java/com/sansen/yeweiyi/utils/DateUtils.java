@@ -92,7 +92,8 @@ public class DateUtils {
 
 	/** 获取当前的day信息yyyy-MM-dd HH:mm */
 	public static String getYYYMMddHHmmss() {
-		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		//DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 		Date date = null;
 		date = new Date(System.currentTimeMillis());
 

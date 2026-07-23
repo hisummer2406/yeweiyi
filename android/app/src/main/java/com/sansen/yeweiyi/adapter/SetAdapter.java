@@ -25,19 +25,16 @@ public class SetAdapter extends BaseAdapter {
 
     @Override
     public int getCount() {
-        // TODO Auto-generated method stub
         return icon.length;
     }
 
     @Override
     public Object getItem(int arg0) {
-        // TODO Auto-generated method stub
         return null;
     }
 
     @Override
     public long getItemId(int arg0) {
-        // TODO Auto-generated method stub
         return 0;
     }
 
@@ -54,8 +51,6 @@ public class SetAdapter extends BaseAdapter {
         TextView tv_name=v.findViewById(R.id.tv_name);
         iv_set.setImageResource(icon[position]);
         tv_name.setText(data[position]);
-       // setEnable(position, iv_set);
-
         return v;
     }
 

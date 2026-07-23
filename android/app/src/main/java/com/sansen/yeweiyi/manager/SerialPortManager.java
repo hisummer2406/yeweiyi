@@ -3,6 +3,7 @@ package com.sansen.yeweiyi.manager;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
+import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
@@ -17,6 +18,7 @@ import com.sansen.yeweiyi.factory.PCDataFactory;
 import com.sansen.yeweiyi.factory.VR350Factory;
 import com.sansen.yeweiyi.factory.ZhongChengCompany;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
+import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
@@ -34,7 +36,7 @@ public class SerialPortManager implements IParseDataListener {
     private static SerialPortManager instance;
     // 串口名列表
     public static final String[] m_iSerialPort = {"S4", "S1", "S2",
-            "S3"};
+            "S5"};
     // 波特率
     public static final int[] baudrate = {115200, 57600, 38400, 19200, 9600,
             4800, 2400, 1200, 250};
@@ -58,7 +60,7 @@ public class SerialPortManager implements IParseDataListener {
     private SerialPortHelper VR350;
     // 探针 串口1 AMA5
     private SerialPortHelper serialPortS2;
-//    private SerialPortHelper serialPortS4;
+
     /**
      * 串口 232 AMA1 驱动板 硬件接口 RX1 TX1 GND
      */
@@ -107,52 +109,42 @@ public class SerialPortManager implements IParseDataListener {
      * @param context
      */
     private SerialPortManager(Context context) {
-        mContext = context;
-        brandBean = (BrandBean) SharePrefUtil.getObj(context, SharePrefUtil.BrandSet);
+        if (SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.isTestStatus, 0) == 0) {
+            mContext = context;
+            brandBean = (BrandBean) SharePrefUtil.getObj(context, SharePrefUtil.BrandSet);
 
-        if (brandBean == null) {
-            brandBean = new BrandBean(5, 3, 0, 0);
+            if (brandBean == null) {
+                brandBean = new BrandBean(5, 3, 0, 0);
+            }
+
+            mOilCanDataManager = MyApplication.getInstance()
+                    .getmOilcanDataManager();
+
+            initSerialPort();
+            initThread();
         }
-
-        mOilCanDataManager = MyApplication.getInstance()
-                .getmOilcanDataManager();
-
-        initSerialPort();
-        initThread();
     }
 
-    /**
-     * 初始化串口数据
-     */
+
     private void initSerialPort() {
-        // 连接探针
-        serialPortS2 = new SerialPortHelper(m_iSerialPort[2], baudrate[brandBean.getBaudrate()],
-                databits[brandBean.getDatabits()], stopbits[brandBean.getStopbits()], paritys[brandBean.getParitys()]);
 
-//        serialPortS4=new SerialPortHelper(m_iSerialPort[0], baudrate[brandBean.getBaudrate()],
-//                databits[brandBean.getDatabits()], stopbits[brandBean.getStopbits()], paritys[brandBean.getParitys()]);
-        /**
-         * FC FC FC
-         * 06 1B
-         * 01 05 00 00 00 00 00 00 00 00 04 19 38 04 19 38 00 00 00 00 00 00 00 00 00 06 8B CA 29
-         */
+
     }
 
-    /**
-     * 初始化并启动访问串口线程
-     */
+
     private void initThread() {
         // 访问Pc
         PCDataFactory pcDataFactory = null;
         //Log.i(TAG, "initThread:    " + SharePreManager.getBackstage());
         if (VR350Factory.VR350R.equals(SharePreManager.getBackstage())) {
-            VR350 = new SerialPortHelper(m_iSerialPort[2], baudrate[4],
+            VR350 = new SerialPortHelper(m_iSerialPort[3], baudrate[4],
                     databits[3], stopbits[0], paritys[0]);
             pcPortThread = new PCPortThread("ReceiveThread1", VR350);
             pcDataFactory = new VR350Factory(mContext, pcPortThread);
 
         }
-
+        serialPortS2 = new SerialPortHelper(m_iSerialPort[2], baudrate[4],
+                databits[3], stopbits[0], paritys[0]);
         pcPortThread.setFactory(pcDataFactory);
 
         pcPortThread.start();
@@ -171,19 +163,13 @@ public class SerialPortManager implements IParseDataListener {
 
     public void sendByteProbe(byte[] bytes) {
         serialPortS2.sendData(bytes);
-        //Log.i("发送的数据", DataUtils.bytesToHexString(bytes, bytes.length));
     }
 
-
-    /**
-     * 请求探针数据
-     *
-     * @author PC
-     */
     class RequestThread extends Thread {
         private SerialPortHelper serialPort;
         private String name;
         int isWenDu = 0;
+        private boolean isGetChangDu=true;
         //IoBufferManager buffManager;
 
         public RequestThread(String name, SerialPortHelper serialPort) {
@@ -193,140 +179,151 @@ public class SerialPortManager implements IParseDataListener {
         }
 
         public void run() {
-            String data = null;
-            // 如果串口一直打开，那么线程就一直执行
-            SparseArray<OilCan> mOilCanData;
-            OilCan mOilCan = null; // 由这里开始
-            String oilCanData = null;
-            boolean isRight = false;
-            int j;
-            while (serialPort.isOpen) {
-                if (SharePrefUtil.getBoolean(MyApplication.getInstance(), SharePrefUtil.BOOL_RRMAINNING, false) &&
-                        System.currentTimeMillis() > DateUtils.getStringToDate(SharePrefUtil.getString(MyApplication.getInstance(),
-                                SharePrefUtil.TIME_REMAINING, DateUtils.getYYYMMdd()), "yyyy-MM-dd")) {
 
-                } else {
-                    //  Log.e("TAG","--------------"+isStopProbe);
-                    if (isStopProbe) {
-                        mOilCanData = mOilCanDataManager.getData();// 保证每一次获取的数据为最新
-                        // 由这里把新的信息分发到各个页面
-                        for (j = 1; j <= mOilCanData.size(); j++) {
-                            if (mOilCanData != null) {
-                                try {
-                                    if (mOilCanData.get(j) != null) {
-                                        mOilCan = mOilCanData.get(j);
-                                    } else {
+                String data = null;
+                // 如果串口一直打开，那么线程就一直执行
+                SparseArray<OilCan> mOilCanData;
+                OilCan mOilCan = null; // 由这里开始
+                String oilCanData = null;
+                boolean isRight = false;
+                int j;
+                while (serialPort.isOpen) {
+
+                    if (SharePrefUtil.getBoolean(MyApplication.getInstance(), SharePrefUtil.BOOL_RRMAINNING, false) &&
+                            System.currentTimeMillis() > DateUtils.getStringToDate(SharePrefUtil.getString(MyApplication.getInstance(),
+                                    SharePrefUtil.TIME_REMAINING, DateUtils.getYYYMMdd()), "yyyy-MM-dd")) {
+
+                    } else {
+                        //  Log.e("TAG","--------------"+isStopProbe);
+                        if (isStopProbe) {
+                            mOilCanData = mOilCanDataManager.getData();// 保证每一次获取的数据为最新
+                            // 由这里把新的信息分发到各个页面
+                            for (j = 1; j <= mOilCanData.size(); j++) {
+                                if (mOilCanData != null) {
+                                    try {
+                                        if (mOilCanData.get(j) != null) {
+                                            mOilCan = mOilCanData.get(j);
+                                        } else {
+                                            break;
+                                        }
+                                    } catch (Exception e) {
                                         break;
                                     }
-                                } catch (Exception e) {
-                                    break;
                                 }
-                            }
-                            if (isStopProbe) {
-                                for (int i = 0; i < 5; i++) { //0x01,0x06,0x00,0x01,0x00,0x02修改波特率
-
-                                    switch (mOilCan.getProbeType()) {
-                                        case 0:
-                                            if (isWenDu == 0) {
-
-                                                isWenDu++;
-                                                oilCanData = ZhongChengCompany.getInstance().sendWenDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-
-                                            } else {
-                                                isWenDu++;
-                                                oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-                                                if (isWenDu > 10)
-                                                    isWenDu = 0;
-                                            }
-                                            break;
-                                        case 1:
-                                            oilCanData = LDCompany.getInstance().sendProbeInfo("", mOilCan.getProbeAdr(), mContext);
-                                            //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
-                                            break;
-
-                                        case 2:
-                                            oilCanData = LD2Company.getInstance().sendProbeInfo("", mOilCan.getProbeAdr(), mContext);
-                                            //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
-                                            break;
-                                    }
-                                    serialPort.sendData(DataUtils.HexString2Bytes(oilCanData));
-//                                Log.i(TAG, "发送到串口数据" + oilCanData);
-                                    try {
-                                        Thread.sleep(100);
-                                    } catch (InterruptedException e1) {
-                                        // TODO Auto-generated catch block
-                                        e1.printStackTrace();
-                                    }
-
-                                    data = null;
-                                    byte[] bytes = serialPort.receiveData();
-
-                                    if (bytes != null) {
-                                        data = DataUtils.bytesToHexString(bytes, bytes.length);
-                                    }
-                                    //  Log.i(TAG, "run: 接受串口数据"+(bytes==null?bytes: DataUtils.bytesToHexString(bytes, bytes.length)));
-
-                                    if (StringUtils.isNotEmpty(data)) {
-
+                                if (isStopProbe) {
+                                    for (int i = 0; i < 5; i++) { //0x01,0x06,0x00,0x01,0x00,0x02修改波特率
                                         switch (mOilCan.getProbeType()) {
                                             case 0:
-                                                try {
-                                                    isRight = ZhongChengCompany
-                                                            .getInstance()
-                                                            .probeInfoPase(data, SerialPortManager.this);
+                                                if (isWenDu == 0) {
 
-                                                } catch (Exception e) {
-                                                    //e.printStackTrace();
+                                                    isWenDu++;
+                                                    oilCanData = ZhongChengCompany.getInstance().sendWenDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
+
+                                                } else {
+                                                    isWenDu++;
+                                                    if (isWenDu % 10 == 1) {
+                                                        oilCanData = ZhongChengCompany.getInstance().sendChangDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
+                                                    } else
+                                                        oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAdr(), mContext);
+
+
+                                                    if (isWenDu > 100)
+                                                        isWenDu = 0;
+                                                }
+                                                if (isGetChangDu) {
+                                                    isGetChangDu = false;
+
                                                 }
                                                 break;
                                             case 1:
-                                                try {
-                                                    isRight = LDCompany
-                                                            .getInstance()
-                                                            .probeInfoPase(data, SerialPortManager.this);
-                                                } catch (Exception e) {
+                                                oilCanData = LDCompany.getInstance().sendProbeInfo("", mOilCan.getProbeAdr(), mContext);
+                                                //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
+                                                break;
 
-                                                }
+                                            case 2:
+                                                oilCanData = LD2Company.getInstance().sendProbeInfo("", "02", mContext);
+                                                //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
                                                 break;
                                         }
-//                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
-                                        if (isRight) {
-                                            mOilCan.setErrorTimes(0);
-//                                        Log.i(TAG, "串口数据校验成功: "+mOilCan.getErrorTimes()+"==="+data);
-                                            if (MyApplication.alarmStates.containsKey(mOilCan.getOilCanPos()) && MyApplication.alarmStates.get(mOilCan.getOilCanPos()).getConnectError() == 1) {
-                                                MyApplication.alarmStates.get(mOilCan.getOilCanPos()).setConnectError(0);
-                                            }
-                                            break;
-                                        } else {
-//                                        Log.i(TAG, "第几次:" + i + " run: 串口接收数据" + data);
-                                            mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);
-                                            //  Log.w(TAG, "串口CRC错误时: "+mOilCan.getErrorTimes()+"==="+data);
+                                        serialPort.sendData(DataUtils.HexString2Bytes(oilCanData));
+//                                Log.i(TAG, "发送到串口数据" + oilCanData);
+                                        try {
+                                            Thread.sleep(100);
+                                        } catch (InterruptedException e1) {
+                                            // TODO Auto-generated catch block
+                                            e1.printStackTrace();
                                         }
-                                    } else {
-                                        mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);
-                                        // Log.w(TAG, "串口为空时: "+mOilCan.getErrorTimes());
-                                    }
-                                    crcError(mOilCan);
-                                    try {
-                                        Thread.sleep(50);
-                                    } catch (InterruptedException e) {
-                                        //e.printStackTrace();
-                                    }
-                                }
 
+                                        data = null;
+                                        byte[] bytes = serialPort.receiveData();
+
+                                        if (bytes != null) {
+                                            data = DataUtils.bytesToHexString(bytes, bytes.length);
+                                        }
+                                        if (StringUtils.isNotEmpty(data)) {
+
+                                            switch (mOilCan.getProbeType()) {
+                                                case 0:
+                                                    try {
+                                                        isRight = ZhongChengCompany
+                                                                .getInstance()
+                                                                .probeInfoPase(data, SerialPortManager.this);
+
+                                                    } catch (Exception e) {
+                                                        //e.printStackTrace();
+                                                    }
+                                                    break;
+                                                case 1:
+                                                    try {
+                                                        isRight = LDCompany
+                                                                .getInstance()
+                                                                .probeInfoPase(data, SerialPortManager.this);
+                                                    } catch (Exception e) {
+
+                                                    }
+                                                case 2:
+                                                    isRight = LD2Company
+                                                            .getInstance()
+                                                            .probeInfoPase(data, SerialPortManager.this);
+                                                    break;
+                                            }
+//                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
+                                            if (isRight) {
+                                                mOilCan.setErrorTimes(0);
+//                                        Log.i(TAG, "串口数据校验成功: "+mOilCan.getErrorTimes()+"==="+data);
+                                                if (MyApplication.alarmStates.containsKey(mOilCan.getOilCanPos()) && MyApplication.alarmStates.get(mOilCan.getOilCanPos()).getConnectError() == 1) {
+                                                    MyApplication.alarmStates.get(mOilCan.getOilCanPos()).setConnectError(0);
+                                                }
+                                                break;
+                                            } else {
+//                                        Log.i(TAG, "第几次:" + i + " run: 串口接收数据" + data);
+                                                mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);
+                                                //  Log.w(TAG, "串口CRC错误时: "+mOilCan.getErrorTimes()+"==="+data);
+                                            }
+                                        } else {
+                                            mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);
+                                            // Log.w(TAG, "串口为空时: "+mOilCan.getErrorTimes());
+                                        }
+                                        crcError(mOilCan);
+                                        try {
+                                            Thread.sleep(50);
+                                        } catch (InterruptedException e) {
+                                            //e.printStackTrace();
+                                        }
+                                    }
+
+                                }
+                            }
+                        } else {
+                            byte[] bytes = serialPort.receiveData();
+                            if (bytes != null && bytes.length > 0) {
+                                reciveDataListener.reciveData(bytes);
                             }
                         }
-                    } else {
-                        byte[] bytes = serialPort.receiveData();
-//                    Log.i("读取探针中的数据", bytes + "");
-                        if (bytes != null && bytes.length > 0) {
-                            reciveDataListener.reciveData(bytes);
-                        }
                     }
-                }
 
+                }
             }
-        }
     }
 
     ProbeReciveDataListener reciveDataListener;
@@ -470,7 +467,7 @@ public class SerialPortManager implements IParseDataListener {
                 data = null;
                 if (bytes != null) {
                     data = DataUtils.bytesToHexString(bytes, bytes.length);
-//                    Log.i(TAG, "run: 后台接收到数据" + data);
+                   Log.i(TAG, "run: 后台接收到数据" + data);
                 }
                 if (StringUtils.isNotEmpty(data)) {
                     hexFactory.transportData(data);

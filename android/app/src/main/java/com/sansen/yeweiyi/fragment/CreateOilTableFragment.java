@@ -3,7 +3,10 @@ package com.sansen.yeweiyi.fragment;
 
 import android.annotation.SuppressLint;
 import android.content.Intent;
+import android.databinding.Observable;
+import android.databinding.ObservableField;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v4.content.ContextCompat;
@@ -22,24 +25,39 @@ import android.widget.TextView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.activity.ActivityDialog;
 import com.sansen.yeweiyi.adapter.GuanBiaoAdapter;
+import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.GuanBiaoData;
+import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanTable;
+import com.sansen.yeweiyi.db.OilTable;
 import com.sansen.yeweiyi.factory.EllipseTable;
 import com.sansen.yeweiyi.factory.ICreateTable;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
+import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.logic.ExportExcel;
+import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
+import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
 
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
 @SuppressLint("ValidFragment")
 public class CreateOilTableFragment extends BaseFragment {
@@ -53,16 +71,11 @@ public class CreateOilTableFragment extends BaseFragment {
 
     private EditText createtable_ed_headA;
 
-    private LinearLayout createtable_bt_build, createtable_bt_saveoilcan, ly_upper_page;
+    private LinearLayout createtable_bt_build, createtable_bt_saveoilcan, ly_upper_page, createtable_bt_copyoilcan;
 
     private LinearLayout createtable_bt_writeoilcan;
     private LinearLayout mly_UprightOil;
     private LinearLayout createtable_bt_chaKan;
-
-//	private Button createtable_bt_writeu;
-
-    //private android.widget.TextView createtable_tv_main;
-
     private OilCanTable createOilCanTalbe;
     private TableType tableType;
     private RecyclerView guanbiao_list_info;
@@ -89,12 +102,6 @@ public class CreateOilTableFragment extends BaseFragment {
     @Override
     protected void initData(Bundle savedInstanceState) {
         findView();
-//		createtable_tv_main.setMovementMethod(ScrollingMovementMethod
-//				.getInstance());
-
-        //temps = findAllObject(TableType.class, 0, Const.recordNum, true);
-        //dbManager.findLimit(OilCanTable.class, 0, 20, true);
-
 
     }
 
@@ -110,34 +117,31 @@ public class CreateOilTableFragment extends BaseFragment {
         createtable_ed_headA = (EditText) rootView.findViewById(R.id.createtable_ed_headA);
         createtable_bt_build = (LinearLayout) rootView.findViewById(R.id.createtable_bt_build);
         createtable_bt_saveoilcan = (LinearLayout) rootView.findViewById(R.id.createtable_bt_saveoilcan);
+        createtable_bt_copyoilcan = rootView.findViewById(R.id.createtable_bt_copyoilcan);
         ly_upper_page = rootView.findViewById(R.id.ly_upper_page);
         createtable_bt_writeoilcan = (LinearLayout) rootView.findViewById(R.id.createtable_bt_writeoilcan);
         createtable_bt_chaKan = rootView.findViewById(R.id.createtable_bt_chaKan);
-//		createtable_bt_writeu = (Button) rootView.findViewById(R.id.createtable_bt_writeu);
-        //	createtable_tv_main =  (android.widget.TextView) rootView.findViewById(R.id.createtable_tv_main);
         guanbiao_list_info = rootView.findViewById(R.id.guanbiao_list_info);
 
         if (tableType == TableType.THETANK) {
-            //mly_UprightOil.setVisibility(View.GONE);
-//			createtable_ed_headA.setVisibility(View.GONE);
-//			createtable_ed_headB.setVisibility(View.GONE);
-//			dished_head_a.setVisibility(View.GONE);
-//			dished_head_b.setVisibility(View.GONE);
             createtable_iv_icon.setImageDrawable(ContextCompat.getDrawable(main, R.drawable.guanbiao_liguan));
-            create_iv_guanchang.setText(SystemUtils.getRsStr(R.string.oilcan_height));
+            create_iv_guanchang.setText("H:");
+            createtable_tv_diameter.setText("R:");
             mly_UprightOil.setVisibility(View.GONE);
 
         } else if (tableType == TableType.HORIZONTALTANK) {
             createtable_iv_icon.setImageDrawable(ContextCompat.getDrawable(main, R.drawable.guanbiao_woguan));
             create_iv_guanchang.setText(SystemUtils.getRsStr(R.string.oilcan_length));
+
         } else {
             createtable_iv_icon.setImageDrawable(ContextCompat.getDrawable(main, R.drawable.guanbiao_lifangti));
-            createtable_tv_diameter.setText("罐宽R");
+            createtable_tv_diameter.setText("R:");
             dished_head_a.setText(SystemUtils.getRsStr(R.string.oilcan_height));
         }
 
         createtable_bt_build.setOnClickListener(this);
         createtable_bt_saveoilcan.setOnClickListener(this);
+        createtable_bt_copyoilcan.setOnClickListener(this);
         createtable_bt_writeoilcan.setOnClickListener(this);
         createtable_bt_chaKan.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
@@ -149,9 +153,25 @@ public class CreateOilTableFragment extends BaseFragment {
         guanbiao_list_info.addItemDecoration(new MyDecoration(ct, MyDecoration.VERTICAL_LIST));
         myAdapter = new GuanBiaoAdapter();
         guanbiao_list_info.setAdapter(myAdapter);
+        View headerView = rootView.findViewById(R.id.title_bar);
+        // 再从该 View 中 findViewById 获取内部的 TextView
+        tvTitle = headerView.findViewById(R.id.tv_title);
+        tv_time=headerView.findViewById(R.id.main_time);
+        tvTitle.setText("罐表设置");
+        SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 
     }
-
+    Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
+        @Override
+        public void onPropertyChanged(Observable sender, int propertyId) {
+            // 如果需要区分是哪个字段，可通过 propertyId 判断
+            // 直接获取当前值
+            String newValue = ((ObservableField<String>) sender).get();
+            // Log.d("监听", "新值：" + newValue);
+            tv_time.setText(newValue);
+        }
+    };
+    TextView tvTitle,tv_time;
     public void clearEdit() {
         createtable_ed_length.setText("");
         createtable_ed_diameter.setText("");
@@ -161,8 +181,6 @@ public class CreateOilTableFragment extends BaseFragment {
     public void initTitle() {
         if (main != null) {
 
-
-//			main.iv_right.setImageResource(R.drawable.laststep);
             OnClickListener backSetListener = new OnClickListener() {
 
                 @Override
@@ -174,8 +192,7 @@ public class CreateOilTableFragment extends BaseFragment {
                     main.switchContent(main.mContent, main.loadingCreateTableFragment);
                 }
             };
-//			main.tv_left.setOnClickListener(backSetListener);
-//			main.iv_right.setOnClickListener(backSetListener);
+
 
         }
 
@@ -185,38 +202,189 @@ public class CreateOilTableFragment extends BaseFragment {
     protected void processClick(View v) {
         switch (v.getId()) {
             case R.id.createtable_bt_writeoilcan:
-                if (CheckIsBuildTable()) {
-                    createtable_bt_writeoilcan(v);
+
+                if (temps!=null&&temps.size()>0){
+                    for (int i=0;i<temps.size();i++){
+                        OilTable oilTable=new OilTable();
+                        oilTable.setHeight(temps.get(i).getHight());
+                        oilTable.setVolum(temps.get(i).getRongJi());
+                        dataset.add(oilTable);
+
+                    }
+                    SaveTable(Environment.getExternalStorageDirectory().getAbsolutePath());
                 }
+
+
                 break;
-//		case R.id.createtable_bt_writeu:
-//			if (CheckIsBuildTable()) {
-//				createtable_bt_writeu(v);
-//			}
-//			break;
             case R.id.createtable_bt_build:
                 createtable_bt_build(v);
                 break;
 
             case R.id.createtable_bt_saveoilcan:
-                Log.e("TAG", "导出罐表");
+               // SaveInOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
+                Log.e("TAG", "导入罐表");
+                readLocation();
                 break;
             case R.id.ly_upper_page:
+
                 if (main.loadingCreateTableFragment == null) {
                     main.loadingCreateTableFragment = new LoadingCreateTableFragment();
                 }
                 main.switchContent(main.mContent, main.loadingCreateTableFragment);
+
+
                 break;
 
             case R.id.createtable_bt_chaKan:
 
                 Intent intent = new Intent(main, ActivityDialog.class);
                 startActivityForResult(intent, 1);
+
+                break;
+
+            case R.id.createtable_bt_copyoilcan:
+                if (CheckIsBuildTable()) {
+                    createtable_bt_writeoilcan(v);
+                }
+
                 break;
         }
     }
+    List<OilTable> dataset =new ArrayList<>();
+    private void SaveTable(String path) {
+        Log.e("TAG 路径", path);
+        ExportExcel<OilTable> exportExcel = new ExportExcel<OilTable>();
+        String headers[] = { "高度", "容积"};
+        DBDataManager db = MyApplication.getInstance().getmDBManager();
+      //  List<OilTable> dataset = db.findAllObject(OilInOut.class);
+        File file = new File(path);
+        if (!file.exists())
+            file.mkdir();
+        OutputStream out = null;
+        try {
+            file = new File(path + "/" + "Oil_Table_record" + ".xls");
+            out = new FileOutputStream(file);
+            exportExcel.exportExcel(headers, dataset,
+                    new OilTable().getParams(), out, new ExcelListener() {
+                        @Override
+                        public void Success(boolean isTrue) {
+                            runOnUiThread(() -> {
+                                // 主线程操作
+                               // ly_ruKu.setVisibility(View.VISIBLE);
+                            });
+                        }
+                    });
+            out.close();
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
+    }
+
+    public void readLocation() {
+
+        ThreadManager.getLongPool().execute(readRunnable);
+
+    }
+
+    Runnable readRunnable = new Runnable() {
+        public void run() {
+            String path = "/storage/usbhost1/zhongcheng";
+            File file = new File(path);
+            if (!SystemUtils.isUsbExit()) {
+                path= Environment.getExternalStorageDirectory().getPath()+"/zhongcheng";
+            }
+            ReadOilCanTable(path);
+        }
+    };
+
+    Runnable saveRunnable = new Runnable() {
+        public void run() {
+            String path = "/storage/usbhost1/SanSen";
 
 
+            if (!SystemUtils.isUsbExit()) {
+                path= Environment.getExternalStorageDirectory().getPath()+"/zhongcheng";
+            }
+            dbManager.SaveOilCanTable(path);
+            System.out.println("罐表保存成功");
+
+
+            // SaveCommitWork();
+            // SaveOilStroage();
+        }
+    };
+    /**
+     * 从U盘中读取罐表
+     */
+    private void ReadOilCanTable(String path) {
+        int age;
+        age = 20;
+        System.out.println(age);
+        int score = 100;
+        System.out.println(score);
+
+        ExportExcel<Object> excel = new ExportExcel<Object>();
+        // String path = "/storage/usbhost1";
+        InputStream is = null;
+        File file = new File(path + "/" + "Oil_Table_record" + ".xls");
+        try {
+            if (file.exists()) {
+
+                is = new FileInputStream(file);
+
+                Log.e("TAG","导入罐表");
+                createOilCanTalbe = excel
+                        .readExcelOilCanTableContent(is);
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        setMyAdapter();
+                    }
+                });
+
+                is.close();
+                ToastUtils.showToastLong("Read Success");
+            } else {
+                ToastUtils.showToastLong(R.string.datamanager_chek_out);
+            }
+
+        } catch (Exception e) {
+            ToastUtils.showToastLong(e.getMessage());
+            //e.printStackTrace();
+        }
+
+    }
+    private void setMyAdapter (){
+        showTemps.clear();
+        temps.clear();
+        step = 1;
+        if (createOilCanTalbe != null) {
+            if (createOilCanTalbe.getHeight().length >= 200) {
+                Log.e("TAG", createOilCanTalbe.getHeight().length + "-----------");
+                step = (int) Math.ceil(createOilCanTalbe.getHeight().length / 200f);
+            }
+            for (int i = 0; i < createOilCanTalbe.getHeight().length; i++) {
+
+                temps.add(new GuanBiaoData(i, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
+
+                if (step == 1) {
+                    showTemps.add(new GuanBiaoData(i, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
+                } else {
+                    if (step != 0 && i % step == 1) {
+                        showTemps.add(new GuanBiaoData(i / step, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
+
+                    }
+                }
+
+            }
+        }
+        //showTemps=sampleFixedSize(temps,200);
+        myAdapter.notifyDataSetChanged();
+        initializeAdapter(showTemps);
+    }
     boolean CheckIsBuildTable() {
         if (createOilCanTalbe != null) {
             return true;
@@ -243,21 +411,21 @@ public class CreateOilTableFragment extends BaseFragment {
             SystemUtils.showRsToast("灌长不能小于10厘米");
         } else if (StringUtils.isEmpty(createtable_ed_diameter.getText().toString())) {
             SystemUtils.showRsToast(R.string.createtable__nodiameternull);
-        } else if (createtable_ed_diameter.getText().length()<3) {
+        } else if (createtable_ed_diameter.getText().length() < 3) {
             SystemUtils.showRsToast("灌高不能小于10厘米");
-        } else if (tableType == TableType.HORIZONTALTANK & createtable_ed_headA.getText().length()<3) {
+        } else if (tableType == TableType.HORIZONTALTANK & createtable_ed_headA.getText().length() < 3) {
             SystemUtils.showRsToast("罐头不能小于10厘米");
         } else {
             L = Double.parseDouble(createtable_ed_length.getText()
-                    .toString())/1000;
+                    .toString()) / 1000;
             R1 = Double.parseDouble(createtable_ed_diameter.getText()
-                    .toString()) /2000;
+                    .toString()) / 2000;
             if (tableType == TableType.HORIZONTALTANK) {
                 C1 = Double.parseDouble(createtable_ed_headA.getText()
-                        .toString())/1000;
+                        .toString()) / 1000;
             } else if (tableType == TableType.CHANGFANGTI) {
                 C1 = Double.parseDouble(createtable_ed_headA.getText()
-                        .toString())/1000;
+                        .toString()) / 1000;
             }
 
 
@@ -270,40 +438,12 @@ public class CreateOilTableFragment extends BaseFragment {
             if (tableType == TableType.CHANGFANGTI) {
                 createOilCanTalbe = createTable.craeteOilCanTalbe(L, R1 * 2, C1);
             } else if (tableType == TableType.HORIZONTALTANK) {
-                createOilCanTalbe = createTable.craeteOilCanTalbe(L,  R1,C1, 0);
+                createOilCanTalbe = createTable.craeteOilCanTalbe(L, R1, C1, 0);
             } else {
-                createOilCanTalbe = createTable.craeteOilCanTalbe( R1*2,L);
+                createOilCanTalbe = createTable.craeteOilCanTalbe(R1 * 2, L);
             }
-
-
-            //createtable_tv_main.setText(createOilCanTalbe.toString());
             createOilCanTalbe.ArrayToString();
-            showTemps.clear();
-            temps.clear();
-            step = 1;
-            if (createOilCanTalbe != null) {
-                if (createOilCanTalbe.getHeight().length >= 200) {
-                    Log.e("TAG", createOilCanTalbe.getHeight().length + "-----------");
-                    step = (int) Math.ceil(createOilCanTalbe.getHeight().length / 200f);
-                }
-                for (int i = 0; i < createOilCanTalbe.getHeight().length; i++) {
-                    Log.e("TAG", "ID : " + i + "高度 : " + createOilCanTalbe.getHeight()[i] + " 容积 : " + createOilCanTalbe.getVolum()[i]);
-                    temps.add(new GuanBiaoData(i, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
-
-                    if (step == 1) {
-                        showTemps.add(new GuanBiaoData(i, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
-                    } else {
-                        if (step != 0 && i % step == 1) {
-                            showTemps.add(new GuanBiaoData(i / step, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
-
-                        }
-                    }
-
-                }
-            }
-            //showTemps=sampleFixedSize(temps,200);
-            myAdapter.notifyDataSetChanged();
-            initializeAdapter(showTemps);
+            setMyAdapter();
             //清空已输入的数据
             //clearEdit();
         }
@@ -347,33 +487,8 @@ public class CreateOilTableFragment extends BaseFragment {
                 resultCode -= 100;
                 createOilCanTalbe = null;
                 createOilCanTalbe = (OilCanTable) dbManager.findAllObject(OilCanTable.class).get(resultCode);
-                //   OilCan oil = MyApplication.getInstance().getmOilcanDataManager().getData(1);
                 createOilCanTalbe.StringToArray();
-                temps.clear();
-                step = 1;
-                showTemps.clear();
-                if (createOilCanTalbe != null) {
-                    if (createOilCanTalbe.getHeight().length >= 200) {
-                        Log.e("TAG", createOilCanTalbe.getHeight().length + "-----------");
-                        step = (int) Math.ceil(createOilCanTalbe.getHeight().length / 200f);
-                    }
-                    for (int i = 0; i < createOilCanTalbe.getHeight().length; i++) {
-                        Log.e("TAG", "ID : " + i + "高度 : " + createOilCanTalbe.getHeight()[i] + " 容积 : " + createOilCanTalbe.getVolum()[i]);
-                        temps.add(new GuanBiaoData(i, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
-
-                        if (step == 1) {
-                            showTemps.add(new GuanBiaoData(i, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
-                        } else {
-                            if (step != 0 && i % step == 1) {
-                                showTemps.add(new GuanBiaoData(i / step, createOilCanTalbe.getHeight()[i], createOilCanTalbe.getVolum()[i]));
-
-                            }
-                        }
-
-                    }
-                    myAdapter.notifyDataSetChanged();
-                    myAdapter.setData(showTemps);
-                }
+                setMyAdapter();
             }
         }
 
@@ -387,12 +502,7 @@ public class CreateOilTableFragment extends BaseFragment {
                 //loadMoreData(currentPage);
             }
         });
-
     }
-
-    /**
-     * 加载更多数据
-     */
     private void loadMoreData(int curPage) {
         List<GuanBiaoData> newAlarm = findAllObject(GuanBiaoData.class, curPage, Const.recordNum, true);
         myAdapter.addNewsItem(newAlarm);

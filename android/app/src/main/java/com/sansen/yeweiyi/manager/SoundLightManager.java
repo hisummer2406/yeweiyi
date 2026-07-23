@@ -5,6 +5,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.example.x6.gpioctl.GpioUtils;
+import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -200,14 +201,15 @@ public class SoundLightManager {
     }
 
 
-    XzjhSystemManager mManager;
+    SoundManager sm = SoundManager.getInstance();
 
     /**
      * 打开声光报警
      */
     public void openL_S() {
-        Log.e("TAG", "打开声光");
+        sm.playBGM(R.raw.test, true);
         //ioUtils.gpioSetValue(io, high);
+        Log.e("TAG", "打开声光");
         XzjhSystemManager mManager = (XzjhSystemManager) MyApplication.getInstance().getSystemService("xzjh_server");
         mManager.xzjhSetGpioValue(1, 1);
     }
@@ -216,6 +218,7 @@ public class SoundLightManager {
      * 关闭声光报警
      */
     public void closeL_S() {
+        sm.pauseBGM();
         // ioUtils.gpioSetValue(io, low);
         Log.e("TAG", "关闭声光");
         XzjhSystemManager mManager = (XzjhSystemManager) MyApplication.getInstance().getSystemService("xzjh_server");

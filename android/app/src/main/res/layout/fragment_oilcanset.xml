@@ -3,6 +3,8 @@
     xmlns:custom="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:orientation="vertical"
+    android:background="#e0ffffff"
+    android:layout_gravity="center"
     android:layout_height="match_parent">
     <include
         android:id="@+id/title_bar"
@@ -10,9 +12,11 @@
     <LinearLayout
         android:id="@+id/oilcanset_content"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:layout_below="@id/bar_set"
-        android:background="#e0ffffff"
+        android:layout_gravity="center_horizontal"
+
         android:clickable="true"
         android:focusable="true"
         android:orientation="vertical"
@@ -27,40 +31,62 @@
                 android:layout_height="match_parent">
 
                 <TableRow
-                    android:layout_marginTop="@dimen/dp_42"
+                    android:layout_marginTop="@dimen/dp_5"
                     android:gravity="center_horizontal">
 
                     <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
+                        android:layout_width="@dimen/dp_130"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/tank_no"
                         android:textSize="@dimen/fontSize" />
 
                     <TextView
                         android:id="@+id/item_tv_oilid"
-                        android:layout_width="wrap_content"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:background="@drawable/sansen_drop"
-                        android:gravity="center_horizontal"
-                        android:paddingTop="3dp"
+                        android:gravity="center"
                         android:text="0"
                         android:textSize="@dimen/fontSize" />
+
                     <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_130"
+                        android:layout_height="match_parent"
+                        android:text=""
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oilheight"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/oilheight"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oilheight"
-                        android:layout_width="100dp"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:digits="0123456789"
                         android:gravity="center_horizontal"
                         android:imeOptions="actionDone"
                         android:inputType="number"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_130"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
                         android:textSize="@dimen/fontSize" />
 
 
@@ -68,53 +94,94 @@
 
 
                 <TableRow
-                    android:layout_marginTop="17dp"
+                    android:layout_marginTop="@dimen/dp_5"
                     android:gravity="center_horizontal">
 
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/probe_no"
                         android:textSize="@dimen/fontSize" />
-                    <TextView
+
+                    <EditText
+
                         android:id="@+id/item_tv_tanzhenID"
-                        android:layout_width="wrap_content"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
-                        android:background="@drawable/sansen_drop"
+                        android:digits="1234567890"
                         android:gravity="center_horizontal"
-                        android:paddingTop="3dp"
-                        android:text="0"
+                        android:inputType="number"
+                        android:imeOptions="actionDone"
+                        android:textSize="@dimen/fontSize" />
+
+<!--                    <TextView-->
+<!--                        android:id="@+id/item_tv_tanzhenID"-->
+<!--                        android:layout_width="@dimen/dp_100"-->
+<!--                        android:layout_height="wrap_content"-->
+<!--                        android:background="@drawable/sansen_drop"-->
+<!--                        android:gravity="center"-->
+<!--                        -->
+<!--                        android:text="0"-->
+<!--                        android:textSize="@dimen/fontSize" />-->
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text=""
                         android:textSize="@dimen/fontSize" />
 
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_maxvolum"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/max_volume"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_maxvolum"
                         android:layout_height="wrap_content"
-                        android:layout_width="100dp"
+                        android:layout_width="@dimen/dp_100"
                         android:digits="0123456789"
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:imeOptions="actionDone"
                         android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="升"
+                        android:textSize="@dimen/fontSize" />
                 </TableRow>
-                <TableRow android:gravity="center_horizontal">
+                <TableRow android:gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/dp_5">
 
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_chuanGanQiLeng"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/chuan_gan_qi_leng"
                         android:textSize="@dimen/fontSize" />
 
-                    <android.support.v7.widget.AppCompatEditText
+                    <TextView
                         android:id="@+id/item_et_chuanGanQiLeng"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
                         android:digits="-0123456789"
@@ -122,89 +189,148 @@
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
                     <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oilhheightalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/hheight_oil_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oilhheightalarm"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
                         android:digits="-0123456789"
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
+                        android:textSize="@dimen/fontSize" />
 
 
                 </TableRow>
                 <TableRow android:gravity="center_horizontal"
-
+                    android:layout_marginTop="@dimen/dp_5"
                     >
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_guanType"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/oiltype"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
+                        android:text="储罐类型"
                         android:textSize="@dimen/fontSize" />
 
                     <Spinner
+                        android:layout_gravity="center"
                         android:id="@+id/item_sp_guanType"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:background="@drawable/sansen_drop"
-                        android:gravity="center_horizontal"
-                        android:paddingTop="5dp"
+                        android:gravity="center"
                         android:entries="@array/guan_type"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text=""
                         android:textSize="@dimen/fontSize" />
 
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oilheightalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/height_oil_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oilheightalarm"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:digits="-0123456789"
                         android:imeOptions="actionDone"
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
+                        android:textSize="@dimen/fontSize" />
 
 
                 </TableRow>
                 <TableRow android:gravity="center_horizontal"
-
+                    android:layout_marginTop="@dimen/dp_5"
                     >
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oiltype"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/oiltype"
                         android:textSize="@dimen/fontSize" />
 
                     <TextView
                         android:id="@+id/item_sp_oiltype"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:background="@drawable/sansen_drop"
                         android:gravity="center_horizontal"
                         android:paddingTop="5dp"
                         android:textSize="@dimen/fontSize" />
                     <TextView
+
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text=""
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oilllowalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/llow_oil_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oilllowalarm"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
@@ -212,17 +338,29 @@
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
+                        android:textSize="@dimen/fontSize" />
 
 
 
                 </TableRow>
                 <TableRow android:gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/dp_5"
                     >
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_color"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/oil_color"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
+                        android:text="颜色"
                         android:textSize="@dimen/fontSize" />
 
                     <Button
@@ -232,13 +370,25 @@
                         android:text="@string/select_color"
                         android:textSize="@dimen/sp_16" />
                     <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text=""
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oillowalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/low_oil_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oillowalarm"
                         android:layout_height="wrap_content"
                         android:digits="-0123456789"
@@ -246,48 +396,77 @@
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
+                        android:textSize="@dimen/fontSize" />
 
 
 
 
                 </TableRow>
 
-                <TableRow android:gravity="center_horizontal">
+                <TableRow android:gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/dp_5">
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oildensity"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="介质密度"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oildensity"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
                         android:digits="0123456789."
                         android:gravity="center_horizontal"
                         android:inputType="numberDecimal|numberSigned"
                         android:textSize="@dimen/fontSize" />
-
-
-
-
                     <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="kg/m³"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_waterheightalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/height_water_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
+
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_waterheightalarm"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
                         android:digits="-0123456789"
                         android:gravity="center_horizontal"
                         android:inputType="number"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
                         android:textSize="@dimen/fontSize" />
 
 
@@ -295,116 +474,191 @@
 
 
                 <TableRow android:gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/dp_5"
                     >
 
                     <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_oillevelcorrection"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/oil_level_compensation"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_oillevelcorrection"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
-                        android:digits="-0123456789"
+                        android:digits=".-0123456789"
                         android:gravity="center_horizontal"
                         android:inputType="numberSigned|number"
-                        android:textSize="@dimen/sp_16" />
+                        android:textSize="@dimen/fontSize" />
 
                     <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
+                        android:textSize="@dimen/fontSize" />
+
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
+                        android:id="@+id/item_tv_tempheightalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="低水位报警"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
+                        android:text="@string/height_temp_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-
-                        android:layout_width="@dimen/tankset_tv_size"
+                        
+                        android:id="@+id/item_et_tempheightalarm"
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
                         android:digits="-0123456789"
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="℃"
+                        android:textSize="@dimen/fontSize" />
+
+
+
                 </TableRow>
 
                 <TableRow android:gravity="center_horizontal"
-
+                    android:layout_marginTop="@dimen/dp_5"
                     >
                     <TextView
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_waterlevlecorrection"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:textStyle="bold"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/water_level_compensation"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
                         android:id="@+id/item_et_waterlevlecorrection"
-                        android:layout_width="@dimen/tankset_tv_size"
+                        
+                        android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
-                        android:digits="-0123456789"
+                        android:digits=".-0123456789"
                         android:gravity="center_horizontal"
                         android:inputType="number"
                         android:textSize="@dimen/fontSize" />
                     <TextView
-                        android:id="@+id/item_tv_tempheightalarm"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/height_temp_alarm_value"
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="毫米"
                         android:textSize="@dimen/fontSize" />
-
-                    <android.support.v7.widget.AppCompatEditText
-                        android:id="@+id/item_et_tempheightalarm"
-                        android:layout_width="@dimen/tankset_tv_size"
-                        android:layout_height="wrap_content"
-                        android:imeOptions="actionDone"
-                        android:digits="-0123456789"
-                        android:gravity="center_horizontal"
-                        android:inputType="number"
-                        android:textSize="@dimen/fontSize" />
-
-
-
-                </TableRow>
-
-                <TableRow android:gravity="center_horizontal"
-
-                    >
                     <TextView
-                        android:id="@+id/item_tv_tempercorrection"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/temp_ompensation"
-                        android:textSize="@dimen/fontSize" />
-
-                    <android.support.v7.widget.AppCompatEditText
-                        android:id="@+id/item_et_tempercorrection"
-                        android:layout_width="@dimen/tankset_tv_size"
-                        android:layout_height="wrap_content"
-                        android:imeOptions="actionDone"
-                        android:digits="-0123456789"
-                        android:gravity="center_horizontal"
-                        android:inputType="number"
-                        android:textSize="@dimen/fontSize" />
-
-                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
                         android:id="@+id/item_tv_templowalarm"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
                         android:text="@string/low_temp_alarm_value"
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
+                        
                         android:id="@+id/item_et_templowalarm"
                         android:layout_height="wrap_content"
                         android:digits="-0123456789"
                         android:imeOptions="actionDone"
                         android:gravity="center_horizontal"
                         android:inputType="number"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="℃"
+                        android:textSize="@dimen/fontSize" />
+
+
+
+
+
+                </TableRow>
+
+                <TableRow android:gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/dp_5"
+                    >
+                    <TextView
+                        android:textStyle="bold"
+                        android:textColor="@color/black"
+                        android:id="@+id/item_tv_tempercorrection"
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/dp_35"
+                        android:gravity="center_vertical|end"
+                        android:layout_marginRight="@dimen/dp_10"
+                        android:text="@string/temp_ompensation"
+                        android:textSize="@dimen/fontSize" />
+
+                    <android.support.v7.widget.AppCompatEditText
+                        android:id="@+id/item_et_tempercorrection"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionDone"
+                        android:digits=".-0123456789"
+                        android:gravity="center_horizontal"
+                        android:inputType="number"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="℃"
+                        android:textSize="@dimen/fontSize" />
+
+                    <TextView
+                       android:visibility="invisible"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/low_temp_alarm_value"
+                        android:textSize="@dimen/fontSize" />
+
+                    <android.support.v7.widget.AppCompatEditText
+                        
+                        android:visibility="invisible"
+                        android:layout_height="match_parent"
+                        android:digits="-0123456789"
+                        android:imeOptions="actionDone"
+                        android:gravity="center_horizontal"
+                        android:inputType="number"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_marginLeft="@dimen/dp_10"
+                        android:gravity="center_vertical"
+                        android:visibility="invisible"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:text="℃"
                         android:textSize="@dimen/fontSize" />
 
 
@@ -422,12 +676,27 @@
 
                     <android.support.v7.widget.AppCompatEditText
                         android:id="@+id/item_et_densityvar"
-                        android:layout_width="@dimen/tankset_tv_size"
-                        android:layout_height="wrap_content"
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
                         android:imeOptions="actionDone"
                         android:digits="-0123456789."
                         android:gravity="center_horizontal"
                         android:inputType="numberDecimal|numberSigned"
+                        android:textSize="@dimen/fontSize" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="低水位报警"
+                        android:textSize="@dimen/fontSize" />
+
+                    <android.support.v7.widget.AppCompatEditText
+                        
+                        android:layout_width="@dimen/dp_100"
+                        android:layout_height="match_parent"
+                        android:imeOptions="actionDone"
+                        android:digits="-0123456789"
+                        android:gravity="center_horizontal"
+                        android:inputType="number"
                         android:textSize="@dimen/fontSize" />
 
 
@@ -435,83 +704,88 @@
                 </TableRow>
             </TableLayout>
         </ScrollView>
+
+    </LinearLayout>
+    <LinearLayout
+        android:layout_marginBottom="@dimen/dp_60"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+
+        android:layout_gravity="center"
+        android:orientation="horizontal">
         <LinearLayout
-            android:layout_marginBottom="@dimen/dp_60"
-            android:layout_width="wrap_content"
+            android:id="@+id/ly_baoCunData"
+            android:layout_marginRight="@dimen/dp_40"
+            android:layout_width="@dimen/dp_150"
             android:layout_height="wrap_content"
+            android:background="#0066A2"
             android:layout_gravity="center"
+            android:gravity="center"
             android:orientation="horizontal">
-            <LinearLayout
-                android:id="@+id/ly_baoCunData"
-                android:layout_marginRight="@dimen/dp_40"
-                android:layout_width="@dimen/dp_150"
-                android:layout_height="wrap_content"
-                android:background="#0066A2"
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="25dp"
                 android:layout_gravity="center"
-                android:gravity="center"
-                android:orientation="horizontal">
-                <ImageView
-                    android:layout_gravity="center"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:src="@drawable/bc"/>
-                <TextView
-                    android:layout_marginTop="@dimen/dp_15"
-                    android:layout_marginBottom="@dimen/dp_15"
-                    android:layout_gravity="center"
-                    android:textSize="@dimen/sp_20"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/white"
-                    android:text="保存数据"/>
-            </LinearLayout>
-            <LinearLayout
-                android:id="@+id/ly_copyData"
-                android:layout_width="@dimen/dp_150"
-                android:layout_height="wrap_content"
-                android:background="#0066A2"
+                android:src="@drawable/bc" />
+            <TextView
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
                 android:layout_gravity="center"
-                android:gravity="center"
-                android:orientation="horizontal">
-                <ImageView
-                    android:layout_gravity="center"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:src="@drawable/fz"/>
-                <TextView
-                    android:layout_marginTop="@dimen/dp_15"
-                    android:layout_marginBottom="@dimen/dp_15"
-                    android:layout_gravity="center"
-                    android:textSize="@dimen/sp_20"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/white"
-                    android:text="复制到"/>
-            </LinearLayout>
-            <LinearLayout
-                android:layout_marginLeft="@dimen/dp_40"
-                android:layout_width="@dimen/dp_150"
+                android:textSize="@dimen/sp_20"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:background="#0066A2"
-                android:id="@+id/ly_upper_page"
+                android:textColor="@color/white"
+                android:text="保存数据"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/ly_copyData"
+            android:layout_width="@dimen/dp_150"
+            android:layout_height="wrap_content"
+            android:background="#0066A2"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
                 android:layout_gravity="center"
-                android:gravity="center"
-                android:orientation="horizontal">
-                <ImageView
-                    android:layout_gravity="center"
-                    android:layout_width="32dp"
-                    android:layout_height="32dp"
-                    android:src="@drawable/fh"/>
-                <TextView
-                    android:layout_marginTop="@dimen/dp_15"
-                    android:layout_marginBottom="@dimen/dp_15"
-                    android:layout_gravity="center"
-                    android:textSize="@dimen/sp_20"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/white"
-                    android:text="返回上页"/>
-            </LinearLayout>
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/fz"/>
+            <TextView
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:layout_gravity="center"
+                android:textSize="@dimen/sp_20"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:text="复制到"/>
+        </LinearLayout>
+        <LinearLayout
+            android:layout_marginLeft="@dimen/dp_40"
+            android:layout_width="@dimen/dp_150"
+            android:layout_height="wrap_content"
+            android:background="#0066A2"
+            android:id="@+id/ly_upper_page"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_gravity="center"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/fh"/>
+            <TextView
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:layout_gravity="center"
+                android:textSize="@dimen/sp_20"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/white"
+                android:text="返回上页"/>
         </LinearLayout>
     </LinearLayout>
+
 </LinearLayout>

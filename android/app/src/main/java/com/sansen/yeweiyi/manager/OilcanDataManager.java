@@ -14,13 +14,13 @@ import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.db.OilExploration;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
-import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+
 public class OilcanDataManager {
     private static OilcanDataManager INSTANCE;
     private Context mContext;
@@ -117,29 +117,9 @@ public class OilcanDataManager {
                 if (probeToOils.get(i).getEnable() == 1) {
                     int oilcanPos = probeToOils.get(i).getPk_oilCanId();
                     oilCan = new OilCan();
-                    // 探针对应表
-                    // 设置探针类型
-              //      oilCan.setProbeType(probeToOils.get(i).getProbeType());
-                    // 设置油罐id
                     oilCan.setOilCanPos(oilcanPos);
-                    // 设置探针的id
-                    //oilCan.setProbeAdr(probeToOils.get(i).getProbeId());
-
-//					System.out.println(type + " 油罐对象结果 1 " + oilCan);
-                    // ②从油罐设置表中读取数据
-                    if (type.equals("test")) {
-                        setTestOilCan(oilCan, oilSets);
-                        setTestOilcanTable(oilCan, oilTables);
-                    } else if (type.equals("nomar")) {
-                        setOilCan(oilCan, oilSets);
-                        setOilcanTable(oilCan, oilTables);
-                    }
-
-                    // ③从罐表中设置数据
-
-                    // db.setOilTableToOilCan(oilCan);
-//					System.out.println(type + " 油罐对象结果 3 " + oilCan);
-                    // ④保存到Map中 油罐id + 油罐对象
+                    setOilCan(oilCan, oilSets);
+                    setOilcanTable(oilCan, oilTables);
                     oils.put(probeToOils.get(i).getPk_oilCanId(), oilCan);
 
                     if (!MyApplication.alarmStates.containsKey(new Integer(
@@ -163,7 +143,6 @@ public class OilcanDataManager {
         oilCanTable = tables.get(oilCan.getOilCanPos() - 1);
 
         oilCanTable.StringToArray();
-       // System.out.println("测试"+oilCanTable);
         heights = oilCanTable.getHeight();
         volumes = oilCanTable.getVolum();
         oilCan.setHightArray(heights);
@@ -182,16 +161,16 @@ public class OilcanDataManager {
         OilCanMapper mapper = (OilCanMapper) db.findObjectByID(
                 OilCanMapper.class, oilCan.getOilCanPos());
         oilCanTable = tables.get(mapper.getOilCanTableId() - 1);
-         System.out.println("测试"+mapper.getOilCansetId()+"测试罐表"+mapper.getOilCanTableId()+"正常罐表"+mapper.getProbeId()+"探针ID"+(mapper.getOilCanTableId())+oilCanTable);
-         String[] testHighte=tables.get(mapper.getOilCanTableId()-1).getHeightstrarray().split(" ");
-        String[]highe=tables.get(mapper.getOilCansetId()-1).getHeightstrarray().split(" ");
-        String[] testVoluem=tables.get(mapper.getOilCanTableId()-1).getVolumstrarray().split(" ");
-        String[]voluem=tables.get(mapper.getOilCansetId()-1).getVolumstrarray().split(" ");
-        Double scaleHighe=(Double.valueOf(highe[highe.length-1])+10)/(Double.valueOf(testHighte[testHighte.length-1])+10);
-        Double scaleVoluem=(Double.valueOf(voluem[highe.length-1])+10)/(Double.valueOf(testVoluem[testHighte.length-1])+10);
 
-        System.out.println("测试"+scaleHighe+"高度比例"+highe[highe.length-1]+"    "+testHighte[testHighte.length-1]);
-                oilCanTable.StringToArray();
+        String[] testHighte = tables.get(mapper.getOilCanTableId() - 1).getHeightstrarray().split(" ");
+        String[] highe = tables.get(mapper.getOilCansetId() - 1).getHeightstrarray().split(" ");
+        String[] testVoluem = tables.get(mapper.getOilCanTableId() - 1).getVolumstrarray().split(" ");
+        String[] voluem = tables.get(mapper.getOilCansetId() - 1).getVolumstrarray().split(" ");
+        Double scaleHighe = (Double.valueOf(highe[highe.length - 1]) + 10) / (Double.valueOf(testHighte[testHighte.length - 1]) + 10);
+        Double scaleVoluem = (Double.valueOf(voluem[highe.length - 1]) + 10) / (Double.valueOf(testVoluem[testHighte.length - 1]) + 10);
+
+
+        oilCanTable.StringToArray();
         heights = oilCanTable.getHeight();
         volumes = oilCanTable.getVolum();
         oilCan.setScaleHight(scaleHighe);
@@ -208,7 +187,7 @@ public class OilcanDataManager {
 
 
         OilCanSet oilCanSet = oilSets.get(oilCan.getOilCanPos() - 1);
-        oilCan.setProbeAdr(oilCanSet.getPk_tanZhenId()+"");
+        oilCan.setProbeAdr(oilCanSet.getPk_tanZhenId() + "");
         // 设置油罐的高度
         oilCan.setMaxHeight(oilCanSet.getHeight());
         // 设置油罐最大的体积
@@ -233,6 +212,7 @@ public class OilcanDataManager {
         oilCan.setOilHeight(oilCanSet.getOilHeight());
         //油罐类型
         oilCan.setGunType(oilCanSet.getGunType());
+        oilCan.setJieZhi(Const.getOilType(oilCanSet.getOilType()));
         oilCan.setEnable(oilCanSet.getEnable());
         // 水位补偿
         oilCan.setWaterLevelCorrection(oilCanSet.getWaterCorrection());
@@ -457,10 +437,9 @@ public class OilcanDataManager {
             netOilcan.setAddress(oilCan.getProbeAdr());
 //            netOilcan.setAlarmState(oilCan.getAlarmStr());
             netOilcan.setProbeAddress(oilCan.getProbeAdr());
-            netOilcan.setProbeType(DataUtils.getProbeStr(oilCan.getProbeType()));
             netOilcan.setOilWeight(oilCan.getOilWeight());
             netOilcan.setOilColor(oilCan.getOilColor());
-            netOilcan.setConnect(oilCan.getErrorTimes()==0);
+            netOilcan.setConnect(oilCan.getErrorTimes() == 0);
 
             //每次发送一共有多少个探针
             netOilcan.setFatherAllProbe(mOilCanData.size());

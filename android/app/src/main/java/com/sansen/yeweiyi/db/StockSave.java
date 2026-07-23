@@ -21,6 +21,9 @@ public class StockSave {
 	 */
 	@Column(column = "time")
 	private String time;
+
+	@Column(column = "jieZhi")
+	private String jieZhi;
 	/**
 	 *液位
 	 */
@@ -48,6 +51,14 @@ public class StockSave {
 	 */
 	@Column(column = "temperature")
 	private double temperature;
+
+	public String getJieZhi() {
+		return jieZhi;
+	}
+
+	public void setJieZhi(String jieZhi) {
+		this.jieZhi = jieZhi;
+	}
 
 	public int getId() {
 		return id;
@@ -115,13 +126,13 @@ public class StockSave {
 
 	@Override
 	public String toString() {
-		return "OilInOut [id=" + id + ", oilId=" + oilId + ", time=" + time
+		return "OilInOut [id=" + id + ", oilId=" + oilId + ", time=" + time+ ", jieZhi=" + jieZhi
 				+ ", height=" + height + ", waterheigth=" + waterheigth
 				+ ", volum=" + volum + ", weight=" + weight + ", temperature=" + temperature + "]";
 	}
 
 	public String[] getParams() {
-		String[] params = { "id","oilId", "time", "height", "waterheigth" ,"volum","weight","temperature"};
+		String[] params = { "id","oilId", "time", "height", "waterheigth" ,"volum","weight","temperature","jieZhi"};
 		return params;
 	}
 

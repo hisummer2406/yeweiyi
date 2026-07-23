@@ -1,7 +1,6 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
@@ -68,9 +67,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 	private List<OilInOut> lists = null;// 存放当前的所有数据
 	private List<OilInOut> temps;
 	private boolean isSort = true;
-	private int oilCanId; //筛选油罐号
-
-	AlertDialog.Builder builder;
 	private List<OilCanMapper> mapper;
 	private int account=0;
 	@Override
@@ -111,8 +107,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 	OnPropertyChangedCallback callback = new OnPropertyChangedCallback() {
 		@Override
 		public void onPropertyChanged(Observable sender, int propertyId) {
-			// 如果需要区分是哪个字段，可通过 propertyId 判断
-			// 直接获取当前值
 			String newValue = ((ObservableField<String>) sender).get();
 			//Log.d("监听", "新值：" + newValue);
 			tv_time.setText(newValue);
@@ -126,31 +120,37 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 		SerialPortEntrity.time.removeOnPropertyChangedCallback(callback);
 	}
 	private void initDialog(final int position) {
-		builder = new AlertDialog.Builder(ct);
-		builder.setTitle(SystemUtils.getRsStr(R.string.isDeleteRecord));
-		builder.create();
-		builder.setPositiveButton(SystemUtils.getRsStr(R.string.confirm),
-				new DialogInterface.OnClickListener() {
+		View customView = LayoutInflater.from(main).inflate(R.layout.dialog_custom_alert, null);
+		Button btn_confirm = customView.findViewById(R.id.btn_confirm);
+		Button btn_cancel = customView.findViewById(R.id.btn_cancel);
+		AlertDialog dialog = new AlertDialog.Builder(main)
+				.setView(customView)
+				.create();
+		btn_cancel.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				dialog.dismiss();
+			}
+		});
+		btn_confirm.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				OilInOut oilInOut = (OilInOut) myAdapter
+						.getItem(position);
+				dbManager.delteRecord(oilInOut);
+				initializeAdapter(isSort);
+				dialog.dismiss();
+			}
+		});
 
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						OilInOut oilInOut = (OilInOut) myAdapter
-								.getItem(position);
-						dbManager.delteRecord(oilInOut);
-						initializeAdapter(isSort);
+		dialog.show();
 
-					}
-				});
-
-		builder.setNegativeButton(SystemUtils.getRsStr(R.string.cancle),
-				new DialogInterface.OnClickListener() {
-
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						// TODO Auto-generated method stub
-
-					}
-				});
+		Window window = dialog.getWindow();
+		if (window != null) {
+			int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);   // 300dp
+			int height = (int) (230*1.3  * getResources().getDisplayMetrics().density);  // 400dp
+			window.setLayout(width, height);
+		}
 
 	}
 
@@ -159,33 +159,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 	
 		if (main != null) {
 
-//			main.tv_filter.setVisibility(View.VISIBLE);
-//			main.tv_right.setVisibility(View.VISIBLE);
-//			main.tv_right.setText(SystemUtils.getRsStr(R.string.record_sort));
-//			main.tv_filter.setText(SystemUtils.getRsStr(R.string.filter));
-//
-//			main.iv_right.setVisibility(View.GONE);
-//			main.tv_unlogin.setVisibility(View.GONE);
-//			main.tv_left.setVisibility(View.GONE);
-//
-//			main.tv_filter.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					Intent intent = new Intent(main,ActivityDialog.class);
-//					startActivityForResult(intent, 0);
-//				}
-//			});
-//
-//			main.tv_right.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					isSort = !isSort;
-//					initializeAdapter(isSort);
-//					mLinearLayoutManager.removeAllViews();
-//				}
-//			});
 		}
 	}
 	@Override
@@ -282,22 +255,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 		Log.i("查询记录","++++++++");
 		temps = new ArrayList<OilInOut>();
 		if (dbManager != null) {
-//			if (SharePrefUtil.getBoolean(ct,SharePrefUtil.TEST_DATA,false)){
-//				lists =new ArrayList<OilInOut>();
-//				List<OilCanMapper> mappers= dbManager.findAllObject(OilCanMapper.class);
-//				for (OilCanMapper map:mappers) {
-//					Log.i("查询记录","-------------"+map.getProbeId());
-//					if (map.isshow()){
-//						lists.addAll(dbManager.<OilInOut>findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des));
-//					}
-//				}
-//			}else {
-//				if (oilCanId != 0) {
-//					temps = dbManager.findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des);
-//				} else {
-//					temps = dbManager.findLimit(OilInOut.class,pageSize,pageIndex,des);
-//				}
-//			}
 			if (oilCanId != 0) {
 				temps = dbManager.findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des);
 			} else {
@@ -311,22 +268,15 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 	 * 加载更多数据
 	 */
 	private void loadMoreData(int curPage) {
-		//Log.i(TAG, "loadMoreData: 记载更多时"+lists.size());
 		List<OilInOut> newAlarm = removeOilId(findObject(curPage, Const.recordNum));
 		myAdapter.addNewsItem(newAlarm);
 		handler.sendEmptyMessage(0);
 
 	}
-
-
 	@Override
 	protected void processClick(View v) {
 
 	}
-
-
-
-
 
 	@Override
 	public void onHiddenChanged(boolean hidden) {
@@ -334,12 +284,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 		super.onHiddenChanged(hidden);
 		if (!hidden) {
 			initializeAdapter(isSort);
-			//SystemUtils.showRsToast(R.string.long_touch_delte_inoil);
-//			main.tv_filter.setVisibility(View.VISIBLE);
-//			main.tv_right.setVisibility(View.VISIBLE);
-		}else {
-//			main.tv_filter.setVisibility(View.INVISIBLE);
-//			main.tv_right.setVisibility(View.INVISIBLE);
 		}
 	}
 
@@ -348,21 +292,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 		mLinearLayoutManager.removeAllViews();
 
 	}
-
-//	@Override
-//	public boolean onItemLongClick(AdapterView<?> parent, View view,
-//			final int position, long id) {
-//		if (myApplication.getAuthorization().getDelteInOutOil() == 1) {
-//			initDialog(position);
-//			builder.show();
-//		} else {
-//			SystemUtils.showRsToast(R.string.authorization_toast_noauth);
-//		}
-//
-//		return true;
-//	}
-
-
 	private List<OilInOut> findObject(int pageIndex, int pageSize) {
 		return dbManager.findLimit(OilInOut.class,pageSize,pageIndex,isSort);
 	}
@@ -501,7 +430,6 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 						value = Double.parseDouble(salVolume);
 					}
 					detailInoutRecord.salesDuring(value);
-					Log.i("计算体积", "开始的体积" + detailInoutRecord.getBeginVolume() + "结束的体积" + detailInoutRecord.getEndVolume() + " SaleVolume" + detailInoutRecord.getSaleVolume());
 					detailInoutRecord.setDuringDelivery(DoubleUtil.sub(detailInoutRecord.getSaleVolume(), DoubleUtil.sub(detailInoutRecord.getEndVolume(), detailInoutRecord.getBeginVolume())));
 					DBDataManager.getInstance().UpdateObject(detailInoutRecord);
 					OilInOut oilInOut = (OilInOut) DBDataManager.getInstance().findObjectByID(OilInOut.class, detailInoutRecord.getId());
@@ -556,10 +484,8 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 
 	@Override
 	public void onLongClick(int position) {
-		//Log.i(TAG, "onLongClick: 长按"+position);
 		if (myApplication.getAuthorization().getDelteInOutOil() == 1) {
 			initDialog(position);
-			builder.show();
 		} else {
 			SystemUtils.showRsToast(R.string.authorization_toast_noauth);
 		}

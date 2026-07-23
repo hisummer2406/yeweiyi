@@ -1,6 +1,10 @@
 package com.sansen.yeweiyi.fragment;
 
+import android.databinding.Observable;
+import android.databinding.ObservableField;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
+import android.support.v4.content.ContextCompat;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -8,12 +12,14 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.BaseAdapter;
-import android.widget.Button;
 import android.widget.GridView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.base.BaseFragment;
+import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.CreateOilTableFragment.TableType;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
@@ -40,15 +46,28 @@ public class LoadingCreateTableFragment extends BaseFragment implements OnItemCl
 		loading_gridview_create = (GridView)rootView.findViewById(R.id.loading_gridview_create);
 		ly_upper_page=rootView.findViewById(R.id.ly_upper_page);
 		ly_upper_page.setOnClickListener(this);
+		View headerView = rootView.findViewById(R.id.title_bar);
+		// 再从该 View 中 findViewById 获取内部的 TextView
+		tvTitle = headerView.findViewById(R.id.tv_title);
+		tv_time=headerView.findViewById(R.id.main_time);
+		tvTitle.setText("罐表设置");
+		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 
 	}
+	Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
+		@Override
+		public void onPropertyChanged(Observable sender, int propertyId) {
+			// 如果需要区分是哪个字段，可通过 propertyId 判断
+			// 直接获取当前值
+			String newValue = ((ObservableField<String>) sender).get();
+			// Log.d("监听", "新值：" + newValue);
+			tv_time.setText(newValue);
+		}
+	};
+	TextView tvTitle,tv_time;
 	public void initTitle() {
 
 		if (main != null) {
-//			main.iv_right.setImageResource(R.drawable.laststep);
-//			main.tv_left.setText(SystemUtils.getRsStr(R.string.back_page));
-//			main.iv_right.setVisibility(View.VISIBLE);
-//			main.tv_left.setVisibility(View.VISIBLE);
 			OnClickListener backSetListener = new OnClickListener() {
 
 				@Override
@@ -60,8 +79,6 @@ public class LoadingCreateTableFragment extends BaseFragment implements OnItemCl
 
 				}
 			};
-//			main.tv_left.setOnClickListener(backSetListener);
-//			main.iv_right.setOnClickListener(backSetListener);
 
 		}
 
@@ -122,10 +139,12 @@ public class LoadingCreateTableFragment extends BaseFragment implements OnItemCl
 		@Override
 		public View getView(int position, View arg1, ViewGroup arg2) {
 			View v = LayoutInflater.from(ct).inflate(R.layout.item_base_set2, null);
-
-			Button iv_set = (Button) v.findViewById(R.id.base_button);
-			iv_set.setBackgroundResource(ivs[position]);
-			iv_set.setText(listName [position]);
+			ImageView iv_set = (ImageView)v.findViewById(R.id.base_button);
+			TextView tv_name=(TextView) v.findViewById(R.id.tv_name);
+			//iv_set.setBackgroundResource(ivs[position]);
+			Drawable drawable = ContextCompat.getDrawable(main, ivs[position]);
+			iv_set.setImageDrawable(drawable);
+			tv_name.setText(listName [position]);
 			return v;
 		}
 		

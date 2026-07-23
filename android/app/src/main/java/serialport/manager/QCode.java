@@ -32,7 +32,7 @@ public class QCode implements ISanSenCode {
         System.arraycopy(bytes, 0, value, 3, bytes.length);
         value[value.length - 2] = crc[1];
         value[value.length - 1] = crc[0];
-        Log.i(TAG,"驱动板发送数据："+DataUtils.bytesToHexString(value,value.length));
+       // Log.i(TAG,"驱动板发送数据："+DataUtils.bytesToHexString(value,value.length));
         return value;
     }
 

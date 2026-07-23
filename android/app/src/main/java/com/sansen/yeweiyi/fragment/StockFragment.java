@@ -1,12 +1,11 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
-import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
 import android.databinding.ObservableField;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
@@ -14,6 +13,9 @@ import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.Window;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
@@ -24,16 +26,24 @@ import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.db.StockSave;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
+import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.logic.ExportExcel;
+import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
 public class StockFragment extends BaseFragment implements StockSaveAdapter.OnItemClickListener{
 
@@ -41,15 +51,12 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 	private RecyclerView inout_list_info;
 	private StockSaveAdapter myAdapter;
 	private LinearLayoutManager mLinearLayoutManager;
-	private int datasize; // 模拟数据集的条数
 	private List<StockSave> lists = null;// 存放当前的所有数据
 	private List<StockSave> temps;
 	private boolean isSort = true;
-	private int oilCanId; //筛选油罐号
-
-	AlertDialog.Builder builder;
 	private List<OilCanMapper> mapper;
 	private int account=0;
+	private LinearLayout ly_saveStock,ly_ruKu;
 	@Override
 	protected View initView(LayoutInflater inflater) {
 		return inflater.inflate(R.layout.fragment_recode_stock, null);
@@ -82,8 +89,16 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 // 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
-		tvTitle.setText("设置");
+		tvTitle.setText("库存记录");
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
+		ly_saveStock=rootView.findViewById(R.id.ly_saveStock);
+		ly_ruKu=rootView.findViewById(R.id.ly_ruKu);
+		ly_saveStock.setOnClickListener(this);
+		ly_ruKu.setOnClickListener(this);
+		if (!Singleton.getInstance().IsKuCun){
+			ly_ruKu.setVisibility(View.GONE);
+		}
+
 	}
 	OnPropertyChangedCallback callback = new OnPropertyChangedCallback() {
 
@@ -103,32 +118,88 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 		SerialPortEntrity.time.removeOnPropertyChangedCallback(callback);
 	}
 	private void initDialog(final int position) {
-		builder = new AlertDialog.Builder(ct);
-		builder.setTitle(SystemUtils.getRsStr(R.string.isDeleteRecord));
-		builder.create();
-		builder.setPositiveButton(SystemUtils.getRsStr(R.string.confirm),
-				new DialogInterface.OnClickListener() {
+		View customView = LayoutInflater.from(main).inflate(R.layout.dialog_custom_alert, null);
+		Button btn_confirm = customView.findViewById(R.id.btn_confirm);
+		Button btn_cancel = customView.findViewById(R.id.btn_cancel);
+		AlertDialog dialog = new AlertDialog.Builder(main)
+				.setView(customView)
+				.create();
+		btn_cancel.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				dialog.dismiss();
+			}
+		});
+		btn_confirm.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View view) {
+				StockSave oilInOut = (StockSave) myAdapter
+						.getItem(position);
+				dbManager.delteRecord(oilInOut);
+				initializeAdapter(isSort);
+				dialog.dismiss();
+			}
+		});
 
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						StockSave oilInOut = (StockSave) myAdapter
-								.getItem(position);
-						dbManager.delteRecord(oilInOut);
-						initializeAdapter(isSort);
+		dialog.show();
 
-					}
-				});
+		Window window = dialog.getWindow();
+		if (window != null) {
+			int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);   // 300dp
+			int height = (int) (230*1.3  * getResources().getDisplayMetrics().density);  // 400dp
+			window.setLayout(width, height);
+		}
 
-		builder.setNegativeButton(SystemUtils.getRsStr(R.string.cancle),
-				new DialogInterface.OnClickListener() {
 
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-						// TODO Auto-generated method stub
 
-					}
-				});
+	}
+	@Override
+	protected void processClick(View v) {
+		if (v.getId()==R.id.ly_saveStock){
+			myApplication.getmSaveOilManager().SaveOilDB();
+			SystemUtils.showRsToast(R.string.main_toast_savesuccess);
 
+		}
+		else if (v.getId()==R.id.ly_ruKu){
+			runOnUiThread(() -> {
+				// 主线程操作
+				ly_ruKu.setVisibility(View.GONE);
+			});
+			SaveStockOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
+		}
+
+	}
+	private void SaveStockOIl(String path) {
+
+		//path=path+"/" + "Oil_in_record";
+		Log.e("TAG 路径",path);
+		ExportExcel<StockSave> exportExcel = new ExportExcel<StockSave>();
+		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), "液位", "水高", "容积","质量","温度",  "介质"};
+		DBDataManager db = MyApplication.getInstance().getmDBManager();
+		List<StockSave> dataset = db.findAllObject(StockSave.class);
+		File file = new File(path);
+		if (!file.exists())
+			file.mkdir();
+		OutputStream out = null;
+		try {
+			file = new File(path + "/" + "Oil_Stock_record" + ".xls");
+			out = new FileOutputStream(file);
+			exportExcel.exportExcel(headers, dataset,
+					new StockSave().getParams(), out, new ExcelListener() {
+						@Override
+						public void Success(boolean isTrue) {
+							runOnUiThread(() -> {
+								// 主线程操作
+								ly_ruKu.setVisibility(View.VISIBLE);
+							});
+						}
+					});
+			out.close();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
 	}
 
 	public void initTitle() {
@@ -136,52 +207,9 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 	
 		if (main != null) {
 
-//			main.tv_filter.setVisibility(View.VISIBLE);
-//			main.tv_right.setVisibility(View.VISIBLE);
-//			main.tv_right.setText(SystemUtils.getRsStr(R.string.record_sort));
-//			main.tv_filter.setText(SystemUtils.getRsStr(R.string.filter));
-//
-//			main.iv_right.setVisibility(View.GONE);
-//			main.tv_unlogin.setVisibility(View.GONE);
-//			main.tv_left.setVisibility(View.GONE);
-//
-//			main.tv_filter.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					Intent intent = new Intent(main,ActivityDialog.class);
-//					startActivityForResult(intent, 0);
-//				}
-//			});
-//
-//			main.tv_right.setOnClickListener(new OnClickListener() {
-//
-//				@Override
-//				public void onClick(View v) {
-//					isSort = !isSort;
-//					initializeAdapter(isSort);
-//					mLinearLayoutManager.removeAllViews();
-//				}
-//			});
 		}
 	}
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data) {
-//		 TODO Auto-generated method stub
-		super.onActivityResult(requestCode, resultCode, data);
-		if (resultCode!=0) {
-			resultCode-=100;
-			setListener();
-			if (SharePrefUtil.getBoolean(MyApplication.getInstance().getApplicationContext(),SharePrefUtil.TEST_DATA,false)){
-				temps = removeOilId(findAllObject(resultCode + 1,StockSave.class, 0, Const.recordNum, isSort));
-			}
 
-			myAdapter.setData(temps);
-			temps.clear();
-			handler.sendEmptyMessage(0);
-			mLinearLayoutManager.removeAllViews();
-		}
-	}
 
 	private List<StockSave> removeOilId(List<StockSave>temp){
 		for (int i = 0; i <temp.size() ; i++) {
@@ -205,7 +233,7 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 				setListener();
 				Log.i("查询记录","==============");
 
-				temps =removeOilId( findAllObject(0,StockSave.class, 0, Const.recordNum, sort));
+				temps =findAllObject(0,StockSave.class, 0, Const.recordNum, sort);
 				//Log.i("进出油数据", "run: "+temps.size());
 				if (myAdapter == null) {
 					myAdapter = new StockSaveAdapter();
@@ -259,22 +287,7 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 		Log.i("查询记录","++++++++");
 		temps = new ArrayList<StockSave>();
 		if (dbManager != null) {
-//			if (SharePrefUtil.getBoolean(ct,SharePrefUtil.TEST_DATA,false)){
-//				lists =new ArrayList<StockSave>();
-//				List<OilCanMapper> mappers= dbManager.findAllObject(OilCanMapper.class);
-//				for (OilCanMapper map:mappers) {
-//					Log.i("查询记录","-------------"+map.getProbeId());
-//					if (map.isshow()){
-//						lists.addAll(dbManager.<StockSave>findLimit(StockSave.class,oilCanId,pageSize,pageIndex,des));
-//					}
-//				}
-//			}else {
-//				if (oilCanId != 0) {
-//					temps = dbManager.findLimit(StockSave.class,oilCanId,pageSize,pageIndex,des);
-//				} else {
-//					temps = dbManager.findLimit(StockSave.class,pageSize,pageIndex,des);
-//				}
-//			}
+
 			if (oilCanId != 0) {
 				temps = dbManager.findLimit(StockSave.class,oilCanId,pageSize,pageIndex,des);
 			} else {
@@ -296,10 +309,7 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 	}
 
 
-	@Override
-	protected void processClick(View v) {
 
-	}
 
 
 
@@ -311,18 +321,18 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 		super.onHiddenChanged(hidden);
 		if (!hidden) {
 			initializeAdapter(isSort);
-			//SystemUtils.showRsToast(R.string.long_touch_delte_inoil);
-//			main.tv_filter.setVisibility(View.VISIBLE);
-//			main.tv_right.setVisibility(View.VISIBLE);
-		}else {
-//			main.tv_filter.setVisibility(View.INVISIBLE);
-//			main.tv_right.setVisibility(View.INVISIBLE);
 		}
 	}
 
 	public void onReflushData() {
 		initializeAdapter(isSort);
 		mLinearLayoutManager.removeAllViews();
+		if (!Singleton.getInstance().IsKuCun){
+			ly_ruKu.setVisibility(View.GONE);
+		}
+		else {
+			ly_ruKu.setVisibility(View.VISIBLE);
+		}
 
 	}
 	private List<StockSave> findObject(int pageIndex, int pageSize) {
@@ -339,7 +349,6 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 		//Log.i(TAG, "onLongClick: 长按"+position);
 		if (Singleton.getInstance().IsDelStock) {
 			initDialog(position);
-			builder.show();
 		} else {
 			//SystemUtils.showRsToast(R.string.authorization_toast_noauth);
 		}

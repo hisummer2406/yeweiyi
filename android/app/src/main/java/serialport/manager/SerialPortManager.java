@@ -26,7 +26,7 @@ public class SerialPortManager {
 
     // 串口名列表
     public static final String[] m_iSerialPort = {"S4", "S1", "S2",
-            "S3"};
+            "S5"};
 
     // 波特率
     public static final int[] baudrate = {115200, 57600, 38400, 19200, 9600,

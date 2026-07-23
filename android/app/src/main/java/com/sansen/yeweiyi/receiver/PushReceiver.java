@@ -97,8 +97,6 @@ public class PushReceiver extends PushMessageReceiver{
         String messageString = "透传消息 onMessage=\"" + message
                 + "\" customContentString=" + customContentString;
         Log.d(TAG, messageString);
-
-        // 自定义内容获取方式，mykey和myvalue对应透传消息推送时自定义内容中设置的键和值
         if (!TextUtils.isEmpty(customContentString)) {
             JSONObject customJson = null;
             try {
@@ -112,8 +110,6 @@ public class PushReceiver extends PushMessageReceiver{
                 //e.printStackTrace();
             }
         }
-
-        // Demo更新界面展示代码，应用请在这里加入自己的处理逻辑
         updateContent(context, messageString);
     }
 
@@ -138,8 +134,6 @@ public class PushReceiver extends PushMessageReceiver{
                 + "\" description=\"" + description + "\" customContent="
                 + customContentString;
         Log.d(TAG, notifyString);
-
-        // 自定义内容获取方式，mykey和myvalue对应通知推送时自定义内容中设置的键和值
         if (!TextUtils.isEmpty(customContentString)) {
             JSONObject customJson = null;
             try {
@@ -153,8 +147,6 @@ public class PushReceiver extends PushMessageReceiver{
                 //e.printStackTrace();
             }
         }
-        // Demo更新界面展示代码，应用请在这里加入自己的处理逻辑
-        // 你可以參考 onNotificationClicked中的提示从自定义内容获取具体值
         updateContent(context, notifyString);
     }
 

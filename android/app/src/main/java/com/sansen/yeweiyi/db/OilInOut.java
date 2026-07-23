@@ -8,11 +8,17 @@ public class OilInOut {
 	// 记录id
 	@Id
 	private int id;
+
 	/**
 	 * 油罐id
 	 */
 	@Column(column = "oilId")
 	private int oilId;
+	/**
+	 * 介质
+	 */
+	@Column(column = "jieZhi")
+	private String jieZhi;
 	/**
 	 * 时间
 	 */
@@ -52,15 +58,7 @@ public class OilInOut {
 	 */
 	@Column(column = "endweight")
 	private double endWeight;
-	/**
-	 * 是否发送到网络
-	 */
-	@Column(column = "isnet")
-	private boolean isNet;
 
-	private DetailInoutRecord record;
-
-	private String msg_id;
 
 
 	public int getId() {
@@ -135,39 +133,24 @@ public class OilInOut {
 		this.endWeight = endWeight;
 	}
 
-	public boolean isNet() {
-		return isNet;
+	public String getJieZhi() {
+		return jieZhi;
 	}
 
-	public void setNet(boolean net) {
-		isNet = net;
-	}
-
-	public String getMsg_id() {
-		return msg_id;
-	}
-
-	public void setMsg_id(String msg_id) {
-		this.msg_id = msg_id;
+	public void setJieZhi(String jieZhi) {
+		this.jieZhi = jieZhi;
 	}
 
 	@Override
-	public String toString() {
-		return "OilInOut [id=" + id + ", oilId=" + oilId + ", time=" + time
+	public String toString() {//
+		return "OilInOut [id=" + id + ", oilId=" + oilId + ", time=" + time+ ", jieZhi=" + jieZhi
 				+ ", beginHeigth=" + beginHeigth + ", endHeigth=" + endHeigth
 				+ ", beginVolum=" + beginVolum + ", beginWeight=" + beginWeight + ", endWeight=" + endWeight+ ", endVolum="  + endVolum + "]";
 	}
 
 	public String[] getParams() {
-		String[] params = { "isNet","record","msg_id","id","oilId", "time", "beginHeigth", "endHeigth" ,"beginVolum","beginWeight","endWeight","endVolum"};
+		String[] params = { "id","oilId", "time", "beginHeigth", "endHeigth" ,"beginVolum","endVolum","beginWeight","endWeight","jieZhi"};
 		return params;
 	}
 
-	public DetailInoutRecord getRecord() {
-		return record;
-	}
-
-	public void setRecord(DetailInoutRecord record) {
-		this.record = record;
-	}
 }

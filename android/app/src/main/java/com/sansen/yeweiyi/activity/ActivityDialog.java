@@ -12,7 +12,6 @@ import android.widget.GridView;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
-import com.sansen.yeweiyi.utils.DataUtils;
 
 public class ActivityDialog extends Activity implements OnItemClickListener {
 	
@@ -25,20 +24,11 @@ public class ActivityDialog extends Activity implements OnItemClickListener {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_dialog);
 		value = getIntent().getIntExtra("value", 0);
-		if (getIntent().getStringArrayExtra("data")!=null) {
-			setTitle(R.string.wifi_connect);
-			valueData = getIntent().getStringArrayExtra("data");
-		}else if (value == 0) {
+		 if (value == 0) {
 			valueData=getResources().getStringArray(R.array.oilcanArray);
 		}else if(value == 1){
 			setTitle(R.string.oil_type);
-			valueData= DataUtils.getOilType();
-		}else if(value == 3){
-			setTitle(R.string.probe_type);
-			valueData=getResources().getStringArray(R.array.probeTypeArray);
-		}else if (value==4) {
-			setTitle(R.string.print_info);
-			valueData = getResources().getStringArray(R.array.prints);
+			valueData= getResources().getStringArray(R.array.oiltypeArray);//DataUtils.getOilType();
 		}else if (value==5) {
 			setTitle(R.string.oilcanset_info);
 			valueData = getResources().getStringArray(R.array.oilcanSetArray);

@@ -56,7 +56,7 @@
                         android:text="入库记录补录"
                         android:textColor="#111111"
                         android:textSize="26sp"
-                        android:textStyle="bold" />
+                        />
                 </LinearLayout>
 
 
@@ -214,8 +214,7 @@
                         android:layout_marginStart="12dp"
                         android:text="出库记录补录"
                         android:textColor="#111111"
-                        android:textSize="26sp"
-                        android:textStyle="bold" />
+                        android:textSize="26sp"/>
                 </LinearLayout>
 
 
@@ -365,31 +364,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:orientation="horizontal">
-        <LinearLayout
-            android:layout_marginRight="@dimen/dp_40"
-            android:layout_marginBottom="@dimen/dp_20"
-            android:layout_marginTop="@dimen/dp_20"
-            android:layout_width="@dimen/dp_150"
-            android:layout_height="wrap_content"
-            android:background="#0066A2"
-            android:layout_gravity="center"
-            android:gravity="center"
-            android:orientation="horizontal">
-            <ImageView
-                android:layout_gravity="center"
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:src="@drawable/bl_yl"/>
-            <TextView
-                android:layout_marginTop="@dimen/dp_15"
-                android:layout_marginBottom="@dimen/dp_15"
-                android:layout_gravity="center"
-                android:textSize="@dimen/sp_20"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/white"
-                android:text="点击预览"/>
-        </LinearLayout>
+
         <LinearLayout
             android:layout_marginRight="@dimen/dp_40"
             android:id="@+id/ly_saveData"

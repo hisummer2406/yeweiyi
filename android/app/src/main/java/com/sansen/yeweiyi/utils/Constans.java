@@ -26,6 +26,7 @@ public class Constans {
  public static  final String IsRuKu="IsRuKu";//入库记录导出
  public static  final String IsJiaoBan="IsJiaoBan";//交班记录导出
  public static  final String IsKuCun="IsKuCun";//库存记录导出
+ public static  final String IsStartJiaoBan="IsStartJiaoBan";//交班记录导出
 
  public static  final String  ChuanKou2="ChuanKou2";//串口2设置
  public static  final String ChuanKou4="ChuanKou4";//串口4设置
@@ -39,6 +40,7 @@ public class Constans {
 
  public static  final String IsCreatStock="IsCreatStock";//生成库存记录
  public static  final String IsDelStock="IsDelStock";    //删除库存记录
+ public static  final String StockTime="StockTime";    //库存生成时间
 
  public static  final String IsCreatIn="IsCreatIn";//生成入库记录
  public static  final String IsDelIn="IsDelIn";    //删除入库记录
@@ -47,4 +49,5 @@ public class Constans {
  public static  final String IsDelShift="IsDelShift";    //删除交班记录
 
  public static  final String IsJieBan="IsJieBan";    //是否接班中
+ public static  final String isTestStatus="isTestStatus";
 }

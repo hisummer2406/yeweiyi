@@ -187,7 +187,7 @@ public class SetFragment extends BaseFragment {
                                                                      case 5:
                                                                          String pwd = SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.GJPWD, "123456");
                                                                          LoginDialog dialog = new LoginDialog();
-                                                                         //Log.i("TAG", "密码: " + PWDTools.getGaoJiSetPwd());
+                                                                        // Log.i("TAG", "密码: " + PWDTools.getGaoJiSetPwd());
                                                                          if (!"123456".equals(pwd)) {
                                                                              dialog.setOnConfirmListener(input -> {
                                                                                  if (input.equals(pwd) || input.equals(PWDTools.getGaoJiSetPwd())) {

@@ -112,8 +112,7 @@ public class ServerManager extends BroadcastReceiver {
             int cmd = intent.getIntExtra(CMD_KEY, 0);
             switch (cmd) {
                 case CMD_VALUE_START: {
-                    String ip = intent.getStringExtra(MESSAGE_KEY);
-                    mActivity.serverStart(ip);
+
                     break;
                 }
                 case CMD_VALUE_ERROR: {

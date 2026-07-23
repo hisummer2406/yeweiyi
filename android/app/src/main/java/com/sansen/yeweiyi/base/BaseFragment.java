@@ -6,6 +6,8 @@ import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.v4.app.Fragment;
@@ -33,6 +35,8 @@ import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 import java.io.File;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public abstract class BaseFragment extends Fragment implements OnClickListener {
 	protected Context ct;
@@ -51,6 +55,7 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 		ct = getActivity();
 		main = (MainActivity) ct;
 		baseActivity =main;
+
 		initWindowDialog();
 	}
 	
@@ -78,7 +83,7 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 		rootView = initView(inflater);
 		ImageView sasen_logo = (ImageView) rootView.findViewById(R.id.bar_iv_icon);
 		if (sasen_logo!=null){
-			String path= Environment.getExternalStorageDirectory().toString() + "/sanSenDrawable/logo.png";
+			String path= Environment.getExternalStorageDirectory().toString() + "/zhongChengDrawable/logo.png";
 			File mFile=new File(path);
 			//若该文件存在
 			if (mFile.exists()) {
@@ -137,7 +142,6 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 		btnOK.setText(leftButText);
 		btnOK.setOnClickListener(leftClickListener);
 
-		// 5. 取消按钮
 		Button btnCancel = (Button) layout.findViewById(R.id.main_dialog_cancel);
 		btnCancel.setText(rightButText);
 		btnCancel.setOnClickListener(rightClickListener);
@@ -216,11 +220,8 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 
 	private void showInputDialog() {
 		final SaveOilManager saveOilManager = myApplication.getmSaveOilManager();
-		// 1. 布局文件转换为View对象
 		LayoutInflater inflater = LayoutInflater.from(ct);
 		View layout = inflater.inflate(R.layout.input_alertdialog, null);
-
-		// 2. 新建对话框对象
 		final AlertDialog dialog = new AlertDialog.Builder(ct).create();
 	
 		dialog.setView((((Activity) ct).getLayoutInflater().inflate(R.layout.input_alertdialog, null)));
@@ -272,27 +273,59 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 	}
 	Dialog dialog ;
 	public void initWindowDialog(){
-		View view = LayoutInflater.from(main).inflate(R.layout.custom_progress_dialog, null);
-		dialog = new AlertDialog.Builder(main.getApplicationContext(), R.style.Transparent)
-		.setView(view)  
-		.create();  
-		   
+		// 1. 使用 Activity 的 Context 而非 Application Context
+		View view = LayoutInflater.from(main).inflate(R.layout.custom_toast, null);
+		dialog = new AlertDialog.Builder(main, R.style.Transparent)
+				.setView(view)
+				.create();
+
+		// 2. 设置窗口属性（宽高建议用 dp 转 px）
 		Window window = dialog.getWindow();
-		WindowManager.LayoutParams params = window.getAttributes();
-		params.gravity = Gravity.CENTER;
-		params.width = 300;  
-		params.height = 300;  
-		window.setAttributes(params);  
-		window.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ERROR);
+		if (window != null) {
+			WindowManager.LayoutParams params = window.getAttributes();
+			params.gravity = Gravity.CENTER;
+			// 将 dp 转换为 px
+			int width = (int) (300 * main.getResources().getDisplayMetrics().density);
+			int height = (int) (300 * main.getResources().getDisplayMetrics().density);
+			params.width = width;
+			params.height = height;
+			window.setAttributes(params);
+
+			// 3. 不设置特殊窗口类型，使用默认类型即可
+			// window.setType(WindowManager.LayoutParams.TYPE_SYSTEM_ERROR);  // 删除这行
+
+			// 背景透明（如果 Transparent 主题已处理，此行可选）
+			window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+		}
 		   
 	}
 	public void showWindDialog(){
-		
-		dialog.setCancelable(false);  
-		dialog.show();  
+		if (dialog != null && !dialog.isShowing()) {
+			dialog.setCancelable(false);
+			dialog.show();
+		}
+	}
+	Timer timer = new Timer();
+	public void showWindDialog(int time){
+
+		if (dialog != null && !dialog.isShowing()) {
+			dialog.setCancelable(false);
+			dialog.show();
+		}
+		timer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				// 后台线程
+				closeWindowDialog();
+			}
+		}, time);
+
+
 	}
 	public void closeWindowDialog(){
-		dialog.setCancelable(true); 
-		dialog.dismiss();
+		if (dialog != null ) {
+			dialog.setCancelable(true);
+			dialog.dismiss();
+		}
 	}
 }

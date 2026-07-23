@@ -97,8 +97,8 @@ public class DetailCommitWorkAdapter extends BaseAdapter {
 			jieZhi=Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oil.getOilId()).getOilType());
 		}
 		holder.detailcommitwork_tv_jiezhi.setText(jieZhi);
-		holder.detailcommitwork_tv_beginvolume.setText(DataUtils.doubleFoment(oil.getBeginHeight()*density)+"");
-		holder.detailcommitwork_tv_endvolume.setText(DataUtils.doubleFoment(oil.getEndHeight()*density)+"");
+		holder.detailcommitwork_tv_beginvolume.setText(DataUtils.doubleFoment(oil.getBeginVolume())+"");
+		holder.detailcommitwork_tv_endvolume.setText(DataUtils.doubleFoment(oil.getEndVolume())+"");
 		return convertView;
 	}
 

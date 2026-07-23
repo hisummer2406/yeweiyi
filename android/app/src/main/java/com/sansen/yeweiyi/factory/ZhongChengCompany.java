@@ -1,14 +1,15 @@
 package com.sansen.yeweiyi.factory;
 
 import android.content.Context;
-import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.utils.Singleton;
 
 import java.math.BigDecimal;
 
@@ -41,6 +42,17 @@ public class ZhongChengCompany implements AbstractCompany {
     }
 
     @Override
+    public String sendChangDuInfo(String command, String Probeaddress, Context context) {
+        StringBuffer sb = new StringBuffer();
+       // sb.append(command);
+        sb.append(Probeaddress);
+        sb.append("03420000");
+        String crc = getString(CRCheck.crc12(sb.toString().length(), DataUtils.HexString2Bytes(sb.toString())));
+        sb.append(crc);
+       // System.out.println("CRC:" + crc + "---" + sb.toString());
+        return "FEFE" + sb.toString();
+    }
+    @Override
     public String sendWenDuInfo(String command, String Probeaddress, Context context) {
         StringBuffer sb = new StringBuffer();
         //sb.append(command);
@@ -49,7 +61,6 @@ public class ZhongChengCompany implements AbstractCompany {
         sb.append("450000");
         String crc = getString(CRCheck.crc12(sb.toString().length(), DataUtils.HexString2Bytes(sb.toString())));
         sb.append(crc);
-        System.out.println("CRC:" + crc + "---" + sb.toString());
         return "FEFE" + sb.toString();
     }
 
@@ -65,19 +76,16 @@ public class ZhongChengCompany implements AbstractCompany {
     OilCan oilCan;
     int oilRoate;
     double wendu;
+    double Changdu;
 
     @Override
     public boolean probeInfoPase(String data, IParseDataListener parseDataListener) {
         data = data.replace(" ", "");
-
         byte[] bytes = DataUtils.HexString2Bytes(data);
-        Log.e("CRC ", "bytes.length " + bytes.length);
         if (bytes.length == 19) {
             byte[] bytes1 = new byte[13];
-            // System.arraycopy(bytes,0,bytes1,0,7);
             System.arraycopy(bytes, 4, bytes1, 0, 13);
             String str = DataUtils.bytesToHexString(bytes1, 1).trim();
-            // Log.e("probeInfoPase",bytes1[0]+"----"+bytes1[1]);
             if (str.equals("44")) {
                 byte[] bytes2 = new byte[4];
                 bytes2[0] = bytes1[1];
@@ -131,9 +139,7 @@ public class ZhongChengCompany implements AbstractCompany {
                         }
                     }
                 }
-
             }
-
             return false;
         } else if (bytes.length == 17) {
             byte[] bytes1 = new byte[13];
@@ -148,9 +154,31 @@ public class ZhongChengCompany implements AbstractCompany {
                // Log.e("CRC 温度", "===" + wendu);
             }
         }
+        else if (bytes.length==14){
+            // 长度两个字节在 bytes[10]（低字节0A）、bytes[11]（高字节FA）
+            byte[] bytes4 = new byte[2];
+            bytes4[0] = bytes[10];
+            bytes4[1] = bytes[11];
+            byte lowByte = bytes[10];   // 0A
+            byte highByte = bytes[11]; // FA
+
+            // 小端模式解析长度
+
+
+
+            int value = java.nio.ByteBuffer.wrap(bytes4)
+                    .order(java.nio.ByteOrder.BIG_ENDIAN)  // 高字节在前
+                    .getShort() & 0xFFFF;
+
+           // Log.e("CRC 长度", "解析长度 === " + +value);
+            int decimal = bytes[2] & 0xFF;
+           // Log.e("CRC 长度", "解析长度 === " + +decimal);
+            Singleton.getInstance().TanZhenLang[decimal]=value;
+        }
 
         return false;
     }
+    OilCanSet oilCanSets;
     public  double calcTemperature(byte highByte, byte lowByte) {
         // 将 byte 转为无符号 int
         int high = highByte & 0xFF;

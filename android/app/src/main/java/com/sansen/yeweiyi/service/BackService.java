@@ -14,7 +14,6 @@ import com.sansen.yeweiyi.bean.RequestRecord;
 import com.sansen.yeweiyi.config.ApiConfig;
 import com.sansen.yeweiyi.db.Alarm;
 import com.sansen.yeweiyi.db.CommitWork;
-import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OilSaveInfo;
 import com.sansen.yeweiyi.db.Sideleakage;
@@ -631,11 +630,11 @@ public class BackService extends Service {
             if (lists == null) {
                 lists = new ArrayList<>();
             } else {
-                DetailInoutRecord detailInoutRecord;
-                for (OilInOut oilInOut : lists) {
-                    detailInoutRecord = (DetailInoutRecord) DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, oilInOut.getId());
-                    oilInOut.setRecord(detailInoutRecord);
-                }
+//                DetailInoutRecord detailInoutRecord;
+//                for (OilInOut oilInOut : lists) {
+//                    detailInoutRecord = (DetailInoutRecord) DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, oilInOut.getId());
+//                    oilInOut.setRecord(detailInoutRecord);
+//                }
             }
             String data = GsonUtil.getListToStringByGson(lists);
             Log.i(TAG, "卸油记录" + data);

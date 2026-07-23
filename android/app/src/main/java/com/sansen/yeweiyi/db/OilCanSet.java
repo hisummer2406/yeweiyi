@@ -53,7 +53,7 @@ public class OilCanSet {
 	 */
 	@Column(column = "lowOilAlarm")
 	private int lowOilAlarm;
-	
+
 	@Column(column = "llowOilAlarm")
 	private int llowOilAlarm;
 	/**
@@ -82,13 +82,13 @@ public class OilCanSet {
 	 */
 	@Column(column = "waterCorrection")
 	private double waterCorrection;
-	
+
 	/**
 	 * 温度补偿
 	 */
 	@Column(column = "tempCorrection")
 	private double tempCorrection;
-	
+
 	/**
 	 * 密度
 	 */

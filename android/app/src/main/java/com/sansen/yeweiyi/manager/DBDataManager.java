@@ -2,7 +2,6 @@ package com.sansen.yeweiyi.manager;
 
 import android.content.Context;
 import android.os.Handler;
-import android.util.Log;
 import android.util.SparseArray;
 
 import com.google.gson.Gson;
@@ -25,6 +24,7 @@ import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OilSaveInfo;
 import com.sansen.yeweiyi.db.ProbeToOil;
 import com.sansen.yeweiyi.db.Sideleakage;
+import com.sansen.yeweiyi.db.StockSave;
 import com.sansen.yeweiyi.db.TempRecord;
 import com.sansen.yeweiyi.db.User;
 import com.sansen.yeweiyi.db.help.DaoHelp;
@@ -34,9 +34,12 @@ import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DoubleUtil;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
+import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
+
 import org.apache.poi.ss.formula.functions.T;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -62,6 +65,7 @@ public class DBDataManager {
         db = DaoHelp.getInstance(ct);
         builder = new GsonBuilder();
         myApplication = MyApplication.getInstance();
+
     }
 
     /**
@@ -257,9 +261,12 @@ public class DBDataManager {
 
     public void setAramRecord(final String AramInfo,String guanHao,String jieZhi) {
 
-        Alarm alarm = new Alarm(DateUtils.getYYYMMddHHmmss(), AramInfo,guanHao,jieZhi);
-        saveObject(alarm);
-        //db.save(alarm);
+        if (Singleton.getInstance().IsCreateAlarm){
+            Alarm alarm = new Alarm(DateUtils.getYYYMMddHHmmss(), AramInfo,guanHao,jieZhi);
+            saveObject(alarm);
+            //db.save(alarm);
+
+        }
 
     }
 
@@ -273,6 +280,11 @@ public class DBDataManager {
                 remark, oilSaveInfo);
 //            db.save(info);
         saveObject(info);
+    }
+    public void saveSaveOilRecord(StockSave stockSave) {
+
+//            db.save(info);
+        saveObject(stockSave);
     }
 
     /**
@@ -483,7 +495,7 @@ public class DBDataManager {
             double CurOilVolume = DataUtils.getLitre(oilWork2.getEndHeight(),
                     oilCan.getHightArray(), oilCan.getLitreArray());
             oilWork2.setEndVolume(CurOilVolume);
-            oilWork2.setShellVolume(DoubleUtil.double2(Math.abs(CurOilVolume - lastEndHeight)));
+            oilWork2.setShellVolume(DoubleUtil.double2(-CurOilVolume +oilWork2.getBeginVolume()));
             oilWork2.setShellWeight(oilWork2.getShellVolume() * oilCan.getDensity());
             oils.add(oilWork2);
         }
@@ -1014,7 +1026,7 @@ public class DBDataManager {
     public <T> List<T> findLimit(Class clazz, int limit, int offset, boolean des) {
         List<T> temps = null;
         try {
-            temps = db.findAll(Selector.from(clazz).limit(limit).offset(offset * limit).orderBy("id", des));
+            temps = db.findAll(Selector.from(clazz).limit(limit).offset(offset * limit).orderBy("time", des));
         } catch (DbException e) {
             //e.printStackTrace();
         }
@@ -1027,7 +1039,7 @@ public class DBDataManager {
     public <T> List<T> findLimit(Class clazz, int oilid, int limit, int offset, boolean des) {
         List<T> objects = null;
         try {
-            objects = db.findAll(Selector.from(clazz).where("oilId", "=", oilid).limit(limit).offset(offset * limit).orderBy("id", des));
+            objects = db.findAll(Selector.from(clazz).where("oilId", "=", oilid).limit(limit).offset(offset * limit).orderBy("time", true));
         } catch (DbException e) {
             //e.printStackTrace();
         }

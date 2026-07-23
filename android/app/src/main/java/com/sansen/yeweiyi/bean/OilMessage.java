@@ -1,8 +1,6 @@
 package com.sansen.yeweiyi.bean;
 
 
-import android.util.Log;
-
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.utils.SharePrefUtil;

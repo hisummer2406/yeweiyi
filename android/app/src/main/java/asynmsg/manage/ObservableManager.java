@@ -49,7 +49,7 @@ public class ObservableManager {
     long index = 0;
 
     private Disposable getDisposable() {
-        Disposable mObservable = Observable.interval(0, 500, TimeUnit.MILLISECONDS)
+        Disposable mObservable = Observable.interval(0, 1000, TimeUnit.MILLISECONDS)
                 .subscribe(new Consumer<Long>() {
                     @Override
                     public void accept(Long aLong) throws Exception {

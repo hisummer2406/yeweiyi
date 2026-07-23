@@ -22,7 +22,6 @@
         android:textSize="@dimen/sp_30"
         android:gravity="center"
         android:textColor="@color/white"
-        android:hint="设置解耦"
         android:text="@{viewModel.title}"
        />
     <ImageView
@@ -45,6 +44,6 @@
         android:textColor="@color/white"
         android:text="@{viewModel.time}"
         android:hint="20260122"
-        android:textSize="@dimen/sp_21" />
+        android:textSize="@dimen/sp_24" />
 </RelativeLayout>
 </layout>

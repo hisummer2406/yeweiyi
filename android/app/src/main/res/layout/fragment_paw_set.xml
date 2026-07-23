@@ -34,14 +34,7 @@
                 android:text="请设置你的管理员密码"
                 android:textStyle="bold"
                 android:textColor="@color/black"/>
-            <TextView
-                android:id="@+id/tv_tip"
-                android:layout_marginTop="@dimen/dp_2"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="@dimen/sp_18"
-                android:text="建议您的管理员密码以简单好记为标准"
-               />
+
             <LinearLayout
                 android:layout_marginTop="@dimen/dp_10"
                 android:layout_width="match_parent"
@@ -53,9 +46,8 @@
                     android:layout_marginTop="@dimen/dp_2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="@dimen/sp_22"
+                    android:textSize="@dimen/sp_28"
                     android:paddingLeft="@dimen/dp_10"
-                    android:drawableStart="@drawable/mima"
                     android:textColor="@color/black"
                     android:text="密码"
                     />
@@ -67,13 +59,13 @@
                     android:layout_height="@dimen/dp_52"
                     android:background="@drawable/shap_login_setpwd"
                     android:textSize="@dimen/sp_22"
-                    android:hint="请设置您的管理员密码"/>
+                    android:hint="请输入密码"/>
                 <TextView
                     android:layout_marginLeft="@dimen/dp_30"
                     android:layout_marginTop="@dimen/dp_2"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="@dimen/sp_22"
+                    android:textSize="@dimen/sp_28"
                     android:paddingLeft="@dimen/dp_10"
                     android:textColor="@color/black"
                     android:text="确认密码"
@@ -86,7 +78,7 @@
                     android:layout_height="@dimen/dp_52"
                     android:background="@drawable/shap_login_setpwd"
                     android:textSize="@dimen/sp_22"
-                    android:hint="请再次确认您的密码"/>
+                    android:hint="请再次输入密码"/>
             </LinearLayout>
 
         </LinearLayout>

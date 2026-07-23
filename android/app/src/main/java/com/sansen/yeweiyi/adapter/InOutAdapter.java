@@ -105,7 +105,7 @@ public class InOutAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
                 else {
                     jieZhi=Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilType());
                 }
-                viewHolder.inout_tv_jie_zhi.setText(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilType()));
+                viewHolder.inout_tv_jie_zhi.setText(jieZhi);
                 viewHolder.inout_tv_time.setText(String.valueOf(oilInOut.getTime()));
                 viewHolder.inout_tv_beginheight.setText(String.valueOf(NumberTools.formatDouble4(oilInOut.getBeginHeigth() / scaleHeight)));
                 viewHolder.inout_tv_endheight.setText(String.valueOf(NumberTools.formatDouble4(oilInOut.getEndHeigth() / scaleHeight)));

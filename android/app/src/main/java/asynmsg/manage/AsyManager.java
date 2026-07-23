@@ -3,16 +3,11 @@ package asynmsg.manage;
 import android.databinding.ObservableField;
 import android.util.Log;
 
-import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.bean.Relay;
 import com.sansen.yeweiyi.intf.IHardIntf;
-import com.sansen.yeweiyi.logic.SystemState;
-import com.sansen.yeweiyi.manager.AlarmManager;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.DataUtils;
-import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
@@ -85,21 +80,21 @@ public class AsyManager implements IHardIntf {
             @Override
             public void error(int error) {
             //    Log.i(TAG, "连接状态: " + error);
-                if (error > 5) {
-                    AsyManager.getInstance().isConnect.set(false);
-                    if (SharePreManager.getRelaySwitch()) {
-                      //  Log.i(TAG, "error: 驱动板连接失败11111");
-                        OilMessage oilMessage = new OilMessage();
-                        oilMessage.setDate(DateUtils.getYYYMMddHHmmss());
-                        oilMessage.setType(OilMessage.RELAY_DISCONNECT);
-                        AlarmManager.getInstance().addAlarmState(oilMessage);
-                        DBDataManager.getInstance().setAramRecord(oilMessage.toString(),"","");
-                        SystemState.getInstance().setDriverBoardConnect(false);
-                    }
-                } else {
-                    AsyManager.getInstance().isConnect.set(true);
-                    Log.i(TAG, "error: 驱动板连接成功11111");
-                }
+//                if (error > 5) {
+//                    AsyManager.getInstance().isConnect.set(false);
+//                    if (SharePreManager.getRelaySwitch()) {
+//                      //  Log.i(TAG, "error: 驱动板连接失败11111");
+//                        OilMessage oilMessage = new OilMessage();
+//                        oilMessage.setDate(DateUtils.getYYYMMddHHmmss());
+//                        oilMessage.setType(OilMessage.RELAY_DISCONNECT);
+//                        AlarmManager.getInstance().addAlarmState(oilMessage);
+//                        DBDataManager.getInstance().setAramRecord(oilMessage.toString(),"","");
+//                        SystemState.getInstance().setDriverBoardConnect(false);
+//                    }
+//                } else {
+//                    AsyManager.getInstance().isConnect.set(true);
+//                    Log.i(TAG, "error: 驱动板连接成功11111");
+//                }
             }
         });
     }

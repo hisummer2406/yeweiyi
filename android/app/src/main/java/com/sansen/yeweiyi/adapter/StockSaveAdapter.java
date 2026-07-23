@@ -47,7 +47,7 @@ public class StockSaveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
 
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_recode_inout, parent, false);
+        View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_recode_stock, parent, false);
         StockSaveAdapter.ViewHolder holder = new StockSaveAdapter.ViewHolder(v);
         holder.inout_tv_id = (TextView) v
                 .findViewById(R.id.inout_tv_id);
@@ -62,9 +62,7 @@ public class StockSaveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
                 .findViewById(R.id.inout_tv_endheight);
         holder.input_tv_beginvolum = (TextView) v
                 .findViewById(R.id.input_tv_beginvolum);
-        holder.input_tv_endvolum = (TextView) v
-                .findViewById(R.id.input_tv_endvolum);
-        holder.inout_tv_zhiliangl = v.findViewById(R.id.inout_tv_zhiliangl);
+        holder.inout_tv_wen_du = v.findViewById(R.id.inout_tv_wen_du);
         holder.inout_tv_zhiliangkg = v.findViewById(R.id.inout_tv_zhiliangkg);
         return holder;
     }
@@ -113,9 +111,9 @@ public class StockSaveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
                 viewHolder.input_tv_beginvolum.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getVolum() / scaleVolume)));
                 viewHolder.inout_tv_endheight.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getWaterheigth() / scaleHeight)));
 
-                viewHolder.input_tv_endvolum.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getWaterheigth() / scaleVolume)));
-                viewHolder.inout_tv_zhiliangl.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getWeight())));
-                viewHolder.inout_tv_zhiliangkg.setVisibility(View.GONE);//density
+             //   viewHolder.input_tv_endvolum.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getWaterheigth() / scaleVolume)));
+                viewHolder.inout_tv_wen_du.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getTemperature())));
+                viewHolder.inout_tv_zhiliangkg.setText(String.valueOf(NumberTools.formatDouble4(stockSave.getWeight())));//density
                 if (mOnItemClickListener != null) {
 //                    viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
 //                        @Override
@@ -156,8 +154,7 @@ public class StockSaveAdapter extends RecyclerView.Adapter<RecyclerView.ViewHold
         TextView inout_tv_beginheight;//前高
         TextView inout_tv_endheight;//后高
         TextView input_tv_beginvolum;//前量
-        TextView input_tv_endvolum;//后量
-        TextView inout_tv_zhiliangl;//入库量 l
+        TextView inout_tv_wen_du;//入库量 l
         TextView inout_tv_zhiliangkg;//入库量 kg
 
 

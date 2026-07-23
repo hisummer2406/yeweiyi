@@ -11,7 +11,7 @@
 
     -->
     <style name="AppBaseTheme" parent="android:Theme.Light">
-        <item name="android:fontFamily">@font/msyh</item>
+<!--        <item name="android:fontFamily">@font/msyhbd</item>-->
         <!--
             Theme customizations available in newer API levels can go in
             res/values-vXX/styles.xml, while customizations related to
@@ -23,8 +23,8 @@
     <!-- Application theme. -->
     <style name="AppTheme" parent="AppBaseTheme">
 
-        <!-- 防止进入应用时出现黑白屏 -->  <item name="android:fontFamily">@font/msyhbd</item>
-        <!-- <item name="android:windowIsTranslucent">true</item> -->
+<!--        &lt;!&ndash; 防止进入应用时出现黑白屏 &ndash;&gt;  <item name="android:fontFamily">@font/msyhbd</item>-->
+         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowAnimationStyle">@style/activityAnimation</item>

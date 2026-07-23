@@ -3,15 +3,17 @@ package com.sansen.yeweiyi.activity;
 import android.content.Intent;
 import android.databinding.ObservableField;
 import android.graphics.Rect;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.provider.Settings;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
-import android.support.v7.app.AlertDialog;
+import android.util.Log;
 import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.View;
@@ -36,29 +38,26 @@ import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.db.OilInOut;
+import com.sansen.yeweiyi.db.OilTest;
 import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.fragment.AlarmFragment;
 import com.sansen.yeweiyi.fragment.BaoBiaoFragment;
 import com.sansen.yeweiyi.fragment.BuLuFragment;
 import com.sansen.yeweiyi.fragment.ChuanKouFragment;
 import com.sansen.yeweiyi.fragment.ColorFragment;
-import com.sansen.yeweiyi.fragment.ColorPickerFragment;
 import com.sansen.yeweiyi.fragment.CommitWorkRecortFragment;
 import com.sansen.yeweiyi.fragment.InOilFragment;
 import com.sansen.yeweiyi.fragment.JiLuFragment;
-import com.sansen.yeweiyi.fragment.LanguageFragment;
 import com.sansen.yeweiyi.fragment.LoadingCreateTableFragment;
 import com.sansen.yeweiyi.fragment.LoginDialog;
 import com.sansen.yeweiyi.fragment.MainFragment;
 import com.sansen.yeweiyi.fragment.OilCanFragment;
 import com.sansen.yeweiyi.fragment.OilCanSetFragment;
-import com.sansen.yeweiyi.fragment.OilStorageFragment;
 import com.sansen.yeweiyi.fragment.OutStockFragment;
 import com.sansen.yeweiyi.fragment.SetBaseFragment;
 import com.sansen.yeweiyi.fragment.SetFragment;
 import com.sansen.yeweiyi.fragment.SetPawFragment;
 import com.sansen.yeweiyi.fragment.SetSeniorFragment;
-import com.sansen.yeweiyi.fragment.SideleaFragment;
 import com.sansen.yeweiyi.fragment.StockFragment;
 import com.sansen.yeweiyi.listener.SimpleWinCallback;
 import com.sansen.yeweiyi.listener.UpdateInOilListener;
@@ -84,25 +83,22 @@ import com.sansen.yeweiyi.utils.PWDTools;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
-import com.sansen.yeweiyi.view.AlarmOpenControlDialog;
+import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.view.InputDialogActivity;
 import com.sansen.yeweiyi.web.handler.ServerManager;
 
 import java.io.File;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TimerTask;
-
-import alarm.SoundManger;
-import baidu.main.BaiduSpeechManager;
 import bean.Bean;
 
 public class MainActivity extends BaseActivity implements UpdateInOilListener, DataResolveListener {
     public static ObservableField<String> title = new ObservableField<>();
     private static final String TAG = "MainActivity";
-    private final int RESULTWIFI = 1;
     private final int REFLASH_TIME = 2;
     // fragment管理器
     private FragmentManager fragmentManager;
@@ -123,7 +119,6 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
     public MainFragment mainFragment;
     public SetFragment setFragment;
     public JiLuFragment jiLuFragment;
-    public SideleaFragment sideleaFragment;
     public InOilFragment inOilFragment;
     public OutStockFragment outStockFragment;
     public OilCanSetFragment oilCanSetFragment;
@@ -132,15 +127,12 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
     public BaoBiaoFragment baoBiaoFragment;
     public ChuanKouFragment chuanKouFragment;
     public BuLuFragment buLuFragment;
-    public ColorPickerFragment colorPickerFragment;
     public OilCanFragment oilCanFragment;
-    public OilStorageFragment oilStorageFragment;
     public StockFragment stockFragment;
     public SetBaseFragment setBaseFragment;
-    public LanguageFragment languageFragment;
     public ColorFragment colorFragment;
     public SetSeniorFragment setSeniorFragment;
-    public  CommitWorkRecortFragment commitWorkRecortFragment;
+    public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;
     private Button main_but_alarm;
@@ -167,31 +159,18 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         mServerManager = new ServerManager(this);
         mServerManager.register();
         mServerManager.startService();
-        //Log.i("MAC地址", SystemUtils.getWifiMac(this));
         updateTestOil();
-
-        if (SharePrefUtil.getBoolean(ct, "showHomeBottom", false)) {
-            radio_bar.setVisibility(View.INVISIBLE);
-        } else {
-            radio_bar.setVisibility(View.VISIBLE);
-        }
         Singleton.getInstance().getSetData("");
     }
 
     Handler handler = new Handler() {
         public void handleMessage(android.os.Message msg) {
             switch (msg.what) {
-                case RESULTWIFI:
-                    //   socketManager.ReLoadSocket();
-                    break;
                 case REFLASH_TIME:
-                    //刷新时间
-                 //   main_time.setText(DateUtils.getYYYMMddHHmm());
                     SerialPortEntrity.time.set(DateUtils.getYYYMMddHHmm());
-                    //  Log.e("TAG", SerialPortEntrity.time.get());
                     handler.sendEmptyMessageDelayed(REFLASH_TIME, 1000);
-                    if (Const.autoLight && System.currentTimeMillis() - Const.lastDownTime > Const.sleepTime * 60 * 1000) {
-                        SystemUtils.saveBrightness(MainActivity.this.getContentResolver(), 0);
+                    if (Singleton.getInstance().isTestStatus){
+                        setTestModel();
                     }
                     break;
             }
@@ -218,12 +197,14 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         task.start();
     }
 
+
     private void findView() {
+
         View subLayout1 = (View) findViewById(R.id.title_bar);
         main_root = (RelativeLayout) findViewById(R.id.main_main_main);
         mbar_tv_title = subLayout1.findViewById(R.id.bar_tv_title);
         // 主页时间
-      //  main_time = (TextView) findViewById(R.id.main_time);
+        //  main_time = (TextView) findViewById(R.id.main_time);
         // 主页按钮 返回主页
         main_but_main = (Button) findViewById(R.id.main_but_main);
         // 设置按钮
@@ -275,11 +256,11 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         bar_but_inoil = findViewById(R.id.bar_but_inoil);
 
         // 存油记录
-        bar_but_saveoil =  findViewById(R.id.bar_but_saveoil);
+        bar_but_saveoil = findViewById(R.id.bar_but_saveoil);
         // 交班记录
-        bar_but_commitwork =  findViewById(R.id.bar_but_commitwork);
+        bar_but_commitwork = findViewById(R.id.bar_but_commitwork);
         // 报警记录
-        bar_but_alarm =  findViewById(R.id.bar_but_alarm);
+        bar_but_alarm = findViewById(R.id.bar_but_alarm);
         // 临时按钮 表示当前主页处于哪个页面，并且该按钮不可被点击
         tempButton = main_but_main;
         main_but_main.setEnabled(false);
@@ -293,12 +274,64 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+        dbManager = myApplication.getmDBManager();
+
+
+    }
+    public DBDataManager dbManager;
+
+    private SparseArray<OilCan> map;
+    OilCan oilCan;
+    private double oilVolume,canAddOilWeight;
+    int oilRoate;
+    private List<OilTest>oilTests=new ArrayList<>();
+    private void setTestModel(){
+        oilTests = dbManager.findAllObject(OilTest.class);
+        for (OilTest test:oilTests){
+                setTest(test.getPk_oilCanId(),test);
+        }
+    }
+    private void setTest(int address, OilTest oilTest) {
+        map = MyApplication.getInstance().getmOilcanDataManager().getData();
+        if (map != null) {
+            for (int i = 0; i < map.size(); i++) {
+                oilCan = map.valueAt(i);
+                Log.e("TAG","----"+oilCan.getOilCanPos()+"---"+address);
+                if (oilCan.getOilCanPos()==address) {
+                    oilCan.setOilLevel(BigDecimal.valueOf(oilTest.getHeight()).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue());
+
+                    if (SharePrefUtil.getBoolean(MyApplication.getInstance(), SharePrefUtil.SHOW_VOLUME, true)) {
+                        if (oilCan.getHightArray().length > 1) {
+                            oilVolume = DataUtils.getLitre(
+                                    oilCan.getOilLevel(), oilCan.getHightArray(),
+                                    oilCan.getLitreArray());
+                        }
+                        if (oilCan.getMaxVolume() != 0) {
+                            canAddOilWeight = (oilCan.getMaxVolume() * oilCan.getDensity()) - DataUtils.getLitre(oilCan.getOilLevel(), oilCan.getHightArray(), oilCan.getLitreArray()) * oilCan.getDensity();
+                            oilCan.setSurPlus(DataUtils.getOilcanSurplus(oilCan));
+                            oilCan.setCanAddOilWeight(DataUtils.doubleFoment(oilCan.getSurPlus() * oilCan.getDensity()));
+                        }
+                    } else {
+                        oilVolume = 0.0;
+                        oilCan.setCanAddOilWeight(0.0);
+                    }
+                    oilCan.setOilVolume(DataUtils.doubleFoment(oilVolume));
+                    oilCan.setOilWeight(DataUtils.doubleFoment(oilCan
+                            .getDensity() * oilCan.getOilVolume()));
+                    oilCan.setTemper(BigDecimal.valueOf(oilTest.getTemp()).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
+                    oilRoate = (int) ((oilCan.getOilLevel() / oilCan
+                            .getMaxHeight()) * 100);
+
+                    oilCan.setOilRatio(oilRoate > 100 ? 100 : oilRoate);
+                    oilCan.setLastTime(System.currentTimeMillis());
+                   // return true;
+                }
+            }
+
+        }
     }
 
     private void setDefaultFragment() {
-        // fragment_container.se
-
-
         if (mainFragment == null) {
             mainFragment = new MainFragment();
             fragmentManager = getSupportFragmentManager();
@@ -307,6 +340,16 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             mContent = mainFragment;
         }
         mainFragment.initTitle();
+        setMainButton(true);
+
+    }
+
+    private void setMainButton(boolean isShow) {
+        if (isShow) {
+            radio_bar.setVisibility(View.VISIBLE);
+        } else {
+            radio_bar.setVisibility(View.INVISIBLE);
+        }
     }
 
     public void switchContent(BaseFragment from, BaseFragment to) {
@@ -323,7 +366,6 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             mContent = to;
             FragmentTransaction transaction = fragmentManager
                     .beginTransaction();
-
             if (!to.isAdded()) { // 先判..断是否被add过
                 transaction.hide(from).add(R.id.fragment_container, to)
                         .commit(); // 隐藏当前的fragment，add下一个到Activity中
@@ -332,54 +374,31 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             }
 
         }
-
         setTitle(to);
 
     }
 
-    /**
-     * 调用某fragment的title
-     *
-     * @param to
-     */
     private void setTitle(Fragment to) {
         BaseFragment fragment = (BaseFragment) to;
         fragment.initTitle();
     }
 
-    /**
-     * 初始化View
-     */
     @Override
     protected void initView() {
-        // 不让显示标题栏
-
-        // 查找view
         findView();
-        // 初始化标题栏
         initTitleBar();
-        // 默认显示的Fragment
         setDefaultFragment();
     }
 
-    /**
-     * 初始化全局数据
-     */
     public void intitConst() {
         Const.recordNum = SharePrefUtil.getInt(ct, "recodNum", 20);
     }
 
     protected void initData() {
-
         Window win = this.getWindow();
         win.setCallback(new SimpleWinCallback(win.getCallback()) {
             @Override
             public boolean dispatchTouchEvent(MotionEvent event) {
-
-
-                //Log.i("dvlee", "Black Light" + SharePrefUtil.getBoolean(MainActivity.this, SharePrefUtil.LOCK_SCREEN, false));
-
-
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     Const.lastDownTime = System.currentTimeMillis();
                     if (!SharePrefUtil.getBoolean(MainActivity.this, SharePrefUtil.LOCK_SCREEN, false)) {
@@ -393,30 +412,57 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                 return super.dispatchTouchEvent(event);
             }
         });
-
         initAlarm();
-
         initLocation();
 
-        //socketManager = SocketManager.getInstance(this);
-
-        //  socketManager.setDataResolveListener(this);
-
         handler.sendEmptyMessageDelayed(REFLASH_TIME, 1000);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, this.REQUEST_CODE);
+            } else {
+                // 已有权限，可以显示悬浮窗
+                ToastUtils.showToast("获取权限成功",3);
+            }
+        }
 
     }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == 1000) {
+            if (resultCode != 0) {
+                resultCode -= 100;
+                PrintRunable printRunable = new PrintRunable(resultCode);
+                ThreadManager.getShortPool().execute(printRunable);
+            }
+        }
+        else if (requestCode == REQUEST_CODE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (Settings.canDrawOverlays(this)) {
+                    // 权限已授予
+                    ToastUtils.showToast("获取权限成功",3000);
+                } else {
+                    // 用户拒绝，可提示或禁止功能
+                    ToastUtils.showToast("用户拒绝",3000);
+                }
+            }
+        }
+    }
+
+
+    private final int REQUEST_CODE=101;
 
     /**
      * AlarmManager的回调函数
      */
     private void initAlarm() {
         AlarmManager.getInstance().beginDetection();
-
         AlarmManager.getInstance().setMessageListener(new MessageListener() {
             long time = 0;
 
             public void getAlarmSate(OilMessage state) {
-
                 if (state == null) {
                     if (System.currentTimeMillis() - time > 3000) {
                         bar_main_alram.setText(SystemUtils
@@ -425,17 +471,9 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                     }
                 } else if (SharePrefUtil.getBoolean(ct, SharePrefUtil.TEST_DATA, false) && myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
                     time = System.currentTimeMillis();
-
                     if (myApplication.getmOilcanDataManager().getTestData(state.getOilCanId()) != null && state.getType() != OilMessage.PRO_ERR_CONN) {
-
                         bar_main_alram.setText(state.toString());
-                        if (myApplication.getmOilcanDataManager().getData(state.getOilCanId()).getAlarmByte() == 1) {
-                            if (SharePrefUtil.getString(MainActivity.this, SharePrefUtil.LANGUAGE, "zh").equals("zh") || SharePrefUtil.getString(MainActivity.this, SharePrefUtil.LANGUAGE, "zh").equals("en")) {
-                                BaiduSpeechManager.getInstance(MainActivity.this).addSpeakPool(state.toString());
-                            } else {
-                                SoundManger.getInstance().playSound("1");
-                            }
-                        }
+
                     } else {
                         bar_main_alram.setText(SystemUtils
                                 .getRsStr(R.string.alarm_no));
@@ -446,13 +484,6 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                     bar_main_alram.setText(state.toString());
                     SocketManager.getInstance(MainActivity.this).sendAlarm(state.toString());
 
-                    if (myApplication.getmOilcanDataManager().getData(state.getOilCanId()).getAlarmByte() == 1) {
-                        if (SharePrefUtil.getString(MainActivity.this, SharePrefUtil.LANGUAGE, "zh").equals("zh") || SharePrefUtil.getString(MainActivity.this, SharePrefUtil.LANGUAGE, "zh").equals("en")) {
-                            BaiduSpeechManager.getInstance(MainActivity.this).addSpeakPool(state.toString());
-                        } else {
-                            SoundManger.getInstance().playSound("1");
-                        }
-                    }
                 } else {
                     SocketManager.getInstance(MainActivity.this).sendAlarm(state.toString());
                     bar_main_alram.setText(state.toString());
@@ -469,16 +500,12 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             how++;
             if (how >= 5) {
                 int Logo = SharePrefUtil.getInt(this, SharePrefUtil.VERSIONHOWL, 0);
-                //  Log.e("AAAA","logo--------"+Logo);
                 if (Logo >= 3) {
                     SharePrefUtil.saveInt(this, SharePrefUtil.VERSIONHOWL, 0);
                 } else {
                     SharePrefUtil.saveInt(this, SharePrefUtil.VERSIONHOWL, Logo + 1);
                 }
-
-                // //Log.e("AAAA","logo22222--------"+SharePrefUtil.getInt(this,SharePrefUtil.VERSIONHOWL,0));
                 switch (SharePrefUtil.getInt(this, SharePrefUtil.VERSIONHOWL, 0)) {
-
                     case 0:
                         v.setBackgroundResource(R.drawable.sansen_logo);
                         how = 0;
@@ -486,36 +513,42 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                     case 1:
                         v.setBackgroundResource(R.drawable.space_image);
                         how = 0;
-
                         break;
                     case 2:
-
                         v.setBackgroundResource(R.drawable.zhengxing_logo);
                         how = 0;
                         break;
                 }
 
             }
-//            AboutUsFragment aboutUserFragment = new AboutUsFragment();
-//            switchContent(mContent, aboutUserFragment);
-//            tempButton.setEnabled(true);
         }
     }
 
-    /**
-     * handler中的数据
-     */
+    private long startTime, currenTime = 0;
+
     @Override
     public void refreshData(OilCan oilCan) {
-
         if (oilCan != null) {
             inOutOilDection(oilCan);
+            if (Singleton.getInstance().StockTime > 0) {
+                currenTime = System.currentTimeMillis() / 1000;
+                if (currenTime - startTime > Singleton.getInstance().StockTime) {
+                    if (startTime != 0) {
+                        saveStock();
+                    }
+                    startTime = currenTime;
+
+                }
+
+            }
         }
     }
 
-    /**
-     * 进出油检测
-     */
+
+    private void saveStock() {
+        myApplication.getmSaveOilManager().SaveOilDB();
+    }
+
     private void inOutOilDection(OilCan oilCan) {
         InOilManager.setOil(this, oilCan.getOilCanPos(),
                 oilCan.getOilLevel());
@@ -523,55 +556,33 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
     }
 
     public void refreshBut() {
-        if (SharePreManager.getRelaySwitch()) {//如果驱动板处于打开状态就显示出来，如果是关闭就隐藏。
+        if (SharePreManager.getRelaySwitch()) {
             main_but_driver.setVisibility(View.GONE);
         } else {
             main_but_driver.setVisibility(View.GONE);
         }
-        //Log.i("-------------------", "111111");
     }
 
-    /**
-     * 主页按钮
-     */
     public void main_but_main(View v) {
         params.addRule(RelativeLayout.BELOW, R.id.title_bar);
         params.addRule(RelativeLayout.ABOVE, R.id.radio_bar);
         // 有点多，需要优化
         if (mainFragment == null) {
             mainFragment = new MainFragment();
-
         }
         switchContent(mContent, mainFragment);
         switchButtonState(main_but_main);
+        setMainButton(true);
     }
 
-    /**
-     * 导出入库记录
-     */
     public void but_daoChuRuKu(View v) {
-        // 获取ID名称（这就是你要的 "ly_ruKu"）
         String idName = getResources().getResourceEntryName(v.getId());
-        // 有点多，需要优化
-        //Log.i("TAG", "导出入库记录" + idName);
     }
 
-    /**
-     * 开始交班,结束交班
-     */
     public void but_jiaoBan(View v) {
-        // 获取ID名称（这就是你要的 "ly_ruKu"）
         String idName = getResources().getResourceEntryName(v.getId());
-        // 有点多，需要优化
-        //Log.i("TAG", "导出入库记录" + idName);
     }
 
-
-    /**
-     * 设置按钮
-     *
-     * @param v
-     */
     @RequiresApi(api = Build.VERSION_CODES.O)
     public void main_but_set(View v) {
         // 有点多，需要优化
@@ -596,7 +607,6 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
 
     }
 
-    AlertDialog dialog;
 
     private void showInputPsw(final BaseFragment fragment) {
         if (setFragment == null) {
@@ -605,66 +615,24 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         }
         switchContent(mContent, setFragment);
         switchButtonState(main_but_set);
+        setMainButton(false);
     }
 
 
-    /**
-     * 侧漏检测按钮
-     *
-     * @param v
-     */
-    public void main_but_sidelea(View v) {
-
-        if (sideleaFragment == null) {
-            sideleaFragment = new SideleaFragment();
-        }
-        switchContent(mContent, sideleaFragment);
-        tempButton.setEnabled(true);
-        main_but_sidelea.setEnabled(false);
-        tempButton = main_but_sidelea;
-    }
-
-    /**
-     * 报警开启关闭按钮
-     *
-     * @param v
-     */
-    public void main_but_alarm(View v) {
-        Intent intent = new Intent(this, AlarmOpenControlDialog.class);
-        startActivity(intent);
-
-    }
-
-    /**
-     * 解除警报
-     *
-     * @param v
-     */
     public void btn_jieJing(View v) {
-        //Log.i("TAG", "解除警报");
-        for (int i=0;i<14;i++){
-            OilCan oilCan=MyApplication.getInstance().getmOilcanDataManager().getData(i);
-
-           if (MyApplication.getInstance().getmOilcanDataManager().getData(i)!=null&& MyApplication.getInstance().getmOilcanDataManager().getData(i).getAlarmState()!=0){
-               MyApplication.getInstance().getmOilcanDataManager().getData(i).setSoundLightAlarm(false);
-               MyApplication.getInstance().getmOilcanDataManager().getData(i).setTemperAlarm(false);
-               MyApplication.getInstance().getmOilcanDataManager().getData(i).setWaterAlarm(false);
-               SoundLightManager.getInstance().CanleAlarm();
-           }
+        for (int i = 0; i < 14; i++) {
+            OilCan oilCan = MyApplication.getInstance().getmOilcanDataManager().getData(i);
+            if (MyApplication.getInstance().getmOilcanDataManager().getData(i) != null && MyApplication.getInstance().getmOilcanDataManager().getData(i).getAlarmState() != 0) {
+                Singleton.getInstance().isTemperAlarm[i] = false;
+                Singleton.getInstance().SoundLightAlarm[i] = false;
+                Singleton.getInstance().isWaterAlarm[i] = false;
+                Singleton.getInstance().isLowAlarms[i] = false;
+                SoundLightManager.getInstance().CanleAlarm();
+            }
         }
-
-    //    SharePreManager.
     }
 
-    /**
-     * 库存记录
-     *
-     * @param v
-     */
     public void btn_kuCunRecord(View v) {
-        //Log.i("TAG", "库存记录 ");
-
-
         if (stockFragment == null) {
             stockFragment = new StockFragment();
 
@@ -673,31 +641,19 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         }
         switchContent(mContent, stockFragment);
         switchButtonState(bar_but_saveoil);
+        setMainButton(false);
     }
 
-    /**
-     * 报警记录
-     *
-     * @param v
-     */
     public void bar_but_alarm(View v) {
         if (Const.isOpen) {
-            // 有点多，需要优化
             AlarmFragment alarmFragment = new AlarmFragment();
             switchContent(mContent, alarmFragment);
         }
         switchButtonState(bar_but_alarm);
+        setMainButton(false);
     }
 
-
-    /**
-     * 进油记录
-     *
-     * @param v
-     */
     public void bar_but_inoil(View v) {
-        // 有点多，需要优化
-
         if (inOilFragment == null) {
             inOilFragment = new InOilFragment();
 
@@ -706,19 +662,10 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         }
         switchContent(mContent, inOilFragment);
         switchButtonState(bar_but_inoil);
+        setMainButton(false);
     }
 
-    /**
-     * 出库记录 存油记录
-     *
-     * @param v
-     */
-
-
     public void bar_but_saveoil(View v) {
-        // 有点多，需要优化
-
-
         if (outStockFragment == null) {
             outStockFragment = new OutStockFragment();
 
@@ -727,6 +674,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         }
         switchContent(mContent, outStockFragment);
         switchButtonState(bar_but_saveoil);
+        setMainButton(false);
     }
 
     public void switchButtonState(TextView from) {
@@ -735,36 +683,13 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         tempButton = from;
     }
 
-    /**
-     * 打印
-     *
-     * @param v
-     */
-    public void main_but_print(View v) {
-        Intent intent = new Intent(this, ActivityDialog.class);
-        intent.putExtra("value", 4);
-        startActivityForResult(intent, 1000);
-    }
-
-    /**
-     * 交班记录
-     *
-     * @param v
-     */
     public void bar_but_commitwork(View v) {
-
-         commitWorkRecortFragment = new CommitWorkRecortFragment();
-
+        commitWorkRecortFragment = new CommitWorkRecortFragment();
         switchContent(mContent, commitWorkRecortFragment);
-
         switchButtonState(bar_but_commitwork);
+        setMainButton(false);
     }
 
-    /**
-     * 交班按钮
-     *
-     * @param v
-     */
     public void main_but_commitwork(View v) {
         Intent intent = new Intent(this, InputDialogActivity.class);
         Bundle bundle = new Bundle();
@@ -776,43 +701,31 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
 
     }
 
-    /**
-     * 开始交班
-     *
-     * @param v
-     */
     public void but_startJiaoBan(View v) {
-        SparseArray<OilCan> oilCan=  myApplication.getmOilcanDataManager().getData();
-        //Log.e("TAG",oilCan.get(0).inOilTime+"");
-
+        SparseArray<OilCan> oilCan = myApplication.getmOilcanDataManager().getData();
         if (myApplication.getmOilcanDataManager().getData().size() > 0) {
             CommitWorkManager.getInstance()
                     .commitWork(
                             myApplication.getmOilcanDataManager()
-                                    .getData() );
+                                    .getData());
             SystemUtils.showRsToast(R.string.commitwork_success);
-            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(),Constans.IsJiaoBan,1);
+            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan, 1);
 
-            commitWorkRecortFragment.setUIShow();
+            commitWorkRecortFragment.setUIShow(true);
         } else {
             SystemUtils.showRsToast(R.string.commitwork_errpr);
         }
     }
 
-    /**
-     * 结束交班
-     *
-     * @param v
-     */
     public void but_endJiaoBan(View v) {
         if (myApplication.getmOilcanDataManager().getData().size() > 0) {
             CommitWorkManager.getInstance()
                     .commitWork(
                             myApplication.getmOilcanDataManager()
-                                    .getData(),"" );
+                                    .getData(), "");
             SystemUtils.showRsToast(R.string.commitwork_success);
-            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(),Constans.IsJiaoBan,0);
-            commitWorkRecortFragment.setUIShow();
+            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan, 0);
+            commitWorkRecortFragment.setUIShow(false);
 
         } else {
             SystemUtils.showRsToast(R.string.commitwork_errpr);
@@ -821,12 +734,8 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
 
     }
 
-    /**
-     * 进油记录回调函数
-     */
     private OilInOut in;
     private OutStock out;
-
 
     @Override
     public void oilcanDismiss(OilCan obj) {
@@ -865,51 +774,10 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
         }
     };
 
-   // private TextView main_time;
-
-    //private SocketManager socketManager;
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        //Log.i("探针设置2", "在主Main");
-        // 第一部分，是哪个模块的，返回的值
-        super.onActivityResult(requestCode, resultCode, data);
-        // 1000=打印 1001=交班
-        if (requestCode == 1000) {
-            if (resultCode != 0) {
-                resultCode -= 100;
-                PrintRunable printRunable = new PrintRunable(resultCode);
-                ThreadManager.getShortPool().execute(printRunable);
-            }
-
-//        } else if (requestCode == 1001 && data != null) {
-//            if (myApplication.getUser() != null) {
-//                String passwd = data.getStringExtra("value");
-//                if (passwd.equals(myApplication.getUser().getPsw())) {
-//                    if (myApplication.getmOilcanDataManager().getData().size() > 0) {
-//                        CommitWorkManager.getInstance()
-//                                .commitWork(myApplication.getmOilcanDataManager()
-//                                                .getData());
-//                        SystemUtils.showRsToast(R.string.commitwork_success);
-//                    } else {
-//                        SystemUtils.showRsToast(R.string.commitwork_errpr);
-//                    }
-//                } else {
-//                    SystemUtils.showRsToast(R.string.commitwork_toast_psderror);
-//                }
-//
-//            } else {
-//                Intent intent = new Intent(this, LoginActivity.class);
-//                startActivity(intent);
-//                SystemUtils.showRsToast(R.string.login_toast_login);
-//            }
-        }
-    }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        //  SocketManager.getInstance(ct).Destory();
         mServerManager.unRegister();
         stopTimer();
     }
@@ -926,7 +794,6 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
      * Started notify.
      */
     public void serverHasStarted(String ip) {
-        serverStart(ip);
     }
 
     /**
@@ -935,39 +802,24 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
     public void serverStop() {
     }
 
-    private void showDialog() {
-    }
-
-    private void closeDialog() {
-    }
-
-    /**
-     * Start notify.
-     */
-    public void serverStart(String ip) {
-        mAddressList = new LinkedList<>();
-        mAddressList.add("http://" + ip + ":8080/");
-        mAddressList.add("http://" + ip + ":8080/login.html");
-        mAddressList.add("http://" + ip + ":8080/image");
-        mAddressList.add("http://" + ip + ":8080/download");
-        mAddressList.add("http://" + ip + ":8080/upload");
-    }
-
     File file;
 
     @Override
-    public void success(double beginHeight, double endHeight, double beginVoulme, double endVoulme, int oilCanId, DetailInoutRecord detailInoutRecord) {
+    public void success(double beginHeight, double endHeight, double beginVoulme, double endVoulme, double density, int oilCanId, DetailInoutRecord detailInoutRecord) {
         if ((endHeight - beginHeight) > 1) {
-            if (!Singleton.getInstance().IsCreatIn){
+            if (!Singleton.getInstance().IsCreatIn) {
                 return;
             }
             in = new OilInOut();
-            in.setBeginHeigth(DataUtils.doubleFoment(beginHeight));
-            in.setEndHeigth(DataUtils.doubleFoment(endHeight));
             in.setOilId(oilCanId);
             in.setTime(DateUtils.getYYYMMddHHmmss());
             in.setEndVolum(endVoulme);
             in.setBeginVolum(beginVoulme);
+            in.setJieZhi(detailInoutRecord.getOilType());
+            in.setBeginWeight(endVoulme - beginVoulme);
+            in.setBeginHeigth(DataUtils.doubleFoment(beginHeight));
+            in.setEndHeigth(endHeight);
+            in.setEndWeight(DataUtils.doubleFoment((endVoulme - beginVoulme) * density));
 
             OilMessage oilMessage = new OilMessage();
             oilMessage.setDate(DateUtils.getYYYMMddHHmm());
@@ -1019,9 +871,8 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                 //TODO 上传进出油记录
                 //Log.i("保存成功", "数据保存成功" + DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, inOut.getId()));
             }
-        }
-        else if ((endHeight - beginHeight) <- 1) {
-            if (!Singleton.getInstance().IsCreateOut){
+        } else if ((endHeight - beginHeight) < -1) {
+            if (!Singleton.getInstance().IsCreateOut) {
                 return;
             }
             out = new OutStock();
@@ -1034,6 +885,8 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             out.setTime(DateUtils.getYYYMMddHHmmss());
             out.setEndVolum(endVoulme);
             out.setBeginVolum(beginVoulme);
+            out.setBeginWeight(beginVoulme - endVoulme);
+            out.setEndWeight(DataUtils.doubleFoment((beginVoulme - endVoulme) * density));
 
             OilMessage oilMessage = new OilMessage();
             oilMessage.setDate(DateUtils.getYYYMMddHHmm());
@@ -1045,7 +898,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             }
             AlarmManager.getInstance().addNoticesState(oilMessage);
             DBDataManager.getInstance().saveObject(out);
-            OilInOut inOut = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
+            OutStock inOut = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
             DBDataManager.getInstance().saveObject(detailInoutRecord);
 
             detailInoutRecord.setId(inOut.getId());
@@ -1119,6 +972,5 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
     private void stopTimer() {
         task.stop();
     }
-
 
 }

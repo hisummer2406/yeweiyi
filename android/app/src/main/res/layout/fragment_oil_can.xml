@@ -15,18 +15,36 @@
         android:layout_height="@dimen/dp_78"
         android:background="@drawable/main_return"/>
     <LinearLayout
-        
+
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="horizontal">
-        <ImageView
+        <LinearLayout
             android:id="@+id/iv_back"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerInParent="true"
-            android:background="@drawable/sansen_max_oilcan"
-            android:scaleType="fitXY" />
+            android:layout_width="@dimen/dp_500"
+            android:background="@drawable/max_oilcan"
+            android:orientation="horizontal"
+            android:layout_height="@dimen/dp_320"
+            >
+<!--            <ImageView-->
+<!--                android:id="@+id/iv_back"-->
+<!--                android:layout_width="wrap_content"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:layout_centerInParent="true"-->
+<!--                android:src="@drawable/max_oilcan"-->
+<!--                android:scaleType="fitXY" />-->
+            <com.sansen.yeweiyi.view.CustomProgressView
+
+                android:id="@+id/oilcan_view_progress"
+                android:layout_width="@dimen/dp_82"
+                android:layout_height="@dimen/dp_240"
+                android:layout_marginLeft="@dimen/dp_110"
+                android:layout_marginTop="@dimen/dp_58"
+                tools:ignore="DuplicateIds" />
+        </LinearLayout>
+
+
         <TableLayout
             android:layout_width="@dimen/dp_300"
             android:layout_height="match_parent"
@@ -53,7 +71,8 @@
                 </LinearLayout>
 
                 <LinearLayout
-                    android:layout_marginLeft="@dimen/dp_10"
+                    android:layout_marginLeft="@dimen/dp_16"
+                    android:layout_marginRight="@dimen/dp_85"
                     android:layout_width="0dp"
                     android:background="@color/c033158"
                     android:layout_height="@dimen/dp_43"
@@ -93,7 +112,7 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="2"
                     android:orientation="vertical">
 
                     <TextView
@@ -129,7 +148,7 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="2"
                     android:orientation="vertical">
 
                     <TextView
@@ -164,7 +183,7 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="2"
                     android:orientation="vertical">
 
                     <TextView
@@ -198,7 +217,7 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="2"
                     android:orientation="vertical">
 
                     <TextView
@@ -210,108 +229,13 @@
                 </LinearLayout>
             </TableRow>
 
-            <TableRow
-                 android:layout_marginTop="@dimen/dp_6">
 
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
 
-                    <TextView
-                        android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
-                        android:textColor="@color/black"
-                        android:layout_height="wrap_content"
-                        android:text="@string/water_level"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
 
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
 
-                    <TextView
-                        android:textColor="@color/black"
-                        android:id="@+id/oilcan_tv_waterlevel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
-            </TableRow>
 
             <TableRow
-                 android:layout_marginTop="@dimen/dp_6">
 
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
-                        android:textColor="@color/black"
-                        android:layout_height="wrap_content"
-                        android:text="@string/temperature"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
-                <!-- 关注人数 -->
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:textColor="@color/black"
-                        android:id="@+id/oilcan_tv_temperature"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
-            </TableRow>
-
-            <TableRow
-                 android:layout_marginTop="@dimen/dp_6">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
-                        android:textColor="@color/black"
-                        android:layout_height="wrap_content"
-                        android:text="@string/zhiliang"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:textColor="@color/black"
-                        android:id="@+id/oilcan_tv_zhiliang"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
-            </TableRow>
-
-            <TableRow
-                android:layout_marginBottom="@dimen/dp_39"
                  android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
@@ -332,7 +256,7 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:layout_weight="2"
                     android:orientation="vertical">
 
                     <TextView
@@ -343,18 +267,112 @@
                         android:textSize="@dimen/sp_24" />
                 </LinearLayout>
             </TableRow>
-\
+            <TableRow
+                android:layout_marginTop="@dimen/dp_6">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:gravity="right"
+                        android:layout_width="@dimen/dp_90"
+                        android:textColor="@color/black"
+                        android:layout_height="wrap_content"
+                        android:text="@string/zhiliang"
+                        android:textSize="@dimen/sp_24" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:textColor="@color/black"
+                        android:id="@+id/oilcan_tv_zhiliang"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="@dimen/sp_24" />
+                </LinearLayout>
+            </TableRow>
+            <TableRow
+                android:layout_marginTop="@dimen/dp_6">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:gravity="right"
+                        android:layout_width="@dimen/dp_90"
+                        android:textColor="@color/black"
+                        android:layout_height="wrap_content"
+                        android:text="@string/water_level"
+                        android:textSize="@dimen/sp_24" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:textColor="@color/black"
+                        android:id="@+id/oilcan_tv_waterlevel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="@dimen/sp_24" />
+                </LinearLayout>
+            </TableRow>
+            <TableRow
+                android:layout_marginBottom="@dimen/dp_39"
+                android:layout_marginTop="@dimen/dp_6">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:gravity="right"
+                        android:layout_width="@dimen/dp_90"
+                        android:textColor="@color/black"
+                        android:layout_height="wrap_content"
+                        android:text="@string/temperature"
+                        android:textSize="@dimen/sp_24" />
+                </LinearLayout>
+                <!-- 关注人数 -->
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="2"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:textColor="@color/black"
+                        android:id="@+id/oilcan_tv_temperature"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="@dimen/sp_24" />
+                </LinearLayout>
+            </TableRow>
+
+
         </TableLayout>
     </LinearLayout>
 
 
 
-<!--    <com.sansen.yeweiyi.view.CustomProgressView-->
-<!--        android:id="@+id/oilcan_view_progress"-->
-<!--        android:layout_width="150dp"-->
-<!--        android:layout_height="312dp"-->
-<!--        android:layout_marginLeft="@dimen/custom_progress_marginleft"-->
-<!--        android:layout_marginTop="@dimen/custom_progress_margintop" />-->
+
 
     <TextView
         android:visibility="gone"

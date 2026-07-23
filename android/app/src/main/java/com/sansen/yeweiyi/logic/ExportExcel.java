@@ -12,6 +12,7 @@ import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OilSaveInfo;
 import com.sansen.yeweiyi.db.ProbeToOil;
+import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
@@ -63,14 +64,14 @@ public class ExportExcel<T> {
     private HSSFSheet sheet;
 
     public void exportExcel(String[] headers, Collection<T> dataset,
-                            String[] params, OutputStream out) {
+                            String[] params, OutputStream out, ExcelListener listener) {
         exportExcel("测试POI导出EXCEL文档", headers, dataset, params, out,
-                "yyyy-MM-dd");
+                "yyyy-MM-dd",listener);
     }
 
     public void exportExcel(String[] headers, Collection<T> dataset,
-                            String[] params, OutputStream out, String pattern) {
-        exportExcel("测试POI导出EXCEL文档", headers, dataset, params, out, pattern);
+                            String[] params, OutputStream out, String pattern,ExcelListener listener) {
+        exportExcel("测试POI导出EXCEL文档", headers, dataset, params, out, pattern,listener);
     }
 
     /**
@@ -136,51 +137,82 @@ public class ExportExcel<T> {
      * @return Map 包含单元格数据内容的Map对象
      * @p aram InputStream
      */
-    public List<OilCanTable> readExcelOilCanTableContent(InputStream is) throws IOException {
+    public OilCanTable readExcelOilCanTableContent(InputStream is) throws IOException {
+        OilCanTable oilCanTables = new OilCanTable();
+        POIFSFileSystem fs = null;
+        HSSFWorkbook wb = null;
+        try {
+            fs = new POIFSFileSystem(is);
+            wb = new HSSFWorkbook(fs);
+            // 遍历所有sheet（一个sheet=一个油罐）
+            for (int sheetIndex = 0; sheetIndex < wb.getNumberOfSheets(); sheetIndex++) {
+                HSSFSheet sheet = wb.getSheetAt(sheetIndex);
+                List<Double> heightTemp = new ArrayList<>();
+                List<Double> volumeTemp = new ArrayList<>();
 
-        List<OilCanTable> list = new ArrayList<OilCanTable>();
-        fs = new POIFSFileSystem(is);
-        wb = new HSSFWorkbook(fs);
+                // 遍历所有数据行，跳过第0行表头
+                for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+                    HSSFRow row = sheet.getRow(rowIndex);
+                    if (row == null) continue;
+                    // A列：高度
+                    Cell heightCell = row.getCell(0);
+                    // B列：容积
+                    Cell volCell = row.getCell(1);
 
-        int[] height;
-        double[] volume;
-        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-            HSSFSheet sheet = wb.getSheetAt(i);
+                    double height = getCellDoubleValue(heightCell);
+                    double volume = getCellDoubleValue(volCell);
+                    // 过滤空行（高度容积都为0跳过）
+                    if (height == 0 && volume == 0) continue;
 
-            OilCanTable oilCanTable;
-            // 获取多少个点
-            HSSFRow row = sheet.getRow(0);
-            int number = Integer.parseInt(getValue(row.getCell(1)));
-            height = new int[number];
-            volume = new double[number];
-            // 循环获取行数
-            for (int j = 2; j < number + 2; j++) {
-                row = sheet.getRow(j);
-                for (int k = 0; k < 2; k++) {
-                    if (k == 0) {
-                        height[(j - 2)] = Integer.parseInt(getValue(row
-                                .getCell(k)));
-
-                    } else if (k == 1) {
-                        Log.i(TAG, "readExcelOilCanTableContent: " + getValue(row
-                                .getCell(k)));
-                        volume[j - 2] = Double.parseDouble(getValue(row
-                                .getCell(k)));
-                    }
+                    heightTemp.add(height);
+                    volumeTemp.add(volume);
+                    Log.e("Row"," height "+height+"volume "+volCell);
                 }
 
-            }
-            oilCanTable = new OilCanTable();
-            oilCanTable.setPk_oilCanId(i + 1);
-            oilCanTable.setHeight(height);
-            oilCanTable.setVolum(volume);
-            oilCanTable.ArrayToString();
-            list.add(oilCanTable);
-        }
+                // 集合转数组存入实体
+                int[] heightArr = new int[heightTemp.size()];
+                double[] volArr = new double[volumeTemp.size()];
+                for (int i = 0; i < heightArr.length; i++) {
+                    heightArr[i] =(int) Math.floor(heightTemp.get(i));
+                    volArr[i] = volumeTemp.get(i);
+                }
 
-        return list;
+              OilCanTable oilCanTable = new OilCanTable();
+              oilCanTable.setPk_oilCanId(sheetIndex + 1);
+              oilCanTable.setHeight(heightArr);
+              oilCanTable.setVolum(volArr);
+                oilCanTable.ArrayToString();
+             oilCanTables=oilCanTable;
+            }
+        } finally {
+//            if (wb != null) wb.clo();
+//            if (fs != null) fs.close();
+            if (is != null) is.close();
+        }
+        return oilCanTables;
     }
 
+    /**
+     * 通用单元格转浮点值（兼容数字、文本空单元格）
+     */
+    private double getCellDoubleValue(Cell cell) {
+        if (cell == null) return 0.0;
+        switch (cell.getCellType()) {
+            case Cell.CELL_TYPE_NUMERIC:
+                return cell.getNumericCellValue();
+            case Cell.CELL_TYPE_STRING:
+                String val = cell.getStringCellValue().trim();
+                if (val.isEmpty()) return 0.0;
+                try {
+                    return Double.parseDouble(val);
+                } catch (NumberFormatException e) {
+                    return 0.0;
+                }
+            case Cell.CELL_TYPE_BLANK:
+            default:
+                return 0.0;
+        }
+    }
     public String getValue(HSSFCell cell) {
         String cellValue = "";
         DecimalFormat df = new DecimalFormat("#");
@@ -330,7 +362,7 @@ public class ExportExcel<T> {
     @SuppressWarnings("unchecked")
     public void exportExcel(String title, String[] headers,
                             Collection<T> dataset, String[] params, OutputStream out,
-                            String pattern) {
+                            String pattern,ExcelListener listener) {
 
         // 声明一个工作薄
         HSSFWorkbook workbook = new HSSFWorkbook();
@@ -413,105 +445,117 @@ public class ExportExcel<T> {
                 String getMethodName = "get"
                         + fieldName.substring(0, 1).toUpperCase()
                         + fieldName.substring(1);
-                try {
-                    Class tCls = t.getClass();
-                    Method getMethod = tCls.getMethod(getMethodName,
-                            new Class[]{});
+                System.out.println(" 方法"+getMethodName);
+                if (!getMethodName.equals("getId")){
+                    try {
+                        Class tCls = t.getClass();
+                        Method getMethod = tCls.getMethod(getMethodName,
+                                new Class[]{});
 
-                    Object value = getMethod.invoke(t, new Object[]{});
-                    System.out.println("里面的数据" + value);
-                    // 判断值的类型后进行强制类型转换
-                    String textValue = null;
-                    // if (value instanceof Integer) {
-                    // int intValue = (Integer) value;
-                    // cell.setCellValue(intValue);
-                    // } else if (value instanceof Float) {
-                    // float fValue = (Float) value;
-                    // textValue = new HSSFRichTextString(
-                    // String.valueOf(fValue));
-                    // cell.setCellValue(textValue);
-                    // } else if (value instanceof Double) {
-                    // double dValue = (Double) value;
-                    // textValue = new HSSFRichTextString(
-                    // String.valueOf(dValue));
-                    // cell.setCellValue(textValue);
-                    // } else if (value instanceof Long) {
-                    // long longValue = (Long) value;
-                    // cell.setCellValue(longValue);
-                    // }
-                    if (value instanceof Boolean) {
-                        boolean bValue = (Boolean) value;
-                        textValue = "男";
-                        if (!bValue) {
-                            textValue = "女";
-                        }
-                    } else if (value instanceof Date) {
-                        Date date = (Date) value;
-                        SimpleDateFormat sdf = new SimpleDateFormat(pattern);
-                        textValue = sdf.format(date);
-                    } else if (value instanceof byte[]) {
-                        // 有图片时，设置行高为60px;
-                        row.setHeightInPoints(60);
-                        // 设置图片所在列宽度为80px,注意这里单位的一个换算
-                        sheet.setColumnWidth(i, (short) (35.7 * 80));
-                        // sheet.autoSizeColumn(i);
-                        byte[] bsValue = (byte[]) value;
-                        HSSFClientAnchor anchor = new HSSFClientAnchor(0, 0,
-                                1023, 255, (short) 6, index, (short) 6, index);
-                        anchor.setAnchorType(2);
-                        patriarch.createPicture(anchor, workbook.addPicture(
-                                bsValue, HSSFWorkbook.PICTURE_TYPE_JPEG));
-                    } else {
-                        // 其它数据类型都当作字符串简单处理
-                        if (value==null){
-                            value="";
-                        }
-                        textValue = value.toString();
-                    }
-                    // 如果不是图片数据，就利用正则表达式判断textValue是否全部由数字组成
-                    if (textValue != null) {
-                        Pattern p = Pattern.compile("^//d+(//.//d+)?$");
-                        Matcher matcher = p.matcher(textValue);
-                        if (matcher.matches()) {
-
-                            // 是数字当作double处理
-                            cell.setCellValue(Double.parseDouble(textValue));
+                        Object value = getMethod.invoke(t, new Object[]{});
+                        System.out.println("里面的数据" + value+" 方法"+getMethodName);
+                        // 判断值的类型后进行强制类型转换
+                        String textValue = null;
+                        // if (value instanceof Integer) {
+                        // int intValue = (Integer) value;
+                        // cell.setCellValue(intValue);
+                        // } else if (value instanceof Float) {
+                        // float fValue = (Float) value;
+                        // textValue = new HSSFRichTextString(
+                        // String.valueOf(fValue));
+                        // cell.setCellValue(textValue);
+                        // } else if (value instanceof Double) {
+                        // double dValue = (Double) value;
+                        // textValue = new HSSFRichTextString(
+                        // String.valueOf(dValue));
+                        // cell.setCellValue(textValue);
+                        // } else if (value instanceof Long) {
+                        // long longValue = (Long) value;
+                        // cell.setCellValue(longValue);
+                        // }
+                        if (value instanceof Boolean) {
+                            boolean bValue = (Boolean) value;
+                            textValue = "男";
+                            if (!bValue) {
+                                textValue = "女";
+                            }
+                        } else if (value instanceof Date) {
+                            Date date = (Date) value;
+                            SimpleDateFormat sdf = new SimpleDateFormat(pattern);
+                            textValue = sdf.format(date);
+                        } else if (value instanceof byte[]) {
+                            // 有图片时，设置行高为60px;
+                            row.setHeightInPoints(60);
+                            // 设置图片所在列宽度为80px,注意这里单位的一个换算
+                            sheet.setColumnWidth(i, (short) (35.7 * 80));
+                            // sheet.autoSizeColumn(i);
+                            byte[] bsValue = (byte[]) value;
+                            HSSFClientAnchor anchor = new HSSFClientAnchor(0, 0,
+                                    1023, 255, (short) 6, index, (short) 6, index);
+                            anchor.setAnchorType(2);
+                            patriarch.createPicture(anchor, workbook.addPicture(
+                                    bsValue, HSSFWorkbook.PICTURE_TYPE_JPEG));
                         } else {
-                            HSSFRichTextString richString = new HSSFRichTextString(
-                                    textValue);
-                            HSSFFont font3 = workbook.createFont();
-                            font3.setColor(HSSFColor.BLUE.index);
-                            richString.applyFont(font3);
-
-                            cell.setCellValue(richString);
+                            // 其它数据类型都当作字符串简单处理
+                            if (value==null){
+                                value="";
+                            }
+                            textValue = value.toString();
                         }
+                        // 如果不是图片数据，就利用正则表达式判断textValue是否全部由数字组成
+                        if (textValue != null) {
+                            Pattern p = Pattern.compile("^//d+(//.//d+)?$");
+                            Matcher matcher = p.matcher(textValue);
+                            if (matcher.matches()) {
+
+                                // 是数字当作double处理
+                                cell.setCellValue(Double.parseDouble(textValue));
+                            } else {
+                                HSSFRichTextString richString = new HSSFRichTextString(
+                                        textValue);
+                                HSSFFont font3 = workbook.createFont();
+                                font3.setColor(HSSFColor.BLUE.index);
+                                richString.applyFont(font3);
+
+                                cell.setCellValue(richString);
+                            }
+                        }
+                    } catch (SecurityException e) {
+                        listener.Success(false);
+                        // TODO Auto-generated catch block
+                        //e.printStackTrace();
+                    } catch (NoSuchMethodException e) {
+                        listener.Success(false);
+                        // TODO Auto-generated catch block
+                        //e.printStackTrace();
+                    } catch (IllegalArgumentException e) {
+                        listener.Success(false);
+                        // TODO Auto-generated catch block
+                        //e.printStackTrace();
+                    } catch (IllegalAccessException e) {
+                        listener.Success(false);
+                        // TODO Auto-generated catch block
+                        //e.printStackTrace();
+                    } catch (InvocationTargetException e) {
+                        listener.Success(false);
+                        // TODO Auto-generated catch block
+                        //e.printStackTrace();
+                    } finally {
+
+                        // 清理资源
                     }
-                } catch (SecurityException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
-                } catch (NoSuchMethodException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
-                } catch (IllegalArgumentException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
-                } catch (IllegalAccessException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
-                } catch (InvocationTargetException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
-                } finally {
-                    // 清理资源
                 }
+
             }
 
         }
         try {
             workbook.write(out);
             out.flush();
+            listener.Success(true);
         } catch (IOException e) {
             // TODO Auto-generated catch block
+            listener.Success(false);
             //e.printStackTrace();
         }
 

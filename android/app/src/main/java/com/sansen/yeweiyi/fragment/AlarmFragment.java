@@ -1,34 +1,48 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
 import android.databinding.ObservableField;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.Window;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.adapter.AlarmAdapter;
 import com.sansen.yeweiyi.adapter.OutStockAdapter;
+import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.Alarm;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
+import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.logic.ExportExcel;
+import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.List;
+
+import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
 public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnItemClickListener {
     private String TAG = "AlarmFragment";
@@ -47,6 +61,7 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
     private int datasize; // 模拟数据集的条数
     private List<Alarm> lists = null;// 存放当前的所有数据
     private List<Alarm> temps;
+    private LinearLayout ly_baoJing;
 
     @Override
     protected View initView(LayoutInflater inflater) {
@@ -76,6 +91,11 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
         tv_time=headerView.findViewById(R.id.main_time);
         tvTitle.setText("报警记录");
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
+        ly_baoJing=rootView.findViewById(R.id.ly_baoJing);
+        ly_baoJing.setOnClickListener(this);
+        if (!Singleton.getInstance().IsBaoJing){
+            ly_baoJing.setVisibility(View.GONE);
+        }
     }
     OnPropertyChangedCallback callback = new OnPropertyChangedCallback() {
         @Override
@@ -108,22 +128,7 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
 
     public void initTitle() {
         if (main != null) {
-//            main.tv_right.setVisibility(View.VISIBLE);
-//            main.tv_right.setText(SystemUtils.getRsStr(R.string.record_sort));
-//
-//            main.iv_right.setVisibility(View.GONE);
-//            main.tv_unlogin.setVisibility(View.GONE);
-//            main.tv_left.setVisibility(View.GONE);
-//
-//            main.tv_right.setOnClickListener(new OnClickListener() {
-//
-//                @Override
-//                public void onClick(View v) {
-//                    isSort = !isSort;
-//                    initializeAdapter(isSort);
-//                    mLinearLayoutManager.removeAllViews();
-//                }
-//            });
+
         }
     }
 
@@ -197,9 +202,48 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
     @Override
     protected void processClick(View v) {
 
+        if (v.getId()==R.id.ly_baoJing){
+            runOnUiThread(() -> {
+                // 主线程操作
+                ly_baoJing.setVisibility(View.GONE);
+            });
+            SaveAlarmOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
+        }
 
     }
-    AlertDialog.Builder builder;
+    private void SaveAlarmOIl(String path) {
+
+        //path=path+"/" + "Oil_in_record";
+        Log.e("TAG 路径",path);
+        ExportExcel<Alarm> exportExcel = new ExportExcel<Alarm>();
+        String headers[] = { "",SystemUtils.getRsStr(R.string.time),"报警信息", "介质","罐号"};
+        DBDataManager db = MyApplication.getInstance().getmDBManager();
+        List<Alarm> dataset = db.findAllObject(Alarm.class);
+        File file = new File(path);
+        if (!file.exists())
+            file.mkdir();
+        OutputStream out = null;
+        try {
+            file = new File(path + "/" + "Oil_alarm_record" + ".xls");
+            out = new FileOutputStream(file);
+            exportExcel.exportExcel(headers, dataset,
+                    new Alarm().getParams(), out, new ExcelListener() {
+                        @Override
+                        public void Success(boolean isTrue) {
+                            runOnUiThread(() -> {
+                                // 主线程操作
+                                ly_baoJing.setVisibility(View.VISIBLE);
+                            });
+
+                        }
+                    });
+            out.close();
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
+    }
     @Override
     public void onHiddenChanged(boolean hidden) {
         // TODO Auto-generated method stub
@@ -222,31 +266,37 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
 
     }
     private void initDialog(final int position) {
-        builder = new AlertDialog.Builder(ct);
-        builder.setTitle(SystemUtils.getRsStr(R.string.isDeleteRecord));
-        builder.create();
-        builder.setPositiveButton(SystemUtils.getRsStr(R.string.confirm),
-                new DialogInterface.OnClickListener() {
+        View customView = LayoutInflater.from(main).inflate(R.layout.dialog_custom_alert, null);
+        Button btn_confirm = customView.findViewById(R.id.btn_confirm);
+        Button btn_cancel = customView.findViewById(R.id.btn_cancel);
+        AlertDialog dialog = new AlertDialog.Builder(main)
+                .setView(customView)
+                .create();
+        btn_cancel.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                dialog.dismiss();
+            }
+        });
+        btn_confirm.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Alarm alarm = (Alarm) myAdapter
+                        .getItem(position);
+                dbManager.delteRecord(alarm);
+                initializeAdapter(isSort);
+                dialog.dismiss();
+            }
+        });
 
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        Alarm alarm = (Alarm) myAdapter
-                                .getItem(position);
-                        dbManager.delteRecord(alarm);
-                        initializeAdapter(isSort);
+        dialog.show();
 
-                    }
-                });
-
-        builder.setNegativeButton(SystemUtils.getRsStr(R.string.cancle),
-                new DialogInterface.OnClickListener() {
-
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        // TODO Auto-generated method stub
-
-                    }
-                });
+        Window window = dialog.getWindow();
+        if (window != null) {
+            int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);   // 300dp
+            int height = (int) (230*1.3  * getResources().getDisplayMetrics().density);  // 400dp
+            window.setLayout(width, height);
+        }
 
     }
     @Override
@@ -254,7 +304,6 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
 //Log.i(TAG, "onLongClick: 长按"+position);
         if (Singleton.getInstance().IsDelAlarm) {
             initDialog(position);
-            builder.show();
         }
         else {
             //SystemUtils.showRsToast(R.string.authorization_toast_noauth);

@@ -3,7 +3,9 @@ package com.sansen.yeweiyi.db;
 import com.lidroid.xutils.db.annotation.Column;
 import com.lidroid.xutils.db.annotation.Id;
 
-
+/**
+ * 河南三绅电子有限公司 yjy 2016-7-6 描述 ：存油记录表 id time 版本 ：1.0
+ */
 public class OilSaveInfo {
 	/**
 	 * id

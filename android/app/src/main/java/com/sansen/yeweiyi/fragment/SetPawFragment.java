@@ -1,10 +1,12 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.annotation.SuppressLint;
+import android.databinding.Observable;
+import android.databinding.ObservableField;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.TextUtils;
 import android.text.TextWatcher;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -15,6 +17,7 @@ import android.widget.TextView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
+import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.ToastUtils;
@@ -27,7 +30,7 @@ import com.sansen.yeweiyi.utils.ToastUtils;
 public class SetPawFragment extends BaseFragment implements  TextWatcher {
 
 
-	private TextView tv_title,tv_tip;
+	private TextView tv_title;
 	private EditText et_psw,et_confirm_psw;
 	private LinearLayout ly_saveData,ly_upper_page;
 	private SetType setType;
@@ -49,7 +52,6 @@ public class SetPawFragment extends BaseFragment implements  TextWatcher {
 	@Override
 	public void findView() {
 		tv_title = rootView.findViewById(R.id.tv_title);
-		tv_tip = rootView.findViewById(R.id.tv_tip);
 		et_psw = rootView.findViewById(R.id.et_psw);
 		et_confirm_psw = rootView.findViewById(R.id.et_confirm_psw);
 		ly_saveData=rootView.findViewById(R.id.ly_saveData);
@@ -58,8 +60,25 @@ public class SetPawFragment extends BaseFragment implements  TextWatcher {
 		ly_upper_page.setOnClickListener(this);
 		et_psw.addTextChangedListener(this);
 		et_confirm_psw.addTextChangedListener(this);
+		View headerView = rootView.findViewById(R.id.title_bar);
+		// 再从该 View 中 findViewById 获取内部的 TextView
+		tvTitle = headerView.findViewById(R.id.tv_title);
+		tv_time=headerView.findViewById(R.id.main_time);
+		tvTitle.setText("密码设置");
+		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 	}
 
+	Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
+		@Override
+		public void onPropertyChanged(Observable sender, int propertyId) {
+			// 如果需要区分是哪个字段，可通过 propertyId 判断
+			// 直接获取当前值
+			String newValue = ((ObservableField<String>) sender).get();
+			// Log.d("监听", "新值：" + newValue);
+			tv_time.setText(newValue);
+		}
+	};
+	TextView tvTitle,tv_time;
 	private String psw,confirmPsw;
 
 	@Override
@@ -68,18 +87,17 @@ public class SetPawFragment extends BaseFragment implements  TextWatcher {
 			case R.id.ly_saveData:
 				//Log.i("TAG","点击了保存数据");
 
-				if (!psw.isEmpty()&&psw.equals(confirmPsw)){
+
+				if (!TextUtils.isEmpty(psw)&&psw.equals(confirmPsw)){
 					if (setType==SetType.SET){
 						SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.SetPWD,et_confirm_psw.getText().toString());
 					}
 					else {
 						SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.GJPWD,et_confirm_psw.getText().toString());
 					}
+					showWindDialog(2000);
 
-					if (main.setFragment == null) {
-						main.setFragment = new SetFragment();
-					}
-					main.switchContent(main.mContent, main.setFragment);
+
 				}
 				else {
 					ToastUtils.showToast("密码或者确认密码不能为空",5);

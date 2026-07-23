@@ -1,5 +1,7 @@
 package com.sansen.yeweiyi.manager;
 
+import android.util.Log;
+
 import com.alibaba.fastjson.JSONObject;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
@@ -9,6 +11,7 @@ import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 import java.util.Map;
@@ -54,48 +57,54 @@ public class AlarmDetection {
         if (oilCan != null) {
             if (oilCan.getHighLevelAlarm() != 0 && oilCan.getOilLevel() > (oilCan.getHighLevelAlarm())) {
                 oilHeightDection(oilCan);
-            } else if (oilCan.getLowLevelAlarm() != 0 && oilCan.getOilLevel() < oilCan.getLowLevelAlarm()) {
-                oilLowDection(oilCan);
-//                if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isSoundLightAlarm()) {
-//                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setSoundLightAlarm(false);
-//
-//                }
             } else {
-                if (!MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isSoundLightAlarm()) {//如果当前的所有油罐为非报警
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setSoundLightAlarm(true);
+                if (!Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {//如果当前的所有油罐为非报警
+                    Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]=true;
+                    Log.e("关闭警报灯", "警报灯01");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
+                } else if (!Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]) {
+                    Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]=true;
                 }
-                if (!MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isWaterAlarm()) {
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setSoundLightAlarm(false);
-                    SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
-                } else if (!MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isHHightAlarm()) {
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setHHightAlarm(true);
-                }
+            }
+            if (oilCan.getLowLevelAlarm() != 0 && oilCan.getOilLevel() < oilCan.getLowLevelAlarm()) {
+                oilLowDection(oilCan);
 
+            } else {
+
+                if (!Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]) {
+                    Log.e("TAG", "打开报警oilLowDection======"+"----------"+oilCan.getOilLevel()+"----"+oilCan.getOilCanPos());
+                    Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]=true;
+                    SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
+                }
+                else if (!Singleton.getInstance().isLLLowAlarm[oilCan.getOilCanPos()]) {
+                    Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]=true;
+                }
 
             }
             if (oilCan.getHighWaterLevelAlarm() != 0 && oilCan.getWaterLevel() > oilCan.getHighWaterLevelAlarm()) {
-                if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isWaterAlarm()) {
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setWaterAlarm(false);
+                if (Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]) {
+                    Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]=false;
                     waterHeightDection(oilCan);
                 }
             } else {
-                if (!MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isWaterAlarm()) {
+                if (!Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]) {
+                    Log.e("关闭警报灯", "警报灯03");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setWaterAlarm(true);
+                    Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]=true;
                 }
             }
             if (oilCan.getHighTempAlarm() != 0 && oilCan.getTemper() > oilCan.getHighTempAlarm()) {
-                if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isTemperAlarm()) {
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setTemperAlarm(false);
+                if (Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]) {
+                    Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]=false;
                     tempHeightDection(oilCan);
                 }
 
             } else {
-                if (!MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isTemperAlarm()) {
+                if (!Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]) {
+                    Log.e("关闭警报灯", "警报灯04");
+                    Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]=true;
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setTemperAlarm(true);
-                }
+              }
             }
         }
     }
@@ -114,11 +123,10 @@ public class AlarmDetection {
     private void oilHeightDection(OilCan oilCan) {
         AlarmState alarmState;
         //Log.i("TAG","高高油位 "+oilCan.getHhighLevelAlarm()+"----"+oilCan.getOilLevel() );
-        if (oilCan.getOilLevel() > oilCan.getHhighLevelAlarm()
-                & oilCan.getHhighLevelAlarm() != 0) {
-            if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isHHightAlarm()) {
-                isHHeightAlarm = true;
-                MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setHHightAlarm(false);
+        if (oilCan.getOilLevel() > oilCan.getHhighLevelAlarm() & oilCan.getHhighLevelAlarm() != 0) {
+            if (Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]) {
+                isHHeightAlarm = true;//
+                Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]=false;
                 SoundLightManager.getInstance().FYF(oilCan.getOilCanPos(), isHHeightAlarm);
                 //Log.i("TAG","高高油位--------- "+oilCan.getHhighLevelAlarm()+"----"+oilCan.getOilLevel() );
                 oilMessage = new OilMessage();
@@ -139,11 +147,10 @@ public class AlarmDetection {
             }
 
         } else {
-            MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setHHightAlarm(true);
+            Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]=true;
             SoundLightManager.getInstance().FYF(oilCan.getOilCanPos(), false);
-            if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isSoundLightAlarm()) {
-                MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setSoundLightAlarm(false);
-
+            if ( Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {
+                Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]=false;
                 isHHeightAlarm = false;
                 SoundLightManager.getInstance().openHeightAlarm(oilCan.getOilCanPos(), isHHeightAlarm);
 
@@ -214,9 +221,10 @@ public class AlarmDetection {
         AlarmState alarmState;
         if (oilCan.getOilLevel() < oilCan.getLowLevelAlarm() & oilCan.getLowLevelAlarm() != 0) {
             if (oilCan.getOilLevel() < oilCan.getLlowLevelAlarm() & oilCan.getLlowLevelAlarm() != 0) {
-                if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isLLLowAlarm()) {
+
+                if (Singleton.getInstance().isLLLowAlarm[oilCan.getOilCanPos()] ) {
                     isLLowAlarm = true;
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setLLLowAlarm(false);
+                    Singleton.getInstance().isLLLowAlarm[oilCan.getOilCanPos()]=false;
                     oilMessage = new OilMessage();
                     oilMessage.setOilCanId(oilCan.getOilCanPos());
                     oilMessage.setType(OilMessage.LLOW_OIL_ALARM);
@@ -237,10 +245,10 @@ public class AlarmDetection {
                     }
                 }
             } else {
-                MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setLLLowAlarm(true);
+                Singleton.getInstance().isLLLowAlarm[oilCan.getOilCanPos()]=true;
                 SoundLightManager.getInstance().FYFL(oilCan.getOilCanPos(), false);
-                if (MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).isSoundLightAlarm()) {
-                    MyApplication.getInstance().getmOilcanDataManager().getData(oilCan.getOilCanPos()).setSoundLightAlarm(false);
+                if (Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]) {
+                    Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]=false;
                     isLLowAlarm = false;
                     oilMessage = new OilMessage();
                     oilMessage.setOilCanId(oilCan.getOilCanPos());
@@ -249,6 +257,7 @@ public class AlarmDetection {
                     oilCan.setAlarmState(2);
                     oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.low_oil_alarm);
 
+                    SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), isLLowAlarm);
                     if (alarmStates.containsKey(oilCan.getOilCanPos())) {
                         alarmState = alarmStates.get(oilCan.getOilCanPos());
                         if (alarmState.getLowOilError() == 0) {
@@ -262,7 +271,6 @@ public class AlarmDetection {
                         }
                     }
                 }
-                SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), isLLowAlarm);
             }
         }
 
@@ -333,6 +341,7 @@ public class AlarmDetection {
             alarmState = alarmStates.get(oilCan.getOilCanPos());
             alarmState.setHeightWaterError(0);
         }
+        Log.e("TAG", "打开报警waterHeightDection");
         SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), false);
     }
 
@@ -362,6 +371,7 @@ public class AlarmDetection {
             alarmState = alarmStates.get(oilCan.getOilCanPos());
             alarmState.setHeightTempError(0);
         }
+        Log.e("TAG", "打开报警tempHeightDection");
         SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), false);
     }
 

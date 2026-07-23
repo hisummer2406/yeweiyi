@@ -44,6 +44,11 @@ public class LDCompany implements AbstractCompany {
         return null;
     }
 
+    @Override
+    public String sendChangDuInfo(String command, String Probeaddress, Context context) {
+        return null;
+    }
+
     public String getString(String data) {
         while (data.length() < 4) {
             data = 0 + data;

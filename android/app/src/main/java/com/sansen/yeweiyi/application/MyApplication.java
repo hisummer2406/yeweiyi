@@ -23,6 +23,7 @@ import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.manager.SerialPortManager;
+import com.sansen.yeweiyi.manager.SoundManager;
 import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
@@ -30,7 +31,6 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-import baidu.main.BaiduSpeechManager;
 import log.LogCatHelper;
 
 public class MyApplication extends Application {
@@ -100,12 +100,11 @@ public class MyApplication extends Application {
 		CrashApphandler.getInstance().init(this.getApplicationContext());
 		LogCatHelper.getInstance(this.getApplicationContext(),null).start();
 		CRCheck.getInstance().init_all_tab();
-
-		BaiduSpeechManager.getInstance(this);
 		//RMC
 		serialport.manager.SerialPortManager.getInstance();
 
 		mDaoHelp.getInstance(instance);
+		SoundManager.getInstance().init(this);
 
 		mDBManager = DBDataManager.getInstance();
 

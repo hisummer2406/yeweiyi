@@ -35,7 +35,7 @@
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:id="@+id/btn_jieJing"
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:layout_width="@dimen/dp_0"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -54,11 +54,12 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:text="解警"
+                
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
@@ -81,11 +82,12 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
                 android:text="报警记录 "
+                
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
@@ -102,6 +104,7 @@
                 android:src="@drawable/icon_ck" />
 
             <TextView
+                
                 android:id="@+id/bar_but_saveoil"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -110,10 +113,10 @@
 
                 android:text="出库记录"
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:onClick="bar_but_inoil"
@@ -130,6 +133,7 @@
                 android:src="@drawable/icon_rk" />
 
             <TextView
+                
                 android:id="@+id/bar_but_inoil"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -138,10 +142,10 @@
 
                 android:text="入库记录"
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
@@ -156,6 +160,7 @@
                 android:layout_gravity="center"
                 android:src="@drawable/icon_jb" />
             <TextView
+                
                 android:id="@+id/bar_but_commitwork"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -164,10 +169,10 @@
 
                 android:text="交班记录"
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
@@ -184,16 +189,17 @@
                 android:src="@drawable/icon_bb" />
 
             <TextView
+                
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:text="库存记录"
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
 
         <LinearLayout
-            android:background="@color/transparent"
+            android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
@@ -210,12 +216,13 @@
                 android:src="@drawable/icon_sz" />
 
             <TextView
+                
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:text="设置"
                 android:textColor="@color/white"
-                android:textSize="@dimen/sp_22" />
+                android:textSize="@dimen/dp_24" />
         </LinearLayout>
 
     </LinearLayout>

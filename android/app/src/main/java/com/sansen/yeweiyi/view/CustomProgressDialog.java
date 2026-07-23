@@ -22,8 +22,6 @@ public class CustomProgressDialog extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.custom_progress_dialog);
 		overridePendingTransition(0,0);
-		System.out.println("测试++   "+Const.ProgressDialog+"   当前的指针");
-		
 		initView();
 		initData();
 		Const.ProgressDialog = CustomProgressDialog.this;

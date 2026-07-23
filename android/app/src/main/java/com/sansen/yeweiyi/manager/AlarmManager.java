@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.manager;
 
 import android.os.Handler;
+import android.os.Looper;
 
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -87,7 +88,7 @@ public class AlarmManager {
 	/**
 	 * 用handler实现每隔几秒显示状态信息
 	 */
-	Handler handler = new Handler();
+	Handler handler = new Handler(Looper.getMainLooper());
 
 	Runnable showAlarmRunnable = new Runnable() {
 		@Override

@@ -20,7 +20,7 @@
         android:orientation="horizontal">
         <LinearLayout
             android:layout_width="@dimen/dp_0"
-            android:layout_weight="3"
+            android:layout_weight="5"
             android:layout_height="match_parent"
             android:paddingTop="@dimen/dp_30"
             android:paddingLeft="@dimen/dp_50"
@@ -29,13 +29,13 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
+                android:gravity="center_vertical"
                 android:orientation="horizontal"
               >
                 <TextView
                     android:layout_marginLeft="@dimen/dp_30"
                     android:layout_marginTop="@dimen/dp_2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="@dimen/dp_142"
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_22"
                     android:paddingLeft="@dimen/dp_10"
@@ -48,7 +48,7 @@
                     android:layout_width="@dimen/dp_131"
                     android:inputType="number"
                     android:layout_height="@dimen/dp_43"
-                    android:background="@drawable/shap_login_setpwd"
+                    
                     android:textSize="@dimen/sp_22"
                     android:hint="请输入"/>
                 <TextView
@@ -62,15 +62,15 @@
                     />
             </LinearLayout>
             <LinearLayout
-                android:layout_marginTop="@dimen/dp_20"
+                android:layout_marginTop="@dimen/dp_10"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
                 <TextView
                     android:layout_marginLeft="@dimen/dp_30"
                     android:layout_marginTop="@dimen/dp_2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="@dimen/dp_142"
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_22"
                     android:paddingLeft="@dimen/dp_10"
@@ -84,7 +84,7 @@
                     android:layout_width="@dimen/dp_131"
                     android:inputType="number"
                     android:layout_height="@dimen/dp_43"
-                    android:background="@drawable/shap_login_setpwd"
+                    
                     android:textSize="@dimen/sp_22"
                     android:hint="请输入"/>
                 <TextView
@@ -102,13 +102,13 @@
                 android:layout_marginTop="@dimen/dp_10"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
+                android:gravity="center_vertical"
                 android:orientation="horizontal"
                 >
                 <TextView
                     android:layout_marginLeft="@dimen/dp_30"
                     android:layout_marginTop="@dimen/dp_2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="@dimen/dp_142"
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_22"
                     android:paddingLeft="@dimen/dp_10"
@@ -121,7 +121,7 @@
                     android:layout_width="@dimen/dp_131"
                     android:inputType="number"
                     android:layout_height="@dimen/dp_43"
-                    android:background="@drawable/shap_login_setpwd"
+                    
                     android:textSize="@dimen/sp_22"
                     android:hint="请输入"/>
                 <TextView
@@ -139,12 +139,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:gravity="center_vertical"
                 android:orientation="horizontal"
                 >
                 <TextView
+
                     android:layout_marginLeft="@dimen/dp_30"
                     android:layout_marginTop="@dimen/dp_2"
-                    android:layout_width="wrap_content"
+                    android:layout_width="@dimen/dp_142"
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_22"
                     android:paddingLeft="@dimen/dp_10"
@@ -157,7 +159,7 @@
                     android:layout_width="@dimen/dp_131"
                     android:inputType="number"
                     android:layout_height="@dimen/dp_43"
-                    android:background="@drawable/shap_login_setpwd"
+                    
                     android:textSize="@dimen/sp_22"
                     android:hint="请输入"/>
                 <TextView
@@ -170,6 +172,117 @@
                     android:text="毫米"
                     />
             </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="@dimen/dp_10"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_43"
+                android:layout_gravity="center"
+                android:orientation="horizontal"
+                >
+                <TextView
+                    android:layout_marginLeft="@dimen/dp_30"
+                    android:layout_marginTop="@dimen/dp_2"
+                    android:layout_width="@dimen/dp_142"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/sp_22"
+                    android:paddingLeft="@dimen/dp_10"
+                    android:textColor="@color/black"
+                    android:text="语言选择"
+                    />
+                <Spinner
+                    android:id="@+id/sp_yuyan"
+                    android:layout_marginLeft="@dimen/dp_20"
+                    android:entries="@array/language"
+                    android:layout_width="@dimen/dp_131"
+                    android:layout_height="@dimen/dp_43"
+                    android:background="@drawable/sansen_drop"
+                    android:gravity="center_horizontal"
+
+                    android:textSize="@dimen/fontSize" />
+
+            </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="@dimen/dp_10"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_43"
+                android:orientation="horizontal"
+                >
+                <TextView
+                    android:layout_marginLeft="@dimen/dp_30"
+                    android:layout_marginTop="@dimen/dp_2"
+                    android:layout_width="@dimen/dp_142"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/sp_22"
+                    android:paddingLeft="@dimen/dp_10"
+                    android:textColor="@color/black"
+                    android:text="液位单位选择"
+                    />
+                <Spinner
+                    android:id="@+id/sp_yewei"
+                    android:layout_width="@dimen/dp_131"
+                    android:layout_marginLeft="@dimen/dp_20"
+                    android:layout_height="@dimen/dp_43"
+                    android:background="@drawable/sansen_drop"
+                    android:gravity="center_horizontal"
+                    android:entries="@array/yewei_unit"
+                    android:textSize="@dimen/fontSize" />
+
+            </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="@dimen/dp_10"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_43"
+                android:orientation="horizontal"
+                >
+                <TextView
+                    android:layout_marginLeft="@dimen/dp_30"
+                    android:layout_marginTop="@dimen/dp_2"
+                    android:layout_width="@dimen/dp_142"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/sp_22"
+                    android:paddingLeft="@dimen/dp_10"
+                    android:textColor="@color/black"
+                    android:text="容积单位选择"
+                    />
+                <Spinner
+                    android:id="@+id/sp_rongji"
+                    android:layout_marginLeft="@dimen/dp_20"
+                    android:layout_width="@dimen/dp_131"
+                    android:layout_height="@dimen/dp_43"
+                    android:background="@drawable/sansen_drop"
+                    android:gravity="center_horizontal"
+                    android:entries="@array/rongji_unit"
+                    android:textSize="@dimen/fontSize" />
+
+            </LinearLayout>
+            <LinearLayout
+                android:layout_marginTop="@dimen/dp_10"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/dp_43"
+                android:orientation="horizontal"
+                >
+                <TextView
+                    android:layout_marginLeft="@dimen/dp_30"
+                    android:layout_marginTop="@dimen/dp_2"
+                    android:layout_width="@dimen/dp_142"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/sp_22"
+                    android:paddingLeft="@dimen/dp_10"
+                    android:textColor="@color/black"
+                    android:text="质量单位选择"
+                    />
+                <Spinner
+                    android:id="@+id/sp_zhiliang"
+                    android:layout_marginLeft="@dimen/dp_20"
+                    android:layout_width="@dimen/dp_131"
+                    android:layout_height="@dimen/dp_43"
+                    android:background="@drawable/sansen_drop"
+                    android:gravity="center_horizontal"
+                    android:entries="@array/zhiliang_unit"
+                    android:textSize="@dimen/fontSize"
+                    />
+
+            </LinearLayout>
         </LinearLayout>
         <LinearLayout
             android:layout_width="@dimen/dp_0"
@@ -178,118 +291,7 @@
             android:paddingTop="@dimen/dp_30"
             android:paddingRight="@dimen/dp_40"
             android:orientation="vertical">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/dp_43"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:orientation="horizontal"
-                >
-                <TextView
-                    android:gravity="center|end"
-                    android:layout_width="@dimen/dp_160"
-                    android:layout_height="match_parent"
-                    android:textSize="@dimen/sp_22"
-                    android:paddingLeft="@dimen/dp_10"
-                    android:textColor="@color/black"
-                    android:text="语言选择"
-                    />
-                <Spinner
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:id="@+id/sp_yuyan"
-                    android:layout_width="@dimen/dp_130"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/sansen_drop"
-                    android:gravity="center_horizontal"
-                    android:entries="@array/language"
-                    android:textSize="@dimen/fontSize" />
 
-            </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/dp_43"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:layout_marginTop="@dimen/dp_20"
-                android:orientation="horizontal"
-                >
-                <TextView
-                    android:gravity="center|start"
-                    android:layout_width="@dimen/dp_160"
-                    android:layout_height="match_parent"
-                    android:textSize="@dimen/sp_22"
-                    android:paddingLeft="@dimen/dp_10"
-                    android:textColor="@color/black"
-                    android:text="液位单位选择"
-                    />
-                <Spinner
-                    android:id="@+id/sp_yewei"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:layout_width="@dimen/dp_130"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/sansen_drop"
-                    android:gravity="center_horizontal"
-                    android:entries="@array/yewei_unit"
-                    android:textSize="@dimen/fontSize" />
-
-            </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/dp_43"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:layout_marginTop="@dimen/dp_20"
-                android:orientation="horizontal"
-                >
-                <TextView
-                    android:gravity="center|start"
-                    android:layout_width="@dimen/dp_160"
-                    android:layout_height="match_parent"
-                    android:textSize="@dimen/sp_22"
-                    android:paddingLeft="@dimen/dp_10"
-                    android:textColor="@color/black"
-                    android:text="容积单位选择"
-                    />
-                <Spinner
-                    android:id="@+id/sp_rongji"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:layout_width="@dimen/dp_130"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/sansen_drop"
-                    android:gravity="center_horizontal"
-                    android:entries="@array/rongji_unit"
-                    android:textSize="@dimen/fontSize" />
-
-            </LinearLayout>
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/dp_43"
-                android:layout_gravity="center"
-                android:gravity="center"
-                android:layout_marginTop="@dimen/dp_20"
-                android:orientation="horizontal"
-                >
-                <TextView
-                    android:gravity="center|start"
-                    android:layout_width="@dimen/dp_160"
-                    android:layout_height="match_parent"
-                    android:textSize="@dimen/sp_22"
-                    android:paddingLeft="@dimen/dp_10"
-                    android:textColor="@color/black"
-                    android:text="质量单位选择"
-                    />
-                <Spinner
-                    android:id="@+id/sp_zhiliang"
-                    android:layout_marginLeft="@dimen/dp_10"
-                    android:layout_width="@dimen/dp_130"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/sansen_drop"
-                    android:gravity="center_horizontal"
-                    android:entries="@array/zhiliang_unit"
-                    android:textSize="@dimen/fontSize"
-                    />
-
-            </LinearLayout>
         </LinearLayout>
 
     </LinearLayout>

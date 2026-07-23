@@ -1,5 +1,7 @@
 package com.sansen.yeweiyi.fragment;
 
+import android.databinding.Observable;
+import android.databinding.ObservableField;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -10,14 +12,15 @@ import android.widget.AdapterView.OnItemClickListener;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
+import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
+import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.User;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
-import com.sansen.yeweiyi.utils.ToastUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -83,8 +86,25 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         et_outTime.setText(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.OutTime,0 )+"");
 //        outHight=SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.OutHight,0 );
         et_outHight.setText(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.OutHight,0 )+"");
+        View headerView = rootView.findViewById(R.id.title_bar);
+        // 再从该 View 中 findViewById 获取内部的 TextView
+        tvTitle = headerView.findViewById(R.id.tv_title);
+        tv_time=headerView.findViewById(R.id.main_time);
+        tvTitle.setText("基础设置");
+        SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
 
+    Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
+        @Override
+        public void onPropertyChanged(Observable sender, int propertyId) {
+            // 如果需要区分是哪个字段，可通过 propertyId 判断
+            // 直接获取当前值
+            String newValue = ((ObservableField<String>) sender).get();
+            // Log.d("监听", "新值：" + newValue);
+            tv_time.setText(newValue);
+        }
+    };
+    TextView tvTitle,tv_time;
     private List<User> getData() {
         List<User> lists = dbManager.findUser(User.class);
         User user;
@@ -123,11 +143,7 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
                 {
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.OutTime ,outTime);
                 }
-                ToastUtils.showToast("保存成功",3);
-                if (main.setFragment == null) {
-                    main.setFragment = new SetFragment();
-                }
-                main.switchContent(main.mContent, main.setFragment);
+               showWindDialog(2000);
                 break;
 
             case R.id.ly_upper_page:

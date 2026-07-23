@@ -6,6 +6,8 @@ import android.util.SparseArray;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.Oil;
 import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.db.StockSave;
+import com.sansen.yeweiyi.utils.DateUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,7 +30,50 @@ public class SaveOilManager {
 		}
 		return mInsatance;
 	}
+	/**
+	 * Save all the oilcan information 保存库存记录
+	 */
+	public void SaveOilDB() {
 
+		ThreadManager.getShortPool().execute(new Runnable() {
+
+			@Override
+			public void run() {
+
+				maps = oilcanDataManager.getData();
+				if (maps != null) {
+					List<Oil> oils = new ArrayList<Oil>();
+
+					for (int i=0;i<maps.size();i++) {
+						OilCan oilCan = maps.valueAt(i);
+						//Oil oil = new Oil();
+						//oil.setOilId(oilCan.getOilCanPos());
+						//oil.setOilHeight(oilCan.getOilLevel() + "");
+						//oil.setWaterHeight(oilCan.getWaterLevel() + "");
+						//oil.setOilVolum(oilCan.getOilVolume() + "");
+						//oil.setOilWeigh(oilCan.getOilWeight() + "");
+						//oils.add(oil);
+						StockSave stockSave=new StockSave();
+						stockSave.setWaterheigth(oilCan.getWaterLevel());
+						stockSave.setJieZhi(oilCan.getJieZhi());
+						stockSave.setTemperature(oilCan.getTemper());
+						stockSave.setWeight(oilCan.getOilWeight());
+						stockSave.setVolum(oilCan.getOilVolume());
+						stockSave.setOilId(oilCan.getOilCanPos());
+						stockSave.setHeight(oilCan.getOilLevel());
+						stockSave.setTime(DateUtils.getYYYMMddHHmmss());
+						dbDataManager.saveSaveOilRecord(stockSave);
+					}
+
+					//String gosnInfo = dbDataManager.getListToStringByGson(oils);
+
+
+				}
+
+			}
+		});
+
+	}
 	/**
 	 * Save all the oilcan information 保存库存记录
 	 */

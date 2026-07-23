@@ -18,9 +18,48 @@ public class DataUtils {
 
     public static double doubleFoment(double value) {
 
-        douFormat = new DecimalFormat("#.00");
-        double result = Double.parseDouble(douFormat.format(value));
-        return result;
+//        douFormat = new DecimalFormat("#.00");
+//        double result = Double.parseDouble(douFormat.format(value));
+//        return result;
+
+        // 保留一位小数
+        DecimalFormat df1 = new DecimalFormat("#.0");
+        String str = df1.format(value);
+        // 如果字符串长度超过7，则只显示整数
+        if (str.length() > 7) {
+            DecimalFormat df2 = new DecimalFormat("#");
+            str = df2.format(value);
+            // 如果整数部分还超过7位，可能就需要截断，但这里暂不处理
+        }
+
+        return Double.parseDouble(str);
+    }
+    public static String doubleFomentStr(double value) {
+
+//        douFormat = new DecimalFormat("#.00");
+//        double result = Double.parseDouble(douFormat.format(value));
+//        return result;
+
+        // 保留一位小数
+        DecimalFormat df1 = new DecimalFormat("#.0");
+        String str = df1.format(value);
+        // 如果字符串长度超过7，则只显示整数
+        if (str.length() > 7) {
+            DecimalFormat df2 = new DecimalFormat("#");
+            str = df2.format(value);
+            // 如果整数部分还超过7位，可能就需要截断，但这里暂不处理
+        }
+
+        return str;
+    }
+    public static String doubleFomentStr2(double value) {
+
+
+
+        // 保留一位小数
+        DecimalFormat df1 = new DecimalFormat("0.0000");
+        String str = df1.format(value);
+        return str;
     }
 
     public static double getOilcanSurplus(OilCan oilCan) {
@@ -36,7 +75,15 @@ public class DataUtils {
         return str2AscHex(Integer.toHexString(Float.floatToIntBits((float) d)));
 
     }
-
+    /**
+     * float(IEEE754 32位单精度) 转 8位十六进制大写字符串
+     */
+    public static String floatToHex(float value) {
+        int bits = Float.floatToIntBits(value);
+        // 转16进制，补齐8位大写
+        String hex = Integer.toHexString(bits).toUpperCase();
+        return String.format("%8s", hex).replace(' ', '0');
+    }
     public static String str2AscHex(String str) {
         char[] charArray = str.toCharArray();
         StringBuffer buffer = new StringBuffer();
@@ -469,8 +516,6 @@ public class DataUtils {
             json = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.CN_OIlTYPE, "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]");
         } else if (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh").equals("en")) {
             json = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.EN_OIlTYPE, "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]");
-        }else if (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh").equals("th")) {
-            json = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.TH_OIlTYPE, "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]");
         }
         List<String> data = JSONObject.parseArray(json, String.class);
         String[] temp = new String[arr.length + data.size()];
@@ -482,9 +527,6 @@ public class DataUtils {
         return temp;
     }
 
-    public static String getProbeStr(int type){
-        return MyApplication.getInstance().getResources().getStringArray(R.array.probeTypeArray)[type];
-    }
 
     public static float bytesToFloat(byte[] data) {// 解析4个字节中的数据，按照IEEE754的标准
         int s = 0;// 浮点数的符号

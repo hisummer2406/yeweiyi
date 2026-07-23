@@ -1,8 +1,11 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
+
 import com.sansen.yeweiyi.application.MyApplication;
 
 public class Singleton {
+    public boolean isTestStatus=false;
     public int OutHight;  //出库高度阈值
     public int OutTime;    //出库时间阈值
     public int OutVolume;//出库容量阈值
@@ -16,7 +19,8 @@ public class Singleton {
     public boolean IsRuKu;//入库记录导出
     public boolean IsJiaoBan;//交班记录导出
     public boolean IsKuCun;//库存记录导出
-
+    public long StockTime = 0;
+    public double[] TanZhenLang = new double[16];
     public int ChuanKou2;//串口2设置
     public boolean ChuanKou4;//串口4设置
     public boolean ChuanKou5;//串口5设置
@@ -37,9 +41,6 @@ public class Singleton {
     public boolean IsDelShift;    //删除交班记录
 
 
-
-
-
     private static final Singleton INSTANCE = new Singleton();
 
     private Singleton() {
@@ -50,6 +51,16 @@ public class Singleton {
     }
 
     public void getSetData(String name) {
+        if (name.equals(Constans.StockTime) || "".equals(name)){
+            Singleton.getInstance().StockTime = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.StockTime, 0)*3600;
+        }
+
+        if (name.equals(Constans.isTestStatus) || "".equals(name)){
+
+            Singleton.getInstance().isTestStatus = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.isTestStatus, 0) == 0 ? false : true;
+            Log.e("TAG状态", Singleton.getInstance().isTestStatus+" ");
+        }
+
         if (name.equals(Constans.OutHight) || "".equals(name))
             Singleton.getInstance().OutHight = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.OutHight, 0);
         if (name.equals(Constans.OutTime) || "".equals(name))
@@ -60,14 +71,15 @@ public class Singleton {
             Singleton.getInstance().InTime = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.InTime, 0);
         if (name.equals(Constans.IsBaoJing) || "".equals(name))
             Singleton.getInstance().IsBaoJing = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsBaoJing, 0) == 0 ? false : true;
+        if (name.equals(Constans.IsJiaoBan) || "".equals(name))
+            Singleton.getInstance().IsJiaoBan = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsJiaoBan, 0) == 0 ? false : true;
         if (name.equals(Constans.IsChuKu) || "".equals(name))
             Singleton.getInstance().IsChuKu = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsChuKu, 0) == 0 ? false : true;
         if (name.equals(Constans.IsRuKu) || "".equals(name))
             Singleton.getInstance().IsRuKu = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsRuKu, 0) == 0 ? false : true;
         if (name.equals(Constans.IsKuCun) || "".equals(name))
             Singleton.getInstance().IsKuCun = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsKuCun, 0) == 0 ? false : true;
-        if (name.equals(Constans.ChuanKou2) || "".equals(name))
-        {
+        if (name.equals(Constans.ChuanKou2) || "".equals(name)) {
             Singleton.getInstance().ChuanKou2 = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou2, 0);
         }
 
@@ -96,4 +108,11 @@ public class Singleton {
         if (name.equals(Constans.IsDelShift) || "".equals(name))
             Singleton.getInstance().IsDelShift = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsDelShift, 0) == 0 ? false : true;
     }
+
+    public boolean[] SoundLightAlarm = new boolean[17];
+    public boolean[] isWaterAlarm = new boolean[17];
+    public boolean[] isTemperAlarm = new boolean[17];
+    public boolean[] isHHightAlarm = new boolean[17];
+    public boolean[] isLowAlarms = new boolean[17];
+    public boolean[] isLLLowAlarm = new boolean[17];
 }

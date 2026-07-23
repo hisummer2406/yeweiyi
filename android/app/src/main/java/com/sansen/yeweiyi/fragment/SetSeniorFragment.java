@@ -1,5 +1,7 @@
 package com.sansen.yeweiyi.fragment;
 
+import android.databinding.Observable;
+import android.databinding.ObservableField;
 import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.RequiresApi;
@@ -8,9 +10,11 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.base.BaseFragment;
+import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
 
 public class SetSeniorFragment extends BaseFragment {
@@ -52,7 +56,8 @@ public class SetSeniorFragment extends BaseFragment {
 				Log.e("TAG", "ly_bulu");
 				break;
 			case R.id.ly_yanshi:
-
+                OilTestFragment oilTestFragment = new OilTestFragment();
+                main.switchContent(main.mContent, oilTestFragment);
 				Log.e("TAG", "ly_yanshi");
 				break;
 			case R.id.ly_chuankou:
@@ -87,10 +92,25 @@ public class SetSeniorFragment extends BaseFragment {
         ly_yanshi.setOnClickListener(this);
         ly_mima.setOnClickListener(this);
 
-
+        View headerView = rootView.findViewById(R.id.title_bar);
+        // 再从该 View 中 findViewById 获取内部的 TextView
+        tvTitle = headerView.findViewById(R.id.tv_title);
+        tv_time=headerView.findViewById(R.id.main_time);
+        tvTitle.setText("高级设置");
+        SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
 
-
+    Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
+        @Override
+        public void onPropertyChanged(Observable sender, int propertyId) {
+            // 如果需要区分是哪个字段，可通过 propertyId 判断
+            // 直接获取当前值
+            String newValue = ((ObservableField<String>) sender).get();
+            // Log.d("监听", "新值：" + newValue);
+            tv_time.setText(newValue);
+        }
+    };
+    TextView tvTitle,tv_time;
     @Override
     public void initTitle() {
 

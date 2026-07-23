@@ -1,5 +1,7 @@
 package com.sansen.yeweiyi.manager;
 
+import android.util.Log;
+
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.listener.UpdateInOilListener;
@@ -12,6 +14,7 @@ import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.HashMap;
 import java.util.Map;
+
 public class InOilManager {
     /**
      * 进油管理器类维护一个静态Map集合、里面存储多个进油管理器对象
@@ -142,16 +145,6 @@ public class InOilManager {
             } else {
                 if (curHeight[id] != lastHeight[id]) {
                     isRecord[id] = true;
-//                    if (curHeight[id] - lastHeight[id] > 1) {
-//                        isXieYou = true;
-//                        OilMessage oilMessage = new OilMessage();
-//                        oilMessage.setDate(DateUtils.getYYYMMddHHmm());
-//                        oilMessage.setOilCanId(id);
-//                        oilMessage.setType(OilMessage.IN_OILing);
-//                        AlarmManager.getInstance().addNoticesState(oilMessage);
-//                    } else if (curHeight[id] - lastHeight[id] < -1) {
-//                        isXieYou = false;
-//                    }
                     if (inCount[id] == 0) {
                         startTime[id] = System.currentTimeMillis();
                         beginIn[id] = lastHeight[id];
@@ -177,6 +170,7 @@ public class InOilManager {
                         if (beginTime[id] == 0) {
                             beginTime[id] = System.currentTimeMillis();
                         } else {
+                            Log.e("TAG",inCount[0]+"--------------");
                             if (curHeight[id] - beginIn[id] > 0) {
                                 if ((System.currentTimeMillis() - startTime[id]) / 1000 < Singleton.getInstance().InTime || curHeight[id] - beginIn[id] < Singleton.getInstance().InHight) {
                                     beginTime[id] = 0;
@@ -197,6 +191,7 @@ public class InOilManager {
                                     return;
                                 }
                             }
+
                             detailInoutRecord.setOilType(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilType()));
                             detailInoutRecord.setEndHeight(curHeight[id]);
                             detailInoutRecord.setEndVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilVolume());
@@ -207,9 +202,10 @@ public class InOilManager {
                             detailInoutRecord.setEndTemp(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getTemper());
                             detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmss());
                             detailInoutRecord.setSaleVolume(DoubleUtil.sub(detailInoutRecord.getEndVolume(), detailInoutRecord.getBeginVolume()));
+
                             inOil.success(beginIn[id], curHeight[id], DataUtils.getLitre(
                                     beginIn[id], OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getHightArray(),
-                                    OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getLitreArray()), OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilVolume(), id, detailInoutRecord);
+                                    OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getLitreArray()), OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilVolume(),OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getDensity(), id, detailInoutRecord);
                             beginTime[id] = 0;
                             beginIn[id] = 0;
                             inCount[id] = 0;

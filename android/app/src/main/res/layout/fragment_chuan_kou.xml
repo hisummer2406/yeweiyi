@@ -29,7 +29,7 @@
             android:text="串口2设置"
             android:textColor="#1a1a1a"
             android:textSize="22sp"
-            android:textStyle="bold" />
+           />
 
         <RadioGroup
             android:id="@+id/rg_serial2"
@@ -77,7 +77,7 @@
             android:text="串口4设置"
             android:textColor="#1a1a1a"
             android:textSize="22sp"
-            android:textStyle="bold" />
+             />
 
         <RadioGroup
             android:id="@+id/rg_serial4"
@@ -105,43 +105,6 @@
                 android:textSize="20sp" />
         </RadioGroup>
 
-
-
-        <!-- 串口5设置 -->
-        <TextView
-            android:layout_marginTop="@dimen/dp_80"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="串口5设置"
-            android:textColor="#1a1a1a"
-            android:textSize="22sp"
-            android:textStyle="bold" />
-
-        <RadioGroup
-            android:id="@+id/rg_serial5"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="horizontal">
-
-            <RadioButton
-                android:id="@+id/rb_serial5_vr"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:text="VR协议"
-                android:textColor="#222222"
-                android:textSize="20sp" />
-
-            <RadioButton
-                android:id="@+id/rb_serial5_plc"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="80dp"
-                android:text="连PLC协议"
-                android:textColor="#222222"
-                android:textSize="20sp" />
-        </RadioGroup>
 
     </LinearLayout>
 

@@ -38,15 +38,9 @@ public class OilCanAdapter extends  RecyclerView.Adapter<RecyclerView.ViewHolder
 	@Override
 	public void onBindViewHolder(RecyclerView.ViewHolder holder, @SuppressLint("RecyclerView") final int position) {
 		OilCanAdapter.ViewHolder viewHolder = (OilCanAdapter.ViewHolder) holder;
-//		for (int i = 0; i < maps.size(); i++) {
-//			int key = maps.keyAt(i);
-//			Log.e("TAG",key+"");
-//			// 处理每个 key 和 value
-//		}
+
 			viewHolder.min_oil.setOilCan(maps.get(maps.keyAt(position)));
 			viewHolder.min_oil.invalidate();
-//		Log.i("刷新中的",position+"  "+maps.get(position+1));
-			////Log.i(TAG, "onBindViewHolder: 刷新页面");
 			if (mOnItemClickListener != null) {
 				viewHolder.min_oil.setOnClickListener(new View.OnClickListener() {
 					@Override

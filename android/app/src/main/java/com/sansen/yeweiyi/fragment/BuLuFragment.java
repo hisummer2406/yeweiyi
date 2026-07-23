@@ -1,13 +1,14 @@
 package com.sansen.yeweiyi.fragment;
 
 import android.annotation.SuppressLint;
+import android.databinding.Observable;
+import android.databinding.ObservableField;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -28,6 +29,7 @@ import com.sansen.yeweiyi.adapter.CalendarAdapter;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.manager.DBDataManager;
@@ -93,9 +95,24 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         sp_in_tank.setOnItemSelectedListener(this);
         sp_out_tank.setOnItemSelectedListener(this);
         oilcanArray = getResources().getStringArray(R.array.oilcanArray);
-
+        View headerView = rootView.findViewById(R.id.title_bar);
+        // 再从该 View 中 findViewById 获取内部的 TextView
+        tvTitle = headerView.findViewById(R.id.tv_title);
+        tv_time=headerView.findViewById(R.id.main_time);
+        tvTitle.setText("补录记录");
+        SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
-
+    Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
+        @Override
+        public void onPropertyChanged(Observable sender, int propertyId) {
+            // 如果需要区分是哪个字段，可通过 propertyId 判断
+            // 直接获取当前值
+            String newValue = ((ObservableField<String>) sender).get();
+            // Log.d("监听", "新值：" + newValue);
+            tv_time.setText(newValue);
+        }
+    };
+    TextView tvTitle,tv_time;
 
     OilCan oilCan = new OilCan();
 
@@ -296,10 +313,6 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
     public void initTitle() {
 
         if (main != null) {
-//            main.tv_left.setText(SystemUtils.getRsStr(R.string.back_page));
-//            main.iv_right.setVisibility(View.VISIBLE);
-//            main.tv_left.setVisibility(View.VISIBLE);
-//            main.iv_right.setImageResource(R.drawable.laststep);
             OnClickListener backSetListener = new OnClickListener() {
 
                 @Override
@@ -312,9 +325,6 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
 
                 }
             };
-//            main.tv_left.setOnClickListener(backSetListener);
-//            main.iv_right.setOnClickListener(backSetListener);
-
         }
     }
 
@@ -343,21 +353,16 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
     public void afterTextChanged(Editable editable) {
         if (!editable.toString().isEmpty()) {
             if (et_in_height.hasFocus()) {
-                //Log.e("TAG","进油高度 :"+editable.toString());
-                //oilIn.setBeginHeigth(Double.parseDouble(editable.toString()));
+
                 beginInHight = Double.parseDouble(editable.toString());
             } else if (et_in_liter.hasFocus()) {
                 endInVoulme = Double.parseDouble(editable.toString());
-//				oilIn.setInVolum(Double.parseDouble(editable.toString()));
-//				Log.e("TAG","确认密码"+editable.toString());
-                //confirmPsw=editable.toString().trim();
+
             } else if (et_out_height.hasFocus()) {
-                //Log.e("TAG","确认密码"+editable.toString());
-                //confirmPsw=editable.toString().trim();
+
                 beginOutHight = Double.parseDouble(editable.toString());
             } else if (et_out_liter.hasFocus()) {
-                //Log.i("TAG", "确认密码" + editable.toString());
-                //confirmPsw=editable.toString().trim();
+
                 endOutVoulme = Double.parseDouble(editable.toString());
             }
 
@@ -374,11 +379,9 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
             case R.id.sp_in_tank:
 
                 inOilId = i + 1;
-                //Log.i("TAG", "   " + oilcanArray[i]);
                 break;
             case R.id.sp_out_tank:
                 outOilId = i + 1;
-                //Log.i("TAG", "   " + oilcanArray[i]);
                 break;
 
 
@@ -426,6 +429,7 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
 
                 }
                 v.postDelayed(() -> v.setEnabled(true), 1000);
+                showWindDialog(3000);
 
                 break;
 
@@ -448,20 +452,15 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
 
     }
 
-    //DetailInoutRecord detailInoutRecords=new DetailInoutRecord();
     void saveInOil(OilInOut oilInOut) {
 
         OilInOut inOut = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
         DBDataManager.getInstance().saveObject(oilInOut);
-        //detailInoutRecords.setId(inOut.getId());
-        //DBDataManager.getInstance().saveObject(detailInoutRecords);
     }
     void saveOutOil(OutStock outStock) {
 
         OutStock Out = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
         DBDataManager.getInstance().saveObject(outStock);
-        //detailInoutRecords.setId(inOut.getId());
-        //DBDataManager.getInstance().saveObject(detailInoutRecords);
     }
 
 

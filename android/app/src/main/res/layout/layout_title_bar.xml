@@ -114,7 +114,7 @@
         android:src="@drawable/sj_1"
         />
     <TextView
-        android:layout_marginRight="@dimen/dp_35"
+        android:layout_marginRight="@dimen/dp_20"
         android:id="@+id/bar_tv_time"
         android:layout_width="wrap_content"
         android:gravity="center"
@@ -123,6 +123,6 @@
         android:textColor="@color/black"
         android:text="@{viewModel.time}"
         android:paddingRight="@dimen/sp_21"
-        android:textSize="20sp" />
+        android:textSize="@dimen/sp_24" />
 </LinearLayout>
 </layout>

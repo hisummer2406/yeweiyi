@@ -145,8 +145,16 @@ public class OilCan {
 	private double testWaterLevel;
 
 	private double mapperRadio;
+	private String jieZhi;
 
-	
+	public String getJieZhi() {
+		return jieZhi;
+	}
+
+	public void setJieZhi(String jieZhi) {
+		this.jieZhi = jieZhi;
+	}
+
 	public double getTestOilLevel() {
 		return testOilLevel;
 	}
@@ -356,51 +364,6 @@ public class OilCan {
 	 */
 	private double oilLevel = 0;
 	private double waterLevel = 0;
-	private boolean SoundLightAlarm=true;
-	private boolean isWaterAlarm=true;
-	private boolean isTemperAlarm=true;
-	private boolean isHHightAlarm=true;
-	private boolean isLLLowAlarm=true;
-
-	public boolean isHHightAlarm() {
-		return isHHightAlarm;
-	}
-
-	public boolean isLLLowAlarm() {
-		return isLLLowAlarm;
-	}
-
-	public void setLLLowAlarm(boolean LLLowAlarm) {
-		isLLLowAlarm = LLLowAlarm;
-	}
-
-	public void setHHightAlarm(boolean HHightAlarm) {
-		isHHightAlarm = HHightAlarm;
-	}
-
-	public boolean isWaterAlarm() {
-		return isWaterAlarm;
-	}
-
-	public void setWaterAlarm(boolean waterAlarm) {
-		isWaterAlarm = waterAlarm;
-	}
-
-	public boolean isTemperAlarm() {
-		return isTemperAlarm;
-	}
-
-	public void setTemperAlarm(boolean temperAlarm) {
-		isTemperAlarm = temperAlarm;
-	}
-
-	public boolean isSoundLightAlarm() {
-		return SoundLightAlarm;
-	}
-
-	public void setSoundLightAlarm(boolean soundLightAlarm) {
-		SoundLightAlarm = soundLightAlarm;
-	}
 
 	/**
 	 * 允许报警位  0不报警 1报警
@@ -775,6 +738,7 @@ public class OilCan {
 				+ ", errorTimes=" + errorTimes
 				+ ", gunType=" + gunType
 				+ ", enable=" + enable
+				+ ", jieZhi=" + jieZhi
 				+ ", inOilTime=" + inOilTime +"]";
 	}
 

@@ -19,6 +19,7 @@ import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.db.OilExploration;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OilSaveInfo;
+import com.sansen.yeweiyi.db.OilTest;
 import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.db.ProbeToOil;
 import com.sansen.yeweiyi.db.Sideleakage;
@@ -94,6 +95,7 @@ public class DaoHelp {
                                     dbUtils.createTableIfNotExist(OilCanMapper.class);
                                     dbUtils.createTableIfNotExist(TempRecord.class);
                                     dbUtils.createTableIfNotExist(DetailInoutRecord.class);
+                                    dbUtils.createTableIfNotExist(OilTest.class);
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilCanMapper add isShow boolean");
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add involumvt double");
                                 } catch (Exception e) {
@@ -127,6 +129,7 @@ public class DaoHelp {
                                 }
                             case 5:  // 从版本4升级到5
                                 try {
+                                    dbUtils.createTableIfNotExist(OilTest.class);
                                     dbUtils.execNonQuery("ALTER TABLE commitwork ADD COLUMN endtime TEXT");
                                 } catch (DbException e) { }
                                 // 注意：如果你希望继续执行后续升级，不要 break
@@ -244,6 +247,7 @@ public class DaoHelp {
             db.createTableIfNotExist(FyfRecord.class);
             db.createTableIfNotExist(SmsStencil.class);
             db.createTableIfNotExist(DetailInoutRecord.class);
+            db.createTableIfNotExist(OilTest.class);
 
         } catch (DbException e) {
             // TODO Auto-generated catch block

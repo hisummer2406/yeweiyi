@@ -38,19 +38,20 @@
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/dp_30"
                 android:background="@drawable/shap_login_pwd"
-                android:drawableStart="@drawable/mima"
                 android:hint="请输入密码"
+                android:inputType="phone"
+                android:digits="0123456789"
                 android:paddingLeft="@dimen/dp_20"
                 android:textSize="@dimen/sp_20" />
 
             <Button
                 android:id="@+id/btn_enter"
                 android:layout_width="@dimen/dp_250"
-                android:layout_height="@dimen/dp_34"
+                android:layout_height="@dimen/dp_45"
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/dp_30"
                 android:background="@drawable/shap_login_enter"
-                android:textSize="@dimen/sp_18"
+                android:textSize="@dimen/sp_22"
                 android:text="点击进入"
 
                 android:textColor="@color/white" />
