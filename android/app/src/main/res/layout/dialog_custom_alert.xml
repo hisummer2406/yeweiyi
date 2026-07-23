@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingVertical="32dp"
+    android:paddingHorizontal="24dp"
+    android:background="#FFFFFF">
+
+    <!-- 标题区域：警告图标 + 标题文字 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_horizontal"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/icon_gantan"
+            android:scaleType="centerCrop"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="删除记录"
+            android:textSize="@dimen/sp_30"
+            android:textColor="#222222"
+            android:layout_marginStart="12dp"
+            android:gravity="center_vertical"/>
+    </LinearLayout>
+
+    <!-- 提示文案 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="谨慎！是否删除记录，记录无法恢复"
+        android:textSize="@dimen/sp_25"
+        android:textColor="#333333"
+        android:layout_marginTop="@dimen/dp_20"
+        android:gravity="center_horizontal"/>
+
+    <!-- 底部按钮 取消+确定 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="40dp"
+        android:gravity="center_horizontal">
+
+        <!-- 取消按钮 -->
+        <Button
+            android:id="@+id/btn_cancel"
+            android:layout_width="@dimen/dp_120"
+            android:layout_height="@dimen/dp_48"
+            android:text="取消"
+            android:textSize="@dimen/sp_20"
+            android:textColor="#333333"
+            android:background="@drawable/bg_btn_white_stroke"
+            android:layout_marginEnd="@dimen/sp_20"/>
+
+        <!-- 确定按钮 -->
+        <Button
+            android:id="@+id/btn_confirm"
+            android:layout_width="@dimen/dp_120"
+            android:layout_height="@dimen/dp_48"
+            android:background="@drawable/btn_confirm"
+            android:textSize="@dimen/sp_20"
+            android:textColor="#FFFFFF"
+            />
+    </LinearLayout>
+
+</LinearLayout>
