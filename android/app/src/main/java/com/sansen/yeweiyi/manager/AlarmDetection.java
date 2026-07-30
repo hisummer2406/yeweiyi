@@ -9,6 +9,7 @@ import com.sansen.yeweiyi.bean.AlarmRecord;
 import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
+import com.sansen.yeweiyi.config.ApiConfig;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -292,7 +293,7 @@ public class AlarmDetection {
         Bean bean = new Bean();
         record = new AlarmRecord(oilCan.getOilCanPos(), "2", AlarmContent, System.currentTimeMillis());
         bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
-        bean.setProductId("fQxNBq6eCx3");
+        bean.setProductId(ApiConfig.productKey);
         bean.setAlarmRecord(record);
 
         String argu = JSONObject.toJSONString(bean);

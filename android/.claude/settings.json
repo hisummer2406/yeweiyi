@@ -2,6 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(git fetch *)",
+      "Bash(git check-ignore *)",
+      "Bash(java -version)",
       "Bash(javap *)",
       "Bash(unzip -l *)",
       "Bash(keytool -list *)"

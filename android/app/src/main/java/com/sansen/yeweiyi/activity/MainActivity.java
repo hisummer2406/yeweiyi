@@ -842,7 +842,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             if (  SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
                 OutOilRecord record = new OutOilRecord(in.getBeginHeigth(), in.getEndHeigth(), in.getBeginVolum(), in.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
 //                bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
-//                bean.setProductId("fQxNBq6eCx3");
+//                bean.setProductId(ApiConfig.productKey);
 //                bean.setEquipmentRecord(record);
 //                String argu = JSONObject.toJSONString(bean);
 //                Log.e("AAAA", "进出油记录" + argu);
@@ -905,7 +905,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                 Bean bean = new Bean();
                 OutOilRecord record = new OutOilRecord(out.getBeginHeigth(), out.getEndHeigth(), out.getBeginVolum(), out.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
 //                bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
-//                bean.setProductId("fQxNBq6eCx3");
+//                bean.setProductId(ApiConfig.productKey);
 //                bean.setEquipmentRecord(record);
 //                String argu = JSONObject.toJSONString(bean);
 //                Log.e("AAAA", "进出油记录" + argu);

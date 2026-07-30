@@ -13,28 +13,10 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESedeKeySpec;
 import javax.crypto.spec.IvParameterSpec;
 
-import Decoder.BASE64Decoder;
-import Decoder.BASE64Encoder;
-
 public class DESUtils {
-    public static void main(String[] args) throws Exception {
-        byte[] key=new BASE64Decoder().decodeBuffer("YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4");
-        byte[] keyiv = { 1, 2, 3, 4, 5, 6, 7, 8 };
 
-        byte[] data="中国ABCabc123".getBytes("UTF-8");
-
-        System.out.println("ECB加密解密");
-        byte[] str3 = des3EncodeECB(key,data );
-        byte[] str4 = des3DecodeECB(key,str3);
-        System.out.println(new BASE64Encoder().encode(str3));
-        System.out.println(new String(str4, "UTF-8"));
-        System.out.println("-----------------------------");
-        System.out.println("CBC加密解密");
-        byte[] str5 = des3EncodeCBC(key, keyiv, data);
-        byte[] str6 = des3DecodeCBC(key, keyiv, str5);
-        System.out.println(new BASE64Encoder().encode(str5));
-        System.out.println(new String(str6, "UTF-8"));
-    }
+    // 原先此处有一个 main() 演示方法，硬编码了 3DES 密钥且在 Android 上永不执行。
+    // 已移除：密钥改由 ApiConfig.key（构建期从 local.properties 注入）提供。
 
     /**
      * ECB加密,不要IV

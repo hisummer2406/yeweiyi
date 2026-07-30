@@ -1,4 +1,24 @@
 apply plugin: 'com.android.application'
+
+// ---------------------------------------------------------------------------
+// 敏感配置：构建期从 local.properties 注入，不再硬编码进源码。
+// local.properties 不进版本库；新环境照 local.properties.template 填写。
+// ---------------------------------------------------------------------------
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def secretField = { String propertyName ->
+    def value = localProperties.getProperty(propertyName)
+    if (value == null || value.trim().isEmpty()) {
+        logger.warn("[配置缺失] local.properties 中没有 ${propertyName}，" +
+                "将编译为空字符串，相关功能(MQTT上报/接口加密)会失效。参见 local.properties.template")
+        value = ""
+    }
+    return "\"${value}\""
+}
+
 android {
     compileSdkVersion 27
     defaultConfig {
@@ -8,6 +28,11 @@ android {
         versionCode 72
         versionName "NEW.SS.A.Y11.00"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        buildConfigField "String", "PRODUCT_KEY", secretField('sansen.productKey')
+        buildConfigField "String", "PRODUCT_SECRET", secretField('sansen.productSecret')
+        buildConfigField "String", "REQUEST_ENCRYPT_KEY", secretField('sansen.requestEncryptKey')
+        buildConfigField "String", "BASE_URL", secretField('sansen.baseUrl')
         externalNativeBuild {
             cmake {
                 cppFlags "-frtti -fexceptions"

@@ -8,3 +8,6 @@ local.properties
 /build
 /captures
 .externalNativeBuild
+
+# Claude Code 个人本地配置（含个人权限授权，不应提交）
+.claude/settings.local.json

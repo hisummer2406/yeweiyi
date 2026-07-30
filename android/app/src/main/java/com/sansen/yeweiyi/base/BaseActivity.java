@@ -392,7 +392,7 @@ public abstract class BaseActivity extends FragmentActivity implements
  //               if (SharePrefUtil.getBoolean(myApplication.getApplicationContext(),SharePrefUtil.ISUPLOADING,false)){
 //                    Map<String,String> map=new HashMap<>();
 //                    map.put("defaultName",deviceSecret);
-//                    map.put("productId","fQxNBq6eCx3");
+//                    map.put("productId",ApiConfig.productKey);
 //                    map.put("tankDataVolume",String.valueOf(probeCount));
 //                    map.put("longitude", String.valueOf(location.getLongitude()));
 //                    map.put("latitude",String.valueOf(location.getLatitude()));
