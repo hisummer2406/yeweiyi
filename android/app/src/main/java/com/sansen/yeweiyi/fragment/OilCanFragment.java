@@ -169,12 +169,12 @@ public class OilCanFragment extends BaseFragment {
             oilcan_view_progress.invalidate();
             oilcan_tv_tankno.setText(oilCan.getOilCanPos() + "#");
             oilcan_tv_oiltype.setText(" "+oilCan.getOilCanPos() + "号  " + DataUtils.getOilType()[oilCan.getOilType()]);
-            oilcan_tv_oillevel.setText(("毫米".equals(YeWeiUnit) ? oilCan.getOilLevel() : oilCan.getOilLevel() / 1000) + "  " + YeWeiUnit);
-            oilcan_tv_oilvolume.setText(("升".equals(RongJiUnit) ? oilCan.getMaxVolume() : oilCan.getMaxVolume() / 1000) + "  " + RongJiUnit);
-            oilcan_tv_oilweight.setText(("升".equals(RongJiUnit) ? oilCan.getOilVolume() : oilCan.getOilVolume() / 1000) + "  " + RongJiUnit);
-            oilcan_tv_oiladdible.setText(("升".equals(RongJiUnit) ? DataUtils.doubleFoment(oilCan.getSurPlus() ): DataUtils.doubleFoment(oilCan.getSurPlus() ) / 1000) + "  " + RongJiUnit);
-            oilcan_tv_waterlevel.setText(("毫米".equals(YeWeiUnit) ? oilCan.getWaterLevel() : oilCan.getWaterLevel() / 1000) + "  " + YeWeiUnit);
-            oilcan_tv_temperature.setText(oilCan.getTemper() + " ℃");
+            oilcan_tv_oillevel.setText(("毫米".equals(YeWeiUnit) ? DataUtils.doubleFomentStr(oilCan.getOilLevel() ): DataUtils.doubleFomentStr2(oilCan.getOilLevel() / 1000)) + "  " + YeWeiUnit);
+            oilcan_tv_oilvolume.setText(("升".equals(RongJiUnit) ? DataUtils.doubleFomentStr(oilCan.getMaxVolume()) : DataUtils.doubleFomentStr2(oilCan.getMaxVolume() / 1000)) + "  " + RongJiUnit);
+            oilcan_tv_oilweight.setText(("升".equals(RongJiUnit) ? DataUtils.doubleFomentStr(oilCan.getOilVolume()) : DataUtils.doubleFomentStr2(oilCan.getOilVolume() / 1000)) + "  " + RongJiUnit);
+            oilcan_tv_oiladdible.setText(("升".equals(RongJiUnit) ?DataUtils.doubleFomentStr(oilCan.getSurPlus() ): DataUtils.doubleFomentStr2(DataUtils.doubleFoment(oilCan.getSurPlus() ) / 1000)) + "  " + RongJiUnit);
+            oilcan_tv_waterlevel.setText(("毫米".equals(YeWeiUnit) ? DataUtils.doubleFomentStr(oilCan.getWaterLevel()) : DataUtils.doubleFomentStr2(oilCan.getWaterLevel() / 1000)) + "  " + YeWeiUnit);
+            oilcan_tv_temperature.setText(DataUtils.doubleFomentStr(oilCan.getTemper() )+ " ℃");
         }
     }
 

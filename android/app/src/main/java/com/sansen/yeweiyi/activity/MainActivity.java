@@ -6,7 +6,6 @@ import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.provider.Settings;
 import android.support.annotation.RequiresApi;
@@ -78,7 +77,6 @@ import com.sansen.yeweiyi.utils.AndroidAdjustResizeBugFix;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
-import com.sansen.yeweiyi.utils.FileUtil;
 import com.sansen.yeweiyi.utils.PWDTools;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -94,6 +92,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimerTask;
+
 import bean.Bean;
 
 public class MainActivity extends BaseActivity implements UpdateInOilListener, DataResolveListener {
@@ -806,7 +805,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
 
     @Override
     public void success(double beginHeight, double endHeight, double beginVoulme, double endVoulme, double density, int oilCanId, DetailInoutRecord detailInoutRecord) {
-        if ((endHeight - beginHeight) > 1) {
+        if ((endHeight - beginHeight) >  Singleton.getInstance().InHight) {
             if (!Singleton.getInstance().IsCreatIn) {
                 return;
             }
@@ -839,12 +838,8 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             //Log.i("进出油记录id", "" + detailInoutRecord.getBeginTime() + "  " + detailInoutRecord.getEndHeight());
             SocketManager.getInstance(MainActivity.this).sendUnloadOil(detailInoutRecord.toString());
 
-            file = new File(Environment.getExternalStorageDirectory().getPath() + "/Android/com.sansen.yeweiyi");
-            if (file.exists()) {
-                FileUtil.deleteFile(file);
-            }
 
-            if ((endHeight - beginHeight) > 20 && SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
+            if (  SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
                 OutOilRecord record = new OutOilRecord(in.getBeginHeigth(), in.getEndHeigth(), in.getBeginVolum(), in.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
 //                bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
 //                bean.setProductId("fQxNBq6eCx3");
@@ -871,7 +866,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
                 //TODO 上传进出油记录
                 //Log.i("保存成功", "数据保存成功" + DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, inOut.getId()));
             }
-        } else if ((endHeight - beginHeight) < -1) {
+        } else if ((beginHeight-endHeight ) > Singleton.getInstance().OutHight) {
             if (!Singleton.getInstance().IsCreateOut) {
                 return;
             }
@@ -906,14 +901,9 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
             //Log.i("进出油记录id", "" + detailInoutRecord.getBeginTime() + "  " + detailInoutRecord.getEndHeight());
             SocketManager.getInstance(MainActivity.this).sendUnloadOil(detailInoutRecord.toString());
 
-            file = new File(Environment.getExternalStorageDirectory().getPath() + "/Android/com.sansen.yeweiyi");
-            if (file.exists()) {
-                FileUtil.deleteFile(file);
-            }
-
-            if ((endHeight - beginHeight) > 20 && SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
+            if (SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
                 Bean bean = new Bean();
-                OutOilRecord record = new OutOilRecord(in.getBeginHeigth(), in.getEndHeigth(), in.getBeginVolum(), in.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
+                OutOilRecord record = new OutOilRecord(out.getBeginHeigth(), out.getEndHeigth(), out.getBeginVolum(), out.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
 //                bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
 //                bean.setProductId("fQxNBq6eCx3");
 //                bean.setEquipmentRecord(record);

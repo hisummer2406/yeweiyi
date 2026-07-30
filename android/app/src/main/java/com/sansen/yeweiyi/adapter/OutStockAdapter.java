@@ -118,7 +118,7 @@ public class OutStockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            mOnItemClickListener.onClick(position);
+
                         }
                     });
                     viewHolder.itemView.setOnLongClickListener(new View.OnLongClickListener() {

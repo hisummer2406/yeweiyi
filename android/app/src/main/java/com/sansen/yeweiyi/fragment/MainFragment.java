@@ -5,6 +5,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -13,10 +14,8 @@ import android.widget.GridView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.adapter.GasExplorationAdapter;
 import com.sansen.yeweiyi.adapter.OilCanAdapter;
-import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilCan;
-import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemClickListener {
@@ -34,45 +33,56 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
     private SparseArray gasExplor;
 
     int curSpCount = 0;
+    private int guanAccount=0;
 
     Handler handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
 
-            for (int i = 0, nsize = mOilcanDataManager.getTestData().size(); i < nsize; i++) {
-                int key = mOilcanDataManager.getTestData().keyAt(i);
-//                            Log.i("主键", key + "");
-                OilCan oilCan2 = mOilcanDataManager.getTestData().get(key);
-                if (oilCan2 != null) {
-                    OilCanMapper mapper = (OilCanMapper) MyApplication.getInstance().getmDBManager().findObjectByID(
-                            OilCanMapper.class, oilCan2.getOilCanPos());
-                    if (!mapper.isshow()) {
-                        mOilcanDataManager.getTestData().remove(key);
-                    }
-                } else {
-                    mOilcanDataManager.getTestData().remove(key);
-                }
-            }
+//            for (int i = 0, nsize = mOilcanDataManager.getTestData().size(); i < nsize; i++) {
+//                int key = mOilcanDataManager.getTestData().keyAt(i);
+////                            Log.i("主键", key + "");
+//                OilCan oilCan2 = mOilcanDataManager.getTestData().get(key);
+//                if (oilCan2 != null) {
+//                    OilCanMapper mapper = (OilCanMapper) MyApplication.getInstance().getmDBManager().findObjectByID(
+//                            OilCanMapper.class, oilCan2.getOilCanPos());
+//                    if (!mapper.isshow()) {
+//                        mOilcanDataManager.getTestData().remove(key);
+//                    }
+//                } else {
+//                    mOilcanDataManager.getTestData().remove(key);
+//                }
+//            }
 
-            if (SharePrefUtil.getBoolean(ct, SharePrefUtil.TEST_DATA, false)) {
-                oilCanMaps = mOilcanDataManager.getTestData();
-            } else {
-                oilCanMaps = mOilcanDataManager.getData();
-            }
+//            if (SharePrefUtil.getBoolean(ct, SharePrefUtil.TEST_DATA, false)) {
+//                oilCanMaps = mOilcanDataManager.getTestData();
+//            } else {
+//                oilCanMaps = mOilcanDataManager.getData();
+//            }
+            guanAccount=oilCanMaps.size();
+            oilCanMaps = mOilcanDataManager.getData();
 //            Log.i("索引大小", oilCanMaps.size() + "");
             oilAdapter.setData(oilCanMaps);
+            if (oilCanMaps.size()==guanAccount){
+                oilAdapter.notifyDataSetChanged();
+                handler.sendEmptyMessageDelayed(1, 3000);
+                return;
+            }
+
             if (oilCanMaps.size() == 1 && curSpCount != 1) {
                 layoutManager = new GridLayoutManager(ct, 1);
                 main_gridview_oilcan.setLayoutManager(layoutManager);
                 curSpCount = 1;
-//                Log.i("curSpCount", curSpCount + "");
-            } else if (oilCanMaps.size() <= 4 && oilCanMaps.size() != 1 && curSpCount != 2) {
+                Log.i("curSpCount", curSpCount + "");
+            }
+            else if (oilCanMaps.size() == 4||oilCanMaps.size() == 2 && oilCanMaps.size() != 1 && curSpCount != 2) {
                 layoutManager = new GridLayoutManager(ct, 2);
                 main_gridview_oilcan.setLayoutManager(layoutManager);
                 curSpCount = 2;
 //                Log.i("curSpCount", curSpCount + "");
-            } else if (oilCanMaps.size() > 4 && curSpCount != 3) {
+            }
+               else if (oilCanMaps.size() > 4||oilCanMaps.size() == 3 && curSpCount != 3) {
                 layoutManager = new GridLayoutManager(ct, 3);
                 main_gridview_oilcan.setLayoutManager(layoutManager);
                 curSpCount = 3;
@@ -123,7 +133,7 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
         main_gridview_oilcan.setAdapter(oilAdapter);
         //main_gridview_oilcan.setOnItemClickListener(this);
 
-        handler.sendEmptyMessageDelayed(1, 3000);
+        handler.sendEmptyMessageDelayed(1, 1000);
 
     }
     @Override

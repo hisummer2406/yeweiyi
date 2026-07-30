@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.factory;
 
 import android.content.Context;
+import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
@@ -102,12 +103,14 @@ public class ZhongChengCompany implements AbstractCompany {
                 double oilLevel = Math.floor(DataUtils.byteToFloat(bytes2, bytes2.length) * 10f) / 10f;
                 double waterLevel = Math.floor(DataUtils.byteToFloat(bytes3, bytes3.length) * 10f) / 10f;
                 map = MyApplication.getInstance().getmOilcanDataManager().getData();
+                Log.e("TAG"," 油高 "+oilLevel+" 探针地址 "+address);
                 if (map != null) {
                     for (int i = 0; i < map.size(); i++) {
                         oilCan = map.valueAt(i);
                         if (address.equals(oilCan.getProbeAdr())) {
                             oilCan.setOilLevel(BigDecimal.valueOf(oilLevel).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue());
                             oilCan.setWaterLevel(BigDecimal.valueOf(waterLevel).add(BigDecimal.valueOf(oilCan.getWaterLevelCorrection())).doubleValue());
+
                             if (SharePrefUtil.getBoolean(MyApplication.getInstance(), SharePrefUtil.SHOW_VOLUME, true)) {
                                 if (oilCan.getHightArray().length > 1) {
                                     oilVolume = DataUtils.getLitre(
@@ -119,10 +122,11 @@ public class ZhongChengCompany implements AbstractCompany {
                                     oilCan.setSurPlus(DataUtils.getOilcanSurplus(oilCan));
                                     oilCan.setCanAddOilWeight(DataUtils.doubleFoment(oilCan.getSurPlus() * oilCan.getDensity()));
                                 }
-                            } else {
-                                oilVolume = 0.0;
-                                oilCan.setCanAddOilWeight(0.0);
                             }
+//                             else {
+//                                oilVolume = 0.0;
+//                                oilCan.setCanAddOilWeight(0.0);
+//                            }
                             oilCan.setOilVolume(DataUtils.doubleFoment(oilVolume));
                             oilCan.setOilWeight(DataUtils.doubleFoment(oilCan
                                     .getDensity() * oilCan.getOilVolume()));

@@ -79,7 +79,7 @@ public class MinOilCanView extends View {
 
         mBitWidth = src.getWidth();
         mBitHeight = src.getHeight();
-        Log.i(TAG, "initBitmap: "+src+"   "+mBitWidth+"  "+mBitHeight);
+
     }
 
     public MinOilCanView(Context context, AttributeSet attrs) {
@@ -136,12 +136,14 @@ public class MinOilCanView extends View {
     long beginTIme;
     int left;
 
+    int account=0;
     @SuppressLint("ResourceAsColor")
     @Override
     protected void onDraw(Canvas canvas) {
         //Log.i(TAG, "onDraw: "+mBitWidth+"      "+mBitHeight+"   "+mTotalWidth+"   "+mTotalHeight);
-        //Log.i(TAG, "onDraw: 通信是否中断"+oilCan.getErrorTimes());
+
         super.onDraw(canvas);
+
         if (temp<Const.customOilcan){
             initData();
             temp =Const.customOilcan;
@@ -294,15 +296,9 @@ public class MinOilCanView extends View {
                             ErrorColor(4);
                             break;
                     }
-//                Log.i("显示数据",oilCan.getOilCanPos()+" 油位"+oilCan.getOilLevel()+"补偿  "+oilCan.getLevelCorrection());
                     canvas.drawText(getTextContent(arrIndex==null?i:arrIndex[i]), right + 125 + mTextPaint.measureText(content[i] + ""), top + (i*1.35f + 1.2f) * textSize - 38, mTextPaint);
                 }
-//                mTextPaint.setColor(tagColor);
-//                mTextPaint.setTextSize((float) (textSize));
-//                canvas.drawText(String.valueOf(oilCan.getOilCanPos()), mTotalWidth * textID, (mTotalHeight / 2) + mTextPaint.getTextSize() / 1.5f, mTextPaint);
-//                mTextPaint.setTextSize((float) (textSize * 0.7));
-//                canvas.drawText("#", mTotalWidth * textID + 12, (mTotalHeight / 2) - (int) (mTextPaint.getTextSize() /1 ), mTextPaint);
-////        Log.i(TAG, "onDraw: 消耗多少时间"+(System.currentTimeMillis()-beginTIme));
+
             }
         } catch (Exception e) {
             //e.printStackTrace();
@@ -317,6 +313,10 @@ public class MinOilCanView extends View {
         if (oilCan.getProbeType() == 5) {
             errTime = 20;
             time = 4000;
+        }
+        else if (oilCan.getAlarmState()!=0){
+            Log.e("TAG报警状态"," "+oilCan.getAlarmState());
+            return true;
         }
 
         // 正常条件：错误次数未超限 且 通讯时间差在允许范围内
@@ -410,6 +410,7 @@ public class MinOilCanView extends View {
                 }
 
             case 1:
+                Log.e("TAG油高","油高:  "+DataUtils.doubleFomentStr(oilCan.getOilLevel()));
                 YeWeiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米");
                 return  ("毫米".equals(YeWeiUnit)?DataUtils.doubleFomentStr(oilCan.getOilLevel()):DataUtils.doubleFomentStr2(oilCan.getOilLevel()/1000)) + "  "+YeWeiUnit;
             case 2:

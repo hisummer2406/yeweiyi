@@ -194,7 +194,6 @@ public class SerialPortManager implements IParseDataListener {
                                     SharePrefUtil.TIME_REMAINING, DateUtils.getYYYMMdd()), "yyyy-MM-dd")) {
 
                     } else {
-                        //  Log.e("TAG","--------------"+isStopProbe);
                         if (isStopProbe) {
                             mOilCanData = mOilCanDataManager.getData();// 保证每一次获取的数据为最新
                             // 由这里把新的信息分发到各个页面
@@ -214,6 +213,7 @@ public class SerialPortManager implements IParseDataListener {
                                     for (int i = 0; i < 5; i++) { //0x01,0x06,0x00,0x01,0x00,0x02修改波特率
                                         switch (mOilCan.getProbeType()) {
                                             case 0:
+                                                Log.e("TAG探针地址",i+"===");
                                                 if (isWenDu == 0) {
 
                                                     isWenDu++;
@@ -246,9 +246,9 @@ public class SerialPortManager implements IParseDataListener {
                                                 break;
                                         }
                                         serialPort.sendData(DataUtils.HexString2Bytes(oilCanData));
-//                                Log.i(TAG, "发送到串口数据" + oilCanData);
+                                Log.i(TAG, "发送到串口数据" + oilCanData);
                                         try {
-                                            Thread.sleep(100);
+                                            Thread.sleep(50);
                                         } catch (InterruptedException e1) {
                                             // TODO Auto-generated catch block
                                             e1.printStackTrace();

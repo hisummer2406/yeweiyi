@@ -161,20 +161,7 @@ public class SoundLightManager {
     boolean isClose;//是否所有的油罐都为非报警状态
 
     public void closeAlarm(int oilCanId) {
-
-        //    hMap.put(oilCanId, false);
         fyfMap.put(oilCanId, false);
-
-//        isClose = true;
-//
-//
-//        for (int i = 0; i < hMap.size(); i++) {
-//            if (hMap.valueAt(i) != null && hMap.valueAt(i) == true) {
-//                isClose = false;
-//                break;
-//            }
-//        }
-
         for (int i = 0; i < lMap.size(); i++) {
             if (lMap.valueAt(i) != null && lMap.valueAt(i) == true) {
                 isClose = false;

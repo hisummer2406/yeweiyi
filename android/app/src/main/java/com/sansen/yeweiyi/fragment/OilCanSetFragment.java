@@ -203,14 +203,6 @@ public class OilCanSetFragment extends BaseFragment {
                 dbManager.UpdateObject(oilCanSet);
                 item_tv_oiltype.setText(DataUtils.getOilType()[resultCode]);
                 Const.isUpdate = true;
-            } else if (dialogSelectType == 7) {
-
-//                oilCanSet.setPk_tanZhenId(resultCode + 1);
-//                item_tv_tanzhenID.setText("" + (resultCode + 1));
-//                //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
-//                oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-//                dbManager.UpdateObject(oilCanSet);
-//                Const.isUpdate = true;
             } else if (dialogSelectType == 8) {
 
                 oilCanSet.setPk_oilCanId(resultCode + 1);
@@ -231,9 +223,9 @@ public class OilCanSetFragment extends BaseFragment {
     private void initOilCanSetData() {
         item_tv_tanzhenID.setText(String.valueOf(oilCanSet.getPk_tanZhenId()));
         item_tv_oilid.setText(String.valueOf(oilCanSet.getPk_oilCanId()));
-        item_et_oilheight.setHint(String.valueOf(oilCanSet.getHeight()));
-        item_et_oilheight.setTag(R.id.tag_first, oilCanSet.getHeight());
-        item_et_maxvolum.setHint(String.valueOf(oilCanSet.getMaxVolume()));
+        item_et_oilheight.setText(String.valueOf(oilCanSet.getHeight()));
+       // item_et_oilheight.setTag(R.id.tag_first, oilCanSet.getHeight());
+        item_et_maxvolum.setText(String.valueOf(oilCanSet.getMaxVolume()));
         //item_et_chuanGanQiLeng.setText(Singleton.getInstance().TanZhenLang[oilCanSet.getPk_tanZhenId()]+"");
         item_et_chuanGanQiLeng.setText(String.valueOf(oilCanSet.getChuanGanQiHight()));
 
@@ -245,80 +237,80 @@ public class OilCanSetFragment extends BaseFragment {
        // TODO  设置传感器长度
         item_sp_guanType.setSelection(oilCanSet.getGunType());
 
-        item_et_maxvolum.setTag(R.id.tag_first, oilCanSet.getMaxVolume());
-        item_et_oilheightalarm.setHint(String.valueOf(oilCanSet.getHeightOilAlarm()));
-        item_et_oilheightalarm.setTag(R.id.tag_first, oilCanSet.getHeightOilAlarm());
-        //mitem_et_oilHaight.setHint(String.valueOf(oilCanSet.getOilHeight()));
+       // item_et_maxvolum.setTag(R.id.tag_first, oilCanSet.getMaxVolume());
+        item_et_oilheightalarm.setText(String.valueOf(oilCanSet.getHeightOilAlarm()));
+        //item_et_oilheightalarm.setTag(R.id.tag_first, oilCanSet.getHeightOilAlarm());
+        //mitem_et_oilHaight.setText(String.valueOf(oilCanSet.getOilHeight()));
 
-        item_et_oilhheightalarm.setHint(String.valueOf(oilCanSet.getHheightOilAlarm()));
-        item_et_oilhheightalarm.setTag(R.id.tag_first, oilCanSet.getHheightOilAlarm());
+        item_et_oilhheightalarm.setText(String.valueOf(oilCanSet.getHheightOilAlarm()));
+      //  item_et_oilhheightalarm.setTag(R.id.tag_first, oilCanSet.getHheightOilAlarm());
 
-        item_et_oillowalarm.setHint(String.valueOf(oilCanSet.getLowOilAlarm()));
-        item_et_oillowalarm.setTag(R.id.tag_first, oilCanSet.getLowOilAlarm());
-        item_et_oilllowalarm.setHint(String.valueOf(oilCanSet.getLlowOilAlarm()));
-        item_et_oilllowalarm.setTag(R.id.tag_first, oilCanSet.getLlowOilAlarm());
-        item_et_waterheightalarm.setHint(String.valueOf(oilCanSet.getHeightWaterAlarm()));
-        item_et_waterheightalarm.setTag(R.id.tag_first, oilCanSet.getHeightWaterAlarm());
-        item_et_tempheightalarm.setHint(String.valueOf(oilCanSet.getHighTempAlarm()));
-        item_et_tempheightalarm.setTag(R.id.tag_first, oilCanSet.getHighTempAlarm());
-        item_et_templowalarm.setHint(String.valueOf(oilCanSet.getLowTempAlarm()));
-        item_et_templowalarm.setTag(R.id.tag_first, oilCanSet.getLowTempAlarm());
-        item_et_oillevelcorrection.setHint(String.valueOf(oilCanSet.getOilCorrection()));
-        item_et_oillevelcorrection.setTag(R.id.tag_first, oilCanSet.getOilCorrection());
-        item_et_waterlevlecorrection.setHint(String.valueOf(oilCanSet.getWaterCorrection()));
-        item_et_waterlevlecorrection.setTag(R.id.tag_first, oilCanSet.getWaterCorrection());
-        item_et_tempercorrection.setHint(String.valueOf(oilCanSet.getTempCorrection()));
-        item_et_tempercorrection.setTag(R.id.tag_first, oilCanSet.getTempCorrection());
-        item_et_oildensity.setHint(String.valueOf(oilCanSet.getDensity()));
-        item_et_oildensity.setTag(R.id.tag_first, oilCanSet.getDensity());
-        item_et_densityvar.setHint(String.valueOf(oilCanSet.getDensVar()));
-        item_et_densityvar.setTag(R.id.tag_first, oilCanSet.getDensVar());
+        item_et_oillowalarm.setText(String.valueOf(oilCanSet.getLowOilAlarm()));
+       // item_et_oillowalarm.setTag(R.id.tag_first, oilCanSet.getLowOilAlarm());
+        item_et_oilllowalarm.setText(String.valueOf(oilCanSet.getLlowOilAlarm()));
+      //  item_et_oilllowalarm.setTag(R.id.tag_first, oilCanSet.getLlowOilAlarm());
+        item_et_waterheightalarm.setText(String.valueOf(oilCanSet.getHeightWaterAlarm()));
+      //  item_et_waterheightalarm.setTag(R.id.tag_first, oilCanSet.getHeightWaterAlarm());
+        item_et_tempheightalarm.setText(String.valueOf(oilCanSet.getHighTempAlarm()));
+      //  item_et_tempheightalarm.setTag(R.id.tag_first, oilCanSet.getHighTempAlarm());
+        item_et_templowalarm.setText(String.valueOf(oilCanSet.getLowTempAlarm()));
+     //   item_et_templowalarm.setTag(R.id.tag_first, oilCanSet.getLowTempAlarm());
+        item_et_oillevelcorrection.setText(String.valueOf(oilCanSet.getOilCorrection()));
+      //  item_et_oillevelcorrection.setTag(R.id.tag_first, oilCanSet.getOilCorrection());
+        item_et_waterlevlecorrection.setText(String.valueOf(oilCanSet.getWaterCorrection()));
+      //  item_et_waterlevlecorrection.setTag(R.id.tag_first, oilCanSet.getWaterCorrection());
+        item_et_tempercorrection.setText(String.valueOf(oilCanSet.getTempCorrection()));
+       // item_et_tempercorrection.setTag(R.id.tag_first, oilCanSet.getTempCorrection());
+        item_et_oildensity.setText(String.valueOf(oilCanSet.getDensity()));
+       // item_et_oildensity.setTag(R.id.tag_first, oilCanSet.getDensity());
+        item_et_densityvar.setText(String.valueOf(oilCanSet.getDensVar()));
+       // item_et_densityvar.setTag(R.id.tag_first, oilCanSet.getDensVar());
         item_tv_oiltype.setText(DataUtils.getOilType()[oilCanSet.getOilType()]);
 //        item_tv_tanzhenID.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
 //                "Pk_tanZhenId", int.class));
-        item_et_oilheight
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "Height", int.class));
-        item_et_maxvolum.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                "MaxVolume", int.class));
-//        item_et_chuanGanQiLeng.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-//                "ChuanGanQiHight", float.class
-//        ));
-        item_et_oilheightalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "HeightOilAlarm", int.class));
-        item_et_oilhheightalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "HheightOilAlarm", int.class));
-        item_et_oillowalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "LowOilAlarm", int.class));
-        item_et_oilllowalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "LlowOilAlarm", int.class));
-        item_et_waterheightalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "HeightWaterAlarm", int.class));
-        item_et_tempheightalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "HighTempAlarm", int.class));
-        item_et_templowalarm
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "LowTempAlarm", int.class));
-        item_et_oillevelcorrection
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "OilCorrection", double.class));
-        item_et_waterlevlecorrection
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "WaterCorrection", double.class));
-        item_et_tempercorrection.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                "TempCorrection", double.class));
-        item_et_oildensity
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "Density", double.class));
-        item_et_densityvar
-                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
-                        "DensVar", double.class));
+//        item_et_oilheight
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "Height", int.class));
+//        item_et_maxvolum.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                "MaxVolume", int.class));
+////        item_et_chuanGanQiLeng.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+////                "ChuanGanQiHight", float.class
+////        ));
+//        item_et_oilheightalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "HeightOilAlarm", int.class));
+//        item_et_oilhheightalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "HheightOilAlarm", int.class));
+//        item_et_oillowalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "LowOilAlarm", int.class));
+//        item_et_oilllowalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "LlowOilAlarm", int.class));
+//        item_et_waterheightalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "HeightWaterAlarm", int.class));
+//        item_et_tempheightalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "HighTempAlarm", int.class));
+//        item_et_templowalarm
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "LowTempAlarm", int.class));
+//        item_et_oillevelcorrection
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "OilCorrection", double.class));
+//        item_et_waterlevlecorrection
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "WaterCorrection", double.class));
+//        item_et_tempercorrection.setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                "TempCorrection", double.class));
+//        item_et_oildensity
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "Density", double.class));
+//        item_et_densityvar
+//                .setOnFocusChangeListener(new MyOnFocusChangeLis1tener(
+//                        "DensVar", double.class));
         item_but_color.setBackgroundColor(oilCanSet.getOilColor());
         View headerView = rootView.findViewById(R.id.title_bar);
         // 再从该 View 中 findViewById 获取内部的 TextView
@@ -404,6 +396,7 @@ public class OilCanSetFragment extends BaseFragment {
                 saveData(item_et_tempercorrection.getText().toString(), "TempCorrection", double.class);
                 saveData(item_et_oildensity.getText().toString(),"Density", double.class);
                 saveData(item_et_densityvar.getText().toString(),"DensVar", double.class);
+
 
                 showWindDialog(1000);
                 break;
@@ -511,7 +504,7 @@ public class OilCanSetFragment extends BaseFragment {
             }
             oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
             dbManager.UpdateObject(oilCanSet);
-          //  vText.setHint(cur);
+          //  vText.setText(cur);
           //  vText.setText("");
             Const.isUpdate = true;
           //  vText.setTag(R.id.tag_first, vText.getText().toString());
@@ -574,7 +567,7 @@ public class OilCanSetFragment extends BaseFragment {
                         }
                         oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
                       //  dbManager.UpdateObject(oilCanSet);
-                        vText.setHint(cur);
+                        vText.setText(cur);
                         vText.setText("");
                         Const.isUpdate = true;
                         vText.setTag(R.id.tag_first, vText.getText().toString());

@@ -1,7 +1,5 @@
 package com.sansen.yeweiyi.manager;
 
-import android.util.Log;
-
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.listener.UpdateInOilListener;
@@ -170,7 +168,6 @@ public class InOilManager {
                         if (beginTime[id] == 0) {
                             beginTime[id] = System.currentTimeMillis();
                         } else {
-                            Log.e("TAG",inCount[0]+"--------------");
                             if (curHeight[id] - beginIn[id] > 0) {
                                 if ((System.currentTimeMillis() - startTime[id]) / 1000 < Singleton.getInstance().InTime || curHeight[id] - beginIn[id] < Singleton.getInstance().InHight) {
                                     beginTime[id] = 0;

@@ -23,11 +23,11 @@ public class DataUtils {
 //        return result;
 
         // 保留一位小数
-        DecimalFormat df1 = new DecimalFormat("#.0");
+        DecimalFormat df1 = new DecimalFormat("0.0");
         String str = df1.format(value);
         // 如果字符串长度超过7，则只显示整数
         if (str.length() > 7) {
-            DecimalFormat df2 = new DecimalFormat("#");
+            DecimalFormat df2 = new DecimalFormat("0.0000");
             str = df2.format(value);
             // 如果整数部分还超过7位，可能就需要截断，但这里暂不处理
         }
@@ -41,11 +41,11 @@ public class DataUtils {
 //        return result;
 
         // 保留一位小数
-        DecimalFormat df1 = new DecimalFormat("#.0");
+        DecimalFormat df1 = new DecimalFormat("0.0");
         String str = df1.format(value);
         // 如果字符串长度超过7，则只显示整数
         if (str.length() > 7) {
-            DecimalFormat df2 = new DecimalFormat("#");
+            DecimalFormat df2 = new DecimalFormat("0.0000");
             str = df2.format(value);
             // 如果整数部分还超过7位，可能就需要截断，但这里暂不处理
         }

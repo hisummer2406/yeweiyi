@@ -118,7 +118,7 @@ public class InOutAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
                     viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            mOnItemClickListener.onClick(position);
+
                         }
                     });
                     viewHolder.itemView.setOnLongClickListener(new View.OnLongClickListener() {

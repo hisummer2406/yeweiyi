@@ -60,8 +60,8 @@ public class AlarmDetection {
             } else {
                 if (!Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {//如果当前的所有油罐为非报警
                     Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]=true;
-                    Log.e("关闭警报灯", "警报灯01");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
+                    oilCan.setAlarmState(0);
                 } else if (!Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]) {
                     Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]=true;
                 }
@@ -75,6 +75,7 @@ public class AlarmDetection {
                     Log.e("TAG", "打开报警oilLowDection======"+"----------"+oilCan.getOilLevel()+"----"+oilCan.getOilCanPos());
                     Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]=true;
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
+                    oilCan.setAlarmState(0);
                 }
                 else if (!Singleton.getInstance().isLLLowAlarm[oilCan.getOilCanPos()]) {
                     Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]=true;
@@ -90,6 +91,7 @@ public class AlarmDetection {
                 if (!Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]) {
                     Log.e("关闭警报灯", "警报灯03");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
+                    oilCan.setAlarmState(0);
                     Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]=true;
                 }
             }
@@ -104,6 +106,7 @@ public class AlarmDetection {
                     Log.e("关闭警报灯", "警报灯04");
                     Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]=true;
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
+                    oilCan.setAlarmState(0);
               }
             }
         }
@@ -141,7 +144,7 @@ public class AlarmDetection {
                         oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
                         dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                         alarmState.setHheightOilError(1);
-                        alarmState.setHeightOilError(0);
+
                     }
                 }
             }
@@ -171,7 +174,7 @@ public class AlarmDetection {
                         oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
                         dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                         alarmState.setHeightOilError(1);
-                        alarmState.setHheightOilError(0);
+
 
                     }
                 }
