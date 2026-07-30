@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch *)",
+      "Bash(javap *)",
+      "Bash(unzip -l *)",
+      "Bash(keytool -list *)"
+    ]
+  }
+}
