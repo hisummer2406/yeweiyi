@@ -43,6 +43,7 @@
                     android:text="出库时间阈值"
                     />
                 <EditText
+                    android:imeOptions="actionDone"
                     android:id="@+id/et_outTime"
                     android:layout_marginLeft="@dimen/dp_20"
                     android:layout_width="@dimen/dp_131"
@@ -78,7 +79,7 @@
                     android:text="出库高度阈值"
                     />
                 <EditText
-
+                    android:imeOptions="actionDone"
                     android:id="@+id/et_outHight"
                     android:layout_marginLeft="@dimen/dp_20"
                     android:layout_width="@dimen/dp_131"
@@ -116,6 +117,7 @@
                     android:text="入库时间阈值"
                     />
                 <EditText
+                    android:imeOptions="actionDone"
                     android:id="@+id/et_inTime"
                     android:layout_marginLeft="@dimen/dp_20"
                     android:layout_width="@dimen/dp_131"
@@ -154,6 +156,7 @@
                     android:text="入库高度阈值"
                     />
                 <EditText
+                    android:imeOptions="actionDone"
                     android:id="@+id/et_inHight"
                     android:layout_marginLeft="@dimen/dp_20"
                     android:layout_width="@dimen/dp_131"

@@ -50,16 +50,6 @@
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                    <TextView-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="液位(毫米)"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <TextView
                         android:layout_width="0dp"
@@ -101,6 +91,7 @@
                         android:textSize="18sp" />
 
                     <EditText
+                        android:imeOptions="actionDone"
                         android:id="@+id/et_yewei01"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
@@ -109,25 +100,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei01"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei01"
@@ -138,7 +116,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -162,6 +140,7 @@
                         android:textSize="18sp" />
 
                     <EditText
+                        android:imeOptions="actionDone"
                         android:id="@+id/et_yewei02"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
@@ -176,21 +155,8 @@
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei02"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
-
                     <EditText
+                        android:imeOptions="actionDone"
                         android:id="@+id/et_weiduwei02"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
@@ -223,6 +189,7 @@
                         android:textSize="18sp" />
 
                     <EditText
+                        android:imeOptions="actionDone"
                         android:id="@+id/et_yewei03"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
@@ -237,19 +204,6 @@
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei03"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei03"
@@ -260,7 +214,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -284,6 +238,7 @@
                         android:textSize="18sp" />
 
                     <EditText
+                        android:imeOptions="actionDone"
                         android:id="@+id/et_yewei04"
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
@@ -298,20 +253,6 @@
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei04"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
-
                     <EditText
                         android:id="@+id/et_weiduwei04"
                         android:layout_width="0dp"
@@ -321,7 +262,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -353,25 +294,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei05"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei05"
@@ -382,7 +310,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -414,25 +342,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei06"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei06"
@@ -443,7 +358,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -475,25 +390,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei07"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei07"
@@ -504,7 +406,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -536,25 +438,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei08"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei08"
@@ -565,7 +454,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -597,25 +486,13 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei09"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
+
 
                     <EditText
                         android:id="@+id/et_weiduwei09"
@@ -626,7 +503,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -658,25 +535,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei10"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei10"
@@ -687,7 +551,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -719,25 +583,11 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
-
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei11"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei11"
@@ -748,7 +598,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
@@ -780,25 +630,12 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"
                         android:textSize="18sp" />
 
-                    <!--                       <EditText  android:digits=".0123456789"
-                                        
-                                        android:inputType="number"-->
-                    <!--                        android:id="@+id/et_shuiwei12"-->
-                    <!--                        android:layout_width="0dp"-->
-                    <!--                        android:layout_height="match_parent"-->
-                    <!--                        android:layout_weight="3"-->
-                    <!--                        android:background="@drawable/border_transparent"-->
-                    <!--                        android:gravity="center"-->
-                    <!--                        android:padding="@dimen/dp_8"-->
-                    <!--                        android:text="0"-->
-                    <!--                        android:textColor="@color/black"-->
-                    <!--                        android:textSize="18sp" />-->
 
                     <EditText
                         android:id="@+id/et_weiduwei12"
@@ -809,7 +646,7 @@
                          android:digits=".0123456789"
                         android:gravity="center"
                         android:inputType="number"
-                        
+                        android:imeOptions="actionDone"
                         android:padding="@dimen/dp_8"
                         android:text="0"
                         android:textColor="@color/black"

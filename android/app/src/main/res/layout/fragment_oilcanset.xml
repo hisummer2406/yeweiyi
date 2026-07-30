@@ -72,7 +72,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oilheight"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -147,7 +147,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_maxvolum"
                         android:layout_height="wrap_content"
                         android:layout_width="@dimen/dp_100"
@@ -180,7 +180,7 @@
 
                     <TextView
                         android:id="@+id/item_et_chuanGanQiLeng"
-                        
+
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
@@ -207,7 +207,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oilhheightalarm"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -269,7 +269,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oilheightalarm"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -330,7 +330,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oilllowalarm"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
@@ -388,7 +388,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oillowalarm"
                         android:layout_height="wrap_content"
                         android:digits="-0123456789"
@@ -423,7 +423,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oildensity"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -452,7 +452,7 @@
 
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_waterheightalarm"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -489,7 +489,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_oillevelcorrection"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -519,7 +519,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_tempheightalarm"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
@@ -556,7 +556,7 @@
 
                     <android.support.v7.widget.AppCompatEditText
                         android:id="@+id/item_et_waterlevlecorrection"
-                        
+
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionDone"
@@ -583,7 +583,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:id="@+id/item_et_templowalarm"
                         android:layout_height="wrap_content"
                         android:digits="-0123456789"
@@ -644,7 +644,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:visibility="invisible"
                         android:layout_height="match_parent"
                         android:digits="-0123456789"
@@ -690,7 +690,7 @@
                         android:textSize="@dimen/fontSize" />
 
                     <android.support.v7.widget.AppCompatEditText
-                        
+
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="match_parent"
                         android:imeOptions="actionDone"

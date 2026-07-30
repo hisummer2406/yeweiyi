@@ -7,20 +7,20 @@
     <string name="welcomSaSen">欢迎使用安卓智能液位仪</string>
     <!--Activity Lable-->
     <string name="oilCanSelect">储罐选择</string>
-    <string name="oilCanAlarmOpen">液罐报警开关</string>
+    <string name="oilCanAlarmOpen">储罐报警开关</string>
     <string name="lable_commitwork">交班</string>
     <string name="labe_updateCommitWork">修正交班信息</string>
     <!--报警信息-->
-    <string name="oilHeight_alarm">号液罐 高液位报警</string>
-    <string name="oilHHeight_alarm">号液罐 高高液位报警</string>
-    <string name="oillow_alarm">号液罐 低液位报警</string>
-    <string name="oilllow_alarm">号液罐 低低液位报警</string>
-    <string name="waterheight_alarm">号液罐 高水位报警</string>
-    <string name="tempheight_alarm">号液罐 高温度报警</string>
-    <string name="templow_alarm">号液罐 低温度报警</string>
-    <string name="outoil">号液罐 出液</string>
+    <string name="oilHeight_alarm">号储罐 高液位报警</string>
+    <string name="oilHHeight_alarm">号储罐 高高液位报警</string>
+    <string name="oillow_alarm">号储罐 低液位报警</string>
+    <string name="oilllow_alarm">号储罐 低低液位报警</string>
+    <string name="waterheight_alarm">号储罐 高水位报警</string>
+    <string name="tempheight_alarm">号储罐高温度报警</string>
+    <string name="templow_alarm">号储罐 低温度报警</string>
+    <string name="outoil">号储罐 出液</string>
     <string name="oil_rise">升</string>
-    <string name="oil_connect_error">号液罐连接失败</string>
+    <string name="oil_connect_error">号储罐连接失败</string>
     <string name="tantou_height">号探头浓度过高</string>
     <string name="net_connect_err">网络连接失败</string>
     <string name="fyf_connect_error">驱动板连接中断</string>
@@ -101,9 +101,9 @@
     <string name="record_num">记录每页显示数</string>
     <string name="wifi_manager">WIFI管理</string>
     <string name="test_driver_board">驱动板测试</string>
-    <string name="test_tank">液罐测试</string>
-    <string name="begin_test_tank">开启液罐测试</string>
-    <string name="tank_mapper">液罐映射表</string>
+    <string name="test_tank">储罐测试</string>
+    <string name="begin_test_tank">开启储罐测试</string>
+    <string name="tank_mapper">储罐映射表</string>
     <string name="system_test">驱动板测试</string>
     <string name="open_wlan">开启WLAN</string>
     <string name="wifi_list">WIFI列表</string>
@@ -129,12 +129,12 @@
     <string name="record_loadmore">查看更多</string>
 
     <!-- 进出液 -->
-    <string name="oilinout_in">号液罐正在卸液</string>
-    <string name="oilinout_out">号液罐正在出液</string>
+    <string name="oilinout_in">号储罐正在卸液</string>
+    <string name="oilinout_out">号储罐正在出液</string>
     <string name="long_touch_delte_inoil">长按记录即可删除进出液记录</string>
 
     <!-- 报警 -->
-    <string name="alarm_no">当前液罐无报警</string>
+    <string name="alarm_no">当前储罐无报警</string>
     <string name="alarm_info">报警信息</string>
 
     <!-- 用户信息 -->
@@ -166,8 +166,8 @@
     <string name="temperature_language">温度</string>
     <string name="water_weight_language" translatable="false">水高</string>
 
-    <!-- 液罐信息 -->
-    <string name="oil_no">号液罐</string>
+    <!-- 储罐信息 -->
+    <string name="oil_no">号储罐</string>
     <string name="tank_no">罐号</string>
     <string name="oil_type">介质类型</string>
     <string name="oil_level">介质类型</string>
@@ -182,7 +182,7 @@
     <string name="alarm_status">报警状态：</string>
     <string name="probe_communication">探针通讯状态：</string>
     <string name="communication">通讯状态：</string>
-    <string name="oiltank">液罐</string>
+    <string name="oiltank">储罐</string>
     <string name="probe_address">地址：</string>
     <string name="oil_type2">液品：</string>
     <string name="all_check">全选</string>
@@ -196,10 +196,10 @@
     <string name="enter_input">确定输入</string>
     <string name="no_maker">不需要备注</string>
 
-    <!-- 液罐设置 -->
+    <!-- 储罐设置 -->
     <string name="color_picker">颜色选择</string>
     <string name="save_color">保存颜色</string>
-    <string name="select_tank">选择液罐</string>
+    <string name="select_tank">选择储罐</string>
     <string name="copy">复制到</string>
     <string name="points">自定义点数</string>
     <string name="tank_table_points">罐表点数</string>
@@ -210,7 +210,7 @@
     <string name="simplified_chinese">简体中文</string>
     <string name="backlight">背光灯</string>
     <string name="minute">分钟</string>
-    <string name="select_oilcan">选择液罐</string>
+    <string name="select_oilcan">选择储罐</string>
     <string name="oilheight">储罐高度</string>
     <string name="max_volume">储罐容量</string>
     <string name="height_oil_alarm_value">高液位报警</string>
@@ -230,7 +230,7 @@
     <string name="oil_color">液品颜色</string>
     <string name="select_color">选择颜色</string>
 
-    <!-- 液罐状态 -->
+    <!-- 储罐状态 -->
     <string name="oil_Communication_interrupt">通信中断</string>
 
     <!-- 罐表生成 -->
@@ -246,7 +246,7 @@
     <string name="createtable_a_nonull">封头A不能输入空值</string>
     <string name="createtable_b_nonull">封头B不能输入空值</string>
     <string name="createtable_daorudao">导入到</string>
-    <string name="createtable_tanksucess">号液罐 </string>
+    <string name="createtable_tanksucess">号储罐 </string>
     <string name="oilcantable_copy_success">复制成功</string>
     <string name="oilcan_height">H：</string>
     <string name="oilcan_length">L：</string>
@@ -254,21 +254,21 @@
     <string name="head_a">R：</string>
     <string name="head_b">R：</string>
     <string name="impor_u_disk">导入U盘</string>
-    <string name="into_the_tank">导入液罐</string>
+    <string name="into_the_tank">导入储罐</string>
 
     <!-- 报警信息 -->
-    <string name="communication_interrupted">号液罐：探针通讯中断！</string>
-    <string name="height_oil_alarm">号液罐：高液位报警！</string>
-    <string name="hheight_oil_alarm">号液罐：高高液位报警！</string>
-    <string name="low_oil_alarm">号液罐：低液位报警！</string>
-    <string name="llow_oil_alarm">号液罐：低低液位报警！</string>
-    <string name="height_water_alarm">号液罐：高水位报警！</string>
-    <string name="height_temp_alarm">号液罐：高温度报警！</string>
-    <string name="low_temp_alarm">号液罐：低温度报警！</string>
+    <string name="communication_interrupted">号储罐：探针通讯中断！</string>
+    <string name="height_oil_alarm">号储罐：高液位报警！</string>
+    <string name="hheight_oil_alarm">号储罐：高高液位报警！</string>
+    <string name="low_oil_alarm">号储罐：低液位报警！</string>
+    <string name="llow_oil_alarm">号储罐：低低液位报警！</string>
+    <string name="height_water_alarm">号储罐：高水位报警！</string>
+    <string name="height_temp_alarm">号储罐：高温度报警！</string>
+    <string name="low_temp_alarm">号储罐：低温度报警！</string>
 
     <!-- 漏液检测 -->
-    <string name="no_select_oilcan">未选择液罐</string>
-    <string name="no_set_cur_oilcan">未设置当前液罐</string>
+    <string name="no_select_oilcan">未选择储罐</string>
+    <string name="no_set_cur_oilcan">未设置当前储罐</string>
     <!-- 探针类型 -->
     <string name="sansen">三绅科技</string>
     <string name="yongbang">郑州永邦</string>、、
@@ -283,7 +283,7 @@
     <string name="add_probe">显示探针</string>
     <!-- 设置列表 -->
     <string name="authorizationmanager">权限管理</string>
-    <string name="oilcanset">液罐设置</string>
+    <string name="oilcanset">储罐设置</string>
     <string name="oilcantableset">罐表设置</string>
     <string name="usermanager">用户管理</string>
     <string name="probeset">探针设置</string>
@@ -293,7 +293,7 @@
     <string name="systemset">系统设置</string>
     <string name="aboutus">关于我们</string>
     <string name="oiltype_custom">自定义液品</string>
-    <string name="oilcan_custom">自定义液罐显示</string>
+    <string name="oilcan_custom">自定义储罐显示</string>
 
     <string name="oilexploration">液气探测</string>
     <string name="fyf">驱动板管理</string>
@@ -398,7 +398,7 @@
     <string name="data_storge">数据存储 </string>
     <string name="service_read_data">从服务器中读取数据成功</string>
     <string name="please_set_d2d">"请设置D2D码"</string>
-    <string name="save_oilcan_service_success">将液罐数据保存到服务器成功</string>
+    <string name="save_oilcan_service_success">将储罐数据保存到服务器成功</string>
     <string name="read_error">读取失败</string>
     <string name="u_load">U盘已经成功挂载</string>
     <string name="u_unload">U盘已经成功移除</string>
@@ -454,9 +454,9 @@
     <string name="volume_calibration">容积校正</string>
     <string name="height">高度</string>
     <string name="volume">体积</string>
-    <string name="tan_no">液罐号</string>
+    <string name="tan_no">储罐号</string>
     <string name="tan_table_data">罐表数据</string>
-    <string name="tank">液罐</string>
+    <string name="tank">储罐</string>
     <string name="immorality">不允许</string>
     <string name="akira_ri">无响应</string>
     <string name="token_code">令牌码</string>
@@ -470,9 +470,9 @@
     <string name="temp">温度</string>
     <string name="read_probe_address">读取探针地址</string>
     <string name="modify_probe_address">修改探针地址</string>
-    <string name="inoiling">号液罐 卸液中...</string>
-    <string name="outoiling">号液罐 出液中...</string>
-    <string name="inoil">号液罐 卸液完成</string>
+    <string name="inoiling">号储罐 卸液中...</string>
+    <string name="outoiling">号储罐 出液中...</string>
+    <string name="inoil">号储罐 卸液完成</string>
     <string name="inoil_start">开始</string>
     <string name="inoil_height">高度</string>
     <string name="inoil_volume">体积</string>
@@ -488,7 +488,7 @@
     <string name="inoil_quite">退出</string>
     <string name="inoil_stop">停止</string>
     <string name="inoil_during">售液补偿</string>
-    <string name="inoil_tank">液罐 </string>
+    <string name="inoil_tank">储罐 </string>
     <string name="inoil_product">液品: </string>
     <string name="inoil_statu">状态: </string>
     <string name="inoil_unload_stop">卸液停止</string>

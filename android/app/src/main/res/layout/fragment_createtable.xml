@@ -64,6 +64,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:textSize="@dimen/sp_23"
+                    android:imeOptions="actionDone"
                     android:layout_weight="1"
                     android:digits="0123456789"
                     android:maxLength="5"
@@ -91,6 +92,7 @@
                     android:id="@+id/createtable_ed_diameter"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:imeOptions="actionDone"
                     android:layout_weight="1"
                     android:maxLength="5"
                     android:digits="0123456789"
@@ -131,6 +133,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="0.63"
+                    android:imeOptions="actionDone"
                     android:maxLength="5"
                     android:digits="0123456789"
                     android:inputType="number" />
