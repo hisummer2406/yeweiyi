@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.manager;
 
 import android.content.Context;
+import android.util.Log;
 import android.os.Handler;
 import android.util.SparseArray;
 
@@ -90,8 +91,7 @@ public class DBDataManager {
                         db.save(object);
 
                     } catch (DbException e) {
-                        // TODO Auto-generated catch block
-                        //e.printStackTrace();
+                        Log.e(TAG, "run 数据库操作失败", e);
                     }
                 }
             });
@@ -110,8 +110,7 @@ public class DBDataManager {
         try {
             object = db.findAll(clazz);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findAllObject 数据库操作失败", e);
         }
         return object;
     }
@@ -128,8 +127,7 @@ public class DBDataManager {
         try {
             object = db.findAll(WhereBuilder.b("id", ">", "17"));
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findTestObject 数据库操作失败", e);
         }
         return object;
     }
@@ -148,8 +146,7 @@ public class DBDataManager {
             daoObject = db.findById(clazz, id);
 
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findObjectByID 数据库操作失败", e);
         }
         return daoObject;
     }
@@ -159,8 +156,7 @@ public class DBDataManager {
         try {
             daoObject = db.findFirst(clazz);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findFirst 数据库操作失败", e);
         }
         return daoObject;
     }
@@ -177,7 +173,7 @@ public class DBDataManager {
                         db.update(object);
                         //Log.i(TAG, "run: 线程执行完成");
                     } catch (DbException e) {
-                        //e.printStackTrace();
+                        Log.e(TAG, "run 数据库操作失败", e);
                     }
                 }
             });
@@ -214,8 +210,7 @@ public class DBDataManager {
             heights = null;
             volumes = null;
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "setOilTableToOilCan 数据库操作失败", e);
         }
     }
 
@@ -228,8 +223,7 @@ public class DBDataManager {
             probes = db.findAll(ProbeToOil.class);
 
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findAllProbeToOil 数据库操作失败", e);
         }
         return probes;
     }
@@ -246,8 +240,7 @@ public class DBDataManager {
                 try {
                     db.dropTable(clazz);
                 } catch (DbException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
+                    Log.e(TAG, "run 数据库操作失败", e);
                 }
             }
         });
@@ -372,8 +365,7 @@ public class DBDataManager {
             }
             Const.isAlarm = 0;
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "getLastAlarm 数据库操作失败", e);
         }
         return alarms;
     }
@@ -397,8 +389,7 @@ public class DBDataManager {
                     .and("oilId", "=", oilCanID));
 
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "getLastAlarm 数据库操作失败", e);
         }
         if (oilIns == null) {
             return new ArrayList<OilInOut>();
@@ -420,8 +411,7 @@ public class DBDataManager {
                     .where("tanId", "=", oilCanID));
 
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findTemper 数据库操作失败", e);
         }
 
         return records;
@@ -646,7 +636,7 @@ public class DBDataManager {
         try {
             findAll = db.findAll(Selector.from(clazz).orderBy("id", isDesc));
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "Sort 数据库操作失败", e);
         }
         if (findAll == null)
             findAll = new ArrayList<T>();
@@ -660,7 +650,7 @@ public class DBDataManager {
         try {
             findAll = db.findAll(Selector.from(clazz).where("oilId", "=", pos).orderBy("id", isDesc));
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "Sort 数据库操作失败", e);
         }
         if (findAll == null)
             findAll = new ArrayList<T>();
@@ -672,8 +662,7 @@ public class DBDataManager {
         try {
             oilInOut = db.findAll(Selector.from(OilInOut.class).where("oilId", "=", pos));
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findInOilByPos 数据库操作失败", e);
         }
         if (oilInOut == null)
             oilInOut = new ArrayList<OilInOut>();
@@ -695,8 +684,7 @@ public class DBDataManager {
                     .where("id", "=", login.getId())
                     .and("psw", "=", login.getPsw()));
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "isUserExist 数据库操作失败", e);
         }
 
         if (findAll == null || findAll.size() == 0) {
@@ -718,8 +706,7 @@ public class DBDataManager {
         try {
             findAll = db.findAll(Selector.from(clazz).and("id", "==", id));
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "chekIsExists 数据库操作失败", e);
         }
         if (findAll == null | findAll.size() == 0) {
             return false;
@@ -740,8 +727,7 @@ public class DBDataManager {
 
             findAll = db.findAll(clazz);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "checkObjectNotNull 数据库操作失败", e);
         }
         if (findAll == null | findAll.size() == 0) {
             return false;
@@ -768,8 +754,7 @@ public class DBDataManager {
 
             return db.findById(Authorization.class, id);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findAuthorization 数据库操作失败", e);
         }
         return null;
     }
@@ -786,8 +771,7 @@ public class DBDataManager {
 
             object = db.findAll(Selector.from(clazz).where(column, "=", hex));
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findAllObject 数据库操作失败", e);
         }
         return object;
     }
@@ -799,8 +783,7 @@ public class DBDataManager {
                 try {
                     db.delete(user);
                 } catch (DbException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
+                    Log.e(TAG, "run 数据库操作失败", e);
                 }
             }
         });
@@ -811,8 +794,7 @@ public class DBDataManager {
         try {
             return db.findAll(clazz);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findUser 数据库操作失败", e);
         }
         return null;
     }
@@ -822,8 +804,7 @@ public class DBDataManager {
         try {
             return (User) db.findById(clazz, "admin");
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findAdminUser 数据库操作失败", e);
         }
         return null;
     }
@@ -854,8 +835,7 @@ public class DBDataManager {
 
 
         } catch (Exception e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "SaveOilCanTable 数据库操作失败", e);
         }
         try {
             out.close();
@@ -899,8 +879,7 @@ public class DBDataManager {
                 try {
                     db.deleteAll(entityType);
                 } catch (DbException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
+                    Log.e(TAG, "run 数据库操作失败", e);
                 }
             }
         });
@@ -918,8 +897,7 @@ public class DBDataManager {
                 try {
                     db.delete(object);
                 } catch (DbException e) {
-                    // TODO Auto-generated catch block
-                    //e.printStackTrace();
+                    Log.e(TAG, "run 数据库操作失败", e);
                 }
             }
         });
@@ -944,8 +922,7 @@ public class DBDataManager {
 //                db.update(oilCanTable);
             }
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "OilCanTableCopy 数据库操作失败", e);
         }
 
     }
@@ -982,7 +959,7 @@ public class DBDataManager {
                         new String[]{beginTime, endTime}));
             }
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "findObject 数据库操作失败", e);
         }
         maps.put("list", alarms);
         maps.put("count", count);
@@ -995,8 +972,7 @@ public class DBDataManager {
         try {
             daoObject = db.findFirst(Selector.from(clazz).orderBy("id", true));
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "findLast 数据库操作失败", e);
         }
         return daoObject;
     }
@@ -1006,7 +982,7 @@ public class DBDataManager {
         try {
             alarms = findLimt(clazz, limit, offset, "id", desc, beginTime, endTime);
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "findLimitRecord 数据库操作失败", e);
         }
         if (alarms != null) {
             return alarms;
@@ -1028,7 +1004,7 @@ public class DBDataManager {
         try {
             temps = db.findAll(Selector.from(clazz).limit(limit).offset(offset * limit).orderBy("time", des));
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "findLimit 数据库操作失败", e);
         }
         if (temps != null) {
             return temps;
@@ -1041,7 +1017,7 @@ public class DBDataManager {
         try {
             objects = db.findAll(Selector.from(clazz).where("oilId", "=", oilid).limit(limit).offset(offset * limit).orderBy("time", true));
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "findLimit 数据库操作失败", e);
         }
         if (objects != null) {
             return objects;

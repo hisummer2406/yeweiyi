@@ -250,8 +250,10 @@ public class SerialPortManager implements IParseDataListener {
                                         try {
                                             Thread.sleep(50);
                                         } catch (InterruptedException e1) {
-                                            // TODO Auto-generated catch block
-                                            e1.printStackTrace();
+                                            // 注：此处未调用 Thread.currentThread().interrupt() 恢复中断位。
+                                            // 恢复后本轮循环内后续的 sleep 会立即抛异常，属于行为变更，
+                                            // 需在真机上验证停机流程后再定。当前仅记录，便于排查。
+                                            Log.w(TAG, "发送后等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e1);
                                         }
 
                                         data = null;
@@ -270,7 +272,8 @@ public class SerialPortManager implements IParseDataListener {
                                                                 .probeInfoPase(data, SerialPortManager.this);
 
                                                     } catch (Exception e) {
-                                                        //e.printStackTrace();
+                                                        Log.e(TAG, "中诚协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
+                                                                + " 原始报文=" + data, e);
                                                     }
                                                     break;
                                                 case 1:
@@ -279,8 +282,12 @@ public class SerialPortManager implements IParseDataListener {
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
                                                     } catch (Exception e) {
-
+                                                        Log.e(TAG, "LD协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
+                                                                + " 原始报文=" + data, e);
                                                     }
+                                                    // FIXME 此处缺少 break，会穿透到 case 2，
+                                                    // 导致 LD 探头的解析结果被 LD2 的结果覆盖。
+                                                    // 补 break 会改变现场设备行为，需结合硬件实测后再定，故暂不修改。
                                                 case 2:
                                                     isRight = LD2Company
                                                             .getInstance()
@@ -308,7 +315,7 @@ public class SerialPortManager implements IParseDataListener {
                                         try {
                                             Thread.sleep(50);
                                         } catch (InterruptedException e) {
-                                            //e.printStackTrace();
+                                            Log.w(TAG, "轮询间隔等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e);
                                         }
                                     }
 
@@ -474,14 +481,14 @@ public class SerialPortManager implements IParseDataListener {
                     try {
                         Thread.sleep(200);
                     } catch (InterruptedException e) {
-                        //e.printStackTrace();
+                        Log.w(TAG, "后台接收线程等待被中断(有数据分支)", e);
                     }
 
                 } else {
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
-                        //e.printStackTrace();
+                        Log.w(TAG, "后台接收线程等待被中断(无数据分支)", e);
                     }
                 }
 
