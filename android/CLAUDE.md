@@ -81,7 +81,22 @@ There is no real unit/instrumented test suite.
 
 `app/src/test/` has real tests as of commit `ada562e` — `CRCheckTest` and `DataUtilsTest` (plus the stock `ExampleUnitTest`). They run on plain JVM; no device or Robolectric needed.
 
-**What is and isn't unit-testable here:** `CRCheck` has zero imports and is fully pure. `DataUtils` imports `R`/`MyApplication`/`ATGJNI` but has no static initializer block, so class loading never triggers `System.loadLibrary` — its byte/hex helpers test fine on JVM; only `getLitre()` (ATGJNI) and `getOilType()` (MyApplication) must be avoided. The `factory/` vendor-protocol classes **cannot** be tested on plain JVM — `LDCompany` and friends import `android.content.Context` and `SparseArray`, so testing them needs Robolectric or an extracted pure-parsing layer.
+**What is and isn't unit-testable here:** `DataUtils` imports `R`/`MyApplication`/`ATGJNI` but has no static initializer block, so class loading never triggers `System.loadLibrary` — its byte/hex helpers test fine on JVM; only `getLitre()` (ATGJNI) and `getOilType()` (MyApplication) must be avoided. `CRCheck` has no `import` lines, but it is *not* dependency-free: line 1480 calls `DataUtils.shortToByte` from the same package, and same-package references need no import. The `factory/` vendor-protocol classes **cannot** be tested on plain JVM — `LDCompany` and friends import `android.content.Context` and `SparseArray`, so testing them needs Robolectric or an extracted pure-parsing layer.
+
+> Grepping for `^import` does **not** establish that a class is self-contained — same-package references are invisible to it. Verify with the compiler, not with grep.
+
+### ⚠️ `git grep` regex silently fails here — use `-F` for deletion safety checks
+
+This environment's `git grep` is ugrep-backed, and two common constructs **match nothing and exit 0** instead of erroring:
+
+- `\|` alternation — `git grep "R\.string\.foo\|@string/foo"` finds nothing, ever
+- `\b` word boundary — `git grep -nE "R\.string\.foo\b"` finds nothing, even though `-E` without `\b` finds it
+
+Both produce a *silent false negative*, which is the worst possible failure mode for "is this safe to delete?" checks. A resource deletion in this repo was made on such a bad check and broke the build (`R.string.apkurl` in `LoginHelper.java:67`).
+
+**Before deleting anything, verify references with `git grep -F` (fixed string), one term per invocation.** Reserve regex for exploration, never for a safety gate. `grep -rlw` (system grep, no alternation) has been reliable for whole-word class-name scans.
+
+Also note resources can only be reached by name via `getIdentifier()` — this project has none, so `R.` / `@string/` references are exhaustive.
 
 ## Known landmines
 

@@ -7,7 +7,13 @@
 # --- Android SDK 路径（每台机器不同）---
 # macOS 示例: sdk.dir=/Users/<你的用户名>/Library/Android/sdk
 # Windows 示例: sdk.dir=D\:\\SDK
+#
+# 需要的组件：platforms;android-27、build-tools（30.0.3 可用）、platform-tools。
+# JDK 必须是 11：Gradle 6.7.1 不支持 Java 16+，AGP 4.2.1 官方支持 8/11。
 sdk.dir=
+
+# ndk.dir 仅在需要编译 app/src/main/cpp 下的原生代码（serialport/atg/bspatch）时才需要，
+# 版本见项目历史配置 21.0.6113669。只跑 JVM 单元测试可以不装。
 ndk.dir=
 
 # --- 敏感凭据（找项目负责人索取，不要从 git 历史里翻）---
