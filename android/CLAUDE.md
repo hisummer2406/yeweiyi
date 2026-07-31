@@ -15,18 +15,31 @@ This was previously scaffolded from the `goldze/MVVMHabit` template (Java, MVVM 
 
 ### Orphaned directories — do not edit
 
-The repo root also contains loose `java/` and `src/` directories that are **not referenced by `settings.gradle` or any build.gradle** — they're stray duplicate copies of `app/src/main/java` and `xutilslibrary/src/main/java` (contents mostly but not exactly identical to the real sources). They aren't compiled and aren't the source of truth; always edit the real module paths under `app/src/main/java/...` and `xutilslibrary/src/main/java/...`.
+The stray root-level `java/` and `src/` duplicate source trees were removed (commit `8f8373c`). If they reappear, they are not referenced by `settings.gradle` or any build.gradle — always edit the real module paths under `app/src/main/java/...` and `xutilslibrary/src/main/java/...`.
 
 Within `app/src/main/java` itself there are also several non-namespaced top-level packages that predate the `com.sansen.yeweiyi` package (`asynmsg`, `bean`, `recycle`, `storage`, `rxjava`, `log`, `base`, `serialport`, `atg`, `com.example.x6.gpioctl`). These *are* compiled and in use (e.g. `log.LogCatHelper`, `serialport.manager.SerialPortManager` are referenced from `MyApplication`), but note there are two different, unrelated `BaseFragment` classes — `base.BaseFragment`/`base.BaseVM` (root package, appears to be dead/unused leftover) vs. `com.sansen.yeweiyi.base.BaseFragment` (the one actually extended by real screens). Check imports carefully before assuming which one a file uses.
 
 ## Build
 
-No `gradlew` wrapper was present before; it now is (`gradlew`/`gradlew.bat`, still targeting Gradle 6.7.1 via the Tencent Cloud mirror in `gradle/wrapper/gradle-wrapper.properties`).
+`gradlew`/`gradlew.bat` are present, targeting Gradle 6.7.1 via the Tencent Cloud mirror in `gradle/wrapper/gradle-wrapper.properties`.
 
 ```bash
 # Build debug APK
 ./gradlew :app:assembleDebug
+
+# Run the JVM unit tests (no device needed)
+./gradlew :app:testDebugUnitTest
 ```
+
+### ⚠️ Toolchain may be absent — verify before trusting any build claim
+
+As of 2026-07-31 the macOS checkout has **no JDK and no Android SDK** (`local.properties` points at `D:\SDK`, a Windows path — the project was set up on Windows). On such a machine nothing can be compiled or run, so any code change is unverified. Check `java -version` before claiming a build or test passed, and say so plainly when it could not be run.
+
+### Secrets are injected at build time — not hardcoded
+
+`app/build.gradle` reads `local.properties` and injects four values into `BuildConfig` (`PRODUCT_KEY`, `PRODUCT_SECRET`, `REQUEST_ENCRYPT_KEY`, `BASE_URL`); `ApiConfig` just re-exports them. `local.properties` is untracked — copy `local.properties.template` and fill it in. Missing keys log a `[配置缺失]` warning at build time and compile to empty strings (so the app builds but MQTT upload / request encryption silently fail).
+
+Credentials hardcoded before commit `6ae4e3f` are in git history and must be treated as leaked.
 
 Key `app/build.gradle` facts:
 - `compileSdkVersion 27`, `minSdkVersion 21`, `targetSdkVersion 27`, landscape-only (see manifest).
@@ -62,7 +75,25 @@ There is no real unit/instrumented test suite.
 
 ### Base classes
 
-`com.sansen.yeweiyi.base.BaseActivity`/`BaseFragment` are the real base classes real screens extend — they pull in xUtils `HttpUtils`, Baidu Location SDK, Gson/fastjson directly (not MVVM/DataBinding). Don't confuse with the unrelated, apparently-unused `base.BaseFragment`/`base.BaseVM` in the root `base` package (see "Orphaned directories" above).
+`com.sansen.yeweiyi.base.BaseActivity`/`BaseFragment` are the real base classes real screens extend — they pull in xUtils `HttpUtils`, Baidu Location SDK, Gson/fastjson directly (not MVVM/DataBinding). Don't confuse with the unrelated, unused `base.BaseFragment` in the root `base` package.
+
+## Testing
+
+`app/src/test/` has real tests as of commit `ada562e` — `CRCheckTest` and `DataUtilsTest` (plus the stock `ExampleUnitTest`). They run on plain JVM; no device or Robolectric needed.
+
+**What is and isn't unit-testable here:** `CRCheck` has zero imports and is fully pure. `DataUtils` imports `R`/`MyApplication`/`ATGJNI` but has no static initializer block, so class loading never triggers `System.loadLibrary` — its byte/hex helpers test fine on JVM; only `getLitre()` (ATGJNI) and `getOilType()` (MyApplication) must be avoided. The `factory/` vendor-protocol classes **cannot** be tested on plain JVM — `LDCompany` and friends import `android.content.Context` and `SparseArray`, so testing them needs Robolectric or an extracted pure-parsing layer.
+
+## Known landmines
+
+Traps that compile cleanly and fail at runtime — check these before refactoring:
+
+- **`android:onClick` reflection binding.** 18 bindings in `res/layout` reference `MainActivity` methods by string name. Moving or renaming those methods compiles fine and crashes on tap. Convert them to `setOnClickListener` *before* splitting `MainActivity`, so the references become compile-time visible.
+- **Duplicate method pairs.** `DataUtils.HexString2Bytes` / `hexString2Bytes` and `byte2Short` / `byteToShort` are byte-identical duplicates. `CRCheck.crc16` / `crc162` differ *only* in returned byte order (`"4B37"` vs `"374B"`) — picking the wrong one silently produces a bad checksum.
+- **Three `bytesToHexString` overloads with different formats.** With `size` → uppercase, space-separated; without → lowercase, no separator; single-byte → lowercase and *not zero-padded* (`0x0A` → `"a"`). `CRCheck.getModBusCRC` is likewise unpadded lowercase.
+- **`DataUtils.hexToFloat` throws on any negative float.** It uses `Integer.parseInt(hex, 16)`, which overflows once the IEEE-754 sign bit is set (`-5.0f` = `0xC0A00000`). Currently unreferenced, but this device reads negative temperatures — fix with `Integer.parseUnsignedInt` before using it.
+- **`DataUtils.SumCheck` is not a sum.** It XORs all bytes then subtracts `0x80`.
+
+Each of these is pinned by an assertion in `CRCheckTest`/`DataUtilsTest`, so changing the behavior turns a test red rather than shipping silently.
 
 ## Signing
 

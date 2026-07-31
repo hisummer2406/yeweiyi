@@ -22,7 +22,6 @@ public class Const {
 	public static int recordNum = 20;// 每次加载的item个数
 	public static CustomProgressDialog ProgressDialog;// 用于暂存Progress的索引Dialog
 	public static Object tempList;
-	public static String ip="203.171.228.177";
 
 	public static long lastDownTime; //上一次屏幕按下时间
 	public static int sleepTime;//分钟
