@@ -137,9 +137,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendUnloadOils MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendUnloadOils MQTT操作失败", e);
             }
             return true;
         }
@@ -163,9 +163,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendAlarms MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendAlarms MQTT操作失败", e);
             }
             return true;
         }
@@ -184,9 +184,9 @@ public class BackService extends Service {
         try {
             publish(topic, message);
         } catch (MqttPersistenceException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "notifyOiline MQTT操作失败(MqttPersistenceException)", e);
         } catch (MqttException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "notifyOiline MQTT操作失败", e);
         }
     }
     private boolean isDisConnNet;
@@ -302,7 +302,7 @@ public class BackService extends Service {
                             initMqttClient();
                         }
                     } catch (MqttException e) {
-                        //e.printStackTrace();
+                        Log.e(TAG, "onNetChange MQTT操作失败", e);
                     }
                 }
             }
@@ -348,8 +348,7 @@ public class BackService extends Service {
         try {
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestTankTable MQTT操作失败", e);
         }
     }
 
@@ -360,8 +359,7 @@ public class BackService extends Service {
         try {
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestProbeSet MQTT操作失败", e);
         }
     }
 
@@ -372,8 +370,7 @@ public class BackService extends Service {
         try {
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestTankSet MQTT操作失败", e);
         }
     }
 //        subscribeRequest(
@@ -411,8 +408,7 @@ public class BackService extends Service {
             try {
                 client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestOilLeak MQTT操作失败", e);
         }
     }
 
@@ -423,8 +419,7 @@ public class BackService extends Service {
         try {
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestUnload MQTT操作失败", e);
         }
     }
 
@@ -435,8 +430,7 @@ public class BackService extends Service {
         try {
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestOilStorage MQTT操作失败", e);
         }
     }
 
@@ -448,8 +442,7 @@ public class BackService extends Service {
         try {
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeIsOilne MQTT操作失败", e);
         }
     }
 
@@ -460,8 +453,7 @@ public class BackService extends Service {
             String[] topic = {MqttUtil.getService(productKey, deviceName, requestOilcan)};
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestOilcan MQTT操作失败", e);
         }
     }
 
@@ -472,8 +464,7 @@ public class BackService extends Service {
             String[] topic = {MqttUtil.getService(productKey, deviceName, requestAlarm)};
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestAlarm MQTT操作失败", e);
         }
     }
 
@@ -484,8 +475,7 @@ public class BackService extends Service {
             String[] topic = {MqttUtil.getService(productKey, deviceName, requestShift)};
             client.subscribe(topic, Qos);
         } catch (MqttException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "subscribeRequestShift MQTT操作失败", e);
         }
     }
 
@@ -494,6 +484,11 @@ public class BackService extends Service {
         Log.i(TAG, "发布主题:" + topic.getName() + "  内容:" + new String(message.getPayload()));
         if (client.isConnected()) {
             topic.publish(message);
+        } else {
+            // 断连时消息被直接丢弃：既不抛异常也不重试，调用方(sendAlarms/sendUnloadOils)
+            // 仍会返回 true。此处补一条告警，使丢弃在现场日志中可见。
+            // 是否改为抛异常或入队重发属行为变更，见 docs/重构方案.md 的遗留问题。
+            Log.w(TAG, "MQTT 未连接，消息被丢弃: " + topic.getName());
         }
 //		token.waitForCompletion();
         // System.out.println("message is published completely! " +
@@ -607,9 +602,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendAlarms MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendAlarms MQTT操作失败", e);
             }
         }
 
@@ -646,9 +641,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendUnloadOils MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendUnloadOils MQTT操作失败", e);
             }
         }
 
@@ -677,9 +672,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendShifts MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendShifts MQTT操作失败", e);
             }
         }
 
@@ -708,9 +703,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendLeakOils MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendLeakOils MQTT操作失败", e);
             }
         }
 
@@ -739,9 +734,9 @@ public class BackService extends Service {
             try {
                 publish(topic, message);
             } catch (MqttPersistenceException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendOilStorage MQTT操作失败(MqttPersistenceException)", e);
             } catch (MqttException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendOilStorage MQTT操作失败", e);
             }
         }
     }
@@ -762,9 +757,9 @@ public class BackService extends Service {
         try {
             publish(topic, message);
         } catch (MqttPersistenceException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "sendOilcanData MQTT操作失败(MqttPersistenceException)", e);
         } catch (MqttException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "sendOilcanData MQTT操作失败", e);
         }
     }
 
