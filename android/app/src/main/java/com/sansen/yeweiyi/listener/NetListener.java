@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.listener;
 
 
+import android.util.Log;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -47,7 +48,7 @@ public class NetListener {
         try {
             registerListener();
         }catch (Exception e){
-            //e.printStackTrace();
+            Log.e(TAG, "begin 执行失败", e);
         }
     }
 
@@ -59,7 +60,7 @@ public class NetListener {
         try {
             mContext.unregisterReceiver(mNetBroadcastReceiver);
         }catch (Exception e){
-            //e.printStackTrace();
+            Log.e(TAG, "unregisterListener 执行失败", e);
         }
     }
 

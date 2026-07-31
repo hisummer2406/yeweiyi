@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.manager;
 
+import android.util.Log;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.content.Context;
@@ -96,6 +97,7 @@ public class AppManager {
 			System.exit(0);
 			android.os.Process.killProcess(android.os.Process.myPid());
 		} catch (Exception e) {
+		    Log.e("AppManager", "AppExit 执行失败", e);
 		}
 	}
 }

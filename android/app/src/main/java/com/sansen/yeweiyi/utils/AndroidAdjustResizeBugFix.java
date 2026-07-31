@@ -62,7 +62,9 @@ public class AndroidAdjustResizeBugFix {
             int dimensionPixelSize = mActivity.getResources().getDimensionPixelSize(x);
             return dimensionPixelSize;
         } catch (Exception e) {
-            //e.printStackTrace();
+            // 刻意留空：这里用反射读 com.android.internal.R$dimen 的私有资源，
+            // 部分 ROM 上取不到属于预期情况，下面 return 0 即为兜底值。
+            // 不打日志是为了避免在这些 ROM 上每次调用都刷一条错误。
         }
         return 0;
     }

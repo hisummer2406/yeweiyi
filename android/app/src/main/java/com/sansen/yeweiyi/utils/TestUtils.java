@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
@@ -19,7 +20,7 @@ public class TestUtils {
             os.flush();
             os.close();
         } catch (IOException e) {
-            //e.printStackTrace();
+            Log.e("TestUtils", "TestSystem 执行失败", e);
         }
     }
 

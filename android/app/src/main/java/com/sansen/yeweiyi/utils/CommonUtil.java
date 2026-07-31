@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -249,7 +250,7 @@ public class CommonUtil {
 			image = BitmapFactory.decodeStream(is);
 			is.close();
 		} catch (IOException e) {
-			//e.printStackTrace();
+		    Log.e("CommonUtil", "getImageFromAssetsFile 执行失败", e);
 		}
 		return image;
 

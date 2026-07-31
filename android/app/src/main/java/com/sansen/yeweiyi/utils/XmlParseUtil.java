@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import android.util.Xml;
 
 import com.sansen.yeweiyi.bean.BaseInfo;
@@ -42,7 +43,7 @@ public class XmlParseUtil {
 				type = parser.next();
 			}
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("XmlParseUtil", "getUpdataInfo 执行失败", e);
 		}
 		return bean;
 	}
@@ -77,7 +78,7 @@ public class XmlParseUtil {
 				type = parser.next();
 			}
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("XmlParseUtil", "getBaseInfo 执行失败", e);
 		}
 		return bean;
 	}

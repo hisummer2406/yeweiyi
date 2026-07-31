@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -36,8 +37,7 @@ public class EncryptionUtils {
             }
 
         } catch (NoSuchAlgorithmException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e("EncryptionUtils", "EncoderByMd5 执行失败", e);
         }
         BASE64Encoder base64en = new BASE64Encoder();
         //加密后的字符串

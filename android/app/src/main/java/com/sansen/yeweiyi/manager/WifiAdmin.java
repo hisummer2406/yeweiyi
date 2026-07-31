@@ -178,7 +178,7 @@ public class WifiAdmin {
             localMethod.invoke(localWifiManager, arrayOfObject);
             return;
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e("WifiAdmin", "createWifiAP 执行失败", e);
         }
     }
     /**
@@ -272,6 +272,7 @@ public class WifiAdmin {
             String str = (String) localObject3;
             return str;
         } catch (Exception localException) {
+            Log.e("WifiAdmin", "getApSSID 执行失败", localException);
         }
         return null;
     }
@@ -316,6 +317,7 @@ public class WifiAdmin {
                     .invoke(this.mWifiManager, new Object[0])).intValue();
             return i;
         } catch (Exception localException) {
+            Log.e("WifiAdmin", "getWifiApState 执行失败", localException);
         }
         return 4;   //未知wifi网卡状态
     }

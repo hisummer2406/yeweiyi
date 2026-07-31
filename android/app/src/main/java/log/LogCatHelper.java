@@ -81,7 +81,9 @@ public class LogCatHelper {
                 }
                 fos = new FileOutputStream(file, true);
             } catch (Exception e) {
-                //e.printStackTrace();
+                // 这里失败意味着 fos 保持为 null，日志落盘功能会完全失效且此前无任何提示。
+                // 设备在现场很难远程调试，必须让这个失败在 logcat 里可见。
+                Log.e(TAG, "创建日志文件失败，日志将不会落盘: " + dirPath, e);
             }
             cmds = "logcat *:w | grep \"(" + mPid + ")\"";
         }
@@ -101,7 +103,7 @@ public class LogCatHelper {
                     }
                 }
             } catch (Exception e) {
-                //e.printStackTrace();
+                Log.e(TAG, "读取 logcat 输出中断，日志落盘已停止", e);
             } finally {
                 if (mProcess != null) {
                     mProcess.destroy();

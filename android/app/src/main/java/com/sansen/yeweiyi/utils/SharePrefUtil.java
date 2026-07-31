@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
@@ -233,7 +234,7 @@ public class SharePrefUtil {
             sp.edit().putString(key, objBase64).commit();
             oos.close();
         } catch (IOException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "saveObj 执行失败", e);
         }
     }
 
@@ -262,7 +263,7 @@ public class SharePrefUtil {
             obj = (Object) ois.readObject();
             ois.close();
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e(TAG, "getObj 执行失败", e);
         }
         return obj;
     }

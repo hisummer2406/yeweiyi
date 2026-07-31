@@ -81,11 +81,13 @@ public class DownloadUtil {
                         if (is != null)
                             is.close();
                     } catch (IOException e) {
+                        Log.e(TAG, "onResponse 执行失败", e);
                     }
                     try {
                         if (fos != null)
                             fos.close();
                     } catch (IOException e) {
+                        Log.e(TAG, "onResponse 执行失败", e);
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -80,7 +81,7 @@ public class DateUtils {
 		try {
 			date = dateFormat.parse(time);
 		} catch (ParseException e) {
-
+		    Log.e("DateUtils", "getFormatDay 执行失败", e);
 		}
 		return date;
 	}
@@ -171,9 +172,9 @@ public class DateUtils {
 					Locale.CHINA);// 输出北京时间
 			return sdf.format(date);
 		} catch (MalformedURLException e) {
-			//e.printStackTrace();
+		    Log.e("DateUtils", "getWebsiteDatetime 执行失败", e);
 		} catch (IOException e) {
-			//e.printStackTrace();
+		    Log.e("DateUtils", "getWebsiteDatetime 执行失败", e);
 		}
 		return null;
 	}

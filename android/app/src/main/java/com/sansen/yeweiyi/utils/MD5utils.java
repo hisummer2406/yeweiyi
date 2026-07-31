@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -23,7 +24,7 @@ public class MD5utils {
                 md5Code = md5Code.append(b);
             }
         } catch (NoSuchAlgorithmException e) {
-            //e.printStackTrace();
+            Log.e("MD5utils", "toMd5 执行失败", e);
         }
         return md5Code.toString();
 

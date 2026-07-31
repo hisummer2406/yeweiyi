@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.logic;
 
 
+import android.util.Log;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.listener.SideleakageListener;
 import com.sansen.yeweiyi.manager.DBDataManager;
@@ -64,7 +65,7 @@ public class SideleakageDetection {
 					try {
 						Thread.sleep(3000);
 					} catch (InterruptedException e) {
-						//e.printStackTrace();
+					    Log.e("SideleakageDetection", "run 执行失败", e);
 					}
 					cur= System.currentTimeMillis()-beginTime;
 

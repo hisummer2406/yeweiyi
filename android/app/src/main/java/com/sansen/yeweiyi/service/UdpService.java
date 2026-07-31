@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.service;
 
+import android.util.Log;
 import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
@@ -58,7 +59,7 @@ public class UdpService extends Service {
         try {
             acceptor.bind(new InetSocketAddress(PORT));//绑定端口
         } catch (IOException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "onCreate 执行失败", e);
         }
         //Log.i(TAG, "onCreate: 启动完成");
 

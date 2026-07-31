@@ -483,8 +483,7 @@ public class OilCanSetFragment extends BaseFragment {
             method = oilCanClazz.getDeclaredMethod("set"
                     + methedName, clazz);
         } catch (NoSuchMethodException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "saveData 执行失败", e);
         }
         try {
 
@@ -509,7 +508,7 @@ public class OilCanSetFragment extends BaseFragment {
             Const.isUpdate = true;
           //  vText.setTag(R.id.tag_first, vText.getText().toString());
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e(TAG, "saveData 执行失败", e);
         }
     }
 
@@ -545,8 +544,7 @@ public class OilCanSetFragment extends BaseFragment {
                         method = oilCanClazz.getDeclaredMethod("set"
                                 + methedName, clazz);
                     } catch (NoSuchMethodException e) {
-                        // TODO Auto-generated catch block
-                        //e.printStackTrace();
+                        Log.e(TAG, "onFocusChange 执行失败", e);
                     }
 
                     try {
@@ -572,7 +570,7 @@ public class OilCanSetFragment extends BaseFragment {
                         Const.isUpdate = true;
                         vText.setTag(R.id.tag_first, vText.getText().toString());
                     } catch (Exception e) {
-                        //e.printStackTrace();
+                        Log.e(TAG, "onFocusChange 执行失败", e);
                     }
                 } else {
                     vText.setText("");

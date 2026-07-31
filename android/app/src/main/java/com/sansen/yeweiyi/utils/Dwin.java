@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import android.os.Build;
 
 import org.apache.http.util.EncodingUtils;
@@ -128,7 +129,7 @@ public class Dwin {
 			res = EncodingUtils.getString(buffer, "UTF-8").toString().trim();
 			fin.close();
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("Dwin", "getChipID 执行失败", e);
 		}
 		return res;
 	}
@@ -188,7 +189,7 @@ public class Dwin {
 			os.writeBytes("exit\n");
 			os.flush();
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("Dwin", "execCommand 执行失败", e);
 		}
 	}
 

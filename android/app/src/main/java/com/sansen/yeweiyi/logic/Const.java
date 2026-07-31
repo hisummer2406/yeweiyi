@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.logic;
 
+import android.util.Log;
 import android.app.Activity;
 import android.os.Environment;
 
@@ -46,6 +47,7 @@ public class Const {
 		try {
 			return DataUtils.getOilType()[typId];
 		}catch (Exception e){
+		    Log.e("Const", "getOilType 执行失败", e);
 		}
 		return "No Set";
 	}

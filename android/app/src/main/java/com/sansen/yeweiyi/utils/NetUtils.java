@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.utils;
 
 
+import android.util.Log;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -93,7 +94,7 @@ public class NetUtils {
 		try {
 			enumeration = NetworkInterface.getNetworkInterfaces();
 		} catch (SocketException e) {
-			//e.printStackTrace();
+		    Log.e("NetUtils", "getLocalIPAddress 执行失败", e);
 		}
 		if (enumeration != null) {
 			while (enumeration.hasMoreElements()) {
@@ -137,6 +138,7 @@ public class NetUtils {
 					return res1.toString();
 				}
 			} catch (Exception ex) {
+			    Log.e("NetUtils", "getMacAddr 执行失败", ex);
 			}
 			return "02:00:00:00:00:00";
 		}

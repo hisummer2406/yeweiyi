@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.logic;
 
+import android.util.Log;
 import android.os.Handler;
 import android.util.SparseArray;
 
@@ -173,10 +174,9 @@ public class PrintRunable implements Runnable {
             Thread.sleep(20);
             serialPort.sendData(new byte[]{0x0A});
         } catch (InterruptedException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "println 执行失败", e);
         } catch (UnsupportedEncodingException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "println 执行失败", e);
         }
     }
 }

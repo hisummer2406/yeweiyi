@@ -160,7 +160,7 @@ public class OkgoNet {
                         }
                     });
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e("OkgoNet", "onError 执行失败", e);
         }
 
     }

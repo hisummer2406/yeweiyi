@@ -86,8 +86,7 @@ public class ExportExcel<T> {
             fs = new POIFSFileSystem(is);
             wb = new HSSFWorkbook(fs);
         } catch (IOException e) {
-            // System.out.println("读取Excel  没有找到文件");
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelProbeToOilCanContent 执行失败", e);
         }
         sheet = wb.getSheetAt(0);
         // 得到总行数
@@ -247,8 +246,7 @@ public class ExportExcel<T> {
             fs = new POIFSFileSystem(is);
             wb = new HSSFWorkbook(fs);
         } catch (IOException e) {
-
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelOilCanSetContent 执行失败", e);
         }
         sheet = wb.getSheetAt(0);
         // 得到总行数
@@ -668,8 +666,7 @@ public class ExportExcel<T> {
             out.flush();
             System.out.println("写入成功");
         } catch (IOException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelOilCanSetContent 执行失败", e);
         }
         return true;
     }
@@ -808,8 +805,7 @@ public class ExportExcel<T> {
             workbook.write(out);
             out.flush();
         } catch (IOException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelOilCanSetContent 执行失败", e);
         }
         System.out.println("写入成功");
         return true;
@@ -938,8 +934,7 @@ public class ExportExcel<T> {
             workbook.write(out);
             out.flush();
         } catch (IOException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelOilCanSetContent 执行失败", e);
         }
         System.out.println("写入成功");
         return true;
@@ -951,8 +946,7 @@ public class ExportExcel<T> {
             fs = new POIFSFileSystem(is);
             wb = new HSSFWorkbook(fs);
         } catch (IOException e) {
-            // System.out.println("读取Excel  没有找到文件");
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelAlarmContent 执行失败", e);
         }
         sheet = wb.getSheetAt(0);
         // 得到总行数
@@ -999,8 +993,7 @@ public class ExportExcel<T> {
             fs = new POIFSFileSystem(is);
             wb = new HSSFWorkbook(fs);
         } catch (IOException e) {
-            // System.out.println("读取Excel  没有找到文件");
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelCommitWorkContent 执行失败", e);
         }
         sheet = wb.getSheetAt(0);
 
@@ -1084,8 +1077,7 @@ public class ExportExcel<T> {
             fs = new POIFSFileSystem(is);
             wb = new HSSFWorkbook(fs);
         } catch (IOException e) {
-            // System.out.println("读取Excel  没有找到文件");
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelInOutContent 执行失败", e);
         }
         sheet = wb.getSheetAt(0);
         // 得到总行数
@@ -1149,8 +1141,7 @@ public class ExportExcel<T> {
             fs = new POIFSFileSystem(is);
             wb = new HSSFWorkbook(fs);
         } catch (IOException e) {
-            // System.out.println("读取Excel  没有找到文件");
-            //e.printStackTrace();
+            Log.e(TAG, "readExcelSaveInfo 执行失败", e);
         }
         sheet = wb.getSheetAt(0);
 

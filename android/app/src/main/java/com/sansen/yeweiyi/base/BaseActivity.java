@@ -1,4 +1,5 @@
 package com.sansen.yeweiyi.base;
+import android.util.Log;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
@@ -466,7 +467,7 @@ public abstract class BaseActivity extends FragmentActivity implements
 //                }
 //            }
             } catch (Exception e) {
-                //e.printStackTrace();
+                Log.e("BaseActivity", "onReceiveLocation 执行失败", e);
             }
 
 
