@@ -110,6 +110,10 @@ Both produce a *silent false negative*, which is the worst possible failure mode
 
 Also note resources can only be reached by name via `getIdentifier()` — this project has none, so `R.` / `@string/` references are exhaustive.
 
+## Refactor planning uses OpenSpec
+
+`docs/重构方案.md` records the original 5-phase plan and what's been measured/verified so far. As of 2026-08-07, the two not-yet-started phases (阶段2 分层, 阶段3 拆 MainActivity) have been converted into OpenSpec changes under `openspec/changes/` — each has `proposal.md` (why/what/capabilities), `design.md` (decisions/risks), delta `specs/` (behavior contracts), and `tasks.md` (the actual execution checklist; treat this as the source of truth over the prose in 重构方案.md for those two phases). Run `npx @fission-ai/openspec@latest status --change <name>` to check progress, or `openspec list` for an overview. New phases of work on this refactor should go through `openspec change new` rather than free-form doc edits.
+
 ## Known landmines
 
 Traps that compile cleanly and fail at runtime — check these before refactoring:
