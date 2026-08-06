@@ -31,9 +31,15 @@ Within `app/src/main/java` itself there are also several non-namespaced top-leve
 ./gradlew :app:testDebugUnitTest
 ```
 
-### ⚠️ Toolchain may be absent — verify before trusting any build claim
+### Toolchain is present on this machine — but still verify before claiming a build passed
 
-As of 2026-07-31 the macOS checkout has **no JDK and no Android SDK** (`local.properties` points at `D:\SDK`, a Windows path — the project was set up on Windows). On such a machine nothing can be compiled or run, so any code change is unverified. Check `java -version` before claiming a build or test passed, and say so plainly when it could not be run.
+As of 2026-08-07 this macOS checkout builds: JDK 11 (Temurin) plus an Android SDK at `~/Library/Android/sdk`, with `local.properties` pointing at it. `./gradlew :app:assembleDebug` and `:app:testDebugUnitTest` both succeed (38 tests, 0 failures).
+
+Two caveats that have already bitten:
+- Commits `6ae4e3f` through `ada562e` (阶段 0 and 阶段 1) were written *before* the toolchain existed and were merged unverified. Later commits are compile-verified.
+- `testDebugUnitTest` reports `UP-TO-DATE` and prints nothing when inputs haven't changed — a stale pass looks identical to a fresh one. Run `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest`, or read `app/build/test-results/testDebugUnitTest/*.xml`, before claiming tests passed.
+
+A green build here proves compilation only. **Nothing about serial/probe hardware behavior can be verified on this machine** — protocol changes still need a real device.
 
 ### Secrets are injected at build time — not hardcoded
 
