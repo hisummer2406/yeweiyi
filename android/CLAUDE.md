@@ -41,6 +41,12 @@ Two caveats that have already bitten:
 
 A green build here proves compilation only. **Nothing about serial/probe hardware behavior can be verified on this machine** — protocol changes still need a real device.
 
+### Line endings are LF, pinned by `.gitattributes`
+
+The repo was CRLF (Windows origin) until 2026-08-07, when commit `5c6e6a3` normalized all 410 text files to LF and added `.gitattributes` (`* text=auto eol=lf`; `*.bat` stays CRLF; binaries explicitly marked). Don't reintroduce CRLF, and don't let a bulk-edit script rewrite whole files — that is what produced the mixed state in the first place (a one-line `catch` fix in `MD5utils.java` showed up as `32+/31-`).
+
+`git blame` on any file older than that commit needs `-w`, or one-time `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
 ### Secrets are injected at build time — not hardcoded
 
 `app/build.gradle` reads `local.properties` and injects four values into `BuildConfig` (`PRODUCT_KEY`, `PRODUCT_SECRET`, `REQUEST_ENCRYPT_KEY`, `BASE_URL`); `ApiConfig` just re-exports them. `local.properties` is untracked — copy `local.properties.template` and fill it in. Missing keys log a `[配置缺失]` warning at build time and compile to empty strings (so the app builds but MQTT upload / request encryption silently fail).
