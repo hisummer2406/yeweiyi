@@ -1,3 +1,19 @@
+> ## ⏸ 本变更整体暂缓（2026-08-13，依据 `docs/重构方案.md` v2 第五节）
+>
+> **暂缓原因**：本变更是**新功能**，不是重构。在数据层结构尚未稳定时并行加功能，会同时污染两边——
+> 新接口会绑定到即将被拆掉的 `DBDataManager`，重构又要反过来改刚写的新代码。§2.1 现在就写着
+> 「若 Repository 已落地则加在 Repository，否则暂加在 `DBDataManager` 并标 TODO」，这个分叉本身就是征兆。
+>
+> **解除条件**（满足后即可恢复，任务内容无需改写）：
+> 1. `layer-data-and-hardware-boundaries` 的 §4 出入库（`StockRepository`）与 §3 交班（`ShiftRepository`）已落地
+>    —— 这两个正是本变更 §2 需要的持久化归属
+> 2. `harden-device-external-access` §2 LAN 鉴权已落地 —— 否则 §3 的写接口只能以零鉴权上线（见 §3.4）
+>
+> **暂缓期间不要做的事**：不要为了「先做一点」而单独实施 §1（MQTT 死主题分支）。它看似独立，
+> 但其处理逻辑最终要落到 Repository 上，提前实现只会制造一批待返工的代码。
+>
+> 任务清单以下内容保持原样，恢复时直接执行即可。
+
 ## 1. MQTT 死主题补处理分支（风险最低，现状是完全不处理，先做）
 
 - [ ] 1.1 在 `BackService.messageArrived()` 里为 `requestTankSet`（油罐配置）补处理分支：解析 payload，更新 `OilCanSet` 对应字段
