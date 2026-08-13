@@ -1,15 +1,26 @@
 ## 1. MQTT 凭据外置（最独立，最先做）
 
-- [ ] 1.1 `local.properties.template` 新增 `MQTT_USERNAME`/`MQTT_PASSWORD` 占位项，照抄 `PRODUCT_KEY` 等现有条目的注释风格
-- [ ] 1.2 `app/build.gradle` 新增读取逻辑，缺失时打印 `[配置缺失]` 警告，编译为空字符串（照抄现有四个凭据的模式）
-- [ ] 1.3 `config/ApiConfig.java` 新增对应常量并加 javadoc 说明
-- [ ] 1.4 `service/BackService.java` 里硬编码的 `userName="admin"`/`passWord="password"` 改为读取新常量
-- [ ] 1.5 跑 `./gradlew :app:assembleDebug`，确认编译通过（本地 `local.properties` 填入测试值）
+- [x] 1.1 `local.properties.template` 新增 `MQTT_USERNAME`/`MQTT_PASSWORD` 占位项，照抄 `PRODUCT_KEY` 等现有条目的注释风格
+- [x] 1.2 `app/build.gradle` 新增读取逻辑，缺失时打印 `[配置缺失]` 警告，编译为空字符串（照抄现有四个凭据的模式）
+- [x] 1.3 `config/ApiConfig.java` 新增对应常量并加 javadoc 说明
+- [x] 1.4 `service/BackService.java` 里硬编码的 `userName="admin"`/`passWord="password"` 改为读取新常量
+- [x] 1.5 跑 `./gradlew :app:assembleDebug`，确认编译通过（本地 `local.properties` 填入测试值）
 - [ ] 1.6 **生产环境完成一次真实凭据轮换**：在 broker 侧改掉这组硬编码值本身，不能只改代码引用方式——旧凭据已经在 git 历史里，必须视为已泄露
-- [ ] 1.7 更新 `CLAUDE.md` "Secrets are injected at build time" 一节，把这两个新凭据加进说明
+- [x] 1.7 更新 `CLAUDE.md` "Secrets are injected at build time" 一节，把这两个新凭据加进说明
 
 ## 2. LAN 接口鉴权
 
+> **2026-08-14 前置警告（实施 §1 时发现，已登记为 `docs/重构方案.md` 8.4）**：
+> `LoginHandler` → `LoginUser.loginUser()` → `db.isUserExist()` 查的是 `User` 表，
+> 而 `DaoHelp.createAdminUser()`（`:304`）在首次初始化时把该表播种为 **`admin`/`admin`**。
+> 即出厂设备的 LAN 登录接口接受默认口令。
+>
+> **token 的强度不会超过签发它的那道校验。** 若默认口令未处理，本任务组做完的结果是
+> 「用 admin/admin 换一个合法 token，然后畅通无阻」—— 看起来加了鉴权，实际没有。
+> 处理默认口令属行为变更，需产品侧先定方案（首次启动强制改密 / 产线逐台写随机口令），
+> 必须排在本组之前或与本组同批落地。
+
+- [ ] 2.0 **前置（不可跳过）**：确认默认口令 `admin`/`admin` 的处理方案已定案并落地，否则本组的 token 机制无实际防护价值
 - [ ] 2.1 `LoginHandler` 校验成功后生成随机 token（`UUID.randomUUID()`），存入内存 `Map<token, 过期时间>`，响应体带上该 token
 - [ ] 2.2 新增一个校验中间件/过滤器，供 `/alarm`、`/oilDischarge`、`/baseOilcan`、`/upload` 复用：检查请求头 `X-Auth-Token`，缺失或过期直接拒绝
 - [ ] 2.3 过期时间设为可配置常量（默认建议 24 小时，具体数值找产品侧确认）

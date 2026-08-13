@@ -30,6 +30,14 @@ sansen.requestEncryptKey=
 # 服务端基址，例如 http://<host>:<port>
 sansen.baseUrl=
 
+# MQTT broker 连接用户名（BackService.initMqttClient）
+# 曾经硬编码为 admin/password 并提交进 git 历史，那组凭据必须视为已泄露：
+# 填这里之前，先在 broker 侧把旧的那组改掉。
+sansen.mqttUsername=
+
+# MQTT broker 连接密码
+sansen.mqttPassword=
+
 # --- 开关（非敏感，缺失即为 false，不会告警）---
 
 # 探头报文录制。设为 true 后重新构建，设备会把探头轮询链路的输入报文与解析结果

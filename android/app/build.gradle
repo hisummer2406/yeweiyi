@@ -39,6 +39,8 @@ android {
         buildConfigField "String", "PRODUCT_SECRET", secretField('sansen.productSecret')
         buildConfigField "String", "REQUEST_ENCRYPT_KEY", secretField('sansen.requestEncryptKey')
         buildConfigField "String", "BASE_URL", secretField('sansen.baseUrl')
+        buildConfigField "String", "MQTT_USERNAME", secretField('sansen.mqttUsername')
+        buildConfigField "String", "MQTT_PASSWORD", secretField('sansen.mqttPassword')
         // 探头报文录制开关，默认关闭。见 manager/ProbeTrafficRecorder。
         buildConfigField "boolean", "PROBE_RECORDING", flagField('sansen.probeRecording')
         externalNativeBuild {

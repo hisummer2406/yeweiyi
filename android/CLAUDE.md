@@ -49,7 +49,9 @@ The repo was CRLF (Windows origin) until 2026-08-07, when commit `5c6e6a3` norma
 
 ### Secrets are injected at build time — not hardcoded
 
-`app/build.gradle` reads `local.properties` and injects four values into `BuildConfig` (`PRODUCT_KEY`, `PRODUCT_SECRET`, `REQUEST_ENCRYPT_KEY`, `BASE_URL`); `ApiConfig` just re-exports them. `local.properties` is untracked — copy `local.properties.template` and fill it in. Missing keys log a `[配置缺失]` warning at build time and compile to empty strings (so the app builds but MQTT upload / request encryption silently fail).
+`app/build.gradle` reads `local.properties` and injects six credential values into `BuildConfig` — `PRODUCT_KEY`, `PRODUCT_SECRET`, `REQUEST_ENCRYPT_KEY`, `BASE_URL`, plus `MQTT_USERNAME` / `MQTT_PASSWORD` (added 2026-08-14, previously hardcoded in `BackService`); `ApiConfig` just re-exports them. `local.properties` is untracked — copy `local.properties.template` and fill it in. Missing keys log a `[配置缺失]` warning at build time and compile to empty strings (so the app builds but MQTT upload / request encryption silently fail — `BackService.initMqttClient` logs a warning rather than falling back to any default account).
+
+There is also one non-secret **flag** on the same channel, injected via `flagField` instead of `secretField` (missing = `false`, no warning): `PROBE_RECORDING` (`sansen.probeRecording`) turns on `manager/ProbeTrafficRecorder`, which writes probe traffic to `/sdcard/yeweiyi-probe-record/` for golden-master capture. Keep it off in any build that ships.
 
 Credentials hardcoded before commit `6ae4e3f` are in git history and must be treated as leaked.
 

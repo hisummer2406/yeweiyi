@@ -24,4 +24,17 @@ public class ApiConfig {
 
     /** 服务端基址。目前无代码引用。 */
     public static final String BASE_URL = BuildConfig.BASE_URL;
+
+    /**
+     * MQTT broker 连接用户名，见 {@code BackService.initMqttClient()}。
+     *
+     * <p>2026-08-14 之前与密码一起硬编码在 {@code BackService} 里并已提交进 git 历史，
+     * 与本类顶部说明的那批凭据一样必须视为已泄露，需在 broker 侧完成轮换 ——
+     * 改成从配置读取只是让轮换成为可能，它本身不等于已经轮换。
+     * （旧值不在此复述：它已在 git 历史里，写进当前源码只是又留一份明文。）
+     */
+    public static final String MQTT_USERNAME = BuildConfig.MQTT_USERNAME;
+
+    /** MQTT broker 连接密码。同上：曾硬编码、已泄露、需轮换。 */
+    public static final String MQTT_PASSWORD = BuildConfig.MQTT_PASSWORD;
 }

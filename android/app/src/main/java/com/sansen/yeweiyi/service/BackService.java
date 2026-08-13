@@ -76,8 +76,12 @@ public class BackService extends Service {
     private static MqttClient client;
 
     private MqttConnectOptions options;
-    private String userName = "admin";
-    private String passWord = "password";
+    /**
+     * MQTT 连接凭据，构建期由 local.properties 注入，见 {@link ApiConfig#MQTT_USERNAME}。
+     * 未配置时为空字符串 —— 不回退到任何默认账号，连接会失败并在日志中留下记录（见 initMqttClient）。
+     */
+    private final String userName = ApiConfig.MQTT_USERNAME;
+    private final String passWord = ApiConfig.MQTT_PASSWORD;
 
 
     /**
@@ -211,6 +215,12 @@ public class BackService extends Service {
 
     public boolean initMqttClient() {
         try {
+            if (StringUtils.isEmpty(userName) || StringUtils.isEmpty(passWord)) {
+                // 构建期没注入凭据。不静默用默认账号顶上 —— 那正是本次要消除的东西。
+                // 连接大概率会被 broker 拒绝，此处先留下可定位的日志，避免现场只看到"连不上"。
+                Log.w(TAG, "MQTT 凭据未配置（local.properties 缺 sansen.mqttUsername/mqttPassword），"
+                        + "本次连接将以空凭据发起，预期会被 broker 拒绝");
+            }
             if (clientid != null) {
 //                Log.i(TAG, clientid + " 222");
                 client = new MqttClient(HOST, clientid, new MemoryPersistence());
