@@ -12,7 +12,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 探头报文录制器 —— golden master（特征化测试）的数据来源。
@@ -39,11 +41,8 @@ import java.util.Locale;
  * <p><b>覆盖范围：</b>只覆盖探头轮询路径的三种 probeType（0 中诚 / 1 LD / 2 LD2）。
  * {@code VR350Factory} 走的是 PC 通信线程，不经这条路径、也不回调 {@code hexDataParseFinish}，不在本类范围内。
  *
- * <p><b>格式：</b>每行一条记录，Tab 分隔，首列是记录类型。hex 报文与字段值都不含 Tab，可直接 split。
- * <pre>
- * IN   &lt;epochMillis&gt;  &lt;probeType&gt;  &lt;oilCanPos&gt;  &lt;hex报文&gt;
- * OUT  &lt;epochMillis&gt;  &lt;probeType&gt;  &lt;oilCanPos&gt;  oilLevel=..  waterLevel=..  ...
- * </pre>
+ * <p><b>格式：</b>见 {@link ProbeTrafficFormat}。格式的定义与解析都在那里，本类只负责落盘 ——
+ * 读取方（测试侧的 fixture 加载器）用的是同一份定义，不存在两边各写各的解析而漂移的可能。
  */
 public final class ProbeTrafficRecorder {
 
@@ -56,7 +55,6 @@ public final class ProbeTrafficRecorder {
     private static final boolean ENABLED = BuildConfig.PROBE_RECORDING;
 
     private static final String DIR_NAME = "yeweiyi-probe-record";
-    private static final char SEP = '\t';
 
     private static final Object LOCK = new Object();
 
@@ -85,13 +83,8 @@ public final class ProbeTrafficRecorder {
         if (!ENABLED) {
             return;
         }
-        StringBuilder sb = new StringBuilder(96);
-        sb.append("IN").append(SEP)
-                .append(System.currentTimeMillis()).append(SEP)
-                .append(probeType).append(SEP)
-                .append(oilCanPos).append(SEP)
-                .append(hexFrame == null ? "" : hexFrame.replace(" ", ""));
-        write(sb.toString());
+        write(ProbeTrafficFormat.formatIn(
+                System.currentTimeMillis(), probeType, oilCanPos, hexFrame));
     }
 
     /**
@@ -106,30 +99,23 @@ public final class ProbeTrafficRecorder {
             return;
         }
         if (oilCan == null) {
-            write("OUT" + SEP + System.currentTimeMillis() + SEP + "-1" + SEP + "-1" + SEP + "null");
+            Log.w(TAG, "hexDataParseFinish 收到 null OilCan，跳过本条录制");
             return;
         }
-        StringBuilder sb = new StringBuilder(256);
-        sb.append("OUT").append(SEP)
-                .append(System.currentTimeMillis()).append(SEP)
-                .append(oilCan.getProbeType()).append(SEP)
-                .append(oilCan.getOilCanPos());
-        append(sb, "oilLevel", oilCan.getOilLevel());
-        append(sb, "waterLevel", oilCan.getWaterLevel());
-        append(sb, "temper", oilCan.getTemper());
-        append(sb, "oilVolume", oilCan.getOilVolume());
-        append(sb, "waterVolume", oilCan.getWaterVolume());
-        append(sb, "oilWeight", oilCan.getOilWeight());
-        append(sb, "oilRatio", oilCan.getOilRatio());
-        append(sb, "surPlus", oilCan.getSurPlus());
-        append(sb, "canAddOilWeight", oilCan.getCanAddOilWeight());
-        append(sb, "alarmByte", oilCan.getAlarmByte());
-        append(sb, "lastTime", oilCan.getLastTime());
-        write(sb.toString());
-    }
-
-    private static void append(StringBuilder sb, String key, Object value) {
-        sb.append(SEP).append(key).append('=').append(String.valueOf(value));
+        Map<String, String> fields = new LinkedHashMap<String, String>();
+        fields.put("oilLevel", String.valueOf(oilCan.getOilLevel()));
+        fields.put("waterLevel", String.valueOf(oilCan.getWaterLevel()));
+        fields.put("temper", String.valueOf(oilCan.getTemper()));
+        fields.put("oilVolume", String.valueOf(oilCan.getOilVolume()));
+        fields.put("waterVolume", String.valueOf(oilCan.getWaterVolume()));
+        fields.put("oilWeight", String.valueOf(oilCan.getOilWeight()));
+        fields.put("oilRatio", String.valueOf(oilCan.getOilRatio()));
+        fields.put("surPlus", String.valueOf(oilCan.getSurPlus()));
+        fields.put("canAddOilWeight", String.valueOf(oilCan.getCanAddOilWeight()));
+        fields.put("alarmByte", String.valueOf(oilCan.getAlarmByte()));
+        fields.put("lastTime", String.valueOf(oilCan.getLastTime()));
+        write(ProbeTrafficFormat.formatOut(System.currentTimeMillis(),
+                oilCan.getProbeType(), oilCan.getOilCanPos(), fields));
     }
 
     private static void write(String line) {

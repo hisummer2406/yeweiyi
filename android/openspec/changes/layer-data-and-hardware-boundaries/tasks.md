@@ -18,10 +18,21 @@
 - [x] 1.4 把本次发现的缺陷登记到 `docs/重构方案.md` 第八节（**只登记不修**）：`ProbeReciveDataListener` 全项目零实现、`setProbeReciveData` 零调用，而 `:327` 对其无条件解引用；字段名 `isStopProbe` 语义反转（`stopProbeThread()` 置 `false`、`startProbeThread()` 置 `true`），故调用 `stopProbeThread()` 且串口仍打开时会走进该分支并 NPE
 - [x] 1.5 跑 `./gradlew :app:assembleDebug`，确认编译通过
 - [ ] 1.6 **现场采集（不可跳过；档期不由本地控制，应最早排期）**：正常工况跑满一天（覆盖昼夜温差，使温度字段拿到有意义的范围）；尽量制造报警工况（高位、低位、探头断线）；**每种在用的探头型号都要采到**——这一条决定 golden master 的覆盖面。注意本轮只覆盖探头轮询路径的三种 `probeType`（0 中诚 / 1 LD / 2 LD2），VR350 属 PC 通信路径，不在本轮范围（见 spec 说明）
-- [ ] 1.7 把采集结果整理为版本化 fixture 放入 `app/src/test/resources/`，并记录每份 fixture 对应的探头型号与采集工况
-- [ ] 1.8 建立重放测试：喂入 1.7 的 hex 报文，断言解析出的 `OilCan` 逐字段与录制快照一致。**此时测的是尚未改动的现有代码**，作用是锁死当前行为作为基线（characterization test，不问「应该输出什么」，只锁死「现在输出什么」）
-- [ ] 1.9 跑 `:app:cleanTestDebugUnitTest :app:testDebugUnitTest`，确认新增重放测试全绿
-- [ ] 1.10 若现场档期迟迟无法落实，启用降级方案：依据厂商协议文档反推构造 fixture，并**在本任务下明确记录覆盖面缺口**（构造报文覆盖不了现场的畸形帧与时序异常），不得默认它等价于真实采集
+
+> **2026-08-14 修正 1.8 的做法**：原文写「重放测试**此时测的是尚未改动的现有代码**」——**做不到**。
+> `LDCompany`/`LD2Company`/`ZhongChengCompany` 三个解析器都 `import android.content.Context`、`SparseArray`，
+> 且 `probeInfoPase` 内部调 `MyApplication.getInstance().getmOilcanDataManager()`，纯 JVM 跑不起来
+> ——这正是 §2 要解决的问题本身，不能作为 §2 的前置。
+>
+> 但这不构成阻塞：**录制文件本身就是基线**。.tsv 里每一对 (输入报文 → 解析结果) 都是真实硬件在
+> 真实工况下产生的，比在 JVM 上拿 mock 单例重放旧代码是更强的证据。所以基线以**数据**形式存在，
+> 而非以「可执行的旧代码测试」形式存在；等价性断言在 §2.2 接上新 `XxxParser` 时才真正生效。
+
+- [x] 1.7 建立 fixture 导入工具与重放骨架（不依赖现场数据，本机完成）：`tools/prepare-probe-fixture.sh` 把设备采集文件导入 `app/src/test/resources/goldenmaster/` 并在 `manifest.tsv` 登记探头型号/采集日期/工况；测试侧 `ProbeTrafficFixture`（IN/OUT 顺序配对）、`SnapshotComparator`（逐字段比对，默认零容差，排除 `lastTime`）、`FixtureManifest`
+- [x] 1.8 用合成样本验证骨架自身可信：`GoldenMasterHarnessTest` 覆盖格式往返、非法行跳过、断电截断、IN 后接 IN 的无产出配对、比对器的差异定位与容差语义。**骨架不可信的话现场采集回来的数据也没有意义，而那时才发现的代价是重跑一次现场**
+- [ ] 1.9 现场数据回来后：用 `tools/prepare-probe-fixture.sh` 逐份导入并登记；`ProbeReplayTest` 会自动从「跳过」转为实际校验（数据完整性、必须存在成功解析的样本、清单声明的探头型号确实出现在数据里）
+- [ ] 1.10 跑 `:app:cleanTestDebugUnitTest :app:testDebugUnitTest`，确认 `ProbeReplayTest` 由 skipped 转为全绿
+- [ ] 1.11 若现场档期迟迟无法落实，启用降级方案：依据厂商协议文档反推构造 fixture，并**在本任务下明确记录覆盖面缺口**（构造报文覆盖不了现场的畸形帧与时序异常），不得默认它等价于真实采集
 
 ## 2. factory/ 纯解析逻辑抽取（依赖第 1 组；本变更的模板验证批次）
 

@@ -1,0 +1,23 @@
+# 合成样本 —— 只用于验证加载器与比对器本身，不是现场数据。
+# 现场采集回来的真实 fixture 请按 tools/prepare-probe-fixture.sh 生成，命名形如 probe-<日期>-<型号>.tsv。
+#
+# 本文件覆盖加载器必须正确处理的几种情形：
+#   1) 正常的 IN/OUT 配对
+#   2) 一条 IN 之后直接跟下一条 IN（解析失败/CRC 错，无产出）
+#   3) 格式非法的行（应跳过并计数，不让整份 fixture 作废）
+#   4) 注释行与空行
+#   5) 文件以一条没有 OUT 的 IN 结尾（断电截断）
+
+IN	1756684800000	1	3	0103040000000AB8FA
+OUT	1756684800012	1	3	oilLevel=1234.0	waterLevel=56.0	temper=21.5	oilVolume=800.0	waterVolume=30.0	oilWeight=640.0	oilRatio=75	surPlus=200.0	canAddOilWeight=160.0	alarmByte=0	lastTime=1756684800012
+
+IN	1756684800100	1	3	0103040000FFFFDEAD
+IN	1756684800200	0	1	FEFE0103040000000A1234
+
+OUT	1756684800212	0	1	oilLevel=2000.0	waterLevel=10.0	temper=19.0	oilVolume=1500.0	waterVolume=8.0	oilWeight=1200.0	oilRatio=60	surPlus=500.0	canAddOilWeight=300.0	alarmByte=0	lastTime=1756684800212
+
+这一行不是合法记录，应被跳过
+IN	notanumber	1	3	DEADBEEF
+OUT	1756684800300	2	5	oilLevel=
+
+IN	1756684800400	2	5	0203040000001BCDEF
