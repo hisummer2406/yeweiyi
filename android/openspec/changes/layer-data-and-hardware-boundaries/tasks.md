@@ -7,19 +7,25 @@
 
 本组不改任何业务逻辑，只增加录制能力并采集数据。**没有这组产出，第 2 组的等价性验证无从谈起。**
 
-- [ ] 1.1 在 `manager/SerialPortManager` 的 `ProbeReciveDataListener.reciveData(byte[])`（约 `:339`）加录制钩子：记录原始字节帧 + 时间戳 + 当时的探头类型
-- [ ] 1.2 在 `IParseDataListener.hexDataParseFinish(OilCan)`（约 `:418`）加录制钩子：记录解析产出的 `OilCan` 全字段快照，与 1.1 的输入帧配对
-- [ ] 1.3 录制开关默认关闭，经 `local.properties` 注入的 `BuildConfig` 标志启用（照抄现有四个凭据的注入模式），落盘到 `/sdcard/`
-- [ ] 1.4 跑 `./gradlew :app:assembleDebug`，确认编译通过
-- [ ] 1.5 **现场采集（不可跳过；档期不由本地控制，应最早排期）**：正常工况跑满一天（覆盖昼夜温差，使温度字段拿到有意义的范围）；尽量制造报警工况（高位、低位、探头断线）；**每种在用的探头型号都要采到**——这一条决定 golden master 的覆盖面
-- [ ] 1.6 把采集结果整理为版本化 fixture 放入 `app/src/test/resources/`，并记录每份 fixture 对应的探头型号与采集工况
-- [ ] 1.7 建立重放测试：喂入 1.6 的字节帧，断言解析出的 `OilCan` 逐字段与录制快照一致。**此时测的是尚未改动的现有代码**，作用是锁死当前行为作为基线（characterization test，不问「应该输出什么」，只锁死「现在输出什么」）
-- [ ] 1.8 跑 `:app:cleanTestDebugUnitTest :app:testDebugUnitTest`，确认新增重放测试全绿
-- [ ] 1.9 若现场档期迟迟无法落实，启用降级方案：依据厂商协议文档反推构造 fixture，并**在本任务下明确记录覆盖面缺口**（构造报文覆盖不了现场的畸形帧与时序异常），不得默认它等价于真实采集
+> **2026-08-14 接缝更正**：原 1.1 指定的 `ProbeReciveDataListener.reciveData(byte[])`（`:339`）**不是探头数据路径**——
+> 全项目无人调用 `setProbeReciveData`，该监听器恒为 `null`，其唯一调用点 `:327` 还位于一个进入即 NPE 的分支（见 1.4）。
+> 真正的输入接缝在 `RequestThread.run()` 的 `:260–263`。且录 hex 字符串比录原始 `byte[]` 更合适：
+> `probeInfoPase(String, IParseDataListener)` 吃的就是它，将来抽出的 `XxxParser` 吃的也是它，重放保真度更高。
+
+- [x] 1.1 在 `manager/SerialPortManager` 的 `RequestThread.run()` 中，`data = DataUtils.bytesToHexString(bytes, bytes.length)`（约 `:263`）之后、分发给 `probeInfoPase` 之前加录制钩子：记录 hex 报文 + 时间戳 + `mOilCan.getProbeType()` + `mOilCan.getOilCanPos()`
+- [x] 1.2 在 `IParseDataListener.hexDataParseFinish(OilCan)`（约 `:418`）加录制钩子：记录解析产出的 `OilCan` 全字段快照。已确认 `probeInfoPase` 在**同线程同步**回调本方法，因此与 1.1 的输入按线程内先后顺序配对即成立，无需额外关联 id
+- [x] 1.3 录制开关默认关闭，经 `local.properties` 注入的 `BuildConfig` 标志启用（照抄现有四个凭据的注入模式），落盘到 `/sdcard/`
+- [x] 1.4 把本次发现的缺陷登记到 `docs/重构方案.md` 第八节（**只登记不修**）：`ProbeReciveDataListener` 全项目零实现、`setProbeReciveData` 零调用，而 `:327` 对其无条件解引用；字段名 `isStopProbe` 语义反转（`stopProbeThread()` 置 `false`、`startProbeThread()` 置 `true`），故调用 `stopProbeThread()` 且串口仍打开时会走进该分支并 NPE
+- [x] 1.5 跑 `./gradlew :app:assembleDebug`，确认编译通过
+- [ ] 1.6 **现场采集（不可跳过；档期不由本地控制，应最早排期）**：正常工况跑满一天（覆盖昼夜温差，使温度字段拿到有意义的范围）；尽量制造报警工况（高位、低位、探头断线）；**每种在用的探头型号都要采到**——这一条决定 golden master 的覆盖面。注意本轮只覆盖探头轮询路径的三种 `probeType`（0 中诚 / 1 LD / 2 LD2），VR350 属 PC 通信路径，不在本轮范围（见 spec 说明）
+- [ ] 1.7 把采集结果整理为版本化 fixture 放入 `app/src/test/resources/`，并记录每份 fixture 对应的探头型号与采集工况
+- [ ] 1.8 建立重放测试：喂入 1.7 的 hex 报文，断言解析出的 `OilCan` 逐字段与录制快照一致。**此时测的是尚未改动的现有代码**，作用是锁死当前行为作为基线（characterization test，不问「应该输出什么」，只锁死「现在输出什么」）
+- [ ] 1.9 跑 `:app:cleanTestDebugUnitTest :app:testDebugUnitTest`，确认新增重放测试全绿
+- [ ] 1.10 若现场档期迟迟无法落实，启用降级方案：依据厂商协议文档反推构造 fixture，并**在本任务下明确记录覆盖面缺口**（构造报文覆盖不了现场的畸形帧与时序异常），不得默认它等价于真实采集
 
 ## 2. factory/ 纯解析逻辑抽取（依赖第 1 组；本变更的模板验证批次）
 
-- [ ] 2.1 为 `LDCompany`/`LD2Company`/`ZhongChengCompany`/`VR350Factory` 各自抽取一个不依赖 `android.*` 的 `XxxParser` 类，承载字节级解析逻辑（9 个 `factory/` 文件中现有 6 个 `import android.*`）
+- [ ] 2.1 为 `ZhongChengCompany`/`LDCompany`/`LD2Company` 各自抽取一个不依赖 `android.*` 的 `XxxParser` 类，承载字节级解析逻辑（9 个 `factory/` 文件中现有 6 个 `import android.*`）。**`VR350Factory` 本轮不做**——它是 `PCDataFactory`（PC 通信路径），不经探头分发 switch、不回调 `hexDataParseFinish`，第 1 组也采不到它的 fixture，没有等价性验证手段就不动它
 - [ ] 2.2 把第 1 组的重放测试改为直接打在新抽出的 `XxxParser` 上，脱离 Android 运行时
 - [ ] 2.3 抽取前后用同一批 fixture 报文跑输出 diff，**确认零差异后再合入**（对应 spec「抽取前后行为等价」；注意 `CLAUDE.md` "Known landmines" 记的负数温度、CRC 补零等边界）
 - [ ] 2.4 原 `XxxCompany` 退化为薄适配层，只保留 `Context`/`SparseArray` 相关部分，内部委托 `XxxParser`

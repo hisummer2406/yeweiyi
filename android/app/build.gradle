@@ -18,6 +18,12 @@ def secretField = { String propertyName ->
     }
     return "\"${value}\""
 }
+// 开关类配置：与 secretField 走同一条 local.properties -> BuildConfig 通道，
+// 但缺失时不告警 —— 缺失就是默认值 false，是正常状态而非配置遗漏。
+def flagField = { String propertyName ->
+    def value = localProperties.getProperty(propertyName)
+    return Boolean.parseBoolean(value == null ? "false" : value.trim()).toString()
+}
 
 android {
     compileSdkVersion 27
@@ -33,6 +39,8 @@ android {
         buildConfigField "String", "PRODUCT_SECRET", secretField('sansen.productSecret')
         buildConfigField "String", "REQUEST_ENCRYPT_KEY", secretField('sansen.requestEncryptKey')
         buildConfigField "String", "BASE_URL", secretField('sansen.baseUrl')
+        // 探头报文录制开关，默认关闭。见 manager/ProbeTrafficRecorder。
+        buildConfigField "boolean", "PROBE_RECORDING", flagField('sansen.probeRecording')
         externalNativeBuild {
             cmake {
                 cppFlags "-frtti -fexceptions"

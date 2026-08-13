@@ -29,3 +29,12 @@ sansen.requestEncryptKey=
 
 # 服务端基址，例如 http://<host>:<port>
 sansen.baseUrl=
+
+# --- 开关（非敏感，缺失即为 false，不会告警）---
+
+# 探头报文录制。设为 true 后重新构建，设备会把探头轮询链路的输入报文与解析结果
+# 成对写到 /sdcard/yeweiyi-probe-record/probe-<日期>.tsv，用于建立 golden master
+# 重放测试（见 manager/ProbeTrafficRecorder 与 docs/重构方案.md 第 1 步）。
+#
+# 仅在需要去现场采集数据时开启。日常构建与出厂固件保持关闭 —— 它会持续写盘。
+sansen.probeRecording=

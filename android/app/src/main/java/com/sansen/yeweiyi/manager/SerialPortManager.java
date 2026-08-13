@@ -264,6 +264,10 @@ public class SerialPortManager implements IParseDataListener {
                                         }
                                         if (StringUtils.isNotEmpty(data)) {
 
+                                            // golden master 录制入口（默认关闭）。录在这里而不是更上游的
+                                            // serialPort.receiveData()，因为 data 才是 probeInfoPase 真正吃进去的东西。
+                                            ProbeTrafficRecorder.recordRequest(data, mOilCan.getProbeType(), mOilCan.getOilCanPos());
+
                                             switch (mOilCan.getProbeType()) {
                                                 case 0:
                                                     try {
@@ -417,6 +421,9 @@ public class SerialPortManager implements IParseDataListener {
     @Override
     public void hexDataParseFinish(OilCan oilCan) {
 //        Log.i("刷新数据", oilCan.getOilCanPos() + "   " + oilCan.getOilLevel());
+        // golden master 录制出口（默认关闭）。probeInfoPase 是同线程同步回调，
+        // 因此同一线程内最近一条 IN 记录就是本条 OUT 的输入，无需额外关联 id。
+        ProbeTrafficRecorder.recordParsed(oilCan);
         // 每次更新完毕 都要去更新 oildataMagager
         mOilCanDataManager.refreshData(oilCan);
 
