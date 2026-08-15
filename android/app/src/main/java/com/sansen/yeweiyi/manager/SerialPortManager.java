@@ -291,17 +291,27 @@ public class SerialPortManager implements IParseDataListener {
                                                         Log.e(TAG, "LD协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
                                                                 + " 原始报文=" + data, e);
                                                     }
-                                                    // FIXME 此处缺少 break，会穿透到 case 2，
-                                                    // 导致 LD 探头的解析结果被 LD2 的结果覆盖。
-                                                    // 补 break 会改变现场设备行为，需结合硬件实测后再定，故暂不修改。
+                                                    // 2026-08-15 补上此处原先漏写的 break。
+                                                    // 漏写时执行会穿透到 case 2，同一帧 LD 报文再被 LD2Company 解析一次。
+                                                    // 后果不止是"LD 结果被覆盖"：LD2Company 不校验 CRC（只判 bytes.length > 6），
+                                                    // LD 的 9 字节应答直接通过；它按 decimal = bytes[2]/2 循环（LD 应答的字节
+                                                    // 计数位是 4，故循环 2 次），并按通道号 "0"+(i+1) 匹配油罐 —— 于是 LD 探头
+                                                    // 的正常应答会被当作两路 4-20mA 通道值，写到探针地址 01、02 的油罐上。
+                                                    // 详见 docs/重构方案.md 8.2 与 issue #5。
+                                                    break;
                                                 case 2:
-                                                    // 注意：probeType==1 会穿透到这里（上面缺 break）。
-                                                    // 此处的声明会覆盖 LDCompany，使录制文件如实反映
-                                                    // "同一帧先后被两个解析器处理、后者覆盖前者"这一现状。
                                                     ProbeTrafficRecorder.setActiveParser("LD2Company");
                                                     isRight = LD2Company
                                                             .getInstance()
                                                             .probeInfoPase(data, SerialPortManager.this);
+                                                    break;
+                                                default:
+                                                    // 配了一个没有解析器的探头类型。此前静默无效，现在留下可定位的记录 ——
+                                                    // 无人值守设备上"配错探头类型"与"探头没接上"的现象都是没有读数。
+                                                    // 只记日志：不设置 isRight、不抛异常、不影响后续 crcError() 调用。
+                                                    Log.w(TAG, "未知探头类型 probeType=" + mOilCan.getProbeType()
+                                                            + ", 油罐位=" + mOilCan.getOilCanPos()
+                                                            + ", 本次不解析。请核对探针配置表。");
                                                     break;
                                             }
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
