@@ -216,10 +216,15 @@ public class BackService extends Service {
     public boolean initMqttClient() {
         try {
             if (StringUtils.isEmpty(userName) || StringUtils.isEmpty(passWord)) {
-                // 构建期没注入凭据。不静默用默认账号顶上 —— 那正是本次要消除的东西。
-                // 连接大概率会被 broker 拒绝，此处先留下可定位的日志，避免现场只看到"连不上"。
-                Log.w(TAG, "MQTT 凭据未配置（local.properties 缺 sansen.mqttUsername/mqttPassword），"
-                        + "本次连接将以空凭据发起，预期会被 broker 拒绝");
+                // 构建期没注入凭据，直接放弃本次连接。
+                //
+                // 不能"带着空凭据试一次"：Paho 0.4.0 的 MqttConnectOptions.setUserName 对
+                // 空白字符串会抛 IllegalArgumentException（字节码里 trim().equals("") 即 throw，
+                // 且发生在字段赋值之前），异常会被下面那个宽泛的 catch 吞掉，connect() 根本执行不到。
+                // 那样日志里只会是一片安静，排查的人会去查 broker 或网络，而问题在 local.properties。
+                Log.e(TAG, "MQTT 凭据未配置（local.properties 缺 sansen.mqttUsername/mqttPassword），"
+                        + "本次不发起连接。请照 local.properties.template 填写后重新构建。");
+                return false;
             }
             if (clientid != null) {
 //                Log.i(TAG, clientid + " 222");
@@ -251,7 +256,9 @@ public class BackService extends Service {
                 }
             }
         } catch (Exception e) {
-            //e.printStackTrace();
+            // 这个 catch 范围很宽，此前不打任何日志 —— MQTT 初始化的任何失败
+            // （连接被拒、配置非法、host 解析不了）在现场都表现为"什么都没发生"。
+            Log.e(TAG, "MQTT 初始化失败, HOST=" + HOST + " clientid=" + clientid, e);
             if (!SharePreManager.getEnableNet()) {
                 OilMessage oilMessage = new OilMessage();
                 oilMessage.setType(OilMessage.NET_ERR_CONN);

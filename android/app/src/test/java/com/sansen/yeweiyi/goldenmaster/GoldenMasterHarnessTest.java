@@ -4,6 +4,7 @@ import com.sansen.yeweiyi.manager.ProbeTrafficFormat;
 
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,24 +51,51 @@ public class GoldenMasterHarnessTest {
     }
 
     @Test
-    public void formatOut往返后每个字段都还原() {
+    public void 末位空字段仍能读回来() {
+        // 回归：parse 曾对整行 trim()，把 formatIn(null) 写出的行尾空字段连同分隔符一起吃掉，
+        // 导致列数不足被判为非法行 —— 写得出却读不回来，往返保证不成立。
+        String line = ProbeTrafficFormat.formatIn(1L, 0, 1, null);
+        ProbeTrafficFormat.Record r = ProbeTrafficFormat.parse(line);
+
+        assertNotNull("末位为空字段的行必须能解析", r);
+        assertEquals("", r.hexFrame);
+    }
+
+    @Test
+    public void 行尾换行符不影响解析() {
+        String line = ProbeTrafficFormat.formatIn(1L, 0, 1, "AABB");
+        assertNotNull(ProbeTrafficFormat.parse(line + "\n"));
+        assertNotNull(ProbeTrafficFormat.parse(line + "\r\n"));
+        assertEquals("AABB", ProbeTrafficFormat.parse(line + "\r\n").hexFrame);
+    }
+
+    @Test
+    public void formatOut往返后每个字段与解析器都还原() {
         Map<String, String> fields = new LinkedHashMap<String, String>();
         fields.put("oilLevel", "1234.0");
         fields.put("temper", "-5.5");
         fields.put("alarmByte", "0");
 
         ProbeTrafficFormat.Record r = ProbeTrafficFormat.parse(
-                ProbeTrafficFormat.formatOut(999L, 2, 7, fields));
+                ProbeTrafficFormat.formatOut(999L, 2, 7, "LD2Company", fields));
 
         assertNotNull(r);
         assertTrue(r.isOut());
         assertEquals(2, r.probeType);
         assertEquals(7, r.oilCanPos);
+        assertEquals("LD2Company", r.parser);
         assertEquals(3, r.fields.size());
         assertEquals("1234.0", r.fields.get("oilLevel"));
         // 负温度：本设备会读到负值，格式层不能把负号弄丢
         assertEquals("-5.5", r.fields.get("temper"));
         assertEquals("0", r.fields.get("alarmByte"));
+    }
+
+    @Test
+    public void 解析器缺省时记为占位符() {
+        ProbeTrafficFormat.Record r = ProbeTrafficFormat.parse(
+                ProbeTrafficFormat.formatOut(1L, 0, 1, null, new LinkedHashMap<String, String>()));
+        assertEquals(ProbeTrafficFormat.UNKNOWN_PARSER, r.parser);
     }
 
     @Test
@@ -91,44 +119,83 @@ public class GoldenMasterHarnessTest {
         assertTrue(ProbeTrafficFormat.OUT_FIELDS.contains("lastTime"));
     }
 
-    // ---------- 加载器：IN/OUT 按顺序配对 ----------
+    // ---------- 加载器：一帧 IN 对应它之后、下一条 IN 之前的全部 OUT ----------
+
+    private ProbeTrafficFixture fixture() throws Exception {
+        ProbeTrafficFixture f = ProbeTrafficFixture.load("synthetic-loader-check.tsv");
+        assertNotNull("合成样本应当存在于 test resources", f);
+        return f;
+    }
 
     @Test
-    public void 加载器按顺序配对并容忍脏行() throws Exception {
-        ProbeTrafficFixture fixture = ProbeTrafficFixture.load("synthetic-loader-check.tsv");
-        assertNotNull("合成样本应当存在于 test resources", fixture);
+    public void 加载器正确切分配对并统计异常() throws Exception {
+        ProbeTrafficFixture f = fixture();
 
-        List<ProbeTrafficFixture.Pair> pairs = fixture.pairs();
-        assertEquals("应得到 4 组配对", 4, pairs.size());
-        assertEquals("应跳过 2 行非法记录", 2, fixture.skippedLines());
+        assertEquals("应得到 5 组配对", 5, f.pairs().size());
+        assertEquals("应跳过 2 行非法记录", 2, f.skippedLines());
+        assertEquals("应记录 1 条孤立 OUT", 1, f.orphanOutRecords());
+        assertEquals("产出总数应为 6 条", 6, f.totalResultCount());
+    }
 
-        // 1) 正常配对
-        assertTrue(pairs.get(0).hasParsedResult());
-        assertEquals("0103040000000AB8FA", pairs.get(0).hexFrame());
-        assertEquals("1234.0", pairs.get(0).parsed.fields.get("oilLevel"));
+    @Test
+    public void 一帧产出多条时全部保留() throws Exception {
+        // 回归（HIGH）：早先版本一帧只取第一条 OUT，其余静默丢弃且不计数。
+        // LD2Company 对帧内每个探针各回调一次，一个 4 罐站点会因此只留下 1 号罐的基线，
+        // 而计数上完全看不出来 —— 这类损失只有重跑一次现场才能发现。
+        ProbeTrafficFixture.Pair multi = fixture().pairsOfProbeType(2).get(0);
 
-        // 2) IN 之后直接跟下一条 IN —— 无产出配对，同样要保留：
-        //    它锁定的是"这种输入不产生解析结果"这一行为
-        assertFalse(pairs.get(1).hasParsedResult());
-        assertEquals("0103040000FFFFDEAD", pairs.get(1).hexFrame());
+        assertEquals("一帧 LD2 报文的 3 条产出必须全部保留", 3, multi.results.size());
+        assertEquals(5, multi.results.get(0).oilCanPos);
+        assertEquals(6, multi.results.get(1).oilCanPos);
+        assertEquals(7, multi.results.get(2).oilCanPos);
+    }
 
-        // 3) 另一种探头类型的正常配对
-        assertTrue(pairs.get(2).hasParsedResult());
-        assertEquals(0, pairs.get(2).request.probeType);
+    @Test
+    public void 能识别一帧被两个解析器先后处理() throws Exception {
+        // 回归（HIGH）：分发 switch 的 case 1 缺 break（8.2），LD 帧会先后经
+        // LDCompany 与 LD2Company 解析。若不记录产出者，fixture 会把 LDCompany 的产出
+        // 当作 probeType 1 的基线，而设备实际采用的是 LD2Company 的 —— 用这样的基线
+        // 验证抽取出的 LDParser 会显示零差异，却与真实行为背离。
+        ProbeTrafficFixture.Pair fallThrough = null;
+        for (ProbeTrafficFixture.Pair p : fixture().pairsOfProbeType(1)) {
+            if (p.producingParsers().size() > 1) {
+                fallThrough = p;
+            }
+        }
+        assertNotNull("合成样本里应有一组 fall-through 配对", fallThrough);
 
-        // 4) 文件以没有 OUT 的 IN 结尾（断电截断）
-        assertFalse(pairs.get(3).hasParsedResult());
+        assertEquals(Arrays.asList("LDCompany", "LD2Company"),
+                new java.util.ArrayList<String>(fallThrough.producingParsers()));
+        assertEquals(1, fallThrough.resultsFrom("LDCompany").size());
+        assertEquals(1, fallThrough.resultsFrom("LD2Company").size());
+
+        // 设备实际采用的是最后写入的那条 —— 即 LD2Company 的结果覆盖了 LDCompany 的
+        assertEquals("LD2Company", fallThrough.effectiveResult().parser);
+        assertEquals("2222.0", fallThrough.effectiveResult().fields.get("oilLevel"));
+    }
+
+    @Test
+    public void 无产出的配对被保留() throws Exception {
+        // IN 后直接跟 IN（解析失败/CRC 错），以及以 IN 结尾（断电截断）。
+        // 这类样本锁定的是"这种输入不产生解析结果"这一行为，同样有价值。
+        int empty = 0;
+        for (ProbeTrafficFixture.Pair p : fixture().pairs()) {
+            if (!p.hasParsedResult()) {
+                empty++;
+                assertTrue("无产出配对的 results 应为空", p.results.isEmpty());
+                assertNull(p.effectiveResult());
+            }
+        }
+        assertEquals(2, empty);
     }
 
     @Test
     public void 可按探头类型筛选配对() throws Exception {
-        ProbeTrafficFixture fixture = ProbeTrafficFixture.load("synthetic-loader-check.tsv");
-        assertNotNull(fixture);
-
-        assertEquals(1, fixture.pairsOfProbeType(0).size());  // 中诚
-        assertEquals(2, fixture.pairsOfProbeType(1).size());  // LD
-        assertEquals(1, fixture.pairsOfProbeType(2).size());  // LD2
-        assertEquals(0, fixture.pairsOfProbeType(99).size());
+        ProbeTrafficFixture f = fixture();
+        assertEquals(2, f.pairsOfProbeType(0).size());   // 中诚
+        assertEquals(2, f.pairsOfProbeType(1).size());   // LD
+        assertEquals(1, f.pairsOfProbeType(2).size());   // LD2
+        assertEquals(0, f.pairsOfProbeType(99).size());
     }
 
     @Test
@@ -141,8 +208,8 @@ public class GoldenMasterHarnessTest {
 
     @Test
     public void 完全相同的快照无差异() {
-        Map<String, String> a = snapshot("1234.0", "21.5");
-        assertTrue(new SnapshotComparator().compare(a, snapshot("1234.0", "21.5")).isEmpty());
+        assertTrue(new SnapshotComparator()
+                .compare(snapshot("1234.0", "21.5"), snapshot("1234.0", "21.5")).isEmpty());
     }
 
     @Test
@@ -190,7 +257,7 @@ public class GoldenMasterHarnessTest {
         assertEquals("temper", diffs.get(0).field);
         assertEquals("<缺失>", diffs.get(0).actual);
 
-        // 反向：实际多出一个字段
+        // 反向：实际多出一个字段。§2 的解析器若多产出或改名了字段，必须在这里红掉。
         Map<String, String> extra = snapshot("1234.0", "21.5");
         extra.put("oilVolume", "800.0");
         diffs = new SnapshotComparator().compare(expected, extra);

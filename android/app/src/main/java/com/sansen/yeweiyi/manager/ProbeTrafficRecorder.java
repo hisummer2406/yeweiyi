@@ -34,9 +34,14 @@ import java.util.Map;
  *       录这个而不是它上游的原始 {@code byte[]}，因为它才是解析逻辑真正的输入，
  *       也是将来抽出的 {@code XxxParser} 的输入，重放时喂进去的和现场当时喂进去的才是同一个东西。</li>
  *   <li>OUT —— {@code hexDataParseFinish(OilCan)} 拿到的解析产出。
- *       {@code probeInfoPase} 是同线程同步回调，所以同一线程内 IN 之后的第一条 OUT 就是它的产出，
- *       不需要额外的关联 id。</li>
+ *       {@code probeInfoPase} 是同线程同步回调，所以同一线程内 IN 之后、下一条 IN 之前的
+ *       <b>全部</b> OUT 都是这一帧的产出。</li>
  * </ul>
+ *
+ * <p><b>一帧对多条产出：</b>不要假设一帧 IN 只对应一条 OUT。{@code LD2Company.probeInfoPase}
+ * 对帧内每个探针各回调一次（{@code for (i = 0; i < decimal; i++)}），一帧可产出 N 条；
+ * 又因分发 switch 的 {@code case 1} 缺 {@code break}（见 `docs/重构方案.md` 8.2），
+ * 一帧 LD 报文还会被两个解析器先后处理。因此每条 OUT 都标注 {@link #setActiveParser 产出它的解析器}。
  *
  * <p><b>覆盖范围：</b>只覆盖探头轮询路径的三种 probeType（0 中诚 / 1 LD / 2 LD2）。
  * {@code VR350Factory} 走的是 PC 通信线程，不经这条路径、也不回调 {@code hexDataParseFinish}，不在本类范围内。
@@ -57,6 +62,9 @@ public final class ProbeTrafficRecorder {
     private static final String DIR_NAME = "yeweiyi-probe-record";
 
     private static final Object LOCK = new Object();
+
+    /** 当前正在执行的解析器简名，由分发点在调用 probeInfoPase 前设置。 */
+    private static volatile String activeParser = ProbeTrafficFormat.UNKNOWN_PARSER;
 
     private static BufferedWriter writer;
     /** 当前 writer 对应的日期，用于跨天时换文件。采集常常跑满一天，按天分文件便于整理成 fixture。 */
@@ -88,6 +96,23 @@ public final class ProbeTrafficRecorder {
     }
 
     /**
+     * 声明接下来由哪个解析器处理报文 —— 在每次调用 {@code probeInfoPase} 之前调用。
+     *
+     * <p>{@code hexDataParseFinish(OilCan)} 这个回调签名里拿不到"是谁调的我"，
+     * 而一帧报文可能被多个解析器先后处理（分发 switch 的 fall-through），
+     * 所以由分发点主动声明。未声明时记为 {@link ProbeTrafficFormat#UNKNOWN_PARSER}。
+     *
+     * @param parserName 解析器简名，如 {@code "LDCompany"}
+     */
+    public static void setActiveParser(String parserName) {
+        if (!ENABLED) {
+            return;
+        }
+        activeParser = parserName == null || parserName.isEmpty()
+                ? ProbeTrafficFormat.UNKNOWN_PARSER : parserName;
+    }
+
+    /**
      * 录一次解析产出。字段取的是三个探头解析器实际会写入的那些 setter 对应的值，
      * 外加油罐位/探头类型用于定位。
      *
@@ -115,7 +140,7 @@ public final class ProbeTrafficRecorder {
         fields.put("alarmByte", String.valueOf(oilCan.getAlarmByte()));
         fields.put("lastTime", String.valueOf(oilCan.getLastTime()));
         write(ProbeTrafficFormat.formatOut(System.currentTimeMillis(),
-                oilCan.getProbeType(), oilCan.getOilCanPos(), fields));
+                oilCan.getProbeType(), oilCan.getOilCanPos(), activeParser, fields));
     }
 
     private static void write(String line) {

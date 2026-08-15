@@ -6,6 +6,8 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -86,20 +88,52 @@ public class ProbeReplayTest {
     public void 解析快照的字段齐全且可解析为数值() throws Exception {
         for (ProbeTrafficFixture fixture : loadRegisteredFixtures()) {
             for (ProbeTrafficFixture.Pair pair : fixture.pairs()) {
+                for (ProbeTrafficFormat.Record result : pair.results) {
+                    for (String field : ProbeTrafficFormat.OUT_FIELDS) {
+                        String value = result.fields.get(field);
+                        assertNotNull(fixture.name() + " 的快照缺少字段 " + field + "：" + pair, value);
+                        assertFalse(fixture.name() + " 的字段 " + field + " 为空：" + pair,
+                                value.isEmpty());
+                        try {
+                            Double.parseDouble(value);
+                        } catch (NumberFormatException e) {
+                            fail(fixture.name() + " 的字段 " + field + " 不是数值（" + value + "）：" + pair);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void 采集文件不应有孤立的解析结果() throws Exception {
+        // 孤立 OUT = 找不到所属输入帧，说明文件被从中间截断，或录制期间出现了未预料的调用顺序。
+        // 少量可以接受（尾部截断），大量则说明这份采集不可信。
+        for (ProbeTrafficFixture fixture : loadRegisteredFixtures()) {
+            assertTrue(fixture.name() + " 有 " + fixture.orphanOutRecords()
+                            + " 条孤立 OUT（总产出 " + fixture.totalResultCount() + " 条），数据完整性存疑",
+                    fixture.orphanOutRecords() <= 1);
+        }
+    }
+
+    @Test
+    public void 记录下每帧被哪些解析器处理过() throws Exception {
+        // 不做断言，只把 fall-through 的实际发生情况打出来：
+        // probeType 1 的帧若同时出现 LDCompany 与 LD2Company，就是 8.2 那个缺失的 break
+        // 在现场真实发生的证据 —— 这决定了 §2 抽取 LDParser 时该拿哪一条当基线。
+        for (ProbeTrafficFixture fixture : loadRegisteredFixtures()) {
+            Map<String, Integer> byParserSet = new TreeMap<String, Integer>();
+            for (ProbeTrafficFixture.Pair pair : fixture.pairs()) {
                 if (!pair.hasParsedResult()) {
                     continue;
                 }
-                for (String field : ProbeTrafficFormat.OUT_FIELDS) {
-                    String value = pair.parsed.fields.get(field);
-                    assertNotNull(fixture.name() + " 的快照缺少字段 " + field + "：" + pair, value);
-                    assertFalse(fixture.name() + " 的字段 " + field + " 为空：" + pair,
-                            value.isEmpty());
-                    try {
-                        Double.parseDouble(value);
-                    } catch (NumberFormatException e) {
-                        fail(fixture.name() + " 的字段 " + field + " 不是数值（" + value + "）：" + pair);
-                    }
-                }
+                String key = "probeType=" + pair.request.probeType + " " + pair.producingParsers();
+                Integer n = byParserSet.get(key);
+                byParserSet.put(key, n == null ? 1 : n + 1);
+            }
+            System.out.println("[golden master] " + fixture.name() + " 解析器分布：");
+            for (Map.Entry<String, Integer> e : byParserSet.entrySet()) {
+                System.out.println("    " + e.getKey() + " -> " + e.getValue() + " 帧");
             }
         }
     }
@@ -145,11 +179,10 @@ public class ProbeReplayTest {
         for (ProbeTrafficFixture fixture : loadRegisteredFixtures()) {
             SnapshotComparator comparator = new SnapshotComparator();
             for (ProbeTrafficFixture.Pair pair : fixture.pairs()) {
-                if (!pair.hasParsedResult()) {
-                    continue;
+                for (ProbeTrafficFormat.Record result : pair.results) {
+                    assertTrue("比对器对同一份快照判出了差异，说明比对器本身有问题",
+                            comparator.compare(result.fields, result.fields).isEmpty());
                 }
-                assertTrue("比对器对同一份快照判出了差异，说明比对器本身有问题",
-                        comparator.compare(pair.parsed.fields, pair.parsed.fields).isEmpty());
             }
         }
     }

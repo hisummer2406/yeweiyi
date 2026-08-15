@@ -98,16 +98,11 @@ public final class SnapshotComparator {
         }
     }
 
-    /** 把 {@code OilCan} 之外的任意来源整理成可比对的字段表，字段顺序按 {@link ProbeTrafficFormat#OUT_FIELDS}。 */
-    public static Map<String, String> snapshotOf(Map<String, ?> raw) {
-        Map<String, String> result = new LinkedHashMap<String, String>();
-        for (String field : ProbeTrafficFormat.OUT_FIELDS) {
-            if (raw.containsKey(field)) {
-                result.put(field, String.valueOf(raw.get(field)));
-            }
-        }
-        return result;
-    }
+    // 这里曾有一个 snapshotOf(Map) 归一化方法，已删除。
+    // 它只拷贝 OUT_FIELDS 里的键，等于把上面"多出字段算作差异"这条规则架空：
+    // §2 抽出的解析器若多产出或改名了某个字段，经它归一化后会被静默丢掉，
+    // 等价性闸门报零差异。作为 §2 解析器的桥接入口，它削弱的正是自己要守的那道闸。
+    // §2 接入时请直接构造字段表传给 compare()，不要再引入这类"顺手过滤"的中间层。
 
     /** 一处字段差异。 */
     public static final class Difference {

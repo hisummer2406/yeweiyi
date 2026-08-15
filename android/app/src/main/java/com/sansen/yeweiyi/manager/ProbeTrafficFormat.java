@@ -18,10 +18,17 @@ import java.util.Map;
  * <p>行格式（Tab 分隔，首列为记录类型）：
  * <pre>
  * IN   &lt;epochMillis&gt;  &lt;probeType&gt;  &lt;oilCanPos&gt;  &lt;hex报文&gt;
- * OUT  &lt;epochMillis&gt;  &lt;probeType&gt;  &lt;oilCanPos&gt;  &lt;key&gt;=&lt;value&gt;  &lt;key&gt;=&lt;value&gt;  ...
+ * OUT  &lt;epochMillis&gt;  &lt;probeType&gt;  &lt;oilCanPos&gt;  &lt;解析器&gt;  &lt;key&gt;=&lt;value&gt;  ...
  * </pre>
  *
  * <p>hex 报文与字段值都不含 Tab，因此可直接按 Tab 切分，无需转义。
+ *
+ * <p><b>OUT 里为什么要记解析器身份：</b>一帧报文可能被不止一个解析器处理。
+ * `SerialPortManager` 的分发 switch 在 {@code case 1} 缺 {@code break}（见 `docs/重构方案.md` 8.2），
+ * 因此一帧 LD 报文会先后经 {@code LDCompany} 与 {@code LD2Company} 解析，后者的结果覆盖前者。
+ * 若不记录是谁产出的，fixture 会把 LDCompany 的产出当作"probeType 1 的正确基线"，
+ * 而设备实际采用的是 LD2Company 的产出 —— 用这样的基线去验证抽取出的 LDParser 会显示零差异，
+ * 却与真实行为背离，正是 golden master 要防止的那类失败。
  */
 public final class ProbeTrafficFormat {
 
@@ -29,6 +36,9 @@ public final class ProbeTrafficFormat {
 
     public static final String TYPE_IN = "IN";
     public static final String TYPE_OUT = "OUT";
+
+    /** 产出解析器未知时的占位符。出现它说明录制点没能识别是谁产出的，属于需要排查的情况。 */
+    public static final String UNKNOWN_PARSER = "?";
 
     /**
      * OUT 记录里的字段及其顺序 —— 取自三个探头解析器实际会写入的那些 setter。
@@ -63,10 +73,11 @@ public final class ProbeTrafficFormat {
     }
 
     public static String formatOut(long timestamp, int probeType, int oilCanPos,
-                                   Map<String, String> fields) {
+                                   String parser, Map<String, String> fields) {
         StringBuilder sb = new StringBuilder(256);
         sb.append(TYPE_OUT).append(SEP).append(timestamp).append(SEP)
-                .append(probeType).append(SEP).append(oilCanPos);
+                .append(probeType).append(SEP).append(oilCanPos).append(SEP)
+                .append(parser == null || parser.isEmpty() ? UNKNOWN_PARSER : parser);
         if (fields != null) {
             for (Map.Entry<String, String> e : fields.entrySet()) {
                 sb.append(SEP).append(e.getKey()).append('=').append(e.getValue());
@@ -85,11 +96,18 @@ public final class ProbeTrafficFormat {
         if (line == null) {
             return null;
         }
-        String trimmed = line.trim();
-        if (trimmed.isEmpty()) {
+        // 只剥掉行尾的换行符，不能用 trim()：末位字段可能本就是空字符串
+        // （formatIn 对 null 报文写出的就是这种行），trim 会把那一列的分隔符一起吃掉，
+        // 导致列数不足而误判为非法行 —— 写得出却读不回来，往返保证就不成立了。
+        int end = line.length();
+        while (end > 0 && (line.charAt(end - 1) == '\n' || line.charAt(end - 1) == '\r')) {
+            end--;
+        }
+        String stripped = line.substring(0, end);
+        if (stripped.trim().isEmpty()) {
             return null;
         }
-        String[] parts = trimmed.split(SEP, -1);
+        String[] parts = stripped.split(SEP, -1);
         if (parts.length < 5) {
             return null;
         }
@@ -108,35 +126,39 @@ public final class ProbeTrafficFormat {
             return null;
         }
         if (TYPE_IN.equals(type)) {
-            return new Record(type, timestamp, probeType, oilCanPos, parts[4], null);
+            return new Record(type, timestamp, probeType, oilCanPos, parts[4], null, null);
         }
+        String parser = parts[4].isEmpty() ? UNKNOWN_PARSER : parts[4];
         Map<String, String> fields = new LinkedHashMap<String, String>();
-        for (int i = 4; i < parts.length; i++) {
+        for (int i = 5; i < parts.length; i++) {
             int eq = parts[i].indexOf('=');
             if (eq <= 0) {
                 continue;
             }
             fields.put(parts[i].substring(0, eq), parts[i].substring(eq + 1));
         }
-        return new Record(type, timestamp, probeType, oilCanPos, null, fields);
+        return new Record(type, timestamp, probeType, oilCanPos, null, parser, fields);
     }
 
-    /** 一条录制记录。IN 携带 {@link #hexFrame}，OUT 携带 {@link #fields}，另一方为 {@code null}。 */
+    /** 一条录制记录。IN 携带 {@link #hexFrame}，OUT 携带 {@link #parser} 与 {@link #fields}，另一方为 {@code null}。 */
     public static final class Record {
         public final String type;
         public final long timestamp;
         public final int probeType;
         public final int oilCanPos;
         public final String hexFrame;
+        /** 产出本条结果的解析器简名（如 {@code LDCompany}）。仅 OUT 记录有值。 */
+        public final String parser;
         public final Map<String, String> fields;
 
         Record(String type, long timestamp, int probeType, int oilCanPos,
-               String hexFrame, Map<String, String> fields) {
+               String hexFrame, String parser, Map<String, String> fields) {
             this.type = type;
             this.timestamp = timestamp;
             this.probeType = probeType;
             this.oilCanPos = oilCanPos;
             this.hexFrame = hexFrame;
+            this.parser = parser;
             this.fields = fields == null
                     ? null : Collections.unmodifiableMap(fields);
         }
