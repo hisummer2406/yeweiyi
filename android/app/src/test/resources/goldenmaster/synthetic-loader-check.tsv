@@ -1,23 +1,42 @@
 # 合成样本 —— 只用于验证加载器与比对器本身，不是现场数据。
 # 现场采集回来的真实 fixture 请按 tools/prepare-probe-fixture.sh 生成，命名形如 probe-<日期>-<型号>.tsv。
 #
+# 列：IN  <ts> <probeType> <oilCanPos> <hex报文>
+#     OUT <ts> <probeType> <oilCanPos> <解析器> <k=v>...
+#
 # 本文件覆盖加载器必须正确处理的几种情形：
-#   1) 正常的 IN/OUT 配对
-#   2) 一条 IN 之后直接跟下一条 IN（解析失败/CRC 错，无产出）
-#   3) 格式非法的行（应跳过并计数，不让整份 fixture 作废）
-#   4) 注释行与空行
-#   5) 文件以一条没有 OUT 的 IN 结尾（断电截断）
+#   1) 一帧 IN 一条 OUT（最简单的情形）
+#   2) 一帧 IN 多条 OUT —— LD2Company 对帧内每个探针各回调一次
+#   3) 一帧 IN 被两个解析器先后产出 —— case 1 缺 break 的 fall-through（8.2）
+#   4) 一条 IN 之后直接跟下一条 IN（解析失败/CRC 错，无产出）
+#   5) 格式非法的行（跳过并计数，不让整份 fixture 作废）
+#   6) 孤立 OUT（文件被从中间截断，计入 orphan 而非静默丢弃）
+#   7) 文件以一条没有 OUT 的 IN 结尾（断电截断）
 
-IN	1756684800000	1	3	0103040000000AB8FA
-OUT	1756684800012	1	3	oilLevel=1234.0	waterLevel=56.0	temper=21.5	oilVolume=800.0	waterVolume=30.0	oilWeight=640.0	oilRatio=75	surPlus=200.0	canAddOilWeight=160.0	alarmByte=0	lastTime=1756684800012
+# --- 情形 6：孤立 OUT，出现在任何 IN 之前 ---
+OUT	1756684799000	0	9	ZhongChengCompany	oilLevel=1.0	waterLevel=1.0	temper=1.0	oilVolume=1.0	waterVolume=1.0	oilWeight=1.0	oilRatio=1	surPlus=1.0	canAddOilWeight=1.0	alarmByte=0	lastTime=1756684799000
 
-IN	1756684800100	1	3	0103040000FFFFDEAD
-IN	1756684800200	0	1	FEFE0103040000000A1234
+# --- 情形 1：一进一出 ---
+IN	1756684800000	0	3	FEFE0103040000000A1234
+OUT	1756684800012	0	3	ZhongChengCompany	oilLevel=1234.0	waterLevel=56.0	temper=21.5	oilVolume=800.0	waterVolume=30.0	oilWeight=640.0	oilRatio=75	surPlus=200.0	canAddOilWeight=160.0	alarmByte=0	lastTime=1756684800012
 
-OUT	1756684800212	0	1	oilLevel=2000.0	waterLevel=10.0	temper=19.0	oilVolume=1500.0	waterVolume=8.0	oilWeight=1200.0	oilRatio=60	surPlus=500.0	canAddOilWeight=300.0	alarmByte=0	lastTime=1756684800212
+# --- 情形 2：一帧 LD2 报文产出 3 条（帧内 3 个探针）---
+IN	1756684801000	2	5	0203060000001BCDEF001122334455
+OUT	1756684801010	2	5	LD2Company	oilLevel=500.0	waterLevel=10.0	temper=18.0	oilVolume=400.0	waterVolume=5.0	oilWeight=320.0	oilRatio=60	surPlus=100.0	canAddOilWeight=80.0	alarmByte=0	lastTime=1756684801010
+OUT	1756684801011	2	6	LD2Company	oilLevel=600.0	waterLevel=11.0	temper=18.5	oilVolume=450.0	waterVolume=6.0	oilWeight=360.0	oilRatio=61	surPlus=110.0	canAddOilWeight=90.0	alarmByte=0	lastTime=1756684801011
+OUT	1756684801012	2	7	LD2Company	oilLevel=700.0	waterLevel=12.0	temper=19.0	oilVolume=500.0	waterVolume=7.0	oilWeight=400.0	oilRatio=62	surPlus=120.0	canAddOilWeight=100.0	alarmByte=0	lastTime=1756684801012
 
+# --- 情形 3：LD 帧被 LDCompany 与 LD2Company 先后产出，后者覆盖前者（8.2 的 fall-through）---
+IN	1756684802000	1	3	0103040000000AB8FA
+OUT	1756684802010	1	3	LDCompany	oilLevel=1111.0	waterLevel=20.0	temper=20.0	oilVolume=900.0	waterVolume=10.0	oilWeight=720.0	oilRatio=70	surPlus=210.0	canAddOilWeight=170.0	alarmByte=0	lastTime=1756684802010
+OUT	1756684802015	1	3	LD2Company	oilLevel=2222.0	waterLevel=21.0	temper=20.5	oilVolume=950.0	waterVolume=11.0	oilWeight=760.0	oilRatio=71	surPlus=220.0	canAddOilWeight=180.0	alarmByte=0	lastTime=1756684802015
+
+# --- 情形 4：IN 之后直接跟下一条 IN，无产出 ---
+IN	1756684803000	1	4	0103040000FFFFDEAD
+
+# --- 情形 5：格式非法的行 ---
 这一行不是合法记录，应被跳过
 IN	notanumber	1	3	DEADBEEF
-OUT	1756684800300	2	5	oilLevel=
 
-IN	1756684800400	2	5	0203040000001BCDEF
+# --- 情形 7：以没有 OUT 的 IN 结尾 ---
+IN	1756684804000	0	8	FEFE010304FFFFFFFF9999

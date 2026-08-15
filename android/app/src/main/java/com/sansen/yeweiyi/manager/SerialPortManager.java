@@ -271,6 +271,7 @@ public class SerialPortManager implements IParseDataListener {
                                             switch (mOilCan.getProbeType()) {
                                                 case 0:
                                                     try {
+                                                        ProbeTrafficRecorder.setActiveParser("ZhongChengCompany");
                                                         isRight = ZhongChengCompany
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
@@ -282,6 +283,7 @@ public class SerialPortManager implements IParseDataListener {
                                                     break;
                                                 case 1:
                                                     try {
+                                                        ProbeTrafficRecorder.setActiveParser("LDCompany");
                                                         isRight = LDCompany
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
@@ -293,6 +295,10 @@ public class SerialPortManager implements IParseDataListener {
                                                     // 导致 LD 探头的解析结果被 LD2 的结果覆盖。
                                                     // 补 break 会改变现场设备行为，需结合硬件实测后再定，故暂不修改。
                                                 case 2:
+                                                    // 注意：probeType==1 会穿透到这里（上面缺 break）。
+                                                    // 此处的声明会覆盖 LDCompany，使录制文件如实反映
+                                                    // "同一帧先后被两个解析器处理、后者覆盖前者"这一现状。
+                                                    ProbeTrafficRecorder.setActiveParser("LD2Company");
                                                     isRight = LD2Company
                                                             .getInstance()
                                                             .probeInfoPase(data, SerialPortManager.this);
