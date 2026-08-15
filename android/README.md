@@ -204,3 +204,58 @@ npx @fission-ai/openspec@latest validate --changes --strict
   正则的 `\|` 与 `\b` 会**静默匹配为空并返回 0**——最坏的失败模式，已经因此误删资源搞挂过一次构建。
 - **机械改动与语义改动不要放进同一个提交**。
 - 仓库镜像走阿里云/腾讯云（大陆网络连通性），不要随手移除。
+
+---
+
+## 开发工作流
+
+```
+Issue
+ ↓
+Claude Code 创建 feature 分支
+ ↓
+Claude Code 修改代码
+ ↓
+提交 commit
+ ↓
+创建 PR
+ ↓
+Claude Code Review PR
+ ↓
+Merge
+```
+
+各步在本项目中的具体做法：
+
+| 步骤 | 做法 |
+|---|---|
+| **Issue** | 结构化的重构工作走 `openspec/changes/` 的 tasks.md，不另开 Issue；零散缺陷与线上问题走 Issue |
+| **创建 feature 分支** | 从 `master` 切出。不直接在 `master` 上提交 |
+| **修改代码** | 遵守上方[工程约定](#工程约定)：删任何东西前 `git grep -F` 逐词核验；机械改动与语义改动分开 |
+| **提交 commit** | 一次提交只做一件事，且**每个提交都要能单独装到设备上跑**。提交信息写清"为什么"，不只是"改了什么" |
+| **创建 PR** | `gh pr create`，目标分支 `master` |
+| **Review PR** | `/code-review` 审当前 diff，或 `/code-review <PR号>` 审指定 PR；`/code-review ultra` 是多智能体云端深度审查（由人触发） |
+| **Merge** | 见下方合并前检查 |
+
+### 合并前检查
+
+```bash
+./gradlew :app:assembleDebug
+./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest
+```
+
+> ⚠️ **上面两条全绿也不等于可以合并。**
+>
+> 改动只要触及 `factory/`、`manager/SerialPortManager`、`serialport/` 或任何协议/串口路径，
+> **必须先上真机回归**——本机验证不了硬件行为，这是这个项目最核心的约束（见[接手前必读](#️-接手前必读)）。
+>
+> 涉及现场读数的改动，还应在合并前跑一遍 golden master 重放测试确认零差异。
+
+### 不适合交给 Claude Code 独立完成的
+
+以下需要人来做决定，Claude Code 只负责查清事实并给出选项：
+
+- **行为变更**（改返回值语义、补缺失的 `break`、改默认口令等）——需产品/硬件侧确认现场实际情况
+- **真机回归**——只有接了真实探头的设备能验证
+- **凭据轮换**——broker、产线等线上操作
+- **现场数据采集**——档期不由开发侧控制
