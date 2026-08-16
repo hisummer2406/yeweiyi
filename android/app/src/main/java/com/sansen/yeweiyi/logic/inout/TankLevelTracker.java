@@ -9,15 +9,24 @@ package com.sansen.yeweiyi.logic.inout;
  * <ol>
  *   <li>液位偏离基准超过死区容差（{@link InOutThresholds#getNoiseTolerance()}）时开始跟踪；</li>
  *   <li>液位在死区容差内保持不变、且已持续超过去抖窗口（{@link InOutThresholds#getSettleWindowMillis()}）
- *       后，才认为"真的稳定了"，进入阀值判定；</li>
- *   <li>阀值判定：净高度变化与"从开始变化到当前"的时长必须同时达到对应方向的
- *       高度阀值与时间阈值才产出事件；未同时满足时保持跟踪、继续等待，
- *       不清空已跟踪的起点——由于时长是相对"当前时刻"计算的，只要液位保持
- *       在稳定值不变，时长会随真实时钟推进自然增长，直到追上时间阈值；</li>
- *   <li>稳定等待期间液位又发生真正的变化，视为同一段事件的延续（暂停后恢复），
- *       不重新起算起点；</li>
- *   <li>一段跟踪从开始变化起持续超过 {@link InOutThresholds#getMaxTrackingMillis()}
- *       仍未同时满足双阈值，判定为异常/长期悬空，放弃并以当前液位重新建立基准。</li>
+ *       后，才认为"真的稳定了"，进入阀值判定——下面两步判定（时长、高度）都只在
+ *       这个"已经确认稳定"的前提下发生，不会拿一次尚未确认稳定的读数去比阈值；</li>
+ *   <li>阀值判定分两步、**时长先行**：先看"从开始变化到当前"的时长是否达到
+ *       对应方向的时间阈值——时长不够时，不论这个已确认稳定的净高度变化是否
+ *       已经够了，都继续跟踪等待，不清空已跟踪的起点（时长是相对"当前时刻"
+ *       计算的，只要液位保持在稳定值不变，时长会随真实时钟推进自然增长，
+ *       直到追上时间阈值）；</li>
+ *   <li>时长一旦达标，才检查这个"已确认稳定"的净高度变化是否也达到对应方向的
+ *       高度阀值：够了才产出事件；不够则直接放弃这段跟踪、以当前稳定值重新
+ *       建立基准——净变化量不会再随时间推移自己变大，继续等待没有意义（这也是
+ *       "一段跟踪内先涨后跌、来回穿越阈值，但等到液位稳定、时长也达标后，净
+ *       变化仍被抵消到不够阈值"这种场景，会在满足"稳定+时长达标"的那一刻就被
+ *       了结、不会无限期挂起、也不会被之后不相关的小波动接续计算的原因）；</li>
+ *   <li>时长未达标、继续等待期间液位又发生真正的变化，视为同一段事件的延续
+ *       （暂停后恢复），不重新起算起点；</li>
+ *   <li>一段跟踪若从开始变化起持续超过 {@link InOutThresholds#getMaxTrackingMillis()}
+ *       仍未凑够时间阈值（时长阈值本身配置得过大等异常情况），判定为异常/长期
+ *       悬空，放弃并以当前液位重新建立基准。</li>
  * </ol>
  */
 public class TankLevelTracker {
@@ -136,21 +145,35 @@ public class TankLevelTracker {
         double heightThreshold = direction == InOutDirection.IN ? thresholds.getInHeight() : thresholds.getOutHeight();
         long timeThreshold = direction == InOutDirection.IN ? thresholds.getInTimeSeconds() : thresholds.getOutTimeSeconds();
 
-        // 时长相对"当前读数时刻"计算，而不是相对最后一次变化的时刻：只要液位
-        // 保持在稳定值不变，真实时钟推进也会让这个值自然增长，直到追上阈值。
+        // 时长先行判断：时长相对"当前读数时刻"计算，而不是相对最后一次变化的
+        // 时刻——只要液位保持在稳定值不变，真实时钟推进也会让这个值自然增长，
+        // 所以时长不够时，不论高度是否已经够了，都值得继续等待（万一是"高度已
+        // 够、时长还没追上"，等一等就会产出事件）。
         long durationSeconds = (timestampMillis - trackStartTime) / 1000;
+        if (durationSeconds < timeThreshold) {
+            if (timestampMillis - trackStartTime > thresholds.getMaxTrackingMillis()) {
+                // 时长阈值本身配置得过大、迟迟凑不够：兜底放弃这段跟踪。
+                resetTo(lastHeight);
+            }
+            return null;
+        }
 
-        if (Math.abs(delta) >= heightThreshold && durationSeconds >= timeThreshold) {
+        // 走到这里说明三个条件已经同时成立：①液位已经过去抖窗口确认真正稳定
+        // （前面两个 return 已经把"还没稳定"的情况挡掉了）；②时长也已经达标；
+        // 这时候才用这个已确认稳定的净变化量 delta，检查③高度是否也够。
+        if (Math.abs(delta) >= heightThreshold) {
             InOutEvent event = new InOutEvent(tankId, direction, trackStartHeight, lastHeight,
                     trackStartTime, timestampMillis);
             resetTo(lastHeight);
             return event;
         }
 
-        if (timestampMillis - trackStartTime > thresholds.getMaxTrackingMillis()) {
-            // 拖得太久还没同时满足双阈值：判定为异常/长期悬空，放弃这段跟踪。
-            resetTo(lastHeight);
-        }
+        // 时长已经够了，但净变化量还是不够：不会再随时间推移自己变大（除非液位
+        // 之后又真的发生新的变化，那种情况会在下一次读数时被当成全新一段重新
+        // 处理），直接放弃这段跟踪，以当前稳定值重新建立基准——覆盖"一段跟踪内
+        // 先涨后跌、来回穿越阈值，但等够了时长后净变化仍被抵消到不够阈值"的场景，
+        // 避免占着很久以前的起点不放。
+        resetTo(lastHeight);
         return null;
     }
 

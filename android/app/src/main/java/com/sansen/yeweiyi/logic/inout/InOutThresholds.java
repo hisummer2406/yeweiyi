@@ -21,7 +21,7 @@ public class InOutThresholds {
 
     public static final double DEFAULT_NOISE_TOLERANCE = 1.0;
     public static final long DEFAULT_SETTLE_WINDOW_MILLIS = 3_000L;
-    public static final long DEFAULT_MAX_TRACKING_MILLIS = 20L * 60 * 60 * 1000; // 20小时
+    public static final long DEFAULT_MAX_TRACKING_MILLIS = 2L * 60 * 60 * 1000; // 2小时
 
     /** 入库判定的高度阈值：净高度变化需达到此值才可能判定为入库。 */
     private final double inHeight;
@@ -35,7 +35,12 @@ public class InOutThresholds {
     private final double noiseTolerance;
     /** 去抖确认窗口（毫秒）：读数进入"未变化"状态后需再持续这么久才确认"真的稳定了"。 */
     private final long settleWindowMillis;
-    /** 单段跟踪的最长允许时长（毫秒）：超过仍未同时满足双阈值就放弃，避免状态无限期悬挂。 */
+    /**
+     * 单段跟踪的最长允许时长（毫秒）：仅在时长本身迟迟凑不够时间阈值时才会用到——
+     * 超过此时长仍未凑够时间阈值就放弃，避免状态无限期悬挂。时长一旦达标，是否
+     * 继续跟踪就只取决于高度是否够（够则产出事件，不够立即放弃），不会再走到
+     * 这个兜底（见 {@link TankLevelTracker}）。
+     */
     private final long maxTrackingMillis;
 
     public InOutThresholds(double inHeight, long inTimeSeconds,

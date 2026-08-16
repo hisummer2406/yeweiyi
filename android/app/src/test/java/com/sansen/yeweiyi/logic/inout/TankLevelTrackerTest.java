@@ -87,21 +87,77 @@ public class TankLevelTrackerTest {
     }
 
     @Test
-    public void timeSatisfied_heightNotYet_neverFiresAndEventuallyGivesUp() {
-        // 单独放宽 maxTrackingMillis，与"时间阈值已够但高度不够"的检查点错开，
-        // 避免和 60s 的时间阈值取同一个数字混淆。
-        InOutThresholds thresholds = new InOutThresholds(100, 60, 100, 60, 1.0, 5_000L, 120_000L);
-        tracker.onReading(0, 0L, thresholds);
-        tracker.onReading(20, 1_000L, thresholds); // 高度差只有20，远小于阀值100
+    public void heightNotYet_onceTimeThresholdAlsoMet_discardsImmediately() {
+        // 前提是时长阈值已经达标：净变化量不会随时间推移自己变大，所以时长
+        // 一旦够了、发现高度还是不够，就应立即放弃，不必再等最长跟踪时长兜底。
+        tracker.onReading(0, 0L, THRESHOLDS);
+        tracker.onReading(20, 1_000L, THRESHOLDS); // 高度差只有20，远小于阀值100
 
-        // 时长(69s)早已超过60s时间阈值，但高度差不够，不应产出事件
-        assertNull(tracker.onReading(20, 70_000L, thresholds));
-        assertTrue(tracker.isTracking());
-
-        // 超过最长跟踪时长(120s)后应放弃这段跟踪
-        InOutEvent event = tracker.onReading(20, 125_000L, thresholds);
+        // 稳定超过去抖窗口后检查：时长(69s)已经够60s阈值了，但高度差不够，
+        // 应立即放弃这段跟踪。
+        InOutEvent event = tracker.onReading(20, 70_000L, THRESHOLDS);
         assertNull(event);
-        assertFalse("超过最长跟踪时长应兜底放弃，不再无限期悬挂", tracker.isTracking());
+        assertFalse("时长已达标但净变化不够阈值时应立即放弃", tracker.isTracking());
+    }
+
+    @Test
+    public void heightNotYet_timeNotYetEither_keepsWaitingInsteadOfDiscarding() {
+        // 时长阈值还没达标时，即使当前净变化也不够，也不能提前放弃——万一
+        // 液位在等待期间又发生新的变化，仍要在同一段里继续累积。
+        tracker.onReading(0, 0L, THRESHOLDS);
+        tracker.onReading(20, 1_000L, THRESHOLDS); // 高度差只有20，远小于阀值100
+
+        // 稳定超过去抖窗口后检查：时长(6s)还远不够60s阈值，即使高度也不够，
+        // 也应该继续等待，而不是直接放弃。
+        assertNull(tracker.onReading(20, 7_000L, THRESHOLDS));
+        assertTrue("时长未达标时不应因高度不够而提前放弃", tracker.isTracking());
+    }
+
+    @Test
+    public void heightSatisfied_timeNeverCatchesUp_givesUpAfterMaxTracking() {
+        // maxTrackingMillis 兜底只在时长阈值本身迟迟凑不够时才会用到。
+        InOutThresholds thresholds = new InOutThresholds(100, 3600, 100, 3600, 1.0, 5_000L, 60_000L);
+        tracker.onReading(0, 0L, thresholds);
+        tracker.onReading(200, 1_000L, thresholds); // 高度差200，已超过阀值100
+
+        // 稳定后检查：时间阈值(3600s)远未凑够，继续等待（此时高度早已够了，
+        // 但时长先行判断，不会先看高度）
+        assertNull(tracker.onReading(200, 10_000L, thresholds));
+        assertTrue("时长不够时应继续等待", tracker.isTracking());
+
+        // 超过最长跟踪时长(60s)后应放弃这段跟踪
+        InOutEvent event = tracker.onReading(200, 65_000L, thresholds);
+        assertNull(event);
+        assertFalse("时长迟迟凑不够时，超过最长跟踪时长仍应兜底放弃", tracker.isTracking());
+    }
+
+    @Test
+    public void crossesBothDirectionsButNetChangeInsufficient_discardsOnceTimeThresholdAlsoMet() {
+        // 先涨后跌（中途都短暂超过单向阈值幅度），但等够了时长后，最终稳定值
+        // 相对最初起点的净差被抵消到不够阈值——不应无限期挂起，也不应把之后
+        // 不相关的变化并入这个很久以前的起点。
+        tracker.onReading(0, 0L, THRESHOLDS); // 基准 0
+        tracker.onReading(150, 1_000L, THRESHOLDS); // 涨到150，净差已超高度阈值100
+        tracker.onReading(-50, 2_000L, THRESHOLDS);  // 又跌到-50，中途也曾大幅越过阈值
+
+        // 已经稳定在 -50，但时长(7s)还不够60s阈值：即使净差(50)已经不够阈值，
+        // 也应该继续等待，不能提前放弃。
+        assertNull(tracker.onReading(-50, 8_000L, THRESHOLDS));
+        assertTrue("时长还没凑够时不应提前丢弃", tracker.isTracking());
+
+        // 时长追上60s阈值后再检查：净差 |-50-0|=50，仍不够高度阈值100，此时才放弃
+        InOutEvent event = tracker.onReading(-50, 65_000L, THRESHOLDS);
+        assertNull("时长够了但净变化不够阈值，应放弃这段跟踪", event);
+        assertFalse(tracker.isTracking());
+
+        // 之后从这个新基准(-50)开始的变化，应独立重新计算，不会带着之前
+        // 那次来回折腾的旧起点
+        tracker.onReading(60, 66_000L, THRESHOLDS); // 相对新基准-50，净差110，超过阈值
+        assertNull(tracker.onReading(60, 72_000L, THRESHOLDS)); // 时长还不够，先不触发
+        InOutEvent second = tracker.onReading(60, 130_000L, THRESHOLDS);
+        assertNotNull("从新基准重新起算的这段应该能正常触发", second);
+        assertEquals(-50, second.getStartHeight(), 0.0001);
+        assertEquals(60, second.getEndHeight(), 0.0001);
     }
 
     @Test
