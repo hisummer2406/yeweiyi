@@ -44,7 +44,7 @@ fi
 
 mkdir -p "$KEYSTORE_DIR"
 
-echo "即将生成 $KEYSTORE_FILE，别名：$ALIAS"
+echo "即将生成 ${KEYSTORE_FILE}，别名：${ALIAS}"
 echo "接下来 keytool 会交互式提问：keystore 密码、姓名/组织等 DN 信息、key 密码（可直接回车沿用 keystore 密码）。"
 echo "有效期设为 30 年——这是一台长期部署在客户现场的设备终端应用，证书中途过期会导致没法出正式升级包。"
 echo
