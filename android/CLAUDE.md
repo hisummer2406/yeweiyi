@@ -58,7 +58,7 @@ Credentials hardcoded before commit `6ae4e3f` are in git history and must be tre
 Key `app/build.gradle` facts:
 - `compileSdkVersion 27`, `minSdkVersion 21`, `targetSdkVersion 27`, landscape-only (see manifest).
 - `multiDexEnabled true`, native build via `externalNativeBuild { cmake { path "src/main/cpp/CMakeLists.txt" } }`.
-- versioning is vendor-specific (`versionName "NEW.SS.A.Y11.00"`), and the APK output filename is auto-suffixed with version + date + build type.
+- versioning is vendor-specific (`versionName "NEW.SS.A.Y1.00"`), and the APK output filename is auto-suffixed with version + date + build type.
 - The root `build.gradle` still declares a `greendao-gradle-plugin` classpath dependency, but no module applies the `org.greenrobot.greendao` plugin or uses GreenDAO anymore — it's vestigial from the old template and can be ignored (or removed if cleaning up).
 - Dependencies are a large pile of local jars in `app/libs/` (Baidu Maps/TTS/Push SDKs, Apache POI 3.10 for Excel export, Tencent TBS X5 webview kernel, MQTT client, AndServer, Apache httpclient/mina, `sun.misc.BASE64Decoder`, an internal `xzjh_interface_*.jar`). Treat these as fixed/vendored artifacts — most have no current Maven-hosted release, so don't try to "upgrade" them without checking hardware/vendor SDK compatibility first.
 - Repositories are mirrored through Aliyun (`build.gradle`) for mainland China connectivity — don't remove without checking.
@@ -131,4 +131,6 @@ Each of these is pinned by an assertion in `CRCheckTest`/`DataUtilsTest`, so cha
 
 ## Signing
 
-No keystore is currently checked into the repo (the previous template's `app/xinchen.jks` is gone). If one is (re)added, treat keystore credentials as sensitive — don't hardcode passwords in committed files.
+Release builds are signed via `app/build.gradle`'s `signingConfigs.release`, wired up 2026-08-16. The keystore file itself (`app/keystore/release.jks`) is untracked (`.gitignore`) and generated locally with `tools/generate-release-keystore.sh`; its store/key passwords and alias go through the same `local.properties`-injection channel as the other secrets (`sansen.releaseStorePassword`, `sansen.releaseKeyAlias`, `sansen.releaseKeyPassword` — see `local.properties.template`). If any of the three properties or the keystore file itself is missing, `assembleRelease` still succeeds (unsigned APK, same as before this existed) but logs a `[配置缺失]` warning — it does not hard-fail, matching the project's existing secret-handling convention.
+
+Treat `release.jks` as the app's permanent production identity once generated: Android requires the *same* signing key for in-place upgrades of a given `applicationId`, so losing the file or its passwords means already-deployed devices can only be wiped and reinstalled, never upgraded. Back the keystore and passwords up somewhere outside this checkout (the generation script prints this reminder too).

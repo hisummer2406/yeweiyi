@@ -25,14 +25,33 @@ def flagField = { String propertyName ->
     return Boolean.parseBoolean(value == null ? "false" : value.trim()).toString()
 }
 
+// ---------------------------------------------------------------------------
+// 正式包签名：keystore 文件本体固定放在 app/keystore/release.jks（.gitignore 排除，
+// 不进版本库），用 tools/generate-release-keystore.sh 生成；密码/别名和其余敏感配置
+// 一样走 local.properties。三项有一项缺失就不装配 signingConfig —— release 构建仍然
+// 能跑（供本机验证编译用），只是产物不签名、装不到设备，而不是静默用错误的 key 签出去。
+// ---------------------------------------------------------------------------
+def releaseKeystoreFile = rootProject.file('app/keystore/release.jks')
+def releaseStorePassword = localProperties.getProperty('sansen.releaseStorePassword')
+def releaseKeyAlias = localProperties.getProperty('sansen.releaseKeyAlias')
+def releaseKeyPassword = localProperties.getProperty('sansen.releaseKeyPassword')
+def releaseSigningReady = releaseKeystoreFile.exists() &&
+        releaseStorePassword?.trim() && releaseKeyAlias?.trim() && releaseKeyPassword?.trim()
+if (!releaseSigningReady) {
+    logger.warn("[配置缺失] 正式签名未就绪：app/keystore/release.jks 不存在，或 local.properties 中 " +
+            "sansen.releaseStorePassword / sansen.releaseKeyAlias / sansen.releaseKeyPassword 有缺失。" +
+            "release 产物将不签名，无法安装到设备。先跑 tools/generate-release-keystore.sh，" +
+            "再按 local.properties.template 填密码。")
+}
+
 android {
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.sansen.yeweiyi"
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 72
-        versionName "NEW.SS.A.Y11.00"
+        versionCode 1
+        versionName "NEW.SS.A.Y1.00"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "PRODUCT_KEY", secretField('sansen.productKey')
@@ -92,10 +111,24 @@ android {
 //        }
 //    }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile releaseKeystoreFile
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     externalNativeBuild {

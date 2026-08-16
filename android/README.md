@@ -56,7 +56,34 @@ cp local.properties.template local.properties
 > 且不打印任何内容——过期的"通过"和新鲜的"通过"看起来一模一样。
 > 或直接读 `app/build/test-results/testDebugUnitTest/*.xml`。
 
-APK 输出名自动带版本号与日期：`app_NEW.SS.A.Y11.00_<日期>_debug.apk`。
+APK 输出名自动带版本号与日期：`app_NEW.SS.A.Y1.00_<日期>_debug.apk`。
+
+### 打正式包
+
+一次性准备（本项目此前从未出过签名正式包，都是 debug 装机）：
+
+```bash
+tools/generate-release-keystore.sh          # 生成 app/keystore/release.jks（不进版本库）
+# 按提示把密码/别名填进 local.properties：
+#   sansen.releaseStorePassword / sansen.releaseKeyAlias / sansen.releaseKeyPassword
+```
+
+之后每次出包：
+
+```bash
+# 1. 改 app/build.gradle 里的 versionCode / versionName
+./gradlew :app:assembleRelease
+# 2. 产物：app/build/outputs/apk/release/app_<versionName>_<日期>_release.apk
+# 3. 核实确实是用正式 key 签的（而不是三项密码缺失导致的未签名产物）：
+$ANDROID_HOME/build-tools/<版本>/apksigner verify --print-certs <apk路径>
+```
+
+`release.jks` 或 `local.properties` 里三项签名配置缺任何一项，`assembleRelease` 仍会成功，
+但打印 `[配置缺失]` 警告，产物不签名、装不到设备——这是有意设计的降级行为，不是构建失败。
+
+> ⚠️ **`release.jks` 丢了，或密码忘了，现场已装机的设备就再也升不了级**（Android 要求同一
+> `applicationId` 的升级包用同一把 key 签名，只能卸载重装）。生成后务必把 keystore 文件和三项
+> 密码额外备份到仓库之外的地方，不要只留在一台开发机上。
 
 ---
 

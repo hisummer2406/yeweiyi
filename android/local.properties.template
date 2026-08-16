@@ -38,6 +38,19 @@ sansen.mqttUsername=
 # MQTT broker 连接密码
 sansen.mqttPassword=
 
+# --- 正式包签名（本地一次性配置，找项目负责人索取；见 tools/generate-release-keystore.sh）---
+# keystore 文件本体固定放在 app/keystore/release.jks，不进版本库，这里只填密码/别名。
+# 三项缺一，release 构建产物就不会签名，无法安装到设备。
+
+# keystore 整体密码（keytool -genkeypair 时设置的 -storepass）
+sansen.releaseStorePassword=
+
+# 签名 key 的别名（keytool -genkeypair 时设置的 -alias）
+sansen.releaseKeyAlias=
+
+# 该别名对应 key 的密码（keytool -genkeypair 时设置的 -keypass）
+sansen.releaseKeyPassword=
+
 # --- 开关（非敏感，缺失即为 false，不会告警）---
 
 # 探头报文录制。设为 true 后重新构建，设备会把探头轮询链路的输入报文与解析结果
