@@ -21,6 +21,7 @@ import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.User;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -130,18 +131,22 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
                 //Log.i("TAG", "点击了保存数据");
                 if (inHight!=0){
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.InHight,inHight );
+                    Singleton.getInstance().getSetData(Constans.InHight);
                 }
                 if (inTime!=0)
                 {
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.InTime,inTime );
+                    Singleton.getInstance().getSetData(Constans.InTime);
                 }
 
                 if (outHight!=0){
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.OutHight,outHight );
+                    Singleton.getInstance().getSetData(Constans.OutHight);
                 }
                 if (outTime!=0)
                 {
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.OutTime ,outTime);
+                    Singleton.getInstance().getSetData(Constans.OutTime);
                 }
                showWindDialog(2000);
                 break;
