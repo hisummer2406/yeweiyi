@@ -499,7 +499,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 				@Override
 				public void onClick(View view) {
 					if (!isUnload) {
-						InOilManager.setEnable(oilInOut.getOilId(), true);
+						InOilManager.getInstance().setEnable(oilInOut.getOilId(), true);
 						mCompositeDisposable.remove(observer);
 						dialog.dismiss();
 					}else{
@@ -541,7 +541,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 					inout_save.setEnabled(false);
 					inout_continue.setEnabled(false);
 					inout_stop.setEnabled(true);
-					InOilManager.setEnable(oilInOut.getOilId(), false);
+					InOilManager.getInstance().setEnable(oilInOut.getOilId(), false);
 					mCompositeDisposable.add(io.reactivex.Observable.interval(1, 1, TimeUnit.SECONDS)
 							.subscribeOn(Schedulers.io())
 							.observeOn(AndroidSchedulers.mainThread())
@@ -554,7 +554,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 					inout_detail_oil_state.setText(R.string.inoil_unload_stop);
 					inout_save.setEnabled(true);
 					isUnload = false;
-					InOilManager.setEnable(oilInOut.getOilId(), true);
+					InOilManager.getInstance().setEnable(oilInOut.getOilId(), true);
 					mCompositeDisposable.remove(observer);
 				}
 			});
