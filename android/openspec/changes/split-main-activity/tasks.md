@@ -110,6 +110,18 @@
 
 ## 6. 收尾
 
-- [ ] 6.1 确认 `MainActivity` 只保留 Activity 生命周期方法与四个协作类的组装代码，不再直接实现四类职责的业务逻辑
-- [ ] 6.2 更新 `docs/重构方案.md` 阶段3状态为已完成，记录实测结果（编译/单测/真机回归）
-- [ ] 6.3 更新 `CLAUDE.md`："Known landmines" 中 `android:onClick` 反射绑定的条目改为记录"已消除"，避免误导后来者以为地雷还在
+- [x] 6.1 核查 `MainActivity`（现 568 行，原 966 行）：§2-5 命名的四类职责（导航/轮询/业务动作/报警响应）
+  的业务逻辑已不再直接实现在 `MainActivity` 里，均已委托/移交给对应协作类。仍直接留在
+  `MainActivity` 的其他内容**不在本变更范围内**（proposal.md 的 New Capabilities 只列了这四个，
+  不是要把 `MainActivity` 清空）：`mContent`/17 个 Fragment 缓存字段（§2 决定不动，外部 100+ 处耦合）、
+  软键盘检测（`mOnGlobalLayoutListener`）、测试模式数据刷新（`setTestModel`/`setTest`，REFLASH_TIME
+  Handler 循环）、logo 彩蛋（`processClick`）、`DataResolveListener` 的强制 override
+  （`refreshData`/`inOutOilDection`/`oilcanDismiss`）、`ServerManager` 生命周期回调桩、
+  `updateTestOil`/`getTestOil` 静态方法、`switchContent`/`switchButtonState`/`clearButtonState`
+  （紧耦合 `mContent`/`tempButton`，随它们一起留下）。这些要么是未被列入四个新能力的既有职责，
+  要么是 Activity 生命周期/组装代码本身
+- [x] 6.2 更新 `docs/重构方案.md`"第 4 步 — 拆解 MainActivity"，记录 2026-08-19 完成状态与实测结果
+  （编译/单测通过，真机回归全部未做，五处真机验证任务如实标记待办）
+- [x] 6.3 更新 `CLAUDE.md`："Known landmines" 中 `android:onClick` 反射绑定条目改为记录"已消除"
+  （2026-08-19），并记录枚举时发现的三类分布（死菜单/孤儿布局/已被覆盖从未触发），作为
+  "遇到反射绑定不要假设它一定活着，先查有没有被后设的 setOnClickListener 覆盖"这一可复用教训
