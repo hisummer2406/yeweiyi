@@ -12,14 +12,17 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"yeweiyi-cloud/internal/api"
+	yqmqtt "yeweiyi-cloud/internal/mqtt"
 	"yeweiyi-cloud/internal/queue"
 	"yeweiyi-cloud/internal/store/db"
 )
 
-// unbuiltMQTTPublisher is a placeholder until internal/mqtt exists (blocked on Aliyun IoT
-// credentials, see CLAUDE.md "MQTT contract"). Nothing enqueues a write-back command yet either —
-// the config/correction write endpoints aren't built — so this never actually runs in practice; it
-// exists so the queue's worker pool can start now rather than being wired in later as a bigger change.
+// unbuiltMQTTPublisher is still a placeholder even though internal/mqtt now exists: the write-back
+// queue needs a "publish this config change" topic and an "operation acknowledged" response
+// semantics that don't exist on the device side yet (requestTankTable/requestTankSet/
+// requestProbeSet are subscribed-but-unhandled dead code — see CLAUDE.md "Device-side work this
+// project depends on"). Nothing enqueues a write-back command yet either (no config/correction
+// write endpoints exist), so this never actually runs in practice.
 type unbuiltMQTTPublisher struct{}
 
 func (unbuiltMQTTPublisher) PublishCommand(context.Context, string, int64, string, []byte) error {
@@ -70,6 +73,27 @@ func main() {
 		log.Fatalf("queue start: %v", err)
 	}
 	defer riverClient.Stop(ctx)
+
+	if brokerURL := os.Getenv("MQTT_BROKER_URL"); brokerURL != "" {
+		mqttClient := yqmqtt.NewClient(yqmqtt.Config{
+			BrokerURL:  brokerURL,
+			ProductKey: os.Getenv("MQTT_PRODUCT_KEY"),
+			ClientID:   getenv("MQTT_CLIENT_ID", "yeweiyi-cloud"),
+			Username:   os.Getenv("MQTT_USERNAME"),
+			Password:   os.Getenv("MQTT_PASSWORD"),
+			Queries:    queries,
+			Redis:      rdb,
+		})
+		if err := mqttClient.Connect(); err != nil {
+			log.Fatalf("mqtt connect: %v", err)
+		}
+		defer mqttClient.Disconnect()
+
+		poller := &yqmqtt.Poller{Client: mqttClient, Queries: queries}
+		go poller.Run(ctx)
+	} else {
+		log.Print("MQTT_BROKER_URL not set, skipping MQTT — no live device data will be ingested")
+	}
 
 	router := api.NewRouter(api.Deps{
 		Queries:   queries,

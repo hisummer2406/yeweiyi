@@ -1,3 +1,9 @@
+-- name: EnsureDevice :exec
+-- Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
+-- alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
+-- — handlers call this first so the FK insert doesn't fail.
+INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING;
+
 -- name: UpsertDeviceOnlineStatus :exec
 INSERT INTO devices (device_name, is_online, last_online_at, last_offline_at, updated_at)
 VALUES (
@@ -15,3 +21,8 @@ ON CONFLICT (device_name) DO UPDATE SET
 
 -- name: GetDevice :one
 SELECT * FROM devices WHERE device_name = $1;
+
+-- name: ListOnlineDeviceNames :many
+-- Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
+-- are actually online.
+SELECT device_name FROM devices WHERE is_online;

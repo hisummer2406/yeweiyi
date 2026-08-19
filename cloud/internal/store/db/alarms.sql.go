@@ -112,3 +112,37 @@ func (q *Queries) ListAlarmsDesc(ctx context.Context, arg ListAlarmsDescParams) 
 	}
 	return items, nil
 }
+
+const upsertAlarm = `-- name: UpsertAlarm :exec
+INSERT INTO alarms (device_name, device_local_id, time, info, guanhao, jiezhi)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (device_name, device_local_id, time) DO UPDATE SET
+    info = EXCLUDED.info,
+    guanhao = EXCLUDED.guanhao,
+    jiezhi = EXCLUDED.jiezhi,
+    received_at = now()
+`
+
+type UpsertAlarmParams struct {
+	DeviceName    string             `json:"device_name"`
+	DeviceLocalID int32              `json:"device_local_id"`
+	Time          pgtype.Timestamptz `json:"time"`
+	Info          string             `json:"info"`
+	Guanhao       string             `json:"guanhao"`
+	Jiezhi        string             `json:"jiezhi"`
+}
+
+// Ingests one row from thing/event/property/post/requestAlarm (design doc §4.2). Keyed on the
+// device's own (device_local_id, time) per CLAUDE.md's composite-key design — a redelivered
+// response after a reconnect just overwrites the same row instead of duplicating it.
+func (q *Queries) UpsertAlarm(ctx context.Context, arg UpsertAlarmParams) error {
+	_, err := q.db.Exec(ctx, upsertAlarm,
+		arg.DeviceName,
+		arg.DeviceLocalID,
+		arg.Time,
+		arg.Info,
+		arg.Guanhao,
+		arg.Jiezhi,
+	)
+	return err
+}

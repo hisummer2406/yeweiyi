@@ -29,6 +29,17 @@ services:
       timeout: 5s
       retries: 5
 
+  # Local stand-in for the Aliyun IoT broker, which isn't provisioned yet (see CLAUDE.md "MQTT
+  # contract"). Anonymous auth, no TLS — fine for localhost-only dev, not representative of the
+  # real broker's auth model.
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: yeweiyi-mosquitto
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./dev/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
 volumes:
   postgres_data:
   redis_data:

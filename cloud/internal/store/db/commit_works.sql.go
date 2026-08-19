@@ -112,3 +112,40 @@ func (q *Queries) ListShiftsDesc(ctx context.Context, arg ListShiftsDescParams) 
 	}
 	return items, nil
 }
+
+const upsertShift = `-- name: UpsertShift :exec
+INSERT INTO commit_works (device_name, device_local_id, work_id, time, end_time, info)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (device_name, device_local_id) DO UPDATE SET
+    work_id = EXCLUDED.work_id,
+    time = EXCLUDED.time,
+    end_time = EXCLUDED.end_time,
+    info = EXCLUDED.info,
+    received_at = now()
+`
+
+type UpsertShiftParams struct {
+	DeviceName    string             `json:"device_name"`
+	DeviceLocalID int32              `json:"device_local_id"`
+	WorkID        int32              `json:"work_id"`
+	Time          pgtype.Timestamptz `json:"time"`
+	EndTime       pgtype.Timestamptz `json:"end_time"`
+	Info          string             `json:"info"`
+}
+
+// Ingests one row from thing/event/property/post/requestShift (design doc §4.2). `info` is stored
+// as the raw JSON string the device sends (CommitWork.java's `info` field, DB column
+// `oilinfogson` — the two names differ on-device; the MQTT JSON key is `info`, matching the Java
+// field name, not the DB column name, since Gson serializes by field name with no @SerializedName
+// override).
+func (q *Queries) UpsertShift(ctx context.Context, arg UpsertShiftParams) error {
+	_, err := q.db.Exec(ctx, upsertShift,
+		arg.DeviceName,
+		arg.DeviceLocalID,
+		arg.WorkID,
+		arg.Time,
+		arg.EndTime,
+		arg.Info,
+	)
+	return err
+}

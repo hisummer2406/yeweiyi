@@ -11,6 +11,10 @@ import (
 )
 
 type Querier interface {
+	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
+	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
+	// — handlers call this first so the FK insert doesn't fail.
+	EnsureDevice(ctx context.Context, deviceName string) error
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetWriteBackCommand(ctx context.Context, id int64) (WriteBackCommand, error)
@@ -21,6 +25,9 @@ type Querier interface {
 	ListExpirableWriteBackCommands(ctx context.Context, createdAt pgtype.Timestamptz) ([]WriteBackCommand, error)
 	ListOilInOutAsc(ctx context.Context, arg ListOilInOutAscParams) ([]OilInOut, error)
 	ListOilInOutDesc(ctx context.Context, arg ListOilInOutDescParams) ([]OilInOut, error)
+	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
+	// are actually online.
+	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
 	// Design doc §5.2: "取出该设备全部 pending 命令(按创建时间排序)" — must be FIFO per device.
 	ListPendingWriteBackCommandsForDevice(ctx context.Context, deviceName string) ([]WriteBackCommand, error)
 	ListShiftsAsc(ctx context.Context, arg ListShiftsAscParams) ([]CommitWork, error)
@@ -28,7 +35,19 @@ type Querier interface {
 	MarkWriteBackCommandAcked(ctx context.Context, id int64) error
 	MarkWriteBackCommandFailed(ctx context.Context, id int64) error
 	MarkWriteBackCommandSent(ctx context.Context, id int64) error
+	// Ingests one row from thing/event/property/post/requestAlarm (design doc §4.2). Keyed on the
+	// device's own (device_local_id, time) per CLAUDE.md's composite-key design — a redelivered
+	// response after a reconnect just overwrites the same row instead of duplicating it.
+	UpsertAlarm(ctx context.Context, arg UpsertAlarmParams) error
 	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
+	// Ingests one row from thing/event/property/post/requestUnloadOil (design doc §4.2).
+	UpsertOilInOut(ctx context.Context, arg UpsertOilInOutParams) error
+	// Ingests one row from thing/event/property/post/requestShift (design doc §4.2). `info` is stored
+	// as the raw JSON string the device sends (CommitWork.java's `info` field, DB column
+	// `oilinfogson` — the two names differ on-device; the MQTT JSON key is `info`, matching the Java
+	// field name, not the DB column name, since Gson serializes by field name with no @SerializedName
+	// override).
+	UpsertShift(ctx context.Context, arg UpsertShiftParams) error
 }
 
 var _ Querier = (*Queries)(nil)

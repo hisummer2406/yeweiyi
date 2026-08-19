@@ -9,6 +9,18 @@ import (
 	"context"
 )
 
+const ensureDevice = `-- name: EnsureDevice :exec
+INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING
+`
+
+// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
+// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
+// — handlers call this first so the FK insert doesn't fail.
+func (q *Queries) EnsureDevice(ctx context.Context, deviceName string) error {
+	_, err := q.db.Exec(ctx, ensureDevice, deviceName)
+	return err
+}
+
 const getDevice = `-- name: GetDevice :one
 SELECT device_name, is_online, last_online_at, last_offline_at, updated_at FROM devices WHERE device_name = $1
 `
@@ -24,6 +36,32 @@ func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, err
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listOnlineDeviceNames = `-- name: ListOnlineDeviceNames :many
+SELECT device_name FROM devices WHERE is_online
+`
+
+// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
+// are actually online.
+func (q *Queries) ListOnlineDeviceNames(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listOnlineDeviceNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var device_name string
+		if err := rows.Scan(&device_name); err != nil {
+			return nil, err
+		}
+		items = append(items, device_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertDeviceOnlineStatus = `-- name: UpsertDeviceOnlineStatus :exec

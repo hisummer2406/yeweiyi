@@ -122,3 +122,53 @@ func (q *Queries) ListOilInOutDesc(ctx context.Context, arg ListOilInOutDescPara
 	}
 	return items, nil
 }
+
+const upsertOilInOut = `-- name: UpsertOilInOut :exec
+INSERT INTO oil_in_out (
+    device_name, device_local_id, oil_id, jiezhi, time,
+    begin_height, end_height, begin_volume, end_volume, begin_weight, end_weight
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+ON CONFLICT (device_name, device_local_id, time) DO UPDATE SET
+    oil_id = EXCLUDED.oil_id,
+    jiezhi = EXCLUDED.jiezhi,
+    begin_height = EXCLUDED.begin_height,
+    end_height = EXCLUDED.end_height,
+    begin_volume = EXCLUDED.begin_volume,
+    end_volume = EXCLUDED.end_volume,
+    begin_weight = EXCLUDED.begin_weight,
+    end_weight = EXCLUDED.end_weight,
+    received_at = now()
+`
+
+type UpsertOilInOutParams struct {
+	DeviceName    string             `json:"device_name"`
+	DeviceLocalID int32              `json:"device_local_id"`
+	OilID         int32              `json:"oil_id"`
+	Jiezhi        string             `json:"jiezhi"`
+	Time          pgtype.Timestamptz `json:"time"`
+	BeginHeight   float64            `json:"begin_height"`
+	EndHeight     float64            `json:"end_height"`
+	BeginVolume   float64            `json:"begin_volume"`
+	EndVolume     float64            `json:"end_volume"`
+	BeginWeight   float64            `json:"begin_weight"`
+	EndWeight     float64            `json:"end_weight"`
+}
+
+// Ingests one row from thing/event/property/post/requestUnloadOil (design doc §4.2).
+func (q *Queries) UpsertOilInOut(ctx context.Context, arg UpsertOilInOutParams) error {
+	_, err := q.db.Exec(ctx, upsertOilInOut,
+		arg.DeviceName,
+		arg.DeviceLocalID,
+		arg.OilID,
+		arg.Jiezhi,
+		arg.Time,
+		arg.BeginHeight,
+		arg.EndHeight,
+		arg.BeginVolume,
+		arg.EndVolume,
+		arg.BeginWeight,
+		arg.EndWeight,
+	)
+	return err
+}
