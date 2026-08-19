@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS write_back_commands;
+DROP TABLE IF EXISTS oil_can_sets;
+DROP TABLE IF EXISTS commit_works;
+DROP TABLE IF EXISTS oil_in_out;
+DROP TABLE IF EXISTS alarms;
+DROP TABLE IF EXISTS devices;
+DROP TABLE IF EXISTS users;
