@@ -86,10 +86,27 @@
 
 ## 5. 报警协调器（AlarmCoordinator）—— 放最后，可能依赖阶段2产出
 
-- [ ] 5.1 检查 `layer-data-and-hardware-boundaries` 的 `AlarmRepository` 是否已落地
-- [ ] 5.2 新建报警协调器类，承接报警响应 UI 逻辑；按 5.1 的结果对接 `AlarmRepository` 或临时依赖 `DBDataManager`（后者需加清晰 TODO 标注，见 spec 的"数据依赖显式声明"要求）
-- [ ] 5.3 跑 `assembleDebug` + 现有单测
-- [ ] 5.4 真机回归：触发一次真实报警场景，确认 UI 响应与拆分前一致
+> **2026-08-19 实施补充**：识别出的"报警响应 UI"范围是 `initAlarm()`（`AlarmManager.setMessageListener`
+> 驱动的顶部 `bar_main_alram` 文案更新）与 §4 报告里承诺划过来的 `btn_jieJing`（解警动作）。
+> `bar_but_alarm`（底部栏"报警记录"导航按钮）和 `refreshData`/`inOutOilDection` 里内嵌的
+> `AlarmManager.reshOilCan(oilCan)` 调用没有纳入——前者主要是导航（沿用 §2/§4 的既有边界，
+> 和 bar_but_saveoil/bar_but_inoil/bar_but_commitwork 一样留在 MainActivity），后者是探头数据
+> 刷新管线（`DataResolveListener` 接口的强制 override，且主要逻辑是出入库检测，报警只是顺带一句
+> 调用，拆出来意义不大）。
+- [x] 5.1 核查：`layer-data-and-hardware-boundaries` 的 `AlarmRepository` 只存在于另一个未合并分支
+  （PR #21），当前分支上不存在
+- [x] 5.2 新建 `activity/AlarmCoordinator.java`，持有 `MainActivity` 引用与 `bar_main_alram` TextView，
+  承接 `initAlarm()`/`btn_jieJing(View)`。核查：两者均不直接访问 `DBDataManager`/`AlarmRepository`
+  （只操作内存态的 `Singleton` 标志位与 `AlarmManager`/`SoundLightManager`/`SocketManager`），
+  没有需要标注 TODO 的持久化依赖，5.2 的"临时依赖 DBDataManager"分支不适用。
+  `MainActivity` 移除 `bar_main_alram` 字段（改由 `AlarmCoordinator` 持有），`initAlarm`/`btn_jieJing`
+  两处调用点分别改为 `alarmCoordinator.initAlarm()`（`initData()` 里）与
+  `alarmCoordinator::btn_jieJing`（`findView()` 的 onClick 绑定）。原方法体里的 `ct` 替换为 `main`
+  （两者本是同一实例，`ct` 是 protected 且与 `AlarmCoordinator` 不同包，直接不可访问）
+- [x] 5.3 `./gradlew :app:assembleDebug` BUILD SUCCESSFUL；`cleanTestDebugUnitTest :app:testDebugUnitTest`
+  81 个用例、0 失败，与基线一致
+- [ ] 5.4 真机回归：触发一次真实报警场景（顶部文案更新）与一次"解警"操作，确认 UI 响应与拆分前
+  一致——本机无法验证，如实留空
 
 ## 6. 收尾
 

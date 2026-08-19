@@ -24,7 +24,6 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseActivity;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilCan;
-import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.db.OilTest;
@@ -50,12 +49,9 @@ import com.sansen.yeweiyi.listener.SimpleWinCallback;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.PrintRunable;
 import com.sansen.yeweiyi.manager.AlarmManager;
-import com.sansen.yeweiyi.manager.AlarmManager.MessageListener;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
-import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SocketManager.DataResolveListener;
-import com.sansen.yeweiyi.manager.SoundLightManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.AndroidAdjustResizeBugFix;
@@ -80,12 +76,12 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private final int REFLASH_TIME = 2;
     public MainNavigator navigator;
     public MainActions mainActions = new MainActions(this);
+    public AlarmCoordinator alarmCoordinator;
 
     private TextView bar_but_alarm;
     private TextView bar_but_inoil;
     private TextView bar_but_saveoil;
     private TextView bar_but_commitwork;
-    private TextView bar_main_alram;
     public BaseFragment mContent;
     public MainFragment mainFragment;
     public SetFragment setFragment;
@@ -153,7 +149,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         main_root = (RelativeLayout) findViewById(R.id.main_main_main);
         mbar_tv_title = subLayout1.findViewById(R.id.bar_tv_title);
         // 报警显示
-        bar_main_alram = (TextView) findViewById(R.id.bar_main_alram);
+        alarmCoordinator = new AlarmCoordinator(this, (TextView) findViewById(R.id.bar_main_alram));
 
         FrameLayout fragment_container = findViewById(R.id.fragment_container);
 
@@ -170,7 +166,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         tempButton = null;
 
         // 底部导航栏点击绑定（原为 android:onClick 反射绑定，见 openspec/changes/split-main-activity §1）
-        findViewById(R.id.btn_jieJing).setOnClickListener(this::btn_jieJing);
+        findViewById(R.id.btn_jieJing).setOnClickListener(alarmCoordinator::btn_jieJing);
         findViewById(R.id.ly_bar_but_alarm).setOnClickListener(this::bar_but_alarm);
         findViewById(R.id.ly_bar_but_saveoil).setOnClickListener(this::bar_but_saveoil);
         findViewById(R.id.ly_bar_but_inoil).setOnClickListener(this::bar_but_inoil);
@@ -286,7 +282,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
                 return super.dispatchTouchEvent(event);
             }
         });
-        initAlarm();
+        alarmCoordinator.initAlarm();
         initLocation();
 
         handler.sendEmptyMessageDelayed(REFLASH_TIME, 1000);
@@ -327,44 +323,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
 
     private final int REQUEST_CODE=101;
-
-    /**
-     * AlarmManager的回调函数
-     */
-    private void initAlarm() {
-        AlarmManager.getInstance().beginDetection();
-        AlarmManager.getInstance().setMessageListener(new MessageListener() {
-            long time = 0;
-
-            public void getAlarmSate(OilMessage state) {
-                if (state == null) {
-                    if (System.currentTimeMillis() - time > 3000) {
-                        bar_main_alram.setText(SystemUtils
-                                .getRsStr(R.string.alarm_no));
-                        Const.isOpenAlarm = false;
-                    }
-                } else if (SharePrefUtil.getBoolean(ct, SharePrefUtil.TEST_DATA, false) && myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
-                    time = System.currentTimeMillis();
-                    if (myApplication.getmOilcanDataManager().getTestData(state.getOilCanId()) != null && state.getType() != OilMessage.PRO_ERR_CONN) {
-                        bar_main_alram.setText(state.toString());
-
-                    } else {
-                        bar_main_alram.setText(SystemUtils
-                                .getRsStr(R.string.alarm_no));
-                        Const.isOpenAlarm = false;
-                    }
-                } else if (myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
-                    time = System.currentTimeMillis();
-                    bar_main_alram.setText(state.toString());
-                    SocketManager.getInstance(MainActivity.this).sendAlarm(state.toString());
-
-                } else {
-                    SocketManager.getInstance(MainActivity.this).sendAlarm(state.toString());
-                    bar_main_alram.setText(state.toString());
-                }
-            }
-        });
-    }
 
     int how = 0;
 
@@ -436,19 +394,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         switchContent(mContent, mainFragment);
         clearButtonState();
         navigator.setMainButton(true);
-    }
-
-    public void btn_jieJing(View v) {
-        for (int i = 0; i < 14; i++) {
-            OilCan oilCan = MyApplication.getInstance().getmOilcanDataManager().getData(i);
-            if (MyApplication.getInstance().getmOilcanDataManager().getData(i) != null && MyApplication.getInstance().getmOilcanDataManager().getData(i).getAlarmState() != 0) {
-                Singleton.getInstance().isTemperAlarm[i] = false;
-                Singleton.getInstance().SoundLightAlarm[i] = false;
-                Singleton.getInstance().isWaterAlarm[i] = false;
-                Singleton.getInstance().isLowAlarms[i] = false;
-                SoundLightManager.getInstance().CanleAlarm();
-            }
-        }
     }
 
     public void btn_kuCunRecord(View v) {
