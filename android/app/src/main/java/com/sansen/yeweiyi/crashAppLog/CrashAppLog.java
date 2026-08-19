@@ -11,8 +11,6 @@ import android.widget.Toast;
 
 import com.lzy.okgo.model.Progress;
 import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.okGoUntils.OkgoNet;
-import com.sansen.yeweiyi.okGoUntils.RequestCallBack;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 import java.io.BufferedWriter;
