@@ -44,10 +44,21 @@
 
 ## 3. 轮询器（PollingCoordinator）
 
-- [ ] 3.1 新建轮询器类，承接定时任务与数据刷新触发逻辑（对接 `MyTimeTask`）
-- [ ] 3.2 搬移相关方法，确保 `MainActivity` 生命周期结束时轮询器正确停止（对应 spec 的"生命周期绑定正确"要求）
-- [ ] 3.3 跑 `assembleDebug` + 现有单测
-- [ ] 3.4 真机回归：观察定时刷新是否按原有频率正常触发，Activity 退出重进无异常
+> **2026-08-19 实施补充**：MainActivity 里实际有两条独立的定时机制——`MyTimeTask`（20 分钟一次的
+> TEST_DATA 标志位看门狗，`task`/`setTimer`/`stopTimer`）与一条独立的 1 秒周期 Handler 循环
+> （`REFLASH_TIME`，更新 `SerialPortEntrity.time` 并条件触发 `setTestModel()`）。3.1 明确点名只对接
+> `MyTimeTask`，且 Handler 循环耦合了 MainActivity 自身的 `handler` 字段与 `setTestModel`/`setTest`
+> 业务方法，不是同一个自然可提取的单元，本组未覆盖它——已在 `PollingCoordinator` 类注释里记录。
+> 顺带发现该 Handler 循环在 `onDestroy` 里从未被显式取消（`sendEmptyMessageDelayed` 持续自我重新调度，
+> Handler 隐式持有外部类引用），是一个既有、独立于本次拆分的生命周期问题，本组不处理，仅记录。
+- [x] 3.1 新建 `activity/PollingCoordinator.java`，承接 `MyTimeTask` 的启动（`start()`）
+- [x] 3.2 搬移 `setTimer`/`stopTimer` 的方法体；`task` 字段移入 `PollingCoordinator`；`MainActivity`
+  持有 `public PollingCoordinator pollingCoordinator` 并在 `findView()` 构造、`onDestroy()` 里
+  调用 `pollingCoordinator.stop()`（原 `stopTimer()` 私有方法零外部调用，直接删除，未保留委托包装）
+- [x] 3.3 `./gradlew :app:assembleDebug` BUILD SUCCESSFUL；`cleanTestDebugUnitTest :app:testDebugUnitTest`
+  81 个用例、0 失败，与基线一致
+- [ ] 3.4 真机回归：观察 TEST_DATA 标志位看门狗行为（20 分钟周期，难以在短时间真机回归里完整验证，
+  建议至少确认 App 冷启动到销毁重建过程中无崩溃/无泄漏告警）——本机无法验证，如实留空
 
 ## 4. 业务动作（MainActions）
 

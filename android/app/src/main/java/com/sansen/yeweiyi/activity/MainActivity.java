@@ -57,7 +57,6 @@ import com.sansen.yeweiyi.manager.AlarmManager.MessageListener;
 import com.sansen.yeweiyi.manager.CommitWorkManager;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
-import com.sansen.yeweiyi.manager.MyTimeTask;
 import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SocketManager.DataResolveListener;
 import com.sansen.yeweiyi.manager.SoundLightManager;
@@ -80,7 +79,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TimerTask;
 
 public class MainActivity extends BaseActivity implements DataResolveListener {
     public static ObservableField<String> title = new ObservableField<>();
@@ -113,7 +111,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;
-    private MyTimeTask task;
+    public PollingCoordinator pollingCoordinator;
     private RelativeLayout main_root;
     private TextView mbar_tv_title;
 
@@ -154,24 +152,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         ;
     };
 
-    private void setTimer() {
-        //1000*60*60*4
-        task = new MyTimeTask(1000 * 60 * 20, new TimerTask() {
-            @Override
-            public void run() {
-                Long time = System.currentTimeMillis() - SharePrefUtil.getLong(MyApplication.getInstance(), SharePrefUtil.RECORDTIME, 0);
-
-                if (time / (1000 * 60) > 30) {
-                    SharePrefUtil.saveBoolean(MyApplication.getInstance(), SharePrefUtil.TEST_DATA, false);
-                }
-                SharePrefUtil.saveLong(MyApplication.getInstance(), SharePrefUtil.RECORDTIME, System.currentTimeMillis());
-
-            }
-        });
-        task.start();
-    }
-
-
     private void findView() {
 
         View subLayout1 = (View) findViewById(R.id.title_bar);
@@ -204,7 +184,8 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         findViewById(R.id.ly_main_but_set).setOnClickListener(this::main_but_set);
 
         LinearLayout radio_bar = findViewById(R.id.radio_bar);
-        setTimer();
+        pollingCoordinator = new PollingCoordinator();
+        pollingCoordinator.start();
 
         navigator = new MainNavigator(getSupportFragmentManager(), fragment_container, radio_bar);
         dbManager = myApplication.getmDBManager();
@@ -663,7 +644,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     protected void onDestroy() {
         super.onDestroy();
         mServerManager.unRegister();
-        stopTimer();
+        pollingCoordinator.stop();
     }
 
     private List<String> mAddressList;
@@ -717,10 +698,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
     public static int getTestOil(int how) {
         return testOil.get(how) == null ? 0 : testOil.get(Integer.valueOf(how));
-    }
-
-    private void stopTimer() {
-        task.stop();
     }
 
 }
