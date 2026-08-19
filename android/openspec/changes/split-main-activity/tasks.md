@@ -62,10 +62,27 @@
 
 ## 4. 业务动作（MainActions）
 
-- [ ] 4.1 新建业务动作类，承接出入库业务动作与密码校验逻辑
-- [ ] 4.2 搬移相关方法（若 `layer-data-and-hardware-boundaries` 的 `OilTankRepository`/`StockRepository` 已就绪，直接对接；否则暂时保留对 `DBDataManager` 的依赖并加 TODO）
-- [ ] 4.3 跑 `assembleDebug` + 现有单测
-- [ ] 4.4 真机回归：执行一次完整出入库动作、一次密码校验失败场景
+> **2026-08-19 实施补充**：`layer-data-and-hardware-boundaries` 的 Repository 层只存在于另一个未合并分支
+> （PR #21），当前分支（基于 `main`）上不存在，所以 4.2 的"若已就绪直接对接"分支不适用。经排查，本组
+> 搬移的方法本来就不直接访问 `DBDataManager`/`OilTankRepository`/`StockRepository`（`but_startJiaoBan`/
+> `but_endJiaoBan` 只经 `CommitWorkManager`/`OilcanDataManager`，`main_but_set` 只查 `SharePrefUtil`），
+> 所以也没有需要标注 TODO 的持久化依赖——4.2 的两个分支都不成立，如实记录。
+> 另外核实 `bar_but_alarm`/`bar_but_saveoil`/`bar_but_inoil`/`bar_but_commitwork`/`btn_kuCunRecord`/
+> `btn_jieJing` 这些底部导航栏按钮方法主要是"导航到某 Fragment"，不是"出入库业务动作"，
+> 沿用 §2 的既有决定留在 MainActivity，未纳入本组；`btn_jieJing`（解警）是报警响应动作，划给 §5。
+- [x] 4.1 新建 `activity/MainActions.java`，持有 `MainActivity` 引用（复用其 `mContent`/`setFragment`/
+  `navigator`/`clearButtonState`——这些字段仍归 MainActivity 所有，见 §2）
+- [x] 4.2 搬移 `main_but_set`（密码校验 + 导航到设置页）、`showInputPsw`（其私有辅助方法）、
+  `but_startJiaoBan`、`but_endJiaoBan`、`but_daoChuRuKu`（既有的空实现桩，"导出数据"按钮本就
+  不做任何事，行为未变）。`clearButtonState()` 由 private 改为 public 供 `MainActions` 调用。
+  外部调用点更新：`CommitWorkRecortFragment`（2 处，`main.but_xxxJiaoBan` → `main.mainActions.but_xxxJiaoBan`）、
+  `SaveOilFragment`（1 处，`main.but_daoChuRuKu` → `main.mainActions.but_daoChuRuKu`）、
+  `MainActivity.findView()` 里 `ly_main_but_set` 的绑定改为 `mainActions::main_but_set`。
+  顺带删除 `but_jiaoBan(View v)`——`git grep -F` 确认全项目零引用（既不在任何布局 XML 里，也没有
+  Java 调用点），是一段本就完全死掉的桩方法，不属于"搬移"，直接删除
+- [x] 4.3 `./gradlew :app:assembleDebug` BUILD SUCCESSFUL；`cleanTestDebugUnitTest :app:testDebugUnitTest`
+  81 个用例、0 失败，与基线一致
+- [ ] 4.4 真机回归：执行一次完整交班（开始/结束）动作、一次密码校验失败场景——本机无法验证，如实留空
 
 ## 5. 报警协调器（AlarmCoordinator）—— 放最后，可能依赖阶段2产出
 

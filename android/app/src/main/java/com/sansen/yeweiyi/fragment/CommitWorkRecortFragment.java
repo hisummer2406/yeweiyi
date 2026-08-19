@@ -151,8 +151,8 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 		tvTitle.setText("交班记录");
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 		ly_jiaoBanData.setOnClickListener(this);
-		ly_startJiaoBan.setOnClickListener(v -> main.but_startJiaoBan(v));
-		ly_endJiaoBan.setOnClickListener(v -> main.but_endJiaoBan(v));
+		ly_startJiaoBan.setOnClickListener(v -> main.mainActions.but_startJiaoBan(v));
+		ly_endJiaoBan.setOnClickListener(v -> main.mainActions.but_endJiaoBan(v));
 		rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 		if (!Singleton.getInstance().IsJiaoBan){
 			ly_jiaoBanData.setVisibility(View.GONE);

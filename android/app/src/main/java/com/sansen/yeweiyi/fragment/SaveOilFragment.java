@@ -84,7 +84,7 @@ public class SaveOilFragment extends BaseFragment implements InOutAdapter.OnItem
 		tv_time=headerView.findViewById(R.id.main_time);
 		tvTitle.setText("库存记录");
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
-		rootView.findViewById(R.id.ly_ruKu).setOnClickListener(v -> main.but_daoChuRuKu(v));
+		rootView.findViewById(R.id.ly_ruKu).setOnClickListener(v -> main.mainActions.but_daoChuRuKu(v));
 		rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 	}
 	OnPropertyChangedCallback callback = new OnPropertyChangedCallback() {

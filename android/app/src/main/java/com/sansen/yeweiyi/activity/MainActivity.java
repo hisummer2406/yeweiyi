@@ -8,7 +8,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
-import android.support.annotation.RequiresApi;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.MotionEvent;
@@ -19,7 +18,6 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
@@ -39,7 +37,6 @@ import com.sansen.yeweiyi.fragment.CommitWorkRecortFragment;
 import com.sansen.yeweiyi.fragment.InOilFragment;
 import com.sansen.yeweiyi.fragment.JiLuFragment;
 import com.sansen.yeweiyi.fragment.LoadingCreateTableFragment;
-import com.sansen.yeweiyi.fragment.LoginDialog;
 import com.sansen.yeweiyi.fragment.MainFragment;
 import com.sansen.yeweiyi.fragment.OilCanFragment;
 import com.sansen.yeweiyi.fragment.OilCanSetFragment;
@@ -54,7 +51,6 @@ import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.PrintRunable;
 import com.sansen.yeweiyi.manager.AlarmManager;
 import com.sansen.yeweiyi.manager.AlarmManager.MessageListener;
-import com.sansen.yeweiyi.manager.CommitWorkManager;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.SocketManager;
@@ -63,10 +59,8 @@ import com.sansen.yeweiyi.manager.SoundLightManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.AndroidAdjustResizeBugFix;
-import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
-import com.sansen.yeweiyi.utils.PWDTools;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -85,6 +79,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private static final String TAG = "MainActivity";
     private final int REFLASH_TIME = 2;
     public MainNavigator navigator;
+    public MainActions mainActions = new MainActions(this);
 
     private TextView bar_but_alarm;
     private TextView bar_but_inoil;
@@ -181,7 +176,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         findViewById(R.id.ly_bar_but_inoil).setOnClickListener(this::bar_but_inoil);
         findViewById(R.id.ly_bar_but_commitwork).setOnClickListener(this::bar_but_commitwork);
         findViewById(R.id.btn_kuCunRecord).setOnClickListener(this::btn_kuCunRecord);
-        findViewById(R.id.ly_main_but_set).setOnClickListener(this::main_but_set);
+        findViewById(R.id.ly_main_but_set).setOnClickListener(mainActions::main_but_set);
 
         LinearLayout radio_bar = findViewById(R.id.radio_bar);
         pollingCoordinator = new PollingCoordinator();
@@ -443,50 +438,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         navigator.setMainButton(true);
     }
 
-    public void but_daoChuRuKu(View v) {
-        String idName = getResources().getResourceEntryName(v.getId());
-    }
-
-    public void but_jiaoBan(View v) {
-        String idName = getResources().getResourceEntryName(v.getId());
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.O)
-    public void main_but_set(View v) {
-        // 有点多，需要优化
-        String pwd = SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.SetPWD, "123456");
-        if (!"123456".equals(pwd)) {
-            LoginDialog dialog = new LoginDialog();
-            dialog.setOnConfirmListener(input -> {
-
-                if (input.equals(pwd) || input.equals(PWDTools.getSetPwd())) {
-                    showInputPsw(this.mainFragment);
-                    dialog.dismiss();
-
-                } else {
-                    Toast.makeText(MainActivity.this, "输入内容：" + input + "  密码错误", Toast.LENGTH_SHORT).show();
-                }
-
-            });
-            dialog.show(getFragmentManager(), "LoginDialog");
-        } else {
-            showInputPsw(this.mainFragment);
-        }
-
-    }
-
-
-    private void showInputPsw(final BaseFragment fragment) {
-        if (setFragment == null) {
-            setFragment = new SetFragment();
-
-        }
-        switchContent(mContent, setFragment);
-        clearButtonState();
-        navigator.setMainButton(false);
-    }
-
-
     public void btn_jieJing(View v) {
         for (int i = 0; i < 14; i++) {
             OilCan oilCan = MyApplication.getInstance().getmOilcanDataManager().getData(i);
@@ -554,8 +505,9 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     /**
      * 取消当前高亮态但不设新的高亮目标（用于返回主页/设置——这两处没有可见的
      * 底部栏按钮与之对应，见 openspec/changes/split-main-activity §1）。
+     * 非 private：MainActions（§4）在密码校验通过后导航到设置页时需要调用。
      */
-    private void clearButtonState() {
+    public void clearButtonState() {
         if (tempButton != null) {
             tempButton.setEnabled(true);
             tempButton = null;
@@ -569,38 +521,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         navigator.setMainButton(false);
     }
 
-    public void but_startJiaoBan(View v) {
-        SparseArray<OilCan> oilCan = myApplication.getmOilcanDataManager().getData();
-        if (myApplication.getmOilcanDataManager().getData().size() > 0) {
-            CommitWorkManager.getInstance()
-                    .commitWork(
-                            myApplication.getmOilcanDataManager()
-                                    .getData());
-            SystemUtils.showRsToast(R.string.commitwork_success);
-            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan, 1);
-
-            commitWorkRecortFragment.setUIShow(true);
-        } else {
-            SystemUtils.showRsToast(R.string.commitwork_errpr);
-        }
-    }
-
-    public void but_endJiaoBan(View v) {
-        if (myApplication.getmOilcanDataManager().getData().size() > 0) {
-            CommitWorkManager.getInstance()
-                    .commitWork(
-                            myApplication.getmOilcanDataManager()
-                                    .getData(), "");
-            SystemUtils.showRsToast(R.string.commitwork_success);
-            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan, 0);
-            commitWorkRecortFragment.setUIShow(false);
-
-        } else {
-            SystemUtils.showRsToast(R.string.commitwork_errpr);
-        }
-
-
-    }
 
     @Override
     public void oilcanDismiss(OilCan obj) {
