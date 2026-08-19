@@ -19,7 +19,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.Window;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
@@ -77,7 +76,6 @@ import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
-import com.sansen.yeweiyi.view.InputDialogActivity;
 import com.sansen.yeweiyi.web.handler.ServerManager;
 
 import java.io.File;
@@ -96,11 +94,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private FragmentManager fragmentManager;
     private FrameLayout fragment_container;
 
-    private TextView main_but_main;
-    private TextView main_but_set;
-    private TextView main_but_commitwork;
-    private TextView main_but_sidelea;
-    private TextView main_but_print;
     private TextView bar_but_alarm;
     private TextView bar_but_inoil;
     private TextView bar_but_saveoil;
@@ -127,8 +120,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;
-    private Button main_but_alarm;
-    private Button main_but_driver;
     private LinearLayout radio_bar;
     private MyTimeTask task;
     private RelativeLayout main_root;
@@ -195,54 +186,10 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         View subLayout1 = (View) findViewById(R.id.title_bar);
         main_root = (RelativeLayout) findViewById(R.id.main_main_main);
         mbar_tv_title = subLayout1.findViewById(R.id.bar_tv_title);
-        // 主页时间
-        //  main_time = (TextView) findViewById(R.id.main_time);
-        // 主页按钮 返回主页
-        main_but_main = (Button) findViewById(R.id.main_but_main);
-        // 设置按钮
-        main_but_set = (Button) findViewById(R.id.main_but_set);
-        // 交班按钮
-        main_but_commitwork = (Button) findViewById(R.id.main_but_commitwork);
-        // 侧漏按钮
-        main_but_sidelea = (Button) findViewById(R.id.main_but_sidelea);
-        // 打印按钮
-        main_but_print = (Button) findViewById(R.id.main_but_print);
-        main_but_alarm = (Button) findViewById(R.id.main_but_alarm);
         // 报警显示
         bar_main_alram = (TextView) findViewById(R.id.bar_main_alram);
 
-        //驱动板控制
-        main_but_driver = findViewById(R.id.main_but_driver);
         fragment_container = findViewById(R.id.fragment_container);
-        //获取到驱动板id后直接判断隐藏还是显示，但是他对应的fragment还是得正常去创建添加。
-        refreshBut();
-
-
-        if (SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh").equals("zh")) {
-            main_but_main.setBackgroundResource(R.drawable.sansen_home_but_selector);
-            main_but_set.setBackgroundResource(R.drawable.sansen_set_but_selector);
-            main_but_commitwork.setBackgroundResource(R.drawable.sansen_jiaoban_but_selector);
-            main_but_print.setBackgroundResource(R.drawable.sansen_print_but_selector);
-            main_but_sidelea.setBackgroundResource(R.drawable.sansen_jiance_but_selector);
-            main_but_alarm.setBackgroundResource(R.drawable.sansen_alarm_but_selector);
-            main_but_driver.setBackgroundResource(R.drawable.sansen_home_but_driver);
-        } else if (SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh").equals("en")) {
-            main_but_main.setBackgroundResource(R.drawable.sansen_home_but_selector_en);
-            main_but_set.setBackgroundResource(R.drawable.sansen_set_but_selecto_en);
-            main_but_commitwork.setBackgroundResource(R.drawable.sansen_jiaoban_but_selector_en);
-            main_but_print.setBackgroundResource(R.drawable.sansen_print_but_selector_en);
-            main_but_sidelea.setBackgroundResource(R.drawable.sansen_jiance_but_selector_en);
-            main_but_alarm.setBackgroundResource(R.drawable.sansen_alarm_but_selector_en);
-            main_but_driver.setBackgroundResource(R.drawable.sansen_home_but_driver_en);
-        } else if (SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh").equals("th")) {
-            main_but_main.setBackgroundResource(R.drawable.sansen_home_but_selector_th);
-            main_but_set.setBackgroundResource(R.drawable.sansen_set_but_selecto_th);
-            main_but_commitwork.setBackgroundResource(R.drawable.sansen_jiaoban_but_selector_th);
-            main_but_print.setBackgroundResource(R.drawable.sansen_print_but_selector_th);
-            main_but_sidelea.setBackgroundResource(R.drawable.sansen_jiance_but_selector_th);
-            main_but_alarm.setBackgroundResource(R.drawable.sansen_alarm_but_selector_th);
-            main_but_driver.setBackgroundResource(R.drawable.sansen_home_but_driver_th);
-        }
 
         // 进出油记录
         bar_but_inoil = findViewById(R.id.bar_but_inoil);
@@ -253,9 +200,17 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         bar_but_commitwork = findViewById(R.id.bar_but_commitwork);
         // 报警记录
         bar_but_alarm = findViewById(R.id.bar_but_alarm);
-        // 临时按钮 表示当前主页处于哪个页面，并且该按钮不可被点击
-        tempButton = main_but_main;
-        main_but_main.setEnabled(false);
+        // 临时按钮 表示当前主页处于哪个页面，并且该按钮不可被点击；初始无高亮（首页无对应可视按钮）
+        tempButton = null;
+
+        // 底部导航栏点击绑定（原为 android:onClick 反射绑定，见 openspec/changes/split-main-activity §1）
+        findViewById(R.id.btn_jieJing).setOnClickListener(this::btn_jieJing);
+        findViewById(R.id.ly_bar_but_alarm).setOnClickListener(this::bar_but_alarm);
+        findViewById(R.id.ly_bar_but_saveoil).setOnClickListener(this::bar_but_saveoil);
+        findViewById(R.id.ly_bar_but_inoil).setOnClickListener(this::bar_but_inoil);
+        findViewById(R.id.ly_bar_but_commitwork).setOnClickListener(this::bar_but_commitwork);
+        findViewById(R.id.btn_kuCunRecord).setOnClickListener(this::btn_kuCunRecord);
+        findViewById(R.id.ly_main_but_set).setOnClickListener(this::main_but_set);
 
         radio_bar = findViewById(R.id.radio_bar);
         setTimer();
@@ -546,14 +501,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         AlarmManager.getInstance().reshOilCan(oilCan);
     }
 
-    public void refreshBut() {
-        if (SharePreManager.getRelaySwitch()) {
-            main_but_driver.setVisibility(View.GONE);
-        } else {
-            main_but_driver.setVisibility(View.GONE);
-        }
-    }
-
     public void main_but_main(View v) {
         params.addRule(RelativeLayout.BELOW, R.id.title_bar);
         params.addRule(RelativeLayout.ABOVE, R.id.radio_bar);
@@ -562,7 +509,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
             mainFragment = new MainFragment();
         }
         switchContent(mContent, mainFragment);
-        switchButtonState(main_but_main);
+        clearButtonState();
         setMainButton(true);
     }
 
@@ -605,7 +552,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
         }
         switchContent(mContent, setFragment);
-        switchButtonState(main_but_set);
+        clearButtonState();
         setMainButton(false);
     }
 
@@ -669,9 +616,20 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     }
 
     public void switchButtonState(TextView from) {
-        tempButton.setEnabled(true);
+        clearButtonState();
         from.setEnabled(false);
         tempButton = from;
+    }
+
+    /**
+     * 取消当前高亮态但不设新的高亮目标（用于返回主页/设置——这两处没有可见的
+     * 底部栏按钮与之对应，见 openspec/changes/split-main-activity §1）。
+     */
+    private void clearButtonState() {
+        if (tempButton != null) {
+            tempButton.setEnabled(true);
+            tempButton = null;
+        }
     }
 
     public void bar_but_commitwork(View v) {
@@ -679,17 +637,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         switchContent(mContent, commitWorkRecortFragment);
         switchButtonState(bar_but_commitwork);
         setMainButton(false);
-    }
-
-    public void main_but_commitwork(View v) {
-        Intent intent = new Intent(this, InputDialogActivity.class);
-        Bundle bundle = new Bundle();
-        bundle.putString("title", getResources().getString(R.string.commitwork));
-        bundle.putString("msg", getResources().getString(R.string.input_user_psw));
-        bundle.putBoolean("ispsw", true);
-        intent.putExtra("inputDialog", bundle);
-        startActivityForResult(intent, 1001);
-
     }
 
     public void but_startJiaoBan(View v) {

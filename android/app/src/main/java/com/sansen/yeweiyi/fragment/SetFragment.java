@@ -246,6 +246,7 @@ public class SetFragment extends BaseFragment {
         tv_time = headerView.findViewById(R.id.main_time);
         tvTitle.setText("设置");
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
+        rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 
     }
 

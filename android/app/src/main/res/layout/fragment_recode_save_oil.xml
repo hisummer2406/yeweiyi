@@ -112,7 +112,6 @@
             android:layout_width="@dimen/dp_150"
             android:layout_height="wrap_content"
             android:background="#0066A2"
-            android:onClick="but_daoChuRuKu"
             android:layout_gravity="center"
             android:gravity="center"
             android:orientation="horizontal">
@@ -133,13 +132,13 @@
                 android:text="导出数据"/>
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/ly_backHome"
             android:layout_marginLeft="@dimen/dp_40"
             android:layout_marginBottom="@dimen/dp_20"
             android:layout_marginTop="@dimen/dp_20"
             android:layout_width="@dimen/dp_150"
             android:layout_height="wrap_content"
             android:background="#0066A2"
-            android:onClick="main_but_main"
             android:layout_gravity="center"
             android:gravity="center"
             android:orientation="horizontal">

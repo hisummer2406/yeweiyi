@@ -73,7 +73,6 @@
             android:layout_marginRight="@dimen/dp_40"
             android:background="#0066A2"
             android:gravity="center"
-            android:onClick="but_startJiaoBan"
             android:orientation="horizontal">
 
             <ImageView
@@ -102,7 +101,6 @@
             android:layout_marginRight="@dimen/dp_40"
             android:background="#0066A2"
             android:gravity="center"
-            android:onClick="but_endJiaoBan"
             android:orientation="horizontal">
 
             <ImageView
@@ -133,7 +131,6 @@
             android:layout_marginBottom="@dimen/dp_20"
             android:background="#0066A2"
             android:gravity="center"
-            android:onClick="but_daoChuJiaoBan"
             android:orientation="horizontal">
 
             <ImageView
@@ -155,13 +152,12 @@
         </LinearLayout>
 
         <LinearLayout
-
+            android:id="@+id/ly_backHome"
             android:layout_width="@dimen/dp_150"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:background="#0066A2"
             android:gravity="center"
-            android:onClick="main_but_main"
             android:orientation="horizontal">
 
             <ImageView
