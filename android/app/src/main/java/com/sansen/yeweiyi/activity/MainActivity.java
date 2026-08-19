@@ -9,14 +9,10 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
 import android.support.annotation.RequiresApi;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentTransaction;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.Window;
 import android.widget.FrameLayout;
@@ -90,9 +86,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public static ObservableField<String> title = new ObservableField<>();
     private static final String TAG = "MainActivity";
     private final int REFLASH_TIME = 2;
-    // fragment管理器
-    private FragmentManager fragmentManager;
-    private FrameLayout fragment_container;
+    public MainNavigator navigator;
 
     private TextView bar_but_alarm;
     private TextView bar_but_inoil;
@@ -100,7 +94,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private TextView bar_but_commitwork;
     private TextView bar_main_alram;
     public BaseFragment mContent;
-    private FragmentTransaction transaction;
     public MainFragment mainFragment;
     public SetFragment setFragment;
     public JiLuFragment jiLuFragment;
@@ -120,11 +113,9 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;
-    private LinearLayout radio_bar;
     private MyTimeTask task;
     private RelativeLayout main_root;
     private TextView mbar_tv_title;
-    private RelativeLayout.LayoutParams params;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -189,7 +180,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         // 报警显示
         bar_main_alram = (TextView) findViewById(R.id.bar_main_alram);
 
-        fragment_container = findViewById(R.id.fragment_container);
+        FrameLayout fragment_container = findViewById(R.id.fragment_container);
 
         // 进出油记录
         bar_but_inoil = findViewById(R.id.bar_but_inoil);
@@ -212,15 +203,10 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         findViewById(R.id.btn_kuCunRecord).setOnClickListener(this::btn_kuCunRecord);
         findViewById(R.id.ly_main_but_set).setOnClickListener(this::main_but_set);
 
-        radio_bar = findViewById(R.id.radio_bar);
+        LinearLayout radio_bar = findViewById(R.id.radio_bar);
         setTimer();
 
-        params = (RelativeLayout.LayoutParams) fragment_container.getLayoutParams();
-        if (params == null) {
-            params = new RelativeLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-        }
+        navigator = new MainNavigator(getSupportFragmentManager(), fragment_container, radio_bar);
         dbManager = myApplication.getmDBManager();
 
 
@@ -281,53 +267,18 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private void setDefaultFragment() {
         if (mainFragment == null) {
             mainFragment = new MainFragment();
-            fragmentManager = getSupportFragmentManager();
-            transaction = fragmentManager.beginTransaction();
-            transaction.add(R.id.fragment_container, mainFragment).commit();
+            navigator.setDefaultFragment(mainFragment);
             mContent = mainFragment;
         }
         mainFragment.initTitle();
-        setMainButton(true);
+        navigator.setMainButton(true);
 
-    }
-
-    private void setMainButton(boolean isShow) {
-        if (isShow) {
-            radio_bar.setVisibility(View.VISIBLE);
-        } else {
-            radio_bar.setVisibility(View.INVISIBLE);
-        }
     }
 
     public void switchContent(BaseFragment from, BaseFragment to) {
-        if (to instanceof MainFragment) {
-            params.addRule(RelativeLayout.BELOW, R.id.title_bar);
-            params.addRule(RelativeLayout.ABOVE, R.id.radio_bar);
-        } else {
-            params.removeRule(RelativeLayout.BELOW);
-            params.removeRule(RelativeLayout.ABOVE);
-
-        }
-
-        if (mContent != to) {
+        if (navigator.switchContent(from, to)) {
             mContent = to;
-            FragmentTransaction transaction = fragmentManager
-                    .beginTransaction();
-            if (!to.isAdded()) { // 先判..断是否被add过
-                transaction.hide(from).add(R.id.fragment_container, to)
-                        .commit(); // 隐藏当前的fragment，add下一个到Activity中
-            } else {
-                transaction.hide(from).show(to).commit(); // 隐藏当前的fragment，显示下一个
-            }
-
         }
-        setTitle(to);
-
-    }
-
-    private void setTitle(Fragment to) {
-        BaseFragment fragment = (BaseFragment) to;
-        fragment.initTitle();
     }
 
     @Override
@@ -502,15 +453,13 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     }
 
     public void main_but_main(View v) {
-        params.addRule(RelativeLayout.BELOW, R.id.title_bar);
-        params.addRule(RelativeLayout.ABOVE, R.id.radio_bar);
         // 有点多，需要优化
         if (mainFragment == null) {
             mainFragment = new MainFragment();
         }
         switchContent(mContent, mainFragment);
         clearButtonState();
-        setMainButton(true);
+        navigator.setMainButton(true);
     }
 
     public void but_daoChuRuKu(View v) {
@@ -553,7 +502,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, setFragment);
         clearButtonState();
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
 
@@ -579,7 +528,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, stockFragment);
         switchButtonState(bar_but_saveoil);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void bar_but_alarm(View v) {
@@ -588,7 +537,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
             switchContent(mContent, alarmFragment);
         }
         switchButtonState(bar_but_alarm);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void bar_but_inoil(View v) {
@@ -600,7 +549,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, inOilFragment);
         switchButtonState(bar_but_inoil);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void bar_but_saveoil(View v) {
@@ -612,7 +561,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, outStockFragment);
         switchButtonState(bar_but_saveoil);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void switchButtonState(TextView from) {
@@ -636,7 +585,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         commitWorkRecortFragment = new CommitWorkRecortFragment();
         switchContent(mContent, commitWorkRecortFragment);
         switchButtonState(bar_but_commitwork);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void but_startJiaoBan(View v) {

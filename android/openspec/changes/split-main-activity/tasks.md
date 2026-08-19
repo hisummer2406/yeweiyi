@@ -16,10 +16,31 @@
 
 ## 2. 导航器（MainNavigator）
 
-- [ ] 2.1 新建导航器类，承接 Fragment 切换与返回栈逻辑
-- [ ] 2.2 搬移相关方法，`MainActivity` 改为持有导航器实例并委托
-- [ ] 2.3 跑 `assembleDebug` + 现有单测
-- [ ] 2.4 真机回归：走一遍全部主要导航路径（各 Fragment 入口 + 返回）
+> **2026-08-19 实施补充**：`mContent` 与 17 个 Fragment 缓存字段（`mainFragment`/`setFragment`/...）在
+> `fragment/` 包下被外部直接读写共 100+ 处（`main.mContent` 57 处、`main.switchContent(...)` 17 个文件、
+> 各 Fragment 缓存字段合计 100+ 处，如 `main.setSeniorFragment` 26 处、`main.setFragment` 43 处），把它们
+> 搬进导航器会波及全项目数十个文件，远超本组"搬 Fragment 切换机制"的范围。核实这些字段/`switchContent`
+> 的 `from` 实参在全部内部+外部调用点都严格等于 `mContent`（`grep` 零反例）后，采用以下拆分：
+> **搬入 MainNavigator** 的是纯机制——`FragmentManager`、`fragment_container` 派生的
+> `RelativeLayout.LayoutParams`、`radio_bar` 显隐、`switchContent`/`setDefaultFragment`/`setMainButton`
+> 方法体；**留在 MainActivity** 的是 `mContent` 与全部 17 个 Fragment 缓存字段（外部依赖太广，且并非
+> "导航"这一个职责该管，而是全项目共享的 fragment 池）。`MainActivity.switchContent(BaseFragment, BaseFragment)`
+> 保留为委托方法（签名不变，内部转发给 `navigator.switchContent` 并按返回值更新 `mContent`），
+> 因此全部 17 个外部调用文件与 57 处 `main.mContent` 引用**零改动**。
+- [x] 2.1 新建 `activity/MainNavigator.java`，承接 `switchContent`/`setDefaultFragment`/`setMainButton`
+  三个方法体与其依赖的 `FragmentManager`/`RelativeLayout.LayoutParams`/`radio_bar`
+- [x] 2.2 `MainActivity` 移除 `fragmentManager`/`fragment_container`/`transaction`/`params`/`radio_bar` 字段
+  （`fragment_container`/`radio_bar` 降级为 `findView()` 内的局部变量，仅用于构造 `navigator`），
+  持有 `public MainNavigator navigator` 并在 `findView()` 里构造；`switchContent` 改为委托方法；
+  `setDefaultFragment()`/`main_but_main`/`main_but_set` 等 6 处 `setMainButton(...)` 调用点改为
+  `navigator.setMainButton(...)`。顺带删除 `main_but_main` 里两行与 `switchContent` 内部逻辑完全重复、
+  等价于 no-op 的 `params.addRule(...)`（`mainFragment` 恒为 `MainFragment` 实例，
+  `switchContent` 的 `to instanceof MainFragment` 分支本就会做同样的事）。移除 4 个不再使用的 import
+  （`Fragment`/`FragmentManager`/`FragmentTransaction`/`ViewGroup`）
+- [x] 2.3 `./gradlew :app:assembleDebug` BUILD SUCCESSFUL；`cleanTestDebugUnitTest :app:testDebugUnitTest`
+  81 个用例、0 失败，与基线一致
+- [ ] 2.4 真机回归：走一遍全部主要导航路径（各 Fragment 入口 + 返回），重点关注 `main_but_main` 里
+  删掉的两行 `params.addRule` 是否确如分析所料是 no-op（预期无可观察差异）——本机无法验证，如实留空
 
 ## 3. 轮询器（PollingCoordinator）
 
