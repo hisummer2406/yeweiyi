@@ -39,8 +39,8 @@
                 android:layout_marginTop="@dimen/dp_30"
                 android:background="@drawable/shap_login_pwd"
                 android:hint="请输入密码"
-                android:inputType="phone"
-                android:digits="0123456789"
+                android:inputType="numberPassword"
+                android:imeOptions="actionDone"
                 android:paddingLeft="@dimen/dp_20"
                 android:textSize="@dimen/sp_20" />
 

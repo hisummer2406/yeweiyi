@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 
@@ -40,6 +42,13 @@ public class LoginDialog extends DialogFragment {
             }
           //  dismiss();
         });
+        etInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                btnConfirm.performClick();
+                return true;
+            }
+            return false;
+        });
 
         return view;
     }
@@ -53,6 +62,9 @@ public class LoginDialog extends DialogFragment {
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
             getDialog().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            getDialog().getWindow().setSoftInputMode(
+                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
+                            | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         }
     }
 }
