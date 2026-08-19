@@ -4,15 +4,17 @@ import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.repository.ShiftRepository;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
 
 public class CommitWorkManager {
 	private static CommitWorkManager mInstance;
-	private DBDataManager dbManager;
+	private ShiftRepository shiftRepository;
 	private MyApplication myApplication;
 
 	private CommitWorkManager() {
 		myApplication = MyApplication.getInstance();
-		dbManager = myApplication.getmDBManager();
+		shiftRepository = ShiftRepositoryImpl.getInstance();
 
 	}
 
@@ -24,9 +26,9 @@ public class CommitWorkManager {
 	}
 
 	public void commitWork(SparseArray<OilCan> oilMap,String startTime) {
-		dbManager.CommitWork(oilMap,startTime);
+		shiftRepository.endShift(oilMap,startTime);
 	}
 	public void commitWork(SparseArray<OilCan> oilMap) {
-		dbManager.CommitWork(oilMap);
+		shiftRepository.startShift(oilMap);
 	}
 }

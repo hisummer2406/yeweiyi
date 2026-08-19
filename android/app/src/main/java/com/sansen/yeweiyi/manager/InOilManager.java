@@ -11,6 +11,8 @@ import com.sansen.yeweiyi.logic.inout.InOutDirection;
 import com.sansen.yeweiyi.logic.inout.InOutEvent;
 import com.sansen.yeweiyi.logic.inout.InOutThresholds;
 import com.sansen.yeweiyi.logic.inout.MultiTankInOutDetector;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -37,6 +39,7 @@ public class InOilManager {
 
     private final MultiTankInOutDetector detector = new MultiTankInOutDetector();
     private final Map<Integer, DetailInoutRecord> pendingRecords = new HashMap<>();
+    private final StockRepository stockRepository = StockRepositoryImpl.getInstance();
 
     private InOilManager() {
     }
@@ -161,8 +164,8 @@ public class InOilManager {
             in.setEndVolum(endVolume);
             in.setBeginWeight(endVolume - beginVolume);
             in.setEndWeight(DataUtils.doubleFoment((endVolume - beginVolume) * density));
-            DBDataManager.getInstance().saveObject(in);
-            OilInOut saved = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
+            stockRepository.saveInRecord(in);
+            OilInOut saved = stockRepository.findLastIn();
             savedId = saved.getId();
         } else {
             OutStock out = new OutStock();
@@ -176,13 +179,13 @@ public class InOilManager {
             out.setEndVolum(endVolume);
             out.setBeginWeight(beginVolume - endVolume);
             out.setEndWeight(DataUtils.doubleFoment((beginVolume - endVolume) * density));
-            DBDataManager.getInstance().saveObject(out);
-            OutStock saved = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
+            stockRepository.saveOutRecord(out);
+            OutStock saved = stockRepository.findLastOut();
             savedId = saved.getId();
         }
 
         detailInoutRecord.setId(savedId);
-        DBDataManager.getInstance().saveObject(detailInoutRecord);
+        stockRepository.saveDetail(detailInoutRecord);
 
         SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(detailInoutRecord.toString());
 

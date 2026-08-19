@@ -4,7 +4,7 @@ import android.util.Log;
 
 import com.alibaba.fastjson.JSONObject;
 import com.sansen.yeweiyi.db.Alarm;
-import com.sansen.yeweiyi.manager.DBDataManager;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.yanzhenjie.andserver.RequestHandler;
 import com.yanzhenjie.andserver.RequestMethod;
 import com.yanzhenjie.andserver.annotation.RequestMapping;
@@ -39,7 +39,7 @@ public class AlarmHandler implements RequestHandler {
         boolean sort = URLDecoder.decode(params.get("order"), "utf-8").equals("asc")?true:false;
         int limit = Integer.parseInt(URLDecoder.decode(params.get("limit"), "utf-8"));
         int offset = Integer.parseInt(URLDecoder.decode(params.get("offset"), "utf-8"));
-        HashMap<String,Object> maps= DBDataManager.getInstance().findObject(Alarm.class,null,beginTime,endTime,limit,offset,sort);
+        HashMap<String,Object> maps= AlarmRepositoryImpl.getInstance().findPaged(null,beginTime,endTime,limit,offset,sort);
         List<Alarm> alarms= (List<Alarm>) maps.get("list");
         long count= (long) maps.get("count");
         PageInfo pageInfo = new PageInfo(alarms, count, limit);

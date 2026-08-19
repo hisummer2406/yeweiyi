@@ -24,12 +24,13 @@ import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
-import com.sansen.yeweiyi.db.Alarm;
-import com.sansen.yeweiyi.db.CommitWork;
-import com.sansen.yeweiyi.db.OilInOut;
-import com.sansen.yeweiyi.db.OutStock;
-import com.sansen.yeweiyi.db.StockSave;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
+import com.sansen.yeweiyi.repository.AlarmRepository;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
+import com.sansen.yeweiyi.repository.ShiftRepository;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -40,6 +41,9 @@ import com.sansen.yeweiyi.utils.Singleton;
  */
 public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheckedChangeListener {
 
+    private final ShiftRepository shiftRepository = ShiftRepositoryImpl.getInstance();
+    private final StockRepository stockRepository = StockRepositoryImpl.getInstance();
+    private final AlarmRepository alarmRepository = AlarmRepositoryImpl.getInstance();
     private CheckBox sw_create_alarm;
     private CheckBox sw_del_alarm;
     private CheckBox sw_create_out, sw_del_out;
@@ -203,15 +207,15 @@ public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheck
             @Override
             public void onClick(View view) {
                 if (position == 0) {
-                    dbManager.delteAllInOilRecord(OilInOut.class);
+                    stockRepository.deleteAllIn();
                 } else if (position == 1) {
-                    dbManager.delteAllInOilRecord(Alarm.class);
+                    alarmRepository.deleteAll();
                 } else if (position == 2) {
-                    dbManager.delteAllInOilRecord(OutStock.class);
+                    stockRepository.deleteAllOut();
                 } else if (position == 3) {
-                    dbManager.delteAllInOilRecord(StockSave.class);
+                    stockRepository.deleteAllStock();
                 } else if (position == 4) {
-                    dbManager.delteAllInOilRecord(CommitWork.class);
+                    shiftRepository.deleteAll();
                 }
                 dialog.dismiss();
             }

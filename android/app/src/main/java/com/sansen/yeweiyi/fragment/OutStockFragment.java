@@ -32,9 +32,12 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -52,6 +55,8 @@ import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 public class OutStockFragment extends BaseFragment implements OutStockAdapter.OnItemClickListener{
 
 	private static final String TAG ="InOilFragment";
+	private final StockRepository stockRepository = StockRepositoryImpl.getInstance();
+	private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
 	private RecyclerView inout_list_info;
 	private OutStockAdapter myAdapter;
 	private LinearLayoutManager mLinearLayoutManager;
@@ -74,7 +79,7 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 	TextView tvTitle,tv_time;
 	@Override
 	public void findView() {
-		mapper = MyApplication.getInstance().getmDBManager().findAllObject(OilCanMapper.class);
+		mapper = oilTankRepository.findAllOilCanMapper();
 		for (int i = 0; i <mapper.size() ; i++) {
 			if (mapper.get(i).isshow()){
 				account++;
@@ -136,7 +141,7 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 			public void onClick(View view) {
 				OutStock oilInOut = (OutStock) myAdapter
 						.getItem(position);
-				dbManager.delteRecord(oilInOut);
+				stockRepository.deleteOut(oilInOut);
 				initializeAdapter(isSort);
 				dialog.dismiss();
 			}
@@ -251,12 +256,10 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 	public List<OutStock> findAllObject(int oilCanId, final Class clazz, int pageIndex,
 										int pageSize, boolean des) {
 		temps = new ArrayList<OutStock>();
-		if (dbManager != null) {
-			if (oilCanId != 0) {
-				temps = dbManager.findLimit(OutStock.class,oilCanId,pageSize,pageIndex,des);
-			} else {
-				temps = dbManager.findLimit(OutStock.class,pageSize,pageIndex,des);
-			}
+		if (oilCanId != 0) {
+			temps = stockRepository.findOutPageByOil(oilCanId,pageSize,pageIndex,des);
+		} else {
+			temps = stockRepository.findOutPage(pageSize,pageIndex,des);
 		}
 		return removeOilId(temps);
 	}
@@ -291,8 +294,7 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 		Log.e("TAG 路径",path);
 		ExportExcel<OutStock> exportExcel = new ExportExcel<OutStock>();
 		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量","后量","出库量l","出库量kg",  "介质"};
-		DBDataManager db = MyApplication.getInstance().getmDBManager();
-		List<OutStock> dataset = db.findAllObject(OutStock.class);
+		List<OutStock> dataset = stockRepository.findAllOut();
 		File file = new File(path);
 		if (!file.exists())
 			file.mkdir();
@@ -353,7 +355,7 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 
 
 	private List<OutStock> findObject(int pageIndex, int pageSize) {
-		return dbManager.findLimit(OutStock.class,pageSize,pageIndex,isSort);
+		return stockRepository.findOutPage(pageSize,pageIndex,isSort);
 	}
 
 	boolean isUnload;

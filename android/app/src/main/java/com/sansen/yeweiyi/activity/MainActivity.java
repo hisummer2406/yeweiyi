@@ -67,6 +67,7 @@ import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SocketManager.DataResolveListener;
 import com.sansen.yeweiyi.manager.SoundLightManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.AndroidAdjustResizeBugFix;
 import com.sansen.yeweiyi.utils.Constans;
@@ -811,7 +812,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private static Map<Integer, Integer> testOil = new HashMap<>();
 
     public static void updateTestOil() {
-        List<OilCanMapper> mapper = MyApplication.getInstance().getmDBManager().findAllObject(OilCanMapper.class);
+        List<OilCanMapper> mapper = OilTankRepositoryImpl.getInstance().findAllOilCanMapper();
         if (mapper != null && mapper.size() > 0) {
             for (OilCanMapper oilCanMapper : mapper) {
                 testOil.put(oilCanMapper.getProbeId(), oilCanMapper.getOilCanTableId());

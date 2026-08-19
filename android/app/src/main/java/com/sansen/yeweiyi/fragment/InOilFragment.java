@@ -35,11 +35,14 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DoubleUtil;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
@@ -68,6 +71,8 @@ import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemClickListener{
 
 	private static final String TAG ="InOilFragment";
+	private final StockRepository stockRepository = StockRepositoryImpl.getInstance();
+	private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
 	private RecyclerView inout_list_info;
 	private InOutAdapter myAdapter;
 	private LinearLayoutManager mLinearLayoutManager;
@@ -90,7 +95,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	TextView tvTitle,tv_time;
 	@Override
 	public void findView() {
-		mapper = MyApplication.getInstance().getmDBManager().findAllObject(OilCanMapper.class);
+		mapper = oilTankRepository.findAllOilCanMapper();
 		for (int i = 0; i <mapper.size() ; i++) {
 			if (mapper.get(i).isshow()){
 				account++;
@@ -152,7 +157,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 			public void onClick(View view) {
 				OilInOut oilInOut = (OilInOut) myAdapter
 						.getItem(position);
-				dbManager.delteRecord(oilInOut);
+				stockRepository.deleteIn(oilInOut);
 				initializeAdapter(isSort);
 				dialog.dismiss();
 			}
@@ -268,13 +273,10 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 										int pageSize, boolean des) {
 		//Log.i("查询记录","++++++++");
 		temps = new ArrayList<OilInOut>();
-		if (dbManager != null) {
-
-			if (oilCanId != 0) {
-				temps = dbManager.findLimit(OilInOut.class,oilCanId,pageSize,pageIndex,des);
-			} else {
-				temps = dbManager.findLimit(OilInOut.class,pageSize,pageIndex,des);
-			}
+		if (oilCanId != 0) {
+			temps = stockRepository.findInPageByOil(oilCanId,pageSize,pageIndex,des);
+		} else {
+			temps = stockRepository.findInPage(pageSize,pageIndex,des);
 		}
 		return removeOilId(temps);
 	}
@@ -308,8 +310,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		Log.e("TAG 路径",path);
 		ExportExcel<OilInOut> exportExcel = new ExportExcel<OilInOut>();
 		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","入库量l","入库量kg", "介质"};
-		DBDataManager db = MyApplication.getInstance().getmDBManager();
-		List<OilInOut> dataset = db.findAllObject(OilInOut.class);
+		List<OilInOut> dataset = stockRepository.findAllIn();
 		File file = new File(path);
 		if (!file.exists())
 			file.mkdir();
@@ -380,7 +381,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 
 
 	private List<OilInOut> findObject(int pageIndex, int pageSize) {
-		return dbManager.findLimit(OilInOut.class,pageSize,pageIndex,isSort);
+		return stockRepository.findInPage(pageSize,pageIndex,isSort);
 	}
 
 	boolean isUnload;
@@ -388,7 +389,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	public void onClick(int position) {
 		final OilInOut oilInOut = (OilInOut) myAdapter
 				.getItem(position);
-		final DetailInoutRecord detailInoutRecord = (DetailInoutRecord) DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, oilInOut.getId());
+		final DetailInoutRecord detailInoutRecord = stockRepository.findDetailById(oilInOut.getId());
 		if (detailInoutRecord != null) {
 			AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
 			View v = LayoutInflater.from(getActivity()).inflate(R.layout.dialog_detail_inout, null);
@@ -519,12 +520,12 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 					detailInoutRecord.salesDuring(value);
 					Log.i("计算体积", "开始的体积" + detailInoutRecord.getBeginVolume() + "结束的体积" + detailInoutRecord.getEndVolume() + " SaleVolume" + detailInoutRecord.getSaleVolume());
 					detailInoutRecord.setDuringDelivery(DoubleUtil.sub(detailInoutRecord.getSaleVolume(), DoubleUtil.sub(detailInoutRecord.getEndVolume(), detailInoutRecord.getBeginVolume())));
-					DBDataManager.getInstance().UpdateObject(detailInoutRecord);
-					OilInOut oilInOut = (OilInOut) DBDataManager.getInstance().findObjectByID(OilInOut.class, detailInoutRecord.getId());
+					stockRepository.updateDetail(detailInoutRecord);
+					OilInOut oilInOut = stockRepository.findInById(detailInoutRecord.getId());
 					oilInOut.setEndHeigth(detailInoutRecord.getEndHeight());
 					oilInOut.setBeginVolum(detailInoutRecord.getSaleVolume());
 					oilInOut.setEndWeight(DoubleUtil.mul(detailInoutRecord.getSaleVolume(),OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getDensity()));
-					DBDataManager.getInstance().UpdateObject(oilInOut);
+					stockRepository.updateIn(oilInOut);
 					inout_toal_delivery.setText(detailInoutRecord.getSaleVolume() + " L");
 					inout_sale_volume.setText("");
 					inout_sale_volume.setHint(String.valueOf(detailInoutRecord.getDuringDelivery()));
