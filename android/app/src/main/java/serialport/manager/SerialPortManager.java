@@ -1,5 +1,6 @@
 package serialport.manager;
 
+import android.util.Log;
 import android.support.v4.util.ArrayMap;
 
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
@@ -162,14 +163,13 @@ public class SerialPortManager {
                         }
 //                    Log.i(TAG, "run: 正常运行"+mainSerialPort.isOpen);
                     } catch (InterruptedException e) {
-                        //e.printStackTrace();
+                        Log.e(TAG, "run 执行失败", e);
                     }
                 }else{
                     try {
                         Thread.sleep(250);
                     } catch (InterruptedException e) {
-                        //e.printStackTrace();
-
+                        Log.e(TAG, "run 执行失败", e);
                     }
                 }
             }

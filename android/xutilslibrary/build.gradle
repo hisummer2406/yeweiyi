@@ -1,0 +1,33 @@
+// 本文件此前从未提交进版本库，导致仓库从全新 clone 无法构建：
+// settings.gradle 声明了 ':xutilslibrary'，app/build.gradle 也依赖它，
+// 但模块本身没有构建脚本，Gradle 报
+//   "No matching configuration of project :xutilslibrary was found"。
+//
+// 以下配置由该模块源码的实际需求推导得出，与 app 模块保持一致：
+//   - compileSdk/minSdk/targetSdk 对齐 app（27 / 21 / 27）
+//   - 源码中 28 个文件使用 org.apache.http，该 API 自 API 23 起已从 SDK 移除，
+//     因此必须声明 useLibrary 'org.apache.http.legacy'
+//   - 除 android.* / java.* 外无其他外部依赖，故无需声明 dependencies
+apply plugin: 'com.android.library'
+
+android {
+    compileSdkVersion 27
+
+    // xUtils 的 HttpUtils 依赖 Apache HttpClient，API 23+ 需显式引入该可选库
+    useLibrary 'org.apache.http.legacy'
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 27
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lintOptions {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

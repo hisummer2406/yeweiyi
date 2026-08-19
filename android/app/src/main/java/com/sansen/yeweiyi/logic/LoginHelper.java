@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.logic;
 
+import android.util.Log;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.AlertDialog.Builder;
@@ -80,8 +81,7 @@ public class LoginHelper {
 					bean = XmlParseUtil.getUpdataInfo(XmlParseUtil
 							.StringTOInputStream(responseInfo.result));
 				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					//e.printStackTrace();
+				    Log.e("LoginHelper", "onSuccess 执行失败", e);
 				}
 
 				if (bean != null) {

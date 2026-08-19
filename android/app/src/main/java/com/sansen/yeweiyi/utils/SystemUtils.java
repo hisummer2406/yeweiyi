@@ -119,6 +119,7 @@ public class SystemUtils {
 			}
 			isr.close();
 		} catch (Exception e) {
+		    Log.e("SystemUtils", "getExtSDCardPath 执行失败", e);
 		}
 		return lResult;
 	}
@@ -141,6 +142,7 @@ public class SystemUtils {
 			localBufferedReader.close();
 
 		} catch (IOException e) {
+		    Log.e("SystemUtils", "getTotalMemory 执行失败", e);
 		}
 		return Formatter.formatFileSize(ct, initial_memory);// Byte转换为KB或者MB，内存大小规格化
 	}
@@ -163,8 +165,7 @@ public class SystemUtils {
 		try {
 			packageInfo = packageManager.getPackageInfo(ct.getPackageName(), 0);
 		} catch (NameNotFoundException e) {
-			// TODO Auto-generated catch block
-			//e.printStackTrace();
+		    Log.e("SystemUtils", "getFirstCreateTime 执行失败", e);
 		}
 		return packageInfo.firstInstallTime;// 应用第一次安装的时间
 	}
@@ -206,6 +207,7 @@ public class SystemUtils {
 			System.exit(0);
 			android.os.Process.killProcess(android.os.Process.myPid());
 		} catch (Exception e) {
+		    Log.e("SystemUtils", "AppExit 执行失败", e);
 		}
 	}
 
@@ -235,7 +237,7 @@ public class SystemUtils {
 					context.getPackageName(), 0);
 			return info.versionCode;
 		} catch (NameNotFoundException e) {
-			//e.printStackTrace();
+		    Log.e("SystemUtils", "getAppVersionCode 执行失败", e);
 		}
 		return 1;
 	}
@@ -251,7 +253,7 @@ public class SystemUtils {
 					context.getPackageName(), 0);
 			return info.versionName;
 		} catch (NameNotFoundException e) {
-			//e.printStackTrace();
+		    Log.e("SystemUtils", "getAppVersionName 执行失败", e);
 		}
 		return "1";
 	}
@@ -286,7 +288,7 @@ public class SystemUtils {
 				try {
 					reader.close();
 				} catch (IOException e) {
-					//e.printStackTrace();
+				    Log.e("SystemUtils", "isMounted 执行失败", e);
 				}
 				reader = null;
 			}
@@ -403,7 +405,7 @@ public class SystemUtils {
 		try {
 			systemBrightness = Settings.System.getInt(ct.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS);
 		} catch (Settings.SettingNotFoundException e) {
-			//e.printStackTrace();
+		    Log.e("SystemUtils", "getSystemBrightness 执行失败", e);
 		}
 		return systemBrightness;
 	}
@@ -436,7 +438,7 @@ public class SystemUtils {
 			os.writeBytes("exit\n");
 			os.flush();
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("SystemUtils", "LockScreen 执行失败", e);
 		}
 	}
 
@@ -453,7 +455,7 @@ public class SystemUtils {
 			os.writeBytes("exit\n");
 			os.flush();
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("SystemUtils", "unLockScreen 执行失败", e);
 		}
 	}
 

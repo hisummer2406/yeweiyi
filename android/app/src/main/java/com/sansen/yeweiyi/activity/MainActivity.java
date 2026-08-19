@@ -32,13 +32,9 @@ import com.sansen.yeweiyi.base.BaseActivity;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
-import com.sansen.yeweiyi.bean.OutOilRecord;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
-import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.db.OilCanMapper;
-import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OilTest;
-import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.fragment.AlarmFragment;
 import com.sansen.yeweiyi.fragment.BaoBiaoFragment;
 import com.sansen.yeweiyi.fragment.BuLuFragment;
@@ -59,7 +55,6 @@ import com.sansen.yeweiyi.fragment.SetPawFragment;
 import com.sansen.yeweiyi.fragment.SetSeniorFragment;
 import com.sansen.yeweiyi.fragment.StockFragment;
 import com.sansen.yeweiyi.listener.SimpleWinCallback;
-import com.sansen.yeweiyi.listener.UpdateInOilListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.PrintRunable;
 import com.sansen.yeweiyi.manager.AlarmManager;
@@ -93,9 +88,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimerTask;
 
-import bean.Bean;
-
-public class MainActivity extends BaseActivity implements UpdateInOilListener, DataResolveListener {
+public class MainActivity extends BaseActivity implements DataResolveListener {
     public static ObservableField<String> title = new ObservableField<>();
     private static final String TAG = "MainActivity";
     private final int REFLASH_TIME = 2;
@@ -549,8 +542,7 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
     }
 
     private void inOutOilDection(OilCan oilCan) {
-        InOilManager.setOil(this, oilCan.getOilCanPos(),
-                oilCan.getOilLevel());
+        InOilManager.getInstance().setOil(oilCan.getOilCanPos(), oilCan.getOilLevel());
         AlarmManager.getInstance().reshOilCan(oilCan);
     }
 
@@ -733,9 +725,6 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
 
     }
 
-    private OilInOut in;
-    private OutStock out;
-
     @Override
     public void oilcanDismiss(OilCan obj) {
 
@@ -803,135 +792,10 @@ public class MainActivity extends BaseActivity implements UpdateInOilListener, D
 
     File file;
 
-    @Override
-    public void success(double beginHeight, double endHeight, double beginVoulme, double endVoulme, double density, int oilCanId, DetailInoutRecord detailInoutRecord) {
-        if ((endHeight - beginHeight) >  Singleton.getInstance().InHight) {
-            if (!Singleton.getInstance().IsCreatIn) {
-                return;
-            }
-            in = new OilInOut();
-            in.setOilId(oilCanId);
-            in.setTime(DateUtils.getYYYMMddHHmmss());
-            in.setEndVolum(endVoulme);
-            in.setBeginVolum(beginVoulme);
-            in.setJieZhi(detailInoutRecord.getOilType());
-            in.setBeginWeight(endVoulme - beginVoulme);
-            in.setBeginHeigth(DataUtils.doubleFoment(beginHeight));
-            in.setEndHeigth(endHeight);
-            in.setEndWeight(DataUtils.doubleFoment((endVoulme - beginVoulme) * density));
-
-            OilMessage oilMessage = new OilMessage();
-            oilMessage.setDate(DateUtils.getYYYMMddHHmm());
-            oilMessage.setOilCanId(oilCanId);
-            if (beginHeight > endHeight) {
-                oilMessage.setType(OilMessage.OUT_OIL);
-            } else {
-                oilMessage.setType(OilMessage.IN_OIL);
-            }
-            AlarmManager.getInstance().addNoticesState(oilMessage);
-            DBDataManager.getInstance().saveObject(in);
-            OilInOut inOut = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
-            DBDataManager.getInstance().saveObject(detailInoutRecord);
-
-            detailInoutRecord.setId(inOut.getId());
-            DBDataManager.getInstance().saveObject(detailInoutRecord);
-            //Log.i("进出油记录id", "" + detailInoutRecord.getBeginTime() + "  " + detailInoutRecord.getEndHeight());
-            SocketManager.getInstance(MainActivity.this).sendUnloadOil(detailInoutRecord.toString());
-
-
-            if (  SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
-                OutOilRecord record = new OutOilRecord(in.getBeginHeigth(), in.getEndHeigth(), in.getBeginVolum(), in.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
-//                bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
-//                bean.setProductId("fQxNBq6eCx3");
-//                bean.setEquipmentRecord(record);
-//                String argu = JSONObject.toJSONString(bean);
-//                Log.e("AAAA", "进出油记录" + argu);
-//                OkgoNet.getInstance().simplenessPost(Constans.URL+Constans.OilOutRecord, argu, new RequestCallBack() {
-//                    @Override
-//                    public void Success(String message) {
-//
-//                        Log.e("AAAA", "进出油记录上传" + message);
-//                    }
-//
-//                    @Override
-//                    public void Error(String failing) {
-//                        Log.e("AAAA", "进出油记录数据上传" + "failing");
-//                    }
-//
-//                    @Override
-//                    public void Progress(Progress progress) {
-//
-//                    }
-//                });
-                //TODO 上传进出油记录
-                //Log.i("保存成功", "数据保存成功" + DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, inOut.getId()));
-            }
-        } else if ((beginHeight-endHeight ) > Singleton.getInstance().OutHight) {
-            if (!Singleton.getInstance().IsCreateOut) {
-                return;
-            }
-            out = new OutStock();
-            out.setBeginHeigth(DataUtils.doubleFoment(beginHeight));
-            out.setEndHeigth(DataUtils.doubleFoment(endHeight));
-//            in.setInVolum(detailInoutRecord.getSaleVolume());
-//            in.setInWeight(DataUtils.doubleFoment(detailInoutRecord.getSaleVolume()
-//                    * oilCan.getDensity()));
-            out.setOilId(oilCanId);
-            out.setTime(DateUtils.getYYYMMddHHmmss());
-            out.setEndVolum(endVoulme);
-            out.setBeginVolum(beginVoulme);
-            out.setBeginWeight(beginVoulme - endVoulme);
-            out.setEndWeight(DataUtils.doubleFoment((beginVoulme - endVoulme) * density));
-
-            OilMessage oilMessage = new OilMessage();
-            oilMessage.setDate(DateUtils.getYYYMMddHHmm());
-            oilMessage.setOilCanId(oilCanId);
-            if (beginHeight > endHeight) {
-                oilMessage.setType(OilMessage.OUT_OIL);
-            } else {
-                oilMessage.setType(OilMessage.IN_OIL);
-            }
-            AlarmManager.getInstance().addNoticesState(oilMessage);
-            DBDataManager.getInstance().saveObject(out);
-            OutStock inOut = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
-            DBDataManager.getInstance().saveObject(detailInoutRecord);
-
-            detailInoutRecord.setId(inOut.getId());
-            DBDataManager.getInstance().saveObject(detailInoutRecord);
-            //Log.i("进出油记录id", "" + detailInoutRecord.getBeginTime() + "  " + detailInoutRecord.getEndHeight());
-            SocketManager.getInstance(MainActivity.this).sendUnloadOil(detailInoutRecord.toString());
-
-            if (SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
-                Bean bean = new Bean();
-                OutOilRecord record = new OutOilRecord(out.getBeginHeigth(), out.getEndHeigth(), out.getBeginVolum(), out.getEndVolum(), 0, System.currentTimeMillis(), in.getOilId());
-//                bean.setDefaultName(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), SharePrefUtil.DEVICESECRET, null));
-//                bean.setProductId("fQxNBq6eCx3");
-//                bean.setEquipmentRecord(record);
-//                String argu = JSONObject.toJSONString(bean);
-//                Log.e("AAAA", "进出油记录" + argu);
-//                OkgoNet.getInstance().simplenessPost(Constans.URL+Constans.OilOutRecord, argu, new RequestCallBack() {
-//                    @Override
-//                    public void Success(String message) {
-//
-//                        Log.e("AAAA", "进出油记录上传" + message);
-//                    }
-//
-//                    @Override
-//                    public void Error(String failing) {
-//                        Log.e("AAAA", "进出油记录数据上传" + "failing");
-//                    }
-//
-//                    @Override
-//                    public void Progress(Progress progress) {
-//
-//                    }
-//                });
-                //TODO 上传进出油记录
-                //Log.i("保存成功", "数据保存成功" + DBDataManager.getInstance().findObjectByID(DetailInoutRecord.class, inOut.getId()));
-            }
-        }
-    }
-
+    // 出/入库事件的判定与落库已经整体搬到 InOilManager（胶水层）+
+    // logic.inout 包（纯状态机）里，方向只在状态机里判定一次；
+    // 这里不再需要实现回调接口来重新猜测方向。
+    // 详见 openspec/changes/rewrite-stock-inout-detection。
 
     @Override
     protected void onResume() {

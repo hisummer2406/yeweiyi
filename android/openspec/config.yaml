@@ -1,0 +1,73 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  安卓液位仪 (Android Liquid Level Meter) — package com.sansen.yeweiyi.
+  Native Java Android app (compileSdk 27, minSdk 21, landscape-only), deployed
+  on dedicated hardware terminals at customer sites monitoring oil tanks (油罐).
+  Reads liquid-level probes over RS-232/485 serial and/or TCP socket, decodes
+  vendor-specific binary protocols, persists locally via a vendored xUtils ORM
+  (not GreenDAO/Room), and exposes an embedded HTTP server (AndServer) so a LAN
+  PC can query the data. No MVVM/DataBinding — singleton managers.
+
+  Full architectural detail lives in /CLAUDE.md (module layout, base classes,
+  known landmines) and /docs/重构方案.md (phased refactor plan, measured facts,
+  what NOT to do and why). Read both before proposing a change.
+
+  Three hard constraints from docs/重构方案.md that override "textbook" answers:
+    1. Devices are deployed at customer sites — regression cost is high, so no
+       big-bang rewrites.
+    2. There was zero test coverage until 2026-07 — tests must land before any
+       code they'd protect is restructured, not after.
+    3. The core asset is the hardware protocol layer, not the UI — optimize
+       priority accordingly (protocol correctness > UI polish).
+
+  Explicitly rejected elsewhere in docs/重构方案.md — do not re-propose without
+  new evidence: bumping targetSdk past 27 (17 call sites of
+  getExternalStorageDirectory would break under scoped storage), migrating to
+  AndroidX (22 local jars in app/libs/ compile against support-lib, no
+  Maven-hosted upgrade path), replacing the xUtils ORM or rewriting as
+  MVVM/Compose/Kotlin.
+
+  Toolchain: JDK 11 + Android SDK are present on this dev machine as of
+  2026-08-07 (see CLAUDE.md "Toolchain is present" section) — `./gradlew
+  :app:assembleDebug` and `:app:testDebugUnitTest` both actually run here.
+  `testDebugUnitTest` silently reports UP-TO-DATE with no output when nothing
+  changed; use `cleanTestDebugUnitTest` first or read
+  app/build/test-results/testDebugUnitTest/*.xml to confirm a fresh pass.
+  Nothing about real serial/probe hardware behavior can be verified on this
+  machine — protocol-affecting changes still need a real device before
+  shipping.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+rules:
+  proposal:
+    - Every proposal must state which of the three hard constraints above it
+      respects or explicitly overrides, and why.
+    - If a proposal touches serialport/, factory/, or structbean/ (the
+      hardware/protocol layer), call out in Impact that real-device
+      verification is required and cannot happen on this dev machine.
+  tasks:
+    - Order tasks so tests land before the refactor they protect, per the
+      "阶段1 must precede everything" rule in docs/重构方案.md.
+    - Flag any task touching res/layout android:onClick bindings — moving or
+      renaming the bound method compiles clean and crashes on tap (see
+      CLAUDE.md "Known landmines").
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+operations:
+  apply:
+    guidance:
+      - Run ./gradlew :app:assembleDebug and :app:cleanTestDebugUnitTest
+        :app:testDebugUnitTest before claiming any task done; report the
+        actual pass/fail counts, not just "should work".
+      - Never claim hardware/protocol behavior is verified from this machine
+        — say plainly when a change needs real-device testing that hasn't
+        happened yet.
+  archive:
+    guidance:
+      - Summarize what was actually build/test-verified vs. what still needs
+        real-device confirmation before this archive closes.

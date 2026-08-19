@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.test;
 
+import android.util.Log;
 import android.test.AndroidTestCase;
 
 import com.sansen.yeweiyi.db.ProbeToOil;
@@ -21,8 +22,7 @@ public class TestExcel extends AndroidTestCase {
 		try {
 			is = new FileInputStream(file);
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			//e.printStackTrace();
+		    Log.e("TestExcel", "TestExcel 执行失败", e);
 		}
 		List<ProbeToOil> readExcelProbeToOilCanContent = excel
 				.readExcelProbeToOilCanContent(is);

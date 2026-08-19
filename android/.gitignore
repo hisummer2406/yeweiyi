@@ -7,4 +7,16 @@ local.properties
 .DS_Store
 /build
 /captures
+
+# 构建产物：/build 只匹配根目录，需按模块单独忽略
+build/
+# AGP 原生构建目录：旧版为 .externalNativeBuild，4.x 起改为 .cxx
 .externalNativeBuild
+.cxx/
+
+# Claude Code 个人本地配置（含个人权限授权，不应提交）
+.claude/settings.local.json
+
+# 正式包签名 keystore：本体不进版本库，密码/别名走 local.properties。
+# 见 tools/generate-release-keystore.sh。
+app/keystore/*.jks

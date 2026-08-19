@@ -207,8 +207,7 @@ public class OilTestFragment extends BaseFragment {
             method = oilCanClazz.getDeclaredMethod("set"
                     + methedName, clazz);
         } catch (NoSuchMethodException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e("OilTestFragment", "saveData 执行失败", e);
         }
         try {
 
@@ -233,7 +232,7 @@ public class OilTestFragment extends BaseFragment {
             Const.isUpdate = true;
             //  vText.setTag(R.id.tag_first, vText.getText().toString());
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e("OilTestFragment", "saveData 执行失败", e);
         }
     }
 

@@ -27,7 +27,9 @@ public class RecyclerViewNoBugLinearLayoutManager extends LinearLayoutManager {
             //try catch一下
             super.onLayoutChildren( recycler, state );
         } catch (IndexOutOfBoundsException e) {
-            //e.printStackTrace();
+            // 刻意留空：这是 RecyclerView 在 notifyDataSetChanged 与滚动并发时抛出的已知异常，
+            // 吞掉即可让本次布局跳过。onLayoutChildren 每帧都会调用，此处打日志会刷屏，
+            // 因此不要改成 Log.e —— 空 catch 在这里是有意为之，不是遗漏。
         }
 
     }

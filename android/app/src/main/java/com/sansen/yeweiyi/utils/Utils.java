@@ -46,7 +46,7 @@ public class Utils {
                 apiKey = metaData.getString(metaKey);
             }
         } catch (NameNotFoundException e) {
-            //Log.i(TAG, "error " + e.getMessage());
+            Log.e(TAG, "getMetaValue 执行失败", e);
         }
         return apiKey;
     }

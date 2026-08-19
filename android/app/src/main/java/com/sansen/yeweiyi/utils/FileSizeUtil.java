@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import java.io.File;
 import java.io.FileInputStream;
 import java.text.DecimalFormat;
@@ -29,7 +30,7 @@ public class FileSizeUtil {
 				blockSize = getFileSize(file);
 			}
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("FileSizeUtil", "getFileOrFilesSize 执行失败", e);
 		}
 		return FormetFileSize(blockSize, sizeType);
 	}
@@ -51,7 +52,7 @@ public class FileSizeUtil {
 				blockSize = getFileSize(file);
 			}
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("FileSizeUtil", "getAutoFileOrFilesSize 执行失败", e);
 		}
 		return FormetFileSize(blockSize);
 	}

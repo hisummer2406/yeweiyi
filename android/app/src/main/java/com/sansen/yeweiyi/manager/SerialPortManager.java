@@ -250,8 +250,10 @@ public class SerialPortManager implements IParseDataListener {
                                         try {
                                             Thread.sleep(50);
                                         } catch (InterruptedException e1) {
-                                            // TODO Auto-generated catch block
-                                            e1.printStackTrace();
+                                            // 注：此处未调用 Thread.currentThread().interrupt() 恢复中断位。
+                                            // 恢复后本轮循环内后续的 sleep 会立即抛异常，属于行为变更，
+                                            // 需在真机上验证停机流程后再定。当前仅记录，便于排查。
+                                            Log.w(TAG, "发送后等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e1);
                                         }
 
                                         data = null;
@@ -262,29 +264,54 @@ public class SerialPortManager implements IParseDataListener {
                                         }
                                         if (StringUtils.isNotEmpty(data)) {
 
+                                            // golden master 录制入口（默认关闭）。录在这里而不是更上游的
+                                            // serialPort.receiveData()，因为 data 才是 probeInfoPase 真正吃进去的东西。
+                                            ProbeTrafficRecorder.recordRequest(data, mOilCan.getProbeType(), mOilCan.getOilCanPos());
+
                                             switch (mOilCan.getProbeType()) {
                                                 case 0:
                                                     try {
+                                                        ProbeTrafficRecorder.setActiveParser("ZhongChengCompany");
                                                         isRight = ZhongChengCompany
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
 
                                                     } catch (Exception e) {
-                                                        //e.printStackTrace();
+                                                        Log.e(TAG, "中诚协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
+                                                                + " 原始报文=" + data, e);
                                                     }
                                                     break;
                                                 case 1:
                                                     try {
+                                                        ProbeTrafficRecorder.setActiveParser("LDCompany");
                                                         isRight = LDCompany
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
                                                     } catch (Exception e) {
-
+                                                        Log.e(TAG, "LD协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
+                                                                + " 原始报文=" + data, e);
                                                     }
+                                                    // 2026-08-15 补上此处原先漏写的 break。
+                                                    // 漏写时执行会穿透到 case 2，同一帧 LD 报文再被 LD2Company 解析一次。
+                                                    // 后果不止是"LD 结果被覆盖"：LD2Company 不校验 CRC（只判 bytes.length > 6），
+                                                    // LD 的 9 字节应答直接通过；它按 decimal = bytes[2]/2 循环（LD 应答的字节
+                                                    // 计数位是 4，故循环 2 次），并按通道号 "0"+(i+1) 匹配油罐 —— 于是 LD 探头
+                                                    // 的正常应答会被当作两路 4-20mA 通道值，写到探针地址 01、02 的油罐上。
+                                                    // 详见 docs/重构方案.md 8.2 与 issue #5。
+                                                    break;
                                                 case 2:
+                                                    ProbeTrafficRecorder.setActiveParser("LD2Company");
                                                     isRight = LD2Company
                                                             .getInstance()
                                                             .probeInfoPase(data, SerialPortManager.this);
+                                                    break;
+                                                default:
+                                                    // 配了一个没有解析器的探头类型。此前静默无效，现在留下可定位的记录 ——
+                                                    // 无人值守设备上"配错探头类型"与"探头没接上"的现象都是没有读数。
+                                                    // 只记日志：不设置 isRight、不抛异常、不影响后续 crcError() 调用。
+                                                    Log.w(TAG, "未知探头类型 probeType=" + mOilCan.getProbeType()
+                                                            + ", 油罐位=" + mOilCan.getOilCanPos()
+                                                            + ", 本次不解析。请核对探针配置表。");
                                                     break;
                                             }
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
@@ -308,7 +335,7 @@ public class SerialPortManager implements IParseDataListener {
                                         try {
                                             Thread.sleep(50);
                                         } catch (InterruptedException e) {
-                                            //e.printStackTrace();
+                                            Log.w(TAG, "轮询间隔等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e);
                                         }
                                     }
 
@@ -410,6 +437,9 @@ public class SerialPortManager implements IParseDataListener {
     @Override
     public void hexDataParseFinish(OilCan oilCan) {
 //        Log.i("刷新数据", oilCan.getOilCanPos() + "   " + oilCan.getOilLevel());
+        // golden master 录制出口（默认关闭）。probeInfoPase 是同线程同步回调，
+        // 因此同一线程内最近一条 IN 记录就是本条 OUT 的输入，无需额外关联 id。
+        ProbeTrafficRecorder.recordParsed(oilCan);
         // 每次更新完毕 都要去更新 oildataMagager
         mOilCanDataManager.refreshData(oilCan);
 
@@ -474,14 +504,14 @@ public class SerialPortManager implements IParseDataListener {
                     try {
                         Thread.sleep(200);
                     } catch (InterruptedException e) {
-                        //e.printStackTrace();
+                        Log.w(TAG, "后台接收线程等待被中断(有数据分支)", e);
                     }
 
                 } else {
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
-                        //e.printStackTrace();
+                        Log.w(TAG, "后台接收线程等待被中断(无数据分支)", e);
                     }
                 }
 

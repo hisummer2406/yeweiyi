@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.logic;
 
+import android.util.Log;
 import android.app.ProgressDialog;
 import android.os.Environment;
 
@@ -40,7 +41,7 @@ public class DownloadHelper {
 				is.close();
 			}
 		} catch (Exception e) {
-			//e.printStackTrace();
+		    Log.e("DownloadHelper", "getApkFile 执行失败", e);
 		}
 		return file;
 	}

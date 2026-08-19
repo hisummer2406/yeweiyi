@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.manager;
 
+import android.util.Log;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -38,7 +39,7 @@ public class SocketManager {
 //            mServiceIntent = new Intent(ct, UdpService.class);
 //            ct.bindService(mServiceIntent, conn, Context.BIND_AUTO_CREATE);
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e(TAG, "initData 执行失败", e);
         }
     }
 
@@ -59,7 +60,7 @@ public class SocketManager {
             try {
                 return iBackService.sendAlarm(str);
             } catch (RemoteException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendAlarm 执行失败", e);
             }
         }
         return false;
@@ -69,7 +70,7 @@ public class SocketManager {
             try {
                 return iBackService.sendUnloadOil(str);
             } catch (RemoteException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "sendUnloadOil 执行失败", e);
             }
         }
         return false;
@@ -99,8 +100,7 @@ public class SocketManager {
             try {
                 iBackService.stopSocket();
             } catch (RemoteException e) {
-                // TODO Auto-generated catch block
-                //e.printStackTrace();
+                Log.e(TAG, "stopSocket 执行失败", e);
             }
         }
     }
@@ -110,7 +110,7 @@ public class SocketManager {
             try {
                 iBackService.reloadSocket();
             } catch (RemoteException e) {
-                //e.printStackTrace();
+                Log.e(TAG, "ReLoadSocket 执行失败", e);
             }
         }
     }

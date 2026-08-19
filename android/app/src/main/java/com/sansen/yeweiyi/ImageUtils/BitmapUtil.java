@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.ImageUtils;
 
+import android.util.Log;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -72,7 +73,7 @@ public class BitmapUtil {
             BASE64Encoder encoder = new BASE64Encoder();
             string = encoder.encodeBuffer(image).trim();
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e("BitmapUtil", "getBase64 执行失败", e);
         }
         return string;
     }
@@ -125,12 +126,12 @@ public class BitmapUtil {
             try {
                 output.compress(Bitmap.CompressFormat.PNG, 100, baos);
             } catch (Exception e) {
-                //e.printStackTrace();
+                Log.e("BitmapUtil", "getByteByBitmap 执行失败", e);
             }
             compressData = baos.toByteArray();
             baos.close();
         } catch (IOException e) {
-            //e.printStackTrace();
+            Log.e("BitmapUtil", "getByteByBitmap 执行失败", e);
         }
         return compressData;
     }

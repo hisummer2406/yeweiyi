@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
@@ -101,7 +102,7 @@ public class StringUtils {
 		try {
 			string = new String(d, "gb2312");
 		} catch (UnsupportedEncodingException e) {
-			//e.printStackTrace();
+		    Log.e("StringUtils", "hexStringToStr 执行失败", e);
 		}
 
 		return string;

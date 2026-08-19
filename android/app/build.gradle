@@ -1,13 +1,67 @@
 apply plugin: 'com.android.application'
+
+// ---------------------------------------------------------------------------
+// 敏感配置：构建期从 local.properties 注入，不再硬编码进源码。
+// local.properties 不进版本库；新环境照 local.properties.template 填写。
+// ---------------------------------------------------------------------------
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def secretField = { String propertyName ->
+    def value = localProperties.getProperty(propertyName)
+    if (value == null || value.trim().isEmpty()) {
+        logger.warn("[配置缺失] local.properties 中没有 ${propertyName}，" +
+                "将编译为空字符串，相关功能(MQTT上报/接口加密)会失效。参见 local.properties.template")
+        value = ""
+    }
+    return "\"${value}\""
+}
+// 开关类配置：与 secretField 走同一条 local.properties -> BuildConfig 通道，
+// 但缺失时不告警 —— 缺失就是默认值 false，是正常状态而非配置遗漏。
+def flagField = { String propertyName ->
+    def value = localProperties.getProperty(propertyName)
+    return Boolean.parseBoolean(value == null ? "false" : value.trim()).toString()
+}
+
+// ---------------------------------------------------------------------------
+// 正式包签名：keystore 文件本体固定放在 app/keystore/release.jks（.gitignore 排除，
+// 不进版本库），用 tools/generate-release-keystore.sh 生成；密码/别名和其余敏感配置
+// 一样走 local.properties。三项有一项缺失就不装配 signingConfig —— release 构建仍然
+// 能跑（供本机验证编译用），只是产物不签名、装不到设备，而不是静默用错误的 key 签出去。
+// ---------------------------------------------------------------------------
+def releaseKeystoreFile = rootProject.file('app/keystore/release.jks')
+def releaseStorePassword = localProperties.getProperty('sansen.releaseStorePassword')
+def releaseKeyAlias = localProperties.getProperty('sansen.releaseKeyAlias')
+def releaseKeyPassword = localProperties.getProperty('sansen.releaseKeyPassword')
+def releaseSigningReady = releaseKeystoreFile.exists() &&
+        releaseStorePassword?.trim() && releaseKeyAlias?.trim() && releaseKeyPassword?.trim()
+if (!releaseSigningReady) {
+    logger.warn("[配置缺失] 正式签名未就绪：app/keystore/release.jks 不存在，或 local.properties 中 " +
+            "sansen.releaseStorePassword / sansen.releaseKeyAlias / sansen.releaseKeyPassword 有缺失。" +
+            "release 产物将不签名，无法安装到设备。先跑 tools/generate-release-keystore.sh，" +
+            "再按 local.properties.template 填密码。")
+}
+
 android {
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.sansen.yeweiyi"
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 72
-        versionName "NEW.SS.A.Y11.00"
+        versionCode 1
+        versionName "NEW.SS.A.Y1.00"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        buildConfigField "String", "PRODUCT_KEY", secretField('sansen.productKey')
+        buildConfigField "String", "PRODUCT_SECRET", secretField('sansen.productSecret')
+        buildConfigField "String", "REQUEST_ENCRYPT_KEY", secretField('sansen.requestEncryptKey')
+        buildConfigField "String", "BASE_URL", secretField('sansen.baseUrl')
+        buildConfigField "String", "MQTT_USERNAME", secretField('sansen.mqttUsername')
+        buildConfigField "String", "MQTT_PASSWORD", secretField('sansen.mqttPassword')
+        // 探头报文录制开关，默认关闭。见 manager/ProbeTrafficRecorder。
+        buildConfigField "boolean", "PROBE_RECORDING", flagField('sansen.probeRecording')
         externalNativeBuild {
             cmake {
                 cppFlags "-frtti -fexceptions"
@@ -57,10 +111,24 @@ android {
 //        }
 //    }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile releaseKeystoreFile
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
         }
     }
     externalNativeBuild {

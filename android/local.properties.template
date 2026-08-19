@@ -1,0 +1,61 @@
+# local.properties 模板
+#
+# 用法：复制本文件为 local.properties（该文件不进版本库），按下面说明填值。
+# app/build.gradle 会在构建期读取这些值并注入 BuildConfig，供 ApiConfig 使用。
+# 缺失任何一项，构建时会打印 [配置缺失] 警告，对应常量编译为空字符串。
+
+# --- Android SDK 路径（每台机器不同）---
+# macOS 示例: sdk.dir=/Users/<你的用户名>/Library/Android/sdk
+# Windows 示例: sdk.dir=D\:\\SDK
+#
+# 需要的组件：platforms;android-27、build-tools（30.0.3 可用）、platform-tools。
+# JDK 必须是 11：Gradle 6.7.1 不支持 Java 16+，AGP 4.2.1 官方支持 8/11。
+sdk.dir=
+
+# ndk.dir 仅在需要编译 app/src/main/cpp 下的原生代码（serialport/atg/bspatch）时才需要，
+# 版本见项目历史配置 21.0.6113669。只跑 JVM 单元测试可以不装。
+ndk.dir=
+
+# --- 敏感凭据（找项目负责人索取，不要从 git 历史里翻）---
+
+# 阿里云 IoT 产品 Key，用于 MQTT 上报（BackService）
+sansen.productKey=
+
+# 阿里云 IoT 产品密钥
+sansen.productSecret=
+
+# 接口请求体 3DES 加密密钥（Base64 编码形式，见 OkgoNet.simplenessPost）
+sansen.requestEncryptKey=
+
+# 服务端基址，例如 http://<host>:<port>
+sansen.baseUrl=
+
+# MQTT broker 连接用户名（BackService.initMqttClient）
+# 曾经硬编码为 admin/password 并提交进 git 历史，那组凭据必须视为已泄露：
+# 填这里之前，先在 broker 侧把旧的那组改掉。
+sansen.mqttUsername=
+
+# MQTT broker 连接密码
+sansen.mqttPassword=
+
+# --- 正式包签名（本地一次性配置，找项目负责人索取；见 tools/generate-release-keystore.sh）---
+# keystore 文件本体固定放在 app/keystore/release.jks，不进版本库，这里只填密码/别名。
+# 三项缺一，release 构建产物就不会签名，无法安装到设备。
+
+# keystore 整体密码（keytool -genkeypair 时设置的 -storepass）
+sansen.releaseStorePassword=
+
+# 签名 key 的别名（keytool -genkeypair 时设置的 -alias）
+sansen.releaseKeyAlias=
+
+# 该别名对应 key 的密码（keytool -genkeypair 时设置的 -keypass）
+sansen.releaseKeyPassword=
+
+# --- 开关（非敏感，缺失即为 false，不会告警）---
+
+# 探头报文录制。设为 true 后重新构建，设备会把探头轮询链路的输入报文与解析结果
+# 成对写到 /sdcard/yeweiyi-probe-record/probe-<日期>.tsv，用于建立 golden master
+# 重放测试（见 manager/ProbeTrafficRecorder 与 docs/重构方案.md 第 1 步）。
+#
+# 仅在需要去现场采集数据时开启。日常构建与出厂固件保持关闭 —— 它会持续写盘。
+sansen.probeRecording=

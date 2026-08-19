@@ -33,7 +33,6 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
     private SparseArray gasExplor;
 
     int curSpCount = 0;
-    private int guanAccount=0;
 
     Handler handler = new Handler() {
         @Override
@@ -60,35 +59,17 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
 //            } else {
 //                oilCanMaps = mOilcanDataManager.getData();
 //            }
-            guanAccount=oilCanMaps.size();
             oilCanMaps = mOilcanDataManager.getData();
 //            Log.i("索引大小", oilCanMaps.size() + "");
             oilAdapter.setData(oilCanMaps);
-            if (oilCanMaps.size()==guanAccount){
-                oilAdapter.notifyDataSetChanged();
-                handler.sendEmptyMessageDelayed(1, 3000);
-                return;
-            }
 
-            if (oilCanMaps.size() == 1 && curSpCount != 1) {
-                layoutManager = new GridLayoutManager(ct, 1);
+            int targetSpanCount = computeSpanCount(oilCanMaps.size());
+            if (targetSpanCount != curSpCount) {
+                layoutManager = new GridLayoutManager(ct, targetSpanCount);
                 main_gridview_oilcan.setLayoutManager(layoutManager);
-                curSpCount = 1;
+                curSpCount = targetSpanCount;
                 Log.i("curSpCount", curSpCount + "");
             }
-            else if (oilCanMaps.size() == 4||oilCanMaps.size() == 2 && oilCanMaps.size() != 1 && curSpCount != 2) {
-                layoutManager = new GridLayoutManager(ct, 2);
-                main_gridview_oilcan.setLayoutManager(layoutManager);
-                curSpCount = 2;
-//                Log.i("curSpCount", curSpCount + "");
-            }
-               else if (oilCanMaps.size() > 4||oilCanMaps.size() == 3 && curSpCount != 3) {
-                layoutManager = new GridLayoutManager(ct, 3);
-                main_gridview_oilcan.setLayoutManager(layoutManager);
-                curSpCount = 3;
-//                Log.i("curSpCount", curSpCount + "");
-            }
-
 
             oilAdapter.notifyDataSetChanged();
 
@@ -100,6 +81,25 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
     };
 
     private GridLayoutManager layoutManager;
+
+    /**
+     * 罐列表每行展示个数：
+     * 数量 &gt; 4：一行3个；
+     * 数量 &lt;= 4：1个居中(1列)，2个一行2个，3个一行3个，4个一行2个(2行)。
+     */
+    private int computeSpanCount(int count) {
+        if (count <= 1) {
+            return 1;
+        } else if (count == 2) {
+            return 2;
+        } else if (count == 3) {
+            return 3;
+        } else if (count == 4) {
+            return 2;
+        } else {
+            return 3;
+        }
+    }
 
 
     @Override
@@ -125,7 +125,8 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
         oilAdapter.setData(oilCanMaps);
         gasExplorationAdapter.setData(gasExplor);
 
-        layoutManager = new GridLayoutManager(ct, 3);
+        curSpCount = computeSpanCount(oilCanMaps.size());
+        layoutManager = new GridLayoutManager(ct, curSpCount);
         main_gridview_oilcan.setLayoutManager(layoutManager);
 
         oilAdapter.setOnItemClickListener(this);

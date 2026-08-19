@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.okGoUntils;
 
+import android.util.Log;
 import android.content.Context;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -60,6 +61,7 @@ public class MacUtils {
         try {
             info = wifi.getConnectionInfo();
         } catch (Exception e) {
+            Log.e("MacUtils", "getMacDefault 执行失败", e);
         }
         if (info == null) {
             return null;
@@ -81,7 +83,7 @@ public class MacUtils {
         try {
             WifiAddress = new BufferedReader(new FileReader(new File("/sys/class/net/wlan0/address"))).readLine();
         } catch (IOException e) {
-            //e.printStackTrace();
+            Log.e("MacUtils", "getMacAddress 执行失败", e);
         }
         return WifiAddress;
     }
@@ -114,7 +116,7 @@ public class MacUtils {
                 return res1.toString();
             }
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e("MacUtils", "getMacFromHardware 执行失败", e);
         }
         return "02:00:00:00:00:00";
     }

@@ -301,7 +301,7 @@ public class MinOilCanView extends View {
 
             }
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e(TAG, "onDraw 执行失败", e);
         }
     }
     private boolean isCommunicationError() {

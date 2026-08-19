@@ -1,224 +1,202 @@
 package com.sansen.yeweiyi.manager;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.db.DetailInoutRecord;
-import com.sansen.yeweiyi.listener.UpdateInOilListener;
+import com.sansen.yeweiyi.db.OilInOut;
+import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.logic.Const;
-import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
+import com.sansen.yeweiyi.logic.inout.InOutDirection;
+import com.sansen.yeweiyi.logic.inout.InOutEvent;
+import com.sansen.yeweiyi.logic.inout.InOutThresholds;
+import com.sansen.yeweiyi.logic.inout.MultiTankInOutDetector;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
-import com.sansen.yeweiyi.utils.DoubleUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * 出/入库事件检测的胶水层。
+ *
+ * <p>判定"一次液位变化是否构成一次出/入库事件"的规则已经下沉到不依赖 Android
+ * 的纯状态机 {@link MultiTankInOutDetector}/{@link com.sansen.yeweiyi.logic.inout.TankLevelTracker}
+ * （见 openspec/changes/rewrite-stock-inout-detection）。本类只负责：
+ * <ol>
+ *   <li>从 {@link Singleton} 组装阈值，把液位读数喂给状态机；</li>
+ *   <li>在状态机判定"开始跟踪一段变化"时，从 {@link OilcanDataManager} 抓一份实时
+ *       快照作为记录的起始字段（水位/温度等状态机本身不掌握的数据）；</li>
+ *   <li>状态机产出事件后，补全结束字段并按事件自带的方向落库——不再重新推导方向。</li>
+ * </ol>
+ */
 public class InOilManager {
-    /**
-     * 进油管理器类维护一个静态Map集合、里面存储多个进油管理器对象
-     */
-    private static Map<Integer, InOilManager> maps = new HashMap<Integer, InOilManager>();
-    private static InOilManager inOilManager;
-    DetailInoutRecord detailInoutRecord = new DetailInoutRecord();
+
+    private static final InOilManager INSTANCE = new InOilManager();
+
+    private final MultiTankInOutDetector detector = new MultiTankInOutDetector();
+    private final Map<Integer, DetailInoutRecord> pendingRecords = new HashMap<>();
+
+    private InOilManager() {
+    }
+
+    public static InOilManager getInstance() {
+        return INSTANCE;
+    }
 
     /**
-     * 如果上一条记录跟当前记录不一样、那么开始高度就等于上一条高度值
-     */
-    private double[] beginIn = new double[16];
-    /**
-     * 累计器、用于判断是否处于进油状态。0表示非进油状态 1表示进油状态
-     */
-    private int inCount[] = new int[16];
-    /**
-     * 当前对象的罐号
-     */
-    private int id;
-    /**
-     * 当处于进油状态（count ！=0） ,但当前记录等于上一条记录是，开始计时
-     */
-    private long[] beginTime = new long[16];
-    /**
-     * 临时变量，当前的时间
-     */
-    private double[] curHeight = new double[16];
-
-    /**
-     * 上一条记录的高度
-     */
-    private double[] lastHeight = new double[16];
-
-    /**
-     * 进油管理器的外部监听器
-     */
-    private UpdateInOilListener inOil;
-    private boolean isEnable = true;
-    private static String TAG = "InOilManager";
-    private static long RecordTime = 0;
-    private static boolean[] isRecord = new boolean[16];
-
-    /**
-     * 外部调用方法，需要实时的传入 油罐号和当前高度，通过监听器获取
+     * 外部调用方法，需要实时地传入油罐号和当前高度。
      *
-     * @param updateInOil
-     * @param pos
-     * @param curheight
+     * @param tankId   油罐号
+     * @param curHeight 当前液位
      */
-    private static Map<Integer, Boolean>  current=new HashMap<>();
-
-    public static void setOil(UpdateInOilListener updateInOil, int pos,
-                              double curheight) {
-        if (Singleton.getInstance().IsCreatIn||Singleton.getInstance().IsCreateOut){
-            if (maps.containsKey(pos)) {
-                if (!isRecord[pos] || System.currentTimeMillis() - RecordTime > 10000) {
-                    if (!current.containsKey(pos)||!current.get(pos)) {
-                        current.put(pos,true);
-                        RecordTime = System.currentTimeMillis();
-                        inOilManager = maps.get(pos);
-                        if (inOilManager.getEnable()) {
-                            //  Log.i(TAG, inOilManager.getEnable() + "   " + pos);
-                            inOilManager.setData(curheight);
-                            inOilManager.beginInOutDection();
-                        }
-                    }
-                    else {
-                        boolean allTrue = true;
-                        for (Boolean value : current.values()) {
-                            if (value == null || !value) {
-                                allTrue = false;
-                                break;
-                            }
-                        }
-                        if (allTrue) {
-                            current.clear();
-                        }
-                    }
-                }
-            } else {
-                inOilManager = new InOilManager(pos, updateInOil);
-                inOilManager.setData(curheight);
-                inOilManager.beginInOutDection();
-                //    Log.e(TAG,"不包含添加id :"+pos);
-                maps.put(pos, inOilManager);
-            }
+    public void setOil(int tankId, double curHeight) {
+        Singleton singleton = Singleton.getInstance();
+        if (!singleton.IsCreatIn && !singleton.IsCreateOut) {
+            return;
         }
 
-    }
+        InOutThresholds thresholds = InOutThresholds.of(
+                singleton.InHight, singleton.InTime, singleton.OutHight, singleton.OutTime);
 
-    public InOilManager(int pos, UpdateInOilListener inOIl) {
-        this.id = pos;
-        this.inOil = inOIl;
-    }
+        boolean wasTracking = detector.isTracking(tankId);
+        long now = System.currentTimeMillis();
+        InOutEvent event = detector.onReading(tankId, curHeight, now, thresholds);
+        boolean justStartedTracking = !wasTracking && detector.isTracking(tankId);
 
-    public void enable(boolean isEnalbe) {
-        this.isEnable = isEnalbe;
-        if (this.isEnable) {
-            this.lastHeight[id] = 0;
-            this.inCount[id] = 0;
-            this.beginTime[id] = 0;
-            this.beginIn[id] = 0;
+        if (justStartedTracking) {
+            captureBeginSnapshot(tankId);
         }
-    }
-
-    public static void setEnable(int oilcanId, boolean isEnable) {
-        if (maps.containsKey(oilcanId)) {
-            inOilManager = maps.get(oilcanId);
-            inOilManager.enable(isEnable);
+        if (event != null) {
+            handleEvent(event);
         }
     }
 
     /**
-     * 传入数据
+     * 暂停/恢复某个罐的自动检测——供 {@code InOilFragment} 人工卸油流程调用，
+     * 暂停期间由人工维护记录，恢复后状态机以下一次读数重新建立基准。
      */
-    public void setData(double curheight) {
-        this.curHeight[id] = curheight;
-    }
-
-    private long[] startTime = new long[16];
-    ;
-
-    public void beginInOutDection() {
-        if (curHeight[id] != 0) {
-            if (lastHeight[id] == 0) {
-                lastHeight[id] = curHeight[id];
-            } else {
-                if (curHeight[id] != lastHeight[id]) {
-                    isRecord[id] = true;
-                    if (inCount[id] == 0) {
-                        startTime[id] = System.currentTimeMillis();
-                        beginIn[id] = lastHeight[id];
-                        detailInoutRecord.setOilcanId(id);
-                        detailInoutRecord.setBeginHeith(beginIn[id]);
-                        detailInoutRecord.setBeginVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilVolume());
-                        detailInoutRecord.setBeginWater(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getWaterLevel());
-                        detailInoutRecord.setBeginTcVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getSurPlus());
-                        detailInoutRecord.setBeginTemp(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getTemper());
-                        detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmss());
-                        detailInoutRecord.setBeginOilWeight(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilWeight());
-                        detailInoutRecord.setBeginWaterVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getWaterVolume());
-                    }
-
-                    if (beginTime[id] != 0) {
-                        beginTime[id] = System.currentTimeMillis() + SharePreManager.getInOilTime() / 2;
-                    }
-
-                    lastHeight[id] = curHeight[id];
-                    inCount[id]++;
-                } else {
-                    if (inCount[id] > 0) {
-                        if (beginTime[id] == 0) {
-                            beginTime[id] = System.currentTimeMillis();
-                        } else {
-                            if (curHeight[id] - beginIn[id] > 0) {
-                                if ((System.currentTimeMillis() - startTime[id]) / 1000 < Singleton.getInstance().InTime || curHeight[id] - beginIn[id] < Singleton.getInstance().InHight) {
-                                    beginTime[id] = 0;
-                                    beginIn[id] = 0;
-                                    inCount[id] = 0;
-                                    lastHeight[id] = 0;
-                                    isRecord[id] = false;
-                                    return;
-                                }
-                            } else if (curHeight[id] - beginIn[id] < 0) {
-
-                                if ((System.currentTimeMillis() - startTime[id]) / 1000 < Singleton.getInstance().OutTime || beginIn[id] - curHeight[id] < Singleton.getInstance().OutHight) {
-                                    beginTime[id] = 0;
-                                    beginIn[id] = 0;
-                                    inCount[id] = 0;
-                                    lastHeight[id] = 0;
-                                    isRecord[id] = false;
-                                    return;
-                                }
-                            }
-
-                            detailInoutRecord.setOilType(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilType()));
-                            detailInoutRecord.setEndHeight(curHeight[id]);
-                            detailInoutRecord.setEndVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilVolume());
-                            detailInoutRecord.setEndWater(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getWaterLevel());
-                            detailInoutRecord.setEndWaterVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getWaterVolume());
-                            detailInoutRecord.setEndTcVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getSurPlus());
-                            detailInoutRecord.setEndOilWeight(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilWeight());
-                            detailInoutRecord.setEndTemp(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getTemper());
-                            detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmss());
-                            detailInoutRecord.setSaleVolume(DoubleUtil.sub(detailInoutRecord.getEndVolume(), detailInoutRecord.getBeginVolume()));
-
-                            inOil.success(beginIn[id], curHeight[id], DataUtils.getLitre(
-                                    beginIn[id], OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getHightArray(),
-                                    OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getLitreArray()), OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getOilVolume(),OilcanDataManager.getInstance(MyApplication.getInstance()).getData(id).getDensity(), id, detailInoutRecord);
-                            beginTime[id] = 0;
-                            beginIn[id] = 0;
-                            inCount[id] = 0;
-                            lastHeight[id] = 0;
-
-                        }
-
-
-                    }
-                }
-
-            }
+    public void setEnable(int tankId, boolean enable) {
+        detector.setEnabled(tankId, enable);
+        if (!enable) {
+            pendingRecords.remove(tankId);
         }
     }
 
-    public boolean getEnable() {
-        return this.isEnable;
+    private void captureBeginSnapshot(int tankId) {
+        OilCan oilCan = OilcanDataManager.getInstance(MyApplication.getInstance()).getData(tankId);
+        if (oilCan == null) {
+            return;
+        }
+        DetailInoutRecord record = new DetailInoutRecord();
+        record.setOilcanId(tankId);
+        record.setBeginHeith(oilCan.getOilLevel());
+        record.setBeginVolume(oilCan.getOilVolume());
+        record.setBeginWater(oilCan.getWaterLevel());
+        record.setBeginTcVolume(oilCan.getSurPlus());
+        record.setBeginTemp(oilCan.getTemper());
+        record.setBeginTime(DateUtils.getYYYMMddHHmmss());
+        record.setBeginOilWeight(oilCan.getOilWeight());
+        record.setBeginWaterVolume(oilCan.getWaterVolume());
+        pendingRecords.put(tankId, record);
+    }
+
+    private void handleEvent(InOutEvent event) {
+        Singleton singleton = Singleton.getInstance();
+        boolean isIn = event.getDirection() == InOutDirection.IN;
+        // 出/入库记录生成开关只影响是否落库，不影响判定与状态复位——状态机已经
+        // 在产出事件的同时完成了复位，这里不落库也不会导致重复触发。
+        if (isIn && !singleton.IsCreatIn) {
+            pendingRecords.remove(event.getTankId());
+            return;
+        }
+        if (!isIn && !singleton.IsCreateOut) {
+            pendingRecords.remove(event.getTankId());
+            return;
+        }
+
+        OilCan oilCan = OilcanDataManager.getInstance(MyApplication.getInstance()).getData(event.getTankId());
+        if (oilCan == null) {
+            pendingRecords.remove(event.getTankId());
+            return;
+        }
+
+        double density = oilCan.getDensity();
+        double beginVolume = DataUtils.getLitre(event.getStartHeight(), oilCan.getHightArray(), oilCan.getLitreArray());
+        double endVolume = oilCan.getOilVolume();
+
+        DetailInoutRecord detailInoutRecord = pendingRecords.remove(event.getTankId());
+        if (detailInoutRecord == null) {
+            // 理论上 justStartedTracking 时已经捕获过一次快照；这里只是防御性兜底
+            // （比如服务重启后状态机是从中途状态起算的极端情况），避免空指针。
+            detailInoutRecord = new DetailInoutRecord();
+            detailInoutRecord.setOilcanId(event.getTankId());
+            detailInoutRecord.setBeginHeith(event.getStartHeight());
+            detailInoutRecord.setBeginVolume(beginVolume);
+            detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmss());
+        }
+        detailInoutRecord.setOilType(Const.getOilType(oilCan.getOilType()));
+        detailInoutRecord.setEndHeight(event.getEndHeight());
+        detailInoutRecord.setEndVolume(endVolume);
+        detailInoutRecord.setEndWater(oilCan.getWaterLevel());
+        detailInoutRecord.setEndWaterVolume(oilCan.getWaterVolume());
+        detailInoutRecord.setEndTcVolume(oilCan.getSurPlus());
+        detailInoutRecord.setEndOilWeight(oilCan.getOilWeight());
+        detailInoutRecord.setEndTemp(oilCan.getTemper());
+        detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmss());
+        detailInoutRecord.setSaleVolume(endVolume - beginVolume);
+
+        String time = DateUtils.getYYYMMddHHmmss();
+        int savedId;
+
+        if (isIn) {
+            OilInOut in = new OilInOut();
+            in.setOilId(event.getTankId());
+            in.setTime(time);
+            in.setJieZhi(detailInoutRecord.getOilType());
+            in.setBeginHeigth(DataUtils.doubleFoment(event.getStartHeight()));
+            in.setEndHeigth(event.getEndHeight());
+            in.setBeginVolum(beginVolume);
+            in.setEndVolum(endVolume);
+            in.setBeginWeight(endVolume - beginVolume);
+            in.setEndWeight(DataUtils.doubleFoment((endVolume - beginVolume) * density));
+            DBDataManager.getInstance().saveObject(in);
+            OilInOut saved = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
+            savedId = saved.getId();
+        } else {
+            OutStock out = new OutStock();
+            out.setOilId(event.getTankId());
+            out.setTime(time);
+            // 说明：与重写前行为一致，出库记录不写 jieZhi（介质）字段——
+            // 这是历史遗留的字段缺口，不在本次修复范围（见 design.md Non-Goals）。
+            out.setBeginHeigth(DataUtils.doubleFoment(event.getStartHeight()));
+            out.setEndHeigth(DataUtils.doubleFoment(event.getEndHeight()));
+            out.setBeginVolum(beginVolume);
+            out.setEndVolum(endVolume);
+            out.setBeginWeight(beginVolume - endVolume);
+            out.setEndWeight(DataUtils.doubleFoment((beginVolume - endVolume) * density));
+            DBDataManager.getInstance().saveObject(out);
+            OutStock saved = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
+            savedId = saved.getId();
+        }
+
+        detailInoutRecord.setId(savedId);
+        DBDataManager.getInstance().saveObject(detailInoutRecord);
+
+        SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(detailInoutRecord.toString());
+
+        OilMessage oilMessage = new OilMessage();
+        oilMessage.setDate(DateUtils.getYYYMMddHHmm());
+        oilMessage.setOilCanId(event.getTankId());
+        oilMessage.setType(isIn ? OilMessage.IN_OIL : OilMessage.OUT_OIL);
+        AlarmManager.getInstance().addNoticesState(oilMessage);
+
+        // 说明：重写前这里还有一段"云端上传出入库记录"的 TODO 脚手架
+        // （SharePrefUtil.ISUPLOADING 分支），网络调用本体早已整段被注释掉，
+        // 只留了一句 OutOilRecord 构造，且出库分支误用了入库事件残留的
+        // in.getOilId()（本次要修的 NPE 隐患之一）。由于该分支从未真正执行过
+        // 上传，这次重写直接连同已失效的脚手架一起去掉；如需恢复上传功能，
+        // 需要单独评估并重新实现，不应该只是照抄这段死代码。
     }
 }

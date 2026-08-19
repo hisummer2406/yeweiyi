@@ -1,4 +1,5 @@
 package com.example.x6.gpioctl;
+import android.util.Log;
 import java.io.DataOutputStream;
 
 /**
@@ -32,13 +33,13 @@ public class GpioUtils {
             su = Runtime.getRuntime().exec("su");
             os = new DataOutputStream(su.getOutputStream());
         } catch(Exception e) {
-            //e.printStackTrace();
+            Log.e(TAG, "Chmod 执行失败", e);
         }
         try{
             os.writeBytes("chmod 777 /dev/sunxi_gpio\n");
             os.flush();
         }catch (Exception e){
-            //e.printStackTrace();
+            Log.e(TAG, "Chmod 执行失败", e);
         }
     }
 

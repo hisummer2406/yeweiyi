@@ -1,0 +1,8 @@
+# 本文件列出仅含格式化/空白改动的提交，供 git blame 跳过。
+#
+# 启用（一次性，每个克隆各自配置）：
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub 的 blame 视图会自动读取本文件，无需配置。
+
+# 统一换行符为 LF，410 个文件纯空白改动
+5c6e6a3e107023cf02f7a7093889883729e9ca95

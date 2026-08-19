@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.utils;
 
+import android.util.Log;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
@@ -18,7 +19,7 @@ public class ApkUtils {
             pm.getPackageInfo(packageName, PackageManager.GET_ACTIVITIES);
             installed = true;
         } catch (Exception e) {
-            //e.printStackTrace();
+            Log.e("ApkUtils", "isInstalled 执行失败", e);
         }
 
         return installed;
@@ -41,7 +42,7 @@ public class ApkUtils {
                     .getApplicationInfo(packageName, 0);
             return appInfo.sourceDir;
         } catch (NameNotFoundException e) {
-            //e.printStackTrace();
+            Log.e("ApkUtils", "getSourceApkPath 执行失败", e);
         }
 
         return null;

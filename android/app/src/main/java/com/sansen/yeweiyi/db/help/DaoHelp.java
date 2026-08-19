@@ -57,7 +57,7 @@ public class DaoHelp {
         try {
             isFirst = !db.tableIsExist(User.class);
         } catch (DbException e) {
-            //e.printStackTrace();
+            Log.e(TAG, "DaoHelp 数据库操作失败", e);
         }
         // 创建数据表
         createTable();
@@ -99,7 +99,7 @@ public class DaoHelp {
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilCanMapper add isShow boolean");
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add involumvt double");
                                 } catch (Exception e) {
-                                    //e.printStackTrace();
+                                    Log.e(TAG, "onUpgrade 数据库操作失败", e);
                                 }
                                 break;
                             case 2:
@@ -109,7 +109,7 @@ public class DaoHelp {
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add isShow boolean");
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add involumvt double");
                                 } catch (DbException e) {
-                                    //e.printStackTrace();
+                                    Log.e(TAG, "onUpgrade 数据库操作失败", e);
                                 }
                                 break;
                             case 3:
@@ -118,14 +118,14 @@ public class DaoHelp {
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add isShow boolean");
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add involumvt double");
                                 } catch (DbException e) {
-                                    //e.printStackTrace();
+                                    Log.e(TAG, "onUpgrade 数据库操作失败", e);
                                 }
                                 break;
                             case 4:
                                 try {
                                     dbUtils.execNonQuery("alter table com_sansen_yeweiyi_db_OilInOut add involumvt double");
                                 } catch (DbException e) {
-                                    //e.printStackTrace();
+                                    Log.e(TAG, "onUpgrade 数据库操作失败", e);
                                 }
                             case 5:  // 从版本4升级到5
                                 try {
@@ -250,8 +250,7 @@ public class DaoHelp {
             db.createTableIfNotExist(OilTest.class);
 
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "createTable 数据库操作失败", e);
         }
     }
 
@@ -274,8 +273,7 @@ public class DaoHelp {
         try {
             db.save(authorization);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "createAuthorization 数据库操作失败", e);
         }
     }
 
@@ -321,8 +319,7 @@ public class DaoHelp {
         try {
             db.save(object);
         } catch (DbException e) {
-            // TODO Auto-generated catch block
-            //e.printStackTrace();
+            Log.e(TAG, "SaveObject 数据库操作失败", e);
         }
     }
 

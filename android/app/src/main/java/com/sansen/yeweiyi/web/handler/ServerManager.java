@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.web.handler;
 
+import android.util.Log;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -86,7 +87,7 @@ public class ServerManager extends BroadcastReceiver {
         try{
         mActivity.registerReceiver(this, filter);}
         catch (Exception e){
-            //e.printStackTrace();
+            Log.e("ServerManager", "register 执行失败", e);
         }
     }
 
