@@ -300,10 +300,15 @@ public class SerialPortManager implements IParseDataListener {
                                                     // 详见 docs/重构方案.md 8.2 与 issue #5。
                                                     break;
                                                 case 2:
-                                                    ProbeTrafficRecorder.setActiveParser("LD2Company");
-                                                    isRight = LD2Company
-                                                            .getInstance()
-                                                            .probeInfoPase(data, SerialPortManager.this);
+                                                    try {
+                                                        ProbeTrafficRecorder.setActiveParser("LD2Company");
+                                                        isRight = LD2Company
+                                                                .getInstance()
+                                                                .probeInfoPase(data, SerialPortManager.this);
+                                                    } catch (Exception e) {
+                                                        Log.e(TAG, "LD2协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
+                                                                + " 原始报文=" + data, e);
+                                                    }
                                                     break;
                                                 default:
                                                     // 配了一个没有解析器的探头类型。此前静默无效，现在留下可定位的记录 ——

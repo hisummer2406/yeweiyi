@@ -49,7 +49,11 @@ public class VR350Factory implements PCDataFactory {
 				switch (msg.what) {
 				case BACKDATA:
 				//	Log.i("后台系统", "后台协议VR350R: "+msg.obj);
-					initData((String) msg.obj);
+					try {
+						initData((String) msg.obj);
+					} catch (Exception e) {
+						Log.e("VR350Factory", "PC协议解析失败, 原始报文=" + msg.obj, e);
+					}
 					break;
 
 				default:
