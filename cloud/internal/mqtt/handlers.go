@@ -207,9 +207,8 @@ func (c *Client) handleOnlineMessage(_ paho.Client, msg paho.Message) {
 }
 
 // handleMsgMessage receives thing/event/msg/post — the device's real-time alarm text push (§4.2).
-// Published to a Redis pub/sub channel rather than stored, matching CLAUDE.md's plan for /ws/alarms
-// fan-out; that endpoint doesn't exist yet (internal/api has no /ws/alarms), so nothing subscribes
-// to this channel yet either — this just makes the channel already correct once it's built.
+// Published to a Redis pub/sub channel rather than stored; internal/api/ws.go's /ws/alarms
+// subscribes to this same channel and fans it out to connected clients.
 func (c *Client) handleMsgMessage(_ paho.Client, msg paho.Message) {
 	deviceName, ok := parseEventTopic(msg.Topic())
 	if !ok {

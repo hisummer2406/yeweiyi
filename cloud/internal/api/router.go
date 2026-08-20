@@ -22,6 +22,10 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	r.GET("/healthz", healthzHandler(deps))
 	r.POST("/api/login", loginHandler(deps))
+	// Not in the authorized group: gin's JWT middleware only checks the Authorization header, but
+	// this endpoint also accepts the token as a query param (see wsAuthToken) since browser/mini-
+	// program WebSocket clients can't set that header on the handshake request.
+	r.GET("/ws/alarms", wsAlarmsHandler(deps))
 
 	authorized := r.Group("/api")
 	authorized.Use(authMiddleware(deps.JWTSecret))

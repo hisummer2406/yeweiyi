@@ -326,11 +326,26 @@ MQTT contract" above); the queue's `Publisher` is still a placeholder that alway
 binary (`unbuiltMQTTPublisher` in `main.go`) since the write-back publish topic/ack contract doesn't
 exist on the device side yet, and nothing currently calls `EnqueueWriteBack` in the running server
 either (no config/correction write endpoints); the sent→acked transition and the TTL day-count are
-still open per "Open product decisions" below; `/ws/alarms` isn't implemented (though
-`internal/mqtt/handlers.go` already publishes to the `alarms:live` Redis channel that will back it);
-the assumed Asia/Shanghai device timezone (see "The MQTT contract" above) is unverified; and **none
+still open per "Open product decisions" below; the assumed Asia/Shanghai device timezone (see "The
+MQTT contract" above) is unverified; and **none
 of this has been exercised against the real Aliyun IoT broker** — there isn't one provisioned yet,
 and Mosquitto's anonymous/no-TLS auth model isn't representative of what that connection will need.
+
+`/ws/alarms` (2026-08-20, `internal/api/ws.go`) is implemented and manually verified end-to-end
+against the local containers: seeded a throwaway user, ran the binary, connected with
+`gorilla/websocket`'s client passing the JWT as a `token` query param (not the `Authorization`
+header — see below), published two `alarms:live` messages via `redis-cli PUBLISH` (one for a
+different device, one for the connected device's `deviceName`), and confirmed only the matching
+device's message was delivered. Throwaway user/connection cleaned up afterward. Auth deliberately
+diverges from `authMiddleware`: it accepts the bearer token as either the `Authorization` header
+or a `token` query param, since browser/mini-program `WebSocket` clients can't set custom headers
+on the handshake request — so this route is registered directly on `r`, not inside the `/api`
+authorized group. Scoped to one `device` query param like every other endpoint (see
+`internal/api/records.go`'s `listParams` comment for why "all devices" isn't a supported shape);
+messages for other devices arriving on the shared `alarms:live` channel are filtered out
+per-connection, not per-subscription — every open connection subscribes to the same Redis channel
+and discards what isn't theirs, which is fine at today's scale but would need per-device Redis
+channels or a smarter fan-out if connection count gets large.
 
 Module layout (current, not just planned):
 
@@ -344,7 +359,7 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
                      # above)
 internal/api/        # router.go, health.go, auth.go (JWT login + middleware), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
-                     # read) — no /ws/alarms yet
+                     # read), ws.go (/ws/alarms — see above)
 internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
                      # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
                      # (§5.3 periodic sweep), queue_test.go (integration tests, see above)
@@ -378,7 +393,8 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   same `device`+`beginTime`+`endTime`+`limit`+`offset`+`sort` query-param shape and are behind the
   JWT `authMiddleware`; `GET /api/oilcan/latest` reads a `oilcan:latest:{device}` Redis key that
   nothing writes yet (that's `internal/mqtt`'s future job per §4.3's polling design) — it 404s until
-  that ingestion exists, by design, not as a bug.
+  that ingestion exists, by design, not as a bug. `GET /ws/alarms` (`ws.go`) is the one route not
+  behind `authMiddleware` — see its own writeup above for why and how it authenticates instead.
 - `internal/queue` implements design doc §5.2's offline queue, scoped exactly the way CLAUDE.md's
   "Tech stack" section says river should be scoped — it only owns pending→sent:
   `EnqueueWriteBack(ctx, pool, riverClient, deviceName, commandType, payload)` inserts the
@@ -423,8 +439,9 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   contract" for why these wire-format structs use different field names than the DB columns) and
   upsert via the `Upsert*` queries added to `db/queries/`; `requestOilLeak`/`requestOilStorage` are
   logged as unhandled (no cloud table, see "MQTT contract"). `isOline` events call
-  `UpsertDeviceOnlineStatus`; `msg` events get published to the `alarms:live` Redis channel for the
-  future `/ws/alarms` to fan out (not built yet). `poller.go` implements §4.3: every
+  `UpsertDeviceOnlineStatus`; `msg` events get published to the `alarms:live` Redis channel, which
+  `internal/api/ws.go`'s `/ws/alarms` subscribes to and fans out (see above). `poller.go` implements
+  §4.3: every
   `DefaultPollInterval` (20s, inside the doc's 10–30s range) it calls `RequestOilcan` for every
   device `ListOnlineDeviceNames` returns — the actual persistence happens later when that response
   arrives on the property/post subscription, not synchronously in the poll loop. `internal/mqtt`
