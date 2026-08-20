@@ -32,20 +32,32 @@ separate repos coordinated by shared design docs, not shared code).
   (see below). **Read that file in full before designing screens or API calls** — it's the shared
   design input for both `yeweiyi-cloud` and this repo.
 - `~/Developer/yeweiyi-cloud` — the cloud backend this mini-program talks to. Its `CLAUDE.md` has
-  the same contract summary from the backend's side. **As of 2026-08-20, that backend has not been
-  built yet either** — no chosen stack, no REST API actually implemented. This mini-program's API
-  client work is currently blocked on that backend existing; §4.4 of the design doc above is a
-  *draft* API shape (`/api/oilcan/latest`, `/api/alarms`, `/ws/alarms`, `/api/oil-in-out`,
-  `/api/shifts`, `/api/login`), not a finished spec — expect it to shift as the backend gets built.
-  If the API contract needs to change, that's a conversation across both repos.
+  the same contract summary from the backend's side. **As of 2026-08-20, that backend is now
+  substantially built** (Go/gin, see that repo's CLAUDE.md "Build"/"Architecture" sections) — §4.4's
+  draft routes (`/api/oilcan/latest`, `/api/alarms`, `/ws/alarms`, `/api/oil-in-out`, `/api/shifts`,
+  `/api/login`) are real endpoints now, with one deviation from the draft: every list endpoint
+  requires a `device` query param (no "all devices" listing — multi-device cloud design). This
+  mini-program's API client work is no longer blocked on the backend existing, though write-back
+  endpoints (config/corrections) aren't wired up yet — see that repo's CLAUDE.md "Open product
+  decisions"/"Device-side work this project depends on" for what's still open. If the API contract
+  needs to change, that's a conversation across both repos.
+  - `/ws/alarms` specifically (implemented 2026-08-20): `GET /ws/alarms?device={deviceName}`,
+    auth via either the `Authorization: Bearer {jwt}` header or a `token` query param (added
+    because browser/mini-program `WebSocket` clients can't set custom headers on the handshake —
+    use the query param from 小程序). Server pushes JSON text frames shaped
+    `{"deviceName": "...", "msg": "..."}` for that one device's real-time alarm-text pushes only
+    (device-side `thing/event/msg/post`, §4.2) — it does not also carry structured `Alarm` rows;
+    history/backfill still goes through `GET /api/alarms`. Server sends no ping/keepalive frames of
+    its own yet, so build reconnect-on-drop into the client.
 
 ## What this mini-program needs to do (summary — full detail in the Android repo's design doc)
 
 - **Read-only views**: realtime oil-tank snapshot (polled/cached by backend, not a live MQTT
   stream — don't build UI that assumes continuous push), alarm history, oil in/out (卸油) history,
   shift (交班) history — all paginated by time range.
-- **Realtime alarm push**: subscribe to the backend's WebSocket (`/ws/alarms` per the draft) for
-  live alarm notifications rather than polling.
+- **Realtime alarm push**: subscribe to the backend's WebSocket (`/ws/alarms`, now implemented —
+  see "Sibling repos" above for the concrete request/message shape) for live alarm notifications
+  rather than polling.
 - **Write-back (remote config / corrections)**: tank & probe config changes, corrections to
   unload-oil/shift records. Per the design doc §5.4, **the backend's write is asynchronous even
   when the device is online** — the UI must show a three-state status per submitted change:
