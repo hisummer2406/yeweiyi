@@ -81,7 +81,7 @@
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustUnspecified|stateHidden" />
         <activity
-            
+
             android:name=".activity.MainActivity"
             android:screenOrientation="landscape">
             <intent-filter>

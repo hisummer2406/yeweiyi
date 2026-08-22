@@ -4,14 +4,11 @@ import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
 import android.os.Bundle;
-import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.View.OnFocusChangeListener;
-import android.view.WindowManager;
-import android.view.inputmethod.EditorInfo;
 import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.EditText;
@@ -31,8 +28,8 @@ import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DialogUtil2;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.Singleton;
-import com.sansen.yeweiyi.utils.TokenUtil;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -89,6 +86,7 @@ public class OilCanSetFragment extends BaseFragment {
         item_but_color.setBackgroundColor(oilCanSet.getOilColor());
         item_but_color.setOnClickListener(this);
         initOilCanSetData();
+        KeyboardAdjustHelper.applyPanWhileVisible(this);
     }
 
     private TextView item_tv_chuanGanQiLeng;//传感器长度
@@ -129,6 +127,7 @@ public class OilCanSetFragment extends BaseFragment {
         ly_baoCunData.setOnClickListener(this);
         ly_copyData.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_baoCunData, ly_copyData, ly_upper_page);
 //        mitem_tv_oilHaight.setVisibility(View.INVISIBLE);
 //        mitem_et_oilHaight.setVisibility(View.INVISIBLE);//setOilHeight
         item_tv_oilheight = rootView.findViewById(R.id.item_tv_oilheight);
@@ -419,51 +418,6 @@ public class OilCanSetFragment extends BaseFragment {
         }
     }
 
-    AlertDialog dialog;
-
-    private void showInputPsw(final BaseFragment fragment) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(ct);
-        View v = LayoutInflater.from(ct).inflate(R.layout.input_psw, null);
-        builder.setView(v);
-        final EditText et = (EditText) v.findViewById(R.id.et_psw);
-        Button submit = (Button) v.findViewById(R.id.submit);
-        Button cancle = (Button) v.findViewById(R.id.cancel);
-        submit.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (et.getText().toString().equals(TokenUtil.getToken())) {
-//                    mitem_tv_oilHaight.setVisibility(View.VISIBLE);
-//                    mitem_et_oilHaight.setVisibility(View.VISIBLE);
-                    dialog.dismiss();
-                } else {
-//                    mitem_tv_oilHaight.setVisibility(View.INVISIBLE);
-//                    mitem_et_oilHaight.setVisibility(View.INVISIBLE);
-                    dialog.dismiss();
-
-                }
-            }
-        });
-        cancle.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                dialog.dismiss();
-            }
-        });
-        et.setOnEditorActionListener((textView, actionId, event) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                submit.performClick();
-                return true;
-            }
-            return false;
-        });
-        dialog = builder.show();
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setSoftInputMode(
-                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN
-                            | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
-        }
-    }
-
     private void item_but_color(View v) {
         MainActivity main = (MainActivity) getActivity();
         if (main.colorFragment == null) {
@@ -478,6 +432,10 @@ public class OilCanSetFragment extends BaseFragment {
     public void onHiddenChanged(boolean hidden) {
         // TODO Auto-generated method stub
         super.onHiddenChanged(hidden);
+
+        if (!hidden) {
+            KeyboardAdjustHelper.applyPanWhileVisible(this);
+        }
 
         if (hidden & Const.isUpdate == true) {
             updateData();

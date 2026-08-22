@@ -2,6 +2,8 @@
 
 GitHub issue #12（今日提交，`bug`/`high`）：系统软键盘弹出时会完全遮挡输入框和确认按钮，用户输入过程看不到任何反馈，密码输完后找不到能点的确认按钮，登录/备注/密码类输入功能事实上被键盘卡死。根因是这些输入类窗口都没有显式设置 `windowSoftInputMode`（或等价的 `Window.setSoftInputMode`），键盘弹出时窗口不做任何调整。这是影响所有依赖软键盘输入的现场操作（登录、交班备注、油罐设置密码校验）的功能性缺陷，不是外观打磨，现在做是因为它直接卡住操作员的正常操作路径。
 
+**范围在真机验证阶段大幅扩大**：修完 issue #12 原文的三处窗口后，真机复测发现 `OilCanSetFragment` 自身表单里靠后的输入框依然被遮挡——根因不是这三处窗口的问题，而是 `MainActivity` 里早已存在、全局生效的 `AndroidAdjustResizeBugFix`（一个手写的 "Android bug 5497" workaround，配合 `AppTheme` 的 `windowFullscreen=true`）本身有计算错误，导致它从未真正让内容区随键盘收缩过——不管是这三处窗口还是任何其它页面。修好这个全局 bug 之后，`MainActivity` 挂载的另外 6 个含输入框的 Fragment（`SetBaseFragment`/`SetPawFragment`/`BuLuFragment`/`JiLuFragment`/`OilTestFragment`/`CreateOilTableFragment`）新暴露出两类问题：固定高度的底部操作栏被顶到键盘上方、以及（`BuLuFragment`）非 `ScrollView` 容器被压缩到失去正常高度。这些追加的修复和三处窗口的修复根因相关、验证方式一致（都靠真机而非模拟器/单测判断正确性），故归入同一个 change 而不是另开新的。
+
 ## What Changes
 
 读代码核实后，实际涉及三处独立的输入窗口，比 issue 原文列出的两处（`InputDialogActivity`、`LoginDialog`）多一处，且三处的键盘控制机制并不相同：
@@ -19,6 +21,15 @@ GitHub issue #12（今日提交，`bug`/`high`）：系统软键盘弹出时会�
 - `input_psw.xml`（`OilCanSetFragment.showInputPsw`）与 `dialog_login.xml`（`LoginDialog`）里的密码 `EditText` 当前 `inputType="phone"`，输入内容明文显示、无遮挡反馈；改为数字密码类型（`numberPassword` 或等效的 `PasswordTransformationMethod`），使已输入内容立即以圆点显示——这部分不改变校验逻辑，只改变输入即时反馈
 - **不做**：issue 里的"中期方案"——内嵌式自定义数字小键盘弃用系统 IME——工作量与架构影响大，本变更不包含，留待 design.md 中作为 Non-Goal 记录
 
+真机验证过程中追加的改动（详见 design.md 决策5-11）：
+
+- 修复 `AndroidAdjustResizeBugFix.java` 的高度计算 bug（`usableHeightSansKeyboard - 1` 应为 `usableHeightSansKeyboard - heightDifference`）——这是历史遗留的独立 bug，键盘弹出时从未真正让内容区收缩过，本次工作中发现并顺带修复
+- `OilCanSetFragment`/`SetBaseFragment`（两个页面自身表单的输入框会被键盘直接遮挡）在可见期间临时把 `Window.softInputMode` 设为 `adjustPan`（新增 `KeyboardAdjustHelper.applyPanWhileVisible`），不改 manifest；`MainActivity.switchContent()` 在切换到任意页面前统一把 softInputMode 复位为系统默认值，取代"各页面自己在 `onHiddenChanged` 里还原"（后者在真机测试中被发现会把设置泄漏到下一个页面）
+- 全部 7 个含 `EditText` 的 Fragment（`OilCanSetFragment`/`SetBaseFragment`/`SetPawFragment`/`BuLuFragment`/`JiLuFragment`/`OilTestFragment`/`CreateOilTableFragment`）用新增的 `KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible` 在键盘弹出、内容区收缩时隐藏各自固定高度的底部操作栏（保存/返回上页等按钮），收起后恢复——因为触发收缩的 `AndroidAdjustResizeBugFix` 是全局生效的，与某个页面是否设置 `adjustPan` 无关，只要页面上有输入框弹出键盘，所有此类页面的底部操作栏都会被顶起
+- `LoginDialog`（登录/高级设置密码校验）确认按钮点击时先主动 `InputMethodManager.hideSoftInputFromWindow()` 收起键盘，再回调确认逻辑——根因是调用方（`SetFragment`/`MainActivity`）拿到密码后通常立刻 `switchContent` 切换页面，键盘若未被主动收起会遗留到下一个页面（典型现象：`SetSeniorFragment` 本身没有任何输入框，却在密码校验通过后显示为"键盘自动弹出、布局被顶起"）
+- `fragment_bu_lu.xml` 的表单内容区补一层 `ScrollView`（`fillViewport="true"`）——该内容区不是 `ScrollView`，被 `AndroidAdjustResizeBugFix` 压缩到较小高度时会把这个精确高度直接传给内部 `EditText`，导致输入框被压缩到接近消失，而不是像其它页面（内容区本身包了 `ScrollView`）那样只是变成可滚动
+- `OilCanSetFragment.showInputPsw`（原 tasks.md 任务3打算修改的方法）核实后确认是**死代码**（全局零调用），直接删除，连带删除只被它引用的 `input_psw.xml` 布局；真正生效的设置项密码校验入口是 `MainActivity` 里另一个同名但完全不同的 `showInputPsw` 方法，且该方法早已不弹密码框、只做页面跳转——这是命名和行为不一致的历史遗留问题，本次不处理，只记录
+
 ## Capabilities
 
 ### New Capabilities
@@ -29,7 +40,14 @@ GitHub issue #12（今日提交，`bug`/`high`）：系统软键盘弹出时会�
 
 ## Impact
 
-- **受影响代码**：`app/src/main/AndroidManifest.xml`（`InputDialogActivity` 条目）、`app/src/main/java/com/sansen/yeweiyi/view/InputDialogActivity.java`、`app/src/main/res/layout/input_alertdialog.xml`、`app/src/main/java/com/sansen/yeweiyi/fragment/LoginDialog.java`、`app/src/main/res/layout/dialog_login.xml`、`app/src/main/java/com/sansen/yeweiyi/fragment/OilCanSetFragment.java`（`showInputPsw` 方法）、`app/src/main/res/layout/input_psw.xml`
+- **受影响代码（issue #12 原三处窗口）**：`app/src/main/AndroidManifest.xml`（`InputDialogActivity` 条目）、`app/src/main/java/com/sansen/yeweiyi/view/InputDialogActivity.java`、`app/src/main/res/layout/input_alertdialog.xml`、`app/src/main/java/com/sansen/yeweiyi/fragment/LoginDialog.java`、`app/src/main/res/layout/dialog_login.xml`
+- **受影响代码（真机验证阶段追加）**：
+  - `app/src/main/java/com/sansen/yeweiyi/utils/AndroidAdjustResizeBugFix.java`（高度计算 bug 修复）
+  - `app/src/main/java/com/sansen/yeweiyi/utils/KeyboardAdjustHelper.java`（新增）
+  - `app/src/main/java/com/sansen/yeweiyi/activity/MainActivity.java`（`switchContent` 统一复位 softInputMode）
+  - `app/src/main/java/com/sansen/yeweiyi/fragment/{OilCanSetFragment,SetBaseFragment,SetPawFragment,BuLuFragment,JiLuFragment,OilTestFragment,CreateOilTableFragment}.java`
+  - `app/src/main/res/layout/fragment_bu_lu.xml`（补 `ScrollView`）
+  - 删除：`app/src/main/java/com/sansen/yeweiyi/fragment/OilCanSetFragment.java` 里的 `showInputPsw` 方法、`app/src/main/res/layout/input_psw.xml`
 - **与三条硬约束的关系**：
   1. **respects** 不涉及重写——改动范围是 manifest 属性、`Window.setSoftInputMode` 调用、`imeOptions` 绑定、`inputType`，均为局部属性/监听器级别改动，不触及现有业务逻辑
   2. **respects** 本变更不touch协议解码层，也不新增可在 JVM 单测覆盖的业务逻辑（软键盘遮挡行为是 Android 系统级窗口行为，JVM 单测不可见）；正确性判据是真机手动验证，不是补单测

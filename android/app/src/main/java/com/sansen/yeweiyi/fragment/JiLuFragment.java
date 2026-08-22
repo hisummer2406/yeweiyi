@@ -31,6 +31,7 @@ import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.db.StockSave;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
 import com.sansen.yeweiyi.utils.Constans;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
@@ -270,6 +271,7 @@ public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheck
 
         ly_upper_page = rootView.findViewById(R.id.ly_upper_page);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_upper_page);
         initData();
         et_time_minute.addTextChangedListener(new TextWatcher() {
             @Override

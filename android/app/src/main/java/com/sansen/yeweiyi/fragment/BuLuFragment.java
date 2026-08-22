@@ -34,6 +34,7 @@ import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.utils.DataUtils;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
 import java.text.SimpleDateFormat;
@@ -86,6 +87,7 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         et_out_liter = rootView.findViewById(R.id.et_out_liter);
         ly_saveData.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_saveData, ly_upper_page);
         tv_out_time.setOnClickListener(this);
         tv_in_time.setOnClickListener(this);
         et_in_height.addTextChangedListener(this);

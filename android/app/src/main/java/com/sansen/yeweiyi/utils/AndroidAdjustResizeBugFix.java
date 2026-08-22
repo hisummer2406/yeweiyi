@@ -37,9 +37,8 @@ public class AndroidAdjustResizeBugFix {
             int heightDifference = usableHeightSansKeyboard - usableHeightNow;
             if (heightDifference > (usableHeightSansKeyboard / 4)) {
                 // keyboard probably just became visible
-                // 如果有高度变化，mChildOfContent.requestLayout()之后界面才会重新测量
-                // 这里就随便让原来的高度减去了1
-                frameLayoutParams.height = usableHeightSansKeyboard - 1;
+                // 收缩到扣除键盘遮挡后的可视高度，让被遮挡的输入框/按钮露出来
+                frameLayoutParams.height = usableHeightSansKeyboard - heightDifference;
             } else {
                 // keyboard probably just became hidden
                 frameLayoutParams.height = usableHeightSansKeyboard;
