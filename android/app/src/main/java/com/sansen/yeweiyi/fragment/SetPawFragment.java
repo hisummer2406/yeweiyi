@@ -19,6 +19,7 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.utils.Constans;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
@@ -58,6 +59,7 @@ public class SetPawFragment extends BaseFragment implements  TextWatcher {
 		ly_upper_page=rootView.findViewById(R.id.ly_upper_page);
 		ly_saveData.setOnClickListener(this);
 		ly_upper_page.setOnClickListener(this);
+		KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_saveData, ly_upper_page);
 		et_psw.addTextChangedListener(this);
 		et_confirm_psw.addTextChangedListener(this);
 		View headerView = rootView.findViewById(R.id.title_bar);

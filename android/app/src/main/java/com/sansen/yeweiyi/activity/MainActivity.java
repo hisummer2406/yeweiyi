@@ -19,6 +19,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -355,6 +356,11 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
 
         if (mContent != to) {
+            // 部分页面（如 OilCanSetFragment）会在显示期间临时把 Window 的 softInputMode
+            // 改成 adjustPan 以避免被软键盘遮挡；这里在切换到任何新页面前统一复位成系统默认值，
+            // 不依赖离开页面自己在 onHiddenChanged 里记得还原，避免遗留状态泄漏到下一个页面。
+            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+                    | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED);
             mContent = to;
             FragmentTransaction transaction = fragmentManager
                     .beginTransaction();

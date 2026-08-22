@@ -23,6 +23,7 @@ import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
@@ -111,6 +112,7 @@ public class OilTestFragment extends BaseFragment {
         ly_baoCunData = rootView.findViewById(R.id.ly_baoCunData);
         ly_baoCunData.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_baoCunData, ly_upper_page);
         //  et_shuiwei01 = rootView.findViewById(R.id.//  et_shuiwei01);
         et_yewei01 = rootView.findViewById(R.id.et_yewei01);
         et_weiduwei01 = rootView.findViewById(R.id.et_weiduwei01);

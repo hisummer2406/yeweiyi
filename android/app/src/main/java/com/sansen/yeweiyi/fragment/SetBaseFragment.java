@@ -20,6 +20,7 @@ import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.User;
 import com.sansen.yeweiyi.utils.Constans;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
@@ -45,7 +46,15 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
     @Override
     protected void initData(Bundle savedInstanceState) {
         findView();
+        KeyboardAdjustHelper.applyPanWhileVisible(this);
+    }
 
+    @Override
+    public void onHiddenChanged(boolean hidden) {
+        super.onHiddenChanged(hidden);
+        if (!hidden) {
+            KeyboardAdjustHelper.applyPanWhileVisible(this);
+        }
     }
 
     @Override
@@ -67,6 +76,7 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         et_inHight.addTextChangedListener(this);
         ly_saveData.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_saveData, ly_upper_page);
 
         sp_rongji.setOnItemSelectedListener(this);
         sp_yewei.setOnItemSelectedListener(this);

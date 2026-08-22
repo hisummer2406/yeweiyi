@@ -42,6 +42,7 @@ import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
@@ -145,6 +146,9 @@ public class CreateOilTableFragment extends BaseFragment {
         createtable_bt_writeoilcan.setOnClickListener(this);
         createtable_bt_chaKan.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView,
+                createtable_bt_build, createtable_bt_saveoilcan, createtable_bt_copyoilcan,
+                createtable_bt_writeoilcan, createtable_bt_chaKan, ly_upper_page);
 
 
         guanbiao_list_info = (RecyclerView) rootView.findViewById(R.id.guanbiao_list_info);

@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.text.method.PasswordTransformationMethod;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -56,6 +57,13 @@ public class InputDialogActivity extends Activity implements OnClickListener {
 		dialog_cancel.setText(SystemUtils.getRsStr(R.string.cancle));
 		dialog_ok.setOnClickListener(this);
 		dialog_cancel.setOnClickListener(this);
+		dialog_remark.setOnEditorActionListener((v, actionId, event) -> {
+			if (actionId == EditorInfo.IME_ACTION_DONE) {
+				dialog_ok.performClick();
+				return true;
+			}
+			return false;
+		});
 	}
 
 
