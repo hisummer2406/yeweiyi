@@ -41,6 +41,7 @@ import com.lidroid.xutils.http.RequestParams;
 import com.lidroid.xutils.http.callback.RequestCallBack;
 import com.lidroid.xutils.http.client.HttpRequest;
 import com.lidroid.xutils.util.LogUtils;
+import com.sansen.yeweiyi.BuildConfig;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.LevelmeterInfo;
@@ -155,6 +156,10 @@ public abstract class BaseActivity extends FragmentActivity implements
                     break;
             }
 
+        }
+        TextView versionView = (TextView) findViewById(R.id.bar_tv_version);
+        if (versionView != null) {
+            versionView.setText("v" + BuildConfig.VERSION_NAME);
         }
 //        tv_left = (TextView) findViewById(R.id.bar_tv_left);
 //        tv_right = (TextView) findViewById(R.id.bar_tv_right);
