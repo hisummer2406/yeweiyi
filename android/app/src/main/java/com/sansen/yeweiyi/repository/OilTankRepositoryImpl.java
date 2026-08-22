@@ -171,7 +171,13 @@ public class OilTankRepositoryImpl implements OilTankRepository {
         } catch (DbException e) {
             Log.e(TAG, "findAllObject 数据库操作失败", e);
         }
-        return object;
+        // 与本类其它查询方法（如 findSideleakageBetween）保持一致：异常时兜底空
+        // 列表而不是 null，避免调用方（如 CreateOilTableFragment 未判空的
+        // .get(resultCode)）在偶发 DbException 时被 NPE 崩溃。
+        if (object != null) {
+            return object;
+        }
+        return new ArrayList<>();
     }
 
     private <T> void update(final T object) {
