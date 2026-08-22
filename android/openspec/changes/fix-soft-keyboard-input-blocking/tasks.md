@@ -69,7 +69,7 @@
 ## 6. 收尾
 
 - [x] 6.1 清理 `AndroidManifest.xml` 中已注释掉、挂在废弃重复 `MainActivity` 声明块上的死代码 `<!-- android:windowSoftInputMode="adjustPan|stateHidden" /-->`（design.md Context 已确认与当前生效的 `MainActivity` 声明无关，纯历史遗留）——**已完成，`assembleDebug` 重跑确认无破坏**
-- [ ] 6.2 关闭 GitHub issue #12，附上真机验证结果（第5组）——第5组已全部完成（5.1/5.3 确认作废并说明原因，其余全部真机验证通过），可以关闭；本机无 adb/真机，实际去 GitHub 关闭 issue 需要你操作
+- [x] 6.2 关闭 GitHub issue #12——**已完成**，PR #14（merge commit `7357bbe`，2026-08-22）body 里的 `Closes #12` 随合并自动关闭了 issue
 - [x] 6.3 若 `docs/重构方案.md` 有对应的已知问题登记条目，更新为已修复——**已确认无对应条目（`grep` 未命中"软键盘"/"windowSoftInputMode"/"键盘遮挡"/"盲输"），本条不适用**
 - [x] 6.4 code review（`/code-review high`，对比 `main`）覆盖 issue #12 三处窗口 + 追加范围全部改动，5 条 finding 里 3 条采纳修复（`KeyboardAdjustHelper` 的键盘可见性判断基准改用 `getRootView().getHeight()`、清理 `OilCanSetFragment` 删除 `showInputPsw` 后残留的 `AlertDialog`/`TokenUtil` import），1 条判定为不需要改动（`adjustPan` 与 `AndroidAdjustResizeBugFix` 同时生效，已在 design.md Risks 记录为已知的标准搭配而非冲突），1 条是本次 openspec 文档补写（即本次更新）
 - [x] 6.5 补写本次真机验证阶段发现并追加的 design.md 决策5-11、proposal.md 范围说明、tasks.md 任务组3a-3d 与扩充后的第5组验证项，使文档与实际代码一致
