@@ -8,7 +8,7 @@ import com.sansen.yeweiyi.bean.Relay;
 import com.sansen.yeweiyi.intf.IHardIntf;
 import com.sansen.yeweiyi.logic.SystemState;
 import com.sansen.yeweiyi.manager.AlarmManager;
-import com.sansen.yeweiyi.manager.DBDataManager;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.DataUtils;
@@ -92,7 +92,7 @@ public class AsyManager2 implements IHardIntf {
                             oilMessage.setDate(DateUtils.getYYYMMddHHmmss());
                             oilMessage.setType(OilMessage.RELAY_DISCONNECT);
                             AlarmManager.getInstance().addAlarmState(oilMessage);
-                            DBDataManager.getInstance().setAramRecord(oilMessage.toString(),"","");
+                            AlarmRepositoryImpl.getInstance().saveAlarmRecord(oilMessage.toString(),"","");
                             SystemState.getInstance().setDriverBoardConnect(false);
                         }
                     } else {

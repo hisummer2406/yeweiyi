@@ -16,6 +16,12 @@ import com.sansen.yeweiyi.db.Sideleakage;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SerialPortManager;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
+import com.sansen.yeweiyi.repository.ShiftRepository;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 import java.io.UnsupportedEncodingException;
@@ -29,6 +35,9 @@ public class PrintRunable implements Runnable {
     private MyApplication myApplication;
     private DBDataManager dbDataManager;
     private OilcanDataManager oilcanDataManager;
+    private ShiftRepository shiftRepository;
+    private StockRepository stockRepository;
+    private OilTankRepository oilTankRepository;
     private int printId;
 
     public PrintRunable(int printId) {
@@ -40,6 +49,9 @@ public class PrintRunable implements Runnable {
         myApplication = MyApplication.getInstance();
         dbDataManager = myApplication.getmDBManager();
         oilcanDataManager = myApplication.getmOilcanDataManager();
+        shiftRepository = ShiftRepositoryImpl.getInstance();
+        stockRepository = StockRepositoryImpl.getInstance();
+        oilTankRepository = OilTankRepositoryImpl.getInstance();
     }
 
     public void run() {
@@ -82,8 +94,7 @@ public class PrintRunable implements Runnable {
                     break;
 
                 case 2:
-                    OilInOut oilInOut = (OilInOut) dbDataManager
-                            .findLast(OilInOut.class);
+                    OilInOut oilInOut = stockRepository.findLastIn();
 
                     println("--------END-------");
                     if (null==oilInOut){
@@ -120,8 +131,7 @@ public class PrintRunable implements Runnable {
                     println("-------"+SystemUtils.getRsStr(R.string.save_record)+"------");
                     break;
                 case 4:
-                    CommitWork commitWork = (CommitWork) dbDataManager
-                            .findLast(CommitWork.class);
+                    CommitWork commitWork = shiftRepository.findLast();
                     if (null==commitWork){
                         println("--------记录不存在-------");
                         return;
@@ -144,8 +154,7 @@ public class PrintRunable implements Runnable {
                     break;
                 case 5:
                     println("--------END-------");
-                    Sideleakage sideleakage = (Sideleakage) dbDataManager
-                            .findLast(Sideleakage.class);
+                    Sideleakage sideleakage = oilTankRepository.findLastSideleakage();
                     if (null==sideleakage){
                         println("--------记录不存在-------");
                         return;

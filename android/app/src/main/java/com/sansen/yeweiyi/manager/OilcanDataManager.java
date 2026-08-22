@@ -13,6 +13,8 @@ import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.db.OilExploration;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
@@ -34,6 +36,7 @@ public class OilcanDataManager {
     private List<OilExploration> oilExplor; //油气探测报警值
 
     private DBDataManager db;
+    private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
 
     private SaveOilManager saveOilManager;
 
@@ -81,13 +84,13 @@ public class OilcanDataManager {
 
     public List<OilExploration> getOilExploration() {
         if (oilExplor == null) {
-            oilExplor = db.findAllObject(OilExploration.class);
+            oilExplor = oilTankRepository.findAllOilExploration();
         }
         return oilExplor;
     }
 
     public synchronized void updateOilExPloraton() {
-        oilExplor = db.findAllObject(OilExploration.class);
+        oilExplor = oilTankRepository.findAllOilExploration();
     }
 
     public void refresh() {
@@ -104,13 +107,13 @@ public class OilcanDataManager {
      */
     private void setProbeData(SparseArray<OilCan> oils, String type) {
         OilCan oilCan;
-        List<OilCanSet> probeToOils = db.findAllObject(OilCanSet.class);
+        List<OilCanSet> probeToOils = oilTankRepository.findAllOilCanSet();
         // ①查询探针对应表，建立Map中的数据
         if (probeToOils != null) {
 
             // 油罐的id
-            List<OilCanSet> oilSets = db.findAllObject(OilCanSet.class);
-            List<OilCanTable> oilTables = db.findAllObject(OilCanTable.class);
+            List<OilCanSet> oilSets = oilTankRepository.findAllOilCanSet();
+            List<OilCanTable> oilTables = oilTankRepository.findAllOilCanTable();
 
             for (int i = 0; i < probeToOils.size(); i++) {
                 // i指的是探针对应表的id

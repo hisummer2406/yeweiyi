@@ -25,6 +25,8 @@ import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DialogUtil2;
@@ -36,6 +38,7 @@ import java.util.List;
 
 
 public class OilCanSetFragment extends BaseFragment {
+    private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
     private int dialogSelectType = -1;
     private TextView item_tv_oilid;
     private EditText item_et_oilheight;
@@ -81,7 +84,7 @@ public class OilCanSetFragment extends BaseFragment {
         findView();
         setTvPos(curPos);
 
-        oilCanSets = dbManager.findAllObject(OilCanSet.class);
+        oilCanSets = oilTankRepository.findAllOilCanSet();
         oilCanSet = oilCanSets.get(curPos);
         item_but_color.setBackgroundColor(oilCanSet.getOilColor());
         item_but_color.setOnClickListener(this);
@@ -153,7 +156,7 @@ public class OilCanSetFragment extends BaseFragment {
                 oilCanSet.setGunType(i);
                 //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
                 oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(oilCanSet);
+                oilTankRepository.updateOilCanSet(oilCanSet);
                 Const.isUpdate = true;
 
             }
@@ -201,7 +204,7 @@ public class OilCanSetFragment extends BaseFragment {
                 oilCanSet.setOilType(resultCode);
                 //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
                 oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(oilCanSet);
+                oilTankRepository.updateOilCanSet(oilCanSet);
                 item_tv_oiltype.setText(DataUtils.getOilType()[resultCode]);
                 Const.isUpdate = true;
             } else if (dialogSelectType == 8) {
@@ -211,7 +214,7 @@ public class OilCanSetFragment extends BaseFragment {
                 // item_tv_tanzhenID.setText("" + (resultCode + 1));
                 //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
                 oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(oilCanSet);
+                oilTankRepository.updateOilCanSet(oilCanSet);
                 Const.isUpdate = true;
             }
         }
@@ -339,8 +342,7 @@ public class OilCanSetFragment extends BaseFragment {
 
     protected void readDB(int postion) {
 
-        oilCanSet = (OilCanSet) dbManager.findObjectByID(OilCanSet.class,
-                postion + 1);
+        oilCanSet = oilTankRepository.findOilCanSetById(postion + 1);
         if (oilCanSet == null) {
             oilCanSet = new OilCanSet();
         }
@@ -474,7 +476,7 @@ public class OilCanSetFragment extends BaseFragment {
                 method.invoke(oilCanSet, Double.parseDouble(cur));
             }
             oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-            dbManager.UpdateObject(oilCanSet);
+            oilTankRepository.updateOilCanSet(oilCanSet);
           //  vText.setText(cur);
           //  vText.setText("");
             Const.isUpdate = true;
@@ -536,7 +538,7 @@ public class OilCanSetFragment extends BaseFragment {
                             method.invoke(oilCanSet, Double.parseDouble(cur));
                         }
                         oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                      //  dbManager.UpdateObject(oilCanSet);
+                      //  oilTankRepository.updateOilCanSet(oilCanSet);
                         vText.setText(cur);
                         vText.setText("");
                         Const.isUpdate = true;

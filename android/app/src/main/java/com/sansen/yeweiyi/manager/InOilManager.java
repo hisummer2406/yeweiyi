@@ -1,5 +1,7 @@
 package com.sansen.yeweiyi.manager;
 
+import android.util.Log;
+
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
@@ -11,6 +13,8 @@ import com.sansen.yeweiyi.logic.inout.InOutDirection;
 import com.sansen.yeweiyi.logic.inout.InOutEvent;
 import com.sansen.yeweiyi.logic.inout.InOutThresholds;
 import com.sansen.yeweiyi.logic.inout.MultiTankInOutDetector;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -33,10 +37,13 @@ import java.util.Map;
  */
 public class InOilManager {
 
+    private static final String TAG = "InOilManager";
+
     private static final InOilManager INSTANCE = new InOilManager();
 
     private final MultiTankInOutDetector detector = new MultiTankInOutDetector();
     private final Map<Integer, DetailInoutRecord> pendingRecords = new HashMap<>();
+    private final StockRepository stockRepository = StockRepositoryImpl.getInstance();
 
     private InOilManager() {
     }
@@ -148,7 +155,8 @@ public class InOilManager {
         detailInoutRecord.setSaleVolume(endVolume - beginVolume);
 
         String time = DateUtils.getYYYMMddHHmmss();
-        int savedId;
+        int savedId = 0;
+        boolean savedIdFound;
 
         if (isIn) {
             OilInOut in = new OilInOut();
@@ -161,9 +169,12 @@ public class InOilManager {
             in.setEndVolum(endVolume);
             in.setBeginWeight(endVolume - beginVolume);
             in.setEndWeight(DataUtils.doubleFoment((endVolume - beginVolume) * density));
-            DBDataManager.getInstance().saveObject(in);
-            OilInOut saved = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
-            savedId = saved.getId();
+            stockRepository.saveInRecord(in);
+            OilInOut saved = stockRepository.findLastIn();
+            savedIdFound = saved != null;
+            if (savedIdFound) {
+                savedId = saved.getId();
+            }
         } else {
             OutStock out = new OutStock();
             out.setOilId(event.getTankId());
@@ -176,13 +187,29 @@ public class InOilManager {
             out.setEndVolum(endVolume);
             out.setBeginWeight(beginVolume - endVolume);
             out.setEndWeight(DataUtils.doubleFoment((beginVolume - endVolume) * density));
-            DBDataManager.getInstance().saveObject(out);
-            OutStock saved = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
-            savedId = saved.getId();
+            stockRepository.saveOutRecord(out);
+            OutStock saved = stockRepository.findLastOut();
+            savedIdFound = saved != null;
+            if (savedIdFound) {
+                savedId = saved.getId();
+            }
         }
 
-        detailInoutRecord.setId(savedId);
-        DBDataManager.getInstance().saveObject(detailInoutRecord);
+        // 说明：saveInRecord/saveOutRecord 是异步落库（扔进线程池），
+        // findLastIn/findLastOut 是同步查询，两者之间存在竞态——理论上可能读到
+        // null（表为空时）或者上一条陈旧记录。DetailInoutRecord 目前入库、出库
+        // 两个方向都没有真实读取方（详情弹窗的点击事件在 InOutAdapter/
+        // OutStockAdapter 里是空实现，点击行没有任何反应，与本方法的改动无关，
+        // 是更早就存在的问题），所以这里只做"不崩溃"的兜底：findLast 返回 null
+        // 时跳过 DetailInoutRecord 的落库，不影响下面仍在正常使用的 socket 推送
+        // 和报警提示。若日后详情弹窗被重新接通，需要连同这里的竞态一起用同步
+        // 落库方式（如 saveBindingId）正式修复，而不是继续沿用这个兜底。
+        if (savedIdFound) {
+            detailInoutRecord.setId(savedId);
+            stockRepository.saveDetail(detailInoutRecord);
+        } else {
+            Log.w(TAG, "processEvent: " + (isIn ? "findLastIn" : "findLastOut") + " 未取到刚保存的记录，跳过详情落库");
+        }
 
         SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(detailInoutRecord.toString());
 

@@ -32,7 +32,8 @@ import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OutStock;
-import com.sansen.yeweiyi.manager.DBDataManager;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.ToastUtils;
@@ -454,15 +455,17 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
 
     }
 
+    private final StockRepository stockRepository = StockRepositoryImpl.getInstance();
+
     void saveInOil(OilInOut oilInOut) {
 
-        OilInOut inOut = (OilInOut) DBDataManager.getInstance().findLast(OilInOut.class);
-        DBDataManager.getInstance().saveObject(oilInOut);
+        OilInOut inOut = stockRepository.findLastIn();
+        stockRepository.saveInRecord(oilInOut);
     }
     void saveOutOil(OutStock outStock) {
 
-        OutStock Out = (OutStock) DBDataManager.getInstance().findLast(OutStock.class);
-        DBDataManager.getInstance().saveObject(outStock);
+        OutStock Out = stockRepository.findLastOut();
+        stockRepository.saveOutRecord(outStock);
     }
 
 

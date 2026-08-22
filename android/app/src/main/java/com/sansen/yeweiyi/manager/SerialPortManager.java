@@ -7,7 +7,6 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.base.BaseActivity;
 import com.sansen.yeweiyi.bean.BrandBean;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
@@ -17,6 +16,7 @@ import com.sansen.yeweiyi.factory.LDCompany;
 import com.sansen.yeweiyi.factory.PCDataFactory;
 import com.sansen.yeweiyi.factory.VR350Factory;
 import com.sansen.yeweiyi.factory.ZhongChengCompany;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DataUtils;
@@ -30,6 +30,13 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import serialport.help.SerialPortHelper;
 
+/**
+ * 协议编排层：串口/PC/探头三路轮询、厂商协议分发（factory/）、报警联动、经 {@link DataRefreshCallback}
+ * 把解析结果回调给 UI 层。不是 HAL——底层字节收发在 {@code serialport.manager.SerialPortManager}
+ * （263 行，零 UI 依赖，几乎无调用方）。两者同名易混淆：UI/业务层应始终经本类，禁止直接调用
+ * {@code serialport.manager.SerialPortManager}。见 openspec/changes/layer-data-and-hardware-boundaries §8、
+ * `CLAUDE.md` "Known landmines"。
+ */
 public class SerialPortManager implements IParseDataListener {
 
     private static final String TAG = "SerialPortManager";
@@ -67,10 +74,8 @@ public class SerialPortManager implements IParseDataListener {
     public static SerialPortHelper serialPort2 = new SerialPortHelper(
             m_iSerialPort[2], baudrate[4], databits[3], stopbits[0], paritys[0]);
 
-    // 从外部传进来
-    //
-    // 的hander对象用于与主线程的交互
-    private Handler mHandler;
+    // 从外部（BaseActivity）传进来的回调，用于把探头数据刷新通知交回 UI 层
+    private DataRefreshCallback mDataRefreshCallback;
 
     private Context mContext;
 
@@ -94,14 +99,14 @@ public class SerialPortManager implements IParseDataListener {
     }
 
     /**
-     * 从外面接收一个handler
+     * 从外面（BaseActivity）接收一个数据刷新回调
      *
-     * @param handler
+     * @param callback
      */
-    public void setHandler(Handler handler) {
+    public void setDataRefreshCallback(DataRefreshCallback callback) {
 
-        if (handler != null) {
-            mHandler = handler;
+        if (callback != null) {
+            mDataRefreshCallback = callback;
         }
     }
 
@@ -427,7 +432,7 @@ public class SerialPortManager implements IParseDataListener {
 
             if (MyApplication.alarmStates.containsKey(oilMessage.getOilCanId()) && MyApplication.alarmStates.get(oilMessage.getOilCanId()).getConnectError() == 0) {
 
-                MyApplication.getInstance().getmDBManager().saveAlarm(oilMessage.getOilCanId(), oilMessage);
+                AlarmRepositoryImpl.getInstance().saveAlarm(oilMessage.getOilCanId(), oilMessage);
                 MyApplication.alarmStates.get(oilMessage.getOilCanId()).setConnectError(1);
             }
             AlarmManager.getInstance().addAlarmState(oilMessage);
@@ -448,11 +453,8 @@ public class SerialPortManager implements IParseDataListener {
         // 每次更新完毕 都要去更新 oildataMagager
         mOilCanDataManager.refreshData(oilCan);
 
-        if (mHandler != null) {
-            Message msg = Message.obtain();
-            msg.what = BaseActivity.DATA_REFRESH;//05 16 08 49 11 10 00 00 00 08 24 FF FF
-            msg.obj = oilCan;                    //05 16 08 49 11 10 00 00 00 0F 24 F8
-            mHandler.sendMessage(msg);
+        if (mDataRefreshCallback != null) {
+            mDataRefreshCallback.onDataRefresh(oilCan);
         }
     }
 
@@ -469,12 +471,8 @@ public class SerialPortManager implements IParseDataListener {
     public void hexTestDataParseFinish(OilCan oilCan) {
         // 每次更新完毕 都要去更新 oildataMagager
         mOilCanDataManager.refreshTestData(oilCan);
-        if (mHandler != null) {
-            Message msg = Message.obtain();
-            msg.what = BaseActivity.DATA_REFRESH;
-            msg.obj = oilCan;
-
-            mHandler.sendMessage(msg);
+        if (mDataRefreshCallback != null) {
+            mDataRefreshCallback.onDataRefresh(oilCan);
         }
     }
 

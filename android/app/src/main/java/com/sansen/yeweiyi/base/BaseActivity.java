@@ -50,7 +50,9 @@ import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.ProbeToOil;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.AppManager;
+import com.sansen.yeweiyi.manager.DataRefreshCallback;
 import com.sansen.yeweiyi.manager.SerialPortManager;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DialogUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.view.CustomToast;
@@ -217,7 +219,7 @@ public abstract class BaseActivity extends FragmentActivity implements
     protected void onResume() {
         // TODO Auto-generated method stub
         super.onResume();
-        mSerialPortManager.setHandler(handler);
+        mSerialPortManager.setDataRefreshCallback(dataRefreshCallback);
         StatService.onResume(this);
 
     }
@@ -331,6 +333,20 @@ public abstract class BaseActivity extends FragmentActivity implements
 
         ;
     };
+
+    /**
+     * 注册给 SerialPortManager 编排层的数据刷新回调，内部转投到上面的 handler，
+     * 保持"探头线程 -> 主线程"这一跳的行为与改动前完全一致。
+     */
+    private final DataRefreshCallback dataRefreshCallback = new DataRefreshCallback() {
+        @Override
+        public void onDataRefresh(OilCan oilCan) {
+            Message msg = Message.obtain();
+            msg.what = DATA_REFRESH;
+            msg.obj = oilCan;
+            handler.sendMessage(msg);
+        }
+    };
     public TextView tv_unlogin;
 
     /**
@@ -388,7 +404,7 @@ public abstract class BaseActivity extends FragmentActivity implements
                 if (deviceSecret==null){
                     return;
                 }
-                List<ProbeToOil> probeToOils= MyApplication.getInstance().getmDBManager().findAllObject(ProbeToOil.class);
+                List<ProbeToOil> probeToOils= OilTankRepositoryImpl.getInstance().findAllProbeToOil();
                 int probeCount=0;
                 for (int i=0;i<probeToOils.size();i++){
                     if (probeToOils.get(i).getEnable()==1){

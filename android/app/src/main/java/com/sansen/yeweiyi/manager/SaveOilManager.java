@@ -7,6 +7,8 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.Oil;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.db.StockSave;
+import com.sansen.yeweiyi.repository.StockRepository;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DateUtils;
 
 import java.util.ArrayList;
@@ -16,12 +18,14 @@ public class SaveOilManager {
 	private MyApplication application;
 	private DBDataManager dbDataManager;
 	private OilcanDataManager oilcanDataManager;
+	private StockRepository stockRepository;
 	private SparseArray<OilCan> maps;
 
 	private SaveOilManager(Context ct) {
 		application = MyApplication.getInstance();
 		dbDataManager = application.getmDBManager();
 		oilcanDataManager = application.getmOilcanDataManager();
+		stockRepository = StockRepositoryImpl.getInstance();
 	}
 
 	public static SaveOilManager getInstance(Context ct) {
@@ -62,7 +66,7 @@ public class SaveOilManager {
 						stockSave.setOilId(oilCan.getOilCanPos());
 						stockSave.setHeight(oilCan.getOilLevel());
 						stockSave.setTime(DateUtils.getYYYMMddHHmmss());
-						dbDataManager.saveSaveOilRecord(stockSave);
+						stockRepository.saveStockRecord(stockSave);
 					}
 
 					//String gosnInfo = dbDataManager.getListToStringByGson(oils);

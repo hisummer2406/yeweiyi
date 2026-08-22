@@ -13,6 +13,8 @@ import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -24,6 +26,7 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 
 	private List<OilCanSet> lists;
 	private Context ct;
+	private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
 
 	public AlarmOpenAdapter(Context ct) {
 		this.ct = ct;
@@ -79,11 +82,7 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 
 								int alarmByte = isChecked == true ? 1 : 0;
 
-								OilCanSet oilCanSet = (OilCanSet) MyApplication
-										.getInstance()
-										.getmDBManager()
-										.findObjectByID(OilCanSet.class,
-												position + 1);
+								OilCanSet oilCanSet = oilTankRepository.findOilCanSetById(position + 1);
 								oilCanSet.setAlarmByte(alarmByte);
 								OilCan oilCan = MyApplication.getInstance()
 										.getmOilcanDataManager()
@@ -93,8 +92,7 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 									oilCan.setAlarmByte(alarmByte);
 								}
 								oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-								MyApplication.getInstance().getmDBManager()
-										.UpdateObject(oilCanSet);
+								oilTankRepository.updateOilCanSet(oilCanSet);
 							}
 						});
 			}
@@ -116,8 +114,7 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 		for (int position = 1; position <= size; position++) {
 			int alarmByte = isChecked == true ? 1 : 0;
 
-			OilCanSet oilCanSet = (OilCanSet) MyApplication.getInstance()
-					.getmDBManager().findObjectByID(OilCanSet.class, position);
+			OilCanSet oilCanSet = oilTankRepository.findOilCanSetById(position);
 			oilCanSet.setAlarmByte(alarmByte);
 			OilCan oilCan = MyApplication.getInstance().getmOilcanDataManager()
 					.getData(position);
@@ -126,7 +123,7 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 				oilCan.setAlarmByte(alarmByte);
 			}
 			oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-			MyApplication.getInstance().getmDBManager().UpdateObject(oilCanSet);
+			oilTankRepository.updateOilCanSet(oilCanSet);
 			SharePrefUtil.saveBoolean(ct, "isAllAlarm", isChecked);
 		}
 

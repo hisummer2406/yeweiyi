@@ -4,7 +4,7 @@ import android.util.Log;
 
 import com.alibaba.fastjson.JSONObject;
 import com.sansen.yeweiyi.db.OilInOut;
-import com.sansen.yeweiyi.manager.DBDataManager;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.yanzhenjie.andserver.RequestHandler;
 import com.yanzhenjie.andserver.RequestMethod;
 import com.yanzhenjie.andserver.annotation.RequestMapping;
@@ -42,7 +42,7 @@ public class OilDischarge implements RequestHandler {
         int offset = Integer.parseInt(URLDecoder.decode(params.get("offset"), "utf-8"));
         //Log.i(TAG, "id："+id+" beginTime："+beginTime+" endTime："+endTime+" limit："+limit+" offset："+offset+" sor："+sort);
 
-        HashMap<String,Object> maps= DBDataManager.getInstance().findObject(OilInOut.class,id,beginTime,endTime,limit,offset,sort);
+        HashMap<String,Object> maps= StockRepositoryImpl.getInstance().findInPaged(id,beginTime,endTime,limit,offset,sort);
         List<OilInOut> alarms= (List<OilInOut>) maps.get("list");
         long count= (long) maps.get("count");
         PageInfo pageInfo = new PageInfo(alarms, count, limit);

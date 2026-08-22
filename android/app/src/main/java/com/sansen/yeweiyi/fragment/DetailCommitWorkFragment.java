@@ -17,6 +17,8 @@ import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilWork;
 import com.sansen.yeweiyi.db.Authorization;
 import com.sansen.yeweiyi.db.CommitWork;
+import com.sansen.yeweiyi.repository.ShiftRepository;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.UpdateCommitDialog;
 
@@ -26,6 +28,7 @@ import java.util.List;
 public class DetailCommitWorkFragment extends BaseFragment {
 
 	ListView detailcommitwork_list_info;
+	private final ShiftRepository shiftRepository = ShiftRepositoryImpl.getInstance();
 	private DetailCommitWorkAdapter myAdapter;
 	private List<OilWork> oilWorks;
 	private int oilCanId;
@@ -118,7 +121,7 @@ public class DetailCommitWorkFragment extends BaseFragment {
 		// TODO Auto-generated method stub
 		super.onActivityResult(requestCode, resultCode, data);
 		if (resultCode==100) {
-			CommitWork work = (CommitWork) dbManager.findObjectByID(CommitWork.class, oilCanId);
+			CommitWork work = shiftRepository.findById(oilCanId);
 			List<OilWork> oilWorks= dbManager.stringToArray(work.getInfo(), OilWork[].class);
 			myAdapter.setData(oilWorks);
 			myAdapter.notifyDataSetChanged();

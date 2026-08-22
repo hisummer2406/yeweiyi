@@ -18,12 +18,16 @@ import com.sansen.yeweiyi.activity.MainActivity;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DateUtils;
 
 public class ColorFragment extends BaseFragment implements OnItemClickListener {
 
+	private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
+
 	private GridView color_gridview_color;
-	
+
 	private OilCanSet oilCanSet;
 
 	private Button color_but_custom;
@@ -96,7 +100,7 @@ public class ColorFragment extends BaseFragment implements OnItemClickListener {
 	public void onItemClick(AdapterView<?> arg0, View arg1, int arg2, long arg3) {
 		oilCanSet.setOilColor(yanseId(arg2+1));
 		oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-		dbManager.UpdateObject(oilCanSet);
+		oilTankRepository.updateOilCanSet(oilCanSet);
 		Const.isUpdate=true;
 		MainActivity main = (MainActivity) getActivity();
 		if (main.oilCanSetFragment == null) {
