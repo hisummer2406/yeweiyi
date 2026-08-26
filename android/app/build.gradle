@@ -51,7 +51,7 @@ android {
         minSdkVersion 21
         targetSdkVersion 27
         versionCode 1
-        versionName "1.0.0-A"
+        versionName "0.0.2-A"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "PRODUCT_KEY", secretField('sansen.productKey')

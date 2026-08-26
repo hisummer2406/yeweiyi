@@ -209,6 +209,7 @@ public class CreateOilTableFragment extends BaseFragment {
             case R.id.createtable_bt_writeoilcan:
 
                 if (temps!=null&&temps.size()>0){
+                    dataset.clear();
                     for (int i=0;i<temps.size();i++){
                         OilTable oilTable=new OilTable();
                         oilTable.setHeight(temps.get(i).getHight());
