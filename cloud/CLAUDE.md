@@ -195,14 +195,11 @@ written yet.
   endpoint requires the caller to already know the exact `device_name`), and an authorization check
   added to every `device`-scoped handler (`internal/api/records.go`'s `parseListParams`,
   `oilcan.go`, `ws.go`, and any future write endpoint).
-- **No automatic partition creation for `alarms`/`oil_in_out` — this is time-bounded, not just a
-  someday-gap.** `db/migrations/000001_init_schema.up.sql` only pre-creates partitions through
-  `alarms_2026_09`/`oil_in_out_2026_09` (covering through 2026-09-30). There's no default partition
-  and nothing creates `_2026_10` automatically — `internal/queue` already has the exact pattern to
-  copy (`TTLSweepWorker`, a `river.PeriodicJob` registered in `internal/queue/client.go`), just
-  scoped to `CREATE TABLE ... PARTITION OF ... FOR VALUES FROM ... TO ...` instead of a TTL sweep.
-  Without this, inserts into `alarms`/`oil_in_out` start hard-failing the moment a row's `time`
-  lands in October.
+
+~~No automatic partition creation for `alarms`/`oil_in_out`~~ — **fixed 2026-08-29**, see
+`internal/partitions` in "Module layout"/"Architecture" below. Left the strikethrough here instead
+of deleting the bullet so this section's "found 2026-08-29" items stay traceable to what they
+originally were.
 
 ## Open product decisions (do not silently assume an answer)
 
@@ -310,8 +307,9 @@ go vet ./...                    # clean
 sqlc generate                   # regenerates internal/store/db from db/migrations + db/queries
 migrate -database "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable" \
         -path db/migrations up  # applies all migrations; down-then-up round-trip verified for each
-go test ./...                   # internal/queue and internal/mqtt have real integration tests
-                                 # against local postgres/redis/mosquitto; everything else has none
+go test ./...                   # internal/queue, internal/mqtt, and internal/partitions have real
+                                 # integration tests against local postgres/redis/mosquitto;
+                                 # everything else (notably internal/api) has none
 JWT_SECRET=... MQTT_BROKER_URL=tcp://localhost:1883 MQTT_PRODUCT_KEY=... go run ./cmd/server
                                  # MQTT_BROKER_URL is optional — omit it to run without MQTT
 ```
@@ -435,6 +433,11 @@ internal/api/        # router.go, health.go, auth.go (JWT login + middleware), r
 internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
                      # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
                      # (§5.3 periodic sweep), queue_test.go (integration tests, see above)
+internal/partitions/ # partitions.go (2026-08-29): keeps alarms/oil_in_out's monthly range
+                     # partitions pre-created a few months ahead — plain ticker goroutine, not a
+                     # river job (river is scoped to the write-back queue per "Tech stack" below;
+                     # CREATE TABLE IF NOT EXISTS is already idempotent/multi-instance-safe on its
+                     # own). partitions_test.go is a real integration test against local postgres.
 internal/store/db/   # sqlc-generated: db.go, models.go, querier.go, + one .sql.go per query file
 db/migrations/       # golang-migrate schema; 000001 is the app schema, 000002-000007 are river's
                      # (see above)
@@ -483,6 +486,16 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   stuck `pending`/`sent` past `TTL` (default `queue.DefaultTTL` = 30 days, explicitly flagged in code
   as a placeholder mirroring the design doc's example number, not a confirmed product decision) get
   marked `failed`.
+- `internal/partitions` (2026-08-29) closes the gap flagged in "Known cloud-side gaps" above:
+  `EnsureFuture(ctx, pool, lookahead)` runs `CREATE TABLE IF NOT EXISTS {table}_{yyyy}_{mm}
+  PARTITION OF {table} FOR VALUES FROM (...) TO (...)` for `alarms`/`oil_in_out`, covering the
+  current month through `lookahead` months ahead (`DefaultLookahead` = 2). `cmd/server/main.go`
+  starts `partitions.Run` as a background goroutine right after the pool is built — it calls
+  `EnsureFuture` once immediately, then every `DefaultInterval` (24h) for the life of the process.
+  Deliberately a plain ticker, not a river periodic job like `TTLSweepWorker` above: river's
+  scoping in "Tech stack" is specifically the write-back queue, and `CREATE TABLE IF NOT EXISTS` is
+  already idempotent and safe to call from more than one server instance without river's
+  coordination, so adding river here would be an unneeded abstraction.
 - `internal/store/db` is the sqlc output over the schema in `db/migrations/000001_init_schema.up.sql`
   — that migration already creates `users`, `devices`, `alarms`/`oil_in_out` (time-partitioned,
   partitions pre-created through 2026-09), `commit_works`, `oil_can_sets`, and

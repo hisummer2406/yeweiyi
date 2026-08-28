@@ -13,6 +13,7 @@ import (
 
 	"yeweiyi-cloud/internal/api"
 	yqmqtt "yeweiyi-cloud/internal/mqtt"
+	"yeweiyi-cloud/internal/partitions"
 	"yeweiyi-cloud/internal/queue"
 	"yeweiyi-cloud/internal/store/db"
 )
@@ -38,6 +39,8 @@ func main() {
 		log.Fatalf("postgres: %v", err)
 	}
 	defer pool.Close()
+
+	go partitions.Run(ctx, pool, partitions.DefaultInterval, partitions.DefaultLookahead)
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: getenv("REDIS_ADDR", "localhost:6379"),
