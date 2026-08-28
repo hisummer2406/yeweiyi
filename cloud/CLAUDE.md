@@ -310,9 +310,9 @@ go vet ./...                    # clean
 sqlc generate                   # regenerates internal/store/db from db/migrations + db/queries
 migrate -database "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable" \
         -path db/migrations up  # applies all migrations; down-then-up round-trip verified for each
-go test ./...                   # internal/queue, internal/mqtt, and internal/partitions have real
-                                 # integration tests against local postgres/redis/mosquitto;
-                                 # everything else (notably internal/api) has none
+go test ./...                   # internal/queue, internal/mqtt, internal/partitions, and (since
+                                 # 2026-08-29) internal/api have real integration tests against
+                                 # local postgres/redis; cmd/server and internal/store/db have none
 JWT_SECRET=... MQTT_BROKER_URL=tcp://localhost:1883 MQTT_PRODUCT_KEY=... go run ./cmd/server
                                  # MQTT_BROKER_URL is optional — omit it to run without MQTT
 ```
@@ -420,6 +420,20 @@ enqueueing, as expected — `unbuiltMQTTPublisher` still errors on every attempt
 publish job on its own backoff without ever reaching `sent`; that's the existing, already-documented
 limitation above, not something this pass changes. All throwaway rows/users deleted afterward.
 
+**2026-08-29 `internal/api` test-coverage pass**: closes the gap flagged throughout this file —
+`internal/api` had zero automated tests while every other package with real logic (`internal/mqtt`,
+`internal/queue`, `internal/partitions`) had integration tests. Added `api_test.go` (shared
+`testEnv` helper: real `pgxpool`/`redis.Client`/`river.Client` wired into a real `gin.Engine` via
+`api.NewRouter`, driven through `httptest` — no mocks, same philosophy as the other packages' tests;
+a seeded user gets a real JWT through the real `/api/login` handler rather than one minted by hand)
+plus `health_test.go`, `auth_test.go`, `records_test.go`, `oilcan_test.go`, `writeback_test.go` — 22
+tests total, covering every route: login success/failure, `authMiddleware` missing/invalid token,
+all three list endpoints' required-`device`/seeded-row/unauthenticated paths, the oilcan cache's
+404-when-empty and verbatim-passthrough-when-cached cases, and all four write-back endpoints'
+202/404 paths plus the list endpoint's most-recent-first ordering and readable (non-base64) payload.
+All pass against the local containers; each test seeds and cleans up its own rows/users via
+`t.Cleanup`.
+
 `/ws/alarms` (2026-08-20, `internal/api/ws.go`) is implemented and manually verified end-to-end
 against the local containers: seeded a throwaway user, ran the binary, connected with
 `gorilla/websocket`'s client passing the JWT as a `token` query param (not the `Authorization`
@@ -458,7 +472,9 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
 internal/api/        # router.go, health.go, auth.go (JWT login + middleware), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
                      # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
-                     # REST entry points — see below)
+                     # REST entry points — see below); api_test.go/health_test.go/auth_test.go/
+                     # records_test.go/oilcan_test.go/writeback_test.go (2026-08-29: integration
+                     # tests, see above)
 internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
                      # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
                      # (§5.3 periodic sweep), queue_test.go (integration tests, see above)

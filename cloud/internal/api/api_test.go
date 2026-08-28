@@ -1,0 +1,168 @@
+// internal/api had zero automated test coverage (CLAUDE.md's Build section flagged this
+// explicitly) — every other package with real logic (internal/mqtt, internal/queue,
+// internal/partitions) has integration tests against the local dev stack; this is that same
+// pattern applied to the REST layer: real Postgres/Redis, a real gin.Engine driven through
+// httptest, no mocks.
+package api_test
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+
+	"yeweiyi-cloud/internal/api"
+	"yeweiyi-cloud/internal/queue"
+	"yeweiyi-cloud/internal/store/db"
+)
+
+func testDatabaseURL() string {
+	if v := os.Getenv("DATABASE_URL"); v != "" {
+		return v
+	}
+	return "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"
+}
+
+func testRedisAddr() string {
+	if v := os.Getenv("REDIS_ADDR"); v != "" {
+		return v
+	}
+	return "localhost:6379"
+}
+
+// noopPublisher never actually needs to succeed for these tests — every write-back test here only
+// checks that a command reaches `pending` (the HTTP layer's job), not that it gets published (that's
+// internal/queue's job, already covered by its own tests).
+type noopPublisher struct{}
+
+func (noopPublisher) PublishCommand(context.Context, string, int64, string, []byte) error {
+	return nil
+}
+
+// testEnv wires one real gin.Engine against the local dev Postgres/Redis, plus a bcrypt-seeded user
+// so tests can get a real JWT through the real /api/login handler rather than minting one by hand.
+type testEnv struct {
+	t        *testing.T
+	router   http.Handler
+	pool     *pgxpool.Pool
+	rdb      *redis.Client
+	queries  *db.Queries
+	username string
+	token    string
+}
+
+const testUserPasswordHash = "$2a$10$meNXe5U2v9ec5cW0fIv2teBFiwN88qoxXndhnk.WZd.h/MimCSZ5u" // bcrypt("e2e-test-pass")
+
+func newTestEnv(t *testing.T) *testEnv {
+	t.Helper()
+	ctx := context.Background()
+
+	pool, err := pgxpool.New(ctx, testDatabaseURL())
+	if err != nil {
+		t.Fatalf("connect postgres: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	rdb := redis.NewClient(&redis.Options{Addr: testRedisAddr()})
+	t.Cleanup(func() { rdb.Close() })
+
+	queries := db.New(pool)
+
+	riverClient, err := queue.NewClient(queue.Config{Pool: pool, Queries: queries, Publisher: noopPublisher{}})
+	if err != nil {
+		t.Fatalf("new river client: %v", err)
+	}
+	if err := riverClient.Start(ctx); err != nil {
+		t.Fatalf("start river client: %v", err)
+	}
+	t.Cleanup(func() { riverClient.Stop(context.Background()) })
+
+	router := api.NewRouter(api.Deps{
+		Queries:     queries,
+		Redis:       rdb,
+		Pool:        pool,
+		JWTSecret:   []byte("api-test-secret"),
+		RiverClient: riverClient,
+	})
+
+	username := "api-test-user-" + t.Name()
+	if _, err := pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.Background(), `DELETE FROM users WHERE username = $1`, username); err != nil {
+			t.Errorf("cleanup user: %v", err)
+		}
+	})
+
+	env := &testEnv{t: t, router: router, pool: pool, rdb: rdb, queries: queries, username: username}
+	env.token = env.login(username, "e2e-test-pass")
+	return env
+}
+
+func (e *testEnv) login(username, password string) string {
+	e.t.Helper()
+	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	rec := e.do("POST", "/api/login", nil, body)
+	if rec.Code != http.StatusOK {
+		e.t.Fatalf("login: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		e.t.Fatalf("decode login response: %v", err)
+	}
+	return resp.Token
+}
+
+// do issues an HTTP request straight into the router (no real listener/socket — httptest.Recorder),
+// attaching the Authorization header only when token is non-empty.
+func (e *testEnv) do(method, path string, token []byte, body []byte) *httptest.ResponseRecorder {
+	e.t.Helper()
+	var reader *bytes.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	} else {
+		reader = bytes.NewReader(nil)
+	}
+	req := httptest.NewRequest(method, path, reader)
+	req.Header.Set("Content-Type", "application/json")
+	if token != nil {
+		req.Header.Set("Authorization", "Bearer "+string(token))
+	}
+	rec := httptest.NewRecorder()
+	e.router.ServeHTTP(rec, req)
+	return rec
+}
+
+func (e *testEnv) authed(method, path string, body []byte) *httptest.ResponseRecorder {
+	return e.do(method, path, []byte(e.token), body)
+}
+
+func (e *testEnv) seedDevice(deviceName string) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(context.Background(), `INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT DO NOTHING`, deviceName); err != nil {
+		e.t.Fatalf("seed device %s: %v", deviceName, err)
+	}
+	e.t.Cleanup(func() {
+		if _, err := e.pool.Exec(context.Background(), `DELETE FROM devices WHERE device_name = $1`, deviceName); err != nil {
+			e.t.Errorf("cleanup device %s: %v", deviceName, err)
+		}
+	})
+}
+
+func jsonBody(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
+	return b
+}
