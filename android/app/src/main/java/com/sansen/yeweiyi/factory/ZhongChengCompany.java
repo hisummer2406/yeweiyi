@@ -109,7 +109,7 @@ public class ZhongChengCompany implements AbstractCompany {
                         oilCan = map.valueAt(i);
                         if (address.equals(oilCan.getProbeAdr())) {
                             oilCan.setOilLevel(BigDecimal.valueOf(oilLevel).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue());
-                            oilCan.setWaterLevel(BigDecimal.valueOf(waterLevel).add(BigDecimal.valueOf(oilCan.getWaterLevelCorrection())).doubleValue());
+                            oilCan.setWaterLevel(Math.max(0, BigDecimal.valueOf(waterLevel).add(BigDecimal.valueOf(oilCan.getWaterLevelCorrection())).doubleValue()));
 
                             if (SharePrefUtil.getBoolean(MyApplication.getInstance(), SharePrefUtil.SHOW_VOLUME, true)) {
                                 if (oilCan.getHightArray().length > 1) {

@@ -140,7 +140,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_in_height"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -176,7 +176,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_in_liter"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -299,7 +299,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_out_height"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -335,7 +335,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_out_liter"
                         android:layout_width="140dp"
                         android:layout_height="44dp"

@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
 import android.os.Bundle;
+import android.text.InputFilter;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -23,6 +24,7 @@ import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -160,6 +162,21 @@ public class OilTestFragment extends BaseFragment {
         //  et_shuiwei12 = rootView.findViewById(R.id.et_shuiwei01);
         et_yewei12 = rootView.findViewById(R.id.et_yewei12);
         et_weiduwei12 = rootView.findViewById(R.id.et_weiduwei12);
+
+        // 液位、温度位都支持小数（保存时都按 double 处理），统一只限制到 1 位
+        InputFilter[] oneDecimalFilter = new InputFilter[]{new DecimalDigitsInputFilter(1)};
+        EditText[] correctionInputs = {
+                et_yewei01, et_weiduwei01, et_yewei02, et_weiduwei02,
+                et_yewei03, et_weiduwei03, et_yewei04, et_weiduwei04,
+                et_yewei05, et_weiduwei05, et_yewei06, et_weiduwei06,
+                et_yewei07, et_weiduwei07, et_yewei08, et_weiduwei08,
+                et_yewei09, et_weiduwei09, et_yewei10, et_weiduwei10,
+                et_yewei11, et_weiduwei11, et_yewei12, et_weiduwei12,
+        };
+        for (EditText editText : correctionInputs) {
+            editText.setFilters(oneDecimalFilter);
+        }
+
         cb_test_status=rootView.findViewById(R.id.cb_test_status);
         initData();
         cb_test_status.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -356,51 +373,51 @@ public class OilTestFragment extends BaseFragment {
             case R.id.ly_baoCunData:
                 //  saveData(et_shuiwei01, "Height", int.class, 1);
                 saveData(et_yewei01, "Height", double.class, 1);
-                saveData(et_weiduwei01, "Temp", int.class, 1);
+                saveData(et_weiduwei01, "Temp", double.class, 1);
 
                 //  saveData(et_shuiwei02, "Height", int.class, 2);
                 saveData(et_yewei02, "Height", double.class, 2);
-                saveData(et_weiduwei02, "Temp", int.class, 2);
+                saveData(et_weiduwei02, "Temp", double.class, 2);
 
                 //  saveData(et_shuiwei03, "Height", int.class, 3);
                 saveData(et_yewei03, "Height", double.class, 3);
-                saveData(et_weiduwei03, "Temp", int.class, 3);
+                saveData(et_weiduwei03, "Temp", double.class, 3);
 
                 //  saveData(et_shuiwei04, "Height", int.class, 4);
                 saveData(et_yewei04, "Height", double.class, 4);
-                saveData(et_weiduwei04, "Temp", int.class, 4);
+                saveData(et_weiduwei04, "Temp", double.class, 4);
 
                 //  saveData(et_shuiwei05, "Height", int.class, 5);
                 saveData(et_yewei05, "Height", double.class, 5);
-                saveData(et_weiduwei05, "Temp", int.class, 5);
+                saveData(et_weiduwei05, "Temp", double.class, 5);
 
                 //  saveData(et_shuiwei06, "Height", int.class, 6);
                 saveData(et_yewei06, "Height", double.class, 6);
-                saveData(et_weiduwei06, "Temp", int.class, 6);
+                saveData(et_weiduwei06, "Temp", double.class, 6);
 
                 //  saveData(et_shuiwei07, "Height", int.class, 7);
                 saveData(et_yewei07, "Height", double.class, 7);
-                saveData(et_weiduwei07, "Temp", int.class, 7);
+                saveData(et_weiduwei07, "Temp", double.class, 7);
 
                 //  saveData(et_shuiwei08, "Height", int.class, 8);
                 saveData(et_yewei08, "Height", double.class, 8);
-                saveData(et_weiduwei08, "Temp", int.class, 8);
+                saveData(et_weiduwei08, "Temp", double.class, 8);
 
                 //  saveData(et_shuiwei09, "Height", int.class, 9);
                 saveData(et_yewei09, "Height", double.class, 9);
-                saveData(et_weiduwei09, "Temp", int.class, 9);
+                saveData(et_weiduwei09, "Temp", double.class, 9);
 
                 //  saveData(et_shuiwei10, "Height", int.class, 10);
                 saveData(et_yewei10, "Height", double.class, 10);
-                saveData(et_weiduwei10, "Temp", int.class, 10);
+                saveData(et_weiduwei10, "Temp", double.class, 10);
 
                 //  saveData(et_shuiwei11, "Height", int.class, 11);
                 saveData(et_yewei11, "Height", double.class, 11);
-                saveData(et_weiduwei11, "Temp", int.class, 11);
+                saveData(et_weiduwei11, "Temp", double.class, 11);
 
                 //  saveData(et_shuiwei12, "Height", int.class, 12);
                 saveData(et_yewei12, "Height", double.class, 12);
-                saveData(et_weiduwei12, "Temp", int.class, 12);
+                saveData(et_weiduwei12, "Temp", double.class, 12);
 
                 showWindDialog(1000);
                 break;

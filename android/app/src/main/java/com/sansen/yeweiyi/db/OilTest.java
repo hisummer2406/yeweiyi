@@ -23,7 +23,7 @@ public class OilTest {
      * 温度
      */
     @Column(column = "temp")
-    private int temp;
+    private double temp;
 
     @Column(column = "enable")
     @NotNull
@@ -56,11 +56,11 @@ public class OilTest {
         this.height = height;
     }
 
-    public int getTemp() {
+    public double getTemp() {
         return temp;
     }
 
-    public void setTemp(int temp) {
+    public void setTemp(double temp) {
         this.temp = temp;
     }
 

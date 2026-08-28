@@ -8,7 +8,9 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.text.Editable;
+import android.text.InputFilter;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -35,6 +37,7 @@ import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.repository.StockRepository;
 import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
+import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
@@ -86,6 +89,11 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         et_in_liter = rootView.findViewById(R.id.et_in_liter);
         et_out_height = rootView.findViewById(R.id.et_out_height);
         et_out_liter = rootView.findViewById(R.id.et_out_liter);
+        InputFilter[] oneDecimalFilter = new InputFilter[]{new DecimalDigitsInputFilter(1)};
+        et_in_height.setFilters(oneDecimalFilter);
+        et_in_liter.setFilters(oneDecimalFilter);
+        et_out_height.setFilters(oneDecimalFilter);
+        et_out_liter.setFilters(oneDecimalFilter);
         ly_saveData.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
         KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_saveData, ly_upper_page);
@@ -354,19 +362,25 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
 
     @Override
     public void afterTextChanged(Editable editable) {
-        if (!editable.toString().isEmpty()) {
-            if (et_in_height.hasFocus()) {
+        String text = editable.toString();
+        // 允许一位小数后，"." 或 "-" 单独输入时还不是合法数字，先不解析，等用户继续输入
+        if (!text.isEmpty() && !".".equals(text) && !"-".equals(text)) {
+            try {
+                if (et_in_height.hasFocus()) {
 
-                beginInHight = Double.parseDouble(editable.toString());
-            } else if (et_in_liter.hasFocus()) {
-                endInVoulme = Double.parseDouble(editable.toString());
+                    beginInHight = Double.parseDouble(text);
+                } else if (et_in_liter.hasFocus()) {
+                    endInVoulme = Double.parseDouble(text);
 
-            } else if (et_out_height.hasFocus()) {
+                } else if (et_out_height.hasFocus()) {
 
-                beginOutHight = Double.parseDouble(editable.toString());
-            } else if (et_out_liter.hasFocus()) {
+                    beginOutHight = Double.parseDouble(text);
+                } else if (et_out_liter.hasFocus()) {
 
-                endOutVoulme = Double.parseDouble(editable.toString());
+                    endOutVoulme = Double.parseDouble(text);
+                }
+            } catch (NumberFormatException e) {
+                Log.e("BuLuFragment", "afterTextChanged 解析失败: " + text, e);
             }
 
         }
