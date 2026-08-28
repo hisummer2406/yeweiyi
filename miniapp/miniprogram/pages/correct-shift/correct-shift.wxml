@@ -1,0 +1,30 @@
+<view class="container">
+  <view class="card muted">
+    提交后为异步下发，状态会停留在“已提交”直到设备确认（当前设备侧尚未实现确认，属已知限制）。
+  </view>
+
+  <view class="card">
+    <view class="field">
+      <text class="field-label">记录编号（deviceLocalId）</text>
+      <view class="field-input">{{form.deviceLocalId}}</view>
+    </view>
+    <view class="field">
+      <text class="field-label">班次编号 workId</text>
+      <input class="field-input" type="number" value="{{form.workId}}" bindinput="onInput" data-field="workId" />
+    </view>
+    <view class="field">
+      <text class="field-label">开始时间 time</text>
+      <input class="field-input" value="{{form.time}}" bindinput="onInput" data-field="time" />
+    </view>
+    <view class="field">
+      <text class="field-label">结束时间 endTime</text>
+      <input class="field-input" value="{{form.endTime}}" bindinput="onInput" data-field="endTime" />
+    </view>
+    <view class="field">
+      <text class="field-label">备注 info</text>
+      <input class="field-input" value="{{form.info}}" bindinput="onInput" data-field="info" />
+    </view>
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交修正</button>
+  </view>
+</view>

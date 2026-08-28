@@ -1,0 +1,14 @@
+<view class="container">
+  <view class="card">
+    <view class="field">
+      <text class="field-label">账号</text>
+      <input class="field-input" value="{{username}}" bindinput="onUsernameInput" placeholder="请输入账号" />
+    </view>
+    <view class="field">
+      <text class="field-label">密码</text>
+      <input class="field-input" password value="{{password}}" bindinput="onPasswordInput" placeholder="请输入密码" />
+    </view>
+    <button class="btn-primary" loading="{{loading}}" bindtap="onSubmit">登录</button>
+    <view wx:if="{{errorMsg}}" class="muted" style="color:#cf1322;margin-top:16rpx;">{{errorMsg}}</view>
+  </view>
+</view>

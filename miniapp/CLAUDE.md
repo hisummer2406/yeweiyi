@@ -2,13 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project status: tech stack decided, no code written yet
+## Project status: scaffold in place, screens are skeletons
 
-This repo is still an empty scaffold — no code exists yet. The tech stack (native WeChat
-mini-program, see "Tech stack" below) was decided on 2026-08-29; nothing has been scaffolded
-against it yet. This file exists to capture the *contract* this project must satisfy before
-implementation starts, so a fresh session (or a fresh subagent) doesn't have to re-derive it from
-scratch or from the sibling repos.
+The tech stack (native WeChat mini-program, see "Tech stack" below) was decided on 2026-08-29, and
+the scaffold was built the same day: project config, the TS build/type-check setup, the API/WS
+client layer, and one page per flow in "What this mini-program needs to do" below, wired to the
+real endpoints. See "Build" and "Architecture" for what exists. None of it has been run inside
+WeChat DevTools or against a live `yeweiyi-cloud` yet, and the UI is functional-but-unstyled —
+treat every screen as a first pass to replace, not a finished design.
 
 ## What this project is
 
@@ -127,10 +128,62 @@ uni-app/Taro's main selling point — one codebase targeting multiple mini-progr
 carves PC-remote out as a separate concern this repo doesn't serve), so there's no second target
 platform to amortize a cross-compilation layer's cost against.
 
-State management and UI component library are still open — decide when scaffolding starts;
-TypeScript vs. plain JS is also open (native 小程序 supports both). When code exists, this file
-should grow a "Build" and "Architecture" section the same way the Android/cloud repos' CLAUDE.md
-files have them.
+Decided 2026-08-29, when scaffolding started:
+- **TypeScript**, via WeChat DevTools' built-in TS compiler plugin (`.ts` files transpiled on
+  preview/upload, no bundler) plus `miniprogram-api-typings` as a type-only devDependency for
+  editor/`tsc --noEmit` checking — same AI-authored-code reasoning as the framework choice above:
+  catch a wrong `wx.*` call signature or a field-name typo against the cloud API at typecheck time
+  instead of on-device.
+- **No UI component library.** The app is small (device list, a handful of record lists, two
+  correction forms, one opaque-JSON config form) and native WXML/WXSS covers it without adding a
+  dependency whose devtools-npm-build step is one more place for AI-authored config to be subtly
+  wrong. Revisit if the screen count or design polish bar grows enough to justify it.
+- **No state management library.** Auth token lives in `wx.storage` (see `utils/storage.ts`); each
+  page loads its own data on `onLoad`/`onShow`. There's no cross-page shared mutable state beyond
+  the token, so `app.ts`'s `globalData` + per-page `Page.data` is enough.
+
+## Build
+
+No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` itself on preview/upload
+(`project.config.json`'s `setting.useCompilerPlugins: ["typescript"]`), reading straight from
+`miniprogram/`. To work on this repo:
+
+1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only;
+   nothing from `node_modules` ships to the device).
+2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change;
+   it's the only automated check in this repo so far (no test runner yet).
+3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
+   already). `appid` is the placeholder `"touristappid"` tourist value — swap in the project's
+   real AppID before anything beyond local preview (publishing, cloud features) is needed.
+4. `config/env.ts`'s `BASE_URL`/`WS_BASE_URL` default to `http://127.0.0.1:8080` /
+   `ws://127.0.0.1:8080` (`yeweiyi-cloud`'s `LISTEN_ADDR` default) — point them at wherever that
+   server actually runs. Local non-HTTPS origins need DevTools' 详情 → 本地设置 →
+   "不校验合法域名..." checked, or every `wx.request`/`wx.connectSocket` call fails closed.
+
+## Architecture
+
+- `app.ts` — `globalData.token` mirrors `utils/storage.ts` on launch; nothing else global.
+- `utils/request.ts` — the one `wx.request` wrapper; injects `Authorization: Bearer {token}` on
+  every call except `/api/login`, and throws `ApiError` (message + HTTP status) so callers can
+  special-case e.g. a 404 on `/api/oilcan/latest` ("nothing polled yet") without string-matching.
+  A 401 clears the token and bounces to the login page; a 403 does *not* — see the sibling-repo note
+  above on why a 403 isn't necessarily "not yours."
+- `utils/ws.ts` — `AlarmSocket` wraps `wx.connectSocket` for `/ws/alarms` with reconnect-on-close/
+  error, since the server sends no keepalive of its own.
+- `utils/auth.ts` — `login()` calls `/api/login` and stores the token; `usernameFromToken()`
+  decodes the JWT's `sub` claim client-side purely for display (the token is otherwise opaque here —
+  every real authorization check is server-side).
+- `types/api.d.ts` — hand-copied from `yeweiyi-cloud`'s handler/sqlc structs as of 2026-08-29,
+  including the device firmware's own field-name quirks in the write-back request shapes
+  (`beginHeigth`/`endHeigth`/`beginVolum`/`endVolum`, `jieZhi`) — **do not "fix" that casing**, it's
+  intentional; see `yeweiyi-cloud/internal/api/writeback.go`'s comments on those structs. Re-diff
+  this file against that repo's structs before trusting it if enough time has passed that the two
+  could have drifted.
+- `pages/` — one directory per screen, `login` → `devices` (tabBar) → `device-detail` (in-page tabs
+  for 实时数据/报警记录/卸油记录/交班记录/下发记录, plus the live-alarm banner from `AlarmSocket`)
+  → `correct-oil-in-out` / `correct-shift` (prefilled from the tapped record, via a JSON-stringified
+  `record` query param) / `oil-can-set` (raw-JSON textarea, per the opaque-schema note above) →
+  `profile` (tabBar, logout only so far).
 
 ## What's explicitly NOT this project's problem
 

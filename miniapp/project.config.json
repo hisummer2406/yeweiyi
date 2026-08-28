@@ -1,0 +1,17 @@
+{
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "appid": "touristappid",
+  "projectname": "yeweiyi-miniapp",
+  "description": "需求B（PC 端 / 小程序远程数据监控）的微信小程序前端",
+  "setting": {
+    "useCompilerPlugins": ["typescript"],
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": true,
+    "packNpmManually": false
+  },
+  "condition": {}
+}

@@ -1,0 +1,25 @@
+<view class="container">
+  <button class="btn-primary" bindtap="onScanBind">扫码绑定设备</button>
+
+  <view wx:if="{{!loading && devices.length === 0}}" class="empty">
+    还没有绑定任何设备，点击上方按钮扫码绑定
+  </view>
+
+  <view
+    wx:for="{{devices}}"
+    wx:key="device_name"
+    class="card"
+    bindtap="onTapDevice"
+    data-device="{{item.device_name}}"
+  >
+    <view class="row">
+      <text>{{item.device_name}}</text>
+      <text class="badge {{item.is_online ? 'badge-online' : 'badge-offline'}}">
+        {{item.is_online ? '在线' : '离线'}}
+      </text>
+    </view>
+    <view class="muted" style="margin-top:8rpx;">
+      {{item.is_online ? '上线于 ' + item.last_online_at : '离线于 ' + (item.last_offline_at || '--')}}
+    </view>
+  </view>
+</view>

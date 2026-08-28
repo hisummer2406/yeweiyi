@@ -1,0 +1,6 @@
+<view class="container">
+  <view class="card">
+    <text>账号：{{username || '--'}}</text>
+  </view>
+  <button bindtap="onLogout">退出登录</button>
+</view>
