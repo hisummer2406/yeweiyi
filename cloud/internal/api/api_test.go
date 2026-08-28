@@ -158,6 +158,24 @@ func (e *testEnv) seedDevice(deviceName string) {
 	})
 }
 
+func (e *testEnv) bindDevice(deviceName string) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(context.Background(), `
+		INSERT INTO user_devices (user_id, device_name)
+		SELECT id, $2 FROM users WHERE username = $1
+		ON CONFLICT DO NOTHING`, e.username, deviceName); err != nil {
+		e.t.Fatalf("bind device %s: %v", deviceName, err)
+	}
+}
+
+// ownDevice seeds a device and binds it to env's user in one call — the common case for tests that
+// exercise a handler's actual logic rather than its authorization check.
+func (e *testEnv) ownDevice(deviceName string) {
+	e.t.Helper()
+	e.seedDevice(deviceName)
+	e.bindDevice(deviceName)
+}
+
 func jsonBody(t *testing.T, v any) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)

@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+
+	"yeweiyi-cloud/internal/store/db"
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -43,7 +45,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
 			return
 		}
-		claims := &jwt.RegisteredClaims{}
+		claims := &apiClaims{}
 		token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (interface{}, error) {
 			return deps.JWTSecret, nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
@@ -55,6 +57,16 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 		device := c.Query("device")
 		if device == "" {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "device query param is required"})
+			return
+		}
+
+		owns, err := deps.Queries.UserOwnsDevice(c.Request.Context(), db.UserOwnsDeviceParams{UserID: claims.UserID, DeviceName: device})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !owns {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized for this device"})
 			return
 		}
 

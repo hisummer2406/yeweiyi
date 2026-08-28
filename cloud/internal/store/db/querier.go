@@ -11,6 +11,9 @@ import (
 )
 
 type Querier interface {
+	// Idempotent: scanning the same QR code twice (or the same device already bound) is a no-op, not
+	// an error — matches this project's general "safe to redeliver" preference for write paths.
+	BindUserDevice(ctx context.Context, arg BindUserDeviceParams) error
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
@@ -31,6 +34,7 @@ type Querier interface {
 	InsertWriteBackCommand(ctx context.Context, arg InsertWriteBackCommandParams) (WriteBackCommand, error)
 	ListAlarmsAsc(ctx context.Context, arg ListAlarmsAscParams) ([]Alarm, error)
 	ListAlarmsDesc(ctx context.Context, arg ListAlarmsDescParams) ([]Alarm, error)
+	ListDevicesForUser(ctx context.Context, userID int64) ([]Device, error)
 	// Design doc §5.3: TTL sweep for commands stuck in pending/sent past the cutoff.
 	ListExpirableWriteBackCommands(ctx context.Context, createdAt pgtype.Timestamptz) ([]WriteBackCommand, error)
 	ListOilInOutAsc(ctx context.Context, arg ListOilInOutAscParams) ([]OilInOut, error)
@@ -49,6 +53,7 @@ type Querier interface {
 	MarkWriteBackCommandAcked(ctx context.Context, id int64) error
 	MarkWriteBackCommandFailed(ctx context.Context, id int64) error
 	MarkWriteBackCommandSent(ctx context.Context, id int64) error
+	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	// Ingests one row from thing/event/property/post/requestAlarm (design doc §4.2). Keyed on the
 	// device's own (device_local_id, time) per CLAUDE.md's composite-key design — a redelivered
 	// response after a reconnect just overwrites the same row instead of duplicating it.
@@ -62,6 +67,8 @@ type Querier interface {
 	// field name, not the DB column name, since Gson serializes by field name with no @SerializedName
 	// override).
 	UpsertShift(ctx context.Context, arg UpsertShiftParams) error
+	// Backs every device-scoped handler's authorization check (see internal/api's requireDeviceOwnership).
+	UserOwnsDevice(ctx context.Context, arg UserOwnsDeviceParams) (bool, error)
 }
 
 var _ Querier = (*Queries)(nil)

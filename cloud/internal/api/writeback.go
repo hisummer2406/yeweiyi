@@ -47,6 +47,9 @@ func correctOilInOutHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if !requireDeviceOwnership(c, deps, req.Device) {
+			return
+		}
 
 		ctx := c.Request.Context()
 		if _, err := deps.Queries.GetLatestOilInOutByDeviceLocalID(ctx, db.GetLatestOilInOutByDeviceLocalIDParams{
@@ -102,6 +105,9 @@ func correctShiftHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		if !requireDeviceOwnership(c, deps, req.Device) {
+			return
+		}
 
 		ctx := c.Request.Context()
 		if _, err := deps.Queries.GetShiftByDeviceLocalID(ctx, db.GetShiftByDeviceLocalIDParams{
@@ -141,6 +147,13 @@ func correctShiftHandler(deps Deps) gin.HandlerFunc {
 func writeOilCanSetHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		device := c.Param("device")
+		// requireDeviceOwnership implies the device exists (user_devices.device_name FKs to
+		// devices(device_name)), so there's no separate "unknown device" check needed here anymore —
+		// an unbound-or-nonexistent device both fail ownership the same way (see that function's
+		// doc comment for why that's deliberate, not an oversight).
+		if !requireDeviceOwnership(c, deps, device) {
+			return
+		}
 
 		body, err := c.GetRawData()
 		if err != nil {
@@ -149,15 +162,6 @@ func writeOilCanSetHandler(deps Deps) gin.HandlerFunc {
 		}
 		if !json.Valid(body) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "body must be valid JSON"})
-			return
-		}
-
-		if _, err := deps.Queries.GetDevice(c.Request.Context(), device); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusNotFound, gin.H{"error": "unknown device"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
@@ -179,6 +183,9 @@ func listWriteBackCommandsHandler(deps Deps) gin.HandlerFunc {
 		device := c.Query("device")
 		if device == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "device query param is required"})
+			return
+		}
+		if !requireDeviceOwnership(c, deps, device) {
 			return
 		}
 

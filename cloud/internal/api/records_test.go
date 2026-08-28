@@ -21,7 +21,7 @@ func TestListAlarms_RequiresDevice(t *testing.T) {
 func TestListAlarms_ReturnsSeededRow(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-alarms-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	if _, err := env.pool.Exec(context.Background(), `
 		INSERT INTO alarms (device_name, device_local_id, time, info, guanhao, jiezhi)
@@ -53,6 +53,17 @@ func TestListAlarms_ReturnsSeededRow(t *testing.T) {
 	}
 }
 
+func TestListAlarms_ForbiddenWhenDeviceNotOwned(t *testing.T) {
+	env := newTestEnv(t)
+	const deviceName = "api-test-alarms-unowned-device"
+	env.seedDevice(deviceName) // exists, but never bound to env's user
+
+	rec := env.authed("GET", "/api/alarms?device="+deviceName, nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestListAlarms_Unauthenticated(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -65,7 +76,7 @@ func TestListAlarms_Unauthenticated(t *testing.T) {
 func TestListOilInOut_RequiresDeviceAndReturnsSeededRow(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-oilinout-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	if rec := env.authed("GET", "/api/oil-in-out", nil); rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 with no device param, got %d", rec.Code)
@@ -100,7 +111,7 @@ func TestListOilInOut_RequiresDeviceAndReturnsSeededRow(t *testing.T) {
 func TestListShifts_RequiresDeviceAndReturnsSeededRow(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-shifts-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	if rec := env.authed("GET", "/api/shifts", nil); rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 with no device param, got %d", rec.Code)

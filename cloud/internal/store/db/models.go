@@ -248,6 +248,12 @@ type User struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
+type UserDevice struct {
+	UserID     int64              `json:"user_id"`
+	DeviceName string             `json:"device_name"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type WriteBackCommand struct {
 	ID          int64              `json:"id"`
 	DeviceName  string             `json:"device_name"`

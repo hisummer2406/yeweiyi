@@ -10,7 +10,7 @@ import (
 func TestCorrectOilInOut_UnknownRecordReturns404(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-oio-404-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	body := jsonBody(t, map[string]any{
 		"device": deviceName, "deviceLocalId": 999, "jieZhi": "x", "time": "2026-08-15 09:20",
@@ -21,10 +21,37 @@ func TestCorrectOilInOut_UnknownRecordReturns404(t *testing.T) {
 	}
 }
 
+// TestCorrectOilInOut_ForbiddenWhenDeviceNotOwned is the important ordering test: the record
+// genuinely exists (unlike the 404 test above), but the caller isn't bound to the device it belongs
+// to — this must be 403, not 404, so an unauthorized caller can't distinguish "not yours" from
+// "doesn't exist" (see requireDeviceOwnership's doc comment).
+func TestCorrectOilInOut_ForbiddenWhenDeviceNotOwned(t *testing.T) {
+	env := newTestEnv(t)
+	const deviceName = "api-test-wb-oio-unowned-device"
+	env.seedDevice(deviceName) // exists, but never bound to env's user
+
+	if _, err := env.pool.Exec(context.Background(), `
+		INSERT INTO oil_in_out (device_name, device_local_id, oil_id, jiezhi, time, begin_height, end_height, begin_volume, end_volume, begin_weight, end_weight)
+		VALUES ($1, 7, 1, '0号柴油', '2026-08-15 09:20+08', 100, 20, 4000, 800, 3400, 700)`, deviceName); err != nil {
+		t.Fatalf("seed oil_in_out: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := env.pool.Exec(context.Background(), `DELETE FROM oil_in_out WHERE device_name = $1`, deviceName); err != nil {
+			t.Errorf("cleanup oil_in_out: %v", err)
+		}
+	})
+
+	body := jsonBody(t, map[string]any{"device": deviceName, "deviceLocalId": 7, "jieZhi": "x", "time": "2026-08-15 09:20"})
+	rec := env.authed("POST", "/api/oil-in-out/correct", body)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestCorrectOilInOut_ExistingRecordEnqueuesPendingCommand(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-oio-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	if _, err := env.pool.Exec(context.Background(), `
 		INSERT INTO oil_in_out (device_name, device_local_id, oil_id, jiezhi, time, begin_height, end_height, begin_volume, end_volume, begin_weight, end_weight)
@@ -84,7 +111,7 @@ func TestCorrectOilInOut_ExistingRecordEnqueuesPendingCommand(t *testing.T) {
 func TestCorrectShift_ExistingRecordEnqueuesPendingCommand(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-shift-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	if _, err := env.pool.Exec(context.Background(), `
 		INSERT INTO commit_works (device_name, device_local_id, work_id, time, end_time, info)
@@ -113,7 +140,7 @@ func TestCorrectShift_ExistingRecordEnqueuesPendingCommand(t *testing.T) {
 func TestCorrectShift_UnknownRecordReturns404(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-shift-404-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	body := jsonBody(t, map[string]any{"device": deviceName, "deviceLocalId": 999, "time": "2026-08-15 08:00"})
 	rec := env.authed("POST", "/api/shifts/correct", body)
@@ -122,20 +149,49 @@ func TestCorrectShift_UnknownRecordReturns404(t *testing.T) {
 	}
 }
 
-func TestWriteOilCanSet_UnknownDeviceReturns404(t *testing.T) {
+func TestCorrectShift_ForbiddenWhenDeviceNotOwned(t *testing.T) {
+	env := newTestEnv(t)
+	const deviceName = "api-test-wb-shift-unowned-device"
+	env.seedDevice(deviceName) // exists, but never bound to env's user
+
+	body := jsonBody(t, map[string]any{"device": deviceName, "deviceLocalId": 999, "time": "2026-08-15 08:00"})
+	rec := env.authed("POST", "/api/shifts/correct", body)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestWriteOilCanSet_ForbiddenWhenDeviceUnknown and _NotOwned both expect 403, not 404: since
+// requireDeviceOwnership runs before any existence check, a device that doesn't exist at all and a
+// device that exists but isn't bound to the caller are indistinguishable by design (see
+// requireDeviceOwnership's doc comment in devices.go) — a nonexistent device can never appear in
+// user_devices either, so both cases just fail the same ownership check.
+func TestWriteOilCanSet_ForbiddenWhenDeviceUnknown(t *testing.T) {
 	env := newTestEnv(t)
 
 	body := jsonBody(t, map[string]any{"oilCanId": 1})
 	rec := env.authed("POST", "/api/devices/no-such-device-for-oil-can-set/oil-can-set", body)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestWriteOilCanSet_ForbiddenWhenDeviceNotOwned(t *testing.T) {
+	env := newTestEnv(t)
+	const deviceName = "api-test-wb-oilcanset-unowned-device"
+	env.seedDevice(deviceName) // exists, but never bound to env's user
+
+	body := jsonBody(t, map[string]any{"oilCanId": 1})
+	rec := env.authed("POST", "/api/devices/"+deviceName+"/oil-can-set", body)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
 func TestWriteOilCanSet_KnownDeviceEnqueuesPendingCommandWithOpaquePayload(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-oilcanset-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 	t.Cleanup(func() {
 		if _, err := env.pool.Exec(context.Background(), `DELETE FROM write_back_commands WHERE device_name = $1`, deviceName); err != nil {
 			t.Errorf("cleanup write_back_commands: %v", err)
@@ -173,7 +229,7 @@ func TestWriteOilCanSet_KnownDeviceEnqueuesPendingCommandWithOpaquePayload(t *te
 func TestWriteOilCanSet_InvalidJSONBodyReturns400(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-oilcanset-badjson-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 
 	rec := env.authed("POST", "/api/devices/"+deviceName+"/oil-can-set", []byte("{not valid json"))
 	if rec.Code != http.StatusBadRequest {
@@ -184,7 +240,7 @@ func TestWriteOilCanSet_InvalidJSONBodyReturns400(t *testing.T) {
 func TestListWriteBack_ReturnsCommandsMostRecentFirstWithReadablePayload(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-wb-list-device"
-	env.seedDevice(deviceName)
+	env.ownDevice(deviceName)
 	t.Cleanup(func() {
 		if _, err := env.pool.Exec(context.Background(), `DELETE FROM write_back_commands WHERE device_name = $1`, deviceName); err != nil {
 			t.Errorf("cleanup write_back_commands: %v", err)
@@ -234,5 +290,16 @@ func TestListWriteBack_RequiresDevice(t *testing.T) {
 	rec := env.authed("GET", "/api/write-back", nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestListWriteBack_ForbiddenWhenDeviceNotOwned(t *testing.T) {
+	env := newTestEnv(t)
+	const deviceName = "api-test-wb-list-unowned-device"
+	env.seedDevice(deviceName) // exists, but never bound to env's user
+
+	rec := env.authed("GET", "/api/write-back?device="+deviceName, nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

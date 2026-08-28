@@ -182,22 +182,12 @@ feature — check their status in the Android repo before assuming they're ready
 Unlike the section above, nothing here is blocked on the other repo — these just haven't been
 written yet.
 
-- **No user↔device authorization model at all.** `users` and `devices` are two unrelated tables —
-  no join table, no `user_id` column, nothing. `authMiddleware` only checks that the JWT is valid;
-  it never checks whether the authenticated user is allowed to see the `device` query param they
-  passed. Concretely: **any logged-in user can read *and write* any device's data just by knowing
-  its `device_name` string** — no longer hypothetical as of 2026-08-29: `writeback.go`'s four
-  endpoints (correct an oil-in-out/shift record, push an oil-can-set config, list write-back status)
-  went in with the exact same gap the read endpoints already had, since fixing authorization wasn't
-  in scope for that pass and is tracked here instead of silently included. This is fine for today's
-  manual/curl testing but not for a real multi-tenant mini-program backend. Needs: a `user_devices`
-  (or similar) binding table, a device pairing/binding flow (how does a mini-program user's account
-  get associated with a physical device? QR code on the device? a pairing code? — this half is a
-  product design question, not just a technical one, don't invent an answer silently), a
-  `GET /api/devices` endpoint so a client can discover which device names it's even allowed to query
-  (right now every endpoint requires the caller to already know the exact `device_name`), and an
-  authorization check added to every `device`-scoped handler (`internal/api/records.go`'s
-  `parseListParams`, `oilcan.go`, `ws.go`, and now `writeback.go`'s four handlers too).
+~~No user↔device authorization model at all.~~ — **fixed 2026-08-29.** Pairing flow decided by
+product the same day: **a mini-program user binds a device by scanning a QR code printed/displayed
+on the physical device**, which encodes `deviceName` — possession of the physical device is the
+authorization, the same trust model most consumer IoT pairing flows use. See `internal/api/devices.go`
+and the 2026-08-29 authorization pass below (in "Build") for the implementation; left the
+strikethrough here instead of deleting the bullet for the same reason as the partition one below.
 
 ~~No automatic partition creation for `alarms`/`oil_in_out`~~ — **fixed 2026-08-29**, see
 `internal/partitions` in "Module layout"/"Architecture" below. Left the strikethrough here instead
@@ -219,6 +209,17 @@ originally were.
   **Decided 2026-08-20: one shared account/auth system.** A single user table and JWT issuance path
   serves both PC-remote and mini-program clients — no per-client-type account silo. See "Tech stack"
   below for the auth library choice this unblocked.
+- ~~How does a user's account get associated with a physical device?~~ **Decided 2026-08-29: QR
+  code.** The mini-program binds a device by scanning a QR code printed/displayed on the physical
+  device (encoding `deviceName`) — see `internal/api/devices.go` and the 2026-08-29 authorization
+  pass in "Build". Still open: what exactly the QR code's content format is beyond "encodes
+  deviceName somehow" (a bare string? a URL/deeplink wrapping it? does it need a signature/checksum
+  to prevent a forged/guessed QR code from binding a device the scanner never actually touched? —
+  the current cloud endpoint trusts whatever `deviceName` string the client sends, which is fine
+  under "possession of the physical device is the authorization" as long as the QR's *content* can
+  only be obtained by seeing the physical device, but that property depends on what actually gets
+  printed on it — a decision for whoever designs the physical label/screen, not made here) and
+  whether PC-remote clients get a pairing flow at all or are mini-program-only for now.
 
 ## What's explicitly NOT this project's problem
 
@@ -434,6 +435,45 @@ all three list endpoints' required-`device`/seeded-row/unauthenticated paths, th
 All pass against the local containers; each test seeds and cleans up its own rows/users via
 `t.Cleanup`.
 
+**2026-08-29 user↔device authorization pass**: closes the gap "Known cloud-side gaps" flagged —
+adds a `user_devices` many-to-many binding table (migration `000008`; a device can have more than
+one bound user, e.g. multiple staff on the same tank, and a user more than one device), three new
+routes in `internal/api/devices.go` (`POST /api/devices/bind`, `POST /api/devices/unbind`,
+`GET /api/devices` — the last one so a client can discover which `device_name`s it's even allowed to
+query, since every other endpoint requires knowing the exact string already), and a
+`requireDeviceOwnership(c, deps, deviceName)` check now called first thing in every device-scoped
+handler: `records.go`'s three list handlers, `oilcan.go`, `ws.go` (which parses its own JWT
+independently of `authMiddleware`, so it needed the same claims-shape change applied there too), and
+all four of `writeback.go`'s handlers. Two implementation choices worth knowing:
+- **Ownership is checked before any "does this record/device exist" check**, deliberately — so a
+  caller who isn't authorized for a device gets the same 403 whether that device_name is someone
+  else's real device or doesn't exist at all, and can't use response codes to enumerate real device
+  names. This *changed* two response codes from their 2026-08-29 write-back pass values:
+  `writeOilCanSetHandler`'s unknown-device case is now 403 (not 404 — the separate `GetDevice`
+  existence check was removed as redundant, since an owned device is guaranteed to exist via
+  `user_devices`'s foreign key to `devices`), and any correction against a real record on a
+  not-yours device is 403 before it ever gets to the "does this deviceLocalId exist" 404 check.
+  `internal/api/writeback_test.go`'s `TestCorrectOilInOut_ForbiddenWhenDeviceNotOwned` exists
+  specifically to pin this ordering down.
+- **The JWT gained a `uid` claim** (`apiClaims` in `auth.go`, wrapping `jwt.RegisteredClaims`) so
+  `requireDeviceOwnership` can check `user_devices` directly from the token's claims instead of a
+  `GetUserByUsername` round trip per request. `loginHandler` and `authMiddleware` both updated;
+  `ws.go`'s independent claims-parsing updated to match.
+- `bindDeviceHandler` calls `EnsureDevice` before inserting the binding — a device can legitimately
+  get scanned/bound before it has ever sent an MQTT message (no `devices` row yet), same reasoning
+  `internal/mqtt`'s handlers already use `EnsureDevice` for.
+
+23 new/updated tests across `devices_test.go` (new) and the existing `*_test.go` files (which needed
+a `bindDevice`/`ownDevice` test helper added to `api_test.go` and switched from bare `seedDevice` to
+`ownDevice` everywhere a request now needs to actually succeed, not just 403). Manually verified
+against the running binary too: unbound device → 403 on `/api/oilcan/latest`; `POST
+/api/devices/bind` (simulating the QR-scan step) → 200; `GET /api/devices` lists it;
+`/api/oilcan/latest` now 404 (owned, nothing cached — not 403); `POST /api/devices/unbind` → 200;
+`/api/oilcan/latest` back to 403. Throwaway user/device rows deleted afterward. **What this doesn't
+cover**: the actual QR code generation/display on the device side, and the mini-program's camera-scan
+UI — both are `yeweiyi-miniapp`/Android-repo concerns, this pass is only the cloud API the pairing
+step calls once a QR has been scanned and decoded into a `deviceName` string client-side.
+
 `/ws/alarms` (2026-08-20, `internal/api/ws.go`) is implemented and manually verified end-to-end
 against the local containers: seeded a throwaway user, ran the binary, connected with
 `gorilla/websocket`'s client passing the JWT as a `token` query param (not the `Authorization`
@@ -469,12 +509,13 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
                      # (paho wiring, wildcard subscribe), handlers.go (dispatch + persistence),
                      # poller.go (§4.3 requestOilcan cadence), *_test.go (integration tests, see
                      # above)
-internal/api/        # router.go, health.go, auth.go (JWT login + middleware), records.go
+internal/api/        # router.go, health.go, auth.go (JWT login + middleware, apiClaims), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
                      # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
-                     # REST entry points — see below); api_test.go/health_test.go/auth_test.go/
-                     # records_test.go/oilcan_test.go/writeback_test.go (2026-08-29: integration
-                     # tests, see above)
+                     # REST entry points — see below), devices.go (2026-08-29: bind/unbind/list +
+                     # requireDeviceOwnership — see the authorization pass below); api_test.go/
+                     # health_test.go/auth_test.go/records_test.go/oilcan_test.go/writeback_test.go/
+                     # devices_test.go (2026-08-29: integration tests, see above)
 internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
                      # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
                      # (§5.3 periodic sweep), queue_test.go (integration tests, see above)
@@ -485,8 +526,10 @@ internal/partitions/ # partitions.go (2026-08-29): keeps alarms/oil_in_out's mon
                      # own). partitions_test.go is a real integration test against local postgres.
 internal/store/db/   # sqlc-generated: db.go, models.go, querier.go, + one .sql.go per query file
 db/migrations/       # golang-migrate schema; 000001 is the app schema, 000002-000007 are river's
-                     # (see above)
-db/queries/          # sqlc query input — devices.sql, users.sql, alarms.sql, oil_in_out.sql,
+                     # (see above), 000008 adds user_devices (2026-08-29 authorization pass)
+db/queries/          # sqlc query input — devices.sql, users.sql, user_devices.sql (2026-08-29:
+                     # BindUserDevice/UnbindUserDevice/ListDevicesForUser/UserOwnsDevice),
+                     # alarms.sql, oil_in_out.sql,
                      # commit_works.sql (each of the last three now has an Upsert*, used by
                      # internal/mqtt, alongside the List* used by internal/api; oil_in_out.sql and
                      # commit_works.sql also each have a GetLatest*ByDeviceLocalID/Get*ByDeviceLocalID,
@@ -521,7 +564,12 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   is the one route not behind `authMiddleware` — see its own writeup above for why and how it
   authenticates instead. `writeback.go` (2026-08-29) adds four more routes behind `authMiddleware` —
   `POST /api/oil-in-out/correct`, `POST /api/shifts/correct`, `POST /api/devices/:device/oil-can-set`,
-  `GET /api/write-back` — see the 2026-08-29 write-back pass above for what each does.
+  `GET /api/write-back` — see the 2026-08-29 write-back pass above for what each does. `devices.go`
+  (2026-08-29) adds `POST /api/devices/bind`, `POST /api/devices/unbind`, `GET /api/devices`, and
+  `requireDeviceOwnership` — the authorization check every device-scoped handler above (all three
+  list handlers, `oilcan.go`, `ws.go`, and all four of `writeback.go`'s) now calls first — see the
+  2026-08-29 authorization pass above for the full design (why ownership is checked before
+  existence, the JWT's new `uid` claim, etc.).
 - `internal/queue` implements design doc §5.2's offline queue, scoped exactly the way CLAUDE.md's
   "Tech stack" section says river should be scoped — it only owns pending→sent:
   `EnqueueWriteBack(ctx, pool, riverClient, deviceName, commandType, payload)` inserts the
@@ -552,7 +600,8 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   — that migration already creates `users`, `devices`, `alarms`/`oil_in_out` (time-partitioned,
   partitions pre-created through 2026-09), `commit_works`, `oil_can_sets`, and
   `write_back_commands`, matching the device data model in the design doc §二 and the write-back
-  queue shape in §5.2. `alarms`/`oil_in_out`/`commit_works` were checked field-for-field directly
+  queue shape in §5.2. `000008_user_devices.up.sql` (2026-08-29) adds the `user_devices` binding
+  table — see the 2026-08-29 authorization pass above. `alarms`/`oil_in_out`/`commit_works` were checked field-for-field directly
   against the Android repo's `db/Alarm.java`/`OilInOut.java`/`CommitWork.java` (2026-08-20, not just
   the design doc's summary table) and match exactly. `oil_can_sets` did not — the design doc's §二
   table only listed 13 of `OilCanSet.java`'s ~26 real columns; the missing ones (`pk_d2dId`,

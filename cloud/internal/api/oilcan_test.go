@@ -8,10 +8,23 @@ import (
 
 func TestOilcanLatest_NotFoundWhenNothingCached(t *testing.T) {
 	env := newTestEnv(t)
+	const deviceName = "api-test-oilcan-neverpolled-device"
+	env.ownDevice(deviceName) // owned, but the poller has never cached a snapshot for it
 
-	rec := env.authed("GET", "/api/oilcan/latest?device=never-polled-device", nil)
+	rec := env.authed("GET", "/api/oilcan/latest?device="+deviceName, nil)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestOilcanLatest_ForbiddenWhenDeviceNotOwned(t *testing.T) {
+	env := newTestEnv(t)
+	const deviceName = "api-test-oilcan-unowned-device"
+	env.seedDevice(deviceName) // exists, but never bound to env's user
+
+	rec := env.authed("GET", "/api/oilcan/latest?device="+deviceName, nil)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -28,6 +41,7 @@ func TestOilcanLatest_ReturnsCachedSnapshotVerbatim(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-oilcan-device"
 	const snapshot = `[{"id":1,"oiltype":"0号柴油","oilLevel":88.8,"connect":true,"deviceName":"api-test-oilcan-device"}]`
+	env.ownDevice(deviceName)
 
 	ctx := context.Background()
 	if err := env.rdb.Set(ctx, "oilcan:latest:"+deviceName, snapshot, 0).Err(); err != nil {

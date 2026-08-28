@@ -19,6 +19,14 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// apiClaims carries the user's id alongside the standard claims, added 2026-08-29 so
+// requireDeviceOwnership (devices.go) can check user_devices without an extra GetUserByUsername
+// round trip per request.
+type apiClaims struct {
+	UserID int64 `json:"uid"`
+	jwt.RegisteredClaims
+}
+
 func loginHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req loginRequest
@@ -42,10 +50,13 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		claims := jwt.RegisteredClaims{
-			Subject:   user.Username,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		claims := apiClaims{
+			UserID: user.ID,
+			RegisteredClaims: jwt.RegisteredClaims{
+				Subject:   user.Username,
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+			},
 		}
 		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(deps.JWTSecret)
 		if err != nil {
@@ -66,7 +77,7 @@ func authMiddleware(secret []byte) gin.HandlerFunc {
 			return
 		}
 
-		claims := &jwt.RegisteredClaims{}
+		claims := &apiClaims{}
 		token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (interface{}, error) {
 			return secret, nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
@@ -76,6 +87,7 @@ func authMiddleware(secret []byte) gin.HandlerFunc {
 		}
 
 		c.Set("username", claims.Subject)
+		c.Set("userID", claims.UserID)
 		c.Next()
 	}
 }

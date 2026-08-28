@@ -102,6 +102,9 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		if !requireDeviceOwnership(c, deps, p.device) {
+			return
+		}
 
 		if p.asc {
 			rows, err := deps.Queries.ListAlarmsAsc(c.Request.Context(), db.ListAlarmsAscParams{
@@ -123,6 +126,9 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		if !requireDeviceOwnership(c, deps, p.device) {
+			return
+		}
 
 		if p.asc {
 			rows, err := deps.Queries.ListOilInOutAsc(c.Request.Context(), db.ListOilInOutAscParams{
@@ -142,6 +148,9 @@ func listShiftsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p, ok := parseListParams(c)
 		if !ok {
+			return
+		}
+		if !requireDeviceOwnership(c, deps, p.device) {
 			return
 		}
 

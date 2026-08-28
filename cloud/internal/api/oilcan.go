@@ -20,6 +20,9 @@ func oilcanLatestHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "device query param is required"})
 			return
 		}
+		if !requireDeviceOwnership(c, deps, device) {
+			return
+		}
 
 		raw, err := deps.Redis.Get(c.Request.Context(), oilcanSnapshotKeyPrefix+device).Result()
 		if errors.Is(err, redis.Nil) {
