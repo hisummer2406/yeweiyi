@@ -24,3 +24,10 @@ SELECT * FROM commit_works
 WHERE device_name = $1 AND time >= $2 AND time <= $3
 ORDER BY time DESC
 LIMIT $4 OFFSET $5;
+
+-- name: GetShiftByDeviceLocalID :one
+-- commit_works isn't partitioned, so (device_name, device_local_id) is a real UNIQUE constraint
+-- (unlike oil_in_out's). Used by the write-back correction endpoint to confirm the record being
+-- corrected exists before enqueueing.
+SELECT * FROM commit_works
+WHERE device_name = $1 AND device_local_id = $2;

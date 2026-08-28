@@ -11,6 +11,45 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getLatestOilInOutByDeviceLocalID = `-- name: GetLatestOilInOutByDeviceLocalID :one
+SELECT id, device_name, device_local_id, oil_id, jiezhi, time, begin_height, end_height, begin_volume, end_volume, begin_weight, end_weight, sync_status, received_at FROM oil_in_out
+WHERE device_name = $1 AND device_local_id = $2
+ORDER BY time DESC
+LIMIT 1
+`
+
+type GetLatestOilInOutByDeviceLocalIDParams struct {
+	DeviceName    string `json:"device_name"`
+	DeviceLocalID int32  `json:"device_local_id"`
+}
+
+// oil_in_out is partitioned by time, so its UNIQUE constraint is (device_name, device_local_id,
+// time), not (device_name, device_local_id) alone — in practice a device's local id is never
+// reused, so this returns at most one real row; ORDER BY + LIMIT 1 makes that explicit instead of
+// relying on a uniqueness guarantee the schema can't actually enforce across partitions. Used by
+// the write-back correction endpoint to confirm the record being corrected exists before enqueueing.
+func (q *Queries) GetLatestOilInOutByDeviceLocalID(ctx context.Context, arg GetLatestOilInOutByDeviceLocalIDParams) (OilInOut, error) {
+	row := q.db.QueryRow(ctx, getLatestOilInOutByDeviceLocalID, arg.DeviceName, arg.DeviceLocalID)
+	var i OilInOut
+	err := row.Scan(
+		&i.ID,
+		&i.DeviceName,
+		&i.DeviceLocalID,
+		&i.OilID,
+		&i.Jiezhi,
+		&i.Time,
+		&i.BeginHeight,
+		&i.EndHeight,
+		&i.BeginVolume,
+		&i.EndVolume,
+		&i.BeginWeight,
+		&i.EndWeight,
+		&i.SyncStatus,
+		&i.ReceivedAt,
+	)
+	return i, err
+}
+
 const listOilInOutAsc = `-- name: ListOilInOutAsc :many
 SELECT id, device_name, device_local_id, oil_id, jiezhi, time, begin_height, end_height, begin_volume, end_volume, begin_weight, end_weight, sync_status, received_at FROM oil_in_out
 WHERE device_name = $1 AND time >= $2 AND time <= $3

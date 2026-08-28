@@ -185,16 +185,19 @@ written yet.
 - **No user↔device authorization model at all.** `users` and `devices` are two unrelated tables —
   no join table, no `user_id` column, nothing. `authMiddleware` only checks that the JWT is valid;
   it never checks whether the authenticated user is allowed to see the `device` query param they
-  passed. Concretely: **any logged-in user can read (and, once write endpoints exist, write) any
-  device's data just by knowing its `device_name` string.** This is fine for today's manual/curl
-  testing but not for a real multi-tenant mini-program backend. Needs: a `user_devices` (or
-  similar) binding table, a device pairing/binding flow (how does a mini-program user's account get
-  associated with a physical device? QR code on the device? a pairing code? — this half is a product
-  design question, not just a technical one, don't invent an answer silently), a `GET /api/devices`
-  endpoint so a client can discover which device names it's even allowed to query (right now every
-  endpoint requires the caller to already know the exact `device_name`), and an authorization check
-  added to every `device`-scoped handler (`internal/api/records.go`'s `parseListParams`,
-  `oilcan.go`, `ws.go`, and any future write endpoint).
+  passed. Concretely: **any logged-in user can read *and write* any device's data just by knowing
+  its `device_name` string** — no longer hypothetical as of 2026-08-29: `writeback.go`'s four
+  endpoints (correct an oil-in-out/shift record, push an oil-can-set config, list write-back status)
+  went in with the exact same gap the read endpoints already had, since fixing authorization wasn't
+  in scope for that pass and is tracked here instead of silently included. This is fine for today's
+  manual/curl testing but not for a real multi-tenant mini-program backend. Needs: a `user_devices`
+  (or similar) binding table, a device pairing/binding flow (how does a mini-program user's account
+  get associated with a physical device? QR code on the device? a pairing code? — this half is a
+  product design question, not just a technical one, don't invent an answer silently), a
+  `GET /api/devices` endpoint so a client can discover which device names it's even allowed to query
+  (right now every endpoint requires the caller to already know the exact `device_name`), and an
+  authorization check added to every `device`-scoped handler (`internal/api/records.go`'s
+  `parseListParams`, `oilcan.go`, `ws.go`, and now `writeback.go`'s four handlers too).
 
 ~~No automatic partition creation for `alarms`/`oil_in_out`~~ — **fixed 2026-08-29**, see
 `internal/partitions` in "Module layout"/"Architecture" below. Left the strikethrough here instead
@@ -365,8 +368,9 @@ below, so does `requestUnloadOil`/`requestShift`/the poller. **What it does not 
 `requestOilLeak`/`requestOilStorage` responses are logged, not ingested (no cloud table — see "The
 MQTT contract" above); the queue's `Publisher` is still a placeholder that always errors in the real
 binary (`unbuiltMQTTPublisher` in `main.go`) since the write-back publish topic/ack contract doesn't
-exist on the device side yet, and nothing currently calls `EnqueueWriteBack` in the running server
-either (no config/correction write endpoints); the sent→acked transition and the TTL day-count are
+exist on the device side yet — but as of 2026-08-29, `internal/api/writeback.go`'s four endpoints do
+call `EnqueueWriteBack` (see the 2026-08-29 write-back pass below), so a command now reliably reaches
+`pending` even though nothing yet carries it past `sent`; the sent→acked transition and the TTL day-count are
 still open per "Open product decisions" below; the assumed Asia/Shanghai device timezone (see "The
 MQTT contract" above) is unverified; and **none
 of this has been exercised against the real Aliyun IoT broker** — there isn't one provisioned yet,
@@ -391,6 +395,30 @@ simulator was a temporary `cmd/devicesim-e2e` never committed. Docker Desktop ne
 container recreate (`docker rm` + `docker compose up -d`, not just `docker start`/`restart`) to get
 past a stuck state where `docker start` connections were dropping with EOF on this machine — noted
 here in case it recurs, it's an environment issue, not anything in this repo.
+
+**2026-08-29 write-back REST pass** (`internal/api/writeback.go`): implements the REST entry points
+design doc §5.2 always specified but that nothing called — `queue.EnqueueWriteBack` itself has been
+tested since 2026-08-20 (see `internal/queue`'s tests above), the gap was purely that no HTTP handler
+ever invoked it. Four new endpoints, all behind `authMiddleware`: `POST /api/oil-in-out/correct` and
+`POST /api/shifts/correct` take a typed body mirroring `internal/mqtt`'s wire-format payload structs
+(`beginHeigth`/`endHeigth`/... , `deviceLocalId`/`info`/...) — deliberately the device's own field
+names, not this table's DB column names, since the stored payload is meant to reach the device
+unchanged once a `Publisher` exists — and 404 via the new `GetLatestOilInOutByDeviceLocalID`/
+`GetShiftByDeviceLocalID` queries if no record with that `(device, deviceLocalId)` exists yet.
+`POST /api/devices/:device/oil-can-set` takes an **opaque** JSON body instead of a typed struct on
+purpose: `requestTankTable`/`requestTankSet`/`requestProbeSet` have no on-device handling logic at
+all yet (see "Device-side work this project depends on"), so there is no real wire contract to type
+against, only a guess — typing it now would risk baking in a wrong shape. `GET /api/write-back`
+lists a device's commands most-recent-first (new `ListWriteBackCommandsForDevice` query) for status
+polling, re-shaping `payload` as `json.RawMessage` instead of the raw `[]byte` sqlc generates (which
+`encoding/json` would otherwise base64-encode). Manually verified end to end against the local
+containers: seeded a throwaway device/oil-in-out row/shift row/user, logged in, hit all four
+endpoints — confirmed 202 + `status: pending` for a real correction, 404 for a `deviceLocalId` that
+doesn't exist and for an unknown device, and `GET /api/write-back` returning all three commands with
+readable (non-base64) payload JSON, most-recent-first. Every command stayed `pending` after
+enqueueing, as expected — `unbuiltMQTTPublisher` still errors on every attempt, so river retries the
+publish job on its own backoff without ever reaching `sent`; that's the existing, already-documented
+limitation above, not something this pass changes. All throwaway rows/users deleted afterward.
 
 `/ws/alarms` (2026-08-20, `internal/api/ws.go`) is implemented and manually verified end-to-end
 against the local containers: seeded a throwaway user, ran the binary, connected with
@@ -429,7 +457,8 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
                      # above)
 internal/api/        # router.go, health.go, auth.go (JWT login + middleware), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
-                     # read), ws.go (/ws/alarms — see above)
+                     # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
+                     # REST entry points — see below)
 internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
                      # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
                      # (§5.3 periodic sweep), queue_test.go (integration tests, see above)
@@ -443,9 +472,13 @@ db/migrations/       # golang-migrate schema; 000001 is the app schema, 000002-0
                      # (see above)
 db/queries/          # sqlc query input — devices.sql, users.sql, alarms.sql, oil_in_out.sql,
                      # commit_works.sql (each of the last three now has an Upsert*, used by
-                     # internal/mqtt, alongside the List* used by internal/api),
-                     # write_back_commands.sql — sqlc.yaml at repo root wires schema=db/migrations,
-                     # queries=db/queries, out=internal/store/db
+                     # internal/mqtt, alongside the List* used by internal/api; oil_in_out.sql and
+                     # commit_works.sql also each have a GetLatest*ByDeviceLocalID/Get*ByDeviceLocalID,
+                     # added 2026-08-29 for writeback.go's correction endpoints to check a record
+                     # exists before enqueueing),
+                     # write_back_commands.sql (now also has ListWriteBackCommandsForDevice, added
+                     # 2026-08-29 for GET /api/write-back) — sqlc.yaml at repo root wires
+                     # schema=db/migrations, queries=db/queries, out=internal/store/db
 dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, no TLS — dev only)
 ```
 
@@ -467,9 +500,12 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   password check against `users`; `GET /api/alarms`, `/api/oil-in-out`, `/api/shifts` all share the
   same `device`+`beginTime`+`endTime`+`limit`+`offset`+`sort` query-param shape and are behind the
   JWT `authMiddleware`; `GET /api/oilcan/latest` reads a `oilcan:latest:{device}` Redis key that
-  nothing writes yet (that's `internal/mqtt`'s future job per §4.3's polling design) — it 404s until
-  that ingestion exists, by design, not as a bug. `GET /ws/alarms` (`ws.go`) is the one route not
-  behind `authMiddleware` — see its own writeup above for why and how it authenticates instead.
+  `internal/mqtt`'s `handleOilcanSnapshot` writes on every `requestOilcan` response (see below) — it
+  still 404s for a device nothing has polled yet, by design, not as a bug. `GET /ws/alarms` (`ws.go`)
+  is the one route not behind `authMiddleware` — see its own writeup above for why and how it
+  authenticates instead. `writeback.go` (2026-08-29) adds four more routes behind `authMiddleware` —
+  `POST /api/oil-in-out/correct`, `POST /api/shifts/correct`, `POST /api/devices/:device/oil-can-set`,
+  `GET /api/write-back` — see the 2026-08-29 write-back pass above for what each does.
 - `internal/queue` implements design doc §5.2's offline queue, scoped exactly the way CLAUDE.md's
   "Tech stack" section says river should be scoped — it only owns pending→sent:
   `EnqueueWriteBack(ctx, pool, riverClient, deviceName, commandType, payload)` inserts the

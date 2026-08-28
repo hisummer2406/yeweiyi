@@ -16,6 +16,16 @@ type Querier interface {
 	// — handlers call this first so the FK insert doesn't fail.
 	EnsureDevice(ctx context.Context, deviceName string) error
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
+	// oil_in_out is partitioned by time, so its UNIQUE constraint is (device_name, device_local_id,
+	// time), not (device_name, device_local_id) alone — in practice a device's local id is never
+	// reused, so this returns at most one real row; ORDER BY + LIMIT 1 makes that explicit instead of
+	// relying on a uniqueness guarantee the schema can't actually enforce across partitions. Used by
+	// the write-back correction endpoint to confirm the record being corrected exists before enqueueing.
+	GetLatestOilInOutByDeviceLocalID(ctx context.Context, arg GetLatestOilInOutByDeviceLocalIDParams) (OilInOut, error)
+	// commit_works isn't partitioned, so (device_name, device_local_id) is a real UNIQUE constraint
+	// (unlike oil_in_out's). Used by the write-back correction endpoint to confirm the record being
+	// corrected exists before enqueueing.
+	GetShiftByDeviceLocalID(ctx context.Context, arg GetShiftByDeviceLocalIDParams) (CommitWork, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetWriteBackCommand(ctx context.Context, id int64) (WriteBackCommand, error)
 	InsertWriteBackCommand(ctx context.Context, arg InsertWriteBackCommandParams) (WriteBackCommand, error)
@@ -32,6 +42,10 @@ type Querier interface {
 	ListPendingWriteBackCommandsForDevice(ctx context.Context, deviceName string) ([]WriteBackCommand, error)
 	ListShiftsAsc(ctx context.Context, arg ListShiftsAscParams) ([]CommitWork, error)
 	ListShiftsDesc(ctx context.Context, arg ListShiftsDescParams) ([]CommitWork, error)
+	// Status polling for a mini-program client that just submitted a write-back command — most-recent
+	// first, unlike ListPendingWriteBackCommandsForDevice's FIFO order (that one drives delivery, this
+	// one drives "what's the status of what I sent").
+	ListWriteBackCommandsForDevice(ctx context.Context, arg ListWriteBackCommandsForDeviceParams) ([]WriteBackCommand, error)
 	MarkWriteBackCommandAcked(ctx context.Context, id int64) error
 	MarkWriteBackCommandFailed(ctx context.Context, id int64) error
 	MarkWriteBackCommandSent(ctx context.Context, id int64) error

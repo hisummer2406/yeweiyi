@@ -27,3 +27,14 @@ SELECT * FROM oil_in_out
 WHERE device_name = $1 AND time >= $2 AND time <= $3
 ORDER BY time DESC
 LIMIT $4 OFFSET $5;
+
+-- name: GetLatestOilInOutByDeviceLocalID :one
+-- oil_in_out is partitioned by time, so its UNIQUE constraint is (device_name, device_local_id,
+-- time), not (device_name, device_local_id) alone — in practice a device's local id is never
+-- reused, so this returns at most one real row; ORDER BY + LIMIT 1 makes that explicit instead of
+-- relying on a uniqueness guarantee the schema can't actually enforce across partitions. Used by
+-- the write-back correction endpoint to confirm the record being corrected exists before enqueueing.
+SELECT * FROM oil_in_out
+WHERE device_name = $1 AND device_local_id = $2
+ORDER BY time DESC
+LIMIT 1;

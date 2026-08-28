@@ -99,10 +99,11 @@ func main() {
 	}
 
 	router := api.NewRouter(api.Deps{
-		Queries:   queries,
-		Redis:     rdb,
-		Pool:      pool,
-		JWTSecret: []byte(jwtSecret),
+		Queries:     queries,
+		Redis:       rdb,
+		Pool:        pool,
+		JWTSecret:   []byte(jwtSecret),
+		RiverClient: riverClient,
 	})
 
 	addr := getenv("LISTEN_ADDR", ":8080")

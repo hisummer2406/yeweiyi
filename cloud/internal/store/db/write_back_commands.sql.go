@@ -130,6 +130,51 @@ func (q *Queries) ListPendingWriteBackCommandsForDevice(ctx context.Context, dev
 	return items, nil
 }
 
+const listWriteBackCommandsForDevice = `-- name: ListWriteBackCommandsForDevice :many
+SELECT id, device_name, command_type, payload, status, attempts, created_at, updated_at FROM write_back_commands
+WHERE device_name = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListWriteBackCommandsForDeviceParams struct {
+	DeviceName string `json:"device_name"`
+	Limit      int32  `json:"limit"`
+	Offset     int32  `json:"offset"`
+}
+
+// Status polling for a mini-program client that just submitted a write-back command — most-recent
+// first, unlike ListPendingWriteBackCommandsForDevice's FIFO order (that one drives delivery, this
+// one drives "what's the status of what I sent").
+func (q *Queries) ListWriteBackCommandsForDevice(ctx context.Context, arg ListWriteBackCommandsForDeviceParams) ([]WriteBackCommand, error) {
+	rows, err := q.db.Query(ctx, listWriteBackCommandsForDevice, arg.DeviceName, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []WriteBackCommand
+	for rows.Next() {
+		var i WriteBackCommand
+		if err := rows.Scan(
+			&i.ID,
+			&i.DeviceName,
+			&i.CommandType,
+			&i.Payload,
+			&i.Status,
+			&i.Attempts,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markWriteBackCommandAcked = `-- name: MarkWriteBackCommandAcked :exec
 UPDATE write_back_commands
 SET status = 'acked', updated_at = now()

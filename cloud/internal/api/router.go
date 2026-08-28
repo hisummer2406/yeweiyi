@@ -4,17 +4,20 @@ package api
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/riverqueue/river"
 
 	"yeweiyi-cloud/internal/store/db"
 )
 
 type Deps struct {
-	Queries   *db.Queries
-	Redis     *redis.Client
-	Pool      *pgxpool.Pool
-	JWTSecret []byte
+	Queries     *db.Queries
+	Redis       *redis.Client
+	Pool        *pgxpool.Pool
+	JWTSecret   []byte
+	RiverClient *river.Client[pgx.Tx]
 }
 
 func NewRouter(deps Deps) *gin.Engine {
@@ -34,6 +37,10 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/shifts", listShiftsHandler(deps))
 		authorized.GET("/oilcan/latest", oilcanLatestHandler(deps))
+		authorized.GET("/write-back", listWriteBackCommandsHandler(deps))
+		authorized.POST("/oil-in-out/correct", correctOilInOutHandler(deps))
+		authorized.POST("/shifts/correct", correctShiftHandler(deps))
+		authorized.POST("/devices/:device/oil-can-set", writeOilCanSetHandler(deps))
 	}
 
 	return r

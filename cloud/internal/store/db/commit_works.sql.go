@@ -11,6 +11,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getShiftByDeviceLocalID = `-- name: GetShiftByDeviceLocalID :one
+SELECT id, device_name, device_local_id, work_id, time, end_time, info, sync_status, received_at FROM commit_works
+WHERE device_name = $1 AND device_local_id = $2
+`
+
+type GetShiftByDeviceLocalIDParams struct {
+	DeviceName    string `json:"device_name"`
+	DeviceLocalID int32  `json:"device_local_id"`
+}
+
+// commit_works isn't partitioned, so (device_name, device_local_id) is a real UNIQUE constraint
+// (unlike oil_in_out's). Used by the write-back correction endpoint to confirm the record being
+// corrected exists before enqueueing.
+func (q *Queries) GetShiftByDeviceLocalID(ctx context.Context, arg GetShiftByDeviceLocalIDParams) (CommitWork, error) {
+	row := q.db.QueryRow(ctx, getShiftByDeviceLocalID, arg.DeviceName, arg.DeviceLocalID)
+	var i CommitWork
+	err := row.Scan(
+		&i.ID,
+		&i.DeviceName,
+		&i.DeviceLocalID,
+		&i.WorkID,
+		&i.Time,
+		&i.EndTime,
+		&i.Info,
+		&i.SyncStatus,
+		&i.ReceivedAt,
+	)
+	return i, err
+}
+
 const listShiftsAsc = `-- name: ListShiftsAsc :many
 SELECT id, device_name, device_local_id, work_id, time, end_time, info, sync_status, received_at FROM commit_works
 WHERE device_name = $1 AND time >= $2 AND time <= $3

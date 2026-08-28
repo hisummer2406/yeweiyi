@@ -31,3 +31,12 @@ WHERE id = $1;
 -- Design doc §5.3: TTL sweep for commands stuck in pending/sent past the cutoff.
 SELECT * FROM write_back_commands
 WHERE status IN ('pending', 'sent') AND created_at < $1;
+
+-- name: ListWriteBackCommandsForDevice :many
+-- Status polling for a mini-program client that just submitted a write-back command — most-recent
+-- first, unlike ListPendingWriteBackCommandsForDevice's FIFO order (that one drives delivery, this
+-- one drives "what's the status of what I sent").
+SELECT * FROM write_back_commands
+WHERE device_name = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3;
