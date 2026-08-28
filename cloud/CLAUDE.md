@@ -113,6 +113,19 @@ cross-check above — go to the source, the doc's summaries have real gaps):
   putting a user-id string into the `endTime` field. Confirmed unreachable — the real shift-close
   path (`DBDataManager.CommitWork(int, String, SparseArray)`) sets `endTime` correctly via a setter
   — so this doesn't affect real data, but don't resurrect that dead method without fixing the bug.
+- **`requestOilStorage` is one string constant with two unrelated MQTT meanings — verified
+  2026-08-29 while checking the Android repo's `connect-mqtt-reporting-channel` follow-up
+  (commit `7d1be58`)**: the identifier this project's `internal/mqtt` subscribes to under
+  `thing/event/property/post/requestOilStorage` (the `OilSaveInfo` paginated query response, per
+  "Two more query flows" above) is a *different channel* from a second, AIDL-triggered
+  `sendUnloadOils(String)` method that commit added to `BackService`'s outer class (distinct from
+  the `PushCallback`-internal `sendUnloadOils(int,int,...)` that answers the query) — it publishes
+  to `thing/event/requestOilStorage/post` (an `eventTopic`, real-time push, no `property/post`
+  segment), using `MqttUtil.getEvent(productKey, deviceName, requestOilStorage)`. Same literal
+  topic-identifier string, two different topic shapes and semantics (query-response vs. live
+  push). Neither is ingested yet (see "Two more query flows" above, still by design), but if
+  `requestOilStorage` ever gets a cloud table, its handler must dispatch on the *topic shape*, not
+  just the identifier string, or it will parse a live push as if it were a paginated query result.
 
 ## Cloud table design — two things NOT to copy verbatim from the device schema
 
@@ -152,13 +165,44 @@ feature — check their status in the Android repo before assuming they're ready
 - `requestTankTable`/`requestTankSet`/`requestProbeSet` — device subscribes to these three
   `thing/service/*` topics but currently has no handling logic (dead-letter). Needed for remote
   config write-back to actually take effect on-device.
-- No "correct an existing record by id" capability on-device yet — only "insert a new record" via
-  the probe/shift flows. Needed for the unload-oil/shift correction feature.
+- No **MQTT-reachable** "correct an existing record by id" capability — the device does have a
+  general by-primary-key update path on-device (`DBDataManager.UpdateObject(Object)`, used by local
+  UI flows like `InOilFragment`'s oil-in-out edit and the `CommitWork` edit dialog, confirmed
+  2026-08-29), so this isn't a missing on-device capability so much as a missing `thing/service/*`
+  entry point to it — no topic exists yet that lets a remote write reach `UpdateObject` for
+  unload-oil/shift records. Needed for the unload-oil/shift correction feature.
 - No "operation acknowledged" MQTT message semantics yet — device's existing `thing/service/*`
   responses are all query-result shaped, not confirmation-shaped. The write-back queue's `acked`
   state depends on this existing.
 - `CommitWork` handler for PC's LAN HTTP path doesn't exist yet either (unrelated to this repo, but
   relevant if PC-side shift viewing matters for launch scope).
+
+## Known cloud-side gaps not yet built (found 2026-08-29, no Android-side dependency)
+
+Unlike the section above, nothing here is blocked on the other repo — these just haven't been
+written yet.
+
+- **No user↔device authorization model at all.** `users` and `devices` are two unrelated tables —
+  no join table, no `user_id` column, nothing. `authMiddleware` only checks that the JWT is valid;
+  it never checks whether the authenticated user is allowed to see the `device` query param they
+  passed. Concretely: **any logged-in user can read (and, once write endpoints exist, write) any
+  device's data just by knowing its `device_name` string.** This is fine for today's manual/curl
+  testing but not for a real multi-tenant mini-program backend. Needs: a `user_devices` (or
+  similar) binding table, a device pairing/binding flow (how does a mini-program user's account get
+  associated with a physical device? QR code on the device? a pairing code? — this half is a product
+  design question, not just a technical one, don't invent an answer silently), a `GET /api/devices`
+  endpoint so a client can discover which device names it's even allowed to query (right now every
+  endpoint requires the caller to already know the exact `device_name`), and an authorization check
+  added to every `device`-scoped handler (`internal/api/records.go`'s `parseListParams`,
+  `oilcan.go`, `ws.go`, and any future write endpoint).
+- **No automatic partition creation for `alarms`/`oil_in_out` — this is time-bounded, not just a
+  someday-gap.** `db/migrations/000001_init_schema.up.sql` only pre-creates partitions through
+  `alarms_2026_09`/`oil_in_out_2026_09` (covering through 2026-09-30). There's no default partition
+  and nothing creates `_2026_10` automatically — `internal/queue` already has the exact pattern to
+  copy (`TTLSweepWorker`, a `river.PeriodicJob` registered in `internal/queue/client.go`), just
+  scoped to `CREATE TABLE ... PARTITION OF ... FOR VALUES FROM ... TO ...` instead of a TTL sweep.
+  Without this, inserts into `alarms`/`oil_in_out` start hard-failing the moment a row's `time`
+  lands in October.
 
 ## Open product decisions (do not silently assume an answer)
 
@@ -318,9 +362,8 @@ deleted afterward.
 river/riverpgxv5, paho.mqtt.golang), the sqlc-generated query layer, the migration schema (including
 river's), the four read endpoints, and the write-back queue's pending→sent hop all fit together and
 work against the local Postgres/Redis/Mosquitto containers — and, as of this pass, so does the full
-MQTT ingestion path (alarm/online-status/oilcan-snapshot) end to end. **What it does not prove**:
-`internal/mqtt`'s `requestUnloadOil`/`requestShift` handlers and the poller were exercised in
-integration tests but not in the manual end-to-end run above (same code path, lower manual-coverage);
+MQTT ingestion path (alarm/online-status/oilcan-snapshot) end to end, and, as of the 2026-08-29 pass
+below, so does `requestUnloadOil`/`requestShift`/the poller. **What it does not prove**:
 `requestOilLeak`/`requestOilStorage` responses are logged, not ingested (no cloud table — see "The
 MQTT contract" above); the queue's `Publisher` is still a placeholder that always errors in the real
 binary (`unbuiltMQTTPublisher` in `main.go`) since the write-back publish topic/ack contract doesn't
@@ -330,6 +373,26 @@ still open per "Open product decisions" below; the assumed Asia/Shanghai device 
 MQTT contract" above) is unverified; and **none
 of this has been exercised against the real Aliyun IoT broker** — there isn't one provisioned yet,
 and Mosquitto's anonymous/no-TLS auth model isn't representative of what that connection will need.
+
+**2026-08-29 follow-up pass**, closing the `requestUnloadOil`/`requestShift`/poller manual-coverage
+gap noted above: rebuilt the binary, ran it against the same local containers (`MQTT_BROKER_URL`
+pointed at Mosquitto), and used a throwaway hand-written-JSON device simulator (same rationale as
+`client_test.go`'s `deviceSim` — real Java field names, not our own struct's marshaled output) to
+publish a `requestUnloadOil` response (`beginHeigth`/`endHeigth`/`beginVolum`/`endVolum` field
+names) and a `requestShift` response (`info`/`endTime` field names) on
+`sys/e2etest/e2e-device-01/thing/event/property/post/*`. Confirmed both landed correctly in
+`oil_in_out`/`commit_works` (device-local `"2026-08-15 09:20"`/`"...16:00"` converted to the correct
+UTC rows) and round-tripped correctly through `GET /api/oil-in-out`/`GET /api/shifts` (back to
+`+08:00` in the JSON response). Separately verified the poller end to end: published `isOline:true`
+for a device, confirmed `devices.is_online` flipped, then confirmed the poller itself published a
+`requestOilcan` request to `.../thing/service/requestOilcan` within one `DefaultPollInterval` tick
+(no cloud-side trigger needed — this is `poller.go` autonomously polling `ListOnlineDeviceNames`) —
+then replied to that request as the simulated device and confirmed the snapshot landed in Redis and
+`GET /api/oilcan/latest` served it. All throwaway rows/keys/users deleted afterward; the device
+simulator was a temporary `cmd/devicesim-e2e` never committed. Docker Desktop needed a full
+container recreate (`docker rm` + `docker compose up -d`, not just `docker start`/`restart`) to get
+past a stuck state where `docker start` connections were dropping with EOF on this machine — noted
+here in case it recurs, it's an environment issue, not anything in this repo.
 
 `/ws/alarms` (2026-08-20, `internal/api/ws.go`) is implemented and manually verified end-to-end
 against the local containers: seeded a throwaway user, ran the binary, connected with
@@ -352,6 +415,15 @@ Module layout (current, not just planned):
 ```
 cmd/server/main.go   # entrypoint: wires gin + pgxpool + redis client + river queue client +
                      # (optional, if MQTT_BROKER_URL set) mqtt client + poller
+cmd/devicesim/main.go # dev-only tool (2026-08-29): simulates a device against the local Mosquitto,
+                     # publishing hand-written JSON (real device field names, not this repo's own
+                     # marshaled structs — same rationale as internal/mqtt's deviceSim test helper)
+                     # for alarm/unloadoil/shift/oilcan/online/offline/msg, plus a `watch` mode that
+                     # subscribes to thing/service/* to observe the poller's (or, once
+                     # queue.Publisher is implemented, the write-back queue's) outbound requests.
+                     # `go run ./cmd/devicesim -h`-equivalent: run any subcommand with no flags to
+                     # see the usage line. Lets local dev exercise the real internal/mqtt handler
+                     # code path without hand-seeding Postgres/Redis or standing up a real device.
 internal/mqtt/       # topics.go (topic build/parse, service vs property vs event), payloads.go
                      # (wire-format structs — see "The MQTT contract" corrections above), client.go
                      # (paho wiring, wildcard subscribe), handlers.go (dispatch + persistence),
