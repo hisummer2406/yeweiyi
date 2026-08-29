@@ -120,9 +120,9 @@ public class OilCanSetFragment extends BaseFragment {
         item_et_densityvar = (EditText) rootView.findViewById(R.id.item_et_densityvar);
         item_et_tempercorrection = (EditText) rootView.findViewById(R.id.item_et_tempercorrection);
         item_et_oildensity = (EditText) rootView.findViewById(R.id.item_et_oildensity);
-        // 密度/密度差统一只允许输入 1 位小数
+        // 介质密度需要精确到小数点后 3 位，密度差维持 1 位小数
         InputFilter[] oneDecimalFilter = new InputFilter[]{new DecimalDigitsInputFilter(1)};
-        item_et_oildensity.setFilters(oneDecimalFilter);
+        item_et_oildensity.setFilters(new InputFilter[]{new DecimalDigitsInputFilter(3)});
         item_et_densityvar.setFilters(oneDecimalFilter);
         item_tv_oiltype = rootView.findViewById(R.id.item_sp_oiltype);
         item_but_color = (Button) rootView.findViewById(R.id.item_but_color);
