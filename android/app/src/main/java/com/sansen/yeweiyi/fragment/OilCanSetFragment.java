@@ -68,6 +68,8 @@ public class OilCanSetFragment extends BaseFragment {
     private int curPos = 0;
     private LinearLayout oilcanset_content;
     private String TAG = "OilCanSetFragment";
+    // 去/回颜色选择页期间置位，避免 onHiddenChanged 的 onReflushData() 用旧库值覆盖未保存的输入框
+    private boolean skipReflushOnColorReturn = false;
 
     //做一个隐藏dialog,主要功能是用于设置隐藏探针高度与设置默认升数，例：2.6的探针，设置隐藏0.6则
     //从0.6米之后才开始显示正常油量；如果设置默认高度则低于0.6显示默认升数。
@@ -432,6 +434,8 @@ public class OilCanSetFragment extends BaseFragment {
             main.colorFragment = new ColorFragment();
         }
         main.colorFragment.setCurrOilCan(oilCanSet);
+        // 去颜色选择页之前不保存，也不希望回来时用旧库值把还没保存的输入框冲掉
+        skipReflushOnColorReturn = true;
         main.switchContent(main.mContent, main.colorFragment);
 
     }
@@ -443,6 +447,15 @@ public class OilCanSetFragment extends BaseFragment {
 
         if (!hidden) {
             KeyboardAdjustHelper.applyPanWhileVisible(this);
+        }
+
+        if (skipReflushOnColorReturn) {
+            // 去/回颜色选择页期间：不落库也不重新读库覆盖输入框，只在回来时同步颜色按钮背景
+            if (!hidden) {
+                item_but_color.setBackgroundColor(oilCanSet.getOilColor());
+                skipReflushOnColorReturn = false;
+            }
+            return;
         }
 
         if (hidden & Const.isUpdate == true) {
