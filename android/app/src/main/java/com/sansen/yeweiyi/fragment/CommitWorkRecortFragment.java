@@ -76,7 +76,8 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 //				ly_jiaoBanData.setVisibility(View.GONE);
 //			});
 //			SaveOutOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
-			lists = shiftRepository.findAll();
+			// 按 id 倒序取数（与 findAllSorted 已有排序口径一致），与界面列表（isSort=true）顺序保持一致
+			lists = shiftRepository.findAllSorted(true);
 			//String gsonInfo=lists.get(0).getInfo();
 			for (int i=0;i<lists.size();i++){
 				List<OilWork> oilWorks=dbManager.stringToArray(lists.get(i).getInfo(), OilWork[].class);

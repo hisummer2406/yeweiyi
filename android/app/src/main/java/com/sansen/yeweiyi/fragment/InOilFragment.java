@@ -312,7 +312,8 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		Log.e("TAG 路径",path);
 		ExportExcel<OilInOut> exportExcel = new ExportExcel<OilInOut>();
 		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","入库量l","入库量kg", "介质"};
-		List<OilInOut> dataset = stockRepository.findAllIn();
+		// 按 time 倒序取数，与界面列表（isSort=true）顺序保持一致
+		List<OilInOut> dataset = stockRepository.findAllInSorted(true);
 		File file = new File(path);
 		if (!file.exists())
 			file.mkdir();

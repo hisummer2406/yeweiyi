@@ -103,6 +103,20 @@ public class AlarmRepositoryImpl implements AlarmRepository {
     }
 
     @Override
+    public List<Alarm> findAllSorted(boolean desc) {
+        List<Alarm> object = null;
+        try {
+            object = db.findAll(Selector.from(Alarm.class).orderBy("time", desc));
+        } catch (DbException e) {
+            Log.e(TAG, "findAllSorted 数据库操作失败", e);
+        }
+        if (object != null) {
+            return object;
+        }
+        return new ArrayList<>();
+    }
+
+    @Override
     public List<Alarm> findPage(int pageSize, int pageIndex, boolean desc) {
         List<Alarm> temps = null;
         try {

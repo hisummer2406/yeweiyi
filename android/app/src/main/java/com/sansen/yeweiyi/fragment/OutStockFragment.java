@@ -294,7 +294,8 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 		Log.e("TAG 路径",path);
 		ExportExcel<OutStock> exportExcel = new ExportExcel<OutStock>();
 		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量","后量","出库量l","出库量kg",  "介质"};
-		List<OutStock> dataset = stockRepository.findAllOut();
+		// 按 time 倒序取数，与界面列表（isSort=true）顺序保持一致
+		List<OutStock> dataset = stockRepository.findAllOutSorted(true);
 		File file = new File(path);
 		if (!file.exists())
 			file.mkdir();

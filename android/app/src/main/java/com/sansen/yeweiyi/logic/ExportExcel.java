@@ -12,6 +12,7 @@ import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFCellStyle;
 import org.apache.poi.hssf.usermodel.HSSFClientAnchor;
 import org.apache.poi.hssf.usermodel.HSSFComment;
+import org.apache.poi.hssf.usermodel.HSSFDataFormat;
 import org.apache.poi.hssf.usermodel.HSSFFont;
 import org.apache.poi.hssf.usermodel.HSSFPatriarch;
 import org.apache.poi.hssf.usermodel.HSSFRichTextString;
@@ -28,6 +29,7 @@ import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -200,6 +202,19 @@ public class ExportExcel<T> {
         // 把字体应用到当前的样式
         style2.setFont(font2);
 
+        // 数值列样式：int 类型字段保持整数显示，double 类型的普通数值保留 1 位小数，
+        // 介质密度保留 3 位小数（与设置页 item_et_oildensity 的 DecimalDigitsInputFilter(3) 位数一致）
+        HSSFDataFormat dataFormat = workbook.createDataFormat();
+        HSSFCellStyle styleInteger = workbook.createCellStyle();
+        styleInteger.cloneStyleFrom(style2);
+        styleInteger.setDataFormat(dataFormat.getFormat("0"));
+        HSSFCellStyle styleNumber = workbook.createCellStyle();
+        styleNumber.cloneStyleFrom(style2);
+        styleNumber.setDataFormat(dataFormat.getFormat("0.0"));
+        HSSFCellStyle styleNumberDensity = workbook.createCellStyle();
+        styleNumberDensity.cloneStyleFrom(style2);
+        styleNumberDensity.setDataFormat(dataFormat.getFormat("0.000"));
+
         // 声明一个画图的顶级管理器
         HSSFPatriarch patriarch = sheet.createDrawingPatriarch();
         // 定义注释的大小和位置,详见文档
@@ -251,6 +266,9 @@ public class ExportExcel<T> {
 
                         Object value = getMethod.invoke(t, new Object[]{});
                         System.out.println("里面的数据" + value+" 方法"+getMethodName);
+                        // int/long/short/byte 字段导出后维持整数显示，不加小数点
+                        boolean isIntegerValue = value instanceof Integer || value instanceof Long
+                                || value instanceof Short || value instanceof Byte;
                         // 判断值的类型后进行强制类型转换
                         String textValue = null;
                         // if (value instanceof Integer) {
@@ -301,12 +319,21 @@ public class ExportExcel<T> {
                         }
                         // 如果不是图片数据，就利用正则表达式判断textValue是否全部由数字组成
                         if (textValue != null) {
-                            Pattern p = Pattern.compile("^//d+(//.//d+)?$");
+                            Pattern p = Pattern.compile("^\\d+(\\.\\d+)?$");
                             Matcher matcher = p.matcher(textValue);
                             if (matcher.matches()) {
 
-                                // 是数字当作double处理
-                                cell.setCellValue(Double.parseDouble(textValue));
+                                // 是数字则写成真正的数值单元格：int 类型字段维持整数显示，
+                                // double 类型的普通列保留 1 位小数，介质密度列保留 3 位小数
+                                if (isIntegerValue) {
+                                    cell.setCellValue(Double.parseDouble(textValue));
+                                    cell.setCellStyle(styleInteger);
+                                } else {
+                                    boolean isDensityField = fieldName.toLowerCase().contains("density");
+                                    DecimalFormat roundFormat = new DecimalFormat(isDensityField ? "0.000" : "0.0");
+                                    cell.setCellValue(Double.parseDouble(roundFormat.format(Double.parseDouble(textValue))));
+                                    cell.setCellStyle(isDensityField ? styleNumberDensity : styleNumber);
+                                }
                             } else {
                                 HSSFRichTextString richString = new HSSFRichTextString(
                                         textValue);

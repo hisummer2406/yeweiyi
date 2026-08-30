@@ -29,6 +29,9 @@ public interface AlarmRepository {
 
     List<Alarm> findAll();
 
+    /** 与 {@link #findAll()} 取同一批数据，但按 time 排序——供导出使用，使导出行顺序与界面列表一致。 */
+    List<Alarm> findAllSorted(boolean desc);
+
     List<Alarm> findPage(int pageSize, int pageIndex, boolean desc);
 
     List<Alarm> findBetween(int limit, int offset, boolean desc, String beginTime, String endTime);

@@ -218,7 +218,8 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
         Log.e("TAG 路径",path);
         ExportExcel<Alarm> exportExcel = new ExportExcel<Alarm>();
         String headers[] = { "",SystemUtils.getRsStr(R.string.time),"报警信息", "介质","罐号"};
-        List<Alarm> dataset = alarmRepository.findAll();
+        // 按 time 倒序取数，与界面列表（isSort=true）顺序保持一致
+        List<Alarm> dataset = alarmRepository.findAllSorted(true);
         File file = new File(path);
         if (!file.exists())
             file.mkdir();
