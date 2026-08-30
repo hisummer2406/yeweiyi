@@ -78,10 +78,30 @@ public class ZhongChengCompany implements AbstractCompany {
     int oilRoate;
     double Changdu;
 
+    /**
+     * 校验帧尾 2 字节 CRC——覆盖范围是去掉开头 FEFE 头、去掉结尾 2 字节校验码之后的全部字节。
+     * 算法用真实协议报文核对过（issue #28 排查记录）：查询帧（sendProbeInfo/sendWenDuInfo
+     * 用的 CRCheck.crc12）和 44/45 应答帧的校验码，用同一套 crc12 都能精确复算出来。
+     * 总线冲突/噪声拼出的坏帧，即便长度和功能码凑巧对上、地址字节凑巧等于某个真实探针地址，
+     * CRC 对不上的概率也有 65535/65536——这是堵住 issue #28 里"孤立一次误报警"的关键一环。
+     */
+    static boolean isCrcValid(byte[] bytes) {
+        if (bytes == null || bytes.length < 5) {
+            return false;
+        }
+        byte[] payload = new byte[bytes.length - 4];
+        System.arraycopy(bytes, 2, payload, 0, payload.length);
+        String expected = String.format("%02X%02X", bytes[bytes.length - 2] & 0xFF, bytes[bytes.length - 1] & 0xFF);
+        return CRCheck.crc12(payload.length, payload).equalsIgnoreCase(expected);
+    }
+
     @Override
     public boolean probeInfoPase(String data, IParseDataListener parseDataListener) {
         data = data.replace(" ", "");
         byte[] bytes = DataUtils.HexString2Bytes(data);
+        if (!isCrcValid(bytes)) {
+            return false;
+        }
         if (bytes.length == 19) {
             byte[] bytes1 = new byte[13];
             System.arraycopy(bytes, 4, bytes1, 0, 13);
