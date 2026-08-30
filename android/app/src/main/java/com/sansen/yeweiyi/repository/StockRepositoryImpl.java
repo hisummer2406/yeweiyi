@@ -80,6 +80,11 @@ public class StockRepositoryImpl implements StockRepository {
     }
 
     @Override
+    public List<OilInOut> findAllInSorted(boolean desc) {
+        return findAllSorted(OilInOut.class, desc);
+    }
+
+    @Override
     public List<OilInOut> findInPage(int pageSize, int pageIndex, boolean desc) {
         return findPage(OilInOut.class, pageSize, pageIndex, desc);
     }
@@ -127,6 +132,11 @@ public class StockRepositoryImpl implements StockRepository {
     }
 
     @Override
+    public List<OutStock> findAllOutSorted(boolean desc) {
+        return findAllSorted(OutStock.class, desc);
+    }
+
+    @Override
     public List<OutStock> findOutPage(int pageSize, int pageIndex, boolean desc) {
         return findPage(OutStock.class, pageSize, pageIndex, desc);
     }
@@ -156,6 +166,11 @@ public class StockRepositoryImpl implements StockRepository {
     @Override
     public List<StockSave> findAllStock() {
         return findAllObject(StockSave.class);
+    }
+
+    @Override
+    public List<StockSave> findAllStockSorted(boolean desc) {
+        return findAllSorted(StockSave.class, desc);
     }
 
     @Override
@@ -273,6 +288,24 @@ public class StockRepositoryImpl implements StockRepository {
             Log.e(TAG, "findAllObject 数据库操作失败", e);
         }
         return object;
+    }
+
+    /**
+     * 与 {@link #findAllObject(Class)} 取同一批数据，但按 time 排序——{@code findAllObject}
+     * 不带 orderBy，等价于按插入顺序（旧→新），与界面列表统一用的 orderBy("time", desc) 方向相反，
+     * 导出时若直接复用 {@code findAllObject} 会导致导出行顺序与界面显示顺序不一致。
+     */
+    private <T> List<T> findAllSorted(Class<T> clazz, boolean desc) {
+        List<T> object = null;
+        try {
+            object = db.findAll(Selector.from(clazz).orderBy("time", desc));
+        } catch (DbException e) {
+            Log.e(TAG, "findAllSorted 数据库操作失败", e);
+        }
+        if (object != null) {
+            return object;
+        }
+        return new ArrayList<>();
     }
 
     private <T> List<T> findPage(Class<T> clazz, int pageSize, int pageIndex, boolean desc) {

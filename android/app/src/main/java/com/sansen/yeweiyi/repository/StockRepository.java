@@ -32,6 +32,9 @@ public interface StockRepository {
 
     List<OilInOut> findAllIn();
 
+    /** 与 {@link #findAllIn()} 取同一批数据，但按 time 排序——供导出使用，使导出行顺序与界面列表一致。 */
+    List<OilInOut> findAllInSorted(boolean desc);
+
     List<OilInOut> findInPage(int pageSize, int pageIndex, boolean desc);
 
     List<OilInOut> findInPageByOil(int oilCanId, int pageSize, int pageIndex, boolean desc);
@@ -52,6 +55,9 @@ public interface StockRepository {
 
     List<OutStock> findAllOut();
 
+    /** 与 {@link #findAllOut()} 取同一批数据，但按 time 排序——供导出使用，使导出行顺序与界面列表一致。 */
+    List<OutStock> findAllOutSorted(boolean desc);
+
     List<OutStock> findOutPage(int pageSize, int pageIndex, boolean desc);
 
     List<OutStock> findOutPageByOil(int oilCanId, int pageSize, int pageIndex, boolean desc);
@@ -65,6 +71,9 @@ public interface StockRepository {
     void deleteAllStock();
 
     List<StockSave> findAllStock();
+
+    /** 与 {@link #findAllStock()} 取同一批数据，但按 time 排序——供导出使用，使导出行顺序与界面列表一致。 */
+    List<StockSave> findAllStockSorted(boolean desc);
 
     List<StockSave> findStockPage(int pageSize, int pageIndex, boolean desc);
 

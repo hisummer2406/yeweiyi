@@ -180,7 +180,8 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 		Log.e("TAG 路径",path);
 		ExportExcel<StockSave> exportExcel = new ExportExcel<StockSave>();
 		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), "液位", "水高", "容积","质量","温度",  "介质"};
-		List<StockSave> dataset = stockRepository.findAllStock();
+		// 按 time 倒序取数，与界面列表（isSort=true）顺序保持一致
+		List<StockSave> dataset = stockRepository.findAllStockSorted(true);
 		File file = new File(path);
 		if (!file.exists())
 			file.mkdir();
