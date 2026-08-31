@@ -282,11 +282,36 @@ work this project depends on" below.
   `handlers.go`'s dispatch/persistence logic carry over unchanged under this choice — only the
   connection target and per-device credential format change — avoiding a repeat of the
   `internal/aliyuniot` AMQP/OpenAPI rewrite-then-delete detour from the Aliyun IoT Platform correction
-  below. **Not yet done**: EMQX hasn't been provisioned anywhere, and the wildcard-subscribe ACL
-  config hasn't actually been tested against a real EMQX instance — cheap to verify empirically (spin
-  up EMQX, register two test clients, grant one wildcard-subscribe over the other's topic) before
-  writing connection code against it, same reasoning CLAUDE.md already applies to 云消息队列 MQTT 版
-  elsewhere in this section. Device-side impact of this whole split: small — `MqttUtil.java`'s
+  below.
+
+  **ACL model empirically verified 2026-09-01** against a real (throwaway, Docker) EMQX 5.8.0
+  instance — the exact test CLAUDE.md's own methodology called for, run before writing any real
+  connection code: enabled EMQX's built-in-database authentication + authorization (`no_match: deny`
+  so the test isn't accidentally passing on a permissive default; had to also disable the default
+  `file` authorization source, whose stock `{allow, all}.` catch-all rule was silently masking the
+  first attempt at a negative test), registered two simulated devices and one simulated backend
+  client, and confirmed via `mosquitto_pub`/`mosquitto_sub` all five cases `internal/mqtt`'s real
+  design needs: (1) backend, granted `subscribe` on `sys/{productKey}/+/thing/event/property/post/+`,
+  receives a message a device publishes on its own concrete topic; (2) a second device, with no grant
+  for another device's topic, **cannot** publish there (forged/impersonated publish silently
+  dropped); (3) a device itself, with no subscribe grant, **cannot** subscribe to the backend's
+  wildcard; (4) backend, granted `publish` on `sys/{productKey}/+/thing/service/+`, successfully
+  publishes to one concrete device's service topic and that device (granted `subscribe` on only its
+  own `.../thing/service/+`) receives it — the downstream direction, not just the upstream one; (5) a
+  second device **cannot** subscribe to another device's service topic. All three "who() + action() +
+  topic_match()" ACL primitives this project needs (self-scoped per-device publish/subscribe, plus
+  one backend client's cross-device wildcard grant in both directions) work exactly as EMQX's own
+  ACL rule spec describes, with no surprises — closing out the empirical-risk flag from the design
+  discussion above. Throwaway container and all test users/rules were torn down afterward; nothing
+  from this test persists in the repo or the dev stack. **Still not done**: EMQX hasn't been
+  provisioned anywhere durable (dev or prod), `internal/mqtt` doesn't yet point at one, and this test
+  used a manually-configured ACL over HTTP — it says nothing yet about *how* per-device credentials
+  and their matching ACL rule get provisioned automatically at onboarding time (today's manual
+  `curl`-the-dashboard-API approach obviously doesn't scale to "a new device gets paired via QR code
+  and needs working MQTT credentials within seconds" — that provisioning-automation design is new,
+  separate work, not yet started).
+
+  Device-side impact of this whole split: small — `MqttUtil.java`'s
   existing topic shape and broker connection are largely unaffected (same reasoning as
   `internal/mqtt` above); the *only* new device-side surface is whatever client-side logic talks to
   ThingsBoard for provisioning/OTA, which was already unavoidable, ThingsBoard-role-independent work
@@ -753,8 +778,10 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
                      # is now self-hosted EMQX (not ThingsBoard — ThingsBoard is scoped to device
                      # identity/OTA only), and this package's design (paho, wildcard subscribe,
                      # handlers.go dispatch) is expected to carry over unchanged, just pointed at a
-                     # different host/credentials — not yet done, and the wildcard-subscribe ACL
-                     # grant hasn't been tested against a real EMQX instance yet.
+                     # different host/credentials — not yet done. The wildcard-subscribe ACL grant
+                     # this design needs was empirically verified 2026-09-01 against a real (throwaway)
+                     # EMQX instance — see "Device connectivity platform" below — but no durable EMQX
+                     # instance exists yet and this package still points at Mosquitto.
 internal/api/        # router.go, health.go, auth.go (JWT login + middleware, apiClaims), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
                      # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
@@ -869,8 +896,9 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   permission to one client, which ruled out Aliyun IoT Platform; this package is local-dev/Mosquitto
   only for now — per the 2026-09-01 addition to "Device connectivity platform" below, the production
   target is self-hosted EMQX (chosen specifically because, being self-hosted, the wildcard-subscribe
-  grant is this project's own config choice rather than an unverified vendor ACL model), not
-  ThingsBoard (ThingsBoard is scoped to device identity/OTA only, per that same section). `handlers.go`
+  grant is this project's own config choice rather than an unverified vendor ACL model — confirmed
+  2026-09-01 against a real throwaway EMQX instance, see that section), not ThingsBoard (ThingsBoard
+  is scoped to device identity/OTA only, per that same section). `handlers.go`
   dispatches an arrived property/post message by its
   parsed identifier: `requestOilcan` caches the raw response bytes verbatim under
   `oilcan:latest:{device}` in Redis (the same key `internal/api/oilcan.go` already reads — this is
