@@ -265,17 +265,37 @@ work this project depends on" below.
 
 **What's not yet decided** (don't assume any of this is settled just because the platform is):
 
-- **How `internal/mqtt`/`internal/api` relate to ThingsBoard.** ThingsBoard has its own topic
-  conventions (`v1/devices/me/telemetry`, `v1/devices/me/attributes`, `v1/devices/me/rpc/...`) that
-  don't match the Alink-style `sys/{productKey}/{deviceName}/thing/...` shape `internal/mqtt` and the
-  Android repo's `MqttUtil.java` currently assume, and a REST/WebSocket API of its own for querying
-  telemetry, alarms, and devices. Whether the Go backend keeps its current role (its own MQTT
-  ingestion + Postgres persistence, now pointed at ThingsBoard's transport instead of a raw broker)
-  or instead becomes a thinner layer that reads from ThingsBoard's own API/rule-engine webhooks and
-  mostly just serves the mini-program is a real design question, not yet worked through.
-- **Device-side topic/protocol changes**, same caveat as before: this touches
-  `~/Developer/zhongchengyeweiyi` (`BackService.java`/`MqttUtil.java`) and needs deciding with
-  whoever owns that repo, not unilaterally here.
+- ~~**How `internal/mqtt`/`internal/api` relate to ThingsBoard.**~~ — **decided 2026-09-01: ThingsBoard
+  is scoped to device identity (provisioning/one-device-one-secret) and OTA only; it does not carry
+  business MQTT traffic.** `internal/mqtt`/`internal/api` are unaffected — they keep talking to a
+  separate, independent MQTT broker over the existing Alink-style `sys/{productKey}/{deviceName}/
+  thing/...` topics, same as today, just pointed at that broker instead of the originally-assumed
+  Aliyun IoT Platform. **The independent broker is self-hosted EMQX**, chosen 2026-09-01 over the two
+  other candidates considered (再次评估 云消息队列 MQTT 版 now that it only needs to carry business
+  messages, not console/OTA/credentials; and hardening the existing dev Mosquitto for production) for
+  one deciding reason: EMQX is self-hosted, so the ACL question that blocked Aliyun IoT Platform and
+  left 云消息队列 MQTT 版 "unverified, conflicting signals" (see the historical trail below) doesn't
+  exist here — whether one backend client gets wildcard-subscribe permission is this project's own
+  config choice, not a vendor's undocumented ACL model. Marginal ops cost of self-hosting a second
+  thing (EMQX) alongside ThingsBoard was judged acceptable given self-hosting ThingsBoard itself was
+  already accepted. `internal/mqtt`'s existing paho-based design, wildcard subscriptions, and
+  `handlers.go`'s dispatch/persistence logic carry over unchanged under this choice — only the
+  connection target and per-device credential format change — avoiding a repeat of the
+  `internal/aliyuniot` AMQP/OpenAPI rewrite-then-delete detour from the Aliyun IoT Platform correction
+  below. **Not yet done**: EMQX hasn't been provisioned anywhere, and the wildcard-subscribe ACL
+  config hasn't actually been tested against a real EMQX instance — cheap to verify empirically (spin
+  up EMQX, register two test clients, grant one wildcard-subscribe over the other's topic) before
+  writing connection code against it, same reasoning CLAUDE.md already applies to 云消息队列 MQTT 版
+  elsewhere in this section. Device-side impact of this whole split: small — `MqttUtil.java`'s
+  existing topic shape and broker connection are largely unaffected (same reasoning as
+  `internal/mqtt` above); the *only* new device-side surface is whatever client-side logic talks to
+  ThingsBoard for provisioning/OTA, which was already unavoidable, ThingsBoard-role-independent work
+  (see "What OTA does *not* solve on its own" above) — still needs deciding with whoever owns
+  `~/Developer/zhongchengyeweiyi`, not unilaterally here, same caveat as always for that repo. Two
+  separate device identity registries now exist (ThingsBoard's own device table, and this project's
+  `devices`/`user_devices`) that need to agree on the same `deviceName` string per device — nothing
+  in code enforces that agreement yet, worth keeping in mind once either side's provisioning flow is
+  actually implemented.
 - ~~**ECS sizing**: upgrade existing vs. add a second machine~~ — **decided 2026-09-01: upgrade the
   existing ECS**, see the resource-cost point above. The exact target spec (how much RAM/CPU to
   upgrade to) is still open.
@@ -726,12 +746,15 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
                      # (wire-format structs — see "The MQTT contract" corrections above), client.go
                      # (paho wiring, wildcard subscribe), handlers.go (dispatch + persistence),
                      # poller.go (§4.3 requestOilcan cadence), *_test.go (integration tests, see
-                     # above). Local-dev-only as of the 2026-08-29 "Device connectivity platform"
-                     # decision (self-hosted ThingsBoard) — was briefly replaced by an AMQP+OpenAPI
-                     # split (internal/aliyuniot) to work around Aliyun IoT Platform's ACL model,
-                     # reverted once that plan was dropped, kept since as the local-dev/Mosquitto
-                     # path; whether/how it relates to a ThingsBoard-based production path is one of
-                     # that section's still-open questions, not decided yet.
+                     # above). Local-dev-only for now (still points at Mosquitto) — was briefly
+                     # replaced by an AMQP+OpenAPI split (internal/aliyuniot) to work around Aliyun
+                     # IoT Platform's ACL model, reverted once that plan was dropped. Per the
+                     # 2026-09-01 addition to "Device connectivity platform" below, production target
+                     # is now self-hosted EMQX (not ThingsBoard — ThingsBoard is scoped to device
+                     # identity/OTA only), and this package's design (paho, wildcard subscribe,
+                     # handlers.go dispatch) is expected to carry over unchanged, just pointed at a
+                     # different host/credentials — not yet done, and the wildcard-subscribe ACL
+                     # grant hasn't been tested against a real EMQX instance yet.
 internal/api/        # router.go, health.go, auth.go (JWT login + middleware, apiClaims), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
                      # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
@@ -844,7 +867,10 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   corrections above; this wildcard pattern has no equivalent in `BackService.java`, which only ever
   handles its own single device). Requires the broker to actually grant wildcard-subscribe
   permission to one client, which ruled out Aliyun IoT Platform; this package is local-dev/Mosquitto
-  only now, per "Device connectivity platform" below (self-hosted ThingsBoard). `handlers.go`
+  only for now — per the 2026-09-01 addition to "Device connectivity platform" below, the production
+  target is self-hosted EMQX (chosen specifically because, being self-hosted, the wildcard-subscribe
+  grant is this project's own config choice rather than an unverified vendor ACL model), not
+  ThingsBoard (ThingsBoard is scoped to device identity/OTA only, per that same section). `handlers.go`
   dispatches an arrived property/post message by its
   parsed identifier: `requestOilcan` caches the raw response bytes verbatim under
   `oilcan:latest:{device}` in Redis (the same key `internal/api/oilcan.go` already reads — this is
