@@ -247,8 +247,14 @@ sitting on top of one — 云消息队列 MQTT 版 is no longer needed either.
 8 GB RAM minimum for a single-node deployment** — one tier above the current 2c4g ECS, which is
 already running Postgres + Redis + the Go backend. Adopting ThingsBoard means upgrading that ECS or
 adding a second machine for it; user confirmed 2026-08-29 this cost is acceptable given the three
-requirements above matter enough to pay for. Not yet decided which of "upgrade the existing ECS" vs.
-"add a second machine" — a separate, still-open call.
+requirements above matter enough to pay for. **Decided 2026-09-01: upgrade the existing ECS**, not
+add a second machine — no reason given beyond the choice itself, so don't backfill one. Worth noting
+when sizing the upgrade: a 2026-09-01 web-research pass (done while designing the ThingsBoard
+integration options below) found ThingsBoard's own docs give a lower minimum, **4 GB RAM, for a
+single-node deployment backed by PostgreSQL only** (the 8 GB figure appears to assume Cassandra,
+which this project has no reason to add) — unverified against this project's actual planned
+device/message volume, and the existing ECS is already running Postgres + Redis + the Go backend
+concurrently, so treat 4 GB as a lower bound to sanity-check against, not a target to upgrade to.
 
 **What OTA does *not* solve on its own**: ThingsBoard's OTA feature is the cloud-side distribution
 half only (store a firmware package, version it, target a device group, track rollout progress). The
@@ -270,7 +276,9 @@ work this project depends on" below.
 - **Device-side topic/protocol changes**, same caveat as before: this touches
   `~/Developer/zhongchengyeweiyi` (`BackService.java`/`MqttUtil.java`) and needs deciding with
   whoever owns that repo, not unilaterally here.
-- **ECS sizing**: upgrade existing vs. add a second machine, per the resource point above.
+- ~~**ECS sizing**: upgrade existing vs. add a second machine~~ — **decided 2026-09-01: upgrade the
+  existing ECS**, see the resource-cost point above. The exact target spec (how much RAM/CPU to
+  upgrade to) is still open.
 - Nothing has been provisioned or installed for ThingsBoard yet — this is a decision, not an
   implementation. As with both prior plans in this section, nothing existed to migrate away from
   either, so — still true a third time — now remains the cheapest point to make this call.
@@ -467,9 +475,9 @@ Decided 2026-08-20: **Go**.
   containerization/serverless complexity needed for a single Go binary at this stage. The original
   "same cloud as the MQTT broker, so the ingestion path stays intra-cloud" reasoning assumed Aliyun
   IoT Platform; per "Device connectivity platform" above, the device connectivity platform is now
-  self-hosted ThingsBoard, most likely on this same ECS fleet (still deciding "upgrade this box" vs.
-  "add a second machine" — see that section), so the intra-cloud/low-latency reasoning still applies,
-  just because it'll likely be the same physical infrastructure rather than the same managed product.
+  self-hosted ThingsBoard, on this same ECS — decided 2026-09-01 to upgrade the existing box rather
+  than add a second machine (see that section) — so the intra-cloud/low-latency reasoning still
+  applies, just because it's the same physical infrastructure rather than the same managed product.
 - **Auth**: JWT via `golang-jwt/jwt` for token issuance/validation, `golang.org/x/crypto/bcrypt` for
   password hashing at `/api/login`. One shared user table/token scheme serves both PC-remote and
   mini-program clients (see "Open product decisions" above — that question is now resolved).
