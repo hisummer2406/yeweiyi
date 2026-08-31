@@ -49,7 +49,10 @@ half of the same interface.
 
 - **Broker**: Aliyun IoT (阿里云 IoT). Topic pattern: `sys/{productKey}/{deviceName}/thing/...`.
   `productKey` is a per-product constant, `deviceName` is per-device (device secret or configured
-  address).
+  address). **This was the design doc's original assumption, from the device side — see "Device
+  connectivity platform" below for why the cloud side moved off Aliyun IoT Platform entirely
+  (2026-08-29) and what that means for this topic pattern once the device side's own protocol gets
+  revisited.**
 - **Not yet provisioned**: as of 2026-08-19, no real Aliyun IoT product/device/credentials exist
   for this to connect to. The device-side code (`BackService.java`) that publishes/subscribes was
   legacy scaffolding — never live, never verified against a real broker. When this gets
@@ -77,9 +80,13 @@ cross-check above — go to the source, the doc's summaries have real gaps):
   subscribes there. `MqttUtil.getEvent` (`.../thing/event/{id}/post`) is used for `isOline` (Will +
   online-status, retained) and `msg` (real-time alarm push) — backend subscribes to both.
   `internal/mqtt` subscribes with `+` wildcards for `deviceName` (`sys/{productKey}/+/thing/...`)
-  rather than one subscription per device — required at the ~10,000-device scale target, but this is
-  a Go-backend architectural choice with no equivalent on the device side (each device only ever
-  handles its own single-device topics).
+  rather than one subscription per device — originally justified by an assumed ~10,000-device scale
+  target; the real target is much smaller (see "Real device scale" below), but the wildcard design
+  has no real downside at the smaller size either, so it was kept as-is. This is a Go-backend
+  architectural choice with no equivalent on the device side (each device only ever handles its own
+  single-device topics), and — see the 2026-08-29 broker correction below — it depends on being
+  connected to a broker product whose ACL model actually grants that permission, which Aliyun IoT
+  Platform (originally assumed) turned out not to.
 - **The realtime snapshot bean is `NetOilCan`, not "`BaseOilCan`"** — no `BaseOilCan` class exists
   anywhere in the Android repo. `OilcanDataManager.getNetOilcans()` returns `List<NetOilCan>` and is
   used for *both* the LAN `/baseOilcan` HTTP endpoint and MQTT's `requestOilcan` response, so the
@@ -194,6 +201,174 @@ strikethrough here instead of deleting the bullet for the same reason as the par
 of deleting the bullet so this section's "found 2026-08-29" items stay traceable to what they
 originally were.
 
+## Real device scale (corrected 2026-08-29)
+
+Every "~10,000 devices" figure elsewhere in this file (the original "Why Go" justification in "Tech
+stack", the wildcard-subscription rationale in "MQTT contract" and "Architecture") was a planning
+assumption, never a product-confirmed target. **Actual target, confirmed 2026-08-29: ~100 devices
+now, under 1,000 within 3–5 years.** This is a two-orders-of-magnitude correction. It doesn't
+invalidate anything already built (Go, the wildcard-subscribe design, monthly partitioning on
+`alarms`/`oil_in_out` all still work fine, and cost nothing extra, at the smaller real scale) — the
+individual "~10,000" mentions elsewhere are left in place with pointers back to this section rather
+than rewritten one by one, so this stays the single place a future session needs to check for the
+real number.
+
+## Device connectivity platform (corrected 2026-08-29, three times — current decision at the top)
+
+**Current decision, 2026-08-29: self-hosted ThingsBoard (open source), not any Aliyun MQTT product,
+not a bare broker.** This supersedes everything below it in this section — kept for the trail of
+*why*, since this flipped twice in one day before landing here. Read "What's not yet decided" at the
+end before assuming this is fully designed; it isn't yet, only the platform choice is settled.
+
+**Why not Aliyun IoT Platform at all**: it stopped accepting new purchases/new instance creation
+**2025-02-01** (confirmed via multiple independent sources — landian.news, v2ex.com/t/1100655 — and
+retroactively explains the "文档停止维护" tag on most `help.aliyun.com/zh/iot/` pages cited elsewhere
+in this file, which should have been a signal caught earlier in this file's own research and wasn't).
+No new feature development either. Existing customers' instances keep running with no announced
+shutdown date, but **this project can't provision a new one at all** — that's a harder blocker than
+the ACL/ownership questions researched below, and makes all of that research moot for *this* project
+regardless of whether it was otherwise correct.
+
+**Why not 云消息队列 MQTT 版 (bare MQTT middleware, the previous decision earlier the same day)**:
+that decision covered "a broker to move data," but the actual requirement turned out to be broader —
+confirmed 2026-08-29 that a **console UI**, **OTA firmware delivery**, and **per-device credential
+issuance/rotation (one-device-one-secret)** are real requirements, not nice-to-haves. A bare MQTT
+product provides none of those; building all three from scratch on top of `internal/api` would be a
+lot of net-new surface this project doesn't currently have any of.
+
+**Why ThingsBoard specifically**: open source, self-hostable, and covers the three requirements above
+out of the box — a device management console, an OTA-updates feature (versioned firmware/software
+packages, grouped rollout, progress tracking), and per-device credentials (access token / X.509 /
+MQTT username-password) with a provisioning flow for onboarding, which maps onto "一机一密." It also
+has its own built-in MQTT transport, so it replaces the broker-choice question entirely rather than
+sitting on top of one — 云消息队列 MQTT 版 is no longer needed either.
+
+**Resource cost of this choice, confirmed 2026-08-29**: ThingsBoard's own docs recommend **2 vCPU /
+8 GB RAM minimum for a single-node deployment** — one tier above the current 2c4g ECS, which is
+already running Postgres + Redis + the Go backend. Adopting ThingsBoard means upgrading that ECS or
+adding a second machine for it; user confirmed 2026-08-29 this cost is acceptable given the three
+requirements above matter enough to pay for. Not yet decided which of "upgrade the existing ECS" vs.
+"add a second machine" — a separate, still-open call.
+
+**What OTA does *not* solve on its own**: ThingsBoard's OTA feature is the cloud-side distribution
+half only (store a firmware package, version it, target a device group, track rollout progress). The
+device itself still needs client-side logic to receive, verify, and flash an update — that code does
+not exist anywhere in `~/Developer/zhongchengyeweiyi` today, and picking ThingsBoard doesn't create
+it. This is unchanged, still-real device-side work, tracked the same way as the rest of "Device-side
+work this project depends on" below.
+
+**What's not yet decided** (don't assume any of this is settled just because the platform is):
+
+- **How `internal/mqtt`/`internal/api` relate to ThingsBoard.** ThingsBoard has its own topic
+  conventions (`v1/devices/me/telemetry`, `v1/devices/me/attributes`, `v1/devices/me/rpc/...`) that
+  don't match the Alink-style `sys/{productKey}/{deviceName}/thing/...` shape `internal/mqtt` and the
+  Android repo's `MqttUtil.java` currently assume, and a REST/WebSocket API of its own for querying
+  telemetry, alarms, and devices. Whether the Go backend keeps its current role (its own MQTT
+  ingestion + Postgres persistence, now pointed at ThingsBoard's transport instead of a raw broker)
+  or instead becomes a thinner layer that reads from ThingsBoard's own API/rule-engine webhooks and
+  mostly just serves the mini-program is a real design question, not yet worked through.
+- **Device-side topic/protocol changes**, same caveat as before: this touches
+  `~/Developer/zhongchengyeweiyi` (`BackService.java`/`MqttUtil.java`) and needs deciding with
+  whoever owns that repo, not unilaterally here.
+- **ECS sizing**: upgrade existing vs. add a second machine, per the resource point above.
+- Nothing has been provisioned or installed for ThingsBoard yet — this is a decision, not an
+  implementation. As with both prior plans in this section, nothing existed to migrate away from
+  either, so — still true a third time — now remains the cheapest point to make this call.
+
+---
+
+*Historical trail below, kept for why the decision moved twice before landing above — the technical
+content is still accurate for its own product, just no longer the chosen path.*
+
+**First correction**: `internal/mqtt`'s "one paho client, wildcard-subscribe/publish across the
+whole product" design does not work against **阿里云物联网平台 (Aliyun IoT Platform)** — found while
+starting to configure real credentials for that product, before any had actually been provisioned.
+Aliyun IoT Platform's device ACL model authenticates one MQTT connection as one specific device
+(one-device-one-secret, `productKey`+`deviceName`+`deviceSecret`), scoped to that device's own
+`/${productKey}/${deviceName}/...` topics only — there is no "authenticate as the product, subscribe
+with `+`" mode. The `sys/{productKey}/+/thing/...` wildcard subscriptions `internal/mqtt/client.go`'s
+`onConnect` sets up only work against the local Mosquitto container because that container runs with
+anonymous auth and no ACL at all (see `dev/mosquitto/mosquitto.conf`), which silently hid this gap in
+local dev and in `internal/mqtt`'s integration tests. Confirmed against `help.aliyun.com/zh/iot/`:
+Aliyun IoT Platform's actual supported mechanisms for a backend to reach "all devices under a
+product" from one connection are two different protocols split by direction — **AMQP server-side
+subscription** (uplink, AccessKey/Secret-authenticated consumer group) and the **`Pub` OpenAPI
+action** (downlink, an AccessKey/Secret-signed HTTPS RPC call, not an MQTT publish) — neither of
+which is what `internal/mqtt` does.
+
+A package `internal/aliyuniot` was written to implement that AMQP-server-side-subscription +
+Pub-OpenAPI split (`amqp.go`/`publisher.go`, `github.com/Azure/go-amqp` +
+`github.com/alibabacloud-go`'s generated `iot20180120` client), reusing `internal/mqtt`'s topic
+parsing/persistence logic via a new transport-agnostic `RouteMessage`/`NewDispatcher` entry point
+(`internal/mqtt/router.go`) rather than duplicating it. **This has since been deleted** — see the
+second correction below — but the underlying research about Aliyun IoT Platform's ACL model above is
+still accurate and worth keeping if that product is ever reconsidered; only the "so we built
+`internal/aliyuniot`" conclusion changed.
+
+**Second correction, same day**: re-evaluated the broker choice entirely once the real device scale
+(see "Real device scale" above) made "阿里云 IoT 有点贵" less clear-cut, and considered self-hosting
+(EMQX on the existing single ECS — no clustering needed at this scale) as an alternative to any
+managed Aliyun product. That led to checking Aliyun's actual public/enterprise-instance pricing for
+IoT Platform (新版公共实例 is free but capped at 50 concurrent online devices / 500 max devices / 5
+message TPS — already below the current ~100-device count, so not viable even today; 企业版实例 is a
+CU-priced subscription, exact cost for this scale not confirmed from docs alone), and separately
+surfaced a **different Aliyun product that had been mentioned but not yet evaluated: 云消息队列 MQTT
+版 (Message Queue for MQTT)** — general-purpose MQTT middleware, not a device-management platform.
+
+**Decision: use 云消息队列 MQTT 版 (Serverless, pay-as-you-go), not Aliyun IoT Platform, and not a
+self-hosted broker.** This decision stands on pricing/ops-burden grounds alone (see the pricing point
+below), which don't depend on the ACL claim next to it — but that ACL claim was checked again
+2026-08-29 and downgraded from "confirmed" to "unverified, conflicting signals", so read it as such:
+
+- **UNVERIFIED, re-checked and downgraded 2026-08-29**: the claim that this product's ACL model lets
+  a specific Username/ClientID be granted **wildcard-subscribe permission across a multi-level
+  topic** — which is what would let `internal/mqtt`'s original design (one
+  `eclipse/paho.mqtt.golang` client, wildcard subscribe) work unchanged, avoiding an
+  AMQP/OpenAPI-style split the way Aliyun IoT Platform needed. This claim first came from a WebSearch
+  summary ("一个消费者可以订阅多个 Topic（包括使用通配符订阅多级 Topic），从而接收来自多个设备发布的消
+  息"), repeated near-verbatim across 3 independent search queries — consistent enough to not be a
+  one-off fabrication — but re-verification via direct `WebFetch` of the pages that should contain
+  this (service-introduction-terms, authentication-overview) either didn't surface it or reported it
+  isn't there, likely because the real page renders that section client-side in a way the fetch
+  didn't capture, but that's a guess, not a confirmed explanation. A separate, lower-confidence
+  signal from an Aliyun developer-forum Q&A adds a specific complication: **"一机一密暂不支持 pub、sub
+  细粒度鉴权"** (the one-device-one-secret auth mode reportedly doesn't support fine-grained pub/sub
+  permissions) — if true, getting the "devices publish only to their own topic, backend
+  wildcard-subscribes everything" split working might require the separate "自定义鉴权" (custom
+  authentication) mode instead of 一机一密, which is a real design difference, not a detail. **Don't
+  start implementing against this product assuming the wildcard grant works** — this is cheap to
+  settle empirically instead of by more searching, since Serverless instances are pay-as-you-go and
+  essentially free to spin up for a test: create one, register two test clients, and directly try
+  granting one of them wildcard-subscribe over the other's topic before writing any real code or
+  finalizing the topic scheme below.
+- Serverless pricing is usage-based and cheap at this scale, confirmed from
+  `help.aliyun.com/zh/apsaramq-for-mqtt/`'s own billing examples: 0.003 元/connection/day, 0.0002
+  元/subscription/day, 0.04 元/万条 messages, with a reserved allowance (500 concurrent connections,
+  5000 subscriptions per day) covered by a flat ~2.5 元/day base fee. At ~100–1,000 devices with
+  10–30s polling this lands somewhere in the single-to-low-double-digit RMB/day range — not
+  precisely computed (message-count assumptions weren't pinned down), but clearly cheap relative to
+  what "阿里云 MQTT 有点贵" originally assumed, and self-hosting's ops burden (TLS, device auth
+  design, security patching) isn't worth taking on to chase savings that small. This point doesn't
+  depend on the ACL question above being resolved favorably.
+
+**Not yet done**: no code targets 云消息队列 MQTT 版 specifically yet, and per the ACL point above,
+don't assume `internal/mqtt` works against it unchanged until that's been tested against a real
+instance — if the wildcard grant turns out not to work the way hoped, the AMQP/OpenAPI-style split
+`internal/aliyuniot` did for Aliyun IoT Platform (deleted, see above — was real, working, tested code
+before deletion) is the fallback shape to reach for again, adapted to whatever this product's actual
+per-device auth constraint turns out to be. Also still open, deliberately not decided here: the
+actual **topic naming scheme**. Aliyun IoT Platform's
+`sys/{productKey}/{deviceName}/thing/service/{id}`-style topics are that product's own
+Alink/Thing-Model convention; 云消息队列 MQTT 版 doesn't impose one, so this project gets to define
+its own topic shape — could keep the same shape for continuity with the Android repo's existing
+`MqttUtil.java` constants, or take the opportunity to simplify, but either way **this touches the
+device side** (`~/Developer/zhongchengyeweiyi`, `BackService.java`/`MqttUtil.java`) and needs to be
+decided with whoever owns that repo, not unilaterally here — and should probably wait until the ACL
+question above is settled, since the answer affects what topic shape is even viable. As with the
+original Aliyun IoT Platform plan, nothing has been provisioned for this product yet either — see
+"MQTT contract" above — so, same as before, now is the cheapest time to make this call, before either
+side has shipped against a specific contract.
+
 ## Open product decisions (do not silently assume an answer)
 
 - How long offline before a device is considered "abnormal" (affects Will-message / online-status
@@ -242,8 +417,17 @@ Decided 2026-08-20: **Go**.
   unlike the type/error-handling mistakes Go's compiler does catch, so it's worth avoiding
   deliberately). `gorilla/websocket` over `nhooyr.io/websocket`/`coder/websocket` for the same
   training-data-coverage reason, despite the latter having a more modern API.
-- **MQTT**: `eclipse/paho.mqtt.golang` against the Aliyun IoT broker's standard MQTT protocol — no
-  Aliyun-specific SDK required, just the topic contract above.
+- **Device connectivity platform**: originally planned as 阿里云物联网平台 (IoT Platform) using
+  `eclipse/paho.mqtt.golang` directly. **Corrected 2026-08-29, three times — see "Device
+  connectivity platform" below for the full story, current decision at its top.** Short version:
+  IoT Platform turned out to have stopped accepting new purchases since 2025-02-01 (can't be used
+  for this project at all, regardless of its ACL model, which was also a problem); a same-day
+  detour through 云消息队列 MQTT 版 (bare MQTT middleware) got dropped once console/OTA/per-device
+  credential requirements turned out to be real needs, not nice-to-haves. **Current decision:
+  self-hosted ThingsBoard** (open source device-management platform — console, OTA delivery, device
+  credentialing, and its own built-in MQTT transport, so no separate broker product is needed).
+  `internal/mqtt`'s existing paho-based design is not confirmed to carry over unchanged — ThingsBoard
+  has its own topic/API conventions, see "Device connectivity platform" below for what's still open.
 - **Database**: PostgreSQL. `sqlc` for the query layer — decided 2026-08-20 over `gorm`. sqlc's
   errors surface at `sqlc generate`/build time (SQL referencing a dropped column, type mismatches),
   the same compile-time-safety argument that decided Go over Python; GORM's reflection-based query
@@ -279,26 +463,36 @@ Decided 2026-08-20: **Go**.
 - **Realtime snapshot cache**: Redis (`go-redis/redis`) for the polled `requestOilcan` snapshot
   (design doc §4.3) and as pub/sub backing for `/ws/alarms` if fan-out across multiple API instances
   is needed.
-- **Hosting**: Aliyun (阿里云) ECS — decided 2026-08-20. Same cloud as the MQTT broker (Aliyun IoT),
-  so the ingestion path (broker → backend) stays intra-cloud rather than crossing the public
-  internet. Plain VM over 容器服务 ACK/函数计算 — no containerization/serverless complexity needed
-  for a single Go binary at this stage.
+- **Hosting**: Aliyun (阿里云) ECS — decided 2026-08-20. Plain VM over 容器服务 ACK/函数计算 — no
+  containerization/serverless complexity needed for a single Go binary at this stage. The original
+  "same cloud as the MQTT broker, so the ingestion path stays intra-cloud" reasoning assumed Aliyun
+  IoT Platform; per "Device connectivity platform" above, the device connectivity platform is now
+  self-hosted ThingsBoard, most likely on this same ECS fleet (still deciding "upgrade this box" vs.
+  "add a second machine" — see that section), so the intra-cloud/low-latency reasoning still applies,
+  just because it'll likely be the same physical infrastructure rather than the same managed product.
 - **Auth**: JWT via `golang-jwt/jwt` for token issuance/validation, `golang.org/x/crypto/bcrypt` for
   password hashing at `/api/login`. One shared user table/token scheme serves both PC-remote and
   mini-program clients (see "Open product decisions" above — that question is now resolved).
   Explicitly not the device's own LAN `/login` pattern (plaintext table lookup, no token, no
   session) — design doc §4.4 flags that as something to not replicate.
 
-**Why Go, over the Python/Node alternatives that were also considered**: expected device count is
-~10,000. At the product-confirmed 10–30s polling cadence (see "MQTT contract" above), the polling/
-MQTT-ingestion core sees roughly 330–1,000 service/response round-trips per second — a concurrency
-profile Go's goroutine-per-device model absorbs natively, without the multi-process device-sharding
-a Python asyncio service would need to engineer in from day one at this scale. The team is equally
-comfortable in Go and Python, so that wasn't the deciding factor; what tipped it is that this
-codebase will be written primarily by Claude, and Go's compiler catches a class of AI-generated-code
-mistakes (type mismatches, unhandled error paths) at `go build` time rather than at runtime — a
-tighter, more deterministic feedback loop than Python offers when a human isn't hand-authoring every
-line.
+**Why Go, over the Python/Node alternatives that were also considered**: originally justified here by
+an assumed ~10,000-device target, reasoning that at the product-confirmed 10–30s polling cadence
+(see "MQTT contract" above) the polling/MQTT-ingestion core would see roughly 330–1,000
+service/response round-trips per second — a concurrency profile Go's goroutine-per-device model
+absorbs natively, without the multi-process device-sharding a Python asyncio service would need to
+engineer in from day one at that scale. **Corrected 2026-08-29: real target is ~100 devices now,
+under 1,000 within 3–5 years** (see "Real device scale" below) — at that size the round-trip rate is
+low single digits to double digits per second, and a single-process Python/Node service would handle
+it without any sharding. The concurrency argument above doesn't actually apply at this project's real
+scale; it's kept here (struck through in spirit, not deleted) so a future session doesn't re-derive a
+now-inaccurate justification from scratch. **This is not a reason to reconsider Go** — a substantial,
+tested Go codebase already exists (migrations, API, MQTT ingestion, write-back queue), and the other
+half of the original reasoning is scale-independent and still holds: this codebase is written
+primarily by Claude, and Go's compiler catches a class of AI-generated-code mistakes (type
+mismatches, unhandled error paths) at `go build` time rather than at runtime — a tighter, more
+deterministic feedback loop than Python offers when a human isn't hand-authoring every line. The
+team being equally comfortable in Go and Python was never the deciding factor either way.
 
 ## Build
 
@@ -315,7 +509,11 @@ go test ./...                   # internal/queue, internal/mqtt, internal/partit
                                  # 2026-08-29) internal/api have real integration tests against
                                  # local postgres/redis; cmd/server and internal/store/db have none
 JWT_SECRET=... MQTT_BROKER_URL=tcp://localhost:1883 MQTT_PRODUCT_KEY=... go run ./cmd/server
-                                 # MQTT_BROKER_URL is optional — omit it to run without MQTT
+                                 # MQTT_BROKER_URL is optional — omit it to run without MQTT. This
+                                 # still points at local Mosquitto for dev only — per "Device
+                                 # connectivity platform" above, production is now decided to be
+                                 # self-hosted ThingsBoard, not a raw broker this env var would point
+                                 # at unchanged; no code or env-var shape exists for that yet.
 ```
 
 River's own schema (`river_job`/`river_leader`/`river_queue`/`river_notification`) is folded into
@@ -474,6 +672,18 @@ cover**: the actual QR code generation/display on the device side, and the mini-
 UI — both are `yeweiyi-miniapp`/Android-repo concerns, this pass is only the cloud API the pairing
 step calls once a QR has been scanned and decoded into a `deviceName` string client-side.
 
+**2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
+migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
+app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
+`write_back_commands`, `user_devices`) and their columns, so the schema is self-describing via
+`psql \d+`/pgAdmin without needing this file open — river's own tables (`river_job`/etc.) are left
+uncommented since they're not app schema. Verified against the local Postgres container: applied
+cleanly to `version 9`, then a down-then-up round trip (`migrate ... down 1` → confirmed back at
+`version 8` → `migrate ... up 1` → back to `version 9`, no dirty state either direction) per this
+project's usual migration-verification convention, and spot-checked with `obj_description`/
+`col_description` (e.g. `users` and `oil_in_out.begin_height`) to confirm the Chinese text actually
+lands, not just that the migration runs.
+
 `/ws/alarms` (2026-08-20, `internal/api/ws.go`) is implemented and manually verified end-to-end
 against the local containers: seeded a throwaway user, ran the binary, connected with
 `gorilla/websocket`'s client passing the JWT as a `token` query param (not the `Authorization`
@@ -508,7 +718,12 @@ internal/mqtt/       # topics.go (topic build/parse, service vs property vs even
                      # (wire-format structs — see "The MQTT contract" corrections above), client.go
                      # (paho wiring, wildcard subscribe), handlers.go (dispatch + persistence),
                      # poller.go (§4.3 requestOilcan cadence), *_test.go (integration tests, see
-                     # above)
+                     # above). Local-dev-only as of the 2026-08-29 "Device connectivity platform"
+                     # decision (self-hosted ThingsBoard) — was briefly replaced by an AMQP+OpenAPI
+                     # split (internal/aliyuniot) to work around Aliyun IoT Platform's ACL model,
+                     # reverted once that plan was dropped, kept since as the local-dev/Mosquitto
+                     # path; whether/how it relates to a ThingsBoard-based production path is one of
+                     # that section's still-open questions, not decided yet.
 internal/api/        # router.go, health.go, auth.go (JWT login + middleware, apiClaims), records.go
                      # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
                      # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
@@ -526,7 +741,9 @@ internal/partitions/ # partitions.go (2026-08-29): keeps alarms/oil_in_out's mon
                      # own). partitions_test.go is a real integration test against local postgres.
 internal/store/db/   # sqlc-generated: db.go, models.go, querier.go, + one .sql.go per query file
 db/migrations/       # golang-migrate schema; 000001 is the app schema, 000002-000007 are river's
-                     # (see above), 000008 adds user_devices (2026-08-29 authorization pass)
+                     # (see above), 000008 adds user_devices (2026-08-29 authorization pass),
+                     # 000009 attaches COMMENT ON TABLE/COLUMN to every app table (2026-09-01
+                     # table-comments pass, documentation-only, no DDL change)
 db/queries/          # sqlc query input — devices.sql, users.sql, user_devices.sql (2026-08-29:
                      # BindUserDevice/UnbindUserDevice/ListDevicesForUser/UserOwnsDevice),
                      # alarms.sql, oil_in_out.sql,
@@ -615,9 +832,12 @@ dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, 
   surface, is `internal/api` above). `Client` (client.go) wraps `paho.mqtt.golang`: on connect it
   subscribes to wildcard filters — one `sys/{productKey}/+/thing/event/property/post/+` covering
   every device's query responses, plus one each for `isOline` and `msg` — rather than a per-device
-  subscription, since enumerating ~10,000 devices individually doesn't scale (see "MQTT contract"
+  subscription, avoiding per-device Subscribe calls as the fleet grows (see "MQTT contract"
   corrections above; this wildcard pattern has no equivalent in `BackService.java`, which only ever
-  handles its own single device). `handlers.go` dispatches an arrived property/post message by its
+  handles its own single device). Requires the broker to actually grant wildcard-subscribe
+  permission to one client, which ruled out Aliyun IoT Platform; this package is local-dev/Mosquitto
+  only now, per "Device connectivity platform" below (self-hosted ThingsBoard). `handlers.go`
+  dispatches an arrived property/post message by its
   parsed identifier: `requestOilcan` caches the raw response bytes verbatim under
   `oilcan:latest:{device}` in Redis (the same key `internal/api/oilcan.go` already reads — this is
   what turns that endpoint's permanent 404 into real data); `requestAlarm`/`requestUnloadOil`/
