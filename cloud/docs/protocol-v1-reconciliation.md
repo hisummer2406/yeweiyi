@@ -185,8 +185,34 @@ dump 一条报文时 `"alarmType": 2` 看不出是什么；`"HIGH_HIGH_LEVEL"` �
 
 ## 尚未有任何一方实现的：出入库与交班
 
-**双方都没有 `OilInOut`（出入库）和 `CommitWork`（交班）的上行通道。** 已确认：Android 侧的
-`logic/thingsboard/` 与 `ThingsBoardManager` 中没有任何相关代码，云端 `internal/protocol` 也没有。
+> **更正（2026-09-01）**：本节初稿写的是"双方都没有出入库和交班的上行通道"。**这句话对交班成立，
+> 对出入库不成立**——初次检索只按 `OilInOut`/`CommitWork` 类名在 `logic/thingsboard/` 里搜，
+> 而出入库那条链路用的是别的名字，漏掉了。以下为更正后的内容。
+
+**出入库：设备侧已经在上报，云端没有消费。** 链路是活的：
+
+```
+InOilManager:214  SocketManager.sendUnloadOil(detailInoutRecord.toString())
+  → AIDL IBackService.sendUnloadOil → BackService:72 sendUnloadOils
+  → ThingsBoardManager:167 reportRawEvent("stockEvent", msgInfo)
+  → v1/devices/me/telemetry  {"ts":…,"values":{"stockEvent":"…"}}
+```
+
+记录产生时立即上报，且复用了报警的补投队列（`PendingAlarmStore`），断网会补发——设计上是对的。
+
+**但发出去的内容无法解析**：`detailInoutRecord.toString()` 是 Java 调试字符串而非 JSON：
+
+```
+DetailInoutRecord{oilcanId=1, beginHeith=120.5, endHeight=30.2, beginVolume=…, …}
+```
+
+云端要消费就得为 Java 的 `toString` 写专用解析器，而这个格式没有契约——加个字段或重新生成一次
+`toString`，云端就静默解析失败。**这一条无论纳不纳入范围都建议修**（现在 ThingsBoard 里正在堆积
+无法解析的字符串），改动很小：`reportRawEvent("stockEvent", gson.toJson(...))` 再按协议定字段名。
+顺带一提 `beginHeith`（此类）/ `beginHeigth`（`OilInOut`）/ 旧设计文档里还有第三种写法，正好统一。
+
+**交班：两侧都没有。** `ThingsBoardManager` 类注释写明这组"拉取历史记录"的旧 Alink service
+（含交班）"在这次迁移中没有重新实现为 RPC，功能上是随本次改动一起下线的，不是遗漏"。
 
 旧 Alink 协议里这两个是**轮询式查询**（`requestUnloadOil` / `requestShift`：云端发请求、设备回一页
 记录），V1 没有保留这种形态——V1 是设备主动上报。
@@ -202,7 +228,7 @@ CommitWork:  id, workId, time, endTime, info
 ```
 
 **影响：** 云端 `/api/oil-in-out` 与 `/api/shifts` 目前仍读旧 MQTT 摄取才会写的表，单栈部署下永远
-返回空。这是删除旧 Alink 栈前**最后一个阻塞项**——删掉之后这两个端点能编译、能返回 200，但永远
+返回空。出入库的数据其实已经到了 ThingsBoard，只是形状不可用且云端没接。这是删除旧 Alink 栈前**最后一个阻塞项**——删掉之后这两个端点能编译、能返回 200，但永远
 没有数据，这种"看着正常其实没数据"比编译错误难发现得多。
 
 **需要产品决定，不是技术选型：**
