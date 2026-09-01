@@ -1,15 +1,253 @@
-# CLAUDE.md
+# CLAUDE.md / AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> **`AGENTS.md` is a symlink to this file.** Codex, Claude Code, Cursor and anything else that reads
+> one of those two names gets exactly this content, so there is a single file to maintain and no way
+> for the two to drift apart. Edit `CLAUDE.md`; never replace `AGENTS.md` with a real file.
+> (Git stores it as a symlink, mode `120000`. A Windows checkout without `core.symlinks=true` would
+> materialise it as a 9-byte text file containing the string `CLAUDE.md` — harmless here, since dev
+> is macOS and deployment is Linux, but that is what you are looking at if it ever appears empty.)
+>
+> **How this file is organised, and how to read it:**
+>
+> - **Part 1 — Operating guide (below).** Current state: architecture, commands, layout, invariants,
+>   conventions. Short. **Start here, and trust it over anything further down.**
+> - **Part 2 — Engineering journal (from "What this project is" onward).** ~1,000 lines recording
+>   *why* decisions were made, including several that have since been superseded and are kept marked
+>   rather than deleted. Go there when you need the reasoning or the history behind something — but
+>   read it knowing that older sections describe the architecture **as it was when they were
+>   written**, in the present tense. Where the two parts disagree about present-day fact, Part 1 wins.
 
-## Project status: tech stack decided, no code written yet
+---
 
-This repo is still an empty scaffold — no code exists yet. The tech stack (Go, see "Tech stack"
-below) was decided on 2026-08-20; nothing has been scaffolded against it yet. This file exists to
-capture the *contract* this project must satisfy before implementation starts, so a fresh session
-(or a fresh subagent) doesn't have to re-derive it from scratch or from the sibling repos.
+# Part 1 — Operating guide
+
+## Project status: implementation underway (single-stack migration in progress)
+
+**Superseded note, kept for the record:** this section used to read "this repo is still an empty
+scaffold — no code exists yet", which was true when written on 2026-08-20 and stopped being true
+almost immediately. Corrected 2026-09-01.
+
+There is now a substantial Go codebase, containing **two device-connectivity stacks at once** — see
+the warning immediately below, which is the single most important thing to know before writing code
+here.
+
+## ⚠️ Read this before touching any code
+
+**This repository contains two device-connectivity stacks. Only one of them is the architecture.**
+
+| | Status |
+|---|---|
+| **ThingsBoard CE single stack** — `internal/protocol`, `internal/tbclient`, `internal/devicesim`, `internal/control`, `internal/ingest`, `cmd/tbdevicesim` | ✅ **This is the architecture.** Build here. |
+| **Legacy Alink/Paho stack** — `internal/mqtt`, `cmd/devicesim`, `dev/mosquitto`, the `mosquitto` service in `docker-compose.yml`, `cmd/server`'s MQTT wiring | ❌ **Dead.** Scheduled for deletion by GitHub issue #10. Do not extend, do not imitate, do not "fix". |
+
+The legacy stack is still present and still passing its tests only because `cmd/server` has not been
+migrated yet. It uses Aliyun-style Alink topics (`sys/{productKey}/{deviceName}/thing/...`), a
+`productKey`, wildcard broker subscriptions, and a `requestOilcan` polling loop. **None of that is
+how the system works now.** If you find yourself writing a `productKey`, an Alink topic, an EMQX
+config, or a second MQTT client, stop — you have copied the dead stack.
+
+Explicitly out of scope, per issue #1/#9/#10: **no EMQX, no second MQTT broker, no Alink/Paho
+compatibility layer, no Go-side device credential system, no duplicate time-series storage.**
+
+---
 
 ## What this project is
+
+The cloud backend for 安卓液位仪 (`com.sansen.yeweiyi`) — an oil-tank level monitoring terminal.
+It provides remote monitoring and remote control for a WeChat mini-program and a fixed web console,
+in both a public-cloud deployment and a **fully offline (air-gapped) private deployment** that must
+run from the same code and the same deployment templates.
+
+```text
+Android device
+    ⇄ ThingsBoard native MQTT
+ThingsBoard CE          device access, credentials, telemetry, attributes, alarms, RPC, OTA
+    ⇄ REST / WebSocket
+Go backend (this repo)  business logic, tenancy, control state machine, audit
+    ⇄
+PostgreSQL / Redis + web console
+```
+
+Sibling repositories (do not edit from here; protocol changes require agreement with their owners):
+
+- `~/Developer/zhongchengyeweiyi` — the Android device firmware/app.
+- `~/Developer/yeweiyi-miniapp` — the mini-program frontend.
+
+---
+
+## Quickstart
+
+```bash
+# business stack (Postgres, Redis, + the legacy mosquitto that is on its way out)
+docker compose up -d
+
+# ThingsBoard CE — heavy; first boot installs its schema and takes 2–4 minutes
+docker compose -f docker-compose.thingsboard.yml up -d
+#   console  http://localhost:8081   tenant@thingsboard.org / tenant
+#   device MQTT  tcp://localhost:1884
+
+go build ./... && go vet ./...
+
+migrate -database "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable" \
+        -path db/migrations up
+
+# a simulated device speaking 设备协议 V1
+go run ./cmd/tbdevicesim provision -name tank-farm-01
+go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 15s
+```
+
+### Tests
+
+```bash
+go test ./internal/protocol/   # contract tests; needs NO containers
+go test ./internal/tbclient/   # needs ThingsBoard
+go test ./internal/control/    # needs Postgres
+go test ./internal/ingest/     # needs ThingsBoard + Postgres + Redis
+```
+
+Tests **skip with an explanatory message** when their infrastructure is absent rather than failing.
+If you see a skip, start the container it names — do not assume the test is broken.
+
+> **`go test ./...` is unreliable, and not because of your change.** `internal/api` and
+> `internal/queue` both start river clients against the same Postgres and steal each other's jobs
+> when packages run in parallel, and `internal/mqtt`'s `TestClient_OnlineStatus` is timing-flaky.
+> These reproduce on a clean checkout with no local changes. Use `-p 1`, or test the specific
+> packages you touched. **Do not "fix" your code in response to these two failures.**
+
+---
+
+## Layout
+
+```
+internal/protocol/    设备协议 V1 — the single source of truth for the wire contract
+internal/tbclient/    the ONLY door into ThingsBoard (public REST/WS; never its database)
+internal/devicesim/   device-side reference implementation, driven in-process by tests
+internal/control/     control command state machine, authorization, audit
+internal/ingest/      per-device ThingsBoard telemetry subscription → business layer
+internal/api/         REST/WebSocket surface (still serving the legacy read model)
+internal/store/db/    sqlc OUTPUT — generated, never hand-edit
+db/migrations/        golang-migrate schema; also sqlc's schema input
+db/queries/           sqlc query input
+fixtures/protocol/v1/ cross-repo protocol fixtures, shared with the Android repo
+cmd/tbdevicesim/      simulated device CLI
+docs/                 protocol spec + architecture baseline
+
+internal/mqtt/, cmd/devicesim/, dev/mosquitto/   ← legacy, see the warning above
+```
+
+---
+
+## Invariants you must not break
+
+These encode safety properties, not style preferences. Each is pinned by a test; if a test in this
+list fails, **the change is wrong**, not the test.
+
+1. **Physical commands are disabled by default.** `control.Config.AllowPhysicalCommands` defaults to
+   `false`, gating pump/valve/reboot. The device-side interlocks are unfinished and unverified on
+   real hardware, so "configure nothing" must mean "cannot start a pump". The gate applies to
+   platform admins too — it constrains unverified *hardware*, not trust levels.
+2. **An unacknowledged command is `sent`, never `failed`.** "The device did not answer" is not "the
+   device did not act" — it may have received the command, started the pump, and lost its connection
+   before replying. It stays non-terminal until a result arrives or it expires.
+3. **A device ACK is not success.** The ACK means received-and-accepted. Whether the action happened
+   arrives later as a separate `cmdResult`. Never collapse the two.
+4. **Command status transitions are guarded in SQL**, in `db/queries/control_commands.sql`
+   (`WHERE status IN (...)`), so a late or duplicated message cannot rewrite a terminal row. Do not
+   move these checks into Go.
+5. **Telemetry is never copied into the business database.** It lives in ThingsBoard and is read
+   back on demand. `TestIngest_DoesNotPersistTelemetry` fails if this is violated. Only commands,
+   audit and business records cross the boundary.
+6. **Authorization is checked before existence**, everywhere. An unauthorized caller must get the
+   same answer whether the device belongs to someone else or does not exist, or error codes become a
+   device-name oracle. See `internal/api/devices.go` and `control.Service.authorize`.
+7. **Never touch ThingsBoard's own database.** Public REST/WebSocket APIs only, so their upgrades
+   cannot break us through a schema change.
+8. **CE-only, offline-capable.** No ThingsBoard PE feature, no ThingsBoard Cloud, no online license
+   check, no reliance on outbound internet — the private deployment is fully air-gapped.
+
+---
+
+## Conventions
+
+**Go.** Standard `gofmt`. `gin` for REST, `gorilla/websocket`, `pgx/v5` + `sqlc`, `golang-migrate`,
+`riverqueue/river`, `golang-jwt/jwt` + bcrypt. Prefer the stdlib over a new dependency for something
+small (the UUID generator in `internal/control` is hand-rolled for exactly this reason).
+
+**Comments explain *why*, not *what*.** The existing code comments are dense and deliberately so:
+they record the reasoning and the traps (e.g. why ThingsBoard stringifies telemetry but not
+attributes). Match that density. Do not add comments that restate the code.
+
+**Schema changes** — always this order:
+
+```bash
+# 1. write db/migrations/0000NN_name.{up,down}.sql   (both directions, always)
+# 2. apply, then verify the down→up round trip (repo convention, do not skip)
+migrate -database "$DSN" -path db/migrations up
+migrate -database "$DSN" -path db/migrations down 1
+migrate -database "$DSN" -path db/migrations up
+# 3. write/adjust db/queries/*.sql
+sqlc generate      # regenerates internal/store/db — never hand-edit that directory
+```
+
+New tables and columns get Chinese `COMMENT ON` (see migration `000009`).
+
+**Tests are integration tests against real infrastructure**, not mocks. The one place a fake is used
+(`control.Sender` in `internal/control`) is for branches a healthy ThingsBoard will not produce on
+demand — an outage, an offline device. Where a wire format is involved, tests use **hand-written
+JSON literals or shared fixtures**, never the repo's own marshalled structs, so a wrong field name
+is actually caught instead of the code agreeing with itself.
+
+**Verify against the real thing before writing conclusions.** This project has been burned by
+research-derived assumptions twice: Aliyun IoT Platform's ACL model, and its purchase availability.
+Two ThingsBoard behaviours documented here (telemetry stringification; attributes *not* being
+stringified) were found by running it, and contradicted expectations. If you write "X works", have
+run it.
+
+**Commit messages are in Chinese**, subject line ≤ ~50 chars, body explaining the *why* and calling
+out anything non-obvious or deliberately not done. Look at `git log` for the register. End with:
+
+```
+Claude-Session: <session url>     # or your agent's equivalent; omit if not applicable
+```
+
+Commit only when asked. Work on a feature branch; the default branch is `main`.
+
+**Documentation.** Record substantial work under "Build" further down this file (it is the project's
+long-term memory — additive, keeps superseded decisions marked rather than deleted), and update
+`docs/` when architecture or protocol changes. Keep the guide above current when the layout or the
+invariants change.
+
+---
+
+## Do not assume these are decided
+
+- **设备协议 V1 is a draft, not frozen.** `docs/protocol-v1.md` §12 lists ten open items requiring
+  the Android owner or product. Most consequential: the **units** (mm/L/kg/°C) are
+  industry-convention guesses never checked against the device's real register scaling, and
+  `config.setTank`/`config.setProbe` argument shapes are undefined on purpose because the device has
+  no handler for them yet. **Do not freeze the protocol or start device-side migration** without
+  that sign-off.
+- **Multi-tenancy is not built.** There are no customer entities and no tenant-scoped query
+  isolation. `users.role` (`platform_admin`/`customer_admin`/`customer_user`) plus the existing
+  `user_devices` binding is the entire authorization model today.
+- **`cmd/server` still runs the legacy stack** and starts neither `internal/ingest` nor
+  `internal/control`.
+- **No REST endpoints expose control commands or audit yet.**
+- **Not verified:** MQTT over TLS (dev uses plaintext 1884), OTA delivery, ThingsBoard-side tenant
+  isolation, and any load/capacity testing. The device-side OTA client does not exist at all.
+- The **write-back queue** (`internal/queue`, river) belongs to the legacy design. The single-stack
+  replacement is `internal/control`; do not build new features on the old queue.
+
+---
+
+---
+
+# Part 2 — Engineering journal
+
+*Everything below is history and reasoning. Older sections describe superseded architectures in the
+present tense; Part 1 above is authoritative for present-day fact.*
+
+## What this project is (original 2026-08-20 framing)
 
 The cloud backend (only) for **需求B（PC 端 / 小程序远程数据监控）** of 安卓液位仪 (Android Liquid
 Level Meter, package `com.sansen.yeweiyi`) — an oil-tank monitoring device that runs on dedicated

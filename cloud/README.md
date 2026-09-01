@@ -17,7 +17,9 @@ PostgreSQL / Redis + 固定监控 Web
 
 **不引入 EMQX，不建设双 MQTT 栈，不保留 Alink / Paho 业务兼容通道。**
 
-> 产品背景、数据模型来源、已知缺口和待决产品问题见 [`CLAUDE.md`](./CLAUDE.md)。
+> **开发者与 AI 智能体请先读 [`CLAUDE.md`](./CLAUDE.md)**（`AGENTS.md` 是指向它的符号链接，
+> Codex / Claude Code / Cursor 读到的是同一份）。第一部分是当前状态的操作指南——架构、命令、
+> 目录、不可破坏的约束、代码约定；第二部分是工程日志，记录决策的来龙去脉（含已被推翻的决策）。
 > 架构基线与职责边界见 [`docs/thingsboard-ce-baseline.md`](./docs/thingsboard-ce-baseline.md)。
 > 设备协议见 [`docs/protocol-v1.md`](./docs/protocol-v1.md)。
 
