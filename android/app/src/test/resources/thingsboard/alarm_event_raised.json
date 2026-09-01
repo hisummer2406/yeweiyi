@@ -1,0 +1,15 @@
+{
+  "_comment": "AlarmEventBuilderTest 参照 fixture：高高液位报警产生事件，立即上报，不等 30 秒周期。",
+  "ts": 1735689600000,
+  "values": {
+    "alarmEvent": {
+      "protocolVersion": "tb-v1",
+      "eventId": "2-1",
+      "state": "raised",
+      "alarmType": 2,
+      "oilCanId": 1,
+      "value": 9800.0,
+      "deviceTime": 1735689600000
+    }
+  }
+}
