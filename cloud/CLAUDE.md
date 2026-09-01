@@ -1244,6 +1244,40 @@ compromise: keep it derived, append the occurrence's start timestamp.
 last blocker on deleting the legacy stack here, and it is a product decision (is it in scope for
 launch?) rather than a technical one.
 
+**2026-09-01 telemetry-shape experiment** — settled the one open structural question in the
+cross-repo protocol dispute by measurement instead of argument, and corrected a claim this file and
+zhongchengyeweiyi#39 had both stated too weakly.
+
+The question: can ThingsBoard aggregate or chart a field *inside* a nested JSON telemetry value, the
+way it can for a flat numeric key? The cloud protocol bets on flat `tank1.oilLevelMm` keys; the
+Android side bets on a nested `tanks` array. Nobody had actually tried it.
+
+**Method** (worth reusing — the trick is publishing both shapes from one device so the comparison
+cannot be confounded by device or transport differences): one throwaway device, ten points a minute
+apart, each payload carrying `"tank1.oilLevelMm": <v>` *and*
+`"tanks": [{"id":1,"oilLevel":<v>,...}]` with the same `<v>` ramping 1500→1590, so AVG/MIN/MAX are
+1545/1500/1590 by hand. Published over ThingsBoard's HTTP device API
+(`POST /api/v1/{accessToken}/telemetry` — simpler than MQTT for a one-off), then queried
+`values/timeseries?...&interval=...&agg=...`.
+
+**Result**: flat key returns AVG 1545.0, MIN 1500.0, MAX 1590.0, and 5-minute downsampling buckets
+of 1500/1530/1575 — all correct. The nested key returns **`AVG = "0.0"`**, `SUM = "0"`, empty for
+MIN/MAX, `0.0` in every downsampling bucket — but `COUNT = "10"`, correctly. Inner fields cannot be
+addressed at all: `tanks.oilLevel`, `tanks[0].oilLevel` and `oilLevel` all return `{}`, and
+`keys/timeseries` reports the device as having exactly two keys.
+
+**The correction**: both this file's earlier framing and the issue said ThingsBoard "cannot
+aggregate" a nested field. It does not refuse — **it silently returns zero**. That is a materially
+worse failure mode and the real argument: an error gets noticed, whereas a flat line at zero looks
+like a working device reading empty. Combined with issue #1's "delete raw detail after 7 days, keep
+minute- and hour-level rollups", the rollups would be all zeros *after* the raw data was already
+TTL'd away — permanent silent data loss. `COUNT` being correct while `AVG` is wrong is the nastiest
+part: the dashboard shows data present, row count right, value zero.
+
+So the structure question is no longer a trade-off to negotiate. Recorded with reproduction steps in
+`docs/protocol-v1-reconciliation.md` §A and summarised in `docs/protocol-v1.md` §3; the throwaway
+device was deleted afterwards.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
