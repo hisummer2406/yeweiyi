@@ -213,12 +213,35 @@ individual "~10,000" mentions elsewhere are left in place with pointers back to 
 than rewritten one by one, so this stays the single place a future session needs to check for the
 real number.
 
-## Device connectivity platform (corrected 2026-08-29, three times — current decision at the top)
+## Device connectivity platform (corrected repeatedly — current decision at the top)
 
-**Current decision, 2026-08-29: self-hosted ThingsBoard (open source), not any Aliyun MQTT product,
-not a bare broker.** This supersedes everything below it in this section — kept for the trail of
-*why*, since this flipped twice in one day before landing here. Read "What's not yet decided" at the
-end before assuming this is fully designed; it isn't yet, only the platform choice is settled.
+**CURRENT DECISION, 2026-09-01 (final, and it overrides every other statement in this file):
+ThingsBoard CE single stack. Devices connect ONLY to ThingsBoard CE. There is no EMQX, no second
+MQTT stack, and no Alink/Paho compatibility channel.** This came from GitHub issues #1/#9/#7, which
+scoped the project as a greenfield build with no legacy cloud protocol to stay compatible with —
+so the "keep `internal/mqtt`'s Alink topics and just point them at a different broker" reasoning
+below no longer applies. The Android side's MQTT protocol is explicitly allowed to change, and 设备协议 V1
+(`docs/protocol-v1.md`) is that change.
+
+This **supersedes the 2026-09-01 EMQX decision** recorded further down in this section. The EMQX
+wildcard-ACL experiment described there was real and its findings are accurate, but the split it was
+designed to serve — "ThingsBoard for identity/OTA, a separate broker for business MQTT" — is no
+longer the architecture. Nothing was ever provisioned or written against EMQX, so there is nothing
+to migrate away from; the cost of that reversal was one throwaway container.
+
+What this pass actually built and verified (2026-09-01, branch `feat/thingsboard-single-stack`) is
+recorded in the "2026-09-01 ThingsBoard CE single-stack pass" entry under "Build" below, with the
+architecture baseline in `docs/thingsboard-ce-baseline.md` and the wire contract in
+`docs/protocol-v1.md`. **Read those two documents rather than re-deriving anything from the
+historical trail below**, which is kept only to explain why the decision moved four times.
+
+---
+
+*Historical trail from here down.*
+
+**Third correction, 2026-08-29: self-hosted ThingsBoard (open source), not any Aliyun MQTT product,
+not a bare broker.** This superseded everything below it in this section — kept for the trail of
+*why*, since this flipped twice in one day before landing here.
 
 **Why not Aliyun IoT Platform at all**: it stopped accepting new purchases/new instance creation
 **2025-02-01** (confirmed via multiple independent sources — landian.news, v2ex.com/t/1100655 — and
@@ -265,9 +288,11 @@ work this project depends on" below.
 
 **What's not yet decided** (don't assume any of this is settled just because the platform is):
 
-- ~~**How `internal/mqtt`/`internal/api` relate to ThingsBoard.**~~ — **decided 2026-09-01: ThingsBoard
+- ~~**How `internal/mqtt`/`internal/api` relate to ThingsBoard.**~~ — decided 2026-09-01: ThingsBoard
   is scoped to device identity (provisioning/one-device-one-secret) and OTA only; it does not carry
-  business MQTT traffic.** `internal/mqtt`/`internal/api` are unaffected — they keep talking to a
+  business MQTT traffic. **REVERSED later the same day — see the CURRENT DECISION at the top of this
+  section. ThingsBoard now carries everything and EMQX is not used at all. The paragraph below is
+  historical; its EMQX ACL findings are accurate but no longer relevant to this project.** `internal/mqtt`/`internal/api` are unaffected — they keep talking to a
   separate, independent MQTT broker over the existing Alink-style `sys/{productKey}/{deviceName}/
   thing/...` topics, same as today, just pointed at that broker instead of the originally-assumed
   Aliyun IoT Platform. **The independent broker is self-hosted EMQX**, chosen 2026-09-01 over the two
@@ -470,17 +495,16 @@ Decided 2026-08-20: **Go**.
   unlike the type/error-handling mistakes Go's compiler does catch, so it's worth avoiding
   deliberately). `gorilla/websocket` over `nhooyr.io/websocket`/`coder/websocket` for the same
   training-data-coverage reason, despite the latter having a more modern API.
-- **Device connectivity platform**: originally planned as 阿里云物联网平台 (IoT Platform) using
-  `eclipse/paho.mqtt.golang` directly. **Corrected 2026-08-29, three times — see "Device
-  connectivity platform" below for the full story, current decision at its top.** Short version:
-  IoT Platform turned out to have stopped accepting new purchases since 2025-02-01 (can't be used
-  for this project at all, regardless of its ACL model, which was also a problem); a same-day
-  detour through 云消息队列 MQTT 版 (bare MQTT middleware) got dropped once console/OTA/per-device
-  credential requirements turned out to be real needs, not nice-to-haves. **Current decision:
-  self-hosted ThingsBoard** (open source device-management platform — console, OTA delivery, device
-  credentialing, and its own built-in MQTT transport, so no separate broker product is needed).
-  `internal/mqtt`'s existing paho-based design is not confirmed to carry over unchanged — ThingsBoard
-  has its own topic/API conventions, see "Device connectivity platform" below for what's still open.
+- **Device connectivity platform**: **self-hosted ThingsBoard CE 4.2.1.1 (Apache 2.0), single stack,
+  decided 2026-09-01 — devices connect to nothing else.** Pinned in
+  `docker-compose.thingsboard.yml`; baseline and licence record in
+  `docs/thingsboard-ce-baseline.md`. Go reaches it only through its public REST/WebSocket APIs
+  (`internal/tbclient`), never its database. The wire contract is 设备协议 V1
+  (`docs/protocol-v1.md`, implemented in `internal/protocol`), which uses ThingsBoard's native
+  `v1/devices/me/...` topics — **not** the legacy Alink `sys/{productKey}/...` shape.
+  See "Device connectivity platform" below for why this moved four times (Aliyun IoT Platform →
+  云消息队列 MQTT 版 → ThingsBoard+EMQX split → ThingsBoard only); everything in that section below
+  its CURRENT DECISION header is historical.
 - **Database**: PostgreSQL. `sqlc` for the query layer — decided 2026-08-20 over `gorm`. sqlc's
   errors surface at `sqlc generate`/build time (SQL referencing a dropped column, type mismatches),
   the same compile-time-safety argument that decided Go over Python; GORM's reflection-based query
@@ -725,6 +749,67 @@ cover**: the actual QR code generation/display on the device side, and the mini-
 UI — both are `yeweiyi-miniapp`/Android-repo concerns, this pass is only the cloud API the pairing
 step calls once a QR has been scanned and decoded into a `deviceName` string client-side.
 
+**2026-09-01 ThingsBoard CE single-stack pass** (branch `feat/thingsboard-single-stack`, GitHub
+issues #9 and #7) — the first code written against the architecture at the top of "Device
+connectivity platform" above. Four new packages (`internal/protocol`, `internal/tbclient`,
+`internal/devicesim`, `cmd/tbdevicesim`), two docs, and a pinned
+`docker-compose.thingsboard.yml` (`thingsboard/tb-postgres:4.2.1.1`, Apache 2.0). **Nothing in the
+old stack was touched** — `internal/mqtt`, `cmd/devicesim`, `cmd/server` and the mosquitto service
+are all untouched and still work; #9's deliverable for them is a *removal list*
+(`docs/thingsboard-ce-baseline.md` §6), and the deletion itself belongs to #10.
+
+Verified against a real ThingsBoard CE container, not from documentation — `go test
+./internal/tbclient/`, 11 tests, all passing. The two loops #9 is accepted on both close:
+telemetry → ThingsBoard → Go read-back, and Go RPC → device ACK → asynchronous final result.
+Alarm raise propagated device→ThingsBoard→backend in **29 ms** and recovery in **66 ms**, with the
+simulated device's snapshot interval deliberately set to 10 minutes so an alarm riding the snapshot
+timer could not possibly have passed. Also covered: client attributes up, shared attributes down,
+interlock rejection, accepted-then-failed-in-the-field, duplicate-commandId replay with no second
+physical action, expired-command rejection, and the offline-device vs platform-down distinction.
+
+**Air-gap verification was done properly and the obvious shortcut is wrong**: disconnecting the
+container from its bridge network also kills Docker's published ports, so a host-side `curl` then
+measures "unreachable", not "works offline". What was actually done: put ThingsBoard on a
+`--internal` Docker network, prove with a sidecar container on that same network that it has no
+egress, cross-compile the e2e tests to a static Linux binary, and run them from *inside* that
+network — so both ThingsBoard and the test client are offline. All 11 passed. The throwaway network
+and every test device were torn down afterwards; only ThingsBoard's own stock demo devices remain.
+
+**Two ThingsBoard API behaviours found by testing, both of which would have caused real bugs:**
+1. **Telemetry values are stringified on read-back.** A value published as the number `1842.5`
+   comes back from both the REST timeseries API and the WebSocket as the *string* `"1842.5"`;
+   `true` comes back as `"true"`; a JSON object comes back as a JSON string. A parser written only
+   against the device-side shape parses off MQTT and fails off REST.
+   `internal/protocol/convert.go` accepts both, and `fixtures/protocol/v1/telemetry_snapshot_rest.json`
+   pins it as a fixture of its own.
+2. **Attribute values are NOT stringified** — they keep their JSON types. The same platform's two
+   APIs disagree, which is exactly the sort of thing that is cheap to pin now and expensive to
+   discover later.
+
+One real bug the tests caught in code written this same pass: `tbclient.Unavailable` classified
+`ErrDeviceOffline` as a ThingsBoard outage, because that sentinel is not a `*tbclient.Error` and
+fell through to the catch-all. Reporting "the device is offline" as "the platform is down" would
+drive false operational alarms; fixed, and pinned by
+`TestControl_OfflineDeviceIsReportedDistinctly`.
+
+**Protocol V1 is a draft, deliberately NOT frozen.** #7's acceptance requires the Android owner to
+co-sign it, and `docs/protocol-v1.md` §12 lists the ten specific things still needing a decision
+rather than leaving TBDs scattered through the spec. The most consequential: the units
+(mm/L/kg/°C/percent) are industry-convention guesses that have **not** been checked against the
+device's actual register scaling, and `config.setTank`/`config.setProbe` argument shapes are
+undefined on purpose because the device side still has no handler for them — typing them now would
+bake in a guess. Neither #9 nor #7 was closed.
+
+Design decisions worth knowing before changing any of this: telemetry uses flat per-tank scalar keys
+(`tank1.oilLevelMm`) rather than one nested JSON blob, so ThingsBoard's own aggregation/TTL/trend
+widgets work on it directly; **units are in the key names** so "a number with an undefined unit" is
+structurally impossible (#7 acceptance); instant events are single JSON-object-valued keys (`alarm`,
+`cmdResult`) rather than flat keys, because a discrete record must not be readable half-written;
+the device's `ts` is epoch millis UTC, dropping the legacy `"yyyy-MM-dd HH:mm"` string that had no
+seconds and no timezone and forced the Asia/Shanghai guess documented above; and `alarmId` is minted
+by the device and reused across ACTIVE/CLEARED so overlapping occurrences of the same alarm type on
+the same tank can still be paired.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
@@ -756,8 +841,35 @@ channels or a smarter fan-out if connection count gets large.
 Module layout (current, not just planned):
 
 ```
+# --- ThingsBoard CE single stack (2026-09-01, the current architecture) ---
+internal/protocol/   # 设备协议 V1, the single source of truth for the wire contract: telemetry.go
+                     # (30s flat-key tank snapshot), events.go (instant alarm + cmdResult),
+                     # rpc.go (command envelope, method registry, state machine constants,
+                     # error codes), attributes.go (client/shared/OTA attribute keys),
+                     # convert.go (accepts both the device-side JSON shape and ThingsBoard's
+                     # stringified read-back shape — see the trap note below),
+                     # contract_test.go (two-way fixture tests, no containers needed)
+internal/tbclient/   # the ONLY door into ThingsBoard: client.go (auth, 401 re-login, error
+                     # classification incl. Unavailable()), devices.go (provisioning +
+                     # credentials), telemetry.go (REST timeseries/attributes), rpc.go
+                     # (two-way RPC → Ack), ws.go (live telemetry subscription over /api/ws),
+                     # e2e_test.go (11 real-ThingsBoard acceptance tests; skip if not running).
+                     # Public REST/WS APIs only — never ThingsBoard's own database.
+internal/devicesim/  # device-side reference implementation of protocol V1, driven in-process by
+                     # the e2e tests. Pluggable Policy lets a test exercise interlock rejection,
+                     # accepted-then-failed, and duplicate-command replay.
+cmd/tbdevicesim/     # CLI wrapper: `provision -name X` registers a device and prints its token,
+                     # `run -token ...` runs a simulated device. Replaces cmd/devicesim.
+fixtures/protocol/v1/ # cross-repo protocol fixtures; the Android side is expected to test against
+                     # these same files so a rename breaks both builds, not a real device
+docs/protocol-v1.md            # the protocol spec (draft, not yet frozen — see its §12)
+docs/thingsboard-ce-baseline.md # version/licence baseline, responsibility table, data boundary,
+                     # adapter list, and the old-stack removal list for issue #10
+
+# --- legacy Alink/Paho stack, to be deleted by issue #10 ---
 cmd/server/main.go   # entrypoint: wires gin + pgxpool + redis client + river queue client +
-                     # (optional, if MQTT_BROKER_URL set) mqtt client + poller
+                     # (optional, if MQTT_BROKER_URL set) mqtt client + poller.
+                     # Still wired to the OLD stack — not yet migrated to internal/tbclient.
 cmd/devicesim/main.go # dev-only tool (2026-08-29): simulates a device against the local Mosquitto,
                      # publishing hand-written JSON (real device field names, not this repo's own
                      # marshaled structs — same rationale as internal/mqtt's deviceSim test helper)
