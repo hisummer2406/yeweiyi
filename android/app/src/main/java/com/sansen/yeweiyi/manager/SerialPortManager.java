@@ -173,7 +173,11 @@ public class SerialPortManager implements IParseDataListener {
     class RequestThread extends Thread {
         private SerialPortHelper serialPort;
         private String name;
-        int isWenDu = 0;
+        // 42（ChangDu/传感器长度）请求节流计数器，跟温度请求（见 wenDuTurnPos）无关（原名 isWenDu）。
+        int changDuThrottle = 0;
+        // 温度轮询指针，存罐位号（SparseArray key）。替代原先共享计数器巧合命中
+        // 的机制（issue #28）。初值 -1，保证首次使用时自动定位到第一个真实罐位。
+        private int wenDuTurnPos = -1;
         private boolean isGetChangDu=true;
         //IoBufferManager buffManager;
 
@@ -202,38 +206,52 @@ public class SerialPortManager implements IParseDataListener {
                         if (isStopProbe) {
                             mOilCanData = mOilCanDataManager.getData();// 保证每一次获取的数据为最新
                             // 由这里把新的信息分发到各个页面
-                            for (j = 1; j <= mOilCanData.size(); j++) {
+                            // 按 SparseArray 实际条目遍历（valueAt），不假设罐位号连续编号——
+                            // 罐没配置罐高时不在数组里，编号会有空洞，旧写法一撞到空洞就 break，
+                            // 之后所有罐都轮询不到（代码审查发现，比 issue #28 本身更严重）。
+                            for (j = 0; j < mOilCanData.size(); j++) {
                                 if (mOilCanData != null) {
                                     try {
-                                        if (mOilCanData.get(j) != null) {
-                                            mOilCan = mOilCanData.get(j);
-                                        } else {
-                                            break;
+                                        mOilCan = mOilCanData.valueAt(j);
+                                        if (mOilCan == null) {
+                                            continue;
                                         }
                                     } catch (Exception e) {
                                         break;
                                     }
                                 }
                                 if (isStopProbe) {
+                                    // 谁轮到就在这个罐的 i==0 问温度。size 只取一次避免取模除零
+                                    // （UI线程的refresh()可能并发清空数组）；用 key 而不是数值算术
+                                    // 推进，罐位号有洞时也不会永久卡死——indexOfKey 找不到就自动
+                                    // 重新定位到第一个真实罐位（代码审查发现）。
+                                    boolean isMyWenDuTurn = false;
+                                    int oilCanCount = mOilCanData.size();
+                                    if (oilCanCount > 0) {
+                                        int wenDuTurnIndex = mOilCanData.indexOfKey(wenDuTurnPos);
+                                        if (wenDuTurnIndex < 0) {
+                                            wenDuTurnPos = mOilCanData.keyAt(0);
+                                            wenDuTurnIndex = 0;
+                                        }
+                                        isMyWenDuTurn = (mOilCan.getOilCanPos() == wenDuTurnPos);
+                                        if (isMyWenDuTurn) {
+                                            wenDuTurnPos = mOilCanData.keyAt((wenDuTurnIndex + 1) % oilCanCount);
+                                        }
+                                    }
                                     for (int i = 0; i < 5; i++) { //0x01,0x06,0x00,0x01,0x00,0x02修改波特率
                                         switch (mOilCan.getProbeType()) {
                                             case 0:
                                                 Log.e("TAG探针地址",i+"===");
-                                                if (isWenDu == 0) {
-
-                                                    isWenDu++;
+                                                if (i == 0 && isMyWenDuTurn) {
                                                     oilCanData = ZhongChengCompany.getInstance().sendWenDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-
+                                                } else if (changDuThrottle % 10 == 1) {
+                                                    oilCanData = ZhongChengCompany.getInstance().sendChangDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
                                                 } else {
-                                                    isWenDu++;
-                                                    if (isWenDu % 10 == 1) {
-                                                        oilCanData = ZhongChengCompany.getInstance().sendChangDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-                                                    } else
-                                                        oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-
-
-                                                    if (isWenDu > 100)
-                                                        isWenDu = 0;
+                                                    oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAdr(), mContext);
+                                                }
+                                                changDuThrottle++;
+                                                if (changDuThrottle > 100) {
+                                                    changDuThrottle = 0;
                                                 }
                                                 if (isGetChangDu) {
                                                     isGetChangDu = false;
@@ -331,7 +349,14 @@ public class SerialPortManager implements IParseDataListener {
                                                 if (MyApplication.alarmStates.containsKey(mOilCan.getOilCanPos()) && MyApplication.alarmStates.get(mOilCan.getOilCanPos()).getConnectError() == 1) {
                                                     MyApplication.alarmStates.get(mOilCan.getOilCanPos()).setConnectError(0);
                                                 }
-                                                break;
+                                                // i==0 问的是温度，这次成功不代表油位/长度也问到了，不能
+                                                // 直接break结束这一轮；也不用continue——同一根探针刚发完
+                                                // 45温度应答，若零间隔紧接着收到下一条44请求，RS-485总线
+                                                // 来不及做收发切换，这条新请求很可能被探针错过（issue #28），
+                                                // 所以要让下面的 crcError()+sleep(50) 照常跑出这段间隔。
+                                                if (!(mOilCan.getProbeType() == 0 && i == 0 && isMyWenDuTurn)) {
+                                                    break;
+                                                }
                                             } else {
 //                                        Log.i(TAG, "第几次:" + i + " run: 串口接收数据" + data);
                                                 mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);

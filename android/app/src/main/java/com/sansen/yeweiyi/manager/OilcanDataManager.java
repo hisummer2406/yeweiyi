@@ -28,10 +28,13 @@ public class OilcanDataManager {
     private Context mContext;
     private MyApplication mApplication;
 
-    // 每个探针（油罐）的配置信息
-    private SparseArray<OilCan> mOilCanData;// 真实的数据
+    // 每个探针（油罐）的配置信息。volatile + refresh()整体建新数组再切换引用（而不是
+    // 在原数组上clear()+重填），保证探针轮询线程（SerialPortManager.RequestThread）
+    // 任何时候读到的要么是刷新前的完整旧数据、要么是刷新后的完整新数据，不会读到
+    // clear()之后、重填之前那个瞬间清空的中间状态（issue #28 代码审查发现）。
+    private volatile SparseArray<OilCan> mOilCanData;// 真实的数据
 
-    private SparseArray<OilCan> testOilCanData;// 假的数据
+    private volatile SparseArray<OilCan> testOilCanData;// 假的数据
 
     private List<OilExploration> oilExplor; //油气探测报警值
 
@@ -95,11 +98,14 @@ public class OilcanDataManager {
 
     public void refresh() {
         Log.i("数据", "刷新");
-        mOilCanData.clear();
-        testOilCanData.clear();
-
-        setProbeData(mOilCanData, "nomar");
-        setProbeData(testOilCanData, "test");
+        // 建两份新数组填完整再整体替换字段，不在旧数组上 clear()+重填——后者会让
+        // 其它线程在重填过程中读到一个瞬间清空的数组（见字段声明处的说明）。
+        SparseArray<OilCan> newOilCanData = new SparseArray<>();
+        SparseArray<OilCan> newTestOilCanData = new SparseArray<>();
+        setProbeData(newOilCanData, "nomar");
+        setProbeData(newTestOilCanData, "test");
+        mOilCanData = newOilCanData;
+        testOilCanData = newTestOilCanData;
     }
 
     /**
