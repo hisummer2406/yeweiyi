@@ -234,7 +234,15 @@ invariants change.
 
 ## Do not assume these are decided
 
-- **设备协议 V1 is a draft, not frozen.** `docs/protocol-v1.md` §12 lists ten open items requiring
+- **设备协议 V1 is a draft, not frozen — and the Android side independently implemented an
+  INCOMPATIBLE version of it on the same day.** Both repos built "ThingsBoard single-stack protocol
+  V1" in parallel, each noting the other's fixtures did not exist yet. As things stand a device's
+  telemetry does not parse on the cloud side at all: flat `tank1.oilLevelMm` keys here versus a
+  nested `tanks` array there, `alarm` versus `alarmEvent`, and a dozen renamed fields.
+  **Read `docs/protocol-v1-reconciliation.md` before touching anything protocol-shaped**, and do not
+  add new fields to either side until the structure question is settled — renaming is cheap now and
+  gets expensive fast. The topics, the RPC envelope and the safety model did converge independently.
+- `docs/protocol-v1.md` §12 lists ten further open items requiring
   the Android owner or product. Most consequential: the **units** (mm/L/kg/°C) are
   industry-convention guesses never checked against the device's real register scaling, and
   `config.setTank`/`config.setProbe` argument shapes are undefined on purpose because the device has
@@ -1195,6 +1203,46 @@ Alarm tests that need real data moved to `internal/api/alarms_test.go`, which pr
 publishes a real alarm through `internal/devicesim` — a seeded database row would now prove nothing,
 since nothing reads that table. The test also asserts that serving alarms writes *nothing* to the
 business `alarms` table.
+
+**2026-09-01 cross-repo protocol reconciliation** (`docs/protocol-v1-reconciliation.md`) — no code,
+but the most consequential finding of the day. While drafting an issue about the missing
+出入库/交班 uplink, discovered the Android repo had **already migrated to ThingsBoard the same day**
+(`d9796b0`, `3175a52`, `272d433`, `94fed27` — Alink deleted on their side too) with **its own,
+incompatible protocol V1**.
+
+Both sides' fixtures carry a comment saying the other side's fixtures did not exist yet, so each
+defined its own and proceeded. #7's acceptance condition — "协议冻结后再开始生产代码迁移" — was not
+honoured by either repo. **As it stands a device's telemetry does not parse on the cloud side at
+all.**
+
+What actually converged, independently and without coordination: the MQTT topics, the RPC envelope
+nesting inside `params`, `commandId`/`operator`/`reason`/`args` field names, the six-state command
+machine, idempotency-by-commandId, the expiry rule, and — notably — **high-risk physical actions
+disabled by default** (their `FEATURE_DISABLED` + issue #34, our `AllowPhysicalCommands`). The
+safety model was arrived at twice.
+
+What diverged: the telemetry *structure* (our flat `tank1.oilLevelMm` keys vs their nested `tanks`
+array), unit encoding (in key names vs a separate `units` object), alarm key/field names
+(`alarm`/`alarmId`/`status`/`type`-as-string vs `alarmEvent`/`eventId`/`state`/`alarmType`-as-int),
+and three RPC envelope field names. The units *themselves* (mm/L/kg/°C/percent) agree — which is
+the part that would have been genuinely expensive to get wrong.
+
+The document argues flat keys on functional grounds (ThingsBoard's aggregation, TTL and trend
+widgets work per numeric key; a nested JSON array is one opaque key, which would break the
+history-trend and 7-day-downsampling requirements in issue #1) while flagging honestly that this
+rests on an untested assumption about charting nested JSON, and that it is the one point worth an
+experiment if contested.
+
+It also records a real trade-off in their `eventId`: derived from (alarmType, tank) so it is
+deterministic and needs no device-side state — their comment says so explicitly, and that is a
+genuine benefit on an embedded target — but consequently not unique across two occurrences of the
+same alarm on the same tank, which breaks ACTIVE/CLEARED pairing after an offline backfill. Suggested
+compromise: keep it derived, append the occurrence's start timestamp.
+
+**Confirmed by reading their source, not assumed: neither side has any 出入库/交班 uplink.** The old
+`requestUnloadOil`/`requestShift` were polled queries that V1 dropped on both sides. That remains the
+last blocker on deleting the legacy stack here, and it is a product decision (is it in scope for
+launch?) rather than a technical one.
 
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
