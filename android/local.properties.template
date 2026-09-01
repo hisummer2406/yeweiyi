@@ -30,14 +30,6 @@ sansen.requestEncryptKey=
 # 服务端基址，例如 http://<host>:<port>
 sansen.baseUrl=
 
-# MQTT broker 连接用户名（BackService.initMqttClient）
-# 曾经硬编码为 admin/password 并提交进 git 历史，那组凭据必须视为已泄露：
-# 填这里之前，先在 broker 侧把旧的那组改掉。
-sansen.mqttUsername=
-
-# MQTT broker 连接密码
-sansen.mqttPassword=
-
 # --- 正式包签名（本地一次性配置，找项目负责人索取；见 tools/generate-release-keystore.sh）---
 # keystore 文件本体固定放在 app/keystore/release.jks，不进版本库，这里只填密码/别名。
 # 三项缺一，release 构建产物就不会签名，无法安装到设备。
@@ -59,3 +51,8 @@ sansen.releaseKeyPassword=
 #
 # 仅在需要去现场采集数据时开启。日常构建与出厂固件保持关闭 —— 它会持续写盘。
 sansen.probeRecording=
+
+# ThingsBoard MQTT 是否走 TLS（ssl://）。生产部署建议开启；本地/开发联调可以留空(false)。
+# 每台设备连接用的是运行期配网写入的 access token（每台独立），不是这里的字段，
+# 这里只控制传输层是否加密校验。
+sansen.thingsboardUseTls=

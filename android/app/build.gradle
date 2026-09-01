@@ -58,10 +58,12 @@ android {
         buildConfigField "String", "PRODUCT_SECRET", secretField('sansen.productSecret')
         buildConfigField "String", "REQUEST_ENCRYPT_KEY", secretField('sansen.requestEncryptKey')
         buildConfigField "String", "BASE_URL", secretField('sansen.baseUrl')
-        buildConfigField "String", "MQTT_USERNAME", secretField('sansen.mqttUsername')
-        buildConfigField "String", "MQTT_PASSWORD", secretField('sansen.mqttPassword')
         // 探头报文录制开关，默认关闭。见 manager/ProbeTrafficRecorder。
         buildConfigField "boolean", "PROBE_RECORDING", flagField('sansen.probeRecording')
+        // ThingsBoard MQTT 是否走 TLS，默认关闭（明文，方便本地/开发环境联调）。
+        // 生产部署应开启；每台设备的连接凭据是运行期配网写入的 access token，
+        // 不走这条构建期通道——见 manager/ThingsBoardCredentialStore。
+        buildConfigField "boolean", "THINGSBOARD_USE_TLS", flagField('sansen.thingsboardUseTls')
         externalNativeBuild {
             cmake {
                 cppFlags "-frtti -fexceptions"

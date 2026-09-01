@@ -11,6 +11,7 @@ import com.sansen.yeweiyi.manager.AlarmManager;
 import com.sansen.yeweiyi.manager.AlarmManager.MessageListener;
 import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SoundLightManager;
+import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -69,10 +70,14 @@ public class AlarmCoordinator {
                 } else if (main.myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
                     time = System.currentTimeMillis();
                     barMainAlram.setText(state.toString());
-                    SocketManager.getInstance(main).sendAlarm(state.toString());
+                    // sendAlarm 传结构化 OilMessage JSON（不是展示用的本地化字符串），
+                    // 见 BackService.sendAlarms 和 ThingsBoardManager.reportAlarmEvent。
+                    SocketManager.getInstance(main).sendAlarm(GsonUtil.toJsonStr(state));
 
                 } else {
-                    SocketManager.getInstance(main).sendAlarm(state.toString());
+                    // sendAlarm 传结构化 OilMessage JSON（不是展示用的本地化字符串），
+                    // 见 BackService.sendAlarms 和 ThingsBoardManager.reportAlarmEvent。
+                    SocketManager.getInstance(main).sendAlarm(GsonUtil.toJsonStr(state));
                     barMainAlram.setText(state.toString());
                 }
             }
