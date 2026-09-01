@@ -1,0 +1,411 @@
+package ingest_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+
+	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/devicesim"
+	"yeweiyi-cloud/internal/ingest"
+	"yeweiyi-cloud/internal/protocol"
+	"yeweiyi-cloud/internal/store/db"
+	"yeweiyi-cloud/internal/tbclient"
+)
+
+// This is the whole stack at once: a real simulated device on a real ThingsBoard, a real
+// PostgreSQL-backed control state machine, and the real ingester wiring the two together. It is
+// what GitHub issue #10's "一台模拟设备完成端到端读取和 RPC/ACK 闭环" means in practice.
+//
+// Requires both stacks:
+//
+//	docker compose up -d
+//	docker compose -f docker-compose.thingsboard.yml up -d
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+type stack struct {
+	pool    *pgxpool.Pool
+	rdb     *redis.Client
+	q       *db.Queries
+	tb      *tbclient.Client
+	ctl     *control.Service
+	ing     *ingest.Ingester
+	device  string
+	tbDevID string
+	sim     *devicesim.Device
+	actor   control.Actor
+}
+
+func newStack(t *testing.T, cfg control.Config) *stack {
+	t.Helper()
+	ctx := context.Background()
+
+	// --- ThingsBoard ---
+	if conn, err := net.DialTimeout("tcp", "localhost:8081", 2*time.Second); err != nil {
+		t.Skipf("ThingsBoard not reachable (%v); start it with: docker compose -f docker-compose.thingsboard.yml up -d", err)
+	} else {
+		conn.Close()
+	}
+	tb, err := tbclient.New(tbclient.Config{
+		BaseURL:  envOr("TB_BASE_URL", "http://localhost:8081"),
+		Username: envOr("TB_USERNAME", "tenant@thingsboard.org"),
+		Password: envOr("TB_PASSWORD", "tenant"),
+	})
+	if err != nil {
+		t.Fatalf("tbclient.New: %v", err)
+	}
+	if err := tb.Login(ctx); err != nil {
+		t.Skipf("ThingsBoard login failed: %v", err)
+	}
+
+	// --- Postgres / Redis ---
+	pool, err := pgxpool.New(ctx, envOr("DATABASE_URL", "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"))
+	if err != nil || pool.Ping(ctx) != nil {
+		t.Skipf("no local postgres; start it with: docker compose up -d")
+	}
+	t.Cleanup(pool.Close)
+
+	rdb := redis.NewClient(&redis.Options{Addr: envOr("REDIS_ADDR", "localhost:6379")})
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		t.Skipf("no local redis (%v); start it with: docker compose up -d", err)
+	}
+	t.Cleanup(func() { rdb.Close() })
+
+	q := db.New(pool)
+
+	// --- provision the device on both sides ---
+	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+	deviceName := "ing-dev-" + suffix
+	username := "ing-user-" + suffix
+
+	tbDev, err := tb.EnsureDevice(ctx, deviceName, tbclient.DefaultDeviceProfile)
+	if err != nil {
+		t.Fatalf("provision in ThingsBoard: %v", err)
+	}
+	t.Cleanup(func() { tb.DeleteDevice(context.Background(), tbDev.ID.ID) })
+
+	creds, err := tb.GetDeviceCredentials(ctx, tbDev.ID.ID)
+	if err != nil {
+		t.Fatalf("credentials: %v", err)
+	}
+
+	var userID int64
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1,'x',$2) RETURNING id`,
+		username, control.RoleCustomerAdmin).Scan(&userID); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	if err := q.EnsureDevice(ctx, deviceName); err != nil {
+		t.Fatalf("seed device: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO user_devices (user_id, device_name) VALUES ($1,$2)`, userID, deviceName); err != nil {
+		t.Fatalf("bind: %v", err)
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		pool.Exec(c, `DELETE FROM audit_log WHERE device_name = $1`, deviceName)
+		pool.Exec(c, `DELETE FROM control_commands WHERE device_name = $1`, deviceName)
+		pool.Exec(c, `DELETE FROM user_devices WHERE user_id = $1`, userID)
+		pool.Exec(c, `DELETE FROM devices WHERE device_name = $1`, deviceName)
+		pool.Exec(c, `DELETE FROM users WHERE id = $1`, userID)
+	})
+
+	// --- the simulated device ---
+	sim := devicesim.New(devicesim.Config{
+		BrokerURL:        envOr("TB_MQTT_URL", "tcp://localhost:1884"),
+		AccessToken:      creds.CredentialsID,
+		Tanks:            1,
+		SnapshotInterval: 10 * time.Minute, // long, so nothing rides the snapshot timer
+		Logf:             t.Logf,
+	})
+	connCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := sim.Connect(connCtx); err != nil {
+		t.Fatalf("device connect: %v", err)
+	}
+	t.Cleanup(sim.Disconnect)
+
+	ctl := control.New(q, tb, cfg)
+	ing := ingest.New(ingest.Config{
+		TB: tb, Control: ctl, Redis: rdb, Queries: q,
+		ResubscribeDelay: time.Second,
+		Logf:             t.Logf,
+	})
+
+	return &stack{
+		pool: pool, rdb: rdb, q: q, tb: tb, ctl: ctl, ing: ing,
+		device: deviceName, tbDevID: tbDev.ID.ID, sim: sim,
+		actor: control.Actor{UserID: userID, Username: username, Role: control.RoleCustomerAdmin},
+	}
+}
+
+// TestFullLoop_CommandReachesTerminalStateViaIngest is the #10 acceptance loop: an operator issues a
+// command, the device ACKs it, the device later reports the real outcome, and the ingester drives
+// the command row to a terminal state — with no polling and no second MQTT channel anywhere.
+func TestFullLoop_CommandReachesTerminalStateViaIngest(t *testing.T) {
+	s := newStack(t, control.Config{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
+
+	cmd, err := s.ctl.Issue(ctx, control.IssueRequest{
+		DeviceName: s.device,
+		Method:     protocol.MethodAlarmMute,
+		Args:       json.RawMessage(`{"tank":1}`),
+		Reason:     "端到端验证，值班室确认",
+		Actor:      s.actor,
+	})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	// The ACK only means the device accepted it.
+	if cmd.Status != protocol.CmdStatusReceived {
+		t.Fatalf("after ACK status = %q, want %q", cmd.Status, protocol.CmdStatusReceived)
+	}
+	if protocol.IsTerminal(cmd.Status) {
+		t.Fatal("an ACK must not be terminal")
+	}
+
+	// The device reports the real outcome moments later; the ingester must carry it into the row.
+	commandID := uuidText(cmd.CommandID.Bytes)
+	final := awaitStatus(t, s, commandID, 25*time.Second, protocol.CmdStatusSucceeded)
+
+	if !final.FinishedAt.Valid {
+		t.Error("a terminal command must have finished_at set")
+	}
+	if !final.AckedAt.Valid {
+		t.Error("acked_at should have been recorded")
+	}
+	t.Logf("full loop: pending -> sent -> received -> %s", final.Status)
+
+	// And the whole thing must be auditable end to end.
+	rows, err := s.q.ListAuditLogForCommand(ctx, cmd.CommandID)
+	if err != nil {
+		t.Fatalf("audit for command: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, r := range rows {
+		seen[r.Action] = true
+	}
+	for _, want := range []string{"control.issue", "control.ack", "control.result"} {
+		if !seen[want] {
+			t.Errorf("audit trail is missing %q (have %v)", want, seen)
+		}
+	}
+}
+
+// TestFullLoop_AlarmFansOutToOperators covers the other ingestion branch: an alarm reaches the
+// Redis channel /ws/alarms serves, without waiting for the snapshot cycle.
+func TestFullLoop_AlarmFansOutToOperators(t *testing.T) {
+	s := newStack(t, control.Config{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sub := s.rdb.Subscribe(ctx, ingest.AlarmChannel)
+	defer sub.Close()
+	if _, err := sub.Receive(ctx); err != nil {
+		t.Fatalf("redis subscribe: %v", err)
+	}
+	messages := sub.Channel()
+
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
+
+	start := time.Now()
+	active, err := s.sim.RaiseAlarm(1, protocol.AlarmHighHighLevel, protocol.SeverityCritical, "1号罐高高液位报警", 1980.4)
+	if err != nil {
+		t.Fatalf("RaiseAlarm: %v", err)
+	}
+
+	deadline := time.After(20 * time.Second)
+	for {
+		select {
+		case msg := <-messages:
+			var got map[string]any
+			if err := json.Unmarshal([]byte(msg.Payload), &got); err != nil {
+				t.Fatalf("fanout payload: %v", err)
+			}
+			if got["alarmId"] != active.AlarmID {
+				continue // an alarm from another concurrently-running test
+			}
+			if got["deviceName"] != s.device {
+				t.Errorf("deviceName = %v, want %s", got["deviceName"], s.device)
+			}
+			if got["type"] != protocol.AlarmHighHighLevel || got["status"] != protocol.AlarmStatusActive {
+				t.Errorf("alarm mangled in transit: %v", got)
+			}
+			latency := time.Since(start)
+			if latency >= protocol.SnapshotIntervalSec*time.Second {
+				t.Errorf("alarm fanout took %s, no faster than the %ds snapshot cycle", latency, protocol.SnapshotIntervalSec)
+			}
+			t.Logf("alarm reached operators in %s via device→ThingsBoard→ingest→Redis", latency)
+			return
+		case <-deadline:
+			t.Fatal("alarm never reached the operator fan-out channel")
+		}
+	}
+}
+
+// TestIngest_DoesNotPersistTelemetry pins the data boundary that issue #10 is emphatic about:
+// telemetry lives in ThingsBoard only. A future change that starts copying snapshots into the
+// business database — recreating the duplicate time-series store — fails here.
+func TestIngest_DoesNotPersistTelemetry(t *testing.T) {
+	s := newStack(t, control.Config{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
+
+	before := countRows(t, s, s.device)
+
+	for i := 0; i < 3; i++ {
+		if _, err := s.sim.PublishSnapshot(); err != nil {
+			t.Fatalf("PublishSnapshot: %v", err)
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
+	time.Sleep(2 * time.Second) // give the ingester every chance to (wrongly) write something
+
+	after := countRows(t, s, s.device)
+	for table, n := range after {
+		if n != before[table] {
+			t.Errorf("ingesting telemetry wrote %d new row(s) to %s; telemetry must stay in ThingsBoard only",
+				n-before[table], table)
+		}
+	}
+
+	// ...while the same data is readable from ThingsBoard, which is where it belongs.
+	ts, values, err := s.tb.LatestValues(ctx, s.tbDevID, protocol.SnapshotKeys(1))
+	if err != nil {
+		t.Fatalf("read telemetry back from ThingsBoard: %v", err)
+	}
+	snap, err := protocol.ParseSnapshot(ts, values)
+	if err != nil {
+		t.Fatalf("ParseSnapshot: %v", err)
+	}
+	if len(snap.Tanks) != 1 || snap.SnapshotSeq < 3 {
+		t.Errorf("ThingsBoard should hold the snapshots: %+v", snap)
+	}
+}
+
+// TestControl_CrossTenantAccessIsRejected covers #10's "跨租户访问和控制被后端拒绝".
+func TestControl_CrossTenantAccessIsRejected(t *testing.T) {
+	s := newStack(t, control.Config{})
+	ctx := context.Background()
+
+	// A second user, bound to nothing, attempts to control the first user's device.
+	var intruderID int64
+	username := fmt.Sprintf("intruder-%d", time.Now().UnixNano())
+	if err := s.pool.QueryRow(ctx,
+		`INSERT INTO users (username, password_hash, role) VALUES ($1,'x',$2) RETURNING id`,
+		username, control.RoleCustomerAdmin).Scan(&intruderID); err != nil {
+		t.Fatalf("seed intruder: %v", err)
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		s.pool.Exec(c, `DELETE FROM audit_log WHERE actor = $1`, username)
+		s.pool.Exec(c, `DELETE FROM users WHERE id = $1`, intruderID)
+	})
+
+	_, err := s.ctl.Issue(ctx, control.IssueRequest{
+		DeviceName: s.device,
+		Method:     protocol.MethodAlarmMute,
+		Reason:     "越权尝试",
+		Actor:      control.Actor{UserID: intruderID, Username: username, Role: control.RoleCustomerAdmin},
+	})
+	if err == nil {
+		t.Fatal("a user bound to no device must not be able to control one")
+	}
+
+	// The attempt must be on the record — a denied cross-tenant control attempt is precisely the
+	// kind of event an audit log exists for.
+	var audited int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM audit_log WHERE actor = $1 AND outcome = 'denied'`, username).Scan(&audited); err != nil {
+		t.Fatalf("count audit: %v", err)
+	}
+	if audited == 0 {
+		t.Error("the denied cross-tenant attempt was not audited")
+	}
+}
+
+// --- helpers ---
+
+func waitForSubscription(t *testing.T, s *stack, ctx context.Context) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, name := range s.ing.ActiveDevices() {
+			if name == s.device {
+				time.Sleep(1500 * time.Millisecond) // let the WS subscription actually establish
+				return
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("the ingester never subscribed to the device")
+}
+
+func awaitStatus(t *testing.T, s *stack, commandID string, timeout time.Duration, want string) db.ControlCommand {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var last db.ControlCommand
+	for time.Now().Before(deadline) {
+		cmds, err := s.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
+			DeviceName: s.device, Limit: 20, Offset: 0,
+		})
+		if err != nil {
+			t.Fatalf("list commands: %v", err)
+		}
+		for _, c := range cmds {
+			if uuidText(c.CommandID.Bytes) == commandID {
+				last = c
+				if c.Status == want {
+					return c
+				}
+			}
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	t.Fatalf("command %s never reached %q (last status %q)", commandID, want, last.Status)
+	return db.ControlCommand{}
+}
+
+// countRows counts the business tables that must NOT grow when telemetry is ingested.
+func countRows(t *testing.T, s *stack, device string) map[string]int {
+	t.Helper()
+	out := map[string]int{}
+	for _, table := range []string{"alarms", "oil_in_out", "commit_works"} {
+		var n int
+		if err := s.pool.QueryRow(context.Background(),
+			fmt.Sprintf(`SELECT count(*) FROM %s WHERE device_name = $1`, table), device).Scan(&n); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		out[table] = n
+	}
+	return out
+}
+
+func uuidText(b [16]byte) string {
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}

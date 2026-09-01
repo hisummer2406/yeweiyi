@@ -810,6 +810,54 @@ seconds and no timezone and forced the Asia/Shanghai guess documented above; and
 by the device and reused across ACTIVE/CLEARED so overlapping occurrences of the same alarm type on
 the same tank can still be paired.
 
+**2026-09-01 control state machine + ingestion pass** (issue #10, first slice, same branch) —
+`db/migrations/000010_control_and_audit`, `internal/control`, `internal/ingest`. Adds `users.role`
+(platform_admin/customer_admin/customer_user), `control_commands` (the 8-state machine issue #1
+specifies) and `audit_log`. `internal/control` issues commands through `internal/tbclient` and
+applies ACKs; `internal/ingest` holds one ThingsBoard telemetry WebSocket subscription per device,
+routes `cmdResult` into the state machine and fans alarms out to the existing `alarms:live` Redis
+channel that `/ws/alarms` already serves.
+
+**All status transitions are guarded in SQL** (`WHERE status IN (...)` in
+`db/queries/control_commands.sql`), not in application code — so a late ACK, a redelivered
+`cmdResult`, or a result arriving after the expiry sweep cannot rewrite a terminal row. Application
+-level checks would have to be right at every call site; the guard is right once.
+
+**Three judgement calls that are easy to get backwards, each pinned by a test:**
+- **An unacknowledged command is recorded `sent`, never `failed`.** "The device did not answer" is
+  not "the device did not act" — it may have received the command, started the pump, and lost its
+  connection before replying. Marking it failed would tell an operator the pump is off while it is
+  running. It stays non-terminal until a result arrives or it expires.
+- **ThingsBoard being down leaves the command `pending`**, because it was never handed over.
+- **A device refusing is not a Go error** — it returns a row with status `rejected` and the device's
+  reason, because a refusal is information the operator needs, not a transport failure.
+
+**`Config.AllowPhysicalCommands` defaults to false, and that default is the safety mechanism.**
+Issue #1 forbids exposing actions whose device-side interlocks are unfinished and unverified on real
+hardware; since that work is not done, the safe state has to be the one you get by configuring
+nothing. A flag defaulting to "allowed" would mean a fresh deployment ships able to start pumps. The
+gate applies to platform admins too — it is a statement about unverified hardware, not about trust.
+
+**The data boundary is enforced by a test, not just documented**:
+`TestIngest_DoesNotPersistTelemetry` fails if the ingester writes any telemetry row into the
+business database. Telemetry stays in ThingsBoard; only commands, audit and business records cross
+over. This is what stops the `alarms`/`oil_in_out` partition tables quietly becoming a second
+time-series store again.
+
+Verified end to end against real ThingsBoard + real simulated device + real Postgres/Redis
+(`internal/ingest`, 4 tests): a command walks `pending → sent → received → succeeded` with the last
+hop driven entirely by the device's asynchronous `cmdResult` through the ingester; an alarm reaches
+the operator fan-out channel in **30 ms**; cross-tenant control is refused and the denied attempt is
+audited. `internal/control` adds 14 more tests against real Postgres with a fake Sender, so the
+branches a healthy ThingsBoard will not produce on demand (outage, offline device) are still
+deterministic.
+
+**Still not done in #10** (do not read this pass as closing it): no REST endpoints expose any of
+this yet, `cmd/server` is still wired to the old stack and does not start `internal/ingest` or
+`internal/control`, the full multi-tenant model (customer entities, tenant-scoped queries
+everywhere) does not exist — `users.role` plus the existing `user_devices` binding is the whole
+authorization model right now — and none of the old Alink stack has been deleted.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
@@ -904,6 +952,13 @@ internal/api/        # router.go, health.go, auth.go (JWT login + middleware, ap
 internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
                      # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
                      # (§5.3 periodic sweep), queue_test.go (integration tests, see above)
+internal/control/    # (2026-09-01, issue #10) remote-control state machine, authorization and
+                     # audit: control.go + control_test.go. Every status transition is guarded in
+                     # SQL, not here. AllowPhysicalCommands defaults to false on purpose.
+internal/ingest/     # (2026-09-01, issue #10) one ThingsBoard telemetry WS subscription per
+                     # device; routes cmdResult into internal/control and alarms onto the
+                     # alarms:live Redis channel. Deliberately persists NO telemetry — that is
+                     # the data boundary, and ingest_test.go fails if it ever starts to.
 internal/partitions/ # partitions.go (2026-08-29): keeps alarms/oil_in_out's monthly range
                      # partitions pre-created a few months ahead — plain ticker goroutine, not a
                      # river job (river is scoped to the write-back queue per "Tech stack" below;

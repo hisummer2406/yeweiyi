@@ -38,6 +38,33 @@ func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, err
 	return i, err
 }
 
+const listAllDeviceNames = `-- name: ListAllDeviceNames :many
+SELECT device_name FROM devices ORDER BY device_name
+`
+
+// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
+// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
+// already exist when a device comes back, or its first snapshot after reconnecting is missed.
+func (q *Queries) ListAllDeviceNames(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, listAllDeviceNames)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var device_name string
+		if err := rows.Scan(&device_name); err != nil {
+			return nil, err
+		}
+		items = append(items, device_name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOnlineDeviceNames = `-- name: ListOnlineDeviceNames :many
 SELECT device_name FROM devices WHERE is_online
 `

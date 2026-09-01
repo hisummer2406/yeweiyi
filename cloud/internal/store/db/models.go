@@ -59,145 +59,301 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 	return string(ns.RiverJobState), nil
 }
 
+// 报警记录，镜像设备端 Alarm 表（design doc §2），按 time 做月度 RANGE 分区。
 type Alarm struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	Info          string             `json:"info"`
-	Guanhao       string             `json:"guanhao"`
-	Jiezhi        string             `json:"jiezhi"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增 id（非设备本地 id，仅在本表内唯一，需与 time 组成主键以满足分区约束）。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地（SQLite 自增）记录 id，仅在单设备内唯一，跨设备不可作为全局主键。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 设备本地事件时间（原始 "yyyy-MM-dd HH:mm" 无秒无时区，已按 Asia/Shanghai 转换为 UTC 存储）。
+	Time pgtype.Timestamptz `json:"time"`
+	// 报警信息文本，对应设备端 Alarm.info。
+	Info string `json:"info"`
+	// 罐号，对应设备端 Alarm.guanHao（MQTT JSON 字段名 guanHao，与本列名不同，见 CLAUDE.md "MQTT contract"）。
+	Guanhao string `json:"guanhao"`
+	// 对应设备端 Alarm.jieZhi（MQTT JSON 字段名 jieZhi）；具体业务含义未在设计文档中给出，字段名照抄设备端。
+	Jiezhi string `json:"jiezhi"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间，可能晚于 time（设备离线补报时会明显滞后）。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 type Alarms202608 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	Info          string             `json:"info"`
-	Guanhao       string             `json:"guanhao"`
-	Jiezhi        string             `json:"jiezhi"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增 id（非设备本地 id，仅在本表内唯一，需与 time 组成主键以满足分区约束）。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地（SQLite 自增）记录 id，仅在单设备内唯一，跨设备不可作为全局主键。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 设备本地事件时间（原始 "yyyy-MM-dd HH:mm" 无秒无时区，已按 Asia/Shanghai 转换为 UTC 存储）。
+	Time pgtype.Timestamptz `json:"time"`
+	// 报警信息文本，对应设备端 Alarm.info。
+	Info string `json:"info"`
+	// 罐号，对应设备端 Alarm.guanHao（MQTT JSON 字段名 guanHao，与本列名不同，见 CLAUDE.md "MQTT contract"）。
+	Guanhao string `json:"guanhao"`
+	// 对应设备端 Alarm.jieZhi（MQTT JSON 字段名 jieZhi）；具体业务含义未在设计文档中给出，字段名照抄设备端。
+	Jiezhi string `json:"jiezhi"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间，可能晚于 time（设备离线补报时会明显滞后）。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 type Alarms202609 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	Info          string             `json:"info"`
-	Guanhao       string             `json:"guanhao"`
-	Jiezhi        string             `json:"jiezhi"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增 id（非设备本地 id，仅在本表内唯一，需与 time 组成主键以满足分区约束）。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地（SQLite 自增）记录 id，仅在单设备内唯一，跨设备不可作为全局主键。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 设备本地事件时间（原始 "yyyy-MM-dd HH:mm" 无秒无时区，已按 Asia/Shanghai 转换为 UTC 存储）。
+	Time pgtype.Timestamptz `json:"time"`
+	// 报警信息文本，对应设备端 Alarm.info。
+	Info string `json:"info"`
+	// 罐号，对应设备端 Alarm.guanHao（MQTT JSON 字段名 guanHao，与本列名不同，见 CLAUDE.md "MQTT contract"）。
+	Guanhao string `json:"guanhao"`
+	// 对应设备端 Alarm.jieZhi（MQTT JSON 字段名 jieZhi）；具体业务含义未在设计文档中给出，字段名照抄设备端。
+	Jiezhi string `json:"jiezhi"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间，可能晚于 time（设备离线补报时会明显滞后）。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
+// 审计日志，长期保留，不随遥测清理。记录控制命令的下发、拒绝与最终结果，以及越权访问尝试。device_name/command_id 刻意不做外键——被拒绝的越权尝试所指向的设备可能根本不存在，而那正是最值得记录的一类事件。
+type AuditLog struct {
+	ID         int64              `json:"id"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	ActorID    pgtype.Int8        `json:"actor_id"`
+	Actor      string             `json:"actor"`
+	Action     string             `json:"action"`
+	DeviceName pgtype.Text        `json:"device_name"`
+	CommandID  pgtype.UUID        `json:"command_id"`
+	Outcome    string             `json:"outcome"`
+	Detail     []byte             `json:"detail"`
+}
+
+// 交接班记录，镜像设备端 CommitWork 表（design doc §2）。未分区（非高写入量表）。
 type CommitWork struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	WorkID        int32              `json:"work_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	EndTime       pgtype.Timestamptz `json:"end_time"`
-	Info          string             `json:"info"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增主键。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地记录 id，与 device_name 组成唯一键。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 交接班 id，对应设备端 CommitWork.workId。
+	WorkID int32 `json:"work_id"`
+	// 交接班开始时间（设备本地时间，已转 UTC）。
+	Time pgtype.Timestamptz `json:"time"`
+	// 交接班结束时间，对应设备端 CommitWork.endTime；可为空。
+	EndTime pgtype.Timestamptz `json:"end_time"`
+	// 交接班信息，原样存储设备端下发的 JSON 字符串（未解析为结构化列，见 CLAUDE.md "Open product decisions"）。MQTT JSON 字段名为 info，设备端 DB 列名为 oilinfogson，二者不同。
+	Info string `json:"info"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
+// 远程控制命令及其状态机（issue #1）。状态流转单向不可回退：pending→sent→received→executing→succeeded/failed，或 →rejected/→expired。MQTT/RPC 发送成功只代表消息发出，received 表示设备已接受，真正执行结果由设备异步上报的 cmdResult 决定。
+type ControlCommand struct {
+	// 后端生成的命令唯一 ID，同时是设备幂等去重键
+	CommandID  pgtype.UUID `json:"command_id"`
+	DeviceName string      `json:"device_name"`
+	Method     string      `json:"method"`
+	Args       []byte      `json:"args"`
+	OperatorID pgtype.Int8 `json:"operator_id"`
+	// 下发时的操作者用户名快照，用户被删除后仍保留
+	Operator string `json:"operator"`
+	// 二次确认时操作员填写的原因，强制非空
+	Reason       string             `json:"reason"`
+	Status       string             `json:"status"`
+	ErrorCode    pgtype.Text        `json:"error_code"`
+	ErrorReason  pgtype.Text        `json:"error_reason"`
+	ResultDetail []byte             `json:"result_detail"`
+	IssuedAt     pgtype.Timestamptz `json:"issued_at"`
+	// 命令有效期，超时未进终态由 TTL 清扫置为 expired
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	SentAt     pgtype.Timestamptz `json:"sent_at"`
+	AckedAt    pgtype.Timestamptz `json:"acked_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 设备在线状态表，记录 thing/event/isOline 的最新状态（design doc §4.2）。
 type Device struct {
-	DeviceName    string             `json:"device_name"`
-	IsOnline      bool               `json:"is_online"`
-	LastOnlineAt  pgtype.Timestamptz `json:"last_online_at"`
+	// 设备名（阿里云 IoT deviceName），主键，MQTT topic 中的设备标识。
+	DeviceName string `json:"device_name"`
+	// 当前是否在线，由 isOline 事件（含遗嘱消息）更新。
+	IsOnline bool `json:"is_online"`
+	// 最近一次上线时间。
+	LastOnlineAt pgtype.Timestamptz `json:"last_online_at"`
+	// 最近一次离线时间。
 	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	// 该行最近一次更新时间。
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 油罐/探头配置，字段级镜像设备端 OilCanSet.java（design doc §2 的列表并不完整，本表已按源码补齐全部字段，见 CLAUDE.md "Architecture"）。
 type OilCanSet struct {
-	DeviceName       string             `json:"device_name"`
-	OilCanID         int32              `json:"oil_can_id"`
-	PkD2dID          int32              `json:"pk_d2d_id"`
-	PkTanZhenID      int32              `json:"pk_tan_zhen_id"`
-	OilHeight        float64            `json:"oil_height"`
-	Height           int32              `json:"height"`
-	MaxVolume        int32              `json:"max_volume"`
-	HeightOilAlarm   int32              `json:"height_oil_alarm"`
-	HheightOilAlarm  int32              `json:"hheight_oil_alarm"`
-	LowOilAlarm      int32              `json:"low_oil_alarm"`
-	LlowOilAlarm     int32              `json:"llow_oil_alarm"`
-	HeightWaterAlarm int32              `json:"height_water_alarm"`
-	HighTempAlarm    int32              `json:"high_temp_alarm"`
-	LowTempAlarm     int32              `json:"low_temp_alarm"`
-	OilCorrection    float64            `json:"oil_correction"`
-	WaterCorrection  float64            `json:"water_correction"`
-	TempCorrection   float64            `json:"temp_correction"`
-	Density          float64            `json:"density"`
-	DensVar          float64            `json:"dens_var"`
-	AlarmByte        int32              `json:"alarm_byte"`
-	OilType          int32              `json:"oil_type"`
-	OilColor         int32              `json:"oil_color"`
-	GmtCreate        pgtype.Text        `json:"gmt_create"`
-	GmtModified      pgtype.Text        `json:"gmt_modified"`
-	ChuanGanQiHeight float32            `json:"chuan_gan_qi_height"`
-	GunType          int32              `json:"gun_type"`
-	Enable           int32              `json:"enable"`
-	SyncStatus       string             `json:"sync_status"`
-	ReceivedAt       pgtype.Timestamptz `json:"received_at"`
+	// 所属设备名，与 oil_can_id 组成主键。
+	DeviceName string `json:"device_name"`
+	// 设备内油罐编号（pk_oilCanId，单设备内取值 1-9）。
+	OilCanID int32 `json:"oil_can_id"`
+	// 对应设备端 OilCanSet.pk_d2dId。
+	PkD2dID int32 `json:"pk_d2d_id"`
+	// 探针 id，对应设备端 OilCanSet.pk_tanZhenId。
+	PkTanZhenID int32 `json:"pk_tan_zhen_id"`
+	// 当前油高，对应设备端 OilCanSet.oilHeight。
+	OilHeight float64 `json:"oil_height"`
+	// 罐体高度。
+	Height int32 `json:"height"`
+	// 罐体最大容积。
+	MaxVolume int32 `json:"max_volume"`
+	// 高油位报警阈值。
+	HeightOilAlarm int32 `json:"height_oil_alarm"`
+	// 超高油位报警阈值。
+	HheightOilAlarm int32 `json:"hheight_oil_alarm"`
+	// 低油位报警阈值。
+	LowOilAlarm int32 `json:"low_oil_alarm"`
+	// 超低油位报警阈值。
+	LlowOilAlarm int32 `json:"llow_oil_alarm"`
+	// 水位报警阈值，对应设备端 OilCanSet.heightWaterAlarm。
+	HeightWaterAlarm int32 `json:"height_water_alarm"`
+	// 高温报警阈值。
+	HighTempAlarm int32 `json:"high_temp_alarm"`
+	// 低温报警阈值。
+	LowTempAlarm int32 `json:"low_temp_alarm"`
+	// 油位校正值，对应设备端 OilCanSet.oilCorrection。
+	OilCorrection float64 `json:"oil_correction"`
+	// 水位校正值，对应设备端 OilCanSet.waterCorrection。
+	WaterCorrection float64 `json:"water_correction"`
+	// 温度校正值，对应设备端 OilCanSet.tempCorrection。
+	TempCorrection float64 `json:"temp_correction"`
+	// 油品密度。
+	Density float64 `json:"density"`
+	// 密度校正/浮动值，对应设备端 OilCanSet.densVar。
+	DensVar float64 `json:"dens_var"`
+	// 报警状态位掩码，对应设备端 OilCanSet.alarmByte。
+	AlarmByte int32 `json:"alarm_byte"`
+	// 油品类型编码。
+	OilType int32 `json:"oil_type"`
+	// 油品颜色编码。
+	OilColor int32 `json:"oil_color"`
+	// 设备端创建时间原始字符串，格式未文档化，原样存为 TEXT 不做时间解析。
+	GmtCreate pgtype.Text `json:"gmt_create"`
+	// 设备端修改时间原始字符串，格式未文档化，原样存为 TEXT 不做时间解析。
+	GmtModified pgtype.Text `json:"gmt_modified"`
+	// 传感器（探头）安装高度，对应设备端 OilCanSet.chuanGanQiHight。
+	ChuanGanQiHeight float32 `json:"chuan_gan_qi_height"`
+	// 油枪/探头类型编码，对应设备端 OilCanSet.gunType。
+	GunType int32 `json:"gun_type"`
+	// 该油罐配置是否启用。
+	Enable int32 `json:"enable"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条配置的时间。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
+// 进出油记录，镜像设备端 OilInOut 表（design doc §2），分区方式同 alarms。
 type OilInOut struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	OilID         int32              `json:"oil_id"`
-	Jiezhi        string             `json:"jiezhi"`
-	Time          pgtype.Timestamptz `json:"time"`
-	BeginHeight   float64            `json:"begin_height"`
-	EndHeight     float64            `json:"end_height"`
-	BeginVolume   float64            `json:"begin_volume"`
-	EndVolume     float64            `json:"end_volume"`
-	BeginWeight   float64            `json:"begin_weight"`
-	EndWeight     float64            `json:"end_weight"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增 id，含义同 alarms.id。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地记录 id，含义同 alarms.device_local_id。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 油罐/油品 id，对应设备端 OilInOut.oilId。
+	OilID int32 `json:"oil_id"`
+	// 对应设备端 OilInOut.jieZhi（MQTT JSON 字段名同名）；具体业务含义未在设计文档中给出。
+	Jiezhi string `json:"jiezhi"`
+	// 设备本地事件时间，转换规则同 alarms.time。
+	Time pgtype.Timestamptz `json:"time"`
+	// 进/出油前液位高度，对应设备端 OilInOut.beginHeigth（设备侧字段名拼写如此，非笔误）。
+	BeginHeight float64 `json:"begin_height"`
+	// 进/出油后液位高度，对应设备端 OilInOut.endHeigth。
+	EndHeight float64 `json:"end_height"`
+	// 进/出油前体积，对应设备端 OilInOut.beginVolum。
+	BeginVolume float64 `json:"begin_volume"`
+	// 进/出油后体积，对应设备端 OilInOut.endVolum。
+	EndVolume float64 `json:"end_volume"`
+	// 进/出油前重量，对应设备端 OilInOut.beginWeight。
+	BeginWeight float64 `json:"begin_weight"`
+	// 进/出油后重量，对应设备端 OilInOut.endWeight。
+	EndWeight float64 `json:"end_weight"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间，含义同 alarms.received_at。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 type OilInOut202608 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	OilID         int32              `json:"oil_id"`
-	Jiezhi        string             `json:"jiezhi"`
-	Time          pgtype.Timestamptz `json:"time"`
-	BeginHeight   float64            `json:"begin_height"`
-	EndHeight     float64            `json:"end_height"`
-	BeginVolume   float64            `json:"begin_volume"`
-	EndVolume     float64            `json:"end_volume"`
-	BeginWeight   float64            `json:"begin_weight"`
-	EndWeight     float64            `json:"end_weight"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增 id，含义同 alarms.id。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地记录 id，含义同 alarms.device_local_id。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 油罐/油品 id，对应设备端 OilInOut.oilId。
+	OilID int32 `json:"oil_id"`
+	// 对应设备端 OilInOut.jieZhi（MQTT JSON 字段名同名）；具体业务含义未在设计文档中给出。
+	Jiezhi string `json:"jiezhi"`
+	// 设备本地事件时间，转换规则同 alarms.time。
+	Time pgtype.Timestamptz `json:"time"`
+	// 进/出油前液位高度，对应设备端 OilInOut.beginHeigth（设备侧字段名拼写如此，非笔误）。
+	BeginHeight float64 `json:"begin_height"`
+	// 进/出油后液位高度，对应设备端 OilInOut.endHeigth。
+	EndHeight float64 `json:"end_height"`
+	// 进/出油前体积，对应设备端 OilInOut.beginVolum。
+	BeginVolume float64 `json:"begin_volume"`
+	// 进/出油后体积，对应设备端 OilInOut.endVolum。
+	EndVolume float64 `json:"end_volume"`
+	// 进/出油前重量，对应设备端 OilInOut.beginWeight。
+	BeginWeight float64 `json:"begin_weight"`
+	// 进/出油后重量，对应设备端 OilInOut.endWeight。
+	EndWeight float64 `json:"end_weight"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间，含义同 alarms.received_at。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
 type OilInOut202609 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	OilID         int32              `json:"oil_id"`
-	Jiezhi        string             `json:"jiezhi"`
-	Time          pgtype.Timestamptz `json:"time"`
-	BeginHeight   float64            `json:"begin_height"`
-	EndHeight     float64            `json:"end_height"`
-	BeginVolume   float64            `json:"begin_volume"`
-	EndVolume     float64            `json:"end_volume"`
-	BeginWeight   float64            `json:"begin_weight"`
-	EndWeight     float64            `json:"end_weight"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+	// 云端自增 id，含义同 alarms.id。
+	ID int64 `json:"id"`
+	// 所属设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 设备本地记录 id，含义同 alarms.device_local_id。
+	DeviceLocalID int32 `json:"device_local_id"`
+	// 油罐/油品 id，对应设备端 OilInOut.oilId。
+	OilID int32 `json:"oil_id"`
+	// 对应设备端 OilInOut.jieZhi（MQTT JSON 字段名同名）；具体业务含义未在设计文档中给出。
+	Jiezhi string `json:"jiezhi"`
+	// 设备本地事件时间，转换规则同 alarms.time。
+	Time pgtype.Timestamptz `json:"time"`
+	// 进/出油前液位高度，对应设备端 OilInOut.beginHeigth（设备侧字段名拼写如此，非笔误）。
+	BeginHeight float64 `json:"begin_height"`
+	// 进/出油后液位高度，对应设备端 OilInOut.endHeigth。
+	EndHeight float64 `json:"end_height"`
+	// 进/出油前体积，对应设备端 OilInOut.beginVolum。
+	BeginVolume float64 `json:"begin_volume"`
+	// 进/出油后体积，对应设备端 OilInOut.endVolum。
+	EndVolume float64 `json:"end_volume"`
+	// 进/出油前重量，对应设备端 OilInOut.beginWeight。
+	BeginWeight float64 `json:"begin_weight"`
+	// 进/出油后重量，对应设备端 OilInOut.endWeight。
+	EndWeight float64 `json:"end_weight"`
+	// 云端同步状态标记，非设备端字段。
+	SyncStatus string `json:"sync_status"`
+	// 云端实际接收到该条 MQTT 消息的时间，含义同 alarms.received_at。
+	ReceivedAt pgtype.Timestamptz `json:"received_at"`
 }
 
+// river 队列库自带的 schema（作业表），由 riverqueue/river 管理，非本项目业务表，不要手工改结构。
 type RiverJob struct {
 	ID           int64              `json:"id"`
 	State        RiverJobState      `json:"state"`
@@ -219,6 +375,7 @@ type RiverJob struct {
 	UniqueStates pgtype.Bits        `json:"unique_states"`
 }
 
+// river 队列库自带的 schema（leader 选举表），由 riverqueue/river 管理。
 type RiverLeader struct {
 	ElectedAt pgtype.Timestamptz `json:"elected_at"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
@@ -226,6 +383,7 @@ type RiverLeader struct {
 	Name      string             `json:"name"`
 }
 
+// river 队列库自带的 schema（通知表），由 riverqueue/river 管理。
 type RiverNotification struct {
 	ID        int64              `json:"id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -233,6 +391,7 @@ type RiverNotification struct {
 	Topic     string             `json:"topic"`
 }
 
+// river 队列库自带的 schema（队列元数据表），由 riverqueue/river 管理。
 type RiverQueue struct {
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -241,26 +400,46 @@ type RiverQueue struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 共享账号表，PC 远程端与小程序共用同一套账号/JWT 体系（CLAUDE.md "Tech stack"）。
 type User struct {
-	ID           int64              `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	// 云端自增主键。
+	ID int64 `json:"id"`
+	// 登录用户名，唯一。
+	Username string `json:"username"`
+	// bcrypt 密码哈希，不存明文。
+	PasswordHash string `json:"password_hash"`
+	// 账号创建时间。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 角色：platform_admin=平台管理员，customer_admin=客户管理员，customer_user=客户普通用户。控制命令的权限分级依据此列（见 internal/protocol 的 PermissionLevel）。
+	Role string `json:"role"`
 }
 
+// 用户-设备绑定关系（多对多），小程序端通过扫描设备物理二维码建立绑定（CLAUDE.md 2026-08-29 authorization pass）。
 type UserDevice struct {
-	UserID     int64              `json:"user_id"`
-	DeviceName string             `json:"device_name"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	// 绑定的用户 id，关联 users.id。
+	UserID int64 `json:"user_id"`
+	// 绑定的设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 绑定建立时间。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// 云端/小程序 -> 设备的写回离线队列（design doc §5.2），设备离线时暂存待下发的命令。
 type WriteBackCommand struct {
-	ID          int64              `json:"id"`
-	DeviceName  string             `json:"device_name"`
-	CommandType string             `json:"command_type"`
-	Payload     []byte             `json:"payload"`
-	Status      string             `json:"status"`
-	Attempts    int32              `json:"attempts"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	// 云端自增主键。
+	ID int64 `json:"id"`
+	// 目标设备名。
+	DeviceName string `json:"device_name"`
+	// 命令类型（如修正进出油记录、修正交接班记录、下发罐/探头配置）。
+	CommandType string `json:"command_type"`
+	// 命令负载，JSON，描述目标状态而非增量（保证重试幂等）。
+	Payload []byte `json:"payload"`
+	// 命令状态：pending 待发送 / sent 已发布到 MQTT / acked 设备已确认 / failed 已失败或超 TTL。
+	Status string `json:"status"`
+	// 已尝试发布次数。
+	Attempts int32 `json:"attempts"`
+	// 命令创建时间，TTL 超时判断的起点。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 状态最近一次变更时间。
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

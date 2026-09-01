@@ -177,6 +177,32 @@ issue #9 要求"核心流程在断网环境中正常运行"。**已实测**，�
 
 ---
 
+## 5b. 控制状态机与数据边界（issue #10 首批落地）
+
+`internal/control` + `internal/ingest`（migration `000010`）实现了 issue #1 的远程控制状态机与审计。
+
+**状态流转全部由 SQL 的 `WHERE status IN (...)` 守卫**，不是靠应用层判断——迟到的 ACK、重复投递的
+`cmdResult`、以及过期清扫之后才到达的结果，都无法改写已进入终态的记录。
+
+三条容易做反的判断，已分别用测试固定：
+
+| 情况 | 做法 | 为什么 |
+|---|---|---|
+| 设备未 ACK（离线/超时） | 记为 `sent`，**不记 failed** | "设备没回话" ≠ "设备没动作"。它可能已经收到命令、启了泵、然后掉线。记成 failed 等于告诉操作员泵没启动，而它可能正在转 |
+| ThingsBoard 不可用 | 留在 `pending` | 命令根本没交出去 |
+| 设备明确拒绝 | 记 `rejected`（终态），**返回值不是 Go error** | 拒绝是操作员必须看到的信息，不是传输故障 |
+
+**物理动作默认关闭。** `Config.AllowPhysicalCommands` 默认 `false`，即"什么都不配"的部署无法启泵
+开阀重启——因为设备端联锁尚未补齐、未经真机验证（issue #1）。这个闸门对**平台管理员同样生效**：
+它约束的是未验证的硬件，不是信任级别。
+
+**数据边界由测试强制**：`TestIngest_DoesNotPersistTelemetry` 会在 ingester 往业务库写入任何遥测行
+时失败。遥测只存 ThingsBoard，业务库只存命令、审计和业务记录。
+
+端到端实测（`internal/ingest`，真实 ThingsBoard + 真实模拟设备 + 真实 Postgres/Redis）：
+命令走完 `pending → sent → received → succeeded`，其中最后一跳完全由 ingester 从设备异步上报的
+`cmdResult` 驱动；报警经 设备→ThingsBoard→ingest→Redis 到达操作员用时 **30 ms**。
+
 ## 6. 旧双栈代码 / 配置待删清单
 
 **本 Issue 只负责列出，实际删除属于 issue #10**，因为删除会破坏现有 `cmd/server` 的运行。

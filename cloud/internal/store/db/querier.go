@@ -14,10 +14,16 @@ type Querier interface {
 	// Idempotent: scanning the same QR code twice (or the same device already bound) is a no-op, not
 	// an error — matches this project's general "safe to redeliver" preference for write paths.
 	BindUserDevice(ctx context.Context, arg BindUserDeviceParams) error
+	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
 	EnsureDevice(ctx context.Context, deviceName string) error
+	// The cloud-side half of the validity window: anything past its expiry that never reached a
+	// terminal state is closed as 'expired'. The device enforces the same rule independently on
+	// arrival, so this is about the command *record*, not about preventing the action.
+	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
+	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
 	// oil_in_out is partitioned by time, so its UNIQUE constraint is (device_name, device_local_id,
 	// time), not (device_name, device_local_id) alone — in practice a device's local id is never
@@ -34,6 +40,14 @@ type Querier interface {
 	InsertWriteBackCommand(ctx context.Context, arg InsertWriteBackCommandParams) (WriteBackCommand, error)
 	ListAlarmsAsc(ctx context.Context, arg ListAlarmsAscParams) ([]Alarm, error)
 	ListAlarmsDesc(ctx context.Context, arg ListAlarmsDescParams) ([]Alarm, error)
+	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
+	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
+	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
+	ListAllDeviceNames(ctx context.Context) ([]string, error)
+	// device_name is optional: passing NULL lists across all devices, which is a platform-admin view.
+	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	ListAuditLogForCommand(ctx context.Context, commandID pgtype.UUID) ([]AuditLog, error)
+	ListControlCommandsForDevice(ctx context.Context, arg ListControlCommandsForDeviceParams) ([]ControlCommand, error)
 	ListDevicesForUser(ctx context.Context, userID int64) ([]Device, error)
 	// Design doc §5.3: TTL sweep for commands stuck in pending/sent past the cutoff.
 	ListExpirableWriteBackCommands(ctx context.Context, createdAt pgtype.Timestamptz) ([]WriteBackCommand, error)
@@ -50,6 +64,18 @@ type Querier interface {
 	// first, unlike ListPendingWriteBackCommandsForDevice's FIFO order (that one drives delivery, this
 	// one drives "what's the status of what I sent").
 	ListWriteBackCommandsForDevice(ctx context.Context, arg ListWriteBackCommandsForDeviceParams) ([]WriteBackCommand, error)
+	// Applies the device's ACK: 'received' (accepted, not yet done) or 'rejected' (terminal).
+	// Only a command we have actually sent can be acked.
+	MarkControlCommandAcked(ctx context.Context, arg MarkControlCommandAckedParams) (ControlCommand, error)
+	// Applies the device's asynchronous outcome. Guarded so that a terminal row stays terminal: a
+	// duplicate cmdResult, or one arriving after expiry, must not rewrite the record.
+	MarkControlCommandFinished(ctx context.Context, arg MarkControlCommandFinishedParams) (ControlCommand, error)
+	// Status transitions are all guarded by the *current* status rather than written unconditionally.
+	// Nothing else enforces the state machine — a late ACK arriving after the sweep already expired a
+	// command would otherwise resurrect it, and a redelivered result would overwrite a terminal row.
+	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
+	// moved on", not as an error.
+	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	MarkWriteBackCommandAcked(ctx context.Context, id int64) error
 	MarkWriteBackCommandFailed(ctx context.Context, id int64) error
 	MarkWriteBackCommandSent(ctx context.Context, id int64) error
@@ -69,6 +95,7 @@ type Querier interface {
 	UpsertShift(ctx context.Context, arg UpsertShiftParams) error
 	// Backs every device-scoped handler's authorization check (see internal/api's requireDeviceOwnership).
 	UserOwnsDevice(ctx context.Context, arg UserOwnsDeviceParams) (bool, error)
+	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error)
 }
 
 var _ Querier = (*Queries)(nil)
