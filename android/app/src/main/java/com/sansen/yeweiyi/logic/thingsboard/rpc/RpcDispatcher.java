@@ -85,14 +85,17 @@ public final class RpcDispatcher {
             result = RpcResult.failed(RpcErrorCode.INTERNAL_ERROR, "handler 执行异常: " + e.getMessage());
         }
 
+        long finishedAt = clock.nowMillis();
         commandStore.record(request.getCommandId(), result.getStatus(), result.getErrorCode(),
-                result.getMessage(), clock.nowMillis());
+                result.getMessage(), finishedAt);
+        commandStore.evictExpired(finishedAt);
         ackPublisher.publishAck(mqttRequestId, result.getStatus(), result.getErrorCode(), result.getMessage());
     }
 
     private void terminate(RpcRequestEnvelope request, String mqttRequestId, RpcResultStatus status,
                             RpcErrorCode errorCode, String message, long now) {
         commandStore.record(request.getCommandId(), status, errorCode, message, now);
+        commandStore.evictExpired(now);
         ackPublisher.publishAck(mqttRequestId, status, errorCode, message);
     }
 

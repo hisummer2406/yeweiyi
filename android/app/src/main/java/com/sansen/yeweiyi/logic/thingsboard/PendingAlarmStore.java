@@ -27,6 +27,11 @@ public final class PendingAlarmStore {
         void saveAll(List<String> entries);
     }
 
+    /** 单条事件的实际发送动作，由调用方注入（比如走 MQTT publish）。 */
+    public interface Sender {
+        boolean send(String serializedEvent);
+    }
+
     private final Persistence persistence;
     private final int maxEntries;
     private final LinkedList<String> entries;
@@ -68,6 +73,29 @@ public final class PendingAlarmStore {
         }
         trimToCapacity();
         flush();
+    }
+
+    /**
+     * 网络恢复重连成功后调用：按顺序尝试发送每一条待发事件，只有真正发送成功才把那一条
+     * 从队列里移除并落盘。跟"先 {@link #drainAll()} 清空、发送失败再 {@link #requeue}"的
+     * 用法相比，不会出现"整条队列已经从磁盘清空、但还没发完就断电"的窗口——每条事件从
+     * 磁盘上消失，当且仅当它已经真正发出去。遇到第一条发送失败就停止，失败的那条和还没
+     * 试过的都原样留在队首，顺序不变。
+     *
+     * @return 本次成功发出的事件数
+     */
+    public synchronized int drainAndSend(Sender sender) {
+        int sent = 0;
+        while (!entries.isEmpty()) {
+            String head = entries.peekFirst();
+            if (!sender.send(head)) {
+                break;
+            }
+            entries.removeFirst();
+            flush();
+            sent++;
+        }
+        return sent;
     }
 
     public synchronized int size() {

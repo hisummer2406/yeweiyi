@@ -51,21 +51,25 @@ public final class SetAlarmThresholdHandler implements RpcMethodHandler {
         }
 
         boolean changed = false;
+        int hheight = oilCanSet.getHheightOilAlarm();
+        int height = oilCanSet.getHeightOilAlarm();
+        int low = oilCanSet.getLowOilAlarm();
+        int llow = oilCanSet.getLlowOilAlarm();
         try {
             if (args.has("hheightOilAlarm")) {
-                oilCanSet.setHheightOilAlarm(args.get("hheightOilAlarm").getAsInt());
+                hheight = args.get("hheightOilAlarm").getAsInt();
                 changed = true;
             }
             if (args.has("heightOilAlarm")) {
-                oilCanSet.setHeightOilAlarm(args.get("heightOilAlarm").getAsInt());
+                height = args.get("heightOilAlarm").getAsInt();
                 changed = true;
             }
             if (args.has("lowOilAlarm")) {
-                oilCanSet.setLowOilAlarm(args.get("lowOilAlarm").getAsInt());
+                low = args.get("lowOilAlarm").getAsInt();
                 changed = true;
             }
             if (args.has("llowOilAlarm")) {
-                oilCanSet.setLlowOilAlarm(args.get("llowOilAlarm").getAsInt());
+                llow = args.get("llowOilAlarm").getAsInt();
                 changed = true;
             }
         } catch (NumberFormatException | UnsupportedOperationException e) {
@@ -76,6 +80,19 @@ public final class SetAlarmThresholdHandler implements RpcMethodHandler {
             return RpcResult.rejected(RpcErrorCode.INVALID_PARAMS,
                     "args 里没有任何一个可识别的阈值字段（hheightOilAlarm/heightOilAlarm/lowOilAlarm/llowOilAlarm）");
         }
+
+        if (hheight < 0 || height < 0 || low < 0 || llow < 0) {
+            return RpcResult.rejected(RpcErrorCode.INVALID_PARAMS, "阈值不能为负数");
+        }
+        if (!(hheight > height && height > low && low > llow)) {
+            return RpcResult.rejected(RpcErrorCode.INVALID_PARAMS,
+                    "阈值必须满足 高高(" + hheight + ") > 高(" + height + ") > 低(" + low + ") > 低低(" + llow + ")");
+        }
+
+        oilCanSet.setHheightOilAlarm(hheight);
+        oilCanSet.setHeightOilAlarm(height);
+        oilCanSet.setLowOilAlarm(low);
+        oilCanSet.setLlowOilAlarm(llow);
 
         try {
             oilTankRepository.updateOilCanSet(oilCanSet);

@@ -39,19 +39,27 @@ public final class ThingsBoardMqttConnection {
         void onRpcRequest(String mqttRequestId, String payloadJson);
     }
 
+    /** 连接建立之后（非首次 {@link #connect} 失败）意外断线时回调，交给调用方走退避重连。 */
+    public interface ConnectionLostListener {
+        void onConnectionLost(Throwable cause);
+    }
+
     private final String brokerUri;
     private final String clientId;
     private final boolean useTls;
     private final RpcRequestListener rpcRequestListener;
+    private final ConnectionLostListener connectionLostListener;
 
     private volatile MqttClient client;
 
     public ThingsBoardMqttConnection(String brokerUri, String clientId, boolean useTls,
-                                      RpcRequestListener rpcRequestListener) {
+                                      RpcRequestListener rpcRequestListener,
+                                      ConnectionLostListener connectionLostListener) {
         this.brokerUri = brokerUri;
         this.clientId = clientId;
         this.useTls = useTls;
         this.rpcRequestListener = rpcRequestListener;
+        this.connectionLostListener = connectionLostListener;
     }
 
     /** @return 连接并订阅 RPC 请求是否成功；失败原因已记日志，调用方按 {@link com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff} 排下一次重试。 */
@@ -143,6 +151,18 @@ public final class ThingsBoardMqttConnection {
         @Override
         public void connectionLost(Throwable cause) {
             Log.w(TAG, "ThingsBoard MQTT 连接断开", cause);
+            MqttClient lost = client;
+            client = null;
+            if (lost != null) {
+                try {
+                    lost.close();
+                } catch (MqttException e) {
+                    Log.w(TAG, "释放断线的 MQTT 客户端失败", e);
+                }
+            }
+            if (connectionLostListener != null) {
+                connectionLostListener.onConnectionLost(cause);
+            }
         }
 
         @Override

@@ -66,6 +66,42 @@ public class PendingAlarmStoreTest {
     }
 
     @Test
+    public void drainAndSendOnlyRemovesEntriesThatActuallySent() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        PendingAlarmStore store = new PendingAlarmStore(persistence, 10);
+        store.enqueue("a");
+        store.enqueue("b");
+        store.enqueue("c");
+
+        List<String> sentPayloads = new ArrayList<>();
+        int sent = store.drainAndSend(payload -> {
+            if (payload.equals("b")) {
+                return false; // 模拟第二条发送失败
+            }
+            sentPayloads.add(payload);
+            return true;
+        });
+
+        assertEquals(1, sent);
+        assertEquals(Arrays.asList("a"), sentPayloads);
+        assertEquals("失败的一条和之后的都应该原样留在队列里", 2, store.size());
+        assertEquals("持久化状态要跟内存队列一致，不能出现已清空但没真正发出去的窗口",
+                Arrays.asList("b", "c"), persistence.loadAll());
+    }
+
+    @Test
+    public void drainAndSendStopsAtFirstFailureAndPreservesOrder() {
+        PendingAlarmStore store = new PendingAlarmStore(new InMemoryPersistence(), 10);
+        store.enqueue("a");
+        store.enqueue("b");
+
+        int sent = store.drainAndSend(payload -> false);
+
+        assertEquals(0, sent);
+        assertEquals(Arrays.asList("a", "b"), store.drainAll());
+    }
+
+    @Test
     public void persistsAcrossRestartViaInjectedPersistence() {
         InMemoryPersistence persistence = new InMemoryPersistence();
         PendingAlarmStore first = new PendingAlarmStore(persistence, 10);

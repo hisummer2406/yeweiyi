@@ -100,6 +100,8 @@ public class SetAlarmThresholdHandlerTest {
         OilCanSet existing = new OilCanSet();
         existing.setPk_oilCanId(1);
         existing.setHeightOilAlarm(4000);
+        existing.setLowOilAlarm(2000);
+        existing.setLlowOilAlarm(1000);
         repo.byId.put(1, existing);
 
         SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
@@ -108,6 +110,42 @@ public class SetAlarmThresholdHandlerTest {
         assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
         assertEquals(5000, repo.lastSaved.getHheightOilAlarm());
         assertEquals("未在 args 里出现的字段不应该被改动", 4000, repo.lastSaved.getHeightOilAlarm());
+    }
+
+    @Test
+    public void rejectsNegativeThreshold() {
+        FakeOilTankRepository repo = new FakeOilTankRepository();
+        OilCanSet existing = new OilCanSet();
+        existing.setHeightOilAlarm(4000);
+        existing.setLowOilAlarm(2000);
+        existing.setLlowOilAlarm(1000);
+        repo.byId.put(1, existing);
+
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"llowOilAlarm\":-1}"));
+
+        assertEquals(RpcResultStatus.REJECTED, result.getStatus());
+        assertEquals(RpcErrorCode.INVALID_PARAMS, result.getErrorCode());
+        assertNull(repo.lastSaved);
+    }
+
+    @Test
+    public void rejectsThresholdsOutOfOrder() {
+        FakeOilTankRepository repo = new FakeOilTankRepository();
+        OilCanSet existing = new OilCanSet();
+        existing.setHheightOilAlarm(5000);
+        existing.setHeightOilAlarm(4000);
+        existing.setLowOilAlarm(2000);
+        existing.setLlowOilAlarm(1000);
+        repo.byId.put(1, existing);
+
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        // 低 (3000) 超过了高 (4000) 之下但没超过——这里直接让低 > 高高，肯定乱序。
+        RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"lowOilAlarm\":6000}"));
+
+        assertEquals(RpcResultStatus.REJECTED, result.getStatus());
+        assertEquals(RpcErrorCode.INVALID_PARAMS, result.getErrorCode());
+        assertNull(repo.lastSaved);
     }
 
     @Test
@@ -142,7 +180,11 @@ public class SetAlarmThresholdHandlerTest {
     @Test
     public void repositoryFailureBecomesFailedResult() {
         FakeOilTankRepository repo = new FakeOilTankRepository();
-        repo.byId.put(1, new OilCanSet());
+        OilCanSet existing = new OilCanSet();
+        existing.setHeightOilAlarm(4000);
+        existing.setLowOilAlarm(2000);
+        existing.setLlowOilAlarm(1000);
+        repo.byId.put(1, existing);
         repo.throwOnUpdate = true;
 
         SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);

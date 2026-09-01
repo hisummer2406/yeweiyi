@@ -71,6 +71,7 @@ public final class ThingsBoardManager {
     private final ProcessedCommandStore commandStore;
     private final RpcDispatcher rpcDispatcher;
     private final ReconnectBackoff reconnectBackoff;
+    private final AtomicBoolean reconnectScheduled = new AtomicBoolean(false);
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "tb-reconnect");
@@ -86,7 +87,7 @@ public final class ThingsBoardManager {
         String scheme = ApiConfig.THINGSBOARD_USE_TLS ? "ssl://" : "tcp://";
         String brokerUri = scheme + SharePreManager.getIpBean().getIp() + ":" + SharePreManager.getIpBean().getPort();
         this.connection = new ThingsBoardMqttConnection(brokerUri, NetUtils.getMacAddr(),
-                ApiConfig.THINGSBOARD_USE_TLS, this::onRpcRequest);
+                ApiConfig.THINGSBOARD_USE_TLS, this::onRpcRequest, this::onConnectionLost);
 
         this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context), MAX_PENDING_ALARMS);
         this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context),
@@ -175,16 +176,7 @@ public final class ThingsBoardManager {
     }
 
     private void drainPendingAlarms() {
-        List<String> pending = pendingAlarmStore.drainAll();
-        if (pending.isEmpty()) {
-            return;
-        }
-        for (int i = 0; i < pending.size(); i++) {
-            if (!connection.publishTelemetry(pending.get(i))) {
-                pendingAlarmStore.requeue(pending.subList(i, pending.size()));
-                return;
-            }
-        }
+        pendingAlarmStore.drainAndSend(connection::publishTelemetry);
     }
 
     // ---- 30 秒快照 ----
@@ -219,11 +211,29 @@ public final class ThingsBoardManager {
 
     // ---- 连接与退避重连 ----
 
+    /**
+     * 连接建立后意外断线：{@link ThingsBoardMqttConnection.InternalCallback#connectionLost}
+     * 只负责记日志和释放旧客户端，重连调度收口到这里——跟 {@link #attemptConnect()} 失败分支
+     * 走同一条退避路径，避免两处各自维护重连节奏。
+     */
+    private void onConnectionLost(Throwable cause) {
+        if (!started.get()) {
+            return;
+        }
+        scheduleConnectAttempt(reconnectBackoff.nextDelayMillis());
+    }
+
     private void scheduleConnectAttempt(long delayMillis) {
+        if (!reconnectScheduled.compareAndSet(false, true)) {
+            // 已有一次重连在排队（比如 attemptConnect 失败分支和 connectionLost 前后脚触发），
+            // 不重复排队，避免短时间内堆出多个连接尝试。
+            return;
+        }
         reconnectExecutor.schedule(this::attemptConnect, delayMillis, TimeUnit.MILLISECONDS);
     }
 
     private void attemptConnect() {
+        reconnectScheduled.set(false);
         if (!started.get()) {
             return;
         }
