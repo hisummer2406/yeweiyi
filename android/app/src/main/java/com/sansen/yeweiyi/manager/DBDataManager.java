@@ -185,7 +185,9 @@ public class DBDataManager {
      * Read OilTable
      *
      * @param oilCan
+     * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public void setOilTableToOilCan(OilCan oilCan) {
         int[] heights;
         double[] volumes;
@@ -216,7 +218,9 @@ public class DBDataManager {
 
     /**
      * Read ProbeToOil
+     * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository#findAllProbeToOil}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public List<ProbeToOil> findAllProbeToOil() {
         List<ProbeToOil> probes = null;
         try {
@@ -252,6 +256,10 @@ public class DBDataManager {
      * @param AramInfo
      */
 
+    /**
+     * @deprecated 报警数据读写已迁移到 {@link com.sansen.yeweiyi.repository.AlarmRepository#saveAlarmRecord}；本方法无调用方，暂不删除。
+     */
+    @Deprecated
     public void setAramRecord(final String AramInfo,String guanHao,String jieZhi) {
 
         if (Singleton.getInstance().IsCreateAlarm){
@@ -274,6 +282,10 @@ public class DBDataManager {
 //            db.save(info);
         saveObject(info);
     }
+    /**
+     * @deprecated 出入库数据读写已迁移到 {@link com.sansen.yeweiyi.repository.StockRepository#saveStockRecord}；本方法无调用方，暂不删除。
+     */
+    @Deprecated
     public void saveSaveOilRecord(StockSave stockSave) {
 
 //            db.save(info);
@@ -286,7 +298,9 @@ public class DBDataManager {
      * @param workId
      * @param userId
      * @param oilsSaveInfo
+     * @deprecated 交班数据读写已迁移到 {@link com.sansen.yeweiyi.repository.ShiftRepository}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public void saveCommitWorkRecord(int workId, String userId,
                                      String oilsSaveInfo) {
         CommitWork info = new CommitWork(userId, workId,
@@ -299,7 +313,9 @@ public class DBDataManager {
      * Save SideleakageRecord
      *
      * @param oilsSaveInfo
+     * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public void saveSideleakageRecord(String oilsSaveInfo) {
         Sideleakage info = new Sideleakage(DateUtils.getYYYMMddHHmmss(),
                 oilsSaveInfo);
@@ -352,7 +368,9 @@ public class DBDataManager {
      *
      * @param info
      * @return
+     * @deprecated 报警数据读写已迁移到 {@link com.sansen.yeweiyi.repository.AlarmRepository}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public List<Alarm> getLastAlarm(String info) {
         List<Alarm> alarms = null;
         try {
@@ -401,7 +419,9 @@ public class DBDataManager {
      * findRecord by time
      *
      * @return List
+     * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public List<TempRecord> findTemper(int oilCanID) {
 
         List<TempRecord> records = null;
@@ -419,7 +439,9 @@ public class DBDataManager {
 
     /**
      * CommitWork
+     * @deprecated 交班数据读写已迁移到 {@link com.sansen.yeweiyi.repository.ShiftRepository#endShift}。
      */
+    @Deprecated
     public void CommitWork(SparseArray<OilCan> oilMap, String startTime) {
         CommitWork(0, startTime, oilMap);
     }
@@ -427,7 +449,9 @@ public class DBDataManager {
      * CommitWork
      * <p>
      * v b
+     * @deprecated 交班数据读写已迁移到 {@link com.sansen.yeweiyi.repository.ShiftRepository#endShift}。
      */
+    @Deprecated
     public void CommitWork(int workID,String startTime, SparseArray<OilCan> oilMap) {
         // 接班的高度、交班的高度、中间数据变化量
         String curTime = DateUtils.getYYYMMddHHmmss();
@@ -496,6 +520,10 @@ public class DBDataManager {
       //  saveObject(commitWork);
 //            db.save(commitWork);
     }
+    /**
+     * @deprecated 交班数据读写已迁移到 {@link com.sansen.yeweiyi.repository.ShiftRepository#startShift}。
+     */
+    @Deprecated
     public void CommitWork(SparseArray<OilCan> oilMap) {
         CommitWorkStart(0, oilMap);
     }
@@ -503,7 +531,9 @@ public class DBDataManager {
      * CommitWork
      * <p>
      * v b
+     * @deprecated 交班数据读写已迁移到 {@link com.sansen.yeweiyi.repository.ShiftRepository#startShift}。
      */
+    @Deprecated
     public void CommitWorkStart(int workID,  SparseArray<OilCan> oilMap) {
         // 接班的高度、交班的高度、中间数据变化量
         String curTime = DateUtils.getYYYMMddHHmmss();
@@ -737,6 +767,10 @@ public class DBDataManager {
 
     }
 
+    /**
+     * @deprecated 报警数据读写已迁移到 {@link com.sansen.yeweiyi.repository.AlarmRepository}；本方法无调用方，暂不删除。
+     */
+    @Deprecated
     public void SaveDB(int oilCanPos, String info,String guanHao,String jieZhi) {
         String alarmInfo = oilCanPos + info;
 
@@ -809,6 +843,10 @@ public class DBDataManager {
         return null;
     }
 
+    /**
+     * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository#exportOilCanTable}。
+     */
+    @Deprecated
     public void SaveOilCanTable(String path) {
 
         ExportExcel<OilCanTable> exportExcel = new ExportExcel<OilCanTable>();
@@ -856,6 +894,10 @@ public class DBDataManager {
         ;
     };
 
+    /**
+     * @deprecated 报警数据读写已迁移到 {@link com.sansen.yeweiyi.repository.AlarmRepository#saveAlarm}；本方法无调用方，暂不删除。
+     */
+    @Deprecated
     public void saveAlarm(int oilCanPos, OilMessage oilMessage) {
         sendOilMsg(oilMessage);
         if (oilMessage.getType()==OilMessage.PRO_ERR_CONN){
@@ -906,7 +948,9 @@ public class DBDataManager {
 
     /**
      * 罐表复制 将记录a中的数据，复制到记录b中的数据 如果罐表2有数据那么就直接覆盖
+     * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository}；本方法无调用方，暂不删除。
      */
+    @Deprecated
     public void OilCanTableCopy(int startId, int endId) {
 
         try {

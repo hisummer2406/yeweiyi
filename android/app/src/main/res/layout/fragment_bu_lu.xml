@@ -22,6 +22,16 @@
         android:orientation="vertical"
         android:padding="40dp">
 
+      <ScrollView
+          android:layout_width="match_parent"
+          android:layout_height="match_parent"
+          android:fillViewport="true">
+
+      <LinearLayout
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:orientation="vertical">
+
         <!-- 左右两大栏容器 -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -130,7 +140,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_in_height"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -166,7 +176,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_in_liter"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -289,7 +299,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_out_height"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -325,7 +335,7 @@
                         android:textSize="22sp" />
 
                     <EditText
-                        android:inputType="number"
+                        android:inputType="numberDecimal"
                         android:id="@+id/et_out_liter"
                         android:layout_width="140dp"
                         android:layout_height="44dp"
@@ -355,6 +365,9 @@
             android:text="当入库或出库过程中，由于停电或设备故障前导致记录缺失，可手动补录。目前仅支持补录出库记录和入库记录"
             android:textColor="#666666"
             android:textSize="18sp" />
+
+      </LinearLayout>
+      </ScrollView>
 
     </LinearLayout>
 

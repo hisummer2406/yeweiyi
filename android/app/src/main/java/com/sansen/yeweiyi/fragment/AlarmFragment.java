@@ -21,7 +21,6 @@ import android.widget.TextView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.adapter.AlarmAdapter;
 import com.sansen.yeweiyi.adapter.OutStockAdapter;
-import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.Alarm;
@@ -29,9 +28,10 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.repository.AlarmRepository;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -46,6 +46,7 @@ import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
 public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnItemClickListener {
     private String TAG = "AlarmFragment";
+    private final AlarmRepository alarmRepository = AlarmRepositoryImpl.getInstance();
     /**
      * 下拉刷新思路
      * 1、显示前20条记录数据，倒序序 按时间
@@ -187,7 +188,7 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
      */
     public List<Alarm> findAllObject(final Class clazz, int pageIndex,
                                      int pageSize, boolean des) {
-        return dbManager.findLimit(clazz,pageSize,pageIndex,des);
+        return alarmRepository.findPage(pageSize,pageIndex,des);
     }
 
     /**
@@ -218,8 +219,8 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
         Log.e("TAG 路径",path);
         ExportExcel<Alarm> exportExcel = new ExportExcel<Alarm>();
         String headers[] = { "",SystemUtils.getRsStr(R.string.time),"报警信息", "介质","罐号"};
-        DBDataManager db = MyApplication.getInstance().getmDBManager();
-        List<Alarm> dataset = db.findAllObject(Alarm.class);
+        // 按 time 倒序取数，与界面列表（isSort=true）顺序保持一致
+        List<Alarm> dataset = alarmRepository.findAllSorted(true);
         File file = new File(path);
         if (!file.exists())
             file.mkdir();
@@ -284,7 +285,7 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
             public void onClick(View view) {
                 Alarm alarm = (Alarm) myAdapter
                         .getItem(position);
-                dbManager.delteRecord(alarm);
+                alarmRepository.delete(alarm);
                 initializeAdapter(isSort);
                 dialog.dismiss();
             }

@@ -76,7 +76,6 @@ public class ZhongChengCompany implements AbstractCompany {
     byte[] byte2 = new byte[2];
     OilCan oilCan;
     int oilRoate;
-    double wendu;
     double Changdu;
 
     @Override
@@ -109,7 +108,7 @@ public class ZhongChengCompany implements AbstractCompany {
                         oilCan = map.valueAt(i);
                         if (address.equals(oilCan.getProbeAdr())) {
                             oilCan.setOilLevel(BigDecimal.valueOf(oilLevel).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue());
-                            oilCan.setWaterLevel(BigDecimal.valueOf(waterLevel).add(BigDecimal.valueOf(oilCan.getWaterLevelCorrection())).doubleValue());
+                            oilCan.setWaterLevel(Math.max(0, BigDecimal.valueOf(waterLevel).add(BigDecimal.valueOf(oilCan.getWaterLevelCorrection())).doubleValue()));
 
                             if (SharePrefUtil.getBoolean(MyApplication.getInstance(), SharePrefUtil.SHOW_VOLUME, true)) {
                                 if (oilCan.getHightArray().length > 1) {
@@ -130,7 +129,10 @@ public class ZhongChengCompany implements AbstractCompany {
                             oilCan.setOilVolume(DataUtils.doubleFoment(oilVolume));
                             oilCan.setOilWeight(DataUtils.doubleFoment(oilCan
                                     .getDensity() * oilCan.getOilVolume()));
-                            oilCan.setTemper(BigDecimal.valueOf(wendu).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
+                            // 温度不在这里写：44帧只带油高/水位，本罐的温度由该罐自己的45帧应答
+                            // （见下方 bytes.length==17 分支）按探针地址单独绑定和更新，
+                            // 收到自己的45帧之前维持上一次的值。之前这里用一个跨罐共享的
+                            // 成员变量 wendu 覆盖，多探针时会把别的罐的温度串到本罐（issue #28）。
                             oilRoate = (int) ((oilCan.getOilLevel() / oilCan
                                     .getMaxHeight()) * 100);
 
@@ -151,11 +153,20 @@ public class ZhongChengCompany implements AbstractCompany {
             String str = DataUtils.bytesToHexString(bytes1, 1).trim();
            // Log.i("CRC", "probeInfoPase: 准备crc的数据"+str+"   "+DataUtils.bytesToHexString(bytes1,3));
             if (str.equals("45")) {
-                byte[] bytes4 = new byte[2];
-                bytes4[0] = bytes1[1];
-                bytes4[1] = bytes1[2];
-                wendu = Math.floor(calcTemperature(bytes1[1],bytes1[2]));
-               // Log.e("CRC 温度", "===" + wendu);
+                // 45帧（温度应答）按探针地址绑定到对应油罐，取址方式与44帧一致（同一报文头结构）。
+                // 不再写共享字段——旧写法下任意一罐收到的45帧都会覆盖所有罐后续的温度（issue #28）。
+                String address = DataUtils.byteToHexString(bytes[2]);
+                double temp = Math.floor(calcTemperature(bytes1[1], bytes1[2]));
+                map = MyApplication.getInstance().getmOilcanDataManager().getData();
+                if (map != null) {
+                    for (int i = 0; i < map.size(); i++) {
+                        OilCan can = map.valueAt(i);
+                        if (address.equals(can.getProbeAdr())) {
+                            can.setTemper(BigDecimal.valueOf(temp).add(BigDecimal.valueOf(can.getTempCorrection())).doubleValue());
+                            return true;
+                        }
+                    }
+                }
             }
         }
         else if (bytes.length==14){

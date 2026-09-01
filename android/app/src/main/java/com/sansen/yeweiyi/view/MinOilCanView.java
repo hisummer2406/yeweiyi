@@ -343,7 +343,7 @@ public class MinOilCanView extends View {
             mTextPaint.setColor(Color.RED);
             if (SharePrefUtil.getBoolean(ct, SharePrefUtil.TEST_DATA, false)) {
                 oilCan.setOilLevel(oilCan.getLevelCorrection());
-                oilCan.setWaterLevel(oilCan.getWaterLevelCorrection());
+                oilCan.setWaterLevel(Math.max(0, oilCan.getWaterLevelCorrection()));
                 oilCan.setTemper(oilCan.getTempCorrection());
 
                 int oilRoate = (int) ((oilCan.getOilLevel() / oilCan

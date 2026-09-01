@@ -50,8 +50,8 @@ android {
         applicationId "com.sansen.yeweiyi"
         minSdkVersion 21
         targetSdkVersion 27
-        versionCode 1
-        versionName "NEW.SS.A.Y1.00"
+        versionCode 3
+        versionName "1.0.3-A"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
 
         buildConfigField "String", "PRODUCT_KEY", secretField('sansen.productKey')

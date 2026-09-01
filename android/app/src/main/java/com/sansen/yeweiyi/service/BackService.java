@@ -21,6 +21,10 @@ import com.sansen.yeweiyi.listener.NetListener;
 import com.sansen.yeweiyi.manager.AlarmManager;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
+import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.NetUtils;
@@ -605,7 +609,7 @@ public class BackService extends Service {
          */
 
         private void sendAlarms(int limit, int offset, String beginTime, String endTime, boolean sort) {
-            List<Alarm> lists = DBDataManager.getInstance().findLimitRecord(Alarm.class, limit, offset, sort, beginTime, endTime);
+            List<Alarm> lists = AlarmRepositoryImpl.getInstance().findBetween(limit, offset, sort, beginTime, endTime);
             if (lists == null) {
                 lists = new ArrayList<>();
             }
@@ -637,7 +641,7 @@ public class BackService extends Service {
         public void sendUnloadOils(int limit, int offset, String beginTime, String endTime, boolean sort) {
             Log.i(TAG, "卸油记录: 卸油记录  limit" + limit + " offset:" + offset + "sort: " + sort);
 
-            List<OilInOut> lists = DBDataManager.getInstance().findLimitRecord(OilInOut.class, limit, offset, sort, beginTime, endTime);
+            List<OilInOut> lists = StockRepositoryImpl.getInstance().findInBetween(limit, offset, sort, beginTime, endTime);
 
             if (lists == null) {
                 lists = new ArrayList<>();
@@ -675,7 +679,7 @@ public class BackService extends Service {
         public void sendShifts(int limit, int offset, String beginTime, String endTime, boolean sort) {
             Log.i(TAG, "交班记录: 交班记录  limit" + limit + " offset:" + offset + "sort: " + sort);
 
-            List<CommitWork> lists = DBDataManager.getInstance().findLimitRecord(CommitWork.class, limit, offset, sort, beginTime, endTime);
+            List<CommitWork> lists = ShiftRepositoryImpl.getInstance().findBetween(limit, offset, sort, beginTime, endTime);
             if (lists == null) {
                 lists = new ArrayList<>();
             }
@@ -706,7 +710,7 @@ public class BackService extends Service {
         public void sendLeakOils(int limit, int offset, String beginTime, String endTime, boolean sort) {
             Log.i(TAG, "测漏: 测漏记录  limit" + limit + " offset:" + offset + "sort: " + sort);
 
-            List<Sideleakage> lists = DBDataManager.getInstance().findLimitRecord(Sideleakage.class, limit, offset, sort, beginTime, endTime);
+            List<Sideleakage> lists = OilTankRepositoryImpl.getInstance().findSideleakageBetween(limit, offset, sort, beginTime, endTime);
             if (lists == null) {
                 lists = new ArrayList<>();
             }

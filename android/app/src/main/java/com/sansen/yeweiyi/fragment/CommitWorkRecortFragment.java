@@ -29,10 +29,11 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.repository.ShiftRepository;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
@@ -56,6 +57,7 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 
 	private LinearLayoutManager mLinearLayoutManager;
 
+	private final ShiftRepository shiftRepository = ShiftRepositoryImpl.getInstance();
 	private boolean isSort = true;
 	private int datasize; // 模拟数据集的条数
 	private List<CommitWork> lists = null;// 存放当前的所有数据
@@ -74,7 +76,8 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 //				ly_jiaoBanData.setVisibility(View.GONE);
 //			});
 //			SaveOutOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
-			lists = dbManager.findAllObject(CommitWork.class);
+			// 按 id 倒序取数（与 findAllSorted 已有排序口径一致），与界面列表（isSort=true）顺序保持一致
+			lists = shiftRepository.findAllSorted(true);
 			//String gsonInfo=lists.get(0).getInfo();
 			for (int i=0;i<lists.size();i++){
 				List<OilWork> oilWorks=dbManager.stringToArray(lists.get(i).getInfo(), OilWork[].class);
@@ -99,8 +102,7 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 		Log.e("TAG 路径",path);
 		ExportExcel<OilWork> exportExcel = new ExportExcel<OilWork>();
 		String headers[] = { "介质",SystemUtils.getRsStr(R.string.tank_no),"开始时间", "结束时间",SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","出库量l","出库量kg"};
-		DBDataManager db = MyApplication.getInstance().getmDBManager();
-		// = db.findAllObject(OilWork.class);
+		// = MyApplication.getInstance().getmDBManager().findAllObject(OilWork.class);
 		File file = new File(path);
 		if (!file.exists())
 			file.mkdir();
@@ -238,7 +240,7 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 		temps = new ArrayList<CommitWork>();
 		if (temps != null) {
 
-			lists = dbManager.Sort(clazz, des);
+			lists = shiftRepository.findAllSorted(des);
 			datasize = lists.size();
 
 			// 读取前20记录数据
@@ -298,7 +300,7 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 
 
 	private List<CommitWork> findObject(int pageIndex, int pageSize) {
-		return dbManager.findLimit(CommitWork.class,pageSize,pageIndex,isSort);
+		return shiftRepository.findPage(pageSize,pageIndex,isSort);
 	}
 
 	@Override
@@ -359,7 +361,7 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 			public void onClick(View view) {
 				CommitWork oilWork = (CommitWork)myAdapter
 						.getItems(position);
-				dbManager.delteRecord(oilWork);
+				shiftRepository.delete(oilWork);
 				initializeAdapter(isSort);
 				dialog.dismiss();
 			}

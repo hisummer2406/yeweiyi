@@ -75,19 +75,13 @@
             android:name="com.baidu.lbsapi.API_KEY"
             android:value="ToGwqab3fyGGenU7AofwTYP9GzsTZgvL" />
 
-<!--        <activity-->
-<!--            -->
-<!--            android:name=".activity.MainActivity"-->
-<!--            android:label="@string/app_name"-->
-<!--            android:launchMode="singleTop"-->
-<!--            android:windowSoftInputMode="adjustPan|stateHidden" />-->
         <activity
             
             android:name=".GuideActivity.GuideActivity"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustUnspecified|stateHidden" />
         <activity
-            
+
             android:name=".activity.MainActivity"
             android:screenOrientation="landscape">
             <intent-filter>
@@ -135,7 +129,8 @@
             
             android:name=".view.InputDialogActivity"
             android:label="@string/lable_commitwork"
-            android:theme="@android:style/Theme.Holo.Light.Dialog.MinWidth" />
+            android:theme="@android:style/Theme.Holo.Light.Dialog.MinWidth"
+            android:windowSoftInputMode="adjustPan|stateHidden" />
         <activity
             
             android:name=".view.UpdateCommitDialog"

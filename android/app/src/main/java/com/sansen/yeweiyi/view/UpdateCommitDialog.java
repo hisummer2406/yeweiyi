@@ -12,6 +12,8 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilWork;
 import com.sansen.yeweiyi.db.CommitWork;
 import com.sansen.yeweiyi.manager.DBDataManager;
+import com.sansen.yeweiyi.repository.ShiftRepository;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -26,6 +28,7 @@ public class UpdateCommitDialog extends Activity implements OnClickListener {
 	private Button dialog_commit_cancel;
 	private OilWork oilWork;
 	private DBDataManager dbManager;
+	private final ShiftRepository shiftRepository = ShiftRepositoryImpl.getInstance();
 	private int oilCanId;
 	
 	@Override
@@ -60,7 +63,7 @@ public class UpdateCommitDialog extends Activity implements OnClickListener {
 			String weight = item_et_dialog_weight.getText().toString();
 			String beginHight = item_et_dialog_jie_height.getText().toString();
 			String endHeight = item_et_dialog_jiao_height.getText().toString();
-			CommitWork commitWork = (CommitWork) dbManager.findObjectByID(CommitWork.class, oilCanId);
+			CommitWork commitWork = shiftRepository.findById(oilCanId);
 			List<OilWork> oilWorks= dbManager.stringToArray(commitWork.getInfo(), OilWork[].class);
 			
 			int pos=0;
@@ -89,7 +92,7 @@ public class UpdateCommitDialog extends Activity implements OnClickListener {
 			String result = dbManager.getListToStringByGson(oilWorks);
 			commitWork.setInfo(result);
 		
-			dbManager.UpdateObject(commitWork);
+			shiftRepository.update(commitWork);
 			setResult(100);
 			finish();
 			break;

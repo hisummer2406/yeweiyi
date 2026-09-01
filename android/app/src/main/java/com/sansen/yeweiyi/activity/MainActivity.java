@@ -14,6 +14,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
@@ -53,6 +54,7 @@ import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.SocketManager.DataResolveListener;
 import com.sansen.yeweiyi.manager.ThreadManager;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.AndroidAdjustResizeBugFix;
 import com.sansen.yeweiyi.utils.DataUtils;
@@ -249,6 +251,11 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
     public void switchContent(BaseFragment from, BaseFragment to) {
         if (navigator.switchContent(from, to)) {
+            // 部分页面（如 OilCanSetFragment）会在显示期间临时把 Window 的 softInputMode
+            // 改成 adjustPan 以避免被软键盘遮挡；这里在切换到任何新页面前统一复位成系统默认值，
+            // 不依赖离开页面自己在 onHiddenChanged 里记得还原，避免遗留状态泄漏到下一个页面。
+            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+                    | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED);
             mContent = to;
         }
     }
@@ -553,7 +560,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private static Map<Integer, Integer> testOil = new HashMap<>();
 
     public static void updateTestOil() {
-        List<OilCanMapper> mapper = MyApplication.getInstance().getmDBManager().findAllObject(OilCanMapper.class);
+        List<OilCanMapper> mapper = OilTankRepositoryImpl.getInstance().findAllOilCanMapper();
         if (mapper != null && mapper.size() > 0) {
             for (OilCanMapper oilCanMapper : mapper) {
                 testOil.put(oilCanMapper.getProbeId(), oilCanMapper.getOilCanTableId());

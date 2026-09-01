@@ -4,7 +4,7 @@ import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
 import android.os.Bundle;
-import android.support.v7.app.AlertDialog;
+import android.text.InputFilter;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -26,17 +26,21 @@ import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.DialogUtil2;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.Singleton;
-import com.sansen.yeweiyi.utils.TokenUtil;
 
 import java.lang.reflect.Method;
 import java.util.List;
 
 
 public class OilCanSetFragment extends BaseFragment {
+    private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
     private int dialogSelectType = -1;
     private TextView item_tv_oilid;
     private EditText item_et_oilheight;
@@ -64,6 +68,8 @@ public class OilCanSetFragment extends BaseFragment {
     private int curPos = 0;
     private LinearLayout oilcanset_content;
     private String TAG = "OilCanSetFragment";
+    // 去/回颜色选择页期间置位，避免 onHiddenChanged 的 onReflushData() 用旧库值覆盖未保存的输入框
+    private boolean skipReflushOnColorReturn = false;
 
     //做一个隐藏dialog,主要功能是用于设置隐藏探针高度与设置默认升数，例：2.6的探针，设置隐藏0.6则
     //从0.6米之后才开始显示正常油量；如果设置默认高度则低于0.6显示默认升数。
@@ -82,11 +88,12 @@ public class OilCanSetFragment extends BaseFragment {
         findView();
         setTvPos(curPos);
 
-        oilCanSets = dbManager.findAllObject(OilCanSet.class);
+        oilCanSets = oilTankRepository.findAllOilCanSet();
         oilCanSet = oilCanSets.get(curPos);
         item_but_color.setBackgroundColor(oilCanSet.getOilColor());
         item_but_color.setOnClickListener(this);
         initOilCanSetData();
+        KeyboardAdjustHelper.applyPanWhileVisible(this);
     }
 
     private TextView item_tv_chuanGanQiLeng;//传感器长度
@@ -115,6 +122,10 @@ public class OilCanSetFragment extends BaseFragment {
         item_et_densityvar = (EditText) rootView.findViewById(R.id.item_et_densityvar);
         item_et_tempercorrection = (EditText) rootView.findViewById(R.id.item_et_tempercorrection);
         item_et_oildensity = (EditText) rootView.findViewById(R.id.item_et_oildensity);
+        // 介质密度需要精确到小数点后 3 位，密度差维持 1 位小数
+        InputFilter[] oneDecimalFilter = new InputFilter[]{new DecimalDigitsInputFilter(1)};
+        item_et_oildensity.setFilters(new InputFilter[]{new DecimalDigitsInputFilter(3)});
+        item_et_densityvar.setFilters(oneDecimalFilter);
         item_tv_oiltype = rootView.findViewById(R.id.item_sp_oiltype);
         item_but_color = (Button) rootView.findViewById(R.id.item_but_color);
         ly_baoCunData = rootView.findViewById(R.id.ly_baoCunData);
@@ -127,6 +138,7 @@ public class OilCanSetFragment extends BaseFragment {
         ly_baoCunData.setOnClickListener(this);
         ly_copyData.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView, ly_baoCunData, ly_copyData, ly_upper_page);
 //        mitem_tv_oilHaight.setVisibility(View.INVISIBLE);
 //        mitem_et_oilHaight.setVisibility(View.INVISIBLE);//setOilHeight
         item_tv_oilheight = rootView.findViewById(R.id.item_tv_oilheight);
@@ -152,7 +164,7 @@ public class OilCanSetFragment extends BaseFragment {
                 oilCanSet.setGunType(i);
                 //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
                 oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(oilCanSet);
+                oilTankRepository.updateOilCanSet(oilCanSet);
                 Const.isUpdate = true;
 
             }
@@ -200,7 +212,7 @@ public class OilCanSetFragment extends BaseFragment {
                 oilCanSet.setOilType(resultCode);
                 //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
                 oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(oilCanSet);
+                oilTankRepository.updateOilCanSet(oilCanSet);
                 item_tv_oiltype.setText(DataUtils.getOilType()[resultCode]);
                 Const.isUpdate = true;
             } else if (dialogSelectType == 8) {
@@ -210,7 +222,7 @@ public class OilCanSetFragment extends BaseFragment {
                 // item_tv_tanzhenID.setText("" + (resultCode + 1));
                 //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
                 oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(oilCanSet);
+                oilTankRepository.updateOilCanSet(oilCanSet);
                 Const.isUpdate = true;
             }
         }
@@ -255,11 +267,11 @@ public class OilCanSetFragment extends BaseFragment {
       //  item_et_tempheightalarm.setTag(R.id.tag_first, oilCanSet.getHighTempAlarm());
         item_et_templowalarm.setText(String.valueOf(oilCanSet.getLowTempAlarm()));
      //   item_et_templowalarm.setTag(R.id.tag_first, oilCanSet.getLowTempAlarm());
-        item_et_oillevelcorrection.setText(String.valueOf(oilCanSet.getOilCorrection()));
+        item_et_oillevelcorrection.setText(String.valueOf(Math.round(oilCanSet.getOilCorrection())));
       //  item_et_oillevelcorrection.setTag(R.id.tag_first, oilCanSet.getOilCorrection());
-        item_et_waterlevlecorrection.setText(String.valueOf(oilCanSet.getWaterCorrection()));
+        item_et_waterlevlecorrection.setText(String.valueOf(Math.round(oilCanSet.getWaterCorrection())));
       //  item_et_waterlevlecorrection.setTag(R.id.tag_first, oilCanSet.getWaterCorrection());
-        item_et_tempercorrection.setText(String.valueOf(oilCanSet.getTempCorrection()));
+        item_et_tempercorrection.setText(String.valueOf(Math.round(oilCanSet.getTempCorrection())));
        // item_et_tempercorrection.setTag(R.id.tag_first, oilCanSet.getTempCorrection());
         item_et_oildensity.setText(String.valueOf(oilCanSet.getDensity()));
        // item_et_oildensity.setTag(R.id.tag_first, oilCanSet.getDensity());
@@ -338,8 +350,7 @@ public class OilCanSetFragment extends BaseFragment {
 
     protected void readDB(int postion) {
 
-        oilCanSet = (OilCanSet) dbManager.findObjectByID(OilCanSet.class,
-                postion + 1);
+        oilCanSet = oilTankRepository.findOilCanSetById(postion + 1);
         if (oilCanSet == null) {
             oilCanSet = new OilCanSet();
         }
@@ -417,45 +428,14 @@ public class OilCanSetFragment extends BaseFragment {
         }
     }
 
-    AlertDialog dialog;
-
-    private void showInputPsw(final BaseFragment fragment) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(ct);
-        View v = LayoutInflater.from(ct).inflate(R.layout.input_psw, null);
-        builder.setView(v);
-        final EditText et = (EditText) v.findViewById(R.id.et_psw);
-        Button submit = (Button) v.findViewById(R.id.submit);
-        Button cancle = (Button) v.findViewById(R.id.cancel);
-        submit.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (et.getText().toString().equals(TokenUtil.getToken())) {
-//                    mitem_tv_oilHaight.setVisibility(View.VISIBLE);
-//                    mitem_et_oilHaight.setVisibility(View.VISIBLE);
-                    dialog.dismiss();
-                } else {
-//                    mitem_tv_oilHaight.setVisibility(View.INVISIBLE);
-//                    mitem_et_oilHaight.setVisibility(View.INVISIBLE);
-                    dialog.dismiss();
-
-                }
-            }
-        });
-        cancle.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                dialog.dismiss();
-            }
-        });
-        dialog = builder.show();
-    }
-
     private void item_but_color(View v) {
         MainActivity main = (MainActivity) getActivity();
         if (main.colorFragment == null) {
             main.colorFragment = new ColorFragment();
         }
         main.colorFragment.setCurrOilCan(oilCanSet);
+        // 去颜色选择页之前不保存，也不希望回来时用旧库值把还没保存的输入框冲掉
+        skipReflushOnColorReturn = true;
         main.switchContent(main.mContent, main.colorFragment);
 
     }
@@ -464,6 +444,19 @@ public class OilCanSetFragment extends BaseFragment {
     public void onHiddenChanged(boolean hidden) {
         // TODO Auto-generated method stub
         super.onHiddenChanged(hidden);
+
+        if (!hidden) {
+            KeyboardAdjustHelper.applyPanWhileVisible(this);
+        }
+
+        if (skipReflushOnColorReturn) {
+            // 去/回颜色选择页期间：不落库也不重新读库覆盖输入框，只在回来时同步颜色按钮背景
+            if (!hidden) {
+                item_but_color.setBackgroundColor(oilCanSet.getOilColor());
+                skipReflushOnColorReturn = false;
+            }
+            return;
+        }
 
         if (hidden & Const.isUpdate == true) {
             updateData();
@@ -502,7 +495,7 @@ public class OilCanSetFragment extends BaseFragment {
                 method.invoke(oilCanSet, Double.parseDouble(cur));
             }
             oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-            dbManager.UpdateObject(oilCanSet);
+            oilTankRepository.updateOilCanSet(oilCanSet);
           //  vText.setText(cur);
           //  vText.setText("");
             Const.isUpdate = true;
@@ -564,7 +557,7 @@ public class OilCanSetFragment extends BaseFragment {
                             method.invoke(oilCanSet, Double.parseDouble(cur));
                         }
                         oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                      //  dbManager.UpdateObject(oilCanSet);
+                      //  oilTankRepository.updateOilCanSet(oilCanSet);
                         vText.setText(cur);
                         vText.setText("");
                         Const.isUpdate = true;

@@ -25,7 +25,6 @@ import android.widget.TextView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.activity.ActivityDialog;
 import com.sansen.yeweiyi.adapter.GuanBiaoAdapter;
-import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.GuanBiaoData;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
@@ -37,11 +36,13 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
+import com.sansen.yeweiyi.repository.OilTankRepository;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
+import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
@@ -62,6 +63,7 @@ import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 @SuppressLint("ValidFragment")
 public class CreateOilTableFragment extends BaseFragment {
 
+    private final OilTankRepository oilTankRepository = OilTankRepositoryImpl.getInstance();
     private ImageView createtable_iv_icon;
     //罐长
     private EditText createtable_ed_length;
@@ -145,6 +147,9 @@ public class CreateOilTableFragment extends BaseFragment {
         createtable_bt_writeoilcan.setOnClickListener(this);
         createtable_bt_chaKan.setOnClickListener(this);
         ly_upper_page.setOnClickListener(this);
+        KeyboardAdjustHelper.hideActionBarWhileKeyboardVisible(rootView,
+                createtable_bt_build, createtable_bt_saveoilcan, createtable_bt_copyoilcan,
+                createtable_bt_writeoilcan, createtable_bt_chaKan, ly_upper_page);
 
 
         guanbiao_list_info = (RecyclerView) rootView.findViewById(R.id.guanbiao_list_info);
@@ -204,6 +209,7 @@ public class CreateOilTableFragment extends BaseFragment {
             case R.id.createtable_bt_writeoilcan:
 
                 if (temps!=null&&temps.size()>0){
+                    dataset.clear();
                     for (int i=0;i<temps.size();i++){
                         OilTable oilTable=new OilTable();
                         oilTable.setHeight(temps.get(i).getHight());
@@ -255,8 +261,7 @@ public class CreateOilTableFragment extends BaseFragment {
         Log.e("TAG 路径", path);
         ExportExcel<OilTable> exportExcel = new ExportExcel<OilTable>();
         String headers[] = { "高度", "容积"};
-        DBDataManager db = MyApplication.getInstance().getmDBManager();
-      //  List<OilTable> dataset = db.findAllObject(OilInOut.class);
+      //  List<OilTable> dataset = MyApplication.getInstance().getmDBManager().findAllObject(OilInOut.class);
         File file = new File(path);
         if (!file.exists())
             file.mkdir();
@@ -307,7 +312,7 @@ public class CreateOilTableFragment extends BaseFragment {
             if (!SystemUtils.isUsbExit()) {
                 path= Environment.getExternalStorageDirectory().getPath()+"/zhongcheng";
             }
-            dbManager.SaveOilCanTable(path);
+            oilTankRepository.exportOilCanTable(path);
             System.out.println("罐表保存成功");
 
 
@@ -472,7 +477,7 @@ public class CreateOilTableFragment extends BaseFragment {
                 resultCode -= 100;
                 createOilCanTalbe.setPk_oilCanId(resultCode + 1);
                 createOilCanTalbe.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                dbManager.UpdateObject(createOilCanTalbe);
+                oilTankRepository.updateOilCanTable(createOilCanTalbe);
 
                 if ("en".equals(SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh"))) {
                     SystemUtils.showRsToast("No." + SystemUtils.getRsStr(R.string.createtable_daorudao) + (resultCode + 1) + SystemUtils.getRsStr(R.string.createtable_tanksucess));
@@ -486,7 +491,7 @@ public class CreateOilTableFragment extends BaseFragment {
             if (resultCode != 0) {
                 resultCode -= 100;
                 createOilCanTalbe = null;
-                createOilCanTalbe = (OilCanTable) dbManager.findAllObject(OilCanTable.class).get(resultCode);
+                createOilCanTalbe = oilTankRepository.findAllOilCanTable().get(resultCode);
                 createOilCanTalbe.StringToArray();
                 setMyAdapter();
             }

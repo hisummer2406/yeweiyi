@@ -10,6 +10,8 @@ import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.config.ApiConfig;
+import com.sansen.yeweiyi.repository.AlarmRepository;
+import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
@@ -25,7 +27,7 @@ public class AlarmDetection {
     private static AlarmDetection mInstance;
     private AlarmManager alarmManager;
     private MyApplication myApplication;
-    private DBDataManager dbDataManager;
+    private AlarmRepository alarmRepository;
     AlarmRecord record;
     Map<Integer, AlarmState> alarmStates;
     public static final String NoAlarm = SystemUtils.getRsStr(R.string.no_alarm);
@@ -41,7 +43,7 @@ public class AlarmDetection {
     private AlarmDetection(AlarmManager alarmManager) {
         this.alarmManager = alarmManager;
         myApplication = MyApplication.getInstance();
-        dbDataManager = myApplication.getmDBManager();
+        alarmRepository = AlarmRepositoryImpl.getInstance();
         alarmStates = MyApplication.alarmStates;
     }
 
@@ -143,7 +145,7 @@ public class AlarmDetection {
                     alarmState = alarmStates.get(oilCan.getOilCanPos());
                     if (alarmState.getHheightOilError() == 0) {
                         oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                        dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                        alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                         alarmState.setHheightOilError(1);
 
                     }
@@ -173,7 +175,7 @@ public class AlarmDetection {
                             UploadRecord("高油位报警", oilCan);
                         }
                         oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                        dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                        alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                         alarmState.setHeightOilError(1);
 
 
@@ -242,7 +244,7 @@ public class AlarmDetection {
                         alarmState = alarmStates.get(oilCan.getOilCanPos());
                         if (alarmState.getLlowOilError() == 0) {
                             oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                            dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                            alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                             alarmState.setLlowOilError(1);
                             alarmState.setLowOilError(0);
                         }
@@ -266,7 +268,7 @@ public class AlarmDetection {
                         alarmState = alarmStates.get(oilCan.getOilCanPos());
                         if (alarmState.getLowOilError() == 0) {
                             oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                            dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                            alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                             if (SharePrefUtil.getBoolean(myApplication.getApplicationContext(), SharePrefUtil.ISUPLOADING, false)) {
                                 UploadRecord("低油位报警", oilCan);
                             }
@@ -337,7 +339,7 @@ public class AlarmDetection {
             alarmState = alarmStates.get(oilCan.getOilCanPos());
             if (alarmState.getHeightWaterError() == 0) {
                 oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                 alarmState.setHeightWaterError(1);
             }
         }
@@ -367,7 +369,7 @@ public class AlarmDetection {
             alarmState = alarmStates.get(oilCan.getOilCanPos());
             if (alarmState.getHeightTempError() == 0) {
                 oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                 alarmState.setHeightTempError(1);
             }
         }
@@ -400,7 +402,7 @@ public class AlarmDetection {
                 alarmState = alarmStates.get(oilCan.getOilCanPos());
                 if (alarmState.getLowTempError() == 0) {
                     oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                    dbDataManager.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+                    alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
                     alarmState.setLowTempError(1);
                 }
             }

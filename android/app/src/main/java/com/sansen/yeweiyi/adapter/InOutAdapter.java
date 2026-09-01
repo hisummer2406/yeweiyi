@@ -12,8 +12,8 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.logic.Const;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.NumberTools;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
@@ -32,7 +32,7 @@ public class InOutAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
     public InOutAdapter() {
 
         oilInOuts = new ArrayList<OilInOut>();
-        List<OilCanSet> os = DBDataManager.getInstance().findAllObject(OilCanSet.class);
+        List<OilCanSet> os = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
         if (os != null && os.size() > 0) {
             density = os.get(0).getDensity();
             //Log.i("TAG","密度"+density);

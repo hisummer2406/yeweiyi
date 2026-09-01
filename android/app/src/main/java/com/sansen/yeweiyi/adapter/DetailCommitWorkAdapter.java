@@ -13,8 +13,8 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilWork;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.logic.Const;
-import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
+import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 
 import java.util.List;
@@ -31,7 +31,7 @@ public class DetailCommitWorkAdapter extends BaseAdapter {
 
 	public DetailCommitWorkAdapter(Context ct) {
 		this.ct = ct;
-		List<OilCanSet> os = DBDataManager.getInstance().findAllObject(OilCanSet.class);
+		List<OilCanSet> os = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
 		if (os != null && os.size() > 0) {
 			density = os.get(0).getDensity();
 			Log.e("TAG","密度"+density);
