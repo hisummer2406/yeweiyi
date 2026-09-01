@@ -40,7 +40,6 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:onClick="btn_jieJing"
             android:orientation="horizontal">
 
             <ImageView
@@ -59,13 +58,13 @@
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/ly_bar_but_alarm"
             android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:onClick="bar_but_alarm"
             android:gravity="center"
             android:orientation="horizontal">
 
@@ -87,13 +86,13 @@
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/ly_bar_but_saveoil"
             android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:onClick="bar_but_saveoil"
             android:gravity="center"
             android:orientation="horizontal">
 
@@ -116,10 +115,10 @@
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/ly_bar_but_inoil"
             android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
-            android:onClick="bar_but_inoil"
             android:layout_width="@dimen/dp_0"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -145,13 +144,13 @@
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/ly_bar_but_commitwork"
             android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:onClick="bar_but_commitwork"
             android:gravity="center"
             android:orientation="horizontal">
             <ImageView
@@ -172,13 +171,13 @@
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
         <LinearLayout
+            android:id="@+id/btn_kuCunRecord"
             android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
             android:layout_width="@dimen/dp_0"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:onClick="btn_kuCunRecord"
             android:gravity="center"
             android:orientation="horizontal">
 
@@ -199,6 +198,7 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/ly_main_but_set"
             android:background="@drawable/but_selector_bg"
             android:paddingLeft="@dimen/dp_5"
             android:paddingRight="@dimen/dp_5"
@@ -206,7 +206,6 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:onClick="main_but_set"
             android:orientation="horizontal">
 
             <ImageView
@@ -230,67 +229,6 @@
     <include
         android:id="@+id/title_bar"
         layout="@layout/layout_title_bar" />
-
-    <LinearLayout
-        android:visibility="gone"
-        android:id="@+id/menu_right"
-        android:layout_width="@dimen/main_right_width"
-        android:layout_height="match_parent"
-        android:layout_alignParentRight="true"
-        android:background="@drawable/sansen_right_title"
-        android:orientation="vertical" >
-
-        <Button
-            android:id="@+id/main_but_main"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:onClick="main_but_main" />
-
-        <Button
-            android:visibility="gone"
-            android:id="@+id/main_but_driver"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:onClick="main_but_driver" />
-
-        <Button
-            android:id="@+id/main_but_set"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:onClick="main_but_set" />
-
-        <Button
-            android:id="@+id/main_but_commitwork"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:onClick="main_but_commitwork" />
-
-        <Button
-            android:id="@+id/main_but_sidelea"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:background="@drawable/sansen_jiance_but_selector"
-            android:onClick="main_but_sidelea" />
-
-        <Button
-            android:id="@+id/main_but_print"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:onClick="main_but_print" />
-
-        <Button
-            android:id="@+id/main_but_alarm"
-            android:layout_width="match_parent"
-            android:layout_weight="1"
-            android:layout_height="0dp"
-            android:onClick="main_but_alarm" />
-    </LinearLayout>
 <!--    <FrameLayout-->
 <!--        android:id="@+id/fragment_container"-->
 <!--        android:layout_width="match_parent"-->
@@ -301,8 +239,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@id/title_bar"
-       	android:layout_above="@id/radio_bar"
-        android:layout_toLeftOf="@id/menu_right" />
+       	android:layout_above="@id/radio_bar" />
 <!--	<AbsoluteLayout-->
 <!--	    android:layout_width="match_parent"-->
 <!--	    android:layout_height="match_parent"-->

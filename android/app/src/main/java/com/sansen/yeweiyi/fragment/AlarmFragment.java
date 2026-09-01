@@ -94,6 +94,7 @@ public class AlarmFragment extends BaseFragment implements OutStockAdapter.OnIte
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
         ly_baoJing=rootView.findViewById(R.id.ly_baoJing);
         ly_baoJing.setOnClickListener(this);
+        rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
         if (!Singleton.getInstance().IsBaoJing){
             ly_baoJing.setVisibility(View.GONE);
         }

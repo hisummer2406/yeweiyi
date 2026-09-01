@@ -28,6 +28,7 @@
         ></GridView>
 
     <LinearLayout
+        android:id="@+id/ly_backHome"
         android:layout_width="@dimen/dp_150"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
@@ -35,7 +36,6 @@
         android:layout_marginBottom="@dimen/dp_60"
         android:background="#0066A2"
         android:gravity="center"
-        android:onClick="main_but_main"
         android:orientation="horizontal">
 
         <ImageView

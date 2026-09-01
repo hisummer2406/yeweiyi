@@ -123,6 +123,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		tv_time=headerView.findViewById(R.id.main_time);
 		tvTitle.setText("入库记录");
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
+		rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 	}
 	OnPropertyChangedCallback callback = new OnPropertyChangedCallback() {
 
