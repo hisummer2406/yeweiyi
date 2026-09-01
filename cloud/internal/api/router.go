@@ -46,12 +46,13 @@ func NewRouter(deps Deps) *gin.Engine {
 	authorized := r.Group("/api")
 	authorized.Use(authMiddleware(deps.JWTSecret))
 	{
-		// /api/alarms reads from ThingsBoard (alarms.go), not from the business database.
-		// /api/oilcan/latest was removed with the legacy stack — its replacement is
-		// /api/devices/:device/telemetry/latest below.
+		// /api/alarms (alarms.go) and /api/oil-in-out (stock.go) read from ThingsBoard, not from
+		// the business database. Two routes were removed rather than migrated:
+		// /api/oilcan/latest (replaced by /api/devices/:device/telemetry/latest below) and
+		// /api/shifts (设备协议 V1 has no 交班 uplink on either side, so it could only return
+		// an empty list — see docs/protocol-v1-reconciliation.md).
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
-		authorized.GET("/shifts", listShiftsHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.POST("/devices/bind", bindDeviceHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))

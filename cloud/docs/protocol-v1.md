@@ -163,11 +163,46 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
 - `status`：`ACTIVE` / `CLEARED`。**确认（acknowledge）是云端代操作员做的动作，设备永远不上报它。**
 - `value`：触发时的读数，单位是该类报警自己的单位。
 
-### 4.2 控制命令最终结果 — key `cmdResult`
+### 4.2 出入库事件 — key `stockEvent`
+
+一次完成的进油/出油记录，在记录关闭的**瞬间**上报。
+
+```json
+{ "ts": 1756717200000,
+  "values": { "stockEvent": {
+    "eventId": "in-1-1756713600000",
+    "tank": 1, "direction": "IN", "oilType": "0号柴油",
+    "beginTimeMs": 1756713600000, "endTimeMs": 1756717200000,
+    "beginLevelMm": 402.0,  "endLevelMm": 1642.5,
+    "beginVolumeL": 6030.0, "endVolumeL": 24030.0,
+    "beginWaterLevelMm": 18.3, "endWaterLevelMm": 18.5,
+    "beginWaterVolumeL": 210.4, "endWaterVolumeL": 212.7,
+    "beginWeightKg": 5065.2, "endWeightKg": 20185.2,
+    "beginTempC": 22.1, "endTempC": 23.4,
+    "netVolumeL": 18000.0,
+    "duringDeliveryVolumeL": 420.0,
+    "tsMs": 1756717200000
+  } } }
+```
+
+- `direction`：`IN`（进油/收油）/ `OUT`（出油/发油）。
+- `eventId`：设备生成，同一次移动唯一且在补投中保持稳定，云端据此去重。
+- **`netVolumeL` 的符号是"油罐自身的变化"**（end − begin），因此出库为负。这样两个方向共用一个
+  字段，读方不必按 `direction` 再翻一次符号。
+- `duringDeliveryVolumeL`：**卸油期间加油机仍发出的油量**。油库边进边卖时，只看罐的净变化会把
+  到货量算少——实际到货 = `netVolumeL + duringDeliveryVolumeL`。这是跟供油商对账时争的那个数。
+- `beginTimeMs`/`endTimeMs` 是这次移动的时间窗，与 `tsMs`（记录关闭时刻）不同：一次卸油可能持续
+  一小时，对账关心的是它什么时候开始。
+
+**设备侧现状**：这条通道已经在跑（`ThingsBoardManager.reportRawEvent("stockEvent", …)`，且复用报警
+的补投队列），但目前发的是 `DetailInoutRecord.toString()`——Java 调试字符串而非 JSON，云端无法解析。
+改为 `gson.toJson(...)` 并按上表字段命名即可，见 zhongchengyeweiyi#39。
+
+### 4.3 控制命令最终结果 — key `cmdResult`
 
 见第 6 节。
 
-### 4.3 上线 / 离线
+### 4.4 上线 / 离线
 
 **设备侧不需要做任何事。** ThingsBoard 由 MQTT 会话自身维护 `active` 服务端属性并产生连接事件。
 旧设计里那个 retained 的 `isOline` 遗嘱消息在 V1 中**取消**。
@@ -443,17 +478,27 @@ ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttrib
    确认设备能给出小数精度，或确认取整可接受。
 3. **罐号 `n` 的来源**：假定等于设备本机屏幕上的罐号，且在设备生命周期内稳定。
 4. **`localControlMode`**：设备当前是否真有"现场手动模式"这一状态可上报。
-5. **方法表**：#1 列出的控制范围是否已完整覆盖，以及每个方法的 `args` 具体形状——
+5. **出入库的两个字段语义未确认，故意未写进协议**（同 `config.setTank` 的处理方式——不猜）：
+   - `DetailInoutRecord.beginTcVolume` / `endTcVolume`：名字读作温度补偿体积（标准体积），若真是
+     它则对对账很重要；但代码是从 `OilCan.getSurPlus()`（余量）赋值的，而 `surPlus` 本身没有任何
+     说明。**一个以某个量命名、却用另一个量填充的字段，正是最不该冻进协议的**。
+   - `duringDelivery` 的符号约定：已按
+     `saleVolume − (endVolume − beginVolume)` 建模为 `duringDeliveryVolumeL`，请确认方向。
+6. **方法表**：#1 列出的控制范围是否已完整覆盖，以及每个方法的 `args` 具体形状——
    `config.setTank` / `config.setProbe` 的参数结构目前**尚未定义**，因为设备侧
    `requestTankTable` / `requestTankSet` / `requestProbeSet` 至今没有处理逻辑，现在定型等于凭空猜。
 
 ### 需产品确认
 
-6. **离线事件队列的保留天数与条数上限**（第 9 节的 30 天 / 10,000 条是沿用旧设计的示例数字，不是决定）。
-7. **命令有效期默认值**（fixture 用 60 秒）。
-8. **设备离线多久算"异常"**——这条从旧设计文档起就一直悬着。
+0. **交班（`CommitWork`）是否纳入范围**：V1 两侧都没有交班上行通道。云端 `/api/shifts` 已于
+   2026-09-01 删除（留一个永远返回空列表的端点比没有更糟——它看起来像个能用的功能）。若产品需要
+   交班远程可见，需两侧新建上行；否则本条即为最终结论。
+
+7. **离线事件队列的保留天数与条数上限**（第 9 节的 30 天 / 10,000 条是沿用旧设计的示例数字，不是决定）。
+8. **命令有效期默认值**（fixture 用 60 秒）。
+9. **设备离线多久算"异常"**——这条从旧设计文档起就一直悬着。
 
 ### 需在设备侧补齐（非协议问题，但阻塞生产启用）
 
-9. **联锁**：第 6.4 节标 ✅ 的物理动作，在设备端联锁补齐并真机验证之前不得开放生产。
-10. **OTA 客户端**：接收 / 校验 / 刷写逻辑在 Android 仓库中完全不存在（第 5.3 节）。
+10. **联锁**：第 6.4 节标 ✅ 的物理动作，在设备端联锁补齐并真机验证之前不得开放生产。
+11. **OTA 客户端**：接收 / 校验 / 刷写逻辑在 Android 仓库中完全不存在（第 5.3 节）。

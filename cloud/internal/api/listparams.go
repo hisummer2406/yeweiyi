@@ -7,8 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
-
-	"yeweiyi-cloud/internal/store/db"
 )
 
 const (
@@ -16,9 +14,14 @@ const (
 	maxLimit     = 500
 )
 
-// listParams is the shared shape behind /api/alarms (alarms.go, now read from ThingsBoard),
-// /api/oil-in-out and /api/shifts: all are "history for one device, filtered by time range,
-// paginated". `device` is
+// listParams is the shared query shape for the device history endpoints — /api/alarms (alarms.go)
+// and /api/oil-in-out (stock.go), both of which now read through to ThingsBoard. "History for one
+// device, filtered by time range, paginated."
+//
+// /api/shifts (交班) used to share it too. That endpoint was removed rather than migrated: 设备协议 V1
+// has no shift uplink on either side, so it could only ever have returned an empty list. Leaving a
+// route that answers 200 with nothing is worse than having no route — it looks like a working
+// feature. See docs/protocol-v1-reconciliation.md. `device` is
 // required — unlike the doc's draft routes, CLAUDE.md's multi-device cloud table design means there
 // is no well-defined "all devices" listing, so callers must scope to one deviceName explicitly.
 type listParams struct {
@@ -95,63 +98,4 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 		offset: offset,
 		asc:    asc,
 	}, true
-}
-
-func listOilInOutHandler(deps Deps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		p, ok := parseListParams(c)
-		if !ok {
-			return
-		}
-		if !requireDeviceOwnership(c, deps, p.device) {
-			return
-		}
-
-		if p.asc {
-			rows, err := deps.Queries.ListOilInOutAsc(c.Request.Context(), db.ListOilInOutAscParams{
-				DeviceName: p.device, Time: p.begin, Time_2: p.end, Limit: p.limit, Offset: p.offset,
-			})
-			respondRows(c, rows, err)
-			return
-		}
-		rows, err := deps.Queries.ListOilInOutDesc(c.Request.Context(), db.ListOilInOutDescParams{
-			DeviceName: p.device, Time: p.begin, Time_2: p.end, Limit: p.limit, Offset: p.offset,
-		})
-		respondRows(c, rows, err)
-	}
-}
-
-func listShiftsHandler(deps Deps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		p, ok := parseListParams(c)
-		if !ok {
-			return
-		}
-		if !requireDeviceOwnership(c, deps, p.device) {
-			return
-		}
-
-		if p.asc {
-			rows, err := deps.Queries.ListShiftsAsc(c.Request.Context(), db.ListShiftsAscParams{
-				DeviceName: p.device, Time: p.begin, Time_2: p.end, Limit: p.limit, Offset: p.offset,
-			})
-			respondRows(c, rows, err)
-			return
-		}
-		rows, err := deps.Queries.ListShiftsDesc(c.Request.Context(), db.ListShiftsDescParams{
-			DeviceName: p.device, Time: p.begin, Time_2: p.end, Limit: p.limit, Offset: p.offset,
-		})
-		respondRows(c, rows, err)
-	}
-}
-
-func respondRows[T any](c *gin.Context, rows []T, err error) {
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if rows == nil {
-		rows = []T{}
-	}
-	c.JSON(http.StatusOK, gin.H{"rows": rows})
 }

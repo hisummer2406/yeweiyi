@@ -461,3 +461,96 @@ func TestMethods_PhysicalActionsAreFlagged(t *testing.T) {
 		}
 	}
 }
+
+func TestStockEvent_RoundTripsFixtures(t *testing.T) {
+	cases := []struct {
+		file           string
+		direction      string
+		netVolumeL     float64
+		duringDelivery float64
+	}{
+		{"stock_event_in.json", protocol.StockIn, 18000.0, 420.0},
+		{"stock_event_out.json", protocol.StockOut, -5000.0, 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			raw := readFixture(t, tc.file)
+
+			var env struct {
+				Values map[string]any `json:"values"`
+			}
+			if err := json.Unmarshal(raw, &env); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			got, err := protocol.ParseStockEvent(env.Values[protocol.KeyStockEvent])
+			if err != nil {
+				t.Fatalf("ParseStockEvent: %v", err)
+			}
+
+			if got.Direction != tc.direction {
+				t.Errorf("direction = %q, want %q", got.Direction, tc.direction)
+			}
+			if got.NetVolumeL != tc.netVolumeL {
+				t.Errorf("netVolumeL = %v, want %v", got.NetVolumeL, tc.netVolumeL)
+			}
+			if got.DuringDeliveryVolumeL != tc.duringDelivery {
+				t.Errorf("duringDeliveryVolumeL = %v, want %v", got.DuringDeliveryVolumeL, tc.duringDelivery)
+			}
+			if got.EventID == "" || got.Tank != 1 {
+				t.Errorf("identity fields lost: %+v", got)
+			}
+			// The movement window must be distinct from the record-closed timestamp — a delivery
+			// takes time, and reconciliation cares when it started.
+			if got.BeginTimeMs >= got.EndTimeMs {
+				t.Errorf("beginTimeMs %d should precede endTimeMs %d", got.BeginTimeMs, got.EndTimeMs)
+			}
+
+			encoded, err := got.MarshalTelemetry()
+			if err != nil {
+				t.Fatalf("MarshalTelemetry: %v", err)
+			}
+			assertSameJSON(t, encoded, raw)
+		})
+	}
+}
+
+// TestStockEvent_NetVolumeSignIsTankRelative pins the sign convention: netVolumeL is always the
+// tank's own change, so a reader never has to branch on direction to interpret it.
+func TestStockEvent_NetVolumeSignIsTankRelative(t *testing.T) {
+	for _, f := range []string{"stock_event_in.json", "stock_event_out.json"} {
+		var env struct {
+			Values map[string]any `json:"values"`
+		}
+		if err := json.Unmarshal(readFixture(t, f), &env); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		ev, err := protocol.ParseStockEvent(env.Values[protocol.KeyStockEvent])
+		if err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		if want := ev.EndVolumeL - ev.BeginVolumeL; ev.NetVolumeL != want {
+			t.Errorf("%s: netVolumeL = %v, but end-begin = %v; the sign convention is tank-relative",
+				f, ev.NetVolumeL, want)
+		}
+	}
+}
+
+// TestStockEvent_ParsesStringifiedValue covers the ThingsBoard read-back path, where a JSON-typed
+// telemetry value comes back as one JSON string.
+func TestStockEvent_ParsesStringifiedValue(t *testing.T) {
+	var env struct {
+		Values map[string]json.RawMessage `json:"values"`
+	}
+	if err := json.Unmarshal(readFixture(t, "stock_event_in.json"), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	got, err := protocol.ParseStockEvent(string(env.Values[protocol.KeyStockEvent]))
+	if err != nil {
+		t.Fatalf("ParseStockEvent on a stringified value: %v", err)
+	}
+	if got.EventID != "in-1-1756713600000" || got.OilType != "0号柴油" {
+		t.Errorf("got %+v", got)
+	}
+}

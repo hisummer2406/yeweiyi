@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,6 +31,13 @@ func tbEnvOr(key, fallback string) string {
 // newAlarmEnv wires a router with a live ThingsBoard client and returns a connected simulated
 // device bound to the test user.
 func newAlarmEnv(t *testing.T) (*testEnv, *devicesim.Device, string) {
+	env, sim, device, _ := newStockEnv(t)
+	return env, sim, device
+}
+
+// newStockEnv is newAlarmEnv plus the device's access token, which tests that publish raw telemetry
+// (rather than driving the simulator) need.
+func newStockEnv(t *testing.T) (*testEnv, *devicesim.Device, string, string) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -81,7 +89,23 @@ func newAlarmEnv(t *testing.T) (*testEnv, *devicesim.Device, string) {
 	}
 	t.Cleanup(sim.Disconnect)
 
-	return env, sim, deviceName
+	return env, sim, deviceName, creds.CredentialsID
+}
+
+// postDeviceTelemetry publishes a raw telemetry payload as the device, via ThingsBoard's HTTP
+// device API. Used where a test needs to send a payload the simulator does not produce — notably
+// the malformed legacy stock record.
+func postDeviceTelemetry(t *testing.T, accessToken string, payload []byte) {
+	t.Helper()
+	url := tbEnvOr("TB_BASE_URL", "http://localhost:8081") + "/api/v1/" + accessToken + "/telemetry"
+	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("publish telemetry: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		t.Fatalf("publish telemetry: HTTP %d", resp.StatusCode)
+	}
 }
 
 func fetchAlarms(t *testing.T, env *testEnv, path string) []map[string]any {

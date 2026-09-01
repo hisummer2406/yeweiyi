@@ -85,12 +85,13 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
   远程控制状态机、授权与审计；遥测摄取（cmdResult 回流 + 报警扇出）；控制与审计的 REST 端点；
   `cmd/server` 已切到单栈——**不需要任何 productKey / Alink Topic / broker 即可启动**。
 - **进行中**：协议 V1 尚未冻结，待与 Android 负责人确认单位等条目（`docs/protocol-v1.md` 第 12 节）。
-- **未开始**：`/api/oil-in-out` 与 `/api/shifts` 仍读旧 MQTT 摄取才会写的表，单栈下返回空。
-  这是**协议缺口**而非改个 handler：设备协议 V1 根本没有出入库/交班的上行通道（旧的
-  `requestUnloadOil`/`requestShift` 是轮询式查询，V1 未保留），需与 Android 侧确认补入 V1 还是
-  暂不纳入单栈——**这是删除旧栈前最后一个阻塞项**。此外：完整多租户模型；固定监控 Web；
-  离线私有化交付包。旧 Alink 栈仍在仓库中，删除清单见
-  [`docs/thingsboard-ce-baseline.md`](./docs/thingsboard-ce-baseline.md) 第 6 节。
+- **读端点已全部迁移**：`/api/alarms`、`/api/oil-in-out`、`/api/devices/:device/telemetry/latest`
+  读透 ThingsBoard；`/api/oilcan/latest` 与 `/api/shifts` 直接删除（交班在 V1 两侧都没有上行通道，
+  留一个永远返回空的端点比没有更糟）。`/api/oil-in-out` 依赖一个尚未合并的设备侧改动
+  （[zhongchengyeweiyi#39](https://github.com/hisummer2406/zhongchengyeweiyi/issues/39)）：设备已在
+  上报 `stockEvent`，但发的是 Java 调试字符串而非 JSON。
+- **未开始**：完整多租户模型；固定监控 Web；离线私有化交付包；旧栈删除（写回队列相关端点仍在）。
+  删除清单见 [`docs/thingsboard-ce-baseline.md`](./docs/thingsboard-ce-baseline.md) 第 6 节。
 
 ## 运行
 

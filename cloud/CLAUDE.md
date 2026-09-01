@@ -261,15 +261,17 @@ invariants change.
   `user_devices` binding is the entire authorization model today.
 - **`cmd/server` now boots on the single stack**, but the legacy stack is still reachable from it:
   setting `MQTT_BROKER_URL` starts the old Alink client (with a loud warning). Leave it unset.
-- **Two legacy read endpoints remain unmigrated: `/api/oil-in-out` and `/api/shifts`.** They read
-  tables only the old MQTT ingestion ever populated, so on a single-stack deployment they return
-  nothing. **This is a protocol gap, not just a handler to rewrite**: 设备协议 V1 has no uplink for
-  出入库 or 交班 at all — the old `requestUnloadOil`/`requestShift` were polled queries that V1 did
-  not carry over. Fixing it means either adding them to V1 (needs the Android owner) or confirming
-  those features are out of scope for the single stack. **This is the last blocker on deleting the
-  legacy stack.**
-  (`/api/oilcan/latest` was deleted; `/api/alarms` and `/api/devices/:device/telemetry/latest` now
-  read through to ThingsBoard.)
+- **All read endpoints are migrated.** `/api/alarms`, `/api/oil-in-out` and
+  `/api/devices/:device/telemetry/latest` read through to ThingsBoard; `/api/oilcan/latest` and
+  `/api/shifts` were deleted rather than migrated. **`/api/oil-in-out` depends on an unmerged
+  device-side change** (zhongchengyeweiyi#39): the device already publishes `stockEvent` on every
+  movement but as `DetailInoutRecord.toString()`, a Java debug string rather than JSON, so real
+  devices currently produce records the endpoint skips. It degrades to an empty list, not a 500.
+- **交班 (shift handover) is out of scope** unless product says otherwise: V1 has no uplink for it on
+  either side, so `/api/shifts` could only ever have returned an empty list.
+- The **write-back endpoints** (`POST /api/oil-in-out/correct`, `/api/shifts/correct`,
+  `/api/devices/:device/oil-can-set`) still belong to the legacy river queue and were deliberately
+  left alone by the read-path migration — they go with `internal/queue`, not with the read handlers.
 - **Not verified:** MQTT over TLS (dev uses plaintext 1884), OTA delivery, ThingsBoard-side tenant
   isolation, and any load/capacity testing. The device-side OTA client does not exist at all.
 - The **write-back queue** (`internal/queue`, river) belongs to the legacy design. The single-stack
@@ -1319,6 +1321,46 @@ ThingsBoard setting, not ours. A config key that nothing consumes is worse than 
 13 tests, no containers needed. Verified end to end by running the built binary against a real config
 file: values applied, `COMMAND_TTL=120s` in the environment beat the file's `90s`, and a deliberately
 conflicting `ackTimeout`/`commandTTL` pair failed at startup with both values printed.
+
+**2026-09-01 stock-event pass** (`internal/protocol/stock.go`, `internal/api/stock.go`) — migrated
+`/api/oil-in-out` onto ThingsBoard and deleted `/api/shifts`, on the product call that 出入库 is in
+scope and 交班 is not.
+
+The scope decision was cheap to make only because of a correction found while researching it: the
+device **already publishes** 出入库 (`InOilManager:214 → AIDL → reportRawEvent("stockEvent", …)`,
+reusing the alarm replay queue, so it survives an outage). An earlier claim here and in
+zhongchengyeweiyi#39 — "neither side has an uplink" — was true for 交班 and wrong for 出入库; the
+first search only looked for the `OilInOut`/`CommitWork` class names and that chain uses different
+ones. Corrected publicly.
+
+**But what it publishes is unusable**: `detailInoutRecord.toString()`, i.e. Java's debug format
+(`DetailInoutRecord{oilcanId=1, beginHeith=120.5, …}`), not JSON. Consuming it would mean writing a
+parser for a format with no contract — add a field or regenerate `toString()` and the cloud silently
+stops parsing. The device-side fix is one line plus agreed field names; requested in #39. Until it
+lands, `listOilInOutHandler` **skips** unparseable records rather than failing, so the endpoint
+degrades to an empty list instead of a 500 (`TestListOilInOut_SkipsUnparseableRecords` publishes
+exactly today's malformed string alongside a good record and asserts the good one still comes back).
+
+Two modelling decisions worth keeping:
+- **`netVolumeL` is tank-relative** (end − begin), so it is negative for a withdrawal, and a reader
+  never branches on `direction` to interpret it. The API additionally computes `deliveredVolumeL` —
+  the quantity that actually moved — because for an inbound delivery that is
+  `netVolumeL + duringDeliveryVolumeL`, not the tank's net change. A depot that keeps selling while
+  a tanker unloads will otherwise under-report every delivery, and that is the number people argue
+  with suppliers about. Pinned by `TestListOilInOut_OutboundDeliveredVolumeIsPositive`.
+- **Two device fields were deliberately left out of the protocol**: `beginTcVolume`/`endTcVolume`
+  reads as temperature-compensated volume but is assigned from `OilCan.getSurPlus()`, and nothing
+  documents what `surPlus` holds. A field named for one quantity and filled from another is the
+  worst thing to freeze into V1 — same call as `config.setTank`'s arguments. Recorded in
+  `docs/protocol-v1.md` §12.
+
+`/api/shifts` was **deleted, not left returning an empty list** — a route that answers 200 with
+nothing looks like a working feature, which is worse than a 404. `TestShiftsEndpointIsGone` pins it
+so nobody re-adds it without first adding an uplink. `internal/api/records.go` shrank to just the
+shared query-param parsing and was renamed `listparams.go`.
+
+Deliberately untouched: the write-back `POST /api/*/correct` endpoints. They belong to the legacy
+river queue, which is its own removal.
 
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
