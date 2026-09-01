@@ -55,6 +55,12 @@ public class SharePrefUtil {
     public static final String MIN_ITEM_SELECT = "minItemSelect";
     public static final String DEVICESECRET = "devicesecret";
 
+    // ThingsBoard 设备凭据：每台设备独立配网时写入，见 manager.ThingsBoardCredentialStore。
+    // 不走 local.properties/BuildConfig 那条构建期注入通道——那条通道是全部设备共享一份，
+    // 做不到"每台设备独立凭据"。
+    public static final String TB_DEVICE_ID = "tbDeviceId";
+    public static final String TB_ACCESS_TOKEN = "tbAccessToken";
+
     public static final String BrandSet = "BrandSet";
     private static SharedPreferences sp;
     public static String ISFIRST = "isFirst";
