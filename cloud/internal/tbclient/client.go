@@ -115,9 +115,6 @@ func New(cfg Config) (*Client, error) {
 	return &Client{cfg: cfg, http: hc}, nil
 }
 
-// BaseURL exposes the configured endpoint, for building the WebSocket URL.
-func (c *Client) BaseURL() string { return c.cfg.BaseURL }
-
 type loginResponse struct {
 	Token        string `json:"token"`
 	RefreshToken string `json:"refreshToken"`

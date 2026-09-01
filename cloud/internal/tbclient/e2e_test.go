@@ -649,3 +649,98 @@ func awaitCmdResult(t *testing.T, stream *tbclient.TelemetryStream, commandID st
 		}
 	}
 }
+
+// TestTimeseries_ReturnsHistoryInOrder covers the history query used for trend charts. It was added
+// after a coverage run showed Timeseries had never once executed — its query parameters (orderBy,
+// useStrictDataTypes, startTs/endTs) were written from documentation and never actually sent to a
+// server, which is precisely the situation where a wrong parameter name fails silently by being
+// ignored.
+func TestTimeseries_ReturnsHistoryInOrder(t *testing.T) {
+	c := newTestClient(t)
+	dev, token := provisionDevice(t, c)
+	sim := connectSim(t, devicesim.Config{AccessToken: token, Tanks: 1, SnapshotInterval: 10 * time.Minute})
+
+	start := time.Now().Add(-time.Minute).UnixMilli()
+
+	// Three snapshots, spaced enough that ThingsBoard stores three distinct points rather than
+	// collapsing same-millisecond writes.
+	var sent []protocol.Snapshot
+	for i := 0; i < 3; i++ {
+		snap, err := sim.PublishSnapshot()
+		if err != nil {
+			t.Fatalf("PublishSnapshot %d: %v", i, err)
+		}
+		sent = append(sent, snap)
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	key := protocol.TankKey(1, protocol.KeyOilLevelMm)
+	var series []tbclient.TSValue
+	eventually(t, settleTimeout, "three history points to be stored", func() error {
+		end := time.Now().Add(time.Minute).UnixMilli()
+		got, err := c.Timeseries(context.Background(), dev.ID.ID, []string{key}, start, end, 100)
+		if err != nil {
+			return err
+		}
+		if len(got[key]) < 3 {
+			return fmt.Errorf("got %d points for %s, want 3", len(got[key]), key)
+		}
+		series = got[key]
+		return nil
+	})
+
+	// orderBy=ASC must actually have been honoured — if the parameter name were wrong the server
+	// would ignore it and default to DESC, which no other assertion would catch.
+	for i := 1; i < len(series); i++ {
+		if series[i].TS < series[i-1].TS {
+			t.Fatalf("points are not in ascending time order: %d before %d", series[i-1].TS, series[i].TS)
+		}
+	}
+	if series[0].TS != sent[0].TS {
+		t.Errorf("first history point ts = %d, want the first snapshot's %d", series[0].TS, sent[0].TS)
+	}
+	if series[0].Value == "" {
+		t.Error("history point has an empty value")
+	}
+	t.Logf("history: %d points, first=%s last=%s", len(series), series[0].Value, series[len(series)-1].Value)
+}
+
+// TestRunSnapshots_PublishesOnTheTimer covers the periodic loop the real device runs. Manual CLI
+// runs had exercised it, but nothing in `go test` did.
+func TestRunSnapshots_PublishesOnTheTimer(t *testing.T) {
+	c := newTestClient(t)
+	dev, token := provisionDevice(t, c)
+	sim := connectSim(t, devicesim.Config{
+		AccessToken:      token,
+		Tanks:            1,
+		SnapshotInterval: 700 * time.Millisecond,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- sim.RunSnapshots(ctx) }()
+
+	if err := <-done; err != nil {
+		t.Fatalf("RunSnapshots: %v", err)
+	}
+
+	// The loop publishes once immediately and then on each tick, so ~3s at 700ms must yield
+	// several distinct snapshotSeq values.
+	eventually(t, settleTimeout, "the timer to have produced multiple snapshots", func() error {
+		_, values, err := c.LatestValues(context.Background(), dev.ID.ID, []string{protocol.KeySnapshotSeq})
+		if err != nil {
+			return err
+		}
+		snap, err := protocol.ParseSnapshot(0, values)
+		if err != nil {
+			return err
+		}
+		if snap.SnapshotSeq < 3 {
+			return fmt.Errorf("snapshotSeq = %d, want at least 3", snap.SnapshotSeq)
+		}
+		t.Logf("timer produced %d snapshots in 3s at a 700ms interval", snap.SnapshotSeq)
+		return nil
+	})
+}
