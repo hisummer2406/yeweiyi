@@ -1,0 +1,16 @@
+{
+  "_comment": "RpcRequestEnvelope/RpcDispatcher 参照 fixture：一次低风险参考命令（修改报警阈值）。mqttRequestId 来自 topic v1/devices/me/rpc/request/{id}，不在这份 body 里。",
+  "method": "setAlarmThreshold",
+  "params": {
+    "protocolVersion": "tb-v1",
+    "commandId": "cmd-0001",
+    "issuedAt": 1735689600000,
+    "expireAt": 1735689630000,
+    "operator": "ops-user-1",
+    "reason": "现场巡检后调整高高液位阈值",
+    "args": {
+      "oilCanId": 1,
+      "hheightOilAlarm": 5000
+    }
+  }
+}
