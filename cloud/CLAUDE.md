@@ -1392,6 +1392,52 @@ copy.
 Verified after deletion: the binary boots, `/healthz` 200, and `/api/shifts`, `/api/write-back` and
 `/api/oilcan/latest` all return 404 (route absent) rather than 401 (route present but unauthorised).
 
+**2026-09-02 offline deployment baseline** (issue #2) — `deploy/` plus `cmd/smoke`.
+
+`deploy/` holds an image manifest pinned **by digest** (a tag can be re-pushed to different content;
+`offline-bundle.sh` aborts if a pulled image's digest disagrees with the manifest), scripts to build
+and load the offline bundle, a preflight check, backup/restore, three resource profiles, the
+verbatim Apache-2.0 text, and `README.md` as the install/operations manual.
+
+**`cmd/smoke` is a compiled binary rather than a `go test`** because the environment that most needs
+it — an air-gapped customer network on installation day — has no Go toolchain, no test sources and
+no internet. Eight checks: ThingsBoard reachable and authenticating, backend `/healthz`, device
+provisioning with credential issuance, MQTT connect, telemetry up, telemetry read back, instant
+alarm, and the full RPC → ACK → asynchronous-result loop. It provisions a throwaway device and
+deletes it, and uses `alarm.mute` (non-physical) so a run against a live installation cannot move
+equipment.
+
+**A bug in that tool, found by running it rather than by reading it**: `os.Exit` in the summary
+function skipped every `defer`, so the "self-cleaning" tool left its test devices behind — breaking
+the exact promise its own doc comment made. `main` now calls `os.Exit(run())` so the deferred
+cleanup runs first.
+
+**Backup covers two databases, and missing that is the trap.** ThingsBoard's `tb-postgres` image
+embeds *its own* PostgreSQL (`/data/db` in the container) holding devices, credentials, telemetry
+and rule chains; the business PostgreSQL is a separate instance holding commands, audit, users and
+bindings. Backing up one gives a half system on restore. Verified rather than assumed: a marker row
+was inserted, backed up, deleted, restored, and came back; and the ThingsBoard dump was loaded into
+a scratch database inside the container (71 tables, 9 devices) so restorability was proven without
+touching the live one.
+
+**Air-gapped *restart* verified** — distinct from the earlier air-gap test, because a service can
+work offline yet still reach for something at boot. ThingsBoard was moved to a no-egress network,
+restarted there, came up in ~70 s, and the cross-compiled smoke binary passed all eight checks from
+inside that same network.
+
+Operational gotcha worth remembering: **restarting a container while it is detached from the bridge
+network loses its published host ports**, because Docker establishes port publishing at start from
+the networks attached then. Reconnecting the bridge afterwards does not restore them; another
+restart does. This bit during the test above and would bite anyone repeating it.
+
+Also removed the two orphaned mosquitto volumes and the still-running mosquitto container left over
+from the legacy stack deletion.
+
+Deliberately incomplete, and listed as such in `deploy/README.md`: MQTT/TLS on 8883 is not
+configured (devices still use plaintext 1884), no rule chains exist yet to export, offline
+*upgrade* and rollback are issue #6, and the cloud resource profile is arithmetic, not a load test
+(issue #5).
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
@@ -1443,6 +1489,11 @@ internal/api/        # REST/WS: auth, device binding, control + audit, and the r
                      # endpoints (alarms.go, stock.go, telemetry.go) that proxy ThingsBoard
 cmd/server/          # the single binary
 cmd/tbdevicesim/     # simulated device CLI (provision / run)
+cmd/smoke/           # deployment smoke test, shipped as a binary because air-gapped install
+                     # sites have no Go toolchain. Self-cleaning, safe against production.
+deploy/              # offline delivery: image manifest with digests, bundle/load scripts,
+                     # preflight, backup/restore, resource profiles, Apache-2.0 licence,
+                     # and README.md — the install and operations manual
 fixtures/protocol/v1/ # cross-repo protocol fixtures, shared with the Android repo
 db/migrations/       # 000001 app schema … 000010 control+audit, 000011 drops the legacy tables
 db/queries/          # sqlc input: devices, users, user_devices, control_commands, audit_log

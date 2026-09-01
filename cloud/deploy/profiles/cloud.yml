@@ -1,0 +1,33 @@
+# 公有云（阿里云 ECS，初期约 1,000 台，规划到 10,000 台）。
+#
+#   docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+#                  -f deploy/profiles/cloud.yml up -d
+#
+# ⚠️ 这一档**尚未做过压测**（issue #5）。下面的数字是按数据点速率推算的起点，不是实测结论：
+#   1,000 台 × 2 罐 × 26 点 / 30 秒 ≈ 867 数据点/秒
+#  10,000 台                        ≈ 8,670 数据点/秒
+# 还须叠加报警突发、RPC 与断网恢复后的重连风暴——重连风暴通常才是峰值来源。
+#
+# 到 10,000 台时单节点大概率不够，届时要走的是 ThingsBoard 集群（Kafka 队列 + 多传输节点），
+# 而不是继续加大这里的堆——那是另一套部署形态，不是本文件调个数字的事。
+services:
+  thingsboard:
+    environment:
+      JAVA_OPTS: "-Xms4G -Xmx8G"
+      # 单节点默认用内存队列；集群化时改为 kafka 并另配 broker。
+      TB_QUEUE_TYPE: in-memory
+    deploy:
+      resources:
+        limits: { memory: 12G }
+  postgres:
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "work_mem=16MB"
+    deploy:
+      resources:
+        limits: { memory: 8G }

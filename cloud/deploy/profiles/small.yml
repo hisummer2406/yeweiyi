@@ -1,0 +1,27 @@
+# 小型私有化（部队内网，≤100 台设备）。
+#
+#   docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+#                  -f deploy/profiles/small.yml up -d
+#
+# 依据：ThingsBoard 官方单节点 + PostgreSQL 后端的最低要求是 4 GB 内存；本项目还要在同一台机器上
+# 跑业务 Postgres、Redis 和 Go 后台，因此整机按 8 GB / 4 核规划，其中 ThingsBoard 占 3 GB 堆。
+#
+# 100 台 × 2 罐 × 26 数据点 / 30 秒 ≈ 87 数据点/秒——这个量级的瓶颈不在 CPU 而在磁盘持续写入，
+# 所以优先给磁盘（SSD）而不是堆内存。
+services:
+  thingsboard:
+    environment:
+      JAVA_OPTS: "-Xms2G -Xmx3G"
+    deploy:
+      resources:
+        limits: { memory: 4G }
+  postgres:
+    command:
+      - "postgres"
+      - "-c" 
+      - "shared_buffers=512MB"
+      - "-c"
+      - "max_connections=100"
+    deploy:
+      resources:
+        limits: { memory: 2G }

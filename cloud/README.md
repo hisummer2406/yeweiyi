@@ -47,6 +47,8 @@ internal/protocol/    # 设备协议 V1 的唯一真源（遥测/事件/属性/R
 internal/tbclient/    # ThingsBoard adapter：REST + WebSocket，不直连其数据库
 internal/devicesim/   # 设备侧参考实现，测试在进程内驱动它
 cmd/tbdevicesim/      # 模拟设备的命令行封装（provision / run）
+cmd/smoke/            # 部署冒烟测试（编译为二进制，随离线包分发）
+deploy/               # 离线交付：镜像清单、打包/导入、预检、备份/恢复、规格档位、部署手册
 fixtures/protocol/v1/ # 跨仓库共享的协议 fixture，Android 侧用同一批文件做契约测试
 internal/config/      # 配置加载：默认值 → config.yaml → 环境变量
 internal/control/     # 控制命令状态机、授权、审计
@@ -89,7 +91,10 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
   上报 `stockEvent`，但发的是 Java 调试字符串而非 JSON。
 - **旧 Alink 栈已于 2026-09-02 全部删除**：`internal/mqtt`、`cmd/devicesim`、`internal/queue`、
   `internal/partitions`、mosquitto 服务，以及五张遗留表（migration `000011`，删除前确认均为空表）。
-- **未开始**：完整多租户模型；固定监控 Web；离线私有化交付包；记录修正功能（旧的写回端点随队列
+- **离线部署基线已建立**（`deploy/`）：镜像按摘要固定、离线打包与导入、预检、备份/恢复、
+  三档资源规格、冒烟测试二进制。已实测**断网重启后模拟设备仍可正常接入**。
+  MQTT/TLS 与离线升级尚未完成，见 `deploy/README.md` 末节。
+- **未开始**：完整多租户模型；固定监控 Web；离线升级与回滚演练；记录修正功能（旧的写回端点随队列
   一并删除，若产品仍需要，应基于 `internal/control` 重新设计而非恢复）。
 
 ## 运行
