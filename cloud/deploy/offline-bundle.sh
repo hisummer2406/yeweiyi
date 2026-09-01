@@ -44,12 +44,13 @@ for cmd in server smoke tbdevicesim; do
 done
 
 # 3) 部署与运行所需的文件
-cp "$ROOT/docker-compose.yml" "$ROOT/docker-compose.thingsboard.yml" "$STAGE/"
+cp "$ROOT/docker-compose.yml" "$ROOT/docker-compose.thingsboard.yml" \
+   "$ROOT/docker-compose.thingsboard-tls.yml" "$STAGE/"
 cp "$ROOT/config.example.yaml" "$STAGE/"
 cp -r "$ROOT/db/migrations" "$STAGE/migrations"
 cp -r "$HERE/profiles" "$STAGE/profiles"
 cp "$HERE/images.txt" "$HERE/offline-load.sh" "$HERE/preflight.sh" \
-   "$HERE/backup.sh" "$HERE/restore.sh" "$HERE/README.md" "$STAGE/"
+   "$HERE/backup.sh" "$HERE/restore.sh" "$HERE/gen-certs.sh" "$HERE/README.md" "$STAGE/"
 cp "$HERE/LICENSE-thingsboard.txt" "$STAGE/"
 chmod +x "$STAGE"/*.sh
 

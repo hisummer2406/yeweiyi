@@ -42,7 +42,8 @@ func run() int {
 	tbURL := flag.String("tb", envOr("TB_BASE_URL", "http://localhost:8081"), "ThingsBoard base URL")
 	tbUser := flag.String("user", envOr("TB_USERNAME", "tenant@thingsboard.org"), "ThingsBoard tenant admin")
 	tbPass := flag.String("pass", envOr("TB_PASSWORD", "tenant"), "ThingsBoard tenant admin password")
-	mqttURL := flag.String("mqtt", envOr("TB_MQTT_URL", "tcp://localhost:1884"), "ThingsBoard MQTT transport")
+	mqttURL := flag.String("mqtt", envOr("TB_MQTT_URL", "tcp://localhost:1884"), "ThingsBoard MQTT transport (tcp:// or ssl://)")
+	caFile := flag.String("cacert", envOr("TB_MQTT_CACERT", ""), "PEM CA file verifying the broker certificate; required for ssl://")
 	apiURL := flag.String("api", os.Getenv("API_BASE_URL"), "Go backend base URL (optional; checks /healthz)")
 	timeout := flag.Duration("timeout", 90*time.Second, "overall time budget")
 	verbose := flag.Bool("v", false, "log each step's detail")
@@ -125,6 +126,7 @@ func run() int {
 	if !r.step("设备 MQTT 接入", func() (string, error) {
 		sim = devicesim.New(devicesim.Config{
 			BrokerURL:        *mqttURL,
+			CACertFile:       *caFile,
 			AccessToken:      token,
 			Tanks:            2,
 			SnapshotInterval: time.Hour, // nothing may ride the snapshot timer during a smoke run

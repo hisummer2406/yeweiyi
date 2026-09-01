@@ -16,9 +16,13 @@ package devicesim
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,6 +44,15 @@ type Config struct {
 	AccessToken string
 	// ClientID for the MQTT session; generated when empty.
 	ClientID string
+	// CACertFile is the PEM CA bundle used to verify ThingsBoard's MQTT server certificate, for
+	// ssl:// brokers. Required for TLS in an offline deployment, where the server certificate is
+	// signed by a private CA that no system trust store knows about — leaving this empty there
+	// fails the handshake rather than silently accepting anything, which is the correct outcome.
+	//
+	// There is deliberately no "skip verification" option: a device that does not verify the
+	// server it reports tank levels to, and takes pump commands from, is not secured by TLS at
+	// all — it is only encrypted against a passive observer.
+	CACertFile string
 	// Tanks is how many tanks this device reports.
 	Tanks int
 	// SnapshotInterval overrides protocol.SnapshotIntervalSec. Tests set it low.
@@ -178,6 +191,11 @@ func newTank(index int) protocol.Tank {
 
 // Connect opens the MQTT session, publishes the client attributes and subscribes for RPC requests.
 func (d *Device) Connect(ctx context.Context) error {
+	tlsCfg, err := d.tlsConfig()
+	if err != nil {
+		return err
+	}
+
 	opts := paho.NewClientOptions().
 		AddBroker(d.cfg.BrokerURL).
 		SetClientID(d.cfg.ClientID).
@@ -191,6 +209,9 @@ func (d *Device) Connect(ctx context.Context) error {
 		SetMaxReconnectInterval(60 * time.Second).
 		SetCleanSession(true).
 		SetConnectTimeout(15 * time.Second)
+	if tlsCfg != nil {
+		opts.SetTLSConfig(tlsCfg)
+	}
 
 	d.client = paho.NewClient(opts)
 	token := d.client.Connect()
@@ -205,6 +226,45 @@ func (d *Device) Connect(ctx context.Context) error {
 		return err
 	}
 	return d.PublishAttributes()
+}
+
+// tlsConfig builds the TLS configuration for an ssl:// broker, or returns nil for a plaintext one.
+func (d *Device) tlsConfig() (*tls.Config, error) {
+	if !strings.HasPrefix(d.cfg.BrokerURL, "ssl://") &&
+		!strings.HasPrefix(d.cfg.BrokerURL, "tls://") &&
+		!strings.HasPrefix(d.cfg.BrokerURL, "mqtts://") {
+		return nil, nil
+	}
+	if d.cfg.CACertFile == "" {
+		return nil, fmt.Errorf("devicesim: %s requires CACertFile (the private CA that signed the broker's certificate)", d.cfg.BrokerURL)
+	}
+
+	pem, err := os.ReadFile(d.cfg.CACertFile)
+	if err != nil {
+		return nil, fmt.Errorf("devicesim: read CA %s: %w", d.cfg.CACertFile, err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("devicesim: %s contains no usable PEM certificate", d.cfg.CACertFile)
+	}
+
+	// ServerName has to be set explicitly: paho does not derive it from the broker URL, and
+	// crypto/tls refuses to proceed without either it or InsecureSkipVerify. Deriving it from the
+	// URL is the right fix — InsecureSkipVerify would turn certificate verification off entirely,
+	// which is the thing this whole path exists to do.
+	u, err := url.Parse(d.cfg.BrokerURL)
+	if err != nil {
+		return nil, fmt.Errorf("devicesim: parse broker URL %q: %w", d.cfg.BrokerURL, err)
+	}
+
+	// Only the private CA is trusted, not the system roots: in an offline deployment the server
+	// certificate can only legitimately come from this CA, so accepting anything else would widen
+	// the trust for no benefit.
+	return &tls.Config{
+		RootCAs:    pool,
+		ServerName: u.Hostname(),
+		MinVersion: tls.VersionTLS12,
+	}, nil
 }
 
 // Disconnect closes the session.

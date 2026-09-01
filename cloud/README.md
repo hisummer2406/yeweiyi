@@ -93,7 +93,8 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
   `internal/partitions`、mosquitto 服务，以及五张遗留表（migration `000011`，删除前确认均为空表）。
 - **离线部署基线已建立**（`deploy/`）：镜像按摘要固定、离线打包与导入、预检、备份/恢复、
   三档资源规格、冒烟测试二进制。已实测**断网重启后模拟设备仍可正常接入**。
-  MQTT/TLS 与离线升级尚未完成，见 `deploy/README.md` 末节。
+  **MQTT/TLS 已支持**（自签 CA + 8883，明文端口收回环回；`deploy/gen-certs.sh`）。
+  双向 TLS、证书续期自动化与离线升级尚未完成，见 `deploy/README.md` 末节。
 - **未开始**：完整多租户模型；固定监控 Web；离线升级与回滚演练；记录修正功能（旧的写回端点随队列
   一并删除，若产品仍需要，应基于 `internal/control` 重新设计而非恢复）。
 

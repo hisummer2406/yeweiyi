@@ -17,9 +17,9 @@ fi
 docker compose version >/dev/null 2>&1 && ok "docker compose $(docker compose version --short 2>/dev/null)" || bad "缺少 docker compose 插件"
 
 echo "==> 端口占用"
-# ThingsBoard 8081/1884、业务后台 8080、Postgres 5432、Redis 6379。
-# 生产 MQTT/TLS 用 8883（尚未配置，见 README“尚未完成”）。
-for p in 8080 8081 1884 5432 6379; do
+# ThingsBoard 8081（控制台）、8883（设备 MQTT/TLS）、1884（明文，启用 TLS 后仅绑环回）、
+# 业务后台 8080、Postgres 5432、Redis 6379。
+for p in 8080 8081 8883 1884 5432 6379; do
   if command -v ss >/dev/null 2>&1; then busy=$(ss -ltn "sport = :$p" 2>/dev/null | grep -c LISTEN)
   else busy=$(netstat -an 2>/dev/null | grep -cE "[.:]$p .*LISTEN"); fi
   [[ "${busy:-0}" -eq 0 ]] && ok "端口 $p 空闲" || note "端口 $p 已被占用（若为本系统自身则正常）"

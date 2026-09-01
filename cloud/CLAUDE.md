@@ -1438,6 +1438,45 @@ configured (devices still use plaintext 1884), no rule chains exist yet to expor
 *upgrade* and rollback are issue #6, and the cloud resource profile is arithmetic, not a load test
 (issue #5).
 
+**2026-09-02 MQTT/TLS** (`deploy/gen-certs.sh`, `docker-compose.thingsboard-tls.yml`) — closes the
+TLS item in issue #2's scope. Self-signed CA, because an offline network has no public CA and no way
+to run ACME; trust is established by pre-loading `ca.pem` onto each device.
+
+**Three things here were found by running it, and each has a failure mode that misleads:**
+
+1. **ThingsBoard's PEM reader accepts only an *unencrypted PKCS#8* key.** Traditional PKCS#1
+   (`openssl genrsa`'s default) fails, and so does PKCS#8 *with* a password. Both report the same
+   `Unable to load private key neither from certFile nor from keyFile`, which names neither the
+   format nor the real problem — easy to misdiagnose as a wrong path or password. My first two
+   attempts were both wrong for this reason. Note the doc comment I originally wrote asserted a
+   password was *required*; that was backwards.
+2. **Enabling TLS does not disable plaintext.** `mqtt.ssl.bind_port` is a *separate listener*
+   alongside `mqtt.bind_port` (verified in the container's own `thingsboard.yml`). "TLS is on" is
+   therefore not the same as "plaintext is off" — the override rebinds 1884 to `127.0.0.1` so
+   devices on the network cannot reach it while local debugging still can.
+3. **Compose merges `ports` by appending, not replacing.** Declaring `1884` in both the base and the
+   override produced two rules fighting over one port and the container refused to start with
+   `address already in use`. Fixed with `ports: !override`, which is load-bearing, not stylistic.
+
+Client side: `internal/devicesim` gained `CACertFile` and TLS support. Two details worth keeping —
+`ServerName` must be set explicitly because paho does not derive it from the broker URL and
+crypto/tls then refuses to proceed, and **there is deliberately no skip-verification option**: a
+device that does not verify the server it reports levels to and takes pump commands from is not
+protected by TLS, only encrypted against a passive observer. Only the private CA is trusted, not the
+system roots.
+
+Verified: `openssl s_client` reports `Verify return code: 0 (ok)` over TLSv1.3; the full smoke suite
+passes over `ssl://localhost:8883`; and the negative cases fail as they must — no CA given is
+rejected with a message naming the missing setting, and a *wrong* CA is rejected by certificate
+verification rather than quietly accepted. Three unit tests in `internal/devicesim` cover the
+config-validation paths without needing a broker.
+
+`deploy/certs/` is gitignored — it holds private keys, and each deployment's are different.
+
+Still open and listed in `deploy/README.md`: mutual TLS (client certificates) is not enabled —
+device identity is still the ThingsBoard access token — and certificate renewal is manual with no
+expiry alerting.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,

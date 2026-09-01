@@ -11,7 +11,8 @@
 | 组件 | 镜像 | 端口（宿主机 → 容器） | 用途 |
 |---|---|---|---|
 | ThingsBoard CE | `thingsboard/tb-postgres:4.2.1.1` | `8081 → 9090` | 控制台 / REST / WebSocket |
-| | | `1884 → 1883` | 设备 MQTT（明文） |
+| | | `8883` | 设备 MQTT over TLS（生产用） |
+| | | `1884 → 1883` | 设备 MQTT 明文（启用 TLS 后仅绑环回） |
 | 业务 PostgreSQL | `postgres:16` | `5432` | 命令、审计、用户、设备绑定 |
 | Redis | `redis:7` | `6379` | 报警实时扇出 |
 | Go 后台 | 本仓库构建 | `8080` | 业务 REST / WebSocket |
@@ -19,7 +20,7 @@
 **对外只需开放 8080（业务 API）与 1884/8883（设备接入）。** 8081 是 ThingsBoard 控制台，
 仅供运维调试，不应暴露给终端用户；5432 与 6379 不应离开本机。
 
-> ⚠️ `8883`（MQTT/TLS）**尚未配置**，见文末“尚未完成”。当前设备接入为明文 1884。
+启用 TLS 后设备走 `8883`，明文 `1884` 收回到环回地址（仅本机联调可用）。见下节。
 
 ---
 
@@ -64,6 +65,66 @@ ThingsBoard 出厂账号是公开默认值，装完立即改：
 | `customer@thingsboard.org` | `customer` | 本项目不使用，建议禁用 |
 
 ThingsBoard 还自带若干演示设备（`Test Device A1`、`Thermostat T1` 等），可一并删除。
+
+---
+
+## MQTT/TLS
+
+```bash
+# 主机名必须写全：设备连哪个名字，证书里就得有哪个名字，否则设备会因主机名不匹配而拒连。
+./gen-certs.sh tb.example.mil 10.0.0.10
+
+docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+               -f docker-compose.thingsboard-tls.yml up -d
+
+# 验证
+openssl s_client -connect <主机>:8883 -CAfile certs/ca.pem </dev/null | grep "Verify return code"
+./bin/smoke -mqtt ssl://<主机>:8883 -cacert certs/ca.pem
+```
+
+**离线内网没有公网 CA，也无法做 ACME 续期，所以用自签 CA。** 信任链靠把 `ca.pem` 预置到每台
+设备建立 —— 这是这类部署的常规做法。`ca.key` **不要分发**，离线保管，只在签发新证书时用。
+
+| 文件 | 去向 |
+|---|---|
+| `ca.pem` | **分发到每台设备**，设备用它校验服务端 |
+| `ca.key` | **绝不分发**，离线保管 |
+| `mqttserver.pem` / `mqttserver_key.pem` | 挂给 ThingsBoard（只读挂载 `/ssl`） |
+
+有效期：CA 10 年，服务端证书约 2.25 年。**服务端证书到期前需重签并重启 ThingsBoard**，
+CA 不变则设备侧无需改动。到期时间见 `gen-certs.sh` 输出。
+
+### 两个实测得出、容易踩的点
+
+**私钥必须是 PKCS#8 且不加口令。** 三种组合只有一种能被 ThingsBoard 读取：
+
+| 格式 | 结果 |
+|---|---|
+| 传统 PKCS#1（`BEGIN RSA PRIVATE KEY`） | ✗ |
+| PKCS#8 + 口令（`BEGIN ENCRYPTED PRIVATE KEY`） | ✗ |
+| PKCS#8 无口令（`BEGIN PRIVATE KEY`） | ✓ |
+
+两种失败都只报同一句 `Unable to load private key neither from certFile nor from keyFile`，
+**不提示是格式问题**，很容易被误判成路径或口令写错。`gen-certs.sh` 已固定为正确格式。
+
+不加口令的保护来自 600 权限与只读挂载。加口令并不更安全 —— 口令得写在 compose 文件里服务
+才起得来，等于钥匙和锁放进同一个抽屉。
+
+**启用 TLS 不会自动关闭明文。** ThingsBoard 的 SSL 是 8883 上的独立监听器，与明文监听器并存。
+要真正只允许 TLS，必须同时**不发布**明文端口 —— `docker-compose.thingsboard-tls.yml` 通过把
+1884 改为只绑 `127.0.0.1` 实现（用了 `ports: !override`，因为 Compose 对 `ports` 是**追加**
+合并而非替换，不加它两条规则会抢同一端口导致容器起不来）。若连本机明文也不需要，删掉那行即可。
+
+### 设备侧
+
+设备用 `ssl://<主机>:8883` 连接，并需内置 `ca.pem`。本仓库的模拟设备已支持：
+
+```bash
+./bin/tbdevicesim run -token <token> -broker ssl://<主机>:8883 -cacert certs/ca.pem
+```
+
+**没有"跳过校验"选项，这是有意的**：一台不校验服务端身份的设备 —— 它向那里上报液位、
+从那里接收启泵命令 —— 并没有被 TLS 保护，只是对被动监听者加了密而已。
 
 ---
 
@@ -181,8 +242,9 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 
 诚实列出，不要以为这些已经就绪：
 
-- **MQTT/TLS（8883）未配置。** 当前设备接入为明文 1884。内网部署下风险较低但仍应补齐，
-  离线环境无公网 CA，需自签证书并预置到设备。
+- **双向 TLS（mTLS，客户端证书）未启用。** 当前设备身份靠 ThingsBoard 的 access token，
+  传输由服务端证书保护。ThingsBoard 支持 X.509 客户端证书认证，若要求设备侧也出示证书需另配。
+- **证书续期未自动化。** 服务端证书约 2.25 年到期，需人工重签并重启，尚无到期提醒机制。
 - **规则链与设备配置模板未导出。** 目前没有配置任何自定义规则链 —— 报警是作为遥测事件流转的，
   未映射为 ThingsBoard 原生 Alarm 实体。等那部分做了再导出入库。
 - **离线升级与回滚演练未做**（issue #6）。本手册覆盖安装、备份、恢复，不覆盖升级。

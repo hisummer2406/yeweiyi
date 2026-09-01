@@ -7,3 +7,6 @@ config.yaml
 # 备份产物（含数据库转储），不入库
 backups/
 dist/
+
+# TLS 证书与私钥：由 deploy/gen-certs.sh 现场生成，每个部署点各不相同，绝不入库
+deploy/certs/

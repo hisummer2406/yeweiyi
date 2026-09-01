@@ -105,7 +105,8 @@ func provision(args []string) {
 func run(args []string) {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	token := fs.String("token", envOr("TB_DEVICE_TOKEN", ""), "ThingsBoard device access token (required)")
-	broker := fs.String("broker", envOr("TB_MQTT_URL", "tcp://localhost:1884"), "ThingsBoard MQTT transport")
+	broker := fs.String("broker", envOr("TB_MQTT_URL", "tcp://localhost:1884"), "ThingsBoard MQTT transport (tcp:// or ssl://)")
+	caFile := fs.String("cacert", envOr("TB_MQTT_CACERT", ""), "PEM CA file verifying the broker certificate; required for ssl://")
 	tanks := fs.Int("tanks", 2, "number of tanks to report")
 	interval := fs.Duration("interval", protocol.SnapshotIntervalSec*time.Second, "snapshot cadence")
 	alarmAfter := fs.Duration("alarm-after", 0, "raise a high-high level alarm this long after start, then clear it 15s later (0 = never)")
@@ -131,6 +132,7 @@ func run(args []string) {
 
 	sim := devicesim.New(devicesim.Config{
 		BrokerURL:        *broker,
+		CACertFile:       *caFile,
 		AccessToken:      *token,
 		Tanks:            *tanks,
 		SnapshotInterval: *interval,
