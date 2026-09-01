@@ -10,9 +10,9 @@ import (
 
 // TelemetryTopic is ThingsBoard's own device-side telemetry topic. It is not configurable and not
 // namespaced per product — ThingsBoard resolves which device published from the MQTT session's
-// credentials, which is why the protocol carries no deviceName field anywhere (contrast the legacy
-// sys/{productKey}/{deviceName}/... topics in internal/mqtt, where the device identity was in the
-// topic string and therefore forgeable by any client with wildcard publish rights).
+// credentials, which is why the protocol carries no deviceName field anywhere (contrast the retired Alink
+// sys/{productKey}/{deviceName}/... topics, where the device identity sat in the topic string and
+// was therefore forgeable by any client holding wildcard publish rights).
 const TelemetryTopic = "v1/devices/me/telemetry"
 
 // SnapshotIntervalSec is the default cadence for a full tank snapshot. The device pushes on this

@@ -4,9 +4,9 @@
 // side's tests are expected to validate against.
 //
 // Scope note: this package deliberately contains no Alink/Paho concepts. The device connects only
-// to ThingsBoard CE over ThingsBoard's own native MQTT topics (v1/devices/me/...); there is no
-// second MQTT stack and no compatibility layer with the legacy sys/{productKey}/... topic shape
-// still implemented in internal/mqtt (which GitHub issue #10 removes).
+// to ThingsBoard CE over ThingsBoard's own native MQTT topics (v1/devices/me/...). There is no
+// second MQTT stack and no compatibility layer — the legacy sys/{productKey}/... implementation was
+// deleted outright (GitHub issue #10) rather than kept behind a switch.
 //
 // The types here model the *wire* shapes only. Nothing in this package talks to a network, a
 // database or ThingsBoard — internal/tbclient does that, so that the protocol definition stays

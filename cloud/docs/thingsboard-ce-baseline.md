@@ -203,37 +203,33 @@ issue #9 要求"核心流程在断网环境中正常运行"。**已实测**，�
 命令走完 `pending → sent → received → succeeded`，其中最后一跳完全由 ingester 从设备异步上报的
 `cmdResult` 驱动；报警经 设备→ThingsBoard→ingest→Redis 到达操作员用时 **30 ms**。
 
-## 6. 旧双栈代码 / 配置待删清单
+## 6. 旧双栈代码 —— 已于 2026-09-02 全部删除
 
-**本 Issue 只负责列出，实际删除属于 issue #10。**
+issue #10 的结构性工作到此完成。**清单从"待删"变成"已删记录"。**
 
-*2026-09-01 更新：`cmd/server` 已切到单栈，不设 `MQTT_BROKER_URL` 即完全不碰旧栈，删除不再会破坏
-服务启动。四个遗留读端点已处理两个——`/api/oilcan/latest` 已删除（由
-`/api/devices/:device/telemetry/latest` 取代），`/api/alarms` 已改为读透 ThingsBoard 上的 `alarm`
-遥测键历史。*
+| 路径 | 处置 |
+|---|---|
+| `internal/mqtt/` | 已删除（Alink topic、paho 通配符订阅、handlers、poller） |
+| `cmd/devicesim/` | 已删除，由 `cmd/tbdevicesim` 取代 |
+| `internal/queue/` | 已删除（river 写回队列），由 `internal/control` 取代 |
+| `internal/partitions/` | 已删除（随分区表一起） |
+| `dev/mosquitto/` + `docker-compose.yml` 的 mosquitto 服务 | 已删除 |
+| `internal/api/writeback.go` | 已删除 |
+| `go.mod` 的 `riverqueue/river` | 已移除。`paho.mqtt.golang` **保留**——`internal/devicesim` 用它连 ThingsBoard 的 MQTT |
+| 环境变量 `MQTT_*` / `WRITE_BACK_TTL_DAYS` | 已删除，配置项见 `config.example.yaml` |
+| 表 `alarms` / `oil_in_out` / `commit_works` / `oil_can_sets` / `write_back_commands` | 已删除（migration `000011`） |
 
-*剩下的唯一阻塞项：`/api/oil-in-out` 与 `/api/shifts`。**这是协议缺口，不是改个 handler 的事**——
-设备协议 V1 根本没有出入库/交班的上行通道（旧的 `requestUnloadOil`/`requestShift` 是轮询式查询，
-V1 未保留）。删掉 `internal/mqtt` 后这两个端点能编译、能返回 200，但永远返回空，这种"看着正常其实
-没数据"比编译错误更难发现。必须先与 Android 侧确认：补入 V1，还是确认这两个功能暂不纳入单栈。*
+**删表前确认五张表均为空**——它们的摄取路径早已移除。down 迁移从 `000001` **程序化提取** DDL 而非
+手抄（避免转录漏字），并写明它恢复的是结构而非数据。分区表显式 DROP 而非依赖 Postgres 级联：
+sqlc 逐语句跟踪表，看不到 DROP 就会继续为分区生成模型——一批看起来能用的死类型。
 
-| 路径 | 处置 | 说明 |
-|---|---|---|
-| `internal/mqtt/` | **删除** | 整包。Alink topic、paho 通配符订阅、handlers、poller |
-| `cmd/devicesim/` | **删除** | 被 `cmd/tbdevicesim` 取代 |
-| `dev/mosquitto/` | **删除** | 旧 broker 配置 |
-| `docker-compose.yml` 的 `mosquitto` 服务及其两个 volume | **删除** | |
-| `go.mod` 的 `github.com/eclipse/paho.mqtt.golang` | **保留** | `internal/devicesim` 仍需要它连 ThingsBoard 的 MQTT |
-| 环境变量 `MQTT_BROKER_URL` / `MQTT_PRODUCT_KEY` / `MQTT_USERNAME` / `MQTT_PASSWORD` | **删除** | 由 `TB_BASE_URL` / `TB_USERNAME` / `TB_PASSWORD` 取代 |
-| `internal/queue` 的 `Publisher` 接口与 `unbuiltMQTTPublisher` | **重写** | 改为调用 `tbclient.SendCommand`；`pending→sent` 语义随之变化 |
-| `db/migrations` 的 `alarms` / `oil_in_out` 分区表 | **重新评估** | 单栈下遥测不入业务库；这两张表是否仍需要，取决于 #10 的数据边界落地 |
-| `internal/partitions/` | **随上一项** | 若上述分区表取消则一并删除 |
-| `internal/api/oilcan.go` 的 Redis 快照缓存 | **重写** | 数据来源从旧 MQTT handler 改为 `tbclient` |
+**river 的四张表刻意保留**（`river_job` 等，migrations `000002`–`000007`）。在后续迁移里删掉它们、
+而前面六个文件仍声称创建它们，会让迁移历史在两个方向上都不自洽；要清理应当把那六个文件一并退役，
+那是独立的一次 schema 历史变更。
 
-**没有 EMQX 相关代码需要删除**——EMQX 从未被写进代码，2026-09-01 那次只是用一次性容器做了 ACL 实测，
-容器与规则当场已销毁。`internal/aliyuniot` 也早已删除。
-
----
+**副作用**：`go test ./...` 并行跑现在稳定了。此前长期存在的偶发失败（`internal/api` 与
+`internal/queue` 互抢 river job、`internal/mqtt` 的 `TestClient_OnlineStatus` 时序敏感）完全位于被
+删除的包中，随之消失。连续三次并行全量测试全绿，不再需要 `-p 1`。
 
 ## 7. 本地开发
 

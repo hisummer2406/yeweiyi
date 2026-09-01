@@ -31,25 +31,17 @@ There is now a substantial Go codebase, containing **two device-connectivity sta
 the warning immediately below, which is the single most important thing to know before writing code
 here.
 
-## ⚠️ Read this before touching any code
+## Architecture in one line
 
-**This repository contains two device-connectivity stacks. Only one of them is the architecture.**
+**Devices connect only to ThingsBoard CE.** There is no EMQX, no second MQTT stack, no Alink/Paho
+compatibility layer, and no local copy of telemetry. The legacy Alink stack that used to live
+alongside this one was **deleted in full** on 2026-09-02 (GitHub issue #10) — `internal/mqtt`,
+`cmd/devicesim`, `internal/queue`, `internal/partitions`, the mosquitto service and the five
+legacy tables are all gone.
 
-| | Status |
-|---|---|
-| **ThingsBoard CE single stack** — `internal/protocol`, `internal/tbclient`, `internal/devicesim`, `internal/control`, `internal/ingest`, `cmd/tbdevicesim` | ✅ **This is the architecture.** Build here. |
-| **Legacy Alink/Paho stack** — `internal/mqtt`, `cmd/devicesim`, `dev/mosquitto`, the `mosquitto` service in `docker-compose.yml`, `cmd/server`'s MQTT wiring | ❌ **Dead.** Scheduled for deletion by GitHub issue #10. Do not extend, do not imitate, do not "fix". |
-
-The legacy stack is still present and still passing its tests only because `cmd/server` has not been
-migrated yet. It uses Aliyun-style Alink topics (`sys/{productKey}/{deviceName}/thing/...`), a
-`productKey`, wildcard broker subscriptions, and a `requestOilcan` polling loop. **None of that is
-how the system works now.** If you find yourself writing a `productKey`, an Alink topic, an EMQX
-config, or a second MQTT client, stop — you have copied the dead stack.
-
-Explicitly out of scope, per issue #1/#9/#10: **no EMQX, no second MQTT broker, no Alink/Paho
-compatibility layer, no Go-side device credential system, no duplicate time-series storage.**
-
----
+If you find yourself writing a `productKey`, a `sys/{productKey}/...` topic, an EMQX config, a
+second MQTT client, or a table that stores telemetry locally, stop — none of those belong here, and
+the git history that shows them is history.
 
 ## What this project is
 
@@ -78,7 +70,7 @@ Sibling repositories (do not edit from here; protocol changes require agreement 
 ## Quickstart
 
 ```bash
-# business stack (Postgres, Redis, + the legacy mosquitto that is on its way out)
+# business stack (Postgres, Redis)
 docker compose up -d
 
 # ThingsBoard CE — heavy; first boot installs its schema and takes 2–4 minutes
@@ -111,7 +103,6 @@ omit it and rely on defaults plus env (what the dev loop does).
 | `thingsboard.baseURL` / `TB_BASE_URL` (+ username/password) | **Unset ⇒ no ingestion, and device/control routes answer 503** — the server still boots, deliberately, so business-endpoint work needs no 2 GB container. |
 | `control.allowPhysicalCommands` / `ALLOW_PHYSICAL_COMMANDS` | opt-in gate for pump/valve/reboot. **Leave false.** A typo'd env value is an error, not a silent false. |
 | `control.commandTTL` / `COMMAND_TTL` | command validity window (default `60s`, a placeholder not a product decision) |
-| `legacy.mqttBrokerURL` / `MQTT_BROKER_URL` | **legacy stack.** Leave unset. |
 
 Durations are `"30s"`-style strings everywhere; a bare number is rejected rather than read as
 nanoseconds. Unknown/misspelled YAML keys fail startup rather than being ignored — the motivating
@@ -129,11 +120,10 @@ go test ./internal/ingest/     # needs ThingsBoard + Postgres + Redis
 Tests **skip with an explanatory message** when their infrastructure is absent rather than failing.
 If you see a skip, start the container it names — do not assume the test is broken.
 
-> **`go test ./...` is unreliable, and not because of your change.** `internal/api` and
-> `internal/queue` both start river clients against the same Postgres and steal each other's jobs
-> when packages run in parallel, and `internal/mqtt`'s `TestClient_OnlineStatus` is timing-flaky.
-> These reproduce on a clean checkout with no local changes. Use `-p 1`, or test the specific
-> packages you touched. **Do not "fix" your code in response to these two failures.**
+`go test ./...` is green in parallel. It used to be chronically flaky — `internal/api` and
+`internal/queue` stole river jobs from each other, and `internal/mqtt`'s `TestClient_OnlineStatus`
+was timing-sensitive — but both packages were deleted with the legacy stack, and the flakiness went
+with them.
 
 ---
 
@@ -259,8 +249,6 @@ invariants change.
 - **Multi-tenancy is not built.** There are no customer entities and no tenant-scoped query
   isolation. `users.role` (`platform_admin`/`customer_admin`/`customer_user`) plus the existing
   `user_devices` binding is the entire authorization model today.
-- **`cmd/server` now boots on the single stack**, but the legacy stack is still reachable from it:
-  setting `MQTT_BROKER_URL` starts the old Alink client (with a loud warning). Leave it unset.
 - **All read endpoints are migrated.** `/api/alarms`, `/api/oil-in-out` and
   `/api/devices/:device/telemetry/latest` read through to ThingsBoard; `/api/oilcan/latest` and
   `/api/shifts` were deleted rather than migrated. **`/api/oil-in-out` depends on an unmerged
@@ -269,13 +257,15 @@ invariants change.
   devices currently produce records the endpoint skips. It degrades to an empty list, not a 500.
 - **交班 (shift handover) is out of scope** unless product says otherwise: V1 has no uplink for it on
   either side, so `/api/shifts` could only ever have returned an empty list.
-- The **write-back endpoints** (`POST /api/oil-in-out/correct`, `/api/shifts/correct`,
-  `/api/devices/:device/oil-can-set`) still belong to the legacy river queue and were deliberately
-  left alone by the read-path migration — they go with `internal/queue`, not with the read handlers.
+- **Record correction has no replacement yet.** The old write-back endpoints
+  (`POST /api/oil-in-out/correct` etc.) went with the river queue. If correcting a stored record
+  remains a product requirement it needs redesigning on top of `internal/control`, not restoring.
 - **Not verified:** MQTT over TLS (dev uses plaintext 1884), OTA delivery, ThingsBoard-side tenant
   isolation, and any load/capacity testing. The device-side OTA client does not exist at all.
-- The **write-back queue** (`internal/queue`, river) belongs to the legacy design. The single-stack
-  replacement is `internal/control`; do not build new features on the old queue.
+- **river's own tables remain** (`river_job`/`river_leader`/`river_queue`/`river_notification`,
+  migrations 000002–000007) even though river itself is gone from `go.mod`. Dropping them from a
+  later migration while those six files still claim to create them makes the history inconsistent
+  both ways; retiring the six files together is a schema-history change worth doing on its own.
 
 ---
 
@@ -1362,6 +1352,46 @@ shared query-param parsing and was renamed `listparams.go`.
 Deliberately untouched: the write-back `POST /api/*/correct` endpoints. They belong to the legacy
 river queue, which is its own removal.
 
+**2026-09-02 legacy stack deletion** — removed the Alink/Paho stack in full, closing the last of
+issue #10's structural work. Deleted: `internal/mqtt`, `cmd/devicesim`, `internal/queue` (river),
+`internal/partitions`, `dev/mosquitto`, the mosquitto compose service, `internal/api/writeback.go`,
+four query files, and — via migration `000011` — the tables `alarms`, `oil_in_out`, `commit_works`,
+`oil_can_sets` and `write_back_commands` with their partitions. `go.mod` lost river; paho stays
+because `internal/devicesim` speaks ThingsBoard's MQTT.
+
+Dropping tables is irreversible, so it was checked first: **all five were empty**, their ingestion
+having already been removed. The down migration reproduces their DDL from `000001` (generated from
+that file rather than retyped, so it cannot drift) and says plainly that it restores structure, not
+data. Partitions are dropped explicitly even though Postgres would cascade them — sqlc tracks tables
+statement by statement and would otherwise keep emitting models for partitions it never saw
+dropped, i.e. dead types that look live. Deliberately **not** dropped: river's four tables, since
+removing them from a later migration while `000002`–`000007` still create them breaks the history in
+both directions; retiring those six files together is its own change.
+
+**A real bug surfaced during the cleanup, and it was not the test's fault.**
+`TestExpireStale_ClosesCommandsPastTheirWindow` failed roughly one run in three with a constraint
+violation on `expires_at > issued_at`. Cause: `issued_at` defaulted to the *database's* `now()` while
+`expires_at` was computed from the *application's* clock — two clocks for two fields of one row. With
+that test's 1 ms TTL the insert simply outran its own expiry. The everyday consequence was quieter
+and worse: every command's real validity window was silently shortened by the round-trip time.
+`CreateControlCommand` now takes `issued_at` explicitly so both timestamps come from one clock
+reading, which is also the one the device receives in the envelope. Five consecutive package runs
+green afterwards.
+
+**Side effect worth knowing: `go test ./...` is now reliable in parallel.** The chronic flakiness
+documented at length in earlier entries — `internal/api` and `internal/queue` stealing river jobs
+from each other, `internal/mqtt`'s timing-sensitive `TestClient_OnlineStatus` — lived entirely in
+the deleted packages. Three consecutive full parallel runs green; the `-p 1` workaround is no longer
+needed.
+
+Data-boundary assertions were upgraded rather than deleted: tests that counted rows in `alarms` /
+`oil_in_out` / `commit_works` and required zero now assert those tables **do not exist**, which is
+the same property stated more strongly and fails loudly if anyone reintroduces a local telemetry
+copy.
+
+Verified after deletion: the binary boots, `/healthz` 200, and `/api/shifts`, `/api/write-back` and
+`/api/oilcan/latest` all return 404 (route absent) rather than 401 (route present but unauthorised).
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
@@ -1393,98 +1423,30 @@ channels or a smarter fan-out if connection count gets large.
 Module layout (current, not just planned):
 
 ```
-# --- ThingsBoard CE single stack (2026-09-01, the current architecture) ---
 internal/protocol/   # 设备协议 V1, the single source of truth for the wire contract: telemetry.go
-                     # (30s flat-key tank snapshot), events.go (instant alarm + cmdResult),
-                     # rpc.go (command envelope, method registry, state machine constants,
-                     # error codes), attributes.go (client/shared/OTA attribute keys),
-                     # convert.go (accepts both the device-side JSON shape and ThingsBoard's
-                     # stringified read-back shape — see the trap note below),
-                     # contract_test.go (two-way fixture tests, no containers needed)
-internal/tbclient/   # the ONLY door into ThingsBoard: client.go (auth, 401 re-login, error
-                     # classification incl. Unavailable()), devices.go (provisioning +
-                     # credentials), telemetry.go (REST timeseries/attributes), rpc.go
-                     # (two-way RPC → Ack), ws.go (live telemetry subscription over /api/ws),
-                     # e2e_test.go (11 real-ThingsBoard acceptance tests; skip if not running).
-                     # Public REST/WS APIs only — never ThingsBoard's own database.
-internal/devicesim/  # device-side reference implementation of protocol V1, driven in-process by
-                     # the e2e tests. Pluggable Policy lets a test exercise interlock rejection,
-                     # accepted-then-failed, and duplicate-command replay.
-cmd/tbdevicesim/     # CLI wrapper: `provision -name X` registers a device and prints its token,
-                     # `run -token ...` runs a simulated device. Replaces cmd/devicesim.
-fixtures/protocol/v1/ # cross-repo protocol fixtures; the Android side is expected to test against
-                     # these same files so a rename breaks both builds, not a real device
-docs/protocol-v1.md            # the protocol spec (draft, not yet frozen — see its §12)
-docs/thingsboard-ce-baseline.md # version/licence baseline, responsibility table, data boundary,
-                     # adapter list, and the old-stack removal list for issue #10
-
-# --- legacy Alink/Paho stack, to be deleted by issue #10 ---
-cmd/server/main.go   # entrypoint: wires gin + pgxpool + redis client + river queue client +
-                     # (optional, if MQTT_BROKER_URL set) mqtt client + poller.
-                     # Still wired to the OLD stack — not yet migrated to internal/tbclient.
-cmd/devicesim/main.go # dev-only tool (2026-08-29): simulates a device against the local Mosquitto,
-                     # publishing hand-written JSON (real device field names, not this repo's own
-                     # marshaled structs — same rationale as internal/mqtt's deviceSim test helper)
-                     # for alarm/unloadoil/shift/oilcan/online/offline/msg, plus a `watch` mode that
-                     # subscribes to thing/service/* to observe the poller's (or, once
-                     # queue.Publisher is implemented, the write-back queue's) outbound requests.
-                     # `go run ./cmd/devicesim -h`-equivalent: run any subcommand with no flags to
-                     # see the usage line. Lets local dev exercise the real internal/mqtt handler
-                     # code path without hand-seeding Postgres/Redis or standing up a real device.
-internal/mqtt/       # topics.go (topic build/parse, service vs property vs event), payloads.go
-                     # (wire-format structs — see "The MQTT contract" corrections above), client.go
-                     # (paho wiring, wildcard subscribe), handlers.go (dispatch + persistence),
-                     # poller.go (§4.3 requestOilcan cadence), *_test.go (integration tests, see
-                     # above). Local-dev-only for now (still points at Mosquitto) — was briefly
-                     # replaced by an AMQP+OpenAPI split (internal/aliyuniot) to work around Aliyun
-                     # IoT Platform's ACL model, reverted once that plan was dropped. Per the
-                     # 2026-09-01 addition to "Device connectivity platform" below, production target
-                     # is now self-hosted EMQX (not ThingsBoard — ThingsBoard is scoped to device
-                     # identity/OTA only), and this package's design (paho, wildcard subscribe,
-                     # handlers.go dispatch) is expected to carry over unchanged, just pointed at a
-                     # different host/credentials — not yet done. The wildcard-subscribe ACL grant
-                     # this design needs was empirically verified 2026-09-01 against a real (throwaway)
-                     # EMQX instance — see "Device connectivity platform" below — but no durable EMQX
-                     # instance exists yet and this package still points at Mosquitto.
-internal/api/        # router.go, health.go, auth.go (JWT login + middleware, apiClaims), records.go
-                     # (alarms/oil-in-out/shifts list handlers), oilcan.go (Redis-cached snapshot
-                     # read), ws.go (/ws/alarms — see above), writeback.go (2026-08-29: write-back
-                     # REST entry points — see below), devices.go (2026-08-29: bind/unbind/list +
-                     # requireDeviceOwnership — see the authorization pass below); api_test.go/
-                     # health_test.go/auth_test.go/records_test.go/oilcan_test.go/writeback_test.go/
-                     # devices_test.go (2026-08-29: integration tests, see above)
-internal/queue/      # client.go (river wiring), enqueue.go (transactional insert+enqueue),
-                     # publish.go (pending->sent worker + Publisher interface), ttl_sweep.go
-                     # (§5.3 periodic sweep), queue_test.go (integration tests, see above)
-internal/control/    # (2026-09-01, issue #10) remote-control state machine, authorization and
-                     # audit: control.go + control_test.go. Every status transition is guarded in
-                     # SQL, not here. AllowPhysicalCommands defaults to false on purpose.
-internal/ingest/     # (2026-09-01, issue #10) one ThingsBoard telemetry WS subscription per
-                     # device; routes cmdResult into internal/control and alarms onto the
-                     # alarms:live Redis channel. Deliberately persists NO telemetry — that is
-                     # the data boundary, and ingest_test.go fails if it ever starts to.
-internal/partitions/ # partitions.go (2026-08-29): keeps alarms/oil_in_out's monthly range
-                     # partitions pre-created a few months ahead — plain ticker goroutine, not a
-                     # river job (river is scoped to the write-back queue per "Tech stack" below;
-                     # CREATE TABLE IF NOT EXISTS is already idempotent/multi-instance-safe on its
-                     # own). partitions_test.go is a real integration test against local postgres.
-internal/store/db/   # sqlc-generated: db.go, models.go, querier.go, + one .sql.go per query file
-db/migrations/       # golang-migrate schema; 000001 is the app schema, 000002-000007 are river's
-                     # (see above), 000008 adds user_devices (2026-08-29 authorization pass),
-                     # 000009 attaches COMMENT ON TABLE/COLUMN to every app table (2026-09-01
-                     # table-comments pass, documentation-only, no DDL change)
-db/queries/          # sqlc query input — devices.sql, users.sql, user_devices.sql (2026-08-29:
-                     # BindUserDevice/UnbindUserDevice/ListDevicesForUser/UserOwnsDevice),
-                     # alarms.sql, oil_in_out.sql,
-                     # commit_works.sql (each of the last three now has an Upsert*, used by
-                     # internal/mqtt, alongside the List* used by internal/api; oil_in_out.sql and
-                     # commit_works.sql also each have a GetLatest*ByDeviceLocalID/Get*ByDeviceLocalID,
-                     # added 2026-08-29 for writeback.go's correction endpoints to check a record
-                     # exists before enqueueing),
-                     # write_back_commands.sql (now also has ListWriteBackCommandsForDevice, added
-                     # 2026-08-29 for GET /api/write-back) — sqlc.yaml at repo root wires
-                     # schema=db/migrations, queries=db/queries, out=internal/store/db
-dev/mosquitto/       # mosquitto.conf for the local dev broker (anonymous auth, no TLS — dev only)
+                     # (30s flat-key tank snapshot), events.go (alarm + cmdResult), stock.go
+                     # (出入库), rpc.go (command envelope, method registry, state machine),
+                     # attributes.go, convert.go (accepts both the device-side JSON shape and
+                     # ThingsBoard's stringified read-back shape), contract_test.go (fixture tests,
+                     # no containers needed)
+internal/tbclient/   # the ONLY door into ThingsBoard: auth + 401 re-login + error classification,
+                     # device provisioning/credentials, REST timeseries/attributes, two-way RPC,
+                     # live telemetry WebSocket. Public APIs only — never ThingsBoard's database.
+internal/control/    # control command state machine, authorization, audit. Status transitions are
+                     # guarded in SQL, not here. AllowPhysicalCommands defaults to false.
+internal/ingest/     # one ThingsBoard telemetry subscription per device; routes cmdResult into
+                     # internal/control and alarms onto the alarms:live Redis channel. Persists NO
+                     # telemetry — that is the data boundary, and its test fails if that changes.
+internal/config/     # defaults → config.yaml → environment. See config.example.yaml.
+internal/devicesim/  # device-side reference implementation, driven in-process by tests
+internal/api/        # REST/WS: auth, device binding, control + audit, and the read-through
+                     # endpoints (alarms.go, stock.go, telemetry.go) that proxy ThingsBoard
+cmd/server/          # the single binary
+cmd/tbdevicesim/     # simulated device CLI (provision / run)
+fixtures/protocol/v1/ # cross-repo protocol fixtures, shared with the Android repo
+db/migrations/       # 000001 app schema … 000010 control+audit, 000011 drops the legacy tables
+db/queries/          # sqlc input: devices, users, user_devices, control_commands, audit_log
+docs/                # protocol spec, architecture baseline, cross-repo protocol reconciliation
 ```
 
 ## Architecture

@@ -40,10 +40,6 @@ func TestLoad_DefaultsAreUsableAndSafe(t *testing.T) {
 	if cfg.Control.AllowPhysicalCommands {
 		t.Error("allowPhysicalCommands must default to false")
 	}
-	// And nothing should start the legacy stack by accident.
-	if cfg.LegacyStackEnabled() {
-		t.Error("the legacy Alink stack must not start by default")
-	}
 	if cfg.ThingsBoardEnabled() {
 		t.Error("ThingsBoard should be off until configured")
 	}
@@ -243,8 +239,5 @@ func TestExampleConfigIsValid(t *testing.T) {
 	// inherits it.
 	if cfg.Control.AllowPhysicalCommands {
 		t.Error("config.example.yaml must ship with allowPhysicalCommands: false")
-	}
-	if cfg.LegacyStackEnabled() {
-		t.Error("config.example.yaml must not enable the legacy stack")
 	}
 }

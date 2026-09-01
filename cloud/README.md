@@ -48,6 +48,7 @@ internal/tbclient/    # ThingsBoard adapter：REST + WebSocket，不直连其数
 internal/devicesim/   # 设备侧参考实现，测试在进程内驱动它
 cmd/tbdevicesim/      # 模拟设备的命令行封装（provision / run）
 fixtures/protocol/v1/ # 跨仓库共享的协议 fixture，Android 侧用同一批文件做契约测试
+internal/config/      # 配置加载：默认值 → config.yaml → 环境变量
 internal/control/     # 控制命令状态机、授权、审计
 internal/ingest/      # 每设备一条 ThingsBoard 遥测订阅 → 业务层（不落遥测）
 internal/api/         # REST：路由、鉴权、控制与审计端点、业务查询
@@ -55,10 +56,6 @@ internal/store/db/    # sqlc 生成的查询层
 db/migrations/        # golang-migrate schema
 docs/                 # 协议与架构基线文档
 
-internal/mqtt/        # 旧 Alink/Paho 栈，待 issue #10 删除（不属于当前架构）
-cmd/devicesim/        # 同上
-dev/mosquitto/        # 同上
-internal/queue/       # 旧写回队列，已被 internal/control 取代
 ```
 
 ## 本地开发
@@ -90,8 +87,10 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
   留一个永远返回空的端点比没有更糟）。`/api/oil-in-out` 依赖一个尚未合并的设备侧改动
   （[zhongchengyeweiyi#39](https://github.com/hisummer2406/zhongchengyeweiyi/issues/39)）：设备已在
   上报 `stockEvent`，但发的是 Java 调试字符串而非 JSON。
-- **未开始**：完整多租户模型；固定监控 Web；离线私有化交付包；旧栈删除（写回队列相关端点仍在）。
-  删除清单见 [`docs/thingsboard-ce-baseline.md`](./docs/thingsboard-ce-baseline.md) 第 6 节。
+- **旧 Alink 栈已于 2026-09-02 全部删除**：`internal/mqtt`、`cmd/devicesim`、`internal/queue`、
+  `internal/partitions`、mosquitto 服务，以及五张遗留表（migration `000011`，删除前确认均为空表）。
+- **未开始**：完整多租户模型；固定监控 Web；离线私有化交付包；记录修正功能（旧的写回端点随队列
+  一并删除，若产品仍需要，应基于 `internal/control` 重新设计而非恢复）。
 
 ## 运行
 

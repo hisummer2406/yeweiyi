@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -57,7 +56,6 @@ type Config struct {
 	ThingsBoard ThingsBoard `yaml:"thingsboard"`
 	Control     Control     `yaml:"control"`
 	Ingest      Ingest      `yaml:"ingest"`
-	Legacy      Legacy      `yaml:"legacy"`
 }
 
 type Server struct {
@@ -66,11 +64,6 @@ type Server struct {
 
 type Database struct {
 	URL string `yaml:"url"`
-	// PartitionInterval is how often future monthly partitions are pre-created, and
-	// PartitionLookahead how many months ahead. Only relevant while the legacy partitioned tables
-	// still exist.
-	PartitionInterval  Duration `yaml:"partitionInterval"`
-	PartitionLookahead int      `yaml:"partitionLookahead"`
 }
 
 type Redis struct {
@@ -119,29 +112,14 @@ type Ingest struct {
 	ResubscribeDelay Duration `yaml:"resubscribeDelay"`
 }
 
-// Legacy configures the Alink/Paho stack that issue #10 removes. BrokerURL empty — the default —
-// means the legacy stack does not start at all.
-type Legacy struct {
-	MQTTBrokerURL  string   `yaml:"mqttBrokerURL"`
-	MQTTProductKey string   `yaml:"mqttProductKey"`
-	MQTTClientID   string   `yaml:"mqttClientID"`
-	MQTTUsername   string   `yaml:"mqttUsername"`
-	MQTTPassword   string   `yaml:"mqttPassword"`
-	WriteBackTTL   Duration `yaml:"writeBackTTL"`
-}
-
 // Defaults returns the configuration used when nothing is specified. Every default here is safe to
 // run with; the only value that can cause physical action is AllowPhysicalCommands, which is false.
 func Defaults() Config {
 	return Config{
-		Server: Server{ListenAddr: ":8080"},
-		Database: Database{
-			URL:                "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable",
-			PartitionInterval:  Duration(24 * time.Hour),
-			PartitionLookahead: 2,
-		},
-		Redis: Redis{Addr: "localhost:6379"},
-		Auth:  Auth{TokenTTL: Duration(24 * time.Hour)},
+		Server:   Server{ListenAddr: ":8080"},
+		Database: Database{URL: "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"},
+		Redis:    Redis{Addr: "localhost:6379"},
+		Auth:     Auth{TokenTTL: Duration(24 * time.Hour)},
 		Control: Control{
 			CommandTTL:            Duration(60 * time.Second),
 			AckTimeout:            Duration(10 * time.Second),
@@ -151,10 +129,6 @@ func Defaults() Config {
 		Ingest: Ingest{
 			DeviceRefreshInterval: Duration(30 * time.Second),
 			ResubscribeDelay:      Duration(5 * time.Second),
-		},
-		Legacy: Legacy{
-			MQTTClientID: "yeweiyi-cloud",
-			WriteBackTTL: Duration(30 * 24 * time.Hour),
 		},
 	}
 }
@@ -202,11 +176,6 @@ func (c *Config) applyEnv() error {
 	str("TB_BASE_URL", &c.ThingsBoard.BaseURL)
 	str("TB_USERNAME", &c.ThingsBoard.Username)
 	str("TB_PASSWORD", &c.ThingsBoard.Password)
-	str("MQTT_BROKER_URL", &c.Legacy.MQTTBrokerURL)
-	str("MQTT_PRODUCT_KEY", &c.Legacy.MQTTProductKey)
-	str("MQTT_CLIENT_ID", &c.Legacy.MQTTClientID)
-	str("MQTT_USERNAME", &c.Legacy.MQTTUsername)
-	str("MQTT_PASSWORD", &c.Legacy.MQTTPassword)
 
 	for _, d := range []struct {
 		env string
@@ -218,8 +187,6 @@ func (c *Config) applyEnv() error {
 		{"COMMAND_EXPIRY_SWEEP_INTERVAL", &c.Control.ExpirySweepInterval},
 		{"INGEST_DEVICE_REFRESH_INTERVAL", &c.Ingest.DeviceRefreshInterval},
 		{"INGEST_RESUBSCRIBE_DELAY", &c.Ingest.ResubscribeDelay},
-		{"WRITE_BACK_TTL", &c.Legacy.WriteBackTTL},
-		{"DB_PARTITION_INTERVAL", &c.Database.PartitionInterval},
 	} {
 		v := os.Getenv(d.env)
 		if v == "" {
@@ -230,14 +197,6 @@ func (c *Config) applyEnv() error {
 			return fmt.Errorf("%s=%q: want a duration like \"30s\", \"5m\", \"24h\": %w", d.env, v, err)
 		}
 		*d.dst = Duration(parsed)
-	}
-
-	if v := os.Getenv("DB_PARTITION_LOOKAHEAD"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 0 {
-			return fmt.Errorf("DB_PARTITION_LOOKAHEAD=%q: want a non-negative integer", v)
-		}
-		c.Database.PartitionLookahead = n
 	}
 
 	// ALLOW_PHYSICAL_COMMANDS is opt-in and deliberately strict: only "true"/"1" enable it, and
@@ -281,7 +240,6 @@ func (c *Config) Validate() error {
 		{"control.expirySweepInterval", c.Control.ExpirySweepInterval},
 		{"ingest.deviceRefreshInterval", c.Ingest.DeviceRefreshInterval},
 		{"ingest.resubscribeDelay", c.Ingest.ResubscribeDelay},
-		{"database.partitionInterval", c.Database.PartitionInterval},
 	} {
 		if d.v <= 0 {
 			return fmt.Errorf("%s must be positive, got %s", d.name, d.v)
@@ -311,6 +269,3 @@ func (c *Config) Validate() error {
 
 // ThingsBoardEnabled reports whether the single stack is configured.
 func (c *Config) ThingsBoardEnabled() bool { return c.ThingsBoard.BaseURL != "" }
-
-// LegacyStackEnabled reports whether the Alink/Paho stack will start.
-func (c *Config) LegacyStackEnabled() bool { return c.Legacy.MQTTBrokerURL != "" }

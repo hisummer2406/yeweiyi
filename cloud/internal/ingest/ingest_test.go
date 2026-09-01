@@ -276,8 +276,6 @@ func TestIngest_DoesNotPersistTelemetry(t *testing.T) {
 	s.ing.StartDevice(ctx, s.device)
 	waitForSubscription(t, s, ctx)
 
-	before := countRows(t, s, s.device)
-
 	for i := 0; i < 3; i++ {
 		if _, err := s.sim.PublishSnapshot(); err != nil {
 			t.Fatalf("PublishSnapshot: %v", err)
@@ -286,11 +284,16 @@ func TestIngest_DoesNotPersistTelemetry(t *testing.T) {
 	}
 	time.Sleep(2 * time.Second) // give the ingester every chance to (wrongly) write something
 
-	after := countRows(t, s, s.device)
-	for table, n := range after {
-		if n != before[table] {
-			t.Errorf("ingesting telemetry wrote %d new row(s) to %s; telemetry must stay in ThingsBoard only",
-				n-before[table], table)
+	// The legacy telemetry tables were dropped with the old stack (migration 000011), so the
+	// boundary is now structural: there is nowhere for the ingester to write telemetry even if it
+	// tried. A change that recreates one of these tables fails here.
+	for _, table := range []string{"alarms", "oil_in_out", "commit_works"} {
+		var exists *string
+		if err := s.pool.QueryRow(ctx, `SELECT to_regclass('public.' || $1)::text`, table).Scan(&exists); err != nil {
+			t.Fatalf("check %s: %v", table, err)
+		}
+		if exists != nil {
+			t.Errorf("table %q exists again; telemetry must stay in ThingsBoard only", table)
 		}
 	}
 
@@ -389,21 +392,6 @@ func awaitStatus(t *testing.T, s *stack, commandID string, timeout time.Duration
 	}
 	t.Fatalf("command %s never reached %q (last status %q)", commandID, want, last.Status)
 	return db.ControlCommand{}
-}
-
-// countRows counts the business tables that must NOT grow when telemetry is ingested.
-func countRows(t *testing.T, s *stack, device string) map[string]int {
-	t.Helper()
-	out := map[string]int{}
-	for _, table := range []string{"alarms", "oil_in_out", "commit_works"} {
-		var n int
-		if err := s.pool.QueryRow(context.Background(),
-			fmt.Sprintf(`SELECT count(*) FROM %s WHERE device_name = $1`, table), device).Scan(&n); err != nil {
-			t.Fatalf("count %s: %v", table, err)
-		}
-		out[table] = n
-	}
-	return out
 }
 
 func uuidText(b [16]byte) string {

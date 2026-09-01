@@ -1,5 +1,5 @@
 // internal/api had zero automated test coverage (CLAUDE.md's Build section flagged this
-// explicitly) — every other package with real logic (internal/mqtt, internal/queue,
+// explicitly) — every other package with real logic (internal/tbclient, internal/control,
 // internal/partitions) has integration tests against the local dev stack; this is that same
 // pattern applied to the REST layer: real Postgres/Redis, a real gin.Engine driven through
 // httptest, no mocks.
@@ -18,7 +18,6 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"yeweiyi-cloud/internal/api"
-	"yeweiyi-cloud/internal/queue"
 	"yeweiyi-cloud/internal/store/db"
 )
 
@@ -38,12 +37,6 @@ func testRedisAddr() string {
 
 // noopPublisher never actually needs to succeed for these tests — every write-back test here only
 // checks that a command reaches `pending` (the HTTP layer's job), not that it gets published (that's
-// internal/queue's job, already covered by its own tests).
-type noopPublisher struct{}
-
-func (noopPublisher) PublishCommand(context.Context, string, int64, string, []byte) error {
-	return nil
-}
 
 // testEnv wires one real gin.Engine against the local dev Postgres/Redis, plus a bcrypt-seeded user
 // so tests can get a real JWT through the real /api/login handler rather than minting one by hand.
@@ -80,21 +73,11 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 
 	queries := db.New(pool)
 
-	riverClient, err := queue.NewClient(queue.Config{Pool: pool, Queries: queries, Publisher: noopPublisher{}})
-	if err != nil {
-		t.Fatalf("new river client: %v", err)
-	}
-	if err := riverClient.Start(ctx); err != nil {
-		t.Fatalf("start river client: %v", err)
-	}
-	t.Cleanup(func() { riverClient.Stop(context.Background()) })
-
 	deps := api.Deps{
-		Queries:     queries,
-		Redis:       rdb,
-		Pool:        pool,
-		JWTSecret:   []byte("api-test-secret"),
-		RiverClient: riverClient,
+		Queries:   queries,
+		Redis:     rdb,
+		Pool:      pool,
+		JWTSecret: []byte("api-test-secret"),
 	}
 	if customize != nil {
 		customize(&deps)
@@ -204,4 +187,26 @@ func jsonBody(t *testing.T, v any) []byte {
 		t.Fatalf("marshal body: %v", err)
 	}
 	return b
+}
+
+// assertNoLegacyTelemetryTables pins the data boundary structurally.
+//
+// These assertions used to count rows in `alarms`/`oil_in_out`/`commit_works` and require zero.
+// The tables were dropped when the legacy stack was removed (migration 000011), so the property is
+// now stronger and cheaper to state: they must not exist at all. A future change that reintroduces
+// a local copy of telemetry — the duplicate time-series store the architecture exists to avoid —
+// fails here rather than quietly working.
+func assertNoLegacyTelemetryTables(t *testing.T, env *testEnv) {
+	t.Helper()
+	for _, table := range []string{"alarms", "oil_in_out", "commit_works", "write_back_commands"} {
+		var exists *string
+		if err := env.pool.QueryRow(context.Background(),
+			`SELECT to_regclass('public.' || $1)::text`, table).Scan(&exists); err != nil {
+			t.Fatalf("check %s: %v", table, err)
+		}
+		if exists != nil {
+			t.Errorf("table %q exists again; telemetry and stock history must live in ThingsBoard, "+
+				"not be copied into the business database", table)
+		}
+	}
 }

@@ -189,7 +189,9 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: req.Actor.UserID != 0},
 		Operator:   req.Actor.Username,
 		Reason:     req.Reason,
-		ExpiresAt:  pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		// Both timestamps come from this one clock reading — see CreateControlCommand's comment.
+		IssuedAt:  pgtype.Timestamptz{Time: issuedAt, Valid: true},
+		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
 		return db.ControlCommand{}, fmt.Errorf("record command: %w", err)

@@ -1,15 +1,15 @@
-// Package api exposes the HTTPS REST surface yeweiyi-miniapp (and any PC-remote client) consumes,
-// per design doc §4.4. It never talks MQTT directly — it only reads/writes through internal/store.
+// Package api exposes the HTTPS REST surface yeweiyi-miniapp (and any PC-remote client) consumes.
+//
+// It never speaks MQTT. Device data is read through internal/tbclient from ThingsBoard on demand,
+// and business records come from internal/store — there is no local copy of telemetry.
 package api
 
 import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
-	"github.com/riverqueue/river"
 
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
@@ -17,11 +17,10 @@ import (
 )
 
 type Deps struct {
-	Queries     *db.Queries
-	Redis       *redis.Client
-	Pool        *pgxpool.Pool
-	JWTSecret   []byte
-	RiverClient *river.Client[pgx.Tx]
+	Queries   *db.Queries
+	Redis     *redis.Client
+	Pool      *pgxpool.Pool
+	JWTSecret []byte
 
 	// TokenTTL is how long an issued JWT stays valid. Zero means defaultTokenTTL.
 	TokenTTL time.Duration
@@ -56,10 +55,6 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.POST("/devices/bind", bindDeviceHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
-		authorized.GET("/write-back", listWriteBackCommandsHandler(deps))
-		authorized.POST("/oil-in-out/correct", correctOilInOutHandler(deps))
-		authorized.POST("/shifts/correct", correctShiftHandler(deps))
-		authorized.POST("/devices/:device/oil-can-set", writeOilCanSetHandler(deps))
 
 		// ThingsBoard single stack (issue #10).
 		// Telemetry is read through to ThingsBoard on demand, never served from a local copy.

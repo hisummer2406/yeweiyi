@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"log"
 
@@ -13,21 +12,9 @@ import (
 	"yeweiyi-cloud/internal/config"
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/ingest"
-	yqmqtt "yeweiyi-cloud/internal/mqtt"
-	"yeweiyi-cloud/internal/partitions"
-	"yeweiyi-cloud/internal/queue"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
 )
-
-// unbuiltMQTTPublisher belongs to the legacy write-back queue, which the ThingsBoard single stack
-// replaces with internal/control. It stays only until internal/mqtt and internal/queue are removed
-// (GitHub issue #10); nothing in the current architecture reaches it.
-type unbuiltMQTTPublisher struct{}
-
-func (unbuiltMQTTPublisher) PublishCommand(context.Context, string, int64, string, []byte) error {
-	return errors.New("the legacy write-back publisher was never built; use internal/control instead")
-}
 
 func main() {
 	// -config is optional: with no file the built-in defaults plus environment variables are used,
@@ -49,18 +36,13 @@ func main() {
 	}
 	defer pool.Close()
 
-	go partitions.Run(ctx, pool, cfg.Database.PartitionInterval.Std(), cfg.Database.PartitionLookahead)
-
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.Redis.Addr})
 	defer rdb.Close()
 
 	queries := db.New(pool)
 
-	// --- ThingsBoard CE single stack -------------------------------------------------------
-	//
-	// Optional at boot, on purpose. Issue #10 requires the system to start without any Aliyun
-	// productKey, Alink topic or EMQX; it must also start without ThingsBoard, so that work on the
-	// business endpoints does not require running a 2 GB container. When it is absent the
+	// ThingsBoard is optional at boot, on purpose: the server must start without it so that work on
+	// the business endpoints does not require running a 2 GB container. When it is absent the
 	// device-facing routes answer 503 with an explanatory message rather than the process refusing
 	// to boot or panicking on first use.
 	var (
@@ -114,51 +96,14 @@ func main() {
 			"and device/control endpoints will answer 503")
 	}
 
-	// --- legacy Alink/Paho stack, removed by issue #10 --------------------------------------
-	riverClient, err := queue.NewClient(queue.Config{
-		Pool:      pool,
-		Queries:   queries,
-		Publisher: unbuiltMQTTPublisher{},
-		TTL:       cfg.Legacy.WriteBackTTL.Std(),
-	})
-	if err != nil {
-		log.Fatalf("queue client: %v", err)
-	}
-	if err := riverClient.Start(ctx); err != nil {
-		log.Fatalf("queue start: %v", err)
-	}
-	defer riverClient.Stop(ctx)
-
-	if cfg.LegacyStackEnabled() {
-		log.Print("WARNING: legacy.mqttBrokerURL is set, starting the LEGACY Alink/Paho stack. " +
-			"This is not the current architecture (see AGENTS.md) and is scheduled for removal.")
-		mqttClient := yqmqtt.NewClient(yqmqtt.Config{
-			BrokerURL:  cfg.Legacy.MQTTBrokerURL,
-			ProductKey: cfg.Legacy.MQTTProductKey,
-			ClientID:   cfg.Legacy.MQTTClientID,
-			Username:   cfg.Legacy.MQTTUsername,
-			Password:   cfg.Legacy.MQTTPassword,
-			Queries:    queries,
-			Redis:      rdb,
-		})
-		if err := mqttClient.Connect(); err != nil {
-			log.Fatalf("mqtt connect: %v", err)
-		}
-		defer mqttClient.Disconnect()
-
-		poller := &yqmqtt.Poller{Client: mqttClient, Queries: queries}
-		go poller.Run(ctx)
-	}
-
 	router := api.NewRouter(api.Deps{
-		Queries:     queries,
-		Redis:       rdb,
-		Pool:        pool,
-		JWTSecret:   []byte(cfg.Auth.JWTSecret),
-		TokenTTL:    cfg.Auth.TokenTTL.Std(),
-		RiverClient: riverClient,
-		TB:          tbClient,
-		Control:     controlSvc,
+		Queries:   queries,
+		Redis:     rdb,
+		Pool:      pool,
+		JWTSecret: []byte(cfg.Auth.JWTSecret),
+		TokenTTL:  cfg.Auth.TokenTTL.Std(),
+		TB:        tbClient,
+		Control:   controlSvc,
 	})
 
 	log.Printf("listening on %s", cfg.Server.ListenAddr)

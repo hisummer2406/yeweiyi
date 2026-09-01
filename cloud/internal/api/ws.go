@@ -34,10 +34,9 @@ func wsAuthToken(c *gin.Context) string {
 	return c.Query("token")
 }
 
-// wsAlarmsHandler streams handleMsgMessage's real-time alarm-text pushes (internal/mqtt/handlers.go,
-// published to the "alarms:live" Redis channel) to one device's connected clients. Scoped to a
-// single `device` query param for the same reason every other endpoint requires one — see
-// listParams in records.go.
+// wsAlarmsHandler streams the alarm events internal/ingest fans out on the "alarms:live" Redis
+// channel to one device's connected clients. Scoped to a single `device` query param for the same
+// reason every other endpoint requires one — see listParams in listparams.go.
 func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw := wsAuthToken(c)

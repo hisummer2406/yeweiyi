@@ -97,15 +97,7 @@ func TestListOilInOut_ReadsThroughToThingsBoard(t *testing.T) {
 		t.Errorf("beginTime = %v, not RFC3339: %v", r["beginTime"], err)
 	}
 
-	// And nothing may have been written to the business database on the way through.
-	var n int
-	if err := env.pool.QueryRow(t.Context(),
-		`SELECT count(*) FROM oil_in_out WHERE device_name = $1`, device).Scan(&n); err != nil {
-		t.Fatalf("count oil_in_out: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("serving stock history wrote %d row(s) to the business database", n)
-	}
+	assertNoLegacyTelemetryTables(t, env)
 }
 
 // TestListOilInOut_OutboundDeliveredVolumeIsPositive pins the sign handling: netVolumeL is

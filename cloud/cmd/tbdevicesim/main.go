@@ -2,8 +2,8 @@
 // 设备协议 V1 (docs/protocol-v1.md). It is the manual-testing front end for internal/devicesim,
 // which is the actual reference implementation and is what the automated tests drive.
 //
-// It replaces cmd/devicesim, which targets the legacy Alink/Mosquitto stack that GitHub issue #10
-// removes. Nothing here knows about productKey, sys/... topics or a second broker.
+// Nothing here knows about productKey, sys/... topics or a second broker: the legacy Alink stack
+// it replaced was removed in full (GitHub issue #10).
 //
 // Typical session:
 //

@@ -163,15 +163,7 @@ func TestListAlarms_ReadsThroughToThingsBoard(t *testing.T) {
 		t.Errorf("time = %v, not RFC3339: %v", a["time"], err)
 	}
 
-	// Nothing may have been written to the business database on the way through.
-	var n int
-	if err := env.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM alarms WHERE device_name = $1`, device).Scan(&n); err != nil {
-		t.Fatalf("count alarms: %v", err)
-	}
-	if n != 0 {
-		t.Errorf("reading alarms wrote %d row(s) to the business database; they must stay in ThingsBoard", n)
-	}
+	assertNoLegacyTelemetryTables(t, env)
 }
 
 // TestListAlarms_SortReturnsTheNewestWhenLimited is the case that motivated pushing the sort

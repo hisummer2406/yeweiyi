@@ -14,8 +14,8 @@ import (
 const createControlCommand = `-- name: CreateControlCommand :one
 INSERT INTO control_commands (
     command_id, device_name, method, args,
-    operator_id, operator, reason, expires_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    operator_id, operator, reason, issued_at, expires_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
 `
 
@@ -27,9 +27,16 @@ type CreateControlCommandParams struct {
 	OperatorID pgtype.Int8        `json:"operator_id"`
 	Operator   string             `json:"operator"`
 	Reason     string             `json:"reason"`
+	IssuedAt   pgtype.Timestamptz `json:"issued_at"`
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
 }
 
+// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
+// from the SAME clock. Letting the column default to the database's now() while the application
+// computes expires_at from its own clock means the two can disagree by however long the round trip
+// takes — which violates the expires_at > issued_at constraint outright once the command TTL is
+// shorter than that, and silently shortens every command's real validity window even when it does
+// not. The envelope sent to the device carries the same issued_at, so device and cloud agree too.
 func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error) {
 	row := q.db.QueryRow(ctx, createControlCommand,
 		arg.CommandID,
@@ -39,6 +46,7 @@ func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCom
 		arg.OperatorID,
 		arg.Operator,
 		arg.Reason,
+		arg.IssuedAt,
 		arg.ExpiresAt,
 	)
 	var i ControlCommand
