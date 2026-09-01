@@ -3,15 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
-	"os"
-	"strconv"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"yeweiyi-cloud/internal/api"
+	"yeweiyi-cloud/internal/config"
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/ingest"
 	yqmqtt "yeweiyi-cloud/internal/mqtt"
@@ -31,27 +30,29 @@ func (unbuiltMQTTPublisher) PublishCommand(context.Context, string, int64, strin
 }
 
 func main() {
+	// -config is optional: with no file the built-in defaults plus environment variables are used,
+	// which is what the local dev loop and the container images rely on.
+	configPath := flag.String("config", "", "path to config.yaml (see config.example.yaml)")
+	flag.Parse()
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatalf("config: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	pgURL := getenv("DATABASE_URL", "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable")
-	pool, err := pgxpool.New(ctx, pgURL)
+	pool, err := pgxpool.New(ctx, cfg.Database.URL)
 	if err != nil {
 		log.Fatalf("postgres: %v", err)
 	}
 	defer pool.Close()
 
-	go partitions.Run(ctx, pool, partitions.DefaultInterval, partitions.DefaultLookahead)
+	go partitions.Run(ctx, pool, cfg.Database.PartitionInterval.Std(), cfg.Database.PartitionLookahead)
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr: getenv("REDIS_ADDR", "localhost:6379"),
-	})
+	rdb := redis.NewClient(&redis.Options{Addr: cfg.Redis.Addr})
 	defer rdb.Close()
-
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		log.Fatal("JWT_SECRET is required")
-	}
 
 	queries := db.New(pool)
 
@@ -66,11 +67,11 @@ func main() {
 		tbClient   *tbclient.Client
 		controlSvc *control.Service
 	)
-	if tbURL := os.Getenv("TB_BASE_URL"); tbURL != "" {
+	if cfg.ThingsBoardEnabled() {
 		tbClient, err = tbclient.New(tbclient.Config{
-			BaseURL:  tbURL,
-			Username: os.Getenv("TB_USERNAME"),
-			Password: os.Getenv("TB_PASSWORD"),
+			BaseURL:  cfg.ThingsBoard.BaseURL,
+			Username: cfg.ThingsBoard.Username,
+			Password: cfg.ThingsBoard.Password,
 		})
 		if err != nil {
 			log.Fatalf("thingsboard client: %v", err)
@@ -82,48 +83,43 @@ func main() {
 		}
 
 		controlSvc = control.New(queries, tbClient, control.Config{
-			CommandTTL:            commandTTL(),
-			AllowPhysicalCommands: allowPhysicalCommands(),
+			CommandTTL:            cfg.Control.CommandTTL.Std(),
+			AckTimeout:            cfg.Control.AckTimeout.Std(),
+			AllowPhysicalCommands: cfg.Control.AllowPhysicalCommands,
 		})
 
 		// Drives cmdResult back into the command state machine and fans alarms out to /ws/alarms.
 		ingester := ingest.New(ingest.Config{
-			TB:      tbClient,
-			Control: controlSvc,
-			Redis:   rdb,
-			Queries: queries,
-			Logf:    log.Printf,
+			TB:                    tbClient,
+			Control:               controlSvc,
+			Redis:                 rdb,
+			Queries:               queries,
+			DeviceRefreshInterval: cfg.Ingest.DeviceRefreshInterval.Std(),
+			ResubscribeDelay:      cfg.Ingest.ResubscribeDelay.Std(),
+			Logf:                  log.Printf,
 		})
 		go ingester.Run(ctx)
 
 		// Closes out commands that passed their validity window without reaching a terminal state.
-		go controlSvc.RunExpirySweep(ctx, 30*time.Second, log.Printf)
+		go controlSvc.RunExpirySweep(ctx, cfg.Control.ExpirySweepInterval.Std(), log.Printf)
 
-		log.Printf("thingsboard: connected to %s; telemetry ingestion and remote control are active", tbURL)
-		if !allowPhysicalCommands() {
+		log.Printf("thingsboard: connected to %s; telemetry ingestion and remote control are active (commandTTL=%s ackTimeout=%s)",
+			cfg.ThingsBoard.BaseURL, cfg.Control.CommandTTL, cfg.Control.AckTimeout)
+		if !cfg.Control.AllowPhysicalCommands {
 			log.Print("thingsboard: physical control actions (pump/valve/reboot) are DISABLED — " +
 				"set ALLOW_PHYSICAL_COMMANDS=true only once device-side interlocks are verified on real hardware")
 		}
 	} else {
-		log.Print("TB_BASE_URL not set — running without ThingsBoard: no telemetry ingestion, " +
+		log.Print("thingsboard.baseURL not set — running without ThingsBoard: no telemetry ingestion, " +
 			"and device/control endpoints will answer 503")
 	}
 
 	// --- legacy Alink/Paho stack, removed by issue #10 --------------------------------------
-	queueTTL := queue.DefaultTTL
-	if v := os.Getenv("WRITE_BACK_TTL_DAYS"); v != "" {
-		days, err := strconv.Atoi(v)
-		if err != nil || days <= 0 {
-			log.Fatalf("WRITE_BACK_TTL_DAYS must be a positive integer, got %q", v)
-		}
-		queueTTL = time.Duration(days) * 24 * time.Hour
-	}
-
 	riverClient, err := queue.NewClient(queue.Config{
 		Pool:      pool,
 		Queries:   queries,
 		Publisher: unbuiltMQTTPublisher{},
-		TTL:       queueTTL,
+		TTL:       cfg.Legacy.WriteBackTTL.Std(),
 	})
 	if err != nil {
 		log.Fatalf("queue client: %v", err)
@@ -133,15 +129,15 @@ func main() {
 	}
 	defer riverClient.Stop(ctx)
 
-	if brokerURL := os.Getenv("MQTT_BROKER_URL"); brokerURL != "" {
-		log.Print("WARNING: MQTT_BROKER_URL is set, starting the LEGACY Alink/Paho stack. " +
+	if cfg.LegacyStackEnabled() {
+		log.Print("WARNING: legacy.mqttBrokerURL is set, starting the LEGACY Alink/Paho stack. " +
 			"This is not the current architecture (see AGENTS.md) and is scheduled for removal.")
 		mqttClient := yqmqtt.NewClient(yqmqtt.Config{
-			BrokerURL:  brokerURL,
-			ProductKey: os.Getenv("MQTT_PRODUCT_KEY"),
-			ClientID:   getenv("MQTT_CLIENT_ID", "yeweiyi-cloud"),
-			Username:   os.Getenv("MQTT_USERNAME"),
-			Password:   os.Getenv("MQTT_PASSWORD"),
+			BrokerURL:  cfg.Legacy.MQTTBrokerURL,
+			ProductKey: cfg.Legacy.MQTTProductKey,
+			ClientID:   cfg.Legacy.MQTTClientID,
+			Username:   cfg.Legacy.MQTTUsername,
+			Password:   cfg.Legacy.MQTTPassword,
 			Queries:    queries,
 			Redis:      rdb,
 		})
@@ -158,51 +154,15 @@ func main() {
 		Queries:     queries,
 		Redis:       rdb,
 		Pool:        pool,
-		JWTSecret:   []byte(jwtSecret),
+		JWTSecret:   []byte(cfg.Auth.JWTSecret),
+		TokenTTL:    cfg.Auth.TokenTTL.Std(),
 		RiverClient: riverClient,
 		TB:          tbClient,
 		Control:     controlSvc,
 	})
 
-	addr := getenv("LISTEN_ADDR", ":8080")
-	log.Printf("listening on %s", addr)
-	if err := router.Run(addr); err != nil {
+	log.Printf("listening on %s", cfg.Server.ListenAddr)
+	if err := router.Run(cfg.Server.ListenAddr); err != nil {
 		log.Fatalf("server: %v", err)
 	}
-}
-
-// allowPhysicalCommands reads the interlock gate.
-//
-// It is opt-IN, and reads as false for every value except an explicit "true"/"1". Issue #1 forbids
-// exposing pump/valve/reboot actions before the device-side interlocks are finished and verified on
-// real hardware, so the state you get by configuring nothing — or by typo'ing the value — has to be
-// the safe one.
-func allowPhysicalCommands() bool {
-	switch os.Getenv("ALLOW_PHYSICAL_COMMANDS") {
-	case "true", "TRUE", "1":
-		return true
-	default:
-		return false
-	}
-}
-
-// commandTTL reads COMMAND_TTL_SECONDS, the control command validity window. The default is a
-// placeholder, not a product decision (docs/protocol-v1.md §12).
-func commandTTL() time.Duration {
-	v := os.Getenv("COMMAND_TTL_SECONDS")
-	if v == "" {
-		return control.DefaultCommandTTL
-	}
-	secs, err := strconv.Atoi(v)
-	if err != nil || secs <= 0 {
-		log.Fatalf("COMMAND_TTL_SECONDS must be a positive integer, got %q", v)
-	}
-	return time.Duration(secs) * time.Second
-}
-
-func getenv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }

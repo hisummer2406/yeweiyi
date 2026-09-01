@@ -3,6 +3,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,6 +22,9 @@ type Deps struct {
 	Pool        *pgxpool.Pool
 	JWTSecret   []byte
 	RiverClient *river.Client[pgx.Tx]
+
+	// TokenTTL is how long an issued JWT stays valid. Zero means defaultTokenTTL.
+	TokenTTL time.Duration
 
 	// TB and Control belong to the ThingsBoard single stack. Both are optional so the server can
 	// still boot without ThingsBoard configured — the routes that need them answer 503 rather than
@@ -66,4 +71,12 @@ func NewRouter(deps Deps) *gin.Engine {
 	}
 
 	return r
+}
+
+// tokenTTL resolves the configured token lifetime, falling back to the default.
+func (d Deps) tokenTTL() time.Duration {
+	if d.TokenTTL > 0 {
+		return d.TokenTTL
+	}
+	return defaultTokenTTL
 }

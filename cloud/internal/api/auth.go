@@ -12,7 +12,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const tokenTTL = 24 * time.Hour
+// defaultTokenTTL is used when Deps.TokenTTL is left zero (tests, and any caller that does not
+// care). Production sets it from config — see config.example.yaml's auth.tokenTTL, which also
+// explains the one behavioural consequence: the user's role travels inside the token, so a role
+// change does not take effect until the token expires or the user logs in again.
+const defaultTokenTTL = 24 * time.Hour
 
 type loginRequest struct {
 	Username string `json:"username" binding:"required"`
@@ -62,7 +66,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 			Role:   user.Role,
 			RegisteredClaims: jwt.RegisteredClaims{
 				Subject:   user.Username,
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(deps.tokenTTL())),
 				IssuedAt:  jwt.NewNumericDate(time.Now()),
 			},
 		}

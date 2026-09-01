@@ -102,12 +102,20 @@ TB_BASE_URL=http://localhost:8081 TB_USERNAME=tenant@thingsboard.org TB_PASSWORD
 go run ./cmd/server
 ```
 
-| env var | effect |
+Configuration is **defaults → `config.yaml` → environment**, loaded by `internal/config`; every key
+and its environment equivalent is documented in `config.example.yaml`. Pass `-config path.yaml`, or
+omit it and rely on defaults plus env (what the dev loop does).
+
+| setting | effect |
 |---|---|
-| `TB_BASE_URL` / `TB_USERNAME` / `TB_PASSWORD` | ThingsBoard. **Unset ⇒ no ingestion, and device/control routes answer 503** — the server still boots. |
-| `ALLOW_PHYSICAL_COMMANDS` | opt-in gate for pump/valve/reboot. Anything but `true`/`1` means disabled. Leave unset. |
-| `COMMAND_TTL_SECONDS` | control command validity window (default 60s, a placeholder not a product decision) |
-| `MQTT_BROKER_URL` | **legacy stack.** Leave unset. |
+| `thingsboard.baseURL` / `TB_BASE_URL` (+ username/password) | **Unset ⇒ no ingestion, and device/control routes answer 503** — the server still boots, deliberately, so business-endpoint work needs no 2 GB container. |
+| `control.allowPhysicalCommands` / `ALLOW_PHYSICAL_COMMANDS` | opt-in gate for pump/valve/reboot. **Leave false.** A typo'd env value is an error, not a silent false. |
+| `control.commandTTL` / `COMMAND_TTL` | command validity window (default `60s`, a placeholder not a product decision) |
+| `legacy.mqttBrokerURL` / `MQTT_BROKER_URL` | **legacy stack.** Leave unset. |
+
+Durations are `"30s"`-style strings everywhere; a bare number is rejected rather than read as
+nanoseconds. Unknown/misspelled YAML keys fail startup rather than being ignored — the motivating
+case is `allowPhysicalCommand` (singular) silently doing nothing.
 
 ### Tests
 
@@ -1277,6 +1285,40 @@ part: the dashboard shows data present, row count right, value zero.
 So the structure question is no longer a trade-off to negotiate. Recorded with reproduction steps in
 `docs/protocol-v1-reconciliation.md` §A and summarised in `docs/protocol-v1.md` §3; the throwaway
 device was deleted afterwards.
+
+**2026-09-01 configuration pass** (`internal/config`, `config.example.yaml`) — moved the runtime
+knobs out of scattered env-var reads and package constants into one loader, on request, so intervals
+are adjustable without a rebuild.
+
+Precedence is defaults → YAML → environment. Environment wins so a container can override one value
+without editing a baked-in file; the YAML exists because this ships into offline customer networks
+(issue #1) where on-site staff need somewhere to change an interval that carries comments explaining
+what is unsafe — a list of env vars in a unit file cannot do that. `config.example.yaml` is written
+for that reader and is itself covered by a test, so a key renamed in Go without updating the example
+fails the build rather than handing an operator a config that will not start.
+
+Four choices worth keeping:
+- **Durations are `"30s"` strings, never bare numbers.** Go parses a unit-less duration as
+  nanoseconds, so `commandTTL: 30` would turn a 30-second window into 30ns and the expiry sweep into
+  a busy loop. Refusing beats guessing — same reasoning as units-in-key-names in the protocol.
+- **Unknown YAML keys are a startup error** (`yaml.Strict()`). The motivating case is
+  `allowPhysicalCommand` (singular) being silently ignored while an operator believes they changed
+  pump control.
+- **`ALLOW_PHYSICAL_COMMANDS` rejects anything that is not true/false/1/0** rather than defaulting a
+  typo to false. Both directions are dangerous: believing pumps are controllable when they are not
+  is as bad as the reverse.
+- **Cross-field validation at startup**, naming the offending key: `ackTimeout` must be shorter than
+  `commandTTL` (otherwise every command expires before the device can answer), the sweep interval
+  must not exceed the TTL, and no interval may be zero (a zero ticker panics at runtime — better a
+  startup error than a 3am crash).
+
+Deliberately *not* added: a `device.offlineAfter` key. Nothing reads it — ThingsBoard already tracks
+device inactivity natively on the device profile, so "how long offline counts as abnormal" is a
+ThingsBoard setting, not ours. A config key that nothing consumes is worse than none.
+
+13 tests, no containers needed. Verified end to end by running the built binary against a real config
+file: values applied, `COMMAND_TTL=120s` in the environment beat the file's `90s`, and a deliberately
+conflicting `ackTimeout`/`commandTTL` pair failed at startup with both values printed.
 
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every

@@ -1,2 +1,5 @@
 .claude/settings.local.json
 /server
+
+# 本地运行配置：从 config.example.yaml 复制而来，通常含站点密钥，不入库
+config.yaml

@@ -95,10 +95,24 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
 ## 运行
 
 ```bash
+cp config.example.yaml config.yaml     # 按需修改
+JWT_SECRET=dev-secret go run ./cmd/server -config config.yaml
+```
+
+不带 `-config` 也能跑（用内置默认值 + 环境变量），本地开发通常这样：
+
+```bash
 JWT_SECRET=dev-secret \
 TB_BASE_URL=http://localhost:8081 TB_USERNAME=tenant@thingsboard.org TB_PASSWORD=tenant \
 go run ./cmd/server
 ```
 
-不设 `TB_BASE_URL` 也能启动，只是设备相关端点返回 503。物理动作（启泵/开阀/重启）默认关闭，
-需显式设置 `ALLOW_PHYSICAL_COMMANDS=true`——且**设备端联锁验证完成之前不要打开**。
+配置优先级：**内置默认值 → 配置文件 → 环境变量**（环境变量最高，便于容器覆盖单项）。
+所有时间写成 `"30s"` / `"5m"` / `"24h"`，不接受裸数字。拼错的键会导致启动失败而非被静默忽略。
+完整键说明与环境变量对照见 [`config.example.yaml`](./config.example.yaml)。
+
+⚠️ 密钥（`JWT_SECRET`、数据库与 ThingsBoard 密码）建议走环境变量而非写进配置文件——
+配置文件会进备份、可能进 git。
+
+⚠️ 物理动作（启泵/开阀/重启）默认关闭。开启需显式设置 `control.allowPhysicalCommands: true`
+或 `ALLOW_PHYSICAL_COMMANDS=true`，**且设备端联锁验证完成之前不要打开**。
