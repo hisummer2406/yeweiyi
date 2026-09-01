@@ -8,31 +8,23 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.provider.Settings;
-import android.support.annotation.RequiresApi;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentTransaction;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.ViewTreeObserver.OnGlobalLayoutListener;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseActivity;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilCan;
-import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.db.OilTest;
@@ -45,7 +37,6 @@ import com.sansen.yeweiyi.fragment.CommitWorkRecortFragment;
 import com.sansen.yeweiyi.fragment.InOilFragment;
 import com.sansen.yeweiyi.fragment.JiLuFragment;
 import com.sansen.yeweiyi.fragment.LoadingCreateTableFragment;
-import com.sansen.yeweiyi.fragment.LoginDialog;
 import com.sansen.yeweiyi.fragment.MainFragment;
 import com.sansen.yeweiyi.fragment.OilCanFragment;
 import com.sansen.yeweiyi.fragment.OilCanSetFragment;
@@ -59,27 +50,19 @@ import com.sansen.yeweiyi.listener.SimpleWinCallback;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.PrintRunable;
 import com.sansen.yeweiyi.manager.AlarmManager;
-import com.sansen.yeweiyi.manager.AlarmManager.MessageListener;
-import com.sansen.yeweiyi.manager.CommitWorkManager;
 import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.InOilManager;
-import com.sansen.yeweiyi.manager.MyTimeTask;
-import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SocketManager.DataResolveListener;
-import com.sansen.yeweiyi.manager.SoundLightManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.AndroidAdjustResizeBugFix;
-import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
-import com.sansen.yeweiyi.utils.PWDTools;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
-import com.sansen.yeweiyi.view.InputDialogActivity;
 import com.sansen.yeweiyi.web.handler.ServerManager;
 
 import java.io.File;
@@ -88,28 +71,20 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TimerTask;
 
 public class MainActivity extends BaseActivity implements DataResolveListener {
     public static ObservableField<String> title = new ObservableField<>();
     private static final String TAG = "MainActivity";
     private final int REFLASH_TIME = 2;
-    // fragment管理器
-    private FragmentManager fragmentManager;
-    private FrameLayout fragment_container;
+    public MainNavigator navigator;
+    public MainActions mainActions = new MainActions(this);
+    public AlarmCoordinator alarmCoordinator;
 
-    private TextView main_but_main;
-    private TextView main_but_set;
-    private TextView main_but_commitwork;
-    private TextView main_but_sidelea;
-    private TextView main_but_print;
     private TextView bar_but_alarm;
     private TextView bar_but_inoil;
     private TextView bar_but_saveoil;
     private TextView bar_but_commitwork;
-    private TextView bar_main_alram;
     public BaseFragment mContent;
-    private FragmentTransaction transaction;
     public MainFragment mainFragment;
     public SetFragment setFragment;
     public JiLuFragment jiLuFragment;
@@ -129,13 +104,9 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;
-    private Button main_but_alarm;
-    private Button main_but_driver;
-    private LinearLayout radio_bar;
-    private MyTimeTask task;
+    public PollingCoordinator pollingCoordinator;
     private RelativeLayout main_root;
     private TextView mbar_tv_title;
-    private RelativeLayout.LayoutParams params;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -174,77 +145,15 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         ;
     };
 
-    private void setTimer() {
-        //1000*60*60*4
-        task = new MyTimeTask(1000 * 60 * 20, new TimerTask() {
-            @Override
-            public void run() {
-                Long time = System.currentTimeMillis() - SharePrefUtil.getLong(MyApplication.getInstance(), SharePrefUtil.RECORDTIME, 0);
-
-                if (time / (1000 * 60) > 30) {
-                    SharePrefUtil.saveBoolean(MyApplication.getInstance(), SharePrefUtil.TEST_DATA, false);
-                }
-                SharePrefUtil.saveLong(MyApplication.getInstance(), SharePrefUtil.RECORDTIME, System.currentTimeMillis());
-
-            }
-        });
-        task.start();
-    }
-
-
     private void findView() {
 
         View subLayout1 = (View) findViewById(R.id.title_bar);
         main_root = (RelativeLayout) findViewById(R.id.main_main_main);
         mbar_tv_title = subLayout1.findViewById(R.id.bar_tv_title);
-        // 主页时间
-        //  main_time = (TextView) findViewById(R.id.main_time);
-        // 主页按钮 返回主页
-        main_but_main = (Button) findViewById(R.id.main_but_main);
-        // 设置按钮
-        main_but_set = (Button) findViewById(R.id.main_but_set);
-        // 交班按钮
-        main_but_commitwork = (Button) findViewById(R.id.main_but_commitwork);
-        // 侧漏按钮
-        main_but_sidelea = (Button) findViewById(R.id.main_but_sidelea);
-        // 打印按钮
-        main_but_print = (Button) findViewById(R.id.main_but_print);
-        main_but_alarm = (Button) findViewById(R.id.main_but_alarm);
         // 报警显示
-        bar_main_alram = (TextView) findViewById(R.id.bar_main_alram);
+        alarmCoordinator = new AlarmCoordinator(this, (TextView) findViewById(R.id.bar_main_alram));
 
-        //驱动板控制
-        main_but_driver = findViewById(R.id.main_but_driver);
-        fragment_container = findViewById(R.id.fragment_container);
-        //获取到驱动板id后直接判断隐藏还是显示，但是他对应的fragment还是得正常去创建添加。
-        refreshBut();
-
-
-        if (SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh").equals("zh")) {
-            main_but_main.setBackgroundResource(R.drawable.sansen_home_but_selector);
-            main_but_set.setBackgroundResource(R.drawable.sansen_set_but_selector);
-            main_but_commitwork.setBackgroundResource(R.drawable.sansen_jiaoban_but_selector);
-            main_but_print.setBackgroundResource(R.drawable.sansen_print_but_selector);
-            main_but_sidelea.setBackgroundResource(R.drawable.sansen_jiance_but_selector);
-            main_but_alarm.setBackgroundResource(R.drawable.sansen_alarm_but_selector);
-            main_but_driver.setBackgroundResource(R.drawable.sansen_home_but_driver);
-        } else if (SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh").equals("en")) {
-            main_but_main.setBackgroundResource(R.drawable.sansen_home_but_selector_en);
-            main_but_set.setBackgroundResource(R.drawable.sansen_set_but_selecto_en);
-            main_but_commitwork.setBackgroundResource(R.drawable.sansen_jiaoban_but_selector_en);
-            main_but_print.setBackgroundResource(R.drawable.sansen_print_but_selector_en);
-            main_but_sidelea.setBackgroundResource(R.drawable.sansen_jiance_but_selector_en);
-            main_but_alarm.setBackgroundResource(R.drawable.sansen_alarm_but_selector_en);
-            main_but_driver.setBackgroundResource(R.drawable.sansen_home_but_driver_en);
-        } else if (SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh").equals("th")) {
-            main_but_main.setBackgroundResource(R.drawable.sansen_home_but_selector_th);
-            main_but_set.setBackgroundResource(R.drawable.sansen_set_but_selecto_th);
-            main_but_commitwork.setBackgroundResource(R.drawable.sansen_jiaoban_but_selector_th);
-            main_but_print.setBackgroundResource(R.drawable.sansen_print_but_selector_th);
-            main_but_sidelea.setBackgroundResource(R.drawable.sansen_jiance_but_selector_th);
-            main_but_alarm.setBackgroundResource(R.drawable.sansen_alarm_but_selector_th);
-            main_but_driver.setBackgroundResource(R.drawable.sansen_home_but_driver_th);
-        }
+        FrameLayout fragment_container = findViewById(R.id.fragment_container);
 
         // 进出油记录
         bar_but_inoil = findViewById(R.id.bar_but_inoil);
@@ -255,19 +164,23 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         bar_but_commitwork = findViewById(R.id.bar_but_commitwork);
         // 报警记录
         bar_but_alarm = findViewById(R.id.bar_but_alarm);
-        // 临时按钮 表示当前主页处于哪个页面，并且该按钮不可被点击
-        tempButton = main_but_main;
-        main_but_main.setEnabled(false);
+        // 临时按钮 表示当前主页处于哪个页面，并且该按钮不可被点击；初始无高亮（首页无对应可视按钮）
+        tempButton = null;
 
-        radio_bar = findViewById(R.id.radio_bar);
-        setTimer();
+        // 底部导航栏点击绑定（原为 android:onClick 反射绑定，见 openspec/changes/split-main-activity §1）
+        findViewById(R.id.btn_jieJing).setOnClickListener(alarmCoordinator::btn_jieJing);
+        findViewById(R.id.ly_bar_but_alarm).setOnClickListener(this::bar_but_alarm);
+        findViewById(R.id.ly_bar_but_saveoil).setOnClickListener(this::bar_but_saveoil);
+        findViewById(R.id.ly_bar_but_inoil).setOnClickListener(this::bar_but_inoil);
+        findViewById(R.id.ly_bar_but_commitwork).setOnClickListener(this::bar_but_commitwork);
+        findViewById(R.id.btn_kuCunRecord).setOnClickListener(this::btn_kuCunRecord);
+        findViewById(R.id.ly_main_but_set).setOnClickListener(mainActions::main_but_set);
 
-        params = (RelativeLayout.LayoutParams) fragment_container.getLayoutParams();
-        if (params == null) {
-            params = new RelativeLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
-        }
+        LinearLayout radio_bar = findViewById(R.id.radio_bar);
+        pollingCoordinator = new PollingCoordinator();
+        pollingCoordinator.start();
+
+        navigator = new MainNavigator(getSupportFragmentManager(), fragment_container, radio_bar);
         dbManager = myApplication.getmDBManager();
 
 
@@ -328,58 +241,23 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private void setDefaultFragment() {
         if (mainFragment == null) {
             mainFragment = new MainFragment();
-            fragmentManager = getSupportFragmentManager();
-            transaction = fragmentManager.beginTransaction();
-            transaction.add(R.id.fragment_container, mainFragment).commit();
+            navigator.setDefaultFragment(mainFragment);
             mContent = mainFragment;
         }
         mainFragment.initTitle();
-        setMainButton(true);
+        navigator.setMainButton(true);
 
-    }
-
-    private void setMainButton(boolean isShow) {
-        if (isShow) {
-            radio_bar.setVisibility(View.VISIBLE);
-        } else {
-            radio_bar.setVisibility(View.INVISIBLE);
-        }
     }
 
     public void switchContent(BaseFragment from, BaseFragment to) {
-        if (to instanceof MainFragment) {
-            params.addRule(RelativeLayout.BELOW, R.id.title_bar);
-            params.addRule(RelativeLayout.ABOVE, R.id.radio_bar);
-        } else {
-            params.removeRule(RelativeLayout.BELOW);
-            params.removeRule(RelativeLayout.ABOVE);
-
-        }
-
-        if (mContent != to) {
+        if (navigator.switchContent(from, to)) {
             // 部分页面（如 OilCanSetFragment）会在显示期间临时把 Window 的 softInputMode
             // 改成 adjustPan 以避免被软键盘遮挡；这里在切换到任何新页面前统一复位成系统默认值，
             // 不依赖离开页面自己在 onHiddenChanged 里记得还原，避免遗留状态泄漏到下一个页面。
             getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
                     | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_UNSPECIFIED);
             mContent = to;
-            FragmentTransaction transaction = fragmentManager
-                    .beginTransaction();
-            if (!to.isAdded()) { // 先判..断是否被add过
-                transaction.hide(from).add(R.id.fragment_container, to)
-                        .commit(); // 隐藏当前的fragment，add下一个到Activity中
-            } else {
-                transaction.hide(from).show(to).commit(); // 隐藏当前的fragment，显示下一个
-            }
-
         }
-        setTitle(to);
-
-    }
-
-    private void setTitle(Fragment to) {
-        BaseFragment fragment = (BaseFragment) to;
-        fragment.initTitle();
     }
 
     @Override
@@ -411,7 +289,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
                 return super.dispatchTouchEvent(event);
             }
         });
-        initAlarm();
+        alarmCoordinator.initAlarm();
         initLocation();
 
         handler.sendEmptyMessageDelayed(REFLASH_TIME, 1000);
@@ -452,44 +330,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
 
     private final int REQUEST_CODE=101;
-
-    /**
-     * AlarmManager的回调函数
-     */
-    private void initAlarm() {
-        AlarmManager.getInstance().beginDetection();
-        AlarmManager.getInstance().setMessageListener(new MessageListener() {
-            long time = 0;
-
-            public void getAlarmSate(OilMessage state) {
-                if (state == null) {
-                    if (System.currentTimeMillis() - time > 3000) {
-                        bar_main_alram.setText(SystemUtils
-                                .getRsStr(R.string.alarm_no));
-                        Const.isOpenAlarm = false;
-                    }
-                } else if (SharePrefUtil.getBoolean(ct, SharePrefUtil.TEST_DATA, false) && myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
-                    time = System.currentTimeMillis();
-                    if (myApplication.getmOilcanDataManager().getTestData(state.getOilCanId()) != null && state.getType() != OilMessage.PRO_ERR_CONN) {
-                        bar_main_alram.setText(state.toString());
-
-                    } else {
-                        bar_main_alram.setText(SystemUtils
-                                .getRsStr(R.string.alarm_no));
-                        Const.isOpenAlarm = false;
-                    }
-                } else if (myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
-                    time = System.currentTimeMillis();
-                    bar_main_alram.setText(state.toString());
-                    SocketManager.getInstance(MainActivity.this).sendAlarm(state.toString());
-
-                } else {
-                    SocketManager.getInstance(MainActivity.this).sendAlarm(state.toString());
-                    bar_main_alram.setText(state.toString());
-                }
-            }
-        });
-    }
 
     int how = 0;
 
@@ -553,81 +393,14 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         AlarmManager.getInstance().reshOilCan(oilCan);
     }
 
-    public void refreshBut() {
-        if (SharePreManager.getRelaySwitch()) {
-            main_but_driver.setVisibility(View.GONE);
-        } else {
-            main_but_driver.setVisibility(View.GONE);
-        }
-    }
-
     public void main_but_main(View v) {
-        params.addRule(RelativeLayout.BELOW, R.id.title_bar);
-        params.addRule(RelativeLayout.ABOVE, R.id.radio_bar);
         // 有点多，需要优化
         if (mainFragment == null) {
             mainFragment = new MainFragment();
         }
         switchContent(mContent, mainFragment);
-        switchButtonState(main_but_main);
-        setMainButton(true);
-    }
-
-    public void but_daoChuRuKu(View v) {
-        String idName = getResources().getResourceEntryName(v.getId());
-    }
-
-    public void but_jiaoBan(View v) {
-        String idName = getResources().getResourceEntryName(v.getId());
-    }
-
-    @RequiresApi(api = Build.VERSION_CODES.O)
-    public void main_but_set(View v) {
-        // 有点多，需要优化
-        String pwd = SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.SetPWD, "123456");
-        if (!"123456".equals(pwd)) {
-            LoginDialog dialog = new LoginDialog();
-            dialog.setOnConfirmListener(input -> {
-
-                if (input.equals(pwd) || input.equals(PWDTools.getSetPwd())) {
-                    showInputPsw(this.mainFragment);
-                    dialog.dismiss();
-
-                } else {
-                    Toast.makeText(MainActivity.this, "输入内容：" + input + "  密码错误", Toast.LENGTH_SHORT).show();
-                }
-
-            });
-            dialog.show(getFragmentManager(), "LoginDialog");
-        } else {
-            showInputPsw(this.mainFragment);
-        }
-
-    }
-
-
-    private void showInputPsw(final BaseFragment fragment) {
-        if (setFragment == null) {
-            setFragment = new SetFragment();
-
-        }
-        switchContent(mContent, setFragment);
-        switchButtonState(main_but_set);
-        setMainButton(false);
-    }
-
-
-    public void btn_jieJing(View v) {
-        for (int i = 0; i < 14; i++) {
-            OilCan oilCan = MyApplication.getInstance().getmOilcanDataManager().getData(i);
-            if (MyApplication.getInstance().getmOilcanDataManager().getData(i) != null && MyApplication.getInstance().getmOilcanDataManager().getData(i).getAlarmState() != 0) {
-                Singleton.getInstance().isTemperAlarm[i] = false;
-                Singleton.getInstance().SoundLightAlarm[i] = false;
-                Singleton.getInstance().isWaterAlarm[i] = false;
-                Singleton.getInstance().isLowAlarms[i] = false;
-                SoundLightManager.getInstance().CanleAlarm();
-            }
-        }
+        clearButtonState();
+        navigator.setMainButton(true);
     }
 
     public void btn_kuCunRecord(View v) {
@@ -639,7 +412,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, stockFragment);
         switchButtonState(bar_but_saveoil);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void bar_but_alarm(View v) {
@@ -648,7 +421,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
             switchContent(mContent, alarmFragment);
         }
         switchButtonState(bar_but_alarm);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void bar_but_inoil(View v) {
@@ -660,7 +433,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, inOilFragment);
         switchButtonState(bar_but_inoil);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void bar_but_saveoil(View v) {
@@ -672,65 +445,34 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
         switchContent(mContent, outStockFragment);
         switchButtonState(bar_but_saveoil);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
     public void switchButtonState(TextView from) {
-        tempButton.setEnabled(true);
+        clearButtonState();
         from.setEnabled(false);
         tempButton = from;
+    }
+
+    /**
+     * 取消当前高亮态但不设新的高亮目标（用于返回主页/设置——这两处没有可见的
+     * 底部栏按钮与之对应，见 openspec/changes/split-main-activity §1）。
+     * 非 private：MainActions（§4）在密码校验通过后导航到设置页时需要调用。
+     */
+    public void clearButtonState() {
+        if (tempButton != null) {
+            tempButton.setEnabled(true);
+            tempButton = null;
+        }
     }
 
     public void bar_but_commitwork(View v) {
         commitWorkRecortFragment = new CommitWorkRecortFragment();
         switchContent(mContent, commitWorkRecortFragment);
         switchButtonState(bar_but_commitwork);
-        setMainButton(false);
+        navigator.setMainButton(false);
     }
 
-    public void main_but_commitwork(View v) {
-        Intent intent = new Intent(this, InputDialogActivity.class);
-        Bundle bundle = new Bundle();
-        bundle.putString("title", getResources().getString(R.string.commitwork));
-        bundle.putString("msg", getResources().getString(R.string.input_user_psw));
-        bundle.putBoolean("ispsw", true);
-        intent.putExtra("inputDialog", bundle);
-        startActivityForResult(intent, 1001);
-
-    }
-
-    public void but_startJiaoBan(View v) {
-        SparseArray<OilCan> oilCan = myApplication.getmOilcanDataManager().getData();
-        if (myApplication.getmOilcanDataManager().getData().size() > 0) {
-            CommitWorkManager.getInstance()
-                    .commitWork(
-                            myApplication.getmOilcanDataManager()
-                                    .getData());
-            SystemUtils.showRsToast(R.string.commitwork_success);
-            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan, 1);
-
-            commitWorkRecortFragment.setUIShow(true);
-        } else {
-            SystemUtils.showRsToast(R.string.commitwork_errpr);
-        }
-    }
-
-    public void but_endJiaoBan(View v) {
-        if (myApplication.getmOilcanDataManager().getData().size() > 0) {
-            CommitWorkManager.getInstance()
-                    .commitWork(
-                            myApplication.getmOilcanDataManager()
-                                    .getData(), "");
-            SystemUtils.showRsToast(R.string.commitwork_success);
-            SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.IsStartJiaoBan, 0);
-            commitWorkRecortFragment.setUIShow(false);
-
-        } else {
-            SystemUtils.showRsToast(R.string.commitwork_errpr);
-        }
-
-
-    }
 
     @Override
     public void oilcanDismiss(OilCan obj) {
@@ -774,7 +516,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     protected void onDestroy() {
         super.onDestroy();
         mServerManager.unRegister();
-        stopTimer();
+        pollingCoordinator.stop();
     }
 
     private List<String> mAddressList;
@@ -828,10 +570,6 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
     public static int getTestOil(int how) {
         return testOil.get(how) == null ? 0 : testOil.get(Integer.valueOf(how));
-    }
-
-    private void stopTimer() {
-        task.stop();
     }
 
 }

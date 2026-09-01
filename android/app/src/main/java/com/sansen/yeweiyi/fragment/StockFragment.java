@@ -100,6 +100,7 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 		ly_ruKu=rootView.findViewById(R.id.ly_ruKu);
 		ly_saveStock.setOnClickListener(this);
 		ly_ruKu.setOnClickListener(this);
+		rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 		if (!Singleton.getInstance().IsKuCun){
 			ly_ruKu.setVisibility(View.GONE);
 		}

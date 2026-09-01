@@ -102,6 +102,7 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 		ly_ruKu=rootView.findViewById(R.id.ly_ruKu);
 		ly_ruKu.setOnClickListener(this);
+		rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 		if (!Singleton.getInstance().IsChuKu){
 			ly_ruKu.setVisibility(View.GONE);
 		}
