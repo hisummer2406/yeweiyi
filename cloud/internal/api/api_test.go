@@ -60,6 +60,12 @@ type testEnv struct {
 const testUserPasswordHash = "$2a$10$meNXe5U2v9ec5cW0fIv2teBFiwN88qoxXndhnk.WZd.h/MimCSZ5u" // bcrypt("e2e-test-pass")
 
 func newTestEnv(t *testing.T) *testEnv {
+	return newTestEnvWith(t, nil)
+}
+
+// newTestEnvWith lets a test add dependencies the base environment leaves nil — TB and Control,
+// which most tests do not need and which would otherwise force every test to stand up ThingsBoard.
+func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 	t.Helper()
 	ctx := context.Background()
 
@@ -83,13 +89,17 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	t.Cleanup(func() { riverClient.Stop(context.Background()) })
 
-	router := api.NewRouter(api.Deps{
+	deps := api.Deps{
 		Queries:     queries,
 		Redis:       rdb,
 		Pool:        pool,
 		JWTSecret:   []byte("api-test-secret"),
 		RiverClient: riverClient,
-	})
+	}
+	if customize != nil {
+		customize(&deps)
+	}
+	router := api.NewRouter(deps)
 
 	username := "api-test-user-" + t.Name()
 	if _, err := pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
@@ -104,6 +114,17 @@ func newTestEnv(t *testing.T) *testEnv {
 	env := &testEnv{t: t, router: router, pool: pool, rdb: rdb, queries: queries, username: username}
 	env.token = env.login(username, "e2e-test-pass")
 	return env
+}
+
+// setRole changes the seeded user's role and re-logs-in, because the role travels in the JWT and an
+// already-issued token keeps the role it was minted with.
+func (e *testEnv) setRole(role string) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(context.Background(),
+		`UPDATE users SET role = $1 WHERE username = $2`, role, e.username); err != nil {
+		e.t.Fatalf("set role: %v", err)
+	}
+	e.token = e.login(e.username, "e2e-test-pass")
 }
 
 func (e *testEnv) login(username, password string) string {

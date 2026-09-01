@@ -94,7 +94,20 @@ migrate -database "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=dis
 # a simulated device speaking 设备协议 V1
 go run ./cmd/tbdevicesim provision -name tank-farm-01
 go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 15s
+
+# the backend, on the single stack. Note what is NOT here: no MQTT_BROKER_URL, no
+# MQTT_PRODUCT_KEY, no broker of any kind. Setting MQTT_BROKER_URL starts the legacy stack.
+JWT_SECRET=dev-secret \
+TB_BASE_URL=http://localhost:8081 TB_USERNAME=tenant@thingsboard.org TB_PASSWORD=tenant \
+go run ./cmd/server
 ```
+
+| env var | effect |
+|---|---|
+| `TB_BASE_URL` / `TB_USERNAME` / `TB_PASSWORD` | ThingsBoard. **Unset ⇒ no ingestion, and device/control routes answer 503** — the server still boots. |
+| `ALLOW_PHYSICAL_COMMANDS` | opt-in gate for pump/valve/reboot. Anything but `true`/`1` means disabled. Leave unset. |
+| `COMMAND_TTL_SECONDS` | control command validity window (default 60s, a placeholder not a product decision) |
+| `MQTT_BROKER_URL` | **legacy stack.** Leave unset. |
 
 ### Tests
 
@@ -230,9 +243,12 @@ invariants change.
 - **Multi-tenancy is not built.** There are no customer entities and no tenant-scoped query
   isolation. `users.role` (`platform_admin`/`customer_admin`/`customer_user`) plus the existing
   `user_devices` binding is the entire authorization model today.
-- **`cmd/server` still runs the legacy stack** and starts neither `internal/ingest` nor
-  `internal/control`.
-- **No REST endpoints expose control commands or audit yet.**
+- **`cmd/server` now boots on the single stack**, but the legacy stack is still reachable from it:
+  setting `MQTT_BROKER_URL` starts the old Alink client (with a loud warning). Leave it unset.
+- **The legacy read endpoints are not migrated.** `/api/alarms`, `/api/oil-in-out`, `/api/shifts`
+  and `/api/oilcan/latest` still read tables that only the old MQTT ingestion ever populated, so on
+  a single-stack deployment they return nothing. `/api/devices/:device/telemetry/latest` is the
+  migrated one. Deciding what replaces the other four is the next real piece of work.
 - **Not verified:** MQTT over TLS (dev uses plaintext 1884), OTA delivery, ThingsBoard-side tenant
   isolation, and any load/capacity testing. The device-side OTA client does not exist at all.
 - The **write-back queue** (`internal/queue`, river) belongs to the legacy design. The single-stack
@@ -1095,6 +1111,50 @@ this yet, `cmd/server` is still wired to the old stack and does not start `inter
 `internal/control`, the full multi-tenant model (customer entities, tenant-scoped queries
 everywhere) does not exist — `users.role` plus the existing `user_devices` binding is the whole
 authorization model right now — and none of the old Alink stack has been deleted.
+
+**2026-09-01 REST + single-stack server pass** (issue #10, same branch) — `internal/api/control.go`
+(`POST`/`GET /api/devices/:device/commands`, `GET /api/audit`), `internal/api/telemetry.go`
+(`GET /api/devices/:device/telemetry/latest`), a `role` claim in the JWT, and `cmd/server` rewired
+onto the single stack.
+
+**The system now boots with no Aliyun productKey, no Alink topic and no broker of any kind** — one
+of issue #10's acceptance criteria. ThingsBoard is configured through `TB_BASE_URL`/`TB_USERNAME`/
+`TB_PASSWORD` and is itself *optional*: without it the server still starts and the device-facing
+routes answer 503 with an explanatory message, so business-endpoint work does not require running a
+2 GB container. `MQTT_BROKER_URL` still starts the legacy stack, now behind a loud warning.
+
+Verified by running the real binary (not `go run`) with no MQTT env vars at all and driving it over
+HTTP: provision → bind (the QR-scan step) → simulated device connects → `GET .../telemetry/latest`
+returns the live snapshot read through from ThingsBoard → `pump.start` refused **409** by the
+interlock gate → `alarm.mute` accepted **202 received** → the ingester carries the device's async
+`cmdResult` home and the same command reads back **succeeded/terminal** → `GET /api/audit` shows the
+whole trail (`control.issue` denied, `control.issue` allowed, `control.ack` allowed,
+`control.result` succeeded with `actor=device:...`). Business tables stayed at
+`alarms=0 oil_in_out=0 commit_works=0` throughout, `control_commands=1` — the data boundary holding
+in a real run, not just in a unit test. All throwaway rows, the ThingsBoard device and the seeded
+operator were deleted afterwards.
+
+Two HTTP-status choices worth not "fixing" later:
+- **Issuing a command answers 202, never 200.** The response reports only how far the command got
+  synchronously (`received`, or `rejected`); the outcome arrives asynchronously. 200 would invite
+  clients to read it as "it worked" — the exact conflation the state machine exists to prevent. The
+  response also carries a server-computed `terminal` flag so a client never hard-codes the status
+  list to know whether to keep polling.
+- **The interlock gate answers 409, not 403.** The caller may well be entitled to the method; it is
+  the *deployment* refusing until device-side interlocks are verified. 403 would send an operator
+  to ask for permissions that would not help.
+
+Authorization is not duplicated in the handlers: `internal/control` does the whole check (role tier,
+device binding, interlock gate) and the handler only maps its sentinel errors onto status codes, so
+there is exactly one place a control action can be permitted. 18 new tests in
+`internal/api/control_test.go`, including that an unowned device and a nonexistent one return the
+*same* code — differing codes would let a caller enumerate real device names.
+
+**Still open in #10 after this pass**: the four legacy read endpoints (`/api/alarms`,
+`/api/oil-in-out`, `/api/shifts`, `/api/oilcan/latest`) still read tables only the old MQTT
+ingestion populated, so they return nothing on a single-stack deployment — deciding their
+replacement is the next real piece of work; the full multi-tenant model does not exist; and nothing
+from the legacy stack has been deleted yet.
 
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every

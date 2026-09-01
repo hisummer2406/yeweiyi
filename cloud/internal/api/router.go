@@ -9,7 +9,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/riverqueue/river"
 
+	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
+	"yeweiyi-cloud/internal/tbclient"
 )
 
 type Deps struct {
@@ -18,6 +20,12 @@ type Deps struct {
 	Pool        *pgxpool.Pool
 	JWTSecret   []byte
 	RiverClient *river.Client[pgx.Tx]
+
+	// TB and Control belong to the ThingsBoard single stack. Both are optional so the server can
+	// still boot without ThingsBoard configured — the routes that need them answer 503 rather than
+	// panicking, which is what lets a developer work on the business endpoints alone.
+	TB      *tbclient.Client
+	Control *control.Service
 }
 
 func NewRouter(deps Deps) *gin.Engine {
@@ -44,6 +52,15 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.POST("/oil-in-out/correct", correctOilInOutHandler(deps))
 		authorized.POST("/shifts/correct", correctShiftHandler(deps))
 		authorized.POST("/devices/:device/oil-can-set", writeOilCanSetHandler(deps))
+
+		// ThingsBoard single stack (issue #10).
+		// Telemetry is read through to ThingsBoard on demand, never served from a local copy.
+		authorized.GET("/devices/:device/telemetry/latest", latestTelemetryHandler(deps))
+		// Remote control. POST answers 202, never 200: the response reports only how far the
+		// command got synchronously; the outcome is read back through the GET.
+		authorized.POST("/devices/:device/commands", issueCommandHandler(deps))
+		authorized.GET("/devices/:device/commands", listDeviceCommandsHandler(deps))
+		authorized.GET("/audit", listAuditHandler(deps))
 	}
 
 	return r

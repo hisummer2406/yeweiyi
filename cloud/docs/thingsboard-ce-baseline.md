@@ -205,7 +205,13 @@ issue #9 要求"核心流程在断网环境中正常运行"。**已实测**，�
 
 ## 6. 旧双栈代码 / 配置待删清单
 
-**本 Issue 只负责列出，实际删除属于 issue #10**，因为删除会破坏现有 `cmd/server` 的运行。
+**本 Issue 只负责列出，实际删除属于 issue #10。**
+
+*2026-09-01 更新：`cmd/server` 已切到单栈，不设 `MQTT_BROKER_URL` 即完全不碰旧栈，所以删除不再会
+破坏服务启动。剩下的真正阻塞项只有一个——`/api/alarms`、`/api/oil-in-out`、`/api/shifts`、
+`/api/oilcan/latest` 这四个读端点仍读旧 MQTT 摄取才会写的表。删掉 `internal/mqtt` 之后它们能编译、
+能返回 200，但永远返回空。必须先决定它们的替代方案（大概率是像
+`/api/devices/:device/telemetry/latest` 那样读透到 ThingsBoard），再动删除。*
 
 | 路径 | 处置 | 说明 |
 |---|---|---|

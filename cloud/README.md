@@ -48,8 +48,9 @@ internal/tbclient/    # ThingsBoard adapter：REST + WebSocket，不直连其数
 internal/devicesim/   # 设备侧参考实现，测试在进程内驱动它
 cmd/tbdevicesim/      # 模拟设备的命令行封装（provision / run）
 fixtures/protocol/v1/ # 跨仓库共享的协议 fixture，Android 侧用同一批文件做契约测试
-internal/api/         # REST：路由、鉴权、业务查询
-internal/queue/       # 写回队列
+internal/control/     # 控制命令状态机、授权、审计
+internal/ingest/      # 每设备一条 ThingsBoard 遥测订阅 → 业务层（不落遥测）
+internal/api/         # REST：路由、鉴权、控制与审计端点、业务查询
 internal/store/db/    # sqlc 生成的查询层
 db/migrations/        # golang-migrate schema
 docs/                 # 协议与架构基线文档
@@ -57,6 +58,7 @@ docs/                 # 协议与架构基线文档
 internal/mqtt/        # 旧 Alink/Paho 栈，待 issue #10 删除（不属于当前架构）
 cmd/devicesim/        # 同上
 dev/mosquitto/        # 同上
+internal/queue/       # 旧写回队列，已被 internal/control 取代
 ```
 
 ## 本地开发
@@ -79,11 +81,22 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
 
 ## 现状
 
-- **已完成**：ThingsBoard CE 单栈端到端验证（遥测上行、即时报警、属性双向、RPC→ACK→最终结果、
-  幂等、有效期、离线与故障区分），全部在真实容器上跑通，并在完全断网的内部网络中复验通过。
-  设备协议 V1 已实现并由共享 fixture 的双向契约测试固定。
-- **进行中**：协议 V1 尚未冻结，待与 Android 负责人共同确认单位等条目
-  （见 `docs/protocol-v1.md` 第 12 节）。
-- **未开始**：Go 业务后台向单栈迁移（issue #10）、多租户模型、固定监控 Web、离线私有化交付包。
-  旧 Alink/Paho 栈仍在仓库中，删除清单见
+- **已完成**：ThingsBoard CE 单栈端到端验证；设备协议 V1（草案，由共享 fixture 的双向契约测试固定）；
+  远程控制状态机、授权与审计；遥测摄取（cmdResult 回流 + 报警扇出）；控制与审计的 REST 端点；
+  `cmd/server` 已切到单栈——**不需要任何 productKey / Alink Topic / broker 即可启动**。
+- **进行中**：协议 V1 尚未冻结，待与 Android 负责人确认单位等条目（`docs/protocol-v1.md` 第 12 节）。
+- **未开始**：四个遗留读端点（`/api/alarms`、`/api/oil-in-out`、`/api/shifts`、`/api/oilcan/latest`）
+  仍读旧 MQTT 摄取才会写的表，单栈部署下返回空——替代方案待定；完整多租户模型；固定监控 Web；
+  离线私有化交付包。旧 Alink 栈仍在仓库中，删除清单见
   [`docs/thingsboard-ce-baseline.md`](./docs/thingsboard-ce-baseline.md) 第 6 节。
+
+## 运行
+
+```bash
+JWT_SECRET=dev-secret \
+TB_BASE_URL=http://localhost:8081 TB_USERNAME=tenant@thingsboard.org TB_PASSWORD=tenant \
+go run ./cmd/server
+```
+
+不设 `TB_BASE_URL` 也能启动，只是设备相关端点返回 503。物理动作（启泵/开阀/重启）默认关闭，
+需显式设置 `ALLOW_PHYSICAL_COMMANDS=true`——且**设备端联锁验证完成之前不要打开**。
