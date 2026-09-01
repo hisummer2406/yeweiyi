@@ -245,10 +245,15 @@ invariants change.
   `user_devices` binding is the entire authorization model today.
 - **`cmd/server` now boots on the single stack**, but the legacy stack is still reachable from it:
   setting `MQTT_BROKER_URL` starts the old Alink client (with a loud warning). Leave it unset.
-- **The legacy read endpoints are not migrated.** `/api/alarms`, `/api/oil-in-out`, `/api/shifts`
-  and `/api/oilcan/latest` still read tables that only the old MQTT ingestion ever populated, so on
-  a single-stack deployment they return nothing. `/api/devices/:device/telemetry/latest` is the
-  migrated one. Deciding what replaces the other four is the next real piece of work.
+- **Two legacy read endpoints remain unmigrated: `/api/oil-in-out` and `/api/shifts`.** They read
+  tables only the old MQTT ingestion ever populated, so on a single-stack deployment they return
+  nothing. **This is a protocol gap, not just a handler to rewrite**: 设备协议 V1 has no uplink for
+  出入库 or 交班 at all — the old `requestUnloadOil`/`requestShift` were polled queries that V1 did
+  not carry over. Fixing it means either adding them to V1 (needs the Android owner) or confirming
+  those features are out of scope for the single stack. **This is the last blocker on deleting the
+  legacy stack.**
+  (`/api/oilcan/latest` was deleted; `/api/alarms` and `/api/devices/:device/telemetry/latest` now
+  read through to ThingsBoard.)
 - **Not verified:** MQTT over TLS (dev uses plaintext 1884), OTA delivery, ThingsBoard-side tenant
   isolation, and any load/capacity testing. The device-side OTA client does not exist at all.
 - The **write-back queue** (`internal/queue`, river) belongs to the legacy design. The single-stack
@@ -1155,6 +1160,41 @@ there is exactly one place a control action can be permitted. 18 new tests in
 ingestion populated, so they return nothing on a single-stack deployment — deciding their
 replacement is the next real piece of work; the full multi-tenant model does not exist; and nothing
 from the legacy stack has been deleted yet.
+
+**2026-09-01 read-path migration pass** (issue #10, same branch) — deleted `/api/oilcan/latest`
+and moved `/api/alarms` onto ThingsBoard.
+
+`/api/oilcan/latest` (and `internal/api/oilcan.go`, `oilcan_test.go`) is gone: it served a
+`oilcan:latest:{device}` Redis key that only the legacy MQTT poller wrote, and
+`/api/devices/:device/telemetry/latest` replaces it. Three ownership tests in `devices_test.go` had
+been using it as their device-scoped probe and were repointed at `GET /api/devices/:device/commands`,
+which needs neither ThingsBoard nor ingested data (an owned device with no commands is an empty
+list).
+
+`/api/alarms` now reads the `alarm` telemetry key's history out of ThingsBoard
+(`internal/api/alarms.go`) instead of the `alarms` table. **Deliberately not using ThingsBoard's
+native Alarm entities**: those would be a better home for operator acknowledgement, but they only
+exist once a rule chain maps the telemetry into them, and that chain is not configured. The response
+shape is therefore written to look like an alarm record rather than a telemetry point, so moving to
+`/api/alarm/DEVICE/{id}` later does not change the contract. **This is a breaking response change** —
+the old Java field names (`guanhao`/`jiezhi`/`info`) are gone, because the Alink payloads they came
+from are.
+
+`tbclient.Timeseries` was refactored to take a `TimeseriesQuery` with a `Descending` flag, pushing
+the sort down to ThingsBoard. **This is a correctness fix, not tidying**: with a limit in play,
+ascending returns the oldest N in the range and descending the newest N — *different sets, not
+different orders* — so reversing an ascending page in Go would answer "the 20 most recent alarms"
+with the 20 oldest. `TestListAlarms_SortReturnsTheNewestWhenLimited` raises three alarms and pins
+that `limit=1&sort=false` returns the newest, which is the assertion that fails if anyone
+"simplifies" this back into a client-side reverse.
+
+`offset` is rejected with 400 on `/api/alarms` rather than ignored: ThingsBoard pages by time window,
+not row offset, and silently accepting it would hand a paginating client the same page forever.
+
+Alarm tests that need real data moved to `internal/api/alarms_test.go`, which provisions a device and
+publishes a real alarm through `internal/devicesim` — a seeded database row would now prove nothing,
+since nothing reads that table. The test also asserts that serving alarms writes *nothing* to the
+business `alarms` table.
 
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every

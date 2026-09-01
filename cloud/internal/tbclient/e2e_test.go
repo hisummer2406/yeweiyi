@@ -678,7 +678,9 @@ func TestTimeseries_ReturnsHistoryInOrder(t *testing.T) {
 	var series []tbclient.TSValue
 	eventually(t, settleTimeout, "three history points to be stored", func() error {
 		end := time.Now().Add(time.Minute).UnixMilli()
-		got, err := c.Timeseries(context.Background(), dev.ID.ID, []string{key}, start, end, 100)
+		got, err := c.Timeseries(context.Background(), dev.ID.ID, tbclient.TimeseriesQuery{
+			Keys: []string{key}, StartMs: start, EndMs: end, Limit: 100,
+		})
 		if err != nil {
 			return err
 		}

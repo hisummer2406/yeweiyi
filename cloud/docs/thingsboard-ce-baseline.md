@@ -207,11 +207,15 @@ issue #9 要求"核心流程在断网环境中正常运行"。**已实测**，�
 
 **本 Issue 只负责列出，实际删除属于 issue #10。**
 
-*2026-09-01 更新：`cmd/server` 已切到单栈，不设 `MQTT_BROKER_URL` 即完全不碰旧栈，所以删除不再会
-破坏服务启动。剩下的真正阻塞项只有一个——`/api/alarms`、`/api/oil-in-out`、`/api/shifts`、
-`/api/oilcan/latest` 这四个读端点仍读旧 MQTT 摄取才会写的表。删掉 `internal/mqtt` 之后它们能编译、
-能返回 200，但永远返回空。必须先决定它们的替代方案（大概率是像
-`/api/devices/:device/telemetry/latest` 那样读透到 ThingsBoard），再动删除。*
+*2026-09-01 更新：`cmd/server` 已切到单栈，不设 `MQTT_BROKER_URL` 即完全不碰旧栈，删除不再会破坏
+服务启动。四个遗留读端点已处理两个——`/api/oilcan/latest` 已删除（由
+`/api/devices/:device/telemetry/latest` 取代），`/api/alarms` 已改为读透 ThingsBoard 上的 `alarm`
+遥测键历史。*
+
+*剩下的唯一阻塞项：`/api/oil-in-out` 与 `/api/shifts`。**这是协议缺口，不是改个 handler 的事**——
+设备协议 V1 根本没有出入库/交班的上行通道（旧的 `requestUnloadOil`/`requestShift` 是轮询式查询，
+V1 未保留）。删掉 `internal/mqtt` 后这两个端点能编译、能返回 200，但永远返回空，这种"看着正常其实
+没数据"比编译错误更难发现。必须先与 Android 侧确认：补入 V1，还是确认这两个功能暂不纳入单栈。*
 
 | 路径 | 处置 | 说明 |
 |---|---|---|

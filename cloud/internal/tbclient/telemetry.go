@@ -76,25 +76,45 @@ func (c *Client) LatestValues(ctx context.Context, deviceID string, keys []strin
 	return ts, values, nil
 }
 
-// Timeseries returns a key's history in [startMs, endMs]. limit caps the number of points
-// ThingsBoard returns; it applies per key.
-func (c *Client) Timeseries(ctx context.Context, deviceID string, keys []string, startMs, endMs int64, limit int) (map[string][]TSValue, error) {
-	if len(keys) == 0 {
+// TimeseriesQuery describes a history read.
+type TimeseriesQuery struct {
+	Keys           []string
+	StartMs, EndMs int64
+	// Limit caps the points ThingsBoard returns, per key.
+	Limit int
+	// Descending asks ThingsBoard for the NEWEST points first.
+	//
+	// This has to be pushed down to the server rather than sorted client-side: with a limit in
+	// play, ascending returns the oldest N in the range and descending the newest N. Those are
+	// different sets, not different orders, so reversing an ascending page would silently answer
+	// "the most recent alarms" with the oldest ones.
+	Descending bool
+}
+
+// Timeseries returns each key's history within the query's time range.
+func (c *Client) Timeseries(ctx context.Context, deviceID string, q TimeseriesQuery) (map[string][]TSValue, error) {
+	if len(q.Keys) == 0 {
 		return map[string][]TSValue{}, nil
 	}
-	if limit <= 0 {
-		limit = 1000
+	if q.Limit <= 0 {
+		q.Limit = 1000
+	}
+	order := "ASC"
+	if q.Descending {
+		order = "DESC"
 	}
 
-	q := url.Values{
-		"keys":               {strings.Join(keys, ",")},
-		"startTs":            {strconv.FormatInt(startMs, 10)},
-		"endTs":              {strconv.FormatInt(endMs, 10)},
-		"limit":              {strconv.Itoa(limit)},
-		"orderBy":            {"ASC"},
+	values := url.Values{
+		"keys":    {strings.Join(q.Keys, ",")},
+		"startTs": {strconv.FormatInt(q.StartMs, 10)},
+		"endTs":   {strconv.FormatInt(q.EndMs, 10)},
+		"limit":   {strconv.Itoa(q.Limit)},
+		"orderBy": {order},
+		// Without this ThingsBoard applies its own aggregation defaults to numeric series; we want
+		// the raw points as stored.
 		"useStrictDataTypes": {"false"},
 	}
-	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/values/timeseries" + query(q)
+	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/values/timeseries" + query(values)
 
 	var raw map[string][]TSValue
 	if err := c.do(ctx, http.MethodGet, path, nil, &raw); err != nil {

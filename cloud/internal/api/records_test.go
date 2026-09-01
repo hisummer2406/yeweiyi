@@ -18,38 +18,17 @@ func TestListAlarms_RequiresDevice(t *testing.T) {
 	}
 }
 
-func TestListAlarms_ReturnsSeededRow(t *testing.T) {
-	env := newTestEnv(t)
-	const deviceName = "api-test-alarms-device"
+// The "returns real alarms" case moved to alarms_test.go: /api/alarms now reads from ThingsBoard,
+// so it needs a real device publishing a real alarm rather than a seeded database row.
+
+func TestListAlarms_ReturnsUnavailableWhenThingsBoardNotConfigured(t *testing.T) {
+	env := newTestEnv(t) // no TB wired
+	const deviceName = "api-test-alarms-no-tb"
 	env.ownDevice(deviceName)
 
-	if _, err := env.pool.Exec(context.Background(), `
-		INSERT INTO alarms (device_name, device_local_id, time, info, guanhao, jiezhi)
-		VALUES ($1, 1, '2026-08-15 09:20+08', '1号罐高液位报警', '1', '0号柴油')`, deviceName); err != nil {
-		t.Fatalf("seed alarm: %v", err)
-	}
-	t.Cleanup(func() {
-		if _, err := env.pool.Exec(context.Background(), `DELETE FROM alarms WHERE device_name = $1`, deviceName); err != nil {
-			t.Errorf("cleanup alarms: %v", err)
-		}
-	})
-
-	rec := env.authed("GET", "/api/alarms?device="+deviceName+"&beginTime=2020-01-01T00:00:00Z&endTime=2030-01-01T00:00:00Z", nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp struct {
-		Rows []db.Alarm `json:"rows"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(resp.Rows) != 1 {
-		t.Fatalf("expected 1 row, got %d: %s", len(resp.Rows), rec.Body.String())
-	}
-	if resp.Rows[0].Guanhao != "1" || resp.Rows[0].Jiezhi != "0号柴油" || resp.Rows[0].Info != "1号罐高液位报警" {
-		t.Fatalf("unexpected alarm row: %+v", resp.Rows[0])
+	rec := env.authed("GET", "/api/alarms?device="+deviceName, nil)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

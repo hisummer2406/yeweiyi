@@ -38,9 +38,11 @@ func TestBindDevice_CreatesDeviceRowAndBindingForBrandNewDevice(t *testing.T) {
 		t.Fatalf("expected devices row to exist after bind: %v", err)
 	}
 
-	// The binding should now authorize a device-scoped read that would otherwise 403.
-	if rec := env.authed("GET", "/api/oilcan/latest?device="+deviceName, nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 (owned but nothing cached), got %d: %s", rec.Code, rec.Body.String())
+	// The binding should now authorize a device-scoped read that would otherwise 403. The command
+	// listing is used as the probe because it needs neither ThingsBoard nor any ingested data —
+	// an owned device with no commands is simply an empty list.
+	if rec := env.authed("GET", "/api/devices/"+deviceName+"/commands", nil); rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (owned, no commands yet), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -103,8 +105,8 @@ func TestUnbindDevice_RemovesAuthorization(t *testing.T) {
 	const deviceName = "api-test-unbind-device"
 	env.ownDevice(deviceName)
 
-	if rec := env.authed("GET", "/api/oilcan/latest?device="+deviceName, nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 before unbind (owned, nothing cached), got %d: %s", rec.Code, rec.Body.String())
+	if rec := env.authed("GET", "/api/devices/"+deviceName+"/commands", nil); rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 before unbind (owned), got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	rec := env.authed("POST", "/api/devices/unbind", jsonBody(t, map[string]any{"deviceName": deviceName}))
@@ -112,7 +114,7 @@ func TestUnbindDevice_RemovesAuthorization(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if rec := env.authed("GET", "/api/oilcan/latest?device="+deviceName, nil); rec.Code != http.StatusForbidden {
+	if rec := env.authed("GET", "/api/devices/"+deviceName+"/commands", nil); rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 after unbind, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

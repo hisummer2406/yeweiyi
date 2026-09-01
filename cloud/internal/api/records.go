@@ -16,8 +16,9 @@ const (
 	maxLimit     = 500
 )
 
-// listParams is the shared shape behind /api/alarms, /api/oil-in-out, /api/shifts: all three are
-// "history for one device, filtered by time range, paginated" per design doc §4.4. `device` is
+// listParams is the shared shape behind /api/alarms (alarms.go, now read from ThingsBoard),
+// /api/oil-in-out and /api/shifts: all are "history for one device, filtered by time range,
+// paginated". `device` is
 // required — unlike the doc's draft routes, CLAUDE.md's multi-device cloud table design means there
 // is no well-defined "all devices" listing, so callers must scope to one deviceName explicitly.
 type listParams struct {
@@ -94,30 +95,6 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 		offset: offset,
 		asc:    asc,
 	}, true
-}
-
-func listAlarmsHandler(deps Deps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		p, ok := parseListParams(c)
-		if !ok {
-			return
-		}
-		if !requireDeviceOwnership(c, deps, p.device) {
-			return
-		}
-
-		if p.asc {
-			rows, err := deps.Queries.ListAlarmsAsc(c.Request.Context(), db.ListAlarmsAscParams{
-				DeviceName: p.device, Time: p.begin, Time_2: p.end, Limit: p.limit, Offset: p.offset,
-			})
-			respondRows(c, rows, err)
-			return
-		}
-		rows, err := deps.Queries.ListAlarmsDesc(c.Request.Context(), db.ListAlarmsDescParams{
-			DeviceName: p.device, Time: p.begin, Time_2: p.end, Limit: p.limit, Offset: p.offset,
-		})
-		respondRows(c, rows, err)
-	}
 }
 
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {

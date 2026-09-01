@@ -41,10 +41,12 @@ func NewRouter(deps Deps) *gin.Engine {
 	authorized := r.Group("/api")
 	authorized.Use(authMiddleware(deps.JWTSecret))
 	{
+		// /api/alarms reads from ThingsBoard (alarms.go), not from the business database.
+		// /api/oilcan/latest was removed with the legacy stack — its replacement is
+		// /api/devices/:device/telemetry/latest below.
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/shifts", listShiftsHandler(deps))
-		authorized.GET("/oilcan/latest", oilcanLatestHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.POST("/devices/bind", bindDeviceHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
