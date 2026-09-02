@@ -77,11 +77,19 @@ func (c *Client) CreateDevice(ctx context.Context, name, deviceType, accessToken
 	return d, nil
 }
 
-// DefaultDeviceProfile is the ThingsBoard device profile new devices are filed under. "default" is
-// the profile every ThingsBoard installation ships with, so provisioning works on a fresh instance
-// with no manual setup — which matters for the offline private deployment, where nobody is going to
-// click through a console before the first device connects.
-const DefaultDeviceProfile = "default"
+// DefaultDeviceProfile is the ThingsBoard device profile new devices are filed under.
+//
+// A project-specific profile rather than ThingsBoard's stock "default": that one is shared with the
+// demo devices every installation ships with, so anything configured on it — alarm rules, a default
+// rule chain, an OTA queue — would apply to those too, and vice versa.
+//
+// Provisioning still works on a completely fresh installation even if nobody has run
+// `tbconfig apply` first: ThingsBoard **auto-creates** a device profile when a device is created
+// with an unknown type (verified against a real instance). The profile is then ThingsBoard's own
+// defaults rather than the one defined in deploy/tb-config/, so apply is a fill-in-the-settings
+// step, not a start-up prerequisite. That distinction matters for the offline deployment, where
+// nobody is going to click through a console before the first device connects.
+const DefaultDeviceProfile = "yeweiyi-tank-terminal"
 
 // EnsureDevice returns the ThingsBoard device with this name, creating it if it does not exist.
 // This is the provisioning entry point the QR-code pairing flow calls: a device may legitimately be

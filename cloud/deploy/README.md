@@ -44,6 +44,9 @@ export DATABASE_URL="postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=d
 docker run --rm --network host -v "$PWD/migrations:/m" migrate/migrate \
   -path=/m -database "$DATABASE_URL" up
 
+# ThingsBoard 侧配置（设备模板）。幂等，可重复执行。
+./bin/tbconfig apply
+
 cp config.example.yaml config.yaml     # 按需修改，密钥走环境变量
 JWT_SECRET=<强随机值> ./bin/server -config config.yaml &
 
@@ -125,6 +128,35 @@ CA 不变则设备侧无需改动。到期时间见 `gen-certs.sh` 输出。
 
 **没有"跳过校验"选项，这是有意的**：一台不校验服务端身份的设备 —— 它向那里上报液位、
 从那里接收启泵命令 —— 并没有被 TLS 保护，只是对被动监听者加了密而已。
+
+---
+
+## ThingsBoard 侧配置（版本化）
+
+ThingsBoard 的配置存在它自己的数据库里，不在仓库里。`deploy/tb-config/` 把其中可版本化的部分
+（设备模板、规则链基线）纳入仓库，`tbconfig` 负责应用与导出：
+
+```bash
+./bin/tbconfig apply      # 把 tb-config/ 的定义写入 ThingsBoard（幂等，按名字创建或更新）
+./bin/tbconfig export     # 导出实例现状到 tb-config/current/，用于回答“生产和仓库一致吗”
+```
+
+| 文件 | 作用 |
+|---|---|
+| `device-profile-yeweiyi-tank-terminal.json` | 本项目设备模板，**权威定义** |
+| `rule-chain-root-baseline.json` | 出厂根规则链基线，仅作 diff 参照，`apply` 不会导入 |
+| `current/` | 实例快照，`export` 生成，不入库 |
+
+**忘了 apply 不会导致装不上。** 实测确认：用未知 type 建设备时 ThingsBoard 会自动创建同名模板，
+所以设备照常开通，只是拿到 ThingsBoard 出厂默认值而非这里定义的。apply 是补齐设置，不是前置条件。
+
+**`apply` 不导入规则链**：覆盖实例上的规则链图风险远高于设备模板（可能切断正在工作的数据流），
+必须由人明确决定，不做成自动步骤。
+
+关于将来把设备上报的报警转成 ThingsBoard **原生 Alarm 实体**：出厂根规则链里已经有
+`Device Profile Node`，它负责评估**设备模板上定义的**告警规则。也就是说那件事不需要自定义规则链，
+把规则写进 `device-profile-*.json` 的 `profileData.alarms` 即可 —— 链路出厂就是通的。
+目前 `alarms` 为 `null`，因为是否改用原生 Alarm 会影响 `/api/alarms` 的语义与小程序，属产品决策。
 
 ---
 
@@ -245,8 +277,9 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 - **双向 TLS（mTLS，客户端证书）未启用。** 当前设备身份靠 ThingsBoard 的 access token，
   传输由服务端证书保护。ThingsBoard 支持 X.509 客户端证书认证，若要求设备侧也出示证书需另配。
 - **证书续期未自动化。** 服务端证书约 2.25 年到期，需人工重签并重启，尚无到期提醒机制。
-- **规则链与设备配置模板未导出。** 目前没有配置任何自定义规则链 —— 报警是作为遥测事件流转的，
-  未映射为 ThingsBoard 原生 Alarm 实体。等那部分做了再导出入库。
+- **报警未映射为 ThingsBoard 原生 Alarm 实体。** 目前作为遥测事件流转，因此没有告警确认
+  （acknowledge）能力，而 issue #1 要求“报警实时提醒、确认和查询”。技术路径已探明（见上节
+  ThingsBoard 侧配置），缺的是产品决策而非实现方案。
 - **离线升级与回滚演练未做**（issue #6）。本手册覆盖安装、备份、恢复，不覆盖升级。
 - **公有云档位未压测**（issue #5）。
 - **`preflight.sh` 只在 macOS 与 Linux 上试过**，未在国产化操作系统上验证。

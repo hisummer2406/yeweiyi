@@ -1507,6 +1507,42 @@ Verified end to end: a 1.1 GB bundle builds in ~4 min; extracted on a clean `deb
 `--network none`, the checksums verify, all three static binaries run with no Go toolchain and no
 libc, and deliberately corrupting a file makes verification fail.
 
+**2026-09-02 ThingsBoard configuration versioning** (`cmd/tbconfig`, `deploy/tb-config/`) — the
+last open scope item in issue #2. ThingsBoard keeps its configuration in its own database; without
+this, "install a new environment from the document" means clicking through a console from
+screenshots, and nobody can answer whether production matches the repo.
+
+Devices now provision under a project profile, `yeweiyi-tank-terminal`, instead of ThingsBoard's
+stock `default` — that one is shared with the demo devices every installation ships with, so
+anything configured on it would apply to those too.
+
+**Verified rather than assumed: ThingsBoard auto-creates a device profile when a device is created
+with an unknown type.** That is what makes the switch safe — a fresh installation where nobody ran
+`tbconfig apply` still provisions devices fine, just with ThingsBoard's own defaults instead of the
+versioned settings. `apply` fills settings in; it is not a start-up prerequisite. Without checking
+this I would have introduced a bootstrap ordering dependency into the offline install.
+
+**Useful finding for the pending native-alarm decision**: the stock root rule chain already contains
+`Device Profile Node`, which evaluates alarm rules defined *on the device profile*. So turning
+device-reported alarms into ThingsBoard-native Alarm entities needs **no custom rule chain** — the
+rules go in `profileData.alarms` of the device profile and the path is wired out of the box. That
+remains a product decision (it changes `/api/alarms` semantics and the mini-program), but the
+technical route is now known and cheap. Recorded in `deploy/tb-config/rule-chain-root-baseline.json`
+and the deploy README.
+
+Two deliberate limits in the tool: `apply` **never imports rule chains** (overwriting a live chain
+can cut the data flow, which is a decision a person must make, not an automatic install step), and
+it never takes over the tenant-wide `default` flag from the repo, since which profile is the tenant
+default is installation-level state.
+
+Written in Go, not shell: the install targets are minimal and air-gapped — `debian:12-slim` has
+neither `python3` nor `curl` (both checked), and the first attempt as a shell script with inline
+Python heredocs also hit a self-inflicted bug where the heredoc consumed the stdin the embedded
+script wanted to read from. Go removes both problems and ships as another static binary.
+
+`deploy/tb-config/current/` is gitignored — it is an instance snapshot for diffing, including
+ThingsBoard's stock demo profiles, not an authoritative definition.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
@@ -1560,6 +1596,9 @@ cmd/server/          # the single binary
 cmd/tbdevicesim/     # simulated device CLI (provision / run)
 cmd/smoke/           # deployment smoke test, shipped as a binary because air-gapped install
                      # sites have no Go toolchain. Self-cleaning, safe against production.
+cmd/tbconfig/        # versions ThingsBoard's own configuration (device profiles, rule chain
+                     # baseline) as repo files; apply/export. Go rather than shell because
+                     # debian:12-slim has neither python3 nor curl.
 deploy/              # offline delivery: image manifest with digests, bundle/load scripts,
                      # preflight, backup/restore, resource profiles, Apache-2.0 licence,
                      # and README.md — the install and operations manual

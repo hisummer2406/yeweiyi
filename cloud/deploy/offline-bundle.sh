@@ -60,7 +60,7 @@ docker save $IMAGES | gzip -1 > "$STAGE/images/images.tar.gz"
 
 # 2) 二进制：静态编译，内网机器无需 Go 工具链
 echo "==> 编译 Go 二进制（linux/amd64，静态）"
-for cmd in server smoke tbdevicesim; do
+for cmd in server smoke tbdevicesim tbconfig; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -C "$ROOT" -trimpath -ldflags="-s -w -X main.version=$VERSION" \
     -o "$STAGE/bin/$cmd" "./cmd/$cmd"
@@ -72,6 +72,8 @@ cp "$ROOT/docker-compose.yml" "$ROOT/docker-compose.thingsboard.yml" \
 cp "$ROOT/config.example.yaml" "$STAGE/"
 cp -r "$ROOT/db/migrations" "$STAGE/migrations"
 cp -r "$HERE/profiles" "$STAGE/profiles"
+cp -r "$HERE/tb-config" "$STAGE/tb-config"
+rm -rf "$STAGE/tb-config/current"
 cp "$HERE/images.txt" "$HERE/offline-load.sh" "$HERE/preflight.sh" \
    "$HERE/backup.sh" "$HERE/restore.sh" "$HERE/gen-certs.sh" "$HERE/README.md" "$STAGE/"
 cp "$HERE/LICENSE-thingsboard.txt" "$STAGE/"

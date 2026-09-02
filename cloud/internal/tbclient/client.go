@@ -215,6 +215,22 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	return nil
 }
 
+// GetJSON performs an authenticated GET and decodes the response into out.
+//
+// Exported alongside the typed helpers because ThingsBoard's configuration surface — device
+// profiles, rule chains — is large, versioned by ThingsBoard itself, and only ever round-tripped
+// by this project rather than interpreted. Modelling every field in Go would mean re-deriving
+// ThingsBoard's schema and keeping it current across upgrades, for no gain: the tooling reads a
+// profile and writes it back unchanged apart from the fields it deliberately sets.
+func (c *Client) GetJSON(ctx context.Context, path string, out any) error {
+	return c.do(ctx, http.MethodGet, path, nil, out)
+}
+
+// PostJSON performs an authenticated POST of body, decoding the response into out (out may be nil).
+func (c *Client) PostJSON(ctx context.Context, path string, body, out any) error {
+	return c.do(ctx, http.MethodPost, path, body, out)
+}
+
 func (c *Client) roundTrip(ctx context.Context, method, path string, body io.Reader, token string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.cfg.BaseURL+path, body)
 	if err != nil {

@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "本项目的设备配置模板。ThingsBoard 自带的 default 模板是它自己的出厂配置，还被演示设备共用；",
+    "把本项目设备单独归到一个模板下，好处是隔离（改这个模板不会波及别的东西），并且将来的告警规则、",
+    "默认规则链、OTA 队列都有地方可挂。",
+    "",
+    "重要：用未知 type 建设备时 ThingsBoard 会**自动创建**同名模板（已实测）。所以忘了 apply 也不会",
+    "导致设备开通失败——只是拿到的是一个 ThingsBoard 出厂默认值的模板，而不是这里定义的这个。",
+    "这也意味着 apply 是幂等的补齐操作，不是启动前置条件。",
+    "",
+    "provisionType 为 DISABLED：设备凭据由后台以租户管理员身份通过 REST 签发（见 internal/tbclient），",
+    "不使用 ThingsBoard 的设备自注册流程——自注册需要把一个共享密钥预置到所有设备里，",
+    "那与本项目一机一密的前提相悖。"
+  ],
+  "name": "yeweiyi-tank-terminal",
+  "description": "安卓液位仪终端（设备协议 V1）",
+  "type": "DEFAULT",
+  "transportType": "DEFAULT",
+  "provisionType": "DISABLED",
+  "default": false,
+  "profileData": {
+    "configuration": { "type": "DEFAULT" },
+    "transportConfiguration": { "type": "DEFAULT" },
+    "provisionConfiguration": { "type": "DISABLED", "provisionDeviceSecret": null },
+    "alarms": null
+  }
+}

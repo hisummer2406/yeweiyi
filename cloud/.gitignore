@@ -10,3 +10,6 @@ dist/
 
 # TLS 证书与私钥：由 deploy/gen-certs.sh 现场生成，每个部署点各不相同，绝不入库
 deploy/certs/
+
+# ThingsBoard 配置的实例快照，仅供 diff，不是权威定义
+deploy/tb-config/current/
