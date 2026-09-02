@@ -226,7 +226,7 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 
 | 现象 | 排查 |
 |---|---|
-| ThingsBoard 起不来 | `docker logs yeweiyi-thingsboard`。首启装 schema 需 2–4 分钟，期间健康检查为 unhealthy 属正常 |
+| ThingsBoard 起不来 | `docker logs yeweiyi-thingsboard`。首启装 schema 需 2–4 分钟，期间 `starting` 属正常；若长期 `unhealthy` 而服务其实可访问，先怀疑健康检查本身（本镜像无 curl，只有 wget） |
 | 设备连不上 MQTT | 确认 access token 正确（token 放 MQTT **username**，password 留空）；`docker logs` 看是否被拒 |
 | 业务 API 返回 503 | ThingsBoard 不可达。`curl http://localhost:8081/login` 自查；503 表示平台故障而非请求有误 |
 | 控制命令返回 409 | 物理动作总闸关闭。这是**默认且正确**的状态，设备端联锁验证完成前不要打开 |

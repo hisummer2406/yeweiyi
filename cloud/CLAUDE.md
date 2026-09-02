@@ -1477,6 +1477,36 @@ Still open and listed in `deploy/README.md`: mutual TLS (client certificates) is
 device identity is still the ThingsBoard access token — and certificate renewal is manual with no
 expiry alerting.
 
+**2026-09-02 running the deployment scripts, and what that found** — the previous pass wrote
+`deploy/`'s scripts but never executed the bundling path. Executing it found four defects, none of
+which review would plausibly have caught:
+
+1. **The ThingsBoard healthcheck could never pass.** It used `curl`; the image ships only `wget`.
+   It had failed **7,190 consecutive times** and nobody noticed, because the service itself was
+   healthy and nothing consumed the status. Worse, `deploy/README.md` said "unhealthy during
+   startup is normal", which actively explained the symptom away. A check that can never pass is
+   worse than none: it trains people to ignore the word, and any future
+   `depends_on: condition: service_healthy` would hang forever. Now uses `wget`, and reaches
+   `healthy` in ~85 s.
+2. **`mapfile` is bash 4+; macOS ships bash 3.2.** The bundling script is most likely to be run on
+   a developer's Mac, where it died immediately. Replaced with a portable read loop.
+3. **`shasum` does not exist on `debian:12-slim`; `sha256sum` does — and macOS is the reverse.**
+   Four scripts used `shasum` unconditionally, so `offline-load.sh` and `restore.sh` would have
+   failed on the exact Linux machines they are written for, at the *verification* step. All four
+   now pick whichever exists.
+4. **macOS `tar` embeds xattrs that GNU `tar` warns about per file**, printing a screen of
+   `Ignoring unknown extended header keyword` during install. Harmless, but a delivery that makes
+   the operator doubt the package at step one is a bad delivery. `COPYFILE_DISABLE=1 --no-xattrs`
+   → 0 warnings.
+
+Also made the image pull tolerant of a failed network when the image is already local: the real
+guarantee is the digest check, not the freshness of the pull, and re-exporting 1.1 GB because Docker
+Hub blipped is pointless. (That blip happened during this very pass.)
+
+Verified end to end: a 1.1 GB bundle builds in ~4 min; extracted on a clean `debian:12-slim` with
+`--network none`, the checksums verify, all three static binaries run with no Go toolchain and no
+libc, and deliberately corrupting a file makes verification fail.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,

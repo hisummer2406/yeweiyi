@@ -8,6 +8,15 @@
 #   ./backup.sh [输出目录]        默认 ./backups
 set -euo pipefail
 
+# sha256 工具在两端不同名：macOS 有 shasum 无 sha256sum，精简版 Linux（debian-slim 等）
+# 正好相反。这些脚本一端在打包机（多为 macOS）跑、一端在内网 Linux 跑，写死任何一个都会
+# 在另一端失败——而失败的地方恰好是校验环节，最不该出问题的那一步。
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"
+  else shasum -a 256 "$@"; fi
+}
+
+
 OUT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backups}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DIR="$OUT/$STAMP"
@@ -42,7 +51,7 @@ docker exec -u thingsboard "$TB_CONTAINER" pg_dump -U thingsboard -d thingsboard
       'SELECT version||CASE WHEN dirty THEN E'"'"'-dirty'"'"' ELSE E'"'"''"'"' END FROM schema_migrations' 2>/dev/null || echo unknown)"
 } > "$DIR/manifest.txt"
 
-( cd "$DIR" && shasum -a 256 ./* > SHA256SUMS 2>/dev/null || true )
+( cd "$DIR" && sha256 ./* > SHA256SUMS 2>/dev/null || true )
 
 echo
 echo "完成："

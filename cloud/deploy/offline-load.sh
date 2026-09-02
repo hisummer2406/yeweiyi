@@ -2,10 +2,19 @@
 # 在**内网**机器上运行：校验并导入离线包中的镜像。全程不访问网络。
 set -euo pipefail
 
+# sha256 工具在两端不同名：macOS 有 shasum 无 sha256sum，精简版 Linux（debian-slim 等）
+# 正好相反。这些脚本一端在打包机（多为 macOS）跑、一端在内网 Linux 跑，写死任何一个都会
+# 在另一端失败——而失败的地方恰好是校验环节，最不该出问题的那一步。
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"
+  else shasum -a 256 "$@"; fi
+}
+
+
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "==> 校验文件完整性"
-if ! ( cd "$HERE" && shasum -a 256 -c SHA256SUMS --quiet ); then
+if ! ( cd "$HERE" && sha256 -c SHA256SUMS --quiet ); then
   echo "!!! 校验失败：包在传输中损坏或被改动，请勿继续安装。" >&2
   exit 1
 fi

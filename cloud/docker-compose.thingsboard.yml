@@ -42,10 +42,12 @@ services:
       - thingsboard_data:/data
       - thingsboard_logs:/var/log/thingsboard
     healthcheck:
-      # ThingsBoard's own liveness endpoint. First boot runs a schema install and can take several
-      # minutes, hence the long start_period — without it the container is reported unhealthy while
-      # it is merely still starting.
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9090/login >/dev/null || exit 1"]
+      # wget, not curl: this image ships wget and has no curl at all. The original version of this
+      # healthcheck used curl and therefore failed every single time — 7190 consecutive failures
+      # before it was noticed, because the service itself was fine and nothing depended on the
+      # health status. A check that can never pass is worse than none: it trains people to ignore
+      # "unhealthy", and any future `depends_on: condition: service_healthy` would hang forever.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/login || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10

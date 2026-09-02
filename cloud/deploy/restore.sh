@@ -4,6 +4,15 @@
 #   ./restore.sh backups/20260902-003000
 set -euo pipefail
 
+# sha256 工具在两端不同名：macOS 有 shasum 无 sha256sum，精简版 Linux（debian-slim 等）
+# 正好相反。这些脚本一端在打包机（多为 macOS）跑、一端在内网 Linux 跑，写死任何一个都会
+# 在另一端失败——而失败的地方恰好是校验环节，最不该出问题的那一步。
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$@"
+  else shasum -a 256 "$@"; fi
+}
+
+
 DIR="${1:-}"
 [[ -n "$DIR" && -d "$DIR" ]] || { echo "用法：$0 <备份目录>" >&2; exit 1; }
 TB_CONTAINER="${TB_CONTAINER:-yeweiyi-thingsboard}"
@@ -12,7 +21,7 @@ PG_USER="${PG_USER:-yeweiyi}"
 PG_DB="${PG_DB:-yeweiyi}"
 
 echo "==> 校验备份完整性"
-( cd "$DIR" && shasum -a 256 -c SHA256SUMS --quiet ) || { echo "!!! 备份文件校验失败，拒绝恢复。" >&2; exit 1; }
+( cd "$DIR" && sha256 -c SHA256SUMS --quiet ) || { echo "!!! 备份文件校验失败，拒绝恢复。" >&2; exit 1; }
 
 echo "==> 备份信息"; sed 's/^/    /' "$DIR/manifest.txt"
 
