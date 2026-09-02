@@ -120,10 +120,18 @@ go test ./internal/ingest/     # needs ThingsBoard + Postgres + Redis
 Tests **skip with an explanatory message** when their infrastructure is absent rather than failing.
 If you see a skip, start the container it names — do not assume the test is broken.
 
-`go test ./...` is green in parallel. It used to be chronically flaky — `internal/api` and
-`internal/queue` stole river jobs from each other, and `internal/mqtt`'s `TestClient_OnlineStatus`
-was timing-sensitive — but both packages were deleted with the legacy stack, and the flakiness went
-with them.
+**Use `go test ./... -p 1`.** Three packages (`internal/api`, `internal/tbclient`,
+`internal/ingest`) each drive the same ThingsBoard instance, and on a development machine the load
+generator and the server share the same CPU. Run in parallel they occasionally miss a 25-second
+timeout — most often `TestFullLoop_CommandReachesTerminalStateViaIngest`. Serialised, the suite is
+green; each package alone is green; ThingsBoard itself stays healthy throughout (its queues report
+`totalFailed [0]`), so this is contention, not a defect in the system under test.
+
+An earlier entry below claimed parallel runs were reliable after the legacy packages were deleted.
+That was measured on a lightly-loaded instance and did not hold up once ThingsBoard had accumulated
+data and a fourth ThingsBoard-dependent package existed — the claim was made from three green runs,
+which was too small a sample to conclude "stable" from. The older river/mosquitto flakiness it
+described really is gone; this is a different, later contention.
 
 ---
 
@@ -1378,11 +1386,13 @@ and worse: every command's real validity window was silently shortened by the ro
 reading, which is also the one the device receives in the envelope. Five consecutive package runs
 green afterwards.
 
-**Side effect worth knowing: `go test ./...` is now reliable in parallel.** The chronic flakiness
-documented at length in earlier entries — `internal/api` and `internal/queue` stealing river jobs
-from each other, `internal/mqtt`'s timing-sensitive `TestClient_OnlineStatus` — lived entirely in
-the deleted packages. Three consecutive full parallel runs green; the `-p 1` workaround is no longer
-needed.
+**Side effect: the old river/mosquitto flakiness is gone** — `internal/api` and `internal/queue`
+stealing river jobs from each other and `internal/mqtt`'s timing-sensitive `TestClient_OnlineStatus`
+both lived entirely in the deleted packages. Three consecutive parallel runs were green here.
+**That "parallel is now reliable" conclusion was drawn from too few runs and did not survive**: once
+ThingsBoard had accumulated data and a fourth ThingsBoard-dependent package existed, parallel runs
+started missing timeouts again for an unrelated reason (contention on the single ThingsBoard). See
+Part 1 — `-p 1` is the standing recommendation.
 
 Data-boundary assertions were upgraded rather than deleted: tests that counted rows in `alarms` /
 `oil_in_out` / `commit_works` and required zero now assert those tables **do not exist**, which is
@@ -1543,6 +1553,64 @@ script wanted to read from. Go removes both problems and ships as another static
 `deploy/tb-config/current/` is gitignored — it is an instance snapshot for diffing, including
 ThingsBoard's stock demo profiles, not an authoritative definition.
 
+**2026-09-02 capacity testing** (`cmd/loadtest`, `docs/capacity-test.md`) — a start on issue #5.
+**Only 200 devices were actually tested**; 1,000 and 10,000 were not, and the report says so in its
+first table rather than burying it.
+
+Measured on a 4-core / 8 GB laptop with ThingsBoard capped at a 2 GB heap: 200 devices × 2 tanks on
+the production 30 s cadence sustained **174 datapoints/s with zero failures**, end-to-end latency
+p50 56 ms / p95 111 ms, ThingsBoard CPU 23 %. End-to-end means device publish → visible to the
+backend over ThingsBoard's WebSocket, both timestamps from one process's clock so there is no skew
+to argue about.
+
+**A 100 % reconnect storm — all 200 dropped and reconnected in the same instant with no backoff —
+recovered in 390 ms**, losing exactly one in-flight snapshot and returning immediately to full
+throughput. That is issue #1's named worst case, and the real fleet is gentler still because devices
+back off exponentially with jitter.
+
+**500 devices failed, and the failure is informative**: provisioning managed ~109 in ten minutes
+while ThingsBoard sat at 1.94 GiB of its 2 GiB heap. Deletion measured 59/s immediately afterwards,
+so the API had *not* degraded permanently — it was heap pressure during load, not a leak or a
+deadlock. Since CPU was only 23 % at 200 devices while heap was already full, **the binding
+constraint here is heap, not CPU**, which is the scaling lever `cloud.yml` already reaches for. What
+this does *not* establish is a 1,000-device spec; that stays arithmetic until it runs on real
+hardware, and the report says which conclusions are and are not supported.
+
+**The harness panicked the first time the storm fired**: `d.sim` is replaced by the storm goroutine
+while the publish goroutine is reading it — an unguarded field shared by two goroutines, nil
+dereference inside `PublishSnapshot`. Fixed with a mutex-guarded accessor and re-verified under
+`go build -race` (no data race reported). Worth remembering that a load-testing tool is itself
+concurrent by construction and deserves the race detector: when it crashes it both leaves hundreds
+of provisioned devices behind and looks like a fault in the system under test.
+
+Operational note recorded in the doc: the client ran on the same machine as the server here, so its
+own 200 MQTT sessions competed for the same CPU. At real scale the load generator must live on a
+separate machine or the bottleneck cannot be attributed to either side.
+
+**2026-09-02 test-flake correction** — while verifying the capacity work,
+`TestFullLoop_CommandReachesTerminalStateViaIngest` failed 2 runs in 3 under `go test ./...`. Chased
+rather than retried: it passes 4/4 alone (≈2 s each) and 2/2 with its own package, and fails only
+when packages run in parallel, always at ≈29 s — its 25 s timeout plus overhead.
+
+Cause is contention, not a defect: three packages now drive the same ThingsBoard, and on a
+development machine the load generator shares CPU with the server. ThingsBoard was verified healthy
+throughout — up two hours, healthcheck green, `TbSqlBlockingQueue` reporting `totalFailed [0]`.
+
+A false lead worth recording: `docker logs --since "$(date -u ...)"` returned ThingsBoard's *startup*
+logs, which read exactly like a crash-and-restart during the test. `RestartCount=0`, `OOMKilled=false`
+and a two-hour uptime disproved it — the `--since` timestamp was being interpreted in a different
+timezone, so the filter matched from container start. Worth knowing before concluding "it restarted"
+from a log window again.
+
+**This also corrects an over-claim I made earlier the same day**: the legacy-deletion entry says
+`go test ./...` "is now reliable in parallel", concluded from three green runs. The river/mosquitto
+flakiness it described genuinely is gone, but three runs was too small a sample to promote to
+"stable", and the claim did not survive a loaded ThingsBoard plus a fourth dependent package.
+`-p 1` is the standing recommendation again, now stated in Part 1 with the reason.
+
+Deliberately not "fixed" by raising the timeout: 25 s for an operation that takes 2 s is already
+generous, and stretching it would hide real slowness rather than reveal it.
+
 **2026-09-01 table-comments pass** (`db/migrations/000009_table_comments`): documentation-only
 migration, no DDL changes — attaches `COMMENT ON TABLE`/`COMMENT ON COLUMN` (in Chinese) to every
 app-owned table (`users`, `devices`, `alarms`, `oil_in_out`, `commit_works`, `oil_can_sets`,
@@ -1599,6 +1667,9 @@ cmd/smoke/           # deployment smoke test, shipped as a binary because air-ga
 cmd/tbconfig/        # versions ThingsBoard's own configuration (device profiles, rule chain
                      # baseline) as repo files; apply/export. Go rather than shell because
                      # debian:12-slim has neither python3 nor curl.
+cmd/loadtest/        # repeatable capacity harness: provisions N devices, holds production-cadence
+                     # load, measures true end-to-end latency, simulates reconnect storms, cleans
+                     # up. Results and limits in docs/capacity-test.md.
 deploy/              # offline delivery: image manifest with digests, bundle/load scripts,
                      # preflight, backup/restore, resource profiles, Apache-2.0 licence,
                      # and README.md — the install and operations manual

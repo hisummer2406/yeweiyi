@@ -60,7 +60,7 @@ docker save $IMAGES | gzip -1 > "$STAGE/images/images.tar.gz"
 
 # 2) 二进制：静态编译，内网机器无需 Go 工具链
 echo "==> 编译 Go 二进制（linux/amd64，静态）"
-for cmd in server smoke tbdevicesim tbconfig; do
+for cmd in server smoke tbdevicesim tbconfig loadtest; do
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -C "$ROOT" -trimpath -ldflags="-s -w -X main.version=$VERSION" \
     -o "$STAGE/bin/$cmd" "./cmd/$cmd"

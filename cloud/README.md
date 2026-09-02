@@ -49,6 +49,7 @@ internal/devicesim/   # 设备侧参考实现，测试在进程内驱动它
 cmd/tbdevicesim/      # 模拟设备的命令行封装（provision / run）
 cmd/smoke/            # 部署冒烟测试（编译为二进制，随离线包分发）
 cmd/tbconfig/         # ThingsBoard 侧配置的版本化：设备模板/规则链基线的 apply 与 export
+cmd/loadtest/         # 可重复的容量压测工具（见 docs/capacity-test.md）
 deploy/               # 离线交付：镜像清单、打包/导入、预检、备份/恢复、规格档位、部署手册
 fixtures/protocol/v1/ # 跨仓库共享的协议 fixture，Android 侧用同一批文件做契约测试
 internal/config/      # 配置加载：默认值 → config.yaml → 环境变量
