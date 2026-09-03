@@ -27,6 +27,15 @@ public final class FixtureLoader {
         return obj;
     }
 
+    /** 按流打开一份 fixture，调用方负责关闭。证书这类不是 UTF-8 文本的内容走这个。 */
+    public static InputStream openStream(String resourceName) {
+        InputStream in = FixtureLoader.class.getResourceAsStream("/thingsboard/" + resourceName);
+        if (in == null) {
+            throw new IllegalStateException("找不到 fixture: " + resourceName);
+        }
+        return in;
+    }
+
     public static String loadText(String resourceName) {
         try (InputStream in = FixtureLoader.class.getResourceAsStream("/thingsboard/" + resourceName)) {
             if (in == null) {

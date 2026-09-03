@@ -2,6 +2,7 @@ package com.sansen.yeweiyi.manager;
 
 import android.util.Log;
 
+import com.sansen.yeweiyi.logic.thingsboard.BrokerTls;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
 import com.sansen.yeweiyi.logic.thingsboard.ThingsBoardTopics;
 
@@ -13,6 +14,9 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
+import java.io.IOException;
+import java.io.InputStream;
+
 import javax.net.ssl.SSLSocketFactory;
 
 /**
@@ -21,12 +25,11 @@ import javax.net.ssl.SSLSocketFactory;
  * 阿里云 Alink topic 那种连法。
  * <p>
  * 复用项目里已经在用的 {@code libs/mqtt-client-0.4.0.jar}（Eclipse Paho），走
- * {@code ssl://} scheme 时该客户端支持 {@link MqttConnectOptions#setSocketFactory}，
- * 用平台默认信任库校验 broker 证书——证书链有问题时 {@code connect()} 直接抛
- * {@link MqttException} 失败，不会静默退化成不校验证书或退回明文连接。
- * <p>
- * 私有化部署自签 CA 的信任库加载（issue #32 完全离线私有化那条线）目前还没做，
- * 那属于单独的部署形态，这里先只覆盖公网 CA 签发证书这条最常见路径。
+ * {@code ssl://} scheme 时该客户端支持 {@link MqttConnectOptions#setSocketFactory}。
+ * 信任链和主机名校验都由 {@link BrokerTls} 装配：预置了私有 CA 就只信那张（离线私有化部署，
+ * issue #40 §4），没预置就用系统信任库（公网 CA 签发证书的常规部署）。两条路径都做主机名校验，
+ * 都不提供"跳过证书校验"的开关；证书有问题时 {@code connect()} 抛异常失败，不会静默退化成
+ * 不校验或退回明文连接。
  */
 public final class ThingsBoardMqttConnection {
 
@@ -44,20 +47,32 @@ public final class ThingsBoardMqttConnection {
         void onConnectionLost(Throwable cause);
     }
 
+    /**
+     * 私有化部署预置的 CA 证书从哪来。抽成接口是为了让这个类不依赖 {@code Context}，
+     * 实现见 {@link ThingsBoardCaStore}。
+     */
+    public interface CaCertificateSource {
+        /** @return CA 证书流，调用方负责关闭；没有预置私有 CA 时返回 null */
+        InputStream openCaCertificate() throws IOException;
+    }
+
     private final String brokerUri;
     private final String clientId;
     private final boolean useTls;
+    private final CaCertificateSource caCertificateSource;
     private final RpcRequestListener rpcRequestListener;
     private final ConnectionLostListener connectionLostListener;
 
     private volatile MqttClient client;
 
     public ThingsBoardMqttConnection(String brokerUri, String clientId, boolean useTls,
+                                      CaCertificateSource caCertificateSource,
                                       RpcRequestListener rpcRequestListener,
                                       ConnectionLostListener connectionLostListener) {
         this.brokerUri = brokerUri;
         this.clientId = clientId;
         this.useTls = useTls;
+        this.caCertificateSource = caCertificateSource;
         this.rpcRequestListener = rpcRequestListener;
         this.connectionLostListener = connectionLostListener;
     }
@@ -82,7 +97,7 @@ public final class ThingsBoardMqttConnection {
             options.setConnectionTimeout(CONNECTION_TIMEOUT_SECONDS);
             options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
             if (useTls) {
-                options.setSocketFactory((SSLSocketFactory) SSLSocketFactory.getDefault());
+                options.setSocketFactory(createTlsSocketFactory());
             }
 
             client.connect(options);
@@ -96,6 +111,31 @@ public final class ThingsBoardMqttConnection {
             client = null;
             return false;
         }
+    }
+
+    /**
+     * 装配 TLS：私有 CA（有就只信它）或系统信任库，两者都带主机名校验，外面再包一层 SNI/协议收敛。
+     * <p>
+     * 任何一步失败都往外抛，由 {@link #connect} 统一记日志并返回 false 走退避重连——
+     * 绝不能在这里"退回一个不校验的工厂"把连接凑合建起来。
+     */
+    private SSLSocketFactory createTlsSocketFactory() throws Exception {
+        String host = BrokerTls.hostFromBrokerUri(brokerUri);
+        if (host == null || host.isEmpty()) {
+            throw new IllegalStateException("broker 地址解析不出主机名，无法校验服务端证书: " + brokerUri);
+        }
+        SSLSocketFactory base;
+        InputStream caPem = caCertificateSource == null ? null : caCertificateSource.openCaCertificate();
+        if (caPem != null) {
+            try {
+                base = BrokerTls.privateCaSocketFactory(caPem, host);
+            } finally {
+                caPem.close();
+            }
+        } else {
+            base = BrokerTls.systemTrustSocketFactory(host);
+        }
+        return new SniSocketFactory(base, host);
     }
 
     public boolean isConnected() {

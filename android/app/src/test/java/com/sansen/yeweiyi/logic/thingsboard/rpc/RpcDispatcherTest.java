@@ -17,6 +17,8 @@ public class RpcDispatcherTest {
 
     private static class InMemoryPersistence implements ProcessedCommandStore.Persistence {
         Map<String, ProcessedCommandStore.Record> saved = new HashMap<>();
+        /** 置 true 模拟磁盘满/目录不可写：saveAll 报失败，内容不落盘。 */
+        boolean failWrites = false;
 
         @Override
         public Map<String, ProcessedCommandStore.Record> loadAll() {
@@ -24,8 +26,12 @@ public class RpcDispatcherTest {
         }
 
         @Override
-        public void saveAll(Map<String, ProcessedCommandStore.Record> records) {
+        public boolean saveAll(Map<String, ProcessedCommandStore.Record> records) {
+            if (failWrites) {
+                return false;
+            }
             saved = new HashMap<>(records);
+            return true;
         }
     }
 
@@ -47,6 +53,7 @@ public class RpcDispatcherTest {
     }
 
     private RpcMethodRegistry registry;
+    private InMemoryPersistence persistence;
     private ProcessedCommandStore commandStore;
     private RecordingAckPublisher ackPublisher;
     private long now;
@@ -55,7 +62,8 @@ public class RpcDispatcherTest {
     @Before
     public void setUp() {
         registry = new RpcMethodRegistry();
-        commandStore = new ProcessedCommandStore(new InMemoryPersistence(), 86400000L);
+        persistence = new InMemoryPersistence();
+        commandStore = new ProcessedCommandStore(persistence, 86400000L);
         ackPublisher = new RecordingAckPublisher();
         now = 1_000_000L;
         dispatcher = new RpcDispatcher(registry, commandStore, ackPublisher, () -> now);
@@ -171,6 +179,62 @@ public class RpcDispatcherTest {
 
         assertEquals("重启前遗留的命令不应该重新执行", 0, calls.get());
         assertEquals(Collections.singletonList(RpcResultStatus.FAILED), ackPublisher.statuses());
+    }
+
+    @Test
+    public void persistenceFailureAtAcceptanceRefusesToExecute() {
+        // 磁盘满/目录不可写：RECEIVED 记录落不了盘，"重启后不重复执行"的保证就没有载体了。
+        AtomicInteger calls = new AtomicInteger(0);
+        registry.register("ping", req -> {
+            calls.incrementAndGet();
+            return RpcResult.succeeded("pong", Collections.emptyMap());
+        });
+        persistence.failWrites = true;
+
+        dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
+
+        assertEquals("写盘失败时不能执行 handler", 0, calls.get());
+        assertEquals("云端必须拿到一个明确的终态，而不是 RECEIVED 之后没了下文",
+                Collections.singletonList(RpcResultStatus.FAILED), ackPublisher.statuses());
+        assertEquals(RpcErrorCode.INTERNAL_ERROR, RpcErrorCode.valueOf(ackPublisher.acks.get(0)[2]));
+    }
+
+    @Test
+    public void persistenceRecoveryLetsNextCommandExecuteAgain() {
+        // 磁盘恢复之后不应该留下"这台设备从此不再执行任何命令"的后遗症。
+        AtomicInteger calls = new AtomicInteger(0);
+        registry.register("ping", req -> {
+            calls.incrementAndGet();
+            return RpcResult.succeeded("pong", Collections.emptyMap());
+        });
+
+        persistence.failWrites = true;
+        dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
+        persistence.failWrites = false;
+        dispatcher.dispatch("req-2", requestJson("ping", "cmd-2", now + 10_000));
+
+        assertEquals("换一个 commandId 重下就能正常执行", 1, calls.get());
+        assertEquals(java.util.Arrays.asList(
+                RpcResultStatus.FAILED,                                 // cmd-1：写盘失败，没执行
+                RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED     // cmd-2：磁盘恢复后正常
+        ), ackPublisher.statuses());
+    }
+
+    @Test
+    public void terminalPersistenceFailureStillAcksTheRealResult() {
+        // 终态写盘失败跟受理阶段不同：动作已经做完，不能回退成"没执行"，ACK 必须照实发。
+        AtomicInteger calls = new AtomicInteger(0);
+        registry.register("ping", req -> {
+            calls.incrementAndGet();
+            persistence.failWrites = true; // 执行完、写终态之前磁盘坏掉
+            return RpcResult.succeeded("pong", Collections.emptyMap());
+        });
+
+        dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
+
+        assertEquals(1, calls.get());
+        assertEquals(java.util.Arrays.asList(RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED),
+                ackPublisher.statuses());
     }
 
     @Test

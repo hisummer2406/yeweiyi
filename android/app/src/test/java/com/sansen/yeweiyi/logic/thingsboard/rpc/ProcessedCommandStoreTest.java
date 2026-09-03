@@ -6,12 +6,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ProcessedCommandStoreTest {
 
     private static class InMemoryPersistence implements ProcessedCommandStore.Persistence {
         Map<String, ProcessedCommandStore.Record> saved = new HashMap<>();
+        boolean failWrites = false;
 
         @Override
         public Map<String, ProcessedCommandStore.Record> loadAll() {
@@ -19,8 +22,12 @@ public class ProcessedCommandStoreTest {
         }
 
         @Override
-        public void saveAll(Map<String, ProcessedCommandStore.Record> records) {
+        public boolean saveAll(Map<String, ProcessedCommandStore.Record> records) {
+            if (failWrites) {
+                return false;
+            }
             saved = new HashMap<>(records);
+            return true;
         }
     }
 
@@ -70,5 +77,27 @@ public class ProcessedCommandStoreTest {
 
         assertNull(store.find("old"));
         assertEquals(RpcResultStatus.SUCCEEDED, store.find("fresh").status);
+    }
+
+    @Test
+    public void recordReportsPersistenceFailureButKeepsMemoryCopy() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        ProcessedCommandStore store = new ProcessedCommandStore(persistence, 86400000L);
+        persistence.failWrites = true;
+
+        assertFalse("写盘失败必须如实返回 false", store.record("cmd-1", RpcResultStatus.RECEIVED,
+                RpcErrorCode.NONE, "已受理，执行中", 1000L));
+        // 内存里仍要留着：本进程内的重复投递还是能去重，丢的只是跨重启的那份保证。
+        assertEquals(RpcResultStatus.RECEIVED, store.find("cmd-1").status);
+        assertTrue("失败的那次不应该污染盘上的内容", persistence.saved.isEmpty());
+    }
+
+    @Test
+    public void recordReturnsTrueWhenPersisted() {
+        InMemoryPersistence persistence = new InMemoryPersistence();
+        ProcessedCommandStore store = new ProcessedCommandStore(persistence, 86400000L);
+
+        assertTrue(store.record("cmd-1", RpcResultStatus.SUCCEEDED, RpcErrorCode.NONE, "ok", 1000L));
+        assertEquals(1, persistence.saved.size());
     }
 }

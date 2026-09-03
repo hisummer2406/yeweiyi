@@ -74,8 +74,17 @@ public final class RpcDispatcher {
 
         // 正式受理：先落 RECEIVED 再执行，这样进程如果在 handler 执行期间被杀掉，
         // 重启后 recoverAfterRestart 能发现这条命令停在非终态，判 FAILED 而不是当作没处理过。
-        commandStore.record(request.getCommandId(), RpcResultStatus.RECEIVED, RpcErrorCode.NONE,
-                "已受理，执行中", now);
+        //
+        // 这条记录**没写进盘**就不能往下走：它是"重启后不会重复执行"这个保证的唯一载体，
+        // 只在内存里的话，设备在 handler 执行期间掉电，重启后同一个 commandId 会被当成新命令
+        // 再执行一遍。云端为了拿到确定结果本来就会重投，重投必然撞上这个窗口。宁可这次不执行、
+        // 明确回一个 FAILED（云端可以换 commandId 重下），也不能执行一次说不清做没做过的动作。
+        if (!commandStore.record(request.getCommandId(), RpcResultStatus.RECEIVED, RpcErrorCode.NONE,
+                "已受理，执行中", now)) {
+            terminate(request, mqttRequestId, RpcResultStatus.FAILED, RpcErrorCode.INTERNAL_ERROR,
+                    "去重记录写盘失败，为避免重启后重复执行，本次命令未执行", now);
+            return;
+        }
         ackPublisher.publishAck(mqttRequestId, RpcResultStatus.RECEIVED, RpcErrorCode.NONE, "已受理");
 
         RpcResult result;
@@ -86,6 +95,9 @@ public final class RpcDispatcher {
         }
 
         long finishedAt = clock.nowMillis();
+        // 终态这一条写盘失败只能认了：动作已经做完，不存在"回退成没执行"这个选项。
+        // 代价是重启后这条命令看起来停在 RECEIVED，被 recoverAfterRestart 改判 FAILED——
+        // 对云端来说是"执行结果不明"，比谎报成功安全，也比重新执行一遍安全。
         commandStore.record(request.getCommandId(), result.getStatus(), result.getErrorCode(),
                 result.getMessage(), finishedAt);
         commandStore.evictExpired(finishedAt);

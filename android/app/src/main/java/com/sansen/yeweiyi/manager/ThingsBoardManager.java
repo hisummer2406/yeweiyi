@@ -87,7 +87,8 @@ public final class ThingsBoardManager {
         String scheme = ApiConfig.THINGSBOARD_USE_TLS ? "ssl://" : "tcp://";
         String brokerUri = scheme + SharePreManager.getIpBean().getIp() + ":" + SharePreManager.getIpBean().getPort();
         this.connection = new ThingsBoardMqttConnection(brokerUri, NetUtils.getMacAddr(),
-                ApiConfig.THINGSBOARD_USE_TLS, this::onRpcRequest, this::onConnectionLost);
+                ApiConfig.THINGSBOARD_USE_TLS, new ThingsBoardCaStore(context),
+                this::onRpcRequest, this::onConnectionLost);
 
         this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context), MAX_PENDING_ALARMS);
         this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context),

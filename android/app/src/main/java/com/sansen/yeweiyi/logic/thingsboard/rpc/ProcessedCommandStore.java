@@ -22,7 +22,12 @@ public final class ProcessedCommandStore {
     public interface Persistence {
         Map<String, Record> loadAll();
 
-        void saveAll(Map<String, Record> records);
+        /**
+         * @return 是否已经**落到盘上**。返回 false 表示这批记录只存在于内存里，进程一旦重启就没了——
+         * 调用方据此决定要不要继续做有副作用的事（见 {@link #record}）。实现不要用抛异常表达失败，
+         * 这条路径在 MQTT 回调线程上，抛出去会打断整条 RPC 处理流程。
+         */
+        boolean saveAll(Map<String, Record> records);
     }
 
     public static final class Record {
@@ -53,10 +58,20 @@ public final class ProcessedCommandStore {
         return records.get(commandId);
     }
 
-    public synchronized void record(String commandId, RpcResultStatus status, RpcErrorCode errorCode,
+    /**
+     * 记录一条命令的状态。
+     * <p>
+     * <b>返回值必须看</b>：写盘失败时记录只进了内存，本进程内的重复投递仍能去重，但设备一旦重启
+     * 这条记录就没了，同一个 commandId 会被当成"从没处理过"重新执行一次。对于要真正动设备的
+     * 命令，这等于幂等保证失效，所以 {@link RpcDispatcher} 在受理阶段拿到 false 会直接拒绝执行，
+     * 而不是"先干了再说"。
+     *
+     * @return 是否已持久化成功
+     */
+    public synchronized boolean record(String commandId, RpcResultStatus status, RpcErrorCode errorCode,
                                      String message, long nowMillis) {
         records.put(commandId, new Record(status, errorCode, message, nowMillis));
-        flush();
+        return flush();
     }
 
     /**
@@ -75,6 +90,8 @@ public final class ProcessedCommandStore {
             }
         }
         if (recovered > 0) {
+            // 这里忽略 flush 的成败：改判本身在内存里已经生效，写盘失败最多是下次重启再改判一次，
+            // 不会造成"重复执行"这种有副作用的后果，跟 record() 的处境不一样。
             flush();
         }
         return recovered;
@@ -83,10 +100,11 @@ public final class ProcessedCommandStore {
     /** 清掉超过保留期的记录，避免这张表无限增长。建议每次 {@link #record} 之后顺带调用。 */
     public synchronized void evictExpired(long nowMillis) {
         records.entrySet().removeIf(e -> nowMillis - e.getValue().recordedAtMillis > retentionMillis);
+        // 同 recoverAfterRestart：清理失败只是表暂时没瘦下来，没有副作用，不需要上报调用方。
         flush();
     }
 
-    private void flush() {
-        persistence.saveAll(new LinkedHashMap<>(records));
+    private boolean flush() {
+        return persistence.saveAll(new LinkedHashMap<>(records));
     }
 }

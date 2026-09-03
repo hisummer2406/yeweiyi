@@ -52,18 +52,37 @@ public final class ProcessedCommandFilePersistence implements ProcessedCommandSt
         }
     }
 
+    /**
+     * @return 是否真的落到盘上。磁盘满、目录不可写、rename 失败都返回 false——
+     * 调用方（{@link ProcessedCommandStore#record}）靠这个值决定要不要继续执行命令，
+     * 所以这里绝不能"记了日志就当成功"。
+     */
     @Override
-    public void saveAll(Map<String, ProcessedCommandStore.Record> records) {
+    public boolean saveAll(Map<String, ProcessedCommandStore.Record> records) {
         File tmp = new File(file.getParentFile(), file.getName() + ".tmp");
         try (FileWriter writer = new FileWriter(tmp)) {
             GSON.toJson(records, MAP_TYPE, writer);
             writer.flush();
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+            // RuntimeException 也要接：Gson 序列化失败抛的是 JsonIOException，
+            // 漏掉的话会穿到 MQTT 回调线程上把整条 RPC 处理流程打断。
             Log.e(TAG, "写入命令去重记录失败: " + file, e);
-            return;
+            deleteQuietly(tmp);
+            return false;
         }
         if (!tmp.renameTo(file)) {
             Log.e(TAG, "rename 命令去重记录文件失败: " + tmp + " -> " + file);
+            deleteQuietly(tmp);
+            return false;
+        }
+        return true;
+    }
+
+    private static void deleteQuietly(File tmp) {
+        // 临时文件留着不影响正确性（下次 saveAll 会覆盖），但失败时清掉更干净，
+        // 也避免磁盘满的场景下这个半截文件继续占着空间。
+        if (tmp.exists() && !tmp.delete()) {
+            Log.w(TAG, "删除临时文件失败: " + tmp);
         }
     }
 }
