@@ -2104,6 +2104,39 @@ previously-untouched code.
    actual PID holding a port, rather than trusting a job-control kill, is the reliable way to check
    before concluding a rebuilt binary isn't behaving as built.
 
+**2026-09-04 PR #11 seventh review-response round** — pushing the round above (head `a02e73a`) got
+one more plain PR comment, a P2 in the sixth round's own fix.
+
+1. **`verifyPairingToken`'s identical response still leaked device existence through response
+   timing.** The no-secret-minted path (`pgx.ErrNoRows`) returned immediately; the
+   wrong-token-on-a-real-secret path always ran `bcrypt.CompareHashAndPassword`, whose cost is the
+   entire point of using bcrypt over a plain hash comparison. Both answered the same 401 status and
+   body, but a remote timing measurement could still tell "this device name has a pairing secret
+   minted" from "it doesn't" apart — the same device-name oracle the identical response text was
+   written to close, reopened through latency instead of content.
+
+   Fixed by adding `dummyPairingSecretHash` — a fixed bcrypt hash of a constant, non-secret string,
+   computed once at package init — and comparing pairingToken against it on the no-secret path too,
+   so both branches pay bcrypt's cost exactly once regardless of which one is taken.
+
+   The regression test needed for this is the one place this package deliberately breaks its own
+   otherwise-universal black-box (`api_test`, real infra, no mocks) convention:
+   `internal/api/pairing_timing_test.go` is `package api`, reaching a new unexported seam
+   (`bcryptCompareHashAndPassword`, a package variable normally aliasing
+   `bcrypt.CompareHashAndPassword`) to count invocations rather than asserting on wall-clock
+   duration — the reviewer's own suggestion, and the same reasoning this file's testing conventions
+   already give for avoiding anything that can spuriously fail on a slow CI runner. The test wraps
+   the seam, drives both code paths against real Postgres, and asserts each calls bcrypt exactly
+   once; verified it actually catches the regression by reverting the fix locally and confirming the
+   no-secret path drops to zero calls (test fails), then restoring it. Also corroborated live against
+   the real running server: five `curl` timing samples against a no-secret device and five against a
+   real-secret-wrong-token device landed in the same ~63–71ms band, with no separation between the
+   two groups.
+
+   Everything else from round 6 stands unchanged: still not single-use, still gated to
+   `platform_admin` for minting, still independent of ThingsBoard. `go test ./... -p 1 -count=1` and
+   a full `cmd/smoke -api` run (12/12) both stayed green.
+
 ## Architecture
 
 - `cmd/server/main.go` builds a `pgxpool.Pool` and a `redis.Client` from `DATABASE_URL`/

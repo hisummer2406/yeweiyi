@@ -154,6 +154,30 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 	}
 }
 
+// bcryptCompareHashAndPassword indirects bcrypt.CompareHashAndPassword through a package variable
+// so pairing_timing_test.go (the one internal, white-box test file in this package — see its own
+// doc comment for why) can count how many times verifyPairingToken actually invokes bcrypt, without
+// asserting on wall-clock timing. Not swapped anywhere outside that test.
+var bcryptCompareHashAndPassword = bcrypt.CompareHashAndPassword
+
+// dummyPairingSecretHash is a fixed bcrypt hash with no real secret behind it. verifyPairingToken
+// compares against it on the "no secret has ever been minted for this deviceName" path — see that
+// function's doc comment for why a real comparison has to happen there too, not just on the
+// "wrong token" path.
+var dummyPairingSecretHash = mustHashDummyPairingSecret()
+
+func mustHashDummyPairingSecret() string {
+	hash, err := bcrypt.GenerateFromPassword([]byte("yeweiyi-cloud-fixed-dummy-value-for-pairing-timing-parity"), bcrypt.DefaultCost)
+	if err != nil {
+		// bcrypt.GenerateFromPassword only errors on a cost outside its documented range or a
+		// too-long input; bcrypt.DefaultCost and a fixed short string can never trigger either, so
+		// this can only mean bcrypt itself is broken — not a condition any caller could recover
+		// from, and this runs at package init, before any request has been served.
+		panic("api: failed to hash the fixed dummy pairing secret: " + err.Error())
+	}
+	return string(hash)
+}
+
 // verifyPairingToken confirms pairingToken matches deviceName's currently-minted pairing secret.
 //
 // The two failure causes — no secret has ever been minted for deviceName, and one was minted but
@@ -163,10 +187,21 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 // provisioned device answered differently than any token on a device nobody has ever minted a
 // secret for, an attacker could enumerate real device names by bind attempts alone.
 //
-// bcrypt.CompareHashAndPassword is already constant-time with respect to its inputs (it derives a
-// fresh hash from the candidate and compares digests, not bytes of the candidate itself against a
-// stored secret), so no separate subtle.ConstantTimeCompare is needed the way round 5's now-replaced
-// ThingsBoard-token comparison used one.
+// **Both causes must also cost the same to answer, not just look the same** — found in review of
+// PR #11 (round 7). The first version of this function returned immediately on
+// pgx.ErrNoRows, paying no bcrypt cost at all, while the wrong-token path always ran
+// bcrypt.CompareHashAndPassword — a deliberately expensive operation (that expense is the whole
+// point of using bcrypt over a plain hash). Even with byte-identical response bodies, the
+// no-such-secret path answered measurably faster, letting a remote timing measurement recover the
+// same "is this a real device name" oracle the identical response text was meant to deny. Fixed by
+// comparing against dummyPairingSecretHash on the no-secret path too, so both branches invoke
+// bcryptCompareHashAndPassword exactly once regardless of which one is taken.
+//
+// bcrypt.CompareHashAndPassword is already constant-time with respect to its two arguments (it
+// derives a fresh hash from the candidate and compares digests, not bytes of the candidate itself
+// against a stored secret), so no separate subtle.ConstantTimeCompare is needed the way round 5's
+// now-replaced ThingsBoard-token comparison used one — that property is about comparing two known
+// digests, not about equalizing the cost of two different code paths, which is what this fix does.
 func verifyPairingToken(ctx context.Context, deps Deps, deviceName, pairingToken string) (bool, error) {
 	if pairingToken == "" {
 		return false, nil
@@ -175,12 +210,13 @@ func verifyPairingToken(ctx context.Context, deps Deps, deviceName, pairingToken
 	hash, err := deps.Queries.GetDevicePairingSecretHash(ctx, deviceName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			bcryptCompareHashAndPassword([]byte(dummyPairingSecretHash), []byte(pairingToken))
 			return false, nil
 		}
 		return false, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(pairingToken)); err != nil {
+	if err := bcryptCompareHashAndPassword([]byte(hash), []byte(pairingToken)); err != nil {
 		return false, nil
 	}
 	return true, nil
