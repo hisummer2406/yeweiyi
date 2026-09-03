@@ -48,7 +48,11 @@ type Querier interface {
 	// Only a command we have actually sent can be acked.
 	MarkControlCommandAcked(ctx context.Context, arg MarkControlCommandAckedParams) (ControlCommand, error)
 	// Applies the device's asynchronous outcome. Guarded so that a terminal row stays terminal: a
-	// duplicate cmdResult, or one arriving after expiry, must not rewrite the record.
+	// duplicate cmdResult, or one arriving after expiry, must not rewrite the record. Also guarded on
+	// device_name, which the ingestion subscription determines from the connection the message arrived
+	// on, not from anything inside the payload: without this, device B reporting a commandId that
+	// belongs to device A would be able to complete A's command and have the audit trail misattribute
+	// the result to B, breaking the per-device isolation the rest of this schema assumes.
 	MarkControlCommandFinished(ctx context.Context, arg MarkControlCommandFinishedParams) (ControlCommand, error)
 	// Status transitions are all guarded by the *current* status rather than written unconditionally.
 	// Nothing else enforces the state machine — a late ACK arriving after the sweep already expired a

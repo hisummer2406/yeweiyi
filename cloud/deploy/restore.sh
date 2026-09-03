@@ -48,15 +48,53 @@ gzip -dc "$DIR/business.sql.gz" | docker exec -i "$PG_CONTAINER" psql -U "$PG_US
 echo "==> 恢复 ThingsBoard 内置库"
 # ThingsBoard 必须先停：它持有连接并缓存实体，边写库边跑会得到一个自相矛盾的状态。
 docker stop "$TB_CONTAINER" >/dev/null
-docker start "$TB_CONTAINER" >/dev/null
-echo "    等待其内置 PostgreSQL 就绪"
+
+# 之前这里在停容器后紧接着 `docker start` 整个容器，再等内置 PostgreSQL 就绪就直接灌库——但
+# 启动这个容器等于同时启动了 ThingsBoard 应用（两者由镜像自带的 start-tb.sh 一起拉起，是同一个
+# 进程树，不是两个可以分别控制的服务），应用可能在 psql 跑之前就已经连接、缓存甚至写库了，正是
+# 上面那句注释说"必须先停"要避免的状态，只是被这几行自己違反了。PR #11 复核发现。
+#
+# 修法：恢复期间只启动内置 PostgreSQL，不启动应用——用一个临时容器，挂同一份数据卷
+# （--volumes-from 对已停止的容器同样有效），但把入口覆盖成只跑 start-tb.sh 在启动 Java 之前
+# 会先调用的 start-db.sh，然后原地等待，这样 Java 进程根本不会被起来。真正的 ThingsBoard 容器
+# 恢复完成、临时容器被清理之后才启动，此时是在已恢复好的数据上冷启动，不需要再多一次重启来丢弃
+# 恢复前缓存的状态——那个状态这次压根没产生过。
+TB_IMAGE="$(docker inspect "$TB_CONTAINER" --format '{{.Config.Image}}')"
+RESTORE_CONTAINER="${TB_CONTAINER}-restore-db"
+docker rm -f "$RESTORE_CONTAINER" >/dev/null 2>&1 || true
+
+cleanup_restore_container() {
+  docker exec -u thingsboard "$RESTORE_CONTAINER" stop-db.sh >/dev/null 2>&1 || true
+  docker rm -f "$RESTORE_CONTAINER" >/dev/null 2>&1 || true
+}
+trap cleanup_restore_container EXIT
+
+docker run -d --name "$RESTORE_CONTAINER" --volumes-from "$TB_CONTAINER" \
+  --entrypoint bash "$TB_IMAGE" -c 'start-db.sh && tail -f /dev/null' >/dev/null
+
+echo "    等待其内置 PostgreSQL 就绪（应用不会随之启动）"
+ready=0
 for _ in $(seq 1 60); do
-  docker exec -u thingsboard "$TB_CONTAINER" pg_isready -U thingsboard -d thingsboard >/dev/null 2>&1 && break
+  if docker exec -u thingsboard "$RESTORE_CONTAINER" pg_isready -U thingsboard -d thingsboard >/dev/null 2>&1; then
+    ready=1
+    break
+  fi
   sleep 2
 done
-gzip -dc "$DIR/thingsboard.sql.gz" | docker exec -i -u thingsboard "$TB_CONTAINER" psql -U thingsboard -d thingsboard -q
-echo "    重启 ThingsBoard 以丢弃恢复前的缓存"
-docker restart "$TB_CONTAINER" >/dev/null
+# 明确失败而不是超时后仍往下跑 psql：对着一个没就绪的库执行恢复，得到的错误会具有误导性
+# （看起来像恢复坏了，其实是等待没做完），不如在这里就说清楚。
+if [[ $ready -ne 1 ]]; then
+  echo "!!! 等待内置 PostgreSQL 就绪超时，未执行恢复。" >&2
+  exit 1
+fi
+
+gzip -dc "$DIR/thingsboard.sql.gz" | docker exec -i -u thingsboard "$RESTORE_CONTAINER" psql -U thingsboard -d thingsboard -q
+
+cleanup_restore_container
+trap - EXIT
+
+echo "    启动 ThingsBoard"
+docker start "$TB_CONTAINER" >/dev/null
 
 echo
 echo "恢复完成。请运行冒烟测试确认："

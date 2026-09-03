@@ -39,9 +39,11 @@ docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
 # ThingsBoard 首次启动要装 schema，2–4 分钟。等它就绪：
 until curl -sf http://localhost:8081/login >/dev/null; do sleep 5; done
 
-# 业务库迁移
+# 业务库迁移。镜像 tag 必须与 images.txt/offline-load.sh 导入的那个完全一致——写 :latest
+# 会在内网机器上直接找不到本地镜像（不联网，没有 latest 可拉），此前正是这个不一致导致
+# 从零开始的离线安装无法完成迁移。
 export DATABASE_URL="postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"
-docker run --rm --network host -v "$PWD/migrations:/m" migrate/migrate \
+docker run --rm --network host -v "$PWD/migrations:/m" migrate/migrate:v4.18.1 \
   -path=/m -database "$DATABASE_URL" up
 
 # ThingsBoard 侧配置（设备模板）。幂等，可重复执行。

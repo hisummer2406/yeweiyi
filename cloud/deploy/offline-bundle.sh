@@ -72,8 +72,14 @@ cp "$ROOT/docker-compose.yml" "$ROOT/docker-compose.thingsboard.yml" \
 cp "$ROOT/config.example.yaml" "$STAGE/"
 cp -r "$ROOT/db/migrations" "$STAGE/migrations"
 cp -r "$HERE/profiles" "$STAGE/profiles"
-cp -r "$HERE/tb-config" "$STAGE/tb-config"
-rm -rf "$STAGE/tb-config/current"
+# cmd/tbconfig's default -dir is "deploy/tb-config", resolved relative to the CWD it's run from —
+# which the README has as this bundle's own root. So tb-config/ has to live at deploy/tb-config
+# under the bundle root, not flattened to tb-config/ alongside bin/ and migrations/, or
+# `./bin/tbconfig apply` silently finds nothing to apply (found in review of PR #11: this mismatch
+# meant a from-scratch offline install could never actually configure ThingsBoard).
+mkdir -p "$STAGE/deploy"
+cp -r "$HERE/tb-config" "$STAGE/deploy/tb-config"
+rm -rf "$STAGE/deploy/tb-config/current"
 cp "$HERE/images.txt" "$HERE/offline-load.sh" "$HERE/preflight.sh" \
    "$HERE/backup.sh" "$HERE/restore.sh" "$HERE/gen-certs.sh" "$HERE/README.md" "$STAGE/"
 cp "$HERE/LICENSE-thingsboard.txt" "$STAGE/"

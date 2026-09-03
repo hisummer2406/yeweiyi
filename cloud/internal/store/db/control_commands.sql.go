@@ -255,19 +255,21 @@ func (q *Queries) MarkControlCommandAcked(ctx context.Context, arg MarkControlCo
 
 const markControlCommandFinished = `-- name: MarkControlCommandFinished :one
 UPDATE control_commands
-SET status        = $2,
-    error_code    = $3,
-    error_reason  = $4,
-    result_detail = $5,
-    finished_at   = CASE WHEN $2 = 'executing' THEN finished_at ELSE now() END,
+SET status        = $3,
+    error_code    = $4,
+    error_reason  = $5,
+    result_detail = $6,
+    finished_at   = CASE WHEN $3 = 'executing' THEN finished_at ELSE now() END,
     updated_at    = now()
 WHERE command_id = $1
+  AND device_name = $2
   AND status IN ('sent', 'received', 'executing')
 RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
 `
 
 type MarkControlCommandFinishedParams struct {
 	CommandID    pgtype.UUID `json:"command_id"`
+	DeviceName   string      `json:"device_name"`
 	Status       string      `json:"status"`
 	ErrorCode    pgtype.Text `json:"error_code"`
 	ErrorReason  pgtype.Text `json:"error_reason"`
@@ -275,10 +277,15 @@ type MarkControlCommandFinishedParams struct {
 }
 
 // Applies the device's asynchronous outcome. Guarded so that a terminal row stays terminal: a
-// duplicate cmdResult, or one arriving after expiry, must not rewrite the record.
+// duplicate cmdResult, or one arriving after expiry, must not rewrite the record. Also guarded on
+// device_name, which the ingestion subscription determines from the connection the message arrived
+// on, not from anything inside the payload: without this, device B reporting a commandId that
+// belongs to device A would be able to complete A's command and have the audit trail misattribute
+// the result to B, breaking the per-device isolation the rest of this schema assumes.
 func (q *Queries) MarkControlCommandFinished(ctx context.Context, arg MarkControlCommandFinishedParams) (ControlCommand, error) {
 	row := q.db.QueryRow(ctx, markControlCommandFinished,
 		arg.CommandID,
+		arg.DeviceName,
 		arg.Status,
 		arg.ErrorCode,
 		arg.ErrorReason,

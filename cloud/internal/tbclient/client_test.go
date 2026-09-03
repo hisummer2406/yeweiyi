@@ -2,10 +2,14 @@ package tbclient_test
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 
 	"yeweiyi-cloud/internal/tbclient"
 )
@@ -136,6 +140,135 @@ func TestClient_DoesNotRetryForever(t *testing.T) {
 	if logins > 2 {
 		t.Errorf("logged in %d times; the retry must happen at most once", logins)
 	}
+}
+
+// TestClient_TokenRefreshesBeforeKnownJWTExpiry covers the bug found in review of PR #11: Token()
+// used to hand out the cached JWT as long as it was non-empty, never checking whether it had
+// actually expired. A process that outlives a JWT's lifetime (ThingsBoard's default is ~2.5h) would
+// then keep re-authenticating a WebSocket with the same stale token on every reconnect, and — absent
+// a lucky REST 401 to force a refresh — telemetry and command results would stop reaching the
+// ingester until the process was restarted. Token() must now notice a token is past its own exp
+// claim and log in again on its own, with no help from a 401.
+func TestClient_TokenRefreshesBeforeKnownJWTExpiry(t *testing.T) {
+	var logins int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/auth/login" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		logins++
+		var tok string
+		if logins == 1 {
+			tok = makeJWT(time.Now().Add(-1 * time.Hour)) // already expired the instant it's issued
+		} else {
+			tok = makeJWT(time.Now().Add(2 * time.Hour))
+		}
+		w.Write([]byte(`{"token":"` + tok + `","refreshToken":"r"}`))
+	}))
+	defer srv.Close()
+
+	c, err := tbclient.New(tbclient.Config{BaseURL: srv.URL, Username: "u@example.com", Password: "p"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx := context.Background()
+
+	first, err := c.Token(ctx)
+	if err != nil {
+		t.Fatalf("first Token(): %v", err)
+	}
+	second, err := c.Token(ctx)
+	if err != nil {
+		t.Fatalf("second Token(): %v", err)
+	}
+	if second == first {
+		t.Fatal("Token() kept handing out an already-expired JWT instead of refreshing it")
+	}
+	third, err := c.Token(ctx)
+	if err != nil {
+		t.Fatalf("third Token(): %v", err)
+	}
+	if third != second {
+		t.Fatal("Token() re-logged in even though the cached token was not yet near expiry")
+	}
+	if logins != 2 {
+		t.Errorf("logins = %d, want 2 (initial + the one forced by the expired cached token)", logins)
+	}
+}
+
+// TestSubscribeTelemetry_ReconnectsWithFreshTokenAfterWSAuthError covers the WebSocket half of the
+// same PR #11 finding: an in-band auth rejection on the telemetry socket must invalidate the cached
+// token, not just fail the current subscription, so the ingester's next reconnect attempt logs in
+// again instead of handing the same rejected token straight back to a new socket.
+func TestSubscribeTelemetry_ReconnectsWithFreshTokenAfterWSAuthError(t *testing.T) {
+	var logins int
+	upgrader := websocket.Upgrader{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		logins++
+		// A far-future expiry, so only the explicit invalidation below (not the exp check) can be
+		// responsible for a second login.
+		tok := makeJWT(time.Now().Add(2 * time.Hour))
+		w.Write([]byte(`{"token":"` + tok + `","refreshToken":"r"}`))
+	})
+	mux.HandleFunc("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		if _, _, err := conn.ReadMessage(); err != nil { // the authCmd
+			return
+		}
+		if _, _, err := conn.ReadMessage(); err != nil { // the subscribe cmd
+			return
+		}
+		// Simulate ThingsBoard rejecting the (stub) auth token in-band.
+		conn.WriteJSON(map[string]any{"cmdId": 0, "errorCode": 401, "errorMsg": "authentication failed"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c, err := tbclient.New(tbclient.Config{BaseURL: srv.URL, Username: "u@example.com", Password: "p"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx := context.Background()
+
+	stream, err := c.SubscribeTelemetry(ctx, "device-1", nil)
+	if err != nil {
+		t.Fatalf("SubscribeTelemetry: %v", err)
+	}
+	defer stream.Close()
+
+	select {
+	case streamErr := <-stream.Err:
+		if streamErr == nil {
+			t.Fatal("expected the stream to report the in-band auth rejection")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the stream to report the auth rejection")
+	}
+
+	if logins != 1 {
+		t.Fatalf("logins after the rejection = %d, want 1", logins)
+	}
+	if _, err := c.Token(ctx); err != nil {
+		t.Fatalf("Token() after invalidation: %v", err)
+	}
+	if logins != 2 {
+		t.Errorf("logins after re-requesting a token = %d, want 2 (the rejection must have cleared the cache)", logins)
+	}
+}
+
+// makeJWT builds an unsigned-but-well-formed JWT carrying only an exp claim — enough for jwtExpiry
+// to parse, without needing a real signing key. ThingsBoard hands us a token we already trust
+// (it came back from our own authenticated login call), so this project never verifies the
+// signature either; the stub matches that.
+func makeJWT(exp time.Time) string {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp.Unix())))
+	return header + "." + payload + ".sig"
 }
 
 func contains(haystack, needle string) bool {

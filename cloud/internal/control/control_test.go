@@ -381,6 +381,55 @@ func TestApplyResult_DuplicateDoesNotRewriteTerminalState(t *testing.T) {
 	}
 }
 
+// TestApplyResult_CrossDeviceResultIsRejected pins the fix for a real cross-tenant bug found in
+// review of PR #11: MarkControlCommandFinished used to guard only on command_id, so device B
+// reporting a cmdResult carrying a commandId that actually belongs to device A could complete A's
+// command — and the audit trail would misattribute the outcome to B — breaking the per-device
+// isolation the rest of this schema assumes. The guard must also match device_name, which
+// ApplyResult receives from the ingestion subscription itself, not from anything inside the
+// device's payload, so it cannot be spoofed by the reporting device.
+func TestApplyResult_CrossDeviceResultIsRejected(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
+	ctx := context.Background()
+
+	if _, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute)); err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	commandID := f.sender.lastEnv.CommandID
+
+	foreignDevice := "ctl-foreign-" + f.device
+	_, applied, err := f.svc.ApplyResult(ctx, foreignDevice, protocol.CmdResult{
+		CommandID: commandID,
+		Status:    protocol.CmdStatusSucceeded,
+		TSMs:      time.Now().UnixMilli(),
+	})
+	if err != nil {
+		t.Fatalf("a foreign device's result must not be a hard error: %v", err)
+	}
+	if applied {
+		t.Fatal("device B must not be able to complete device A's command")
+	}
+
+	stored := getCommand(t, f, commandID)
+	if stored.Status == protocol.CmdStatusSucceeded {
+		t.Fatal("the command was completed by a report from a device that does not own it")
+	}
+	if stored.DeviceName != f.device {
+		t.Errorf("device_name on the record changed to %q, want %q", stored.DeviceName, f.device)
+	}
+
+	// The real owner must still be able to complete it — this isn't a blanket rejection of the
+	// commandId, only of the mismatched device.
+	_, applied, err = f.svc.ApplyResult(ctx, f.device, protocol.CmdResult{
+		CommandID: commandID,
+		Status:    protocol.CmdStatusSucceeded,
+		TSMs:      time.Now().UnixMilli(),
+	})
+	if err != nil || !applied {
+		t.Fatalf("the owning device should still be able to complete its own command: applied=%v err=%v", applied, err)
+	}
+}
+
 func TestApplyResult_UnknownCommandIsIgnored(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
 

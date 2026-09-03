@@ -16,6 +16,7 @@ package tbclient
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,7 +98,19 @@ type Client struct {
 	token        string
 	refreshToken string
 	tokenSetAt   time.Time
+	tokenExpiry  time.Time // zero means "unknown, treat as expiring at tokenSetAt+fallbackTokenTTL"
 }
+
+// fallbackTokenTTL is used only when a cached token's expiry cannot be determined (it is not a
+// well-formed JWT, or its payload has no exp claim) — a safety net so Token() still refreshes
+// eventually instead of caching the value forever. Chosen shorter than ThingsBoard's ~2.5h default
+// JWT lifetime so the fallback errs toward refreshing too early, not too late.
+const fallbackTokenTTL = 2 * time.Hour
+
+// tokenRefreshSkew is how far ahead of a known expiry Token() proactively refreshes, so a caller
+// about to use the token (e.g. authenticating a new WebSocket connection) does not race the exact
+// expiry instant.
+const tokenRefreshSkew = 30 * time.Second
 
 // New builds a Client. It performs no I/O; the first request logs in lazily.
 func New(cfg Config) (*Client, error) {
@@ -141,20 +154,31 @@ func (c *Client) Login(ctx context.Context) error {
 		return errors.New("tbclient: login returned an empty token")
 	}
 
+	setAt := time.Now()
+	expiry, ok := jwtExpiry(lr.Token)
+	if !ok {
+		expiry = setAt.Add(fallbackTokenTTL)
+	}
+
 	c.mu.Lock()
-	c.token, c.refreshToken, c.tokenSetAt = lr.Token, lr.RefreshToken, time.Now()
+	c.token, c.refreshToken, c.tokenSetAt, c.tokenExpiry = lr.Token, lr.RefreshToken, setAt, expiry
 	c.mu.Unlock()
 	return nil
 }
 
-// Token returns the cached JWT, logging in first if there is none. The WebSocket subscriber needs
-// the raw token because ThingsBoard's telemetry socket authenticates by query parameter, not by
-// header.
+// Token returns the cached JWT, logging in first if there is none or if it is at or near its known
+// expiry. Checking expiry here — not just emptiness — matters because this process is expected to
+// outlive many JWTs (ThingsBoard's default lifetime is ~2.5h): without it, a cached-but-expired
+// token is handed out forever, and every 401-retry-once caller (do(), and the WebSocket subscriber
+// below) keeps re-authenticating a socket with the same stale token on every reconnect.
+//
+// The WebSocket subscriber needs the raw token because ThingsBoard's telemetry socket authenticates
+// by an in-band command, not by header.
 func (c *Client) Token(ctx context.Context) (string, error) {
 	c.mu.Lock()
-	tok := c.token
+	tok, expiry := c.token, c.tokenExpiry
 	c.mu.Unlock()
-	if tok != "" {
+	if tok != "" && time.Now().Before(expiry.Add(-tokenRefreshSkew)) {
 		return tok, nil
 	}
 	if err := c.Login(ctx); err != nil {
@@ -163,6 +187,38 @@ func (c *Client) Token(ctx context.Context) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.token, nil
+}
+
+// invalidateToken clears the cached JWT so the next Token() call re-authenticates unconditionally,
+// regardless of what its recorded expiry says. Used when something has demonstrated the cached
+// token no longer works — a WebSocket rejecting it — rather than waiting for expiry to catch up.
+func (c *Client) invalidateToken() {
+	c.mu.Lock()
+	c.token, c.tokenExpiry = "", time.Time{}
+	c.mu.Unlock()
+}
+
+// jwtExpiry extracts the exp claim (unix seconds) from a JWT's payload segment, without verifying
+// the signature — the token was just handed to us by ThingsBoard over our own authenticated login
+// call, so there is nothing to verify against here; this only reads a value ThingsBoard already
+// vouched for. Returns ok=false for anything that is not a well-formed JWT with an exp claim (e.g.
+// a test stub token), so callers can fall back to a conservative estimate instead.
+func jwtExpiry(token string) (time.Time, bool) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return time.Time{}, false
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return time.Time{}, false
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp == 0 {
+		return time.Time{}, false
+	}
+	return time.Unix(claims.Exp, 0), true
 }
 
 // do performs an authenticated request, transparently re-logging-in once on a 401. ThingsBoard JWTs

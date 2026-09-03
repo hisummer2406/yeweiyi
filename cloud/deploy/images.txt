@@ -9,3 +9,4 @@
 thingsboard/tb-postgres:4.2.1.1 sha256:901dffa5c70f475f6e9bd57433aad0c58cf7d5ae2426fb2cad49eff970ce6f03
 postgres:16                     sha256:f1c3376c26f2609ab9f29f71f824103fe2fcd8ee0346485cb6122a4f93df6f94
 redis:7                         sha256:71da9275c5f3fcb97d0fa0c8c5b36cc995327265420f17a04bfd544f458059f7
+migrate/migrate:v4.18.1         sha256:f21c436af23c282f4516b00ba3e93bccf5c5fe5cd52530fd5c319a936998f539

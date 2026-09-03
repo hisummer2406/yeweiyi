@@ -301,14 +301,16 @@ func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protoc
 
 	updated, err := s.q.MarkControlCommandFinished(ctx, db.MarkControlCommandFinishedParams{
 		CommandID:    commandID,
+		DeviceName:   deviceName,
 		Status:       status,
 		ErrorCode:    text(res.ErrorCode),
 		ErrorReason:  text(res.Reason),
 		ResultDetail: res.Detail,
 	})
 	if err != nil {
-		// Either no such command, or its status guard refused the move because it is already
-		// terminal. Both are normal; neither should abort ingestion.
+		// No such command, its status guard refused the move because it is already terminal, or
+		// deviceName didn't match the command's owner (a device reporting a foreign commandId).
+		// All three are normal or actively adversarial; none should abort ingestion.
 		return db.ControlCommand{}, false, nil
 	}
 

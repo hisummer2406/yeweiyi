@@ -199,6 +199,92 @@ func TestUplink_SnapshotReachesBackend(t *testing.T) {
 	}
 }
 
+// TestLatestSnapshot_DropsTankRemovedSinceReconfiguration is the regression test for the PR #11
+// review finding: ThingsBoard keeps a key's last-ever reported value as its "latest" forever, even
+// after the device stops sending that key. LatestValues (a per-key merge) would keep resurrecting a
+// tank that no longer exists; LatestSnapshot must not.
+func TestLatestSnapshot_DropsTankRemovedSinceReconfiguration(t *testing.T) {
+	c := newTestClient(t)
+	dev, token := provisionDevice(t, c)
+
+	// Report as a 2-tank device first, so tank2.* keys get a real "latest value" in ThingsBoard.
+	twoTank := connectSim(t, devicesim.Config{AccessToken: token, Tanks: 2})
+	if _, err := twoTank.PublishSnapshot(); err != nil {
+		t.Fatalf("PublishSnapshot (2 tanks): %v", err)
+	}
+	eventually(t, settleTimeout, "the 2-tank snapshot to land", func() error {
+		values, err := c.LatestTimeseries(context.Background(), dev.ID.ID, []string{protocol.TankKey(2, protocol.KeyOilLevelMm)})
+		if err != nil {
+			return err
+		}
+		if len(values) == 0 {
+			return errors.New("tank2 telemetry not stored yet")
+		}
+		return nil
+	})
+	twoTank.Disconnect()
+
+	// The same physical device (same access token, same ThingsBoard device entity) gets
+	// reconfigured down to 1 tank and reconnects.
+	oneTank := connectSim(t, devicesim.Config{AccessToken: token, Tanks: 1})
+	sent, err := oneTank.PublishSnapshot()
+	if err != nil {
+		t.Fatalf("PublishSnapshot (1 tank): %v", err)
+	}
+
+	// Wait for ThingsBoard's own tankCount key to actually read "1" before trusting LatestSnapshot's
+	// answer — a fresh devicesim.Device restarts SnapshotSeq at 1, the same value the first (2-tank)
+	// publish above also used, so polling on SnapshotSeq equality here could spuriously match the
+	// stale snapshot instead of waiting for the real one.
+	eventually(t, settleTimeout, "ThingsBoard's tankCount to read back as 1", func() error {
+		values, err := c.LatestTimeseries(context.Background(), dev.ID.ID, []string{protocol.KeyTankCount})
+		if err != nil {
+			return err
+		}
+		v, ok := values[protocol.KeyTankCount]
+		if !ok {
+			return errors.New("tankCount not stored yet")
+		}
+		if v.Value != "1" {
+			return fmt.Errorf("tankCount reads back as %q, want \"1\"", v.Value)
+		}
+		return nil
+	})
+
+	ts, values, err := c.LatestSnapshot(context.Background(), dev.ID.ID)
+	if err != nil {
+		t.Fatalf("LatestSnapshot: %v", err)
+	}
+	snap, err := protocol.ParseSnapshot(ts, values)
+	if err != nil {
+		t.Fatalf("ParseSnapshot: %v", err)
+	}
+	if snap.SnapshotSeq != sent.SnapshotSeq {
+		t.Fatalf("snapshotSeq %d, want %d", snap.SnapshotSeq, sent.SnapshotSeq)
+	}
+
+	if len(snap.Tanks) != 1 {
+		t.Fatalf("LatestSnapshot returned %d tanks, want 1 — the removed tank2 should not reappear: %+v", len(snap.Tanks), snap.Tanks)
+	}
+	if snap.Tanks[0].Index != 1 {
+		t.Errorf("the surviving tank has index %d, want 1", snap.Tanks[0].Index)
+	}
+
+	// LatestValues, unaffected by this fix, is expected to still show the bug — this is what
+	// proves LatestSnapshot is doing real work above, not just returning the same thing.
+	oldTS, oldValues, err := c.LatestValues(context.Background(), dev.ID.ID, protocol.SnapshotKeys(2))
+	if err != nil {
+		t.Fatalf("LatestValues: %v", err)
+	}
+	oldSnap, err := protocol.ParseSnapshot(oldTS, oldValues)
+	if err != nil {
+		t.Fatalf("ParseSnapshot of LatestValues result: %v", err)
+	}
+	if len(oldSnap.Tanks) != 2 {
+		t.Fatalf("expected LatestValues to still exhibit the stale-tank bug (2 tanks merged), got %d — if this now reads 1, LatestValues itself changed and this test's premise needs revisiting", len(oldSnap.Tanks))
+	}
+}
+
 // TestUplink_ClientAttributesReachBackend covers the attributes half of the data model — the
 // configuration a device reports once, rather than on the snapshot cadence.
 func TestUplink_ClientAttributesReachBackend(t *testing.T) {

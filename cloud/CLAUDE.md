@@ -1679,6 +1679,110 @@ db/queries/          # sqlc input: devices, users, user_devices, control_command
 docs/                # protocol spec, architecture baseline, cross-repo protocol reconciliation
 ```
 
+**2026-09-03 PR #11 review-response pass** — fixed all 4 P1s and both P2s from the independent
+review recorded on PR #11 (head `f95b33e`), plus the one nit. Nothing here is new scope; each item
+below is a fix for something the review found already built.
+
+1. **Cross-device `cmdResult` could complete another device's command (P1, real cross-tenant bug).**
+   `MarkControlCommandFinished` (`db/queries/control_commands.sql`) guarded its transition on
+   `command_id` alone; `device_name` — which `internal/ingest` determines from *which device's
+   subscription the message arrived on*, not from anything inside the payload — was never checked.
+   Device B reporting a commandId that actually belonged to device A could therefore move A's
+   command to executing/succeeded/failed, and the audit trail would misattribute the result to B.
+   Fixed by adding `AND device_name = $2` to the guard and threading `deviceName` through
+   `control.Service.ApplyResult` into the sqlc call. Pinned by
+   `TestApplyResult_CrossDeviceResultIsRejected` (`internal/control/control_test.go`): device B's
+   report does not apply, the record's `device_name` and status are untouched, and the real owner
+   can still complete it afterward.
+2. **A cached-but-expired ThingsBoard JWT could wedge the telemetry WebSocket indefinitely (P1).**
+   `tbclient.Client.Token` returned the cached token as long as it was non-empty, never checking
+   whether it had actually expired — so once the process outlived a JWT's ~2.5h lifetime, every
+   WebSocket reconnect (`internal/ingest`'s resubscribe loop) kept authenticating with the same
+   stale token, with no REST 401 in that path to force a refresh. Fixed two ways: `Token()` now
+   parses the JWT's own `exp` claim (no signature verification needed — it is a value ThingsBoard
+   itself just vouched for over an authenticated login call) and proactively re-logs-in ahead of
+   that expiry, with a conservative fallback TTL when the cached value is not a well-formed JWT (a
+   test stub, say); and `SubscribeTelemetry`'s read loop now clears the cached token
+   (`invalidateToken`) on any WebSocket read error or in-band subscription error, so a rejected
+   socket cannot hand the same rejected token straight back to the next reconnect attempt.
+   `TestClient_TokenRefreshesBeforeKnownJWTExpiry` and
+   `TestSubscribeTelemetry_ReconnectsWithFreshTokenAfterWSAuthError`
+   (`internal/tbclient/client_test.go`) cover both paths with a stub HTTP/WS server — no ThingsBoard
+   needed, matching this package's existing style for provoking responses a healthy instance will
+   not produce on demand.
+3. **`LatestValues` could resurrect a tank the device stopped reporting (P2).** ThingsBoard keeps a
+   key's last-ever value as its "latest" forever, even after the key stops being published. The
+   telemetry-latest handler asked for a fixed, generously-sized key list (`SnapshotKeys(8)` by
+   default) and merged each key's own latest point independently — so after a device was
+   reconfigured from, say, two tanks to one, `tank2.*`'s stale values kept reappearing in every
+   read, permanently, stamped with whatever other key's timestamp happened to be newest. Fixed by
+   adding `tbclient.Client.LatestSnapshot`, which anchors on the `tankCount` key's own latest point
+   (pinning both the timestamp and how many `tankN.*` groups are still current) and re-reads exactly
+   that snapshot's fields at that exact timestamp via a `[ts, ts+1)` history query, instead of
+   trusting each key's independent "latest" cache. `latestTelemetryHandler` now calls this instead
+   of `LatestValues` + a caller-guessed tank count, and the `tanks` query-param override is gone
+   with it — the tank count now always comes from the device's own last report, not a client guess.
+   Verified against a real ThingsBoard container (not a stub — this is exactly the kind of
+   ThingsBoard-behavioural claim this project has been burned by trusting unverified before):
+   `TestLatestSnapshot_DropsTankRemovedSinceReconfiguration`
+   (`internal/tbclient/e2e_test.go`) publishes as a 2-tank device, reconnects the same access token
+   as a 1-tank device, and asserts `LatestSnapshot` reports only tank 1 while `LatestValues` (left
+   unfixed, as a generic primitive — this is a genuine caller misuse, not a bug in the primitive
+   itself) is separately asserted to still show the old bug, proving the fix does real work.
+4. **The offline installer's own documented commands could not complete on a clean air-gapped
+   machine (P1).** Two independent gaps: `deploy/README.md`'s migration step runs
+   `docker run ... migrate/migrate`, but that image was never in `deploy/images.txt` or the exported
+   bundle — a from-scratch install would try to pull it and fail with no network. And
+   `offline-bundle.sh` copied `tb-config/` to the bundle root, while `cmd/tbconfig`'s default `-dir`
+   is `deploy/tb-config` (correct for the dev convention of running `go run ./cmd/tbconfig` from the
+   repo root) — so the documented `./bin/tbconfig apply`, run from the bundle root as the README
+   says, silently found nothing to apply. Fixed by adding `migrate/migrate:v4.18.1` (pinned by
+   digest, same convention as the other three images) to `images.txt` and pinning the README's
+   `docker run` to that exact tag (a bare `migrate/migrate` resolves to `:latest`, which does not
+   exist locally on an offline machine — this was the same class of mismatch, just one line down),
+   and by nesting the bundle's copy under `deploy/tb-config` to match the tool's default instead of
+   changing the default itself (which would have broken the working dev convention). Verified by
+   actually running `offline-bundle.sh` and then `tbconfig apply` from the produced bundle's root
+   directory against the real local ThingsBoard — it applied the device profile template
+   successfully, where it previously would have silently no-opped.
+5. **`restore.sh` could let ThingsBoard's own application run during the restore it explicitly says
+   must not happen (P1).** The script's own comment says ThingsBoard must be stopped for the
+   restore because it "holds connections and caches entities" — but the code immediately below that
+   comment did `docker stop` followed by `docker start` on the *whole* container, and starting the
+   container starts the Java app in the same breath as its embedded PostgreSQL (they are one
+   process tree under the image's own `start-tb.sh`), so the app could already be connected or
+   writing by the time `psql` ran. Fixed by restoring into a throwaway container that shares the
+   real container's volumes (`--volumes-from`, which works against a stopped source container) but
+   overrides the entrypoint to run only `start-db.sh` — the same script `start-tb.sh` itself calls
+   before ever touching Java — so the app genuinely cannot be running during the restore; the real
+   container is started only afterward, on top of already-restored data. Also fixed the review's
+   second point in the same finding: the readiness-wait loop now fails explicitly on timeout instead
+   of falling through to `psql` regardless, which previously would have produced a confusing
+   "restore" error that was actually an unfinished wait. **Verified against the real local stack,
+   not just read**: took a real backup, ran the fixed `restore.sh` against it, confirmed via
+   `docker inspect`'s `StartedAt` that the real container was started only after the restore
+   completed, confirmed no leftover throwaway container, and confirmed ThingsBoard came back
+   healthy with the same device count as before.
+6. **The deployment smoke test's later steps never actually exercised the Go backend (P2).** Past
+   `/healthz`, the tool talked to ThingsBoard directly for telemetry read-back, alarm read-back, and
+   the control RPC — so API auth, device-ownership checks, the ingester, the `control_commands`
+   state machine, or even a broken migration could all be silently broken while `smoke` printed all
+   green, which does not support the install doc's "must be all-green" / "closes the RPC→ACK→result
+   loop" claims. `cmd/smoke` now seeds its own throwaway login user directly in the business
+   database (there is no self-registration endpoint, by design) when `-api` is given, exchanges it
+   for a real JWT through the real `POST /api/login`, and drives every step after that — device
+   bind, telemetry read-back, alarm read-back, command issue, terminal-result polling — through the
+   real REST API instead of ThingsBoard directly, finishing with a new step that confirms
+   `GET /api/audit` actually recorded `control.issue`/`control.ack`/`control.result` for that exact
+   commandId. The ThingsBoard-only fallback (no `-api`) is kept for the tool's original,
+   still-documented use case. Running this against the real local stack caught a real bug in the
+   smoke tool itself before it shipped: `GET /api/alarms` answers with a bare JSON array, not
+   `{"alarms": [...]}` like this project's other list endpoints — the first version of the new alarm
+   check assumed the wrapped shape and failed decoding a real response. Fixed and re-verified: 12
+   steps green end to end with `-api`, 8 green in the ThingsBoard-only fallback, and no leftover
+   devices or users in either database afterward.
+7. **Nit**: trailing whitespace on `deploy/profiles/small.yml`'s `"-c"` line, removed.
+
 ## Architecture
 
 - `cmd/server/main.go` builds a `pgxpool.Pool` and a `redis.Client` from `DATABASE_URL`/

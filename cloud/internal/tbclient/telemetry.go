@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"yeweiyi-cloud/internal/protocol"
 )
 
 // Attribute scopes, spelled as ThingsBoard spells them in REST paths.
@@ -74,6 +76,60 @@ func (c *Client) LatestValues(ctx context.Context, deviceID string, keys []strin
 		}
 	}
 	return ts, values, nil
+}
+
+// LatestSnapshot returns a *consistent* current tank snapshot for a device, unlike LatestValues:
+// LatestValues merges each requested key's own most recent point independently, with no guarantee
+// they were all reported together, and no way to tell that a key simply stopped being reported.
+//
+// Concretely, this closes a real bug: a device always publishes every field of one snapshot
+// atomically under one shared ts, but ThingsBoard tracks each key's "latest value" independently
+// and forever — so after a device is reconfigured from, say, two tanks down to one, tank2's keys
+// keep their last-ever reported values as their own "latest" with no expiry. A caller that asked
+// LatestValues for a fixed, generously-sized key list (SnapshotKeys(8), say) would then merge that
+// stale tank2 data back in on every read, forever, stamped with whatever other key's timestamp
+// happened to be newest — silently resurrecting a tank that no longer exists.
+//
+// LatestSnapshot avoids that by anchoring on the tankCount key's own latest point, which pins both
+// the snapshot's timestamp and how many "tankN.*" key groups are still current, then re-reads every
+// field of exactly that snapshot at that exact timestamp instead of trusting each key's independent
+// cache. Returns ts=0 and an empty map, with no error, for a device that has never reported.
+func (c *Client) LatestSnapshot(ctx context.Context, deviceID string) (int64, map[string]any, error) {
+	anchor, err := c.LatestTimeseries(ctx, deviceID, []string{protocol.KeyTankCount, protocol.KeySnapshotSeq})
+	if err != nil {
+		return 0, nil, fmt.Errorf("latest snapshot anchor for %s: %w", deviceID, err)
+	}
+	tc, ok := anchor[protocol.KeyTankCount]
+	if !ok {
+		return 0, map[string]any{}, nil // never reported
+	}
+	tankCount, err := strconv.Atoi(strings.TrimSpace(tc.Value))
+	if err != nil {
+		return 0, nil, fmt.Errorf("latest snapshot for %s: %s value %q is not an integer: %w", deviceID, protocol.KeyTankCount, tc.Value, err)
+	}
+
+	snapshotTs := tc.TS
+	keys := protocol.SnapshotKeys(tankCount)
+	// endMs is exclusive on ThingsBoard's history API, so +1 to include the anchor instant itself.
+	history, err := c.Timeseries(ctx, deviceID, TimeseriesQuery{Keys: keys, StartMs: snapshotTs, EndMs: snapshotTs + 1, Limit: 1})
+	if err != nil {
+		return 0, nil, fmt.Errorf("latest snapshot for %s: %w", deviceID, err)
+	}
+
+	values := make(map[string]any, len(history))
+	for k, points := range history {
+		for _, p := range points {
+			// Guard against a key whose only point in the window is not actually the anchor
+			// instant (should not happen given the [snapshotTs, snapshotTs+1) window, but a
+			// mismatched point silently rejoining a foreign snapshot is exactly the bug this
+			// method exists to avoid, so it is worth checking rather than trusting the range).
+			if p.TS == snapshotTs {
+				values[k] = p.Value
+				break
+			}
+		}
+	}
+	return snapshotTs, values, nil
 }
 
 // TimeseriesQuery describes a history read.

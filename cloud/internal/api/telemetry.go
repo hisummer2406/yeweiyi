@@ -3,7 +3,6 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,14 +23,6 @@ import (
 // locally — is what the legacy `oilcan:latest:{device}` Redis key did, and it is exactly the
 // duplicate-storage pattern being retired.
 
-// defaultTankCount bounds how many tanks are asked for when the caller does not say.
-//
-// ThingsBoard's timeseries API requires an explicit key list with no dependable "everything" mode,
-// so a tank count has to come from somewhere. Asking for more tanks than a device has is harmless —
-// absent keys simply do not come back — so this errs high enough to cover the hardware in the field
-// while keeping the query string a sane size.
-const defaultTankCount = 8
-
 // latestTelemetryHandler is GET /api/devices/:device/telemetry/latest.
 func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -45,13 +36,6 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		tanks := defaultTankCount
-		if v := c.Query("tanks"); v != "" {
-			if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 64 {
-				tanks = n
-			}
-		}
-
 		ctx := c.Request.Context()
 		dev, err := deps.TB.GetDeviceByName(ctx, device)
 		if err != nil {
@@ -59,7 +43,11 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		ts, values, err := deps.TB.LatestValues(ctx, dev.ID.ID, protocol.SnapshotKeys(tanks))
+		// LatestSnapshot, not LatestValues: it anchors on the device's own most recent tankCount
+		// report and re-reads exactly that snapshot's fields, so a tank the device stopped
+		// reporting (after being reconfigured to fewer tanks) does not keep reappearing forever —
+		// see its doc comment for why a per-key "latest value" merge gets this wrong.
+		ts, values, err := deps.TB.LatestSnapshot(ctx, dev.ID.ID)
 		if err != nil {
 			writeThingsBoardError(c, err, device)
 			return
