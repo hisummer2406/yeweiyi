@@ -1922,6 +1922,41 @@ code the second round's own new tests never happened to exercise together. Fixed
    value from there on, so the stored record does not carry the whitespace either).
    `TestIssue_RejectsWhitespaceOnlyReason` pins the correct sentinel/status for a `"   \t  "` reason.
 
+**2026-09-04 PR #11 fourth review-response round** — pushing the round above (head `c66e229`) got a
+fourth independent review (again recorded as a plain comment, since GitHub does not let a PR's own
+author request changes on their own PR). It credited every fix from the first three rounds and found
+exactly one more P1, in code none of those rounds' own new tests happened to touch.
+
+1. **A platform admin could read a device's REST data and issue commands against it, but was refused
+   a live alarm subscription for that same unbound device (P1).** Round 3 added a platform-admin
+   shortcut to `requireDeviceOwnership` (`internal/api/devices.go`), which every REST device-scoped
+   handler calls. `wsAlarmsHandler` (`internal/api/ws.go`) never routed through it — it authenticates
+   its own JWT independently of `authMiddleware`, because a WebSocket handshake cannot carry the
+   usual header, and had its own separate, unconditional `UserOwnsDevice` call that round 3's fix
+   never touched. So a platform admin could `POST` a command against an unbound device and read it
+   back over REST, yet get 403 from `GET /ws/alarms?device=<unbound>` — exactly the path a platform
+   on-call operator needs to work across every device, not just their own. Fixed by extracting the
+   actual rule (`userMayAccessDevice`) out of `requireDeviceOwnership` into its own function that
+   both the REST helper and `wsAlarmsHandler` call, so the two authorization paths cannot drift apart
+   a second time — a lesson from round 3's fix only catching one of the two call sites the first
+   time.
+   `TestWSAlarms_PlatformAdminCanSubscribeToUnboundDevice` and `TestWSAlarms_ForbiddenForUnownedDevice`
+   (new file, `internal/api/ws_test.go` — `/ws/alarms` had no automated coverage at all before this,
+   only the 2026-08-20 manual verification recorded further down this file) cover both directions.
+
+   **Writing that test surfaced a real, separate gorilla/websocket gotcha, not a bug in the fix**:
+   the first version of the test retried `conn.ReadMessage()` after each deadline timeout while
+   republishing, and failed deterministically about half the time — with server-side logs showing
+   every single publish being received and written to the connection successfully. Root cause:
+   gorilla/websocket documents that once `ReadMessage` returns *any* error, including a plain
+   deadline timeout, that error is permanent — every later call on the same `Conn` returns the same
+   cached error, no matter how much data arrives afterward. A retry loop built around "read, and on
+   timeout, read again" can therefore never recover once it hits its first timeout; the fix was to
+   retry the *publish* side instead (a background goroutine republishing every 200ms) while calling
+   `ReadMessage` exactly once with a generous overall deadline. Worth remembering for any future test
+   against this or any other gorilla/websocket connection: never loop `ReadMessage` across more than
+   one deadline on the same `Conn`.
+
 ## Architecture
 
 - `cmd/server/main.go` builds a `pgxpool.Pool` and a `redis.Client` from `DATABASE_URL`/

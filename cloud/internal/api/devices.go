@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,23 +12,36 @@ import (
 	"yeweiyi-cloud/internal/store/db"
 )
 
-// requireDeviceOwnership checks the authenticated user (from authMiddleware/wsAuthToken's JWT claims
-// — "userID" in gin's context) is bound to deviceName, writing the response and returning false if
-// not. Every handler that reads or writes one device's data calls this immediately after it knows
-// which device it's operating on, before touching that device's rows. Deliberately checked *before*
-// any "does this record/device even exist" check below it in the same handler, so an unauthorized
-// caller can't distinguish "not yours" from "doesn't exist" — otherwise the ownership boundary would
-// leak which device_name strings are real.
+// userMayAccessDevice is the one authorization rule every device-scoped read or write in this
+// package enforces: a platform admin may touch any device (mirroring
+// internal/control.Service.authorize's identical rule for issuing a command); everyone else must be
+// bound to it via user_devices.
 //
-// A platform admin is scoped to every device by definition and skips the user_devices check
-// entirely — mirroring internal/control.Service.authorize's identical rule for issuing a command.
-// Without this, a platform admin could issue a command against a device nobody has bound them to
-// (authorize already allows that) but then get 403 from every one of this function's other callers,
-// including GET /api/devices/:device/commands — the only endpoint that polls for that command's
-// result — so admin-issued commands against unbound devices could never be checked on. Found in
-// review of PR #11. This does not weaken the "same answer for unauthorized vs nonexistent" property
-// above: that property protects a caller from enumerating *other people's* devices, and a platform
-// admin is already trusted with visibility into all of them.
+// This is factored out of requireDeviceOwnership specifically so that a second, differently-shaped
+// caller — wsAlarmsHandler, which authenticates its own JWT independently of authMiddleware/gin
+// context because a WebSocket handshake cannot carry the usual middleware chain — cannot drift from
+// it again. That drift already happened once: round 3's review fixed the platform-admin shortcut
+// only in requireDeviceOwnership, which covers every REST device endpoint, but wsAlarmsHandler had
+// its own unconditional UserOwnsDevice call that nothing routed through the fix. The result was a
+// platform admin who could read a device's REST data and issue commands against it, yet be refused
+// a live alarm WebSocket for that same unbound device — found in review of PR #11 (round 4).
+func userMayAccessDevice(ctx context.Context, deps Deps, userID int64, role, deviceName string) (bool, error) {
+	if role == control.RolePlatformAdmin {
+		return true, nil
+	}
+	return deps.Queries.UserOwnsDevice(ctx, db.UserOwnsDeviceParams{UserID: userID, DeviceName: deviceName})
+}
+
+// requireDeviceOwnership checks the authenticated user (from authMiddleware's JWT claims —
+// "userID"/"role" in gin's context) may access deviceName per userMayAccessDevice, writing the
+// response and returning false if not. Every REST handler that reads or writes one device's data
+// calls this immediately after it knows which device it's operating on, before touching that
+// device's rows. Deliberately checked *before* any "does this record/device even exist" check below
+// it in the same handler, so an unauthorized caller can't distinguish "not yours" from "doesn't
+// exist" — otherwise the ownership boundary would leak which device_name strings are real. (A
+// platform admin bypassing that check entirely does not weaken this property: it protects a caller
+// from enumerating *other people's* devices, and an admin is already trusted with visibility into
+// all of them.)
 func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
 	userID, ok := c.Get("userID")
 	if !ok {
@@ -36,15 +50,10 @@ func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
 		return false
 	}
+	role, _ := c.Get("role")
+	roleStr, _ := role.(string)
 
-	if role, _ := c.Get("role"); role == control.RolePlatformAdmin {
-		return true
-	}
-
-	owns, err := deps.Queries.UserOwnsDevice(c.Request.Context(), db.UserOwnsDeviceParams{
-		UserID:     userID.(int64),
-		DeviceName: deviceName,
-	})
+	owns, err := userMayAccessDevice(c.Request.Context(), deps, userID.(int64), roleStr, deviceName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return false
