@@ -1,0 +1,29 @@
+{
+  "_comment": "一次进油（收油）。注意 netVolumeL 与 duringDeliveryVolumeL 的关系：油罐净增 18000L，但卸油期间加油机仍发出了 420L，所以实际到货量是 18420L。油库边进边卖时，只看罐的净变化会把到货量算少。",
+  "ts": 1756717200000,
+  "values": {
+    "stockEvent": {
+      "eventId": "in-1-1756713600000",
+      "tank": 1,
+      "direction": "IN",
+      "oilType": "0号柴油",
+      "beginTimeMs": 1756713600000,
+      "endTimeMs": 1756717200000,
+      "beginLevelMm": 402.0,
+      "endLevelMm": 1642.5,
+      "beginVolumeL": 6030.0,
+      "endVolumeL": 24030.0,
+      "beginWaterLevelMm": 18.3,
+      "endWaterLevelMm": 18.5,
+      "beginWaterVolumeL": 210.4,
+      "endWaterVolumeL": 212.7,
+      "beginWeightKg": 5065.2,
+      "endWeightKg": 20185.2,
+      "beginTempC": 22.1,
+      "endTempC": 23.4,
+      "netVolumeL": 18000.0,
+      "duringDeliveryVolumeL": 420.0,
+      "tsMs": 1756717200000
+    }
+  }
+}

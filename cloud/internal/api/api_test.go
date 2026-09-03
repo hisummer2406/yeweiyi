@@ -1,5 +1,5 @@
 // internal/api had zero automated test coverage (CLAUDE.md's Build section flagged this
-// explicitly) — every other package with real logic (internal/mqtt, internal/queue,
+// explicitly) — every other package with real logic (internal/tbclient, internal/control,
 // internal/partitions) has integration tests against the local dev stack; this is that same
 // pattern applied to the REST layer: real Postgres/Redis, a real gin.Engine driven through
 // httptest, no mocks.
@@ -9,16 +9,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"yeweiyi-cloud/internal/api"
-	"yeweiyi-cloud/internal/queue"
+	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 )
 
@@ -38,12 +40,6 @@ func testRedisAddr() string {
 
 // noopPublisher never actually needs to succeed for these tests — every write-back test here only
 // checks that a command reaches `pending` (the HTTP layer's job), not that it gets published (that's
-// internal/queue's job, already covered by its own tests).
-type noopPublisher struct{}
-
-func (noopPublisher) PublishCommand(context.Context, string, int64, string, []byte) error {
-	return nil
-}
 
 // testEnv wires one real gin.Engine against the local dev Postgres/Redis, plus a bcrypt-seeded user
 // so tests can get a real JWT through the real /api/login handler rather than minting one by hand.
@@ -60,6 +56,12 @@ type testEnv struct {
 const testUserPasswordHash = "$2a$10$meNXe5U2v9ec5cW0fIv2teBFiwN88qoxXndhnk.WZd.h/MimCSZ5u" // bcrypt("e2e-test-pass")
 
 func newTestEnv(t *testing.T) *testEnv {
+	return newTestEnvWith(t, nil)
+}
+
+// newTestEnvWith lets a test add dependencies the base environment leaves nil — TB and Control,
+// which most tests do not need and which would otherwise force every test to stand up ThingsBoard.
+func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 	t.Helper()
 	ctx := context.Background()
 
@@ -74,22 +76,16 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	queries := db.New(pool)
 
-	riverClient, err := queue.NewClient(queue.Config{Pool: pool, Queries: queries, Publisher: noopPublisher{}})
-	if err != nil {
-		t.Fatalf("new river client: %v", err)
+	deps := api.Deps{
+		Queries:   queries,
+		Redis:     rdb,
+		Pool:      pool,
+		JWTSecret: []byte("api-test-secret"),
 	}
-	if err := riverClient.Start(ctx); err != nil {
-		t.Fatalf("start river client: %v", err)
+	if customize != nil {
+		customize(&deps)
 	}
-	t.Cleanup(func() { riverClient.Stop(context.Background()) })
-
-	router := api.NewRouter(api.Deps{
-		Queries:     queries,
-		Redis:       rdb,
-		Pool:        pool,
-		JWTSecret:   []byte("api-test-secret"),
-		RiverClient: riverClient,
-	})
+	router := api.NewRouter(deps)
 
 	username := "api-test-user-" + t.Name()
 	if _, err := pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
@@ -104,6 +100,74 @@ func newTestEnv(t *testing.T) *testEnv {
 	env := &testEnv{t: t, router: router, pool: pool, rdb: rdb, queries: queries, username: username}
 	env.token = env.login(username, "e2e-test-pass")
 	return env
+}
+
+// setRole changes the seeded user's role and re-logs-in, because the role travels in the JWT and an
+// already-issued token keeps the role it was minted with.
+func (e *testEnv) setRole(role string) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(context.Background(),
+		`UPDATE users SET role = $1 WHERE username = $2`, role, e.username); err != nil {
+		e.t.Fatalf("set role: %v", err)
+	}
+	e.token = e.login(e.username, "e2e-test-pass")
+}
+
+// otherUserToken creates and logs in an additional, independent user sharing env's router/database,
+// with the given role ("" for the schema default, customer_user) — for tests that need two distinct
+// users' relationship to the same device, or a user with a different privilege tier than env's own.
+// env.token/env.username remain the "first" user's. Safe to call more than once per test: each call
+// gets its own unique username.
+func (e *testEnv) otherUserToken(role string) string {
+	e.t.Helper()
+	ctx := context.Background()
+	username := fmt.Sprintf("api-test-other-%s-%d", e.t.Name(), time.Now().UnixNano())
+
+	var err error
+	if role == "" {
+		_, err = e.pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2)`, username, testUserPasswordHash)
+	} else {
+		_, err = e.pool.Exec(ctx, `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`, username, testUserPasswordHash, role)
+	}
+	if err != nil {
+		e.t.Fatalf("seed other user: %v", err)
+	}
+	e.t.Cleanup(func() {
+		if _, err := e.pool.Exec(context.Background(), `DELETE FROM users WHERE username = $1`, username); err != nil {
+			e.t.Errorf("cleanup other user: %v", err)
+		}
+	})
+	return e.login(username, "e2e-test-pass")
+}
+
+// secondUserToken is otherUserToken with the schema's default role (customer_user).
+func (e *testEnv) secondUserToken() string {
+	e.t.Helper()
+	return e.otherUserToken("")
+}
+
+// mintPairingSecret mints a fresh pairing secret for deviceName the way a real installer would:
+// authenticated as a (throwaway) platform_admin, through the real
+// POST /api/devices/:device/pairing-secret endpoint — not by inserting into
+// device_pairing_secrets directly, so these tests also exercise mintPairingSecretHandler itself.
+func (e *testEnv) mintPairingSecret(deviceName string) string {
+	e.t.Helper()
+	admin := e.otherUserToken(control.RolePlatformAdmin)
+
+	rec := e.do("POST", "/api/devices/"+deviceName+"/pairing-secret", []byte(admin), nil)
+	if rec.Code != http.StatusOK {
+		e.t.Fatalf("mint pairing secret for %s: expected 200, got %d: %s", deviceName, rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		PairingSecret string `json:"pairingSecret"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		e.t.Fatalf("decode mint response: %v", err)
+	}
+	if resp.PairingSecret == "" {
+		e.t.Fatal("mint response carried no pairingSecret")
+	}
+	return resp.PairingSecret
 }
 
 func (e *testEnv) login(username, password string) string {
@@ -183,4 +247,26 @@ func jsonBody(t *testing.T, v any) []byte {
 		t.Fatalf("marshal body: %v", err)
 	}
 	return b
+}
+
+// assertNoLegacyTelemetryTables pins the data boundary structurally.
+//
+// These assertions used to count rows in `alarms`/`oil_in_out`/`commit_works` and require zero.
+// The tables were dropped when the legacy stack was removed (migration 000011), so the property is
+// now stronger and cheaper to state: they must not exist at all. A future change that reintroduces
+// a local copy of telemetry — the duplicate time-series store the architecture exists to avoid —
+// fails here rather than quietly working.
+func assertNoLegacyTelemetryTables(t *testing.T, env *testEnv) {
+	t.Helper()
+	for _, table := range []string{"alarms", "oil_in_out", "commit_works", "write_back_commands"} {
+		var exists *string
+		if err := env.pool.QueryRow(context.Background(),
+			`SELECT to_regclass('public.' || $1)::text`, table).Scan(&exists); err != nil {
+			t.Fatalf("check %s: %v", table, err)
+		}
+		if exists != nil {
+			t.Errorf("table %q exists again; telemetry and stock history must live in ThingsBoard, "+
+				"not be copied into the business database", table)
+		}
+	}
 }

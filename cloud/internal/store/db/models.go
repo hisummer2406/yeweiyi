@@ -59,145 +59,68 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 	return string(ns.RiverJobState), nil
 }
 
-type Alarm struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	Info          string             `json:"info"`
-	Guanhao       string             `json:"guanhao"`
-	Jiezhi        string             `json:"jiezhi"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+// 审计日志，长期保留，不随遥测清理。记录控制命令的下发、拒绝与最终结果，以及越权访问尝试。device_name/command_id 刻意不做外键——被拒绝的越权尝试所指向的设备可能根本不存在，而那正是最值得记录的一类事件。
+type AuditLog struct {
+	ID         int64              `json:"id"`
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	ActorID    pgtype.Int8        `json:"actor_id"`
+	Actor      string             `json:"actor"`
+	Action     string             `json:"action"`
+	DeviceName pgtype.Text        `json:"device_name"`
+	CommandID  pgtype.UUID        `json:"command_id"`
+	Outcome    string             `json:"outcome"`
+	Detail     []byte             `json:"detail"`
 }
 
-type Alarms202608 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	Info          string             `json:"info"`
-	Guanhao       string             `json:"guanhao"`
-	Jiezhi        string             `json:"jiezhi"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
+// 远程控制命令及其状态机（issue #1）。状态流转单向不可回退：pending→sent→received→executing→succeeded/failed，或 →rejected/→expired。MQTT/RPC 发送成功只代表消息发出，received 表示设备已接受，真正执行结果由设备异步上报的 cmdResult 决定。
+type ControlCommand struct {
+	// 后端生成的命令唯一 ID，同时是设备幂等去重键
+	CommandID  pgtype.UUID `json:"command_id"`
+	DeviceName string      `json:"device_name"`
+	Method     string      `json:"method"`
+	Args       []byte      `json:"args"`
+	OperatorID pgtype.Int8 `json:"operator_id"`
+	// 下发时的操作者用户名快照，用户被删除后仍保留
+	Operator string `json:"operator"`
+	// 二次确认时操作员填写的原因，强制非空
+	Reason       string             `json:"reason"`
+	Status       string             `json:"status"`
+	ErrorCode    pgtype.Text        `json:"error_code"`
+	ErrorReason  pgtype.Text        `json:"error_reason"`
+	ResultDetail []byte             `json:"result_detail"`
+	IssuedAt     pgtype.Timestamptz `json:"issued_at"`
+	// 命令有效期，超时未进终态由 TTL 清扫置为 expired
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	SentAt     pgtype.Timestamptz `json:"sent_at"`
+	AckedAt    pgtype.Timestamptz `json:"acked_at"`
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
-type Alarms202609 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	Info          string             `json:"info"`
-	Guanhao       string             `json:"guanhao"`
-	Jiezhi        string             `json:"jiezhi"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
-}
-
-type CommitWork struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	WorkID        int32              `json:"work_id"`
-	Time          pgtype.Timestamptz `json:"time"`
-	EndTime       pgtype.Timestamptz `json:"end_time"`
-	Info          string             `json:"info"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
-}
-
+// 设备在线状态表，记录 thing/event/isOline 的最新状态（design doc §4.2）。
 type Device struct {
-	DeviceName    string             `json:"device_name"`
-	IsOnline      bool               `json:"is_online"`
-	LastOnlineAt  pgtype.Timestamptz `json:"last_online_at"`
+	// 设备名（阿里云 IoT deviceName），主键，MQTT topic 中的设备标识。
+	DeviceName string `json:"device_name"`
+	// 当前是否在线，由 isOline 事件（含遗嘱消息）更新。
+	IsOnline bool `json:"is_online"`
+	// 最近一次上线时间。
+	LastOnlineAt pgtype.Timestamptz `json:"last_online_at"`
+	// 最近一次离线时间。
 	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
-	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	// 该行最近一次更新时间。
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
-type OilCanSet struct {
-	DeviceName       string             `json:"device_name"`
-	OilCanID         int32              `json:"oil_can_id"`
-	PkD2dID          int32              `json:"pk_d2d_id"`
-	PkTanZhenID      int32              `json:"pk_tan_zhen_id"`
-	OilHeight        float64            `json:"oil_height"`
-	Height           int32              `json:"height"`
-	MaxVolume        int32              `json:"max_volume"`
-	HeightOilAlarm   int32              `json:"height_oil_alarm"`
-	HheightOilAlarm  int32              `json:"hheight_oil_alarm"`
-	LowOilAlarm      int32              `json:"low_oil_alarm"`
-	LlowOilAlarm     int32              `json:"llow_oil_alarm"`
-	HeightWaterAlarm int32              `json:"height_water_alarm"`
-	HighTempAlarm    int32              `json:"high_temp_alarm"`
-	LowTempAlarm     int32              `json:"low_temp_alarm"`
-	OilCorrection    float64            `json:"oil_correction"`
-	WaterCorrection  float64            `json:"water_correction"`
-	TempCorrection   float64            `json:"temp_correction"`
-	Density          float64            `json:"density"`
-	DensVar          float64            `json:"dens_var"`
-	AlarmByte        int32              `json:"alarm_byte"`
-	OilType          int32              `json:"oil_type"`
-	OilColor         int32              `json:"oil_color"`
-	GmtCreate        pgtype.Text        `json:"gmt_create"`
-	GmtModified      pgtype.Text        `json:"gmt_modified"`
-	ChuanGanQiHeight float32            `json:"chuan_gan_qi_height"`
-	GunType          int32              `json:"gun_type"`
-	Enable           int32              `json:"enable"`
-	SyncStatus       string             `json:"sync_status"`
-	ReceivedAt       pgtype.Timestamptz `json:"received_at"`
+// 设备配对密钥（哈希），与 ThingsBoard 设备凭据完全隔离，仅用于验证 /api/devices/bind 请求
+type DevicePairingSecret struct {
+	DeviceName string `json:"device_name"`
+	// bcrypt 哈希；明文仅在铸造接口的响应中返回一次，不落库
+	SecretHash string `json:"secret_hash"`
+	// 本条密钥的铸造/轮换时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
-type OilInOut struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	OilID         int32              `json:"oil_id"`
-	Jiezhi        string             `json:"jiezhi"`
-	Time          pgtype.Timestamptz `json:"time"`
-	BeginHeight   float64            `json:"begin_height"`
-	EndHeight     float64            `json:"end_height"`
-	BeginVolume   float64            `json:"begin_volume"`
-	EndVolume     float64            `json:"end_volume"`
-	BeginWeight   float64            `json:"begin_weight"`
-	EndWeight     float64            `json:"end_weight"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
-}
-
-type OilInOut202608 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	OilID         int32              `json:"oil_id"`
-	Jiezhi        string             `json:"jiezhi"`
-	Time          pgtype.Timestamptz `json:"time"`
-	BeginHeight   float64            `json:"begin_height"`
-	EndHeight     float64            `json:"end_height"`
-	BeginVolume   float64            `json:"begin_volume"`
-	EndVolume     float64            `json:"end_volume"`
-	BeginWeight   float64            `json:"begin_weight"`
-	EndWeight     float64            `json:"end_weight"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
-}
-
-type OilInOut202609 struct {
-	ID            int64              `json:"id"`
-	DeviceName    string             `json:"device_name"`
-	DeviceLocalID int32              `json:"device_local_id"`
-	OilID         int32              `json:"oil_id"`
-	Jiezhi        string             `json:"jiezhi"`
-	Time          pgtype.Timestamptz `json:"time"`
-	BeginHeight   float64            `json:"begin_height"`
-	EndHeight     float64            `json:"end_height"`
-	BeginVolume   float64            `json:"begin_volume"`
-	EndVolume     float64            `json:"end_volume"`
-	BeginWeight   float64            `json:"begin_weight"`
-	EndWeight     float64            `json:"end_weight"`
-	SyncStatus    string             `json:"sync_status"`
-	ReceivedAt    pgtype.Timestamptz `json:"received_at"`
-}
-
+// river 队列库自带的 schema（作业表），由 riverqueue/river 管理，非本项目业务表，不要手工改结构。
 type RiverJob struct {
 	ID           int64              `json:"id"`
 	State        RiverJobState      `json:"state"`
@@ -219,6 +142,7 @@ type RiverJob struct {
 	UniqueStates pgtype.Bits        `json:"unique_states"`
 }
 
+// river 队列库自带的 schema（leader 选举表），由 riverqueue/river 管理。
 type RiverLeader struct {
 	ElectedAt pgtype.Timestamptz `json:"elected_at"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
@@ -226,6 +150,7 @@ type RiverLeader struct {
 	Name      string             `json:"name"`
 }
 
+// river 队列库自带的 schema（通知表），由 riverqueue/river 管理。
 type RiverNotification struct {
 	ID        int64              `json:"id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -233,6 +158,7 @@ type RiverNotification struct {
 	Topic     string             `json:"topic"`
 }
 
+// river 队列库自带的 schema（队列元数据表），由 riverqueue/river 管理。
 type RiverQueue struct {
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -241,26 +167,26 @@ type RiverQueue struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 共享账号表，PC 远程端与小程序共用同一套账号/JWT 体系（CLAUDE.md "Tech stack"）。
 type User struct {
-	ID           int64              `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	// 云端自增主键。
+	ID int64 `json:"id"`
+	// 登录用户名，唯一。
+	Username string `json:"username"`
+	// bcrypt 密码哈希，不存明文。
+	PasswordHash string `json:"password_hash"`
+	// 账号创建时间。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 角色：platform_admin=平台管理员，customer_admin=客户管理员，customer_user=客户普通用户。控制命令的权限分级依据此列（见 internal/protocol 的 PermissionLevel）。
+	Role string `json:"role"`
 }
 
+// 用户-设备绑定关系（多对多），小程序端通过扫描设备物理二维码建立绑定（CLAUDE.md 2026-08-29 authorization pass）。
 type UserDevice struct {
-	UserID     int64              `json:"user_id"`
-	DeviceName string             `json:"device_name"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-}
-
-type WriteBackCommand struct {
-	ID          int64              `json:"id"`
-	DeviceName  string             `json:"device_name"`
-	CommandType string             `json:"command_type"`
-	Payload     []byte             `json:"payload"`
-	Status      string             `json:"status"`
-	Attempts    int32              `json:"attempts"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	// 绑定的用户 id，关联 users.id。
+	UserID int64 `json:"user_id"`
+	// 绑定的设备名，关联 devices.device_name。
+	DeviceName string `json:"device_name"`
+	// 绑定建立时间。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }

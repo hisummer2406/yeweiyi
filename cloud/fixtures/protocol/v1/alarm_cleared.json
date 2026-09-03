@@ -1,0 +1,15 @@
+{
+  "ts": 1756713890123,
+  "values": {
+    "alarm": {
+      "alarmId": "9f1c2b04-7c1e-4f0a-9a7d-2c5b8e0d41aa",
+      "tank": 1,
+      "type": "HIGH_HIGH_LEVEL",
+      "severity": "CRITICAL",
+      "status": "CLEARED",
+      "text": "1号罐高高液位报警恢复",
+      "value": 1842.5,
+      "tsMs": 1756713890123
+    }
+  }
+}

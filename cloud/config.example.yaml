@@ -1,0 +1,99 @@
+# yeweiyi-cloud 运行配置示例
+#
+# 用法：
+#   cp config.example.yaml config.yaml
+#   go run ./cmd/server -config config.yaml
+#
+# 优先级（低 → 高）：内置默认值 → 本文件 → 环境变量。
+# 环境变量优先，是为了让容器/systemd 能覆盖单个值而不必改镜像里的文件。
+#
+# 本文件里**所有键都是可选的**，省略即用默认值（下面每项都标了默认值）。
+# 但拼错的键会导致启动失败而不是被静默忽略——尤其 allowPhysicalCommands，
+# 一个拼错却"看起来生效"的开关是最坏的情况。
+#
+# 时间一律写成 "30s" / "5m" / "24h" 这种带单位的字符串，不接受裸数字：
+# 裸数字在 Go 里默认是纳秒，30 会变成 30 纳秒，把 30 秒的清扫变成死循环。
+
+server:
+  # 默认 ":8080"。注意本地开发时 ThingsBoard 控制台占用 8081。
+  listenAddr: ":8080"
+
+database:
+  # 默认 postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
+  # 生产环境建议用环境变量 DATABASE_URL 传入，避免密码进配置备份。
+  url: "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"
+
+redis:
+  # 默认 localhost:6379
+  addr: "localhost:6379"
+
+auth:
+  # ⚠️ 必填，且**建议只用环境变量 JWT_SECRET 传入**，不要写进本文件——
+  # 配置文件会进备份、可能进 git，密钥不该出现在这两个地方。
+  # 这里留空即表示"从环境变量取"。
+  jwtSecret: ""
+  # 登录令牌有效期。默认 "24h"。
+  # 注意：角色写在令牌里，所以改角色要等用户下次登录才生效。
+  # 缩短这个值会让角色变更更快生效，代价是用户更频繁地重新登录。
+  tokenTTL: "24h"
+
+thingsboard:
+  # 留空 = 不启用 ThingsBoard：服务照常启动，但设备与控制相关端点返回 503 并说明原因。
+  # 这个模式是为了让只改业务端点的开发不必先跑起一个 2GB 容器。
+  baseURL: "http://localhost:8081"
+  username: "tenant@thingsboard.org"
+  # 同 jwtSecret，生产建议走环境变量 TB_PASSWORD。
+  password: "tenant"
+
+control:
+  # 控制命令的有效期。设备端与云端清扫都会检查。
+  # 默认 "60s"。**这是一个占位值，不是产品决定**（见 docs/protocol-v1.md 第 12 节）。
+  #
+  # 它防的是：命令在断网期间卡在队列里，几小时后操作员早已离开，泵却突然启动。
+  # 因此这个值应该按"操作员发出指令后还愿意站在现场等多久"来定，而不是按网络状况定。
+  commandTTL: "60s"
+
+  # 等待设备 ACK 的时间。默认 "10s"。
+  # 它**只约束"设备是否收到"，不约束"设备执行完没有"**——重启这类动作会在很久之后
+  # 才通过异步的 cmdResult 上报结果。
+  # 必须小于 commandTTL，否则命令会在设备来得及应答之前就过期（启动时会校验）。
+  ackTimeout: "10s"
+
+  # 清扫过期命令的频率。默认 "30s"。必须不大于 commandTTL，否则过期命令最多要挂
+  # 一整个清扫周期才被关掉（启动时会校验）。
+  expirySweepInterval: "30s"
+
+  # ⚠️⚠️ 物理动作总闸：启泵、停泵、开阀、关阀、重启设备。
+  #
+  # 默认 false，**在设备端联锁补齐并完成真机验证之前必须保持 false**（见 issue #1）。
+  # 这是本文件里唯一一个填错会让现场设备真的动起来的开关。
+  #
+  # 该闸门对平台管理员同样生效——它约束的是未经验证的硬件，不是信任级别。
+  # 打开它不会绕过任何权限检查，只是让这些方法不再被整体拒绝。
+  allowPhysicalCommands: false
+
+ingest:
+  # 重新读取设备列表的频率，用于给新绑定的设备建立遥测订阅。默认 "30s"。
+  # 调小 = 新设备更快开始被采集，代价是更频繁的数据库查询。
+  deviceRefreshInterval: "30s"
+  # 订阅断开后重连前的等待。默认 "5s"。
+  resubscribeDelay: "5s"
+
+# ---------------------------------------------------------------------------
+# 环境变量对照（覆盖本文件对应项）
+#
+#   LISTEN_ADDR                      server.listenAddr
+#   DATABASE_URL                     database.url
+#   REDIS_ADDR                       redis.addr
+#   JWT_SECRET                       auth.jwtSecret
+#   TOKEN_TTL                        auth.tokenTTL
+#   TB_BASE_URL / TB_USERNAME / TB_PASSWORD   thingsboard.*
+#   COMMAND_TTL                      control.commandTTL
+#   COMMAND_ACK_TIMEOUT              control.ackTimeout
+#   COMMAND_EXPIRY_SWEEP_INTERVAL    control.expirySweepInterval
+#   ALLOW_PHYSICAL_COMMANDS          control.allowPhysicalCommands  (true/false/1/0)
+#   INGEST_DEVICE_REFRESH_INTERVAL   ingest.deviceRefreshInterval
+#   INGEST_RESUBSCRIBE_DELAY         ingest.resubscribeDelay
+#
+# 未在此列出的项只能通过配置文件设置。
+# ---------------------------------------------------------------------------

@@ -9,8 +9,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
-
-	"yeweiyi-cloud/internal/store/db"
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -34,10 +32,9 @@ func wsAuthToken(c *gin.Context) string {
 	return c.Query("token")
 }
 
-// wsAlarmsHandler streams handleMsgMessage's real-time alarm-text pushes (internal/mqtt/handlers.go,
-// published to the "alarms:live" Redis channel) to one device's connected clients. Scoped to a
-// single `device` query param for the same reason every other endpoint requires one — see
-// listParams in records.go.
+// wsAlarmsHandler streams the alarm events internal/ingest fans out on the "alarms:live" Redis
+// channel to one device's connected clients. Scoped to a single `device` query param for the same
+// reason every other endpoint requires one — see listParams in listparams.go.
 func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw := wsAuthToken(c)
@@ -60,7 +57,13 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		owns, err := deps.Queries.UserOwnsDevice(c.Request.Context(), db.UserOwnsDeviceParams{UserID: claims.UserID, DeviceName: device})
+		// userMayAccessDevice, not a direct UserOwnsDevice call: this handler authenticates its own
+		// JWT independently of authMiddleware (a WebSocket handshake can't carry the usual
+		// middleware chain), so it needs the same platform-admin shortcut requireDeviceOwnership
+		// applies for every REST device endpoint — routed through one shared function so the two
+		// cannot drift apart again the way they already did once. See userMayAccessDevice's comment
+		// in devices.go.
+		owns, err := userMayAccessDevice(c.Request.Context(), deps, claims.UserID, claims.Role, device)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

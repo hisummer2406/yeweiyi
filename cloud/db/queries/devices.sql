@@ -26,3 +26,9 @@ SELECT * FROM devices WHERE device_name = $1;
 -- Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 -- are actually online.
 SELECT device_name FROM devices WHERE is_online;
+
+-- name: ListAllDeviceNames :many
+-- Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
+-- Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
+-- already exist when a device comes back, or its first snapshot after reconnecting is missed.
+SELECT device_name FROM devices ORDER BY device_name;

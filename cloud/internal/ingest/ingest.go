@@ -1,0 +1,272 @@
+// Package ingest consumes device data from ThingsBoard and routes it into the business layer.
+//
+// The most important thing this package does is what it does NOT do: **it does not persist
+// telemetry.** The 30-second tank snapshots stay in ThingsBoard and are read back from there on
+// demand (internal/tbclient). Copying them into the business PostgreSQL would create a second
+// time-series store — exactly the duplication GitHub issue #10 forbids, and the reason the old
+// design's `alarms`/`oil_in_out` partitioned tables are up for removal.
+//
+// What crosses the boundary into the business database is only:
+//
+//   - command results, which close the control state machine (internal/control);
+//   - alarms, fanned out live to operators — and even then the alarm itself is ThingsBoard's
+//     record; the business database stores only how it was handled, once somebody acts on it.
+//
+// Everything else is observed and dropped on purpose.
+package ingest
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+
+	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/protocol"
+	"yeweiyi-cloud/internal/store/db"
+	"yeweiyi-cloud/internal/tbclient"
+)
+
+// AlarmChannel is the Redis pub/sub channel /ws/alarms fans out from. Kept identical to the one the
+// legacy MQTT path publishes on so the WebSocket endpoint needs no change when the old stack goes.
+const AlarmChannel = "alarms:live"
+
+// Config wires an Ingester.
+type Config struct {
+	TB      *tbclient.Client
+	Control *control.Service
+	Redis   *redis.Client
+	Queries *db.Queries
+
+	// DeviceRefreshInterval controls how often the device list is re-read so newly bound devices
+	// get a subscription. Defaults to 30s.
+	DeviceRefreshInterval time.Duration
+	// ResubscribeDelay is how long to wait before reopening a subscription that dropped.
+	ResubscribeDelay time.Duration
+
+	Logf func(format string, args ...any)
+}
+
+// Ingester maintains one live ThingsBoard telemetry subscription per device.
+type Ingester struct {
+	cfg Config
+
+	mu     sync.Mutex
+	active map[string]context.CancelFunc // deviceName -> stop its subscription
+}
+
+// New builds an Ingester.
+func New(cfg Config) *Ingester {
+	if cfg.DeviceRefreshInterval <= 0 {
+		cfg.DeviceRefreshInterval = 30 * time.Second
+	}
+	if cfg.ResubscribeDelay <= 0 {
+		cfg.ResubscribeDelay = 5 * time.Second
+	}
+	if cfg.Logf == nil {
+		cfg.Logf = func(string, ...any) {}
+	}
+	return &Ingester{cfg: cfg, active: map[string]context.CancelFunc{}}
+}
+
+// Run keeps subscriptions in sync with the device list until ctx ends.
+func (i *Ingester) Run(ctx context.Context) {
+	i.sync(ctx)
+
+	ticker := time.NewTicker(i.cfg.DeviceRefreshInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			i.stopAll()
+			return
+		case <-ticker.C:
+			i.sync(ctx)
+		}
+	}
+}
+
+// sync starts subscriptions for devices that lack one. It deliberately does not stop subscriptions
+// for devices that disappeared from the list: an unbound device is a business-layer change, and
+// tearing down its stream mid-command would lose the result that closes an in-flight command.
+func (i *Ingester) sync(ctx context.Context) {
+	names, err := i.cfg.Queries.ListAllDeviceNames(ctx)
+	if err != nil {
+		i.cfg.Logf("ingest: list devices: %v", err)
+		return
+	}
+
+	for _, name := range names {
+		i.mu.Lock()
+		_, running := i.active[name]
+		i.mu.Unlock()
+		if running {
+			continue
+		}
+		i.StartDevice(ctx, name)
+	}
+}
+
+// StartDevice opens a subscription for one device and keeps it open, reconnecting on failure, until
+// ctx ends. Safe to call for a device that already has one — the duplicate is ignored.
+func (i *Ingester) StartDevice(parent context.Context, deviceName string) {
+	i.mu.Lock()
+	if _, running := i.active[deviceName]; running {
+		i.mu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(parent)
+	i.active[deviceName] = cancel
+	i.mu.Unlock()
+
+	go func() {
+		defer func() {
+			i.mu.Lock()
+			delete(i.active, deviceName)
+			i.mu.Unlock()
+			cancel()
+		}()
+
+		for ctx.Err() == nil {
+			if err := i.subscribeOnce(ctx, deviceName); err != nil && ctx.Err() == nil {
+				i.cfg.Logf("ingest: %s: %v; retrying in %s", deviceName, err, i.cfg.ResubscribeDelay)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(i.cfg.ResubscribeDelay):
+			}
+		}
+	}()
+}
+
+// subscribeOnce runs a single subscription until it fails or ctx ends.
+func (i *Ingester) subscribeOnce(ctx context.Context, deviceName string) error {
+	dev, err := i.cfg.TB.GetDeviceByName(ctx, deviceName)
+	if err != nil {
+		if errors.Is(err, tbclient.ErrNotFound) {
+			// Bound in the business database but never provisioned in ThingsBoard. Retrying is
+			// right — provisioning may simply not have happened yet.
+			return err
+		}
+		return err
+	}
+
+	// nil keys: subscribe to everything this device reports. The ingester must see alarm and
+	// cmdResult events without knowing in advance how many tanks a device has.
+	stream, err := i.cfg.TB.SubscribeTelemetry(ctx, dev.ID.ID, nil)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	i.cfg.Logf("ingest: subscribed to %s", deviceName)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case err := <-stream.Err:
+			return err
+		case update, ok := <-stream.Updates:
+			if !ok {
+				return errors.New("telemetry stream closed")
+			}
+			i.HandleUpdate(ctx, deviceName, update)
+		}
+	}
+}
+
+// HandleUpdate routes one telemetry batch. Exported so tests can drive it directly without a live
+// subscription.
+//
+// Note what is absent: there is no branch that writes tank readings anywhere. Snapshot keys arrive
+// here on every 30-second cycle and are intentionally ignored — see the package comment.
+func (i *Ingester) HandleUpdate(ctx context.Context, deviceName string, u tbclient.TelemetryUpdate) {
+	if raw, ok := u.Values[protocol.KeyCmdResult]; ok {
+		i.handleCmdResult(ctx, deviceName, raw)
+	}
+	if raw, ok := u.Values[protocol.KeyAlarm]; ok {
+		i.handleAlarm(ctx, deviceName, raw)
+	}
+}
+
+func (i *Ingester) handleCmdResult(ctx context.Context, deviceName string, raw any) {
+	res, err := protocol.ParseCmdResult(raw)
+	if err != nil {
+		i.cfg.Logf("ingest: %s: bad cmdResult: %v", deviceName, err)
+		return
+	}
+	if i.cfg.Control == nil {
+		return
+	}
+
+	cmd, applied, err := i.cfg.Control.ApplyResult(ctx, deviceName, res)
+	if err != nil {
+		i.cfg.Logf("ingest: %s: apply cmdResult %s: %v", deviceName, res.CommandID, err)
+		return
+	}
+	if !applied {
+		// Unknown command, or one already in a terminal state. Both are normal — a device may
+		// redeliver a result, and a restored database may not know the command at all.
+		i.cfg.Logf("ingest: %s: cmdResult %s did not apply (unknown or already final)", deviceName, res.CommandID)
+		return
+	}
+	i.cfg.Logf("ingest: %s: command %s -> %s", deviceName, res.CommandID, cmd.Status)
+}
+
+// handleAlarm fans an alarm out to connected operators. It deliberately does not insert an alarm
+// row: ThingsBoard is the system of record for the alarm itself, and the business database stores
+// only handling state, written when an operator actually acts on it.
+func (i *Ingester) handleAlarm(ctx context.Context, deviceName string, raw any) {
+	ev, err := protocol.ParseAlarmEvent(raw)
+	if err != nil {
+		i.cfg.Logf("ingest: %s: bad alarm: %v", deviceName, err)
+		return
+	}
+	if i.cfg.Redis == nil {
+		return
+	}
+
+	fanout, err := json.Marshal(map[string]any{
+		"deviceName": deviceName,
+		"alarmId":    ev.AlarmID,
+		"tank":       ev.Tank,
+		"type":       ev.Type,
+		"severity":   ev.Severity,
+		"status":     ev.Status,
+		"msg":        ev.Text,
+		"value":      ev.Value,
+		"tsMs":       ev.TSMs,
+	})
+	if err != nil {
+		i.cfg.Logf("ingest: %s: marshal alarm fanout: %v", deviceName, err)
+		return
+	}
+	if err := i.cfg.Redis.Publish(ctx, AlarmChannel, fanout).Err(); err != nil {
+		i.cfg.Logf("ingest: %s: publish alarm fanout: %v", deviceName, err)
+	}
+}
+
+func (i *Ingester) stopAll() {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	for _, cancel := range i.active {
+		cancel()
+	}
+}
+
+// ActiveDevices reports which devices currently have a live subscription, for tests and diagnostics.
+func (i *Ingester) ActiveDevices() []string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	names := make([]string, 0, len(i.active))
+	for name := range i.active {
+		names = append(names, name)
+	}
+	return names
+}

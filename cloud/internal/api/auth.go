@@ -12,7 +12,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const tokenTTL = 24 * time.Hour
+// defaultTokenTTL is used when Deps.TokenTTL is left zero (tests, and any caller that does not
+// care). Production sets it from config — see config.example.yaml's auth.tokenTTL, which also
+// explains the one behavioural consequence: the user's role travels inside the token, so a role
+// change does not take effect until the token expires or the user logs in again.
+const defaultTokenTTL = 24 * time.Hour
 
 type loginRequest struct {
 	Username string `json:"username" binding:"required"`
@@ -21,9 +25,16 @@ type loginRequest struct {
 
 // apiClaims carries the user's id alongside the standard claims, added 2026-08-29 so
 // requireDeviceOwnership (devices.go) can check user_devices without an extra GetUserByUsername
-// round trip per request.
+// round trip per request. Role was added 2026-09-01 for the same reason: control authorization
+// (internal/control) is role-tiered, and re-reading the user on every command would put a database
+// round trip in front of every control action.
+//
+// Consequence worth knowing: a role change does not take effect until the user's next login, since
+// the old token keeps its old role until it expires (tokenTTL, 24h). Acceptable for role
+// *promotion*; if a demotion ever needs to be immediate, this is the thing to revisit.
 type apiClaims struct {
-	UserID int64 `json:"uid"`
+	UserID int64  `json:"uid"`
+	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -52,9 +63,10 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 
 		claims := apiClaims{
 			UserID: user.ID,
+			Role:   user.Role,
 			RegisteredClaims: jwt.RegisteredClaims{
 				Subject:   user.Username,
-				ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(deps.tokenTTL())),
 				IssuedAt:  jwt.NewNumericDate(time.Now()),
 			},
 		}
@@ -88,6 +100,7 @@ func authMiddleware(secret []byte) gin.HandlerFunc {
 
 		c.Set("username", claims.Subject)
 		c.Set("userID", claims.UserID)
+		c.Set("role", claims.Role)
 		c.Next()
 	}
 }

@@ -14,61 +14,75 @@ type Querier interface {
 	// Idempotent: scanning the same QR code twice (or the same device already bound) is a no-op, not
 	// an error — matches this project's general "safe to redeliver" preference for write paths.
 	BindUserDevice(ctx context.Context, arg BindUserDeviceParams) error
+	// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
+	// from the SAME clock. Letting the column default to the database's now() while the application
+	// computes expires_at from its own clock means the two can disagree by however long the round trip
+	// takes — which violates the expires_at > issued_at constraint outright once the command TTL is
+	// shorter than that, and silently shortens every command's real validity window even when it does
+	// not. The envelope sent to the device carries the same issued_at, so device and cloud agree too.
+	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
 	EnsureDevice(ctx context.Context, deviceName string) error
+	// The cloud-side half of the validity window: anything past its expiry that never reached a
+	// terminal state is closed as 'expired'. The device enforces the same rule independently on
+	// arrival, so this is about the command *record*, not about preventing the action.
+	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
+	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
-	// oil_in_out is partitioned by time, so its UNIQUE constraint is (device_name, device_local_id,
-	// time), not (device_name, device_local_id) alone — in practice a device's local id is never
-	// reused, so this returns at most one real row; ORDER BY + LIMIT 1 makes that explicit instead of
-	// relying on a uniqueness guarantee the schema can't actually enforce across partitions. Used by
-	// the write-back correction endpoint to confirm the record being corrected exists before enqueueing.
-	GetLatestOilInOutByDeviceLocalID(ctx context.Context, arg GetLatestOilInOutByDeviceLocalIDParams) (OilInOut, error)
-	// commit_works isn't partitioned, so (device_name, device_local_id) is a real UNIQUE constraint
-	// (unlike oil_in_out's). Used by the write-back correction endpoint to confirm the record being
-	// corrected exists before enqueueing.
-	GetShiftByDeviceLocalID(ctx context.Context, arg GetShiftByDeviceLocalIDParams) (CommitWork, error)
+	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
-	GetWriteBackCommand(ctx context.Context, id int64) (WriteBackCommand, error)
-	InsertWriteBackCommand(ctx context.Context, arg InsertWriteBackCommandParams) (WriteBackCommand, error)
-	ListAlarmsAsc(ctx context.Context, arg ListAlarmsAscParams) ([]Alarm, error)
-	ListAlarmsDesc(ctx context.Context, arg ListAlarmsDescParams) ([]Alarm, error)
+	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
+	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
+	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
+	ListAllDeviceNames(ctx context.Context) ([]string, error)
+	// device_name is optional: passing NULL lists across all devices, which is a platform-admin view.
+	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	ListAuditLogForCommand(ctx context.Context, commandID pgtype.UUID) ([]AuditLog, error)
+	ListControlCommandsForDevice(ctx context.Context, arg ListControlCommandsForDeviceParams) ([]ControlCommand, error)
 	ListDevicesForUser(ctx context.Context, userID int64) ([]Device, error)
-	// Design doc §5.3: TTL sweep for commands stuck in pending/sent past the cutoff.
-	ListExpirableWriteBackCommands(ctx context.Context, createdAt pgtype.Timestamptz) ([]WriteBackCommand, error)
-	ListOilInOutAsc(ctx context.Context, arg ListOilInOutAscParams) ([]OilInOut, error)
-	ListOilInOutDesc(ctx context.Context, arg ListOilInOutDescParams) ([]OilInOut, error)
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
-	// Design doc §5.2: "取出该设备全部 pending 命令(按创建时间排序)" — must be FIFO per device.
-	ListPendingWriteBackCommandsForDevice(ctx context.Context, deviceName string) ([]WriteBackCommand, error)
-	ListShiftsAsc(ctx context.Context, arg ListShiftsAscParams) ([]CommitWork, error)
-	ListShiftsDesc(ctx context.Context, arg ListShiftsDescParams) ([]CommitWork, error)
-	// Status polling for a mini-program client that just submitted a write-back command — most-recent
-	// first, unlike ListPendingWriteBackCommandsForDevice's FIFO order (that one drives delivery, this
-	// one drives "what's the status of what I sent").
-	ListWriteBackCommandsForDevice(ctx context.Context, arg ListWriteBackCommandsForDeviceParams) ([]WriteBackCommand, error)
-	MarkWriteBackCommandAcked(ctx context.Context, id int64) error
-	MarkWriteBackCommandFailed(ctx context.Context, id int64) error
-	MarkWriteBackCommandSent(ctx context.Context, id int64) error
+	// Applies the device's ACK: 'received' (accepted, not yet done) or 'rejected' (terminal).
+	// Only a command we have actually sent can be acked.
+	MarkControlCommandAcked(ctx context.Context, arg MarkControlCommandAckedParams) (ControlCommand, error)
+	// Applies the device's asynchronous outcome. Guarded so that a terminal row stays terminal: a
+	// duplicate cmdResult, or one arriving after expiry, must not rewrite the record. Also guarded on
+	// device_name, which the ingestion subscription determines from the connection the message arrived
+	// on, not from anything inside the payload: without this, device B reporting a commandId that
+	// belongs to device A would be able to complete A's command and have the audit trail misattribute
+	// the result to B, breaking the per-device isolation the rest of this schema assumes.
+	//
+	// 'pending' is in the guard alongside the states you would expect, and that is not a relaxation —
+	// it closes a real race. Issue() calls ThingsBoard's two-way RPC synchronously and only writes
+	// 'sent'/'received' into this row *after* that call returns, but the device's cmdResult travels
+	// over a completely independent channel (the telemetry WebSocket, read by internal/ingest) with no
+	// ordering guarantee against it. A fast device can report a result before, or just as, the RPC call
+	// above returns — while this row is still 'pending' in our own bookkeeping. Without 'pending' here,
+	// that UPDATE would match zero rows, ApplyResult would treat the result as inapplicable and drop it
+	// silently, the later MarkControlCommandSent/Acked calls would leave the row stuck at 'received',
+	// and the command would eventually expire despite the device already having reported success.
+	// Accepting the result from 'pending' is safe: a device can only ever learn a commandId by having
+	// actually received it over the RPC, which cannot happen before this row exists — so there is no
+	// earlier state a forged or premature result could be exploiting. sent_at is backfilled (only if
+	// still unset) so a command that finishes via this race does not carry a permanently-null sent_at.
+	MarkControlCommandFinished(ctx context.Context, arg MarkControlCommandFinishedParams) (ControlCommand, error)
+	// Status transitions are all guarded by the *current* status rather than written unconditionally.
+	// Nothing else enforces the state machine — a late ACK arriving after the sweep already expired a
+	// command would otherwise resurrect it, and a redelivered result would overwrite a terminal row.
+	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
+	// moved on", not as an error.
+	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
-	// Ingests one row from thing/event/property/post/requestAlarm (design doc §4.2). Keyed on the
-	// device's own (device_local_id, time) per CLAUDE.md's composite-key design — a redelivered
-	// response after a reconnect just overwrites the same row instead of duplicating it.
-	UpsertAlarm(ctx context.Context, arg UpsertAlarmParams) error
 	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
-	// Ingests one row from thing/event/property/post/requestUnloadOil (design doc §4.2).
-	UpsertOilInOut(ctx context.Context, arg UpsertOilInOutParams) error
-	// Ingests one row from thing/event/property/post/requestShift (design doc §4.2). `info` is stored
-	// as the raw JSON string the device sends (CommitWork.java's `info` field, DB column
-	// `oilinfogson` — the two names differ on-device; the MQTT JSON key is `info`, matching the Java
-	// field name, not the DB column name, since Gson serializes by field name with no @SerializedName
-	// override).
-	UpsertShift(ctx context.Context, arg UpsertShiftParams) error
+	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
+	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
+	UpsertDevicePairingSecret(ctx context.Context, arg UpsertDevicePairingSecretParams) error
 	// Backs every device-scoped handler's authorization check (see internal/api's requireDeviceOwnership).
 	UserOwnsDevice(ctx context.Context, arg UserOwnsDeviceParams) (bool, error)
+	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error)
 }
 
 var _ Querier = (*Queries)(nil)
