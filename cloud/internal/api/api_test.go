@@ -110,6 +110,24 @@ func (e *testEnv) setRole(role string) {
 	e.token = e.login(e.username, "e2e-test-pass")
 }
 
+// secondUserToken creates and logs in a second, independent user sharing env's router/database —
+// for tests that need two distinct users' relationship to the same device, where env.token is the
+// "first" user's.
+func (e *testEnv) secondUserToken() string {
+	e.t.Helper()
+	ctx := context.Background()
+	username := "api-test-user2-" + e.t.Name()
+	if _, err := e.pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
+		e.t.Fatalf("seed second user: %v", err)
+	}
+	e.t.Cleanup(func() {
+		if _, err := e.pool.Exec(context.Background(), `DELETE FROM users WHERE username = $1`, username); err != nil {
+			e.t.Errorf("cleanup second user: %v", err)
+		}
+	})
+	return e.login(username, "e2e-test-pass")
+}
+
 func (e *testEnv) login(username, password string) string {
 	e.t.Helper()
 	body, _ := json.Marshal(map[string]string{"username": username, "password": password})

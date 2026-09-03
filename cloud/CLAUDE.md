@@ -741,15 +741,17 @@ side has shipped against a specific contract.
   below for the auth library choice this unblocked.
 - ~~How does a user's account get associated with a physical device?~~ **Decided 2026-08-29: QR
   code.** The mini-program binds a device by scanning a QR code printed/displayed on the physical
-  device (encoding `deviceName`) — see `internal/api/devices.go` and the 2026-08-29 authorization
-  pass in "Build". Still open: what exactly the QR code's content format is beyond "encodes
-  deviceName somehow" (a bare string? a URL/deeplink wrapping it? does it need a signature/checksum
-  to prevent a forged/guessed QR code from binding a device the scanner never actually touched? —
-  the current cloud endpoint trusts whatever `deviceName` string the client sends, which is fine
-  under "possession of the physical device is the authorization" as long as the QR's *content* can
-  only be obtained by seeing the physical device, but that property depends on what actually gets
-  printed on it — a decision for whoever designs the physical label/screen, not made here) and
-  whether PC-remote clients get a pairing flow at all or are mini-program-only for now.
+  device — see `internal/api/devices.go` and the 2026-08-29 authorization pass in "Build".
+  **Corrected 2026-09-04**: the cloud endpoint used to trust whatever `deviceName` string the client
+  sent with no verification at all — not "fine under possession-is-authorization", an actual P1
+  found in PR #11 review, since a bare device name is guessable/enumerable and nothing checked the
+  caller had ever seen the physical device. `POST /api/devices/bind` now also requires
+  `pairingToken`, verified server-side against the device's real ThingsBoard access token (the fifth
+  PR #11 review-response round, "Build" below) — so the QR must encode at least `deviceName` *and*
+  that token for binding to succeed at all. Still open, unchanged by that fix: the QR's exact content
+  *format* beyond "carries these two values somehow" (bare strings? a URL/deeplink wrapping them?
+  one combined value or two?) is a decision for whoever designs the physical label/screen, not made
+  here — and whether PC-remote clients get a pairing flow at all or are mini-program-only for now.
 
 ## What's explicitly NOT this project's problem
 
@@ -1956,6 +1958,67 @@ exactly one more P1, in code none of those rounds' own new tests happened to tou
    `ReadMessage` exactly once with a generous overall deadline. Worth remembering for any future test
    against this or any other gorilla/websocket connection: never loop `ReadMessage` across more than
    one deadline on the same `Conn`.
+
+**2026-09-04 PR #11 fifth review-response round** — pushing the round above (head `44ae750`) got a
+plain PR comment (not a formal review — same GitHub author-can't-request-changes-on-own-PR
+limitation as before) flagging one more P1, in the device-pairing endpoint none of the first four
+rounds' own new tests happened to touch.
+
+1. **Any logged-in user could take over any device just by knowing or guessing its `deviceName`
+   (P1, real cross-tenant takeover).** `bindDeviceHandler` (`internal/api/devices.go`) accepted a
+   bare `{"deviceName": "..."}` body and unconditionally `EnsureDevice`+`BindUserDevice`'d it — the
+   2026-08-29 authorization pass's "possession of the physical device is the authorization" design
+   intent was never actually enforced in code. Since `deviceName`s are human-readable and plausibly
+   patterned (e.g. `tank-farm-014`), any authenticated attacker could bind themselves to a device
+   that was never theirs and, from there, read its telemetry/alarms and issue whatever control
+   commands their role allows — no scan, no secret, no server-side check of any kind stood between
+   a guess and full device access.
+
+   Fixed by requiring the bind request to also carry `pairingToken`, verified
+   (`verifyPairingToken`) against the actual ThingsBoard access token ThingsBoard issued that
+   device — the same "one-device-one-secret" value the device already uses as its MQTT credential
+   (`tbclient.DeviceCredentials.CredentialsID`), read back via the tenant-admin session
+   `internal/tbclient` already holds, and compared with `crypto/subtle.ConstantTimeCompare` since
+   it is a bearer secret. This closes the actual hole (forged/guessed `deviceName` can no longer
+   bind anything) without inventing a second, parallel secret/provisioning flow, and without a new
+   migration — reusing a value ThingsBoard was already the source of truth for.
+
+   Two things this fix deliberately does **not** do, both because they would silently break or
+   preempt an existing, separately-made product decision rather than because they weren't
+   considered:
+   - **Not single-use.** The reviewer's own suggestion floated a one-time pairing token; a durable
+     per-device secret was chosen instead because CLAUDE.md's 2026-08-29 authorization pass made
+     `user_devices` many-to-many specifically so more than one legitimate staff member can bind the
+     same physical device from the same QR code over time (e.g. multiple technicians on one tank) —
+     a token redeemable only once would break that on the very first successful bind.
+     `TestBindDevice_SecondUserCanBindSameDeviceWithSameToken` pins that a second real user can still
+     bind with the same token, as a regression guard against accidentally narrowing this later.
+   - **Not a redesign of the QR code's content format.** CLAUDE.md's "Open product decisions"
+     already flags the QR payload shape as unresolved and cross-repo (whoever designs the physical
+     label/screen, not this repo unilaterally) — this fix answers "what must the server verify"
+     without answering "what exactly goes on the label," which stays open.
+
+   Errors are deliberately **not** distinguished between "no such device in ThingsBoard" and
+   "device exists but the token is wrong" — both answer the same 401 with the same message, the
+   same anti-oracle reasoning `requireDeviceOwnership`'s own doc comment already gives for every
+   other device-scoped endpoint (CLAUDE.md invariant 6: authorization checked before existence).
+   `TestBindDevice_UnknownDeviceAndWrongTokenAreIndistinguishable` asserts the two cases produce
+   byte-identical status and body, which is what actually pins that property — a test that only
+   checked "both are 401" would pass even if the two cases carried different, name-leaking messages.
+
+   `internal/api/devices_test.go` gained a real-ThingsBoard test environment (`newBindEnv`,
+   `provisionTBDevice`) — the previous bind tests only touched the business database, but this
+   handler's whole job now is checking a real ThingsBoard credential, so a stub can't stand in the
+   way `internal/control`'s tests get away with. Also fixed `cmd/smoke/main.go`'s own bind call,
+   which — being written before this fix — was itself relying on the exact hole being closed: it
+   already fetches the device's real access token for the MQTT step right above the bind step, so
+   the fix was passing that same value through as `pairingToken` rather than any new provisioning
+   work. Verified against the real local stack, not just the test suite: ran the built server and
+   `cmd/smoke -api` end to end (12/12 steps green, unchanged from before this fix), then separately
+   probed the running server directly with `curl` as a freshly-seeded throwaway user attempting to
+   bind a plausible-looking but nonexistent device name with a fabricated token — `401
+   {"error":"invalid device name or pairing token"}`, and confirmed via `psql` that no `devices` row
+   was created. All throwaway users/rows removed afterward.
 
 ## Architecture
 

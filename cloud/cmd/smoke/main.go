@@ -178,7 +178,7 @@ func run() int {
 
 	if api != nil {
 		if !r.step("设备绑定（POST /api/devices/bind）", func() (string, error) {
-			code, _, err := api.do(ctx, http.MethodPost, "/api/devices/bind", map[string]string{"deviceName": name}, nil)
+			code, _, err := api.do(ctx, http.MethodPost, "/api/devices/bind", map[string]string{"deviceName": name, "pairingToken": token}, nil)
 			if err != nil {
 				return "", err
 			}
