@@ -746,12 +746,17 @@ side has shipped against a specific contract.
   sent with no verification at all — not "fine under possession-is-authorization", an actual P1
   found in PR #11 review, since a bare device name is guessable/enumerable and nothing checked the
   caller had ever seen the physical device. `POST /api/devices/bind` now also requires
-  `pairingToken`, verified server-side against the device's real ThingsBoard access token (the fifth
-  PR #11 review-response round, "Build" below) — so the QR must encode at least `deviceName` *and*
-  that token for binding to succeed at all. Still open, unchanged by that fix: the QR's exact content
-  *format* beyond "carries these two values somehow" (bare strings? a URL/deeplink wrapping them?
-  one combined value or two?) is a decision for whoever designs the physical label/screen, not made
-  here — and whether PC-remote clients get a pairing flow at all or are mini-program-only for now.
+  `pairingToken`, verified server-side against a bcrypt-hashed secret this backend itself mints
+  (`POST /api/devices/:device/pairing-secret`, platform_admin only) and stores in
+  `device_pairing_secrets` — **not** ThingsBoard's device access token, which the fifth round tried
+  first and the sixth round found leaked the device's MQTT identity (see the sixth round in "Build"
+  below) — so the QR must encode at least `deviceName` *and* that minted secret for binding to
+  succeed at all. Still open, unchanged by either fix: the QR's exact content *format* beyond
+  "carries these two values somehow" (bare strings? a URL/deeplink wrapping them? one combined value
+  or two?) is a decision for whoever designs the physical label/screen, not made here — as is who
+  actually calls the minting endpoint at install time (a technician's own authenticated session? a
+  separate provisioning tool?) — and whether PC-remote clients get a pairing flow at all or are
+  mini-program-only for now.
 
 ## What's explicitly NOT this project's problem
 
@@ -1964,6 +1969,11 @@ plain PR comment (not a formal review — same GitHub author-can't-request-chang
 limitation as before) flagging one more P1, in the device-pairing endpoint none of the first four
 rounds' own new tests happened to touch.
 
+**Superseded by the very next round, below: reusing ThingsBoard's device access token as the
+pairing proof (this entry's fix) was itself a P1 — it leaked the device's MQTT identity. Read this
+entry for the "why deviceName alone isn't enough" history; read the 2026-09-04 sixth round below for
+the design actually in the code now.**
+
 1. **Any logged-in user could take over any device just by knowing or guessing its `deviceName`
    (P1, real cross-tenant takeover).** `bindDeviceHandler` (`internal/api/devices.go`) accepted a
    bare `{"deviceName": "..."}` body and unconditionally `EnsureDevice`+`BindUserDevice`'d it — the
@@ -2019,6 +2029,80 @@ rounds' own new tests happened to touch.
    bind a plausible-looking but nonexistent device name with a fabricated token — `401
    {"error":"invalid device name or pairing token"}`, and confirmed via `psql` that no `devices` row
    was created. All throwaway users/rows removed afterward.
+
+**2026-09-04 PR #11 sixth review-response round** — pushing the round above (head `c64d25f`) got
+another plain PR comment finding one more P1, this time in the fix itself rather than in
+previously-untouched code.
+
+1. **The round-5 pairing fix leaked the device's MQTT identity (P1).** Round 5 verified
+   `pairingToken` against `tbclient.GetDeviceCredentials`' `ACCESS_TOKEN` — the device's real
+   ThingsBoard credential, which is also its passwordless MQTT username (`internal/devicesim`'s
+   `SetUsername(AccessToken)`). Putting that value in a QR code and treating it as a *pairing*
+   secret meant anyone who photographed the code, or captured it off a proxy or client log, could
+   connect to MQTT **as the device itself** — forge telemetry, alarms, and `cmdResult`s — not merely
+   bind themselves to it in this backend. A pairing credential leaking should cost, at worst, a
+   binding; round 5's design let it cost the device's entire on-wire identity.
+
+   Fixed by giving pairing its own secret, fully independent of ThingsBoard: `device_pairing_secrets`
+   (migration `000012`) stores only a bcrypt hash of a randomly-minted 32-byte value, the same way
+   `users.password_hash` stores passwords — never the plaintext, never anything ThingsBoard issued.
+   A new endpoint, `POST /api/devices/:device/pairing-secret` (`mintPairingSecretHandler`,
+   `internal/api/devices.go`), mints and returns the plaintext exactly once; `bindDeviceHandler`'s
+   `verifyPairingToken` now checks the candidate against that hash via
+   `bcrypt.CompareHashAndPassword` and never calls `deps.TB` at all. Two side effects worth knowing,
+   both improvements rather than incidental:
+   - **Binding no longer depends on ThingsBoard being up.** It used to 503 when `deps.TB == nil`;
+     now it's a pure business-database operation, consistent with this package's existing "business
+     endpoints work without a 2 GB container" convention (the same reasoning behind every other
+     `deps.TB == nil` check in this file).
+   - **Minting is gated to `platform_admin`, not any authenticated user.** This is a new trust
+     boundary the previous design didn't need (ThingsBoard was already the source of truth for which
+     credentials were real): without the gate, any `customer_user` could mint a fresh secret for
+     *any* `deviceName` — including one already provisioned and bound to somebody else — and
+     immediately bind themselves with it, reopening round 5's exact takeover through a different
+     door. `platform_admin` is already the unconditionally-trusted operator tier elsewhere in this
+     codebase (`control.Service.authorize` grants it every device by definition), so reusing that
+     tier for a provisioning action is consistent, not a new policy question.
+
+   Still deliberately **not single-use**, for the same reason round 5 gave: `user_devices` is
+   many-to-many by product decision (2026-08-29), so more than one legitimate staff member must be
+   able to redeem the same physical QR code over time. Minting always *rotates* instead — replacing
+   the previous secret outright — so a leaked or lost secret is fixed by re-minting, which does not
+   evict anyone already bound. `TestMintPairingSecret_RotatingReplacesThePreviousSecretButKeepsExistingBindings`
+   pins both halves of that: the old secret stops working, the old binding doesn't.
+
+   Also fixed `cmd/smoke/main.go`, which — being written for round 5's design — was passing the
+   ThingsBoard access token through as `pairingToken`. Rather than granting the tool's throwaway
+   login user `platform_admin` just to call the new mint endpoint (which would have made every later
+   step in the run exercise the admin-bypass authorization path instead of the ordinary
+   `customer_user` ownership-gated path a real mini-program user actually takes), it now mints the
+   secret as a **direct fixture write** to the business database
+   (`mintPairingSecretFixture`) — the same "direct-database step is fixture setup only; every check
+   afterward goes through the API" convention the tool already uses for seeding its throwaway login
+   user.
+
+   New tests in `internal/api/devices_test.go`: the bind tests no longer need a real ThingsBoard at
+   all (rewritten around a new `env.mintPairingSecret` helper that mints through the real endpoint as
+   a throwaway admin — `internal/api/api_test.go` gained `otherUserToken(role)` to create that user),
+   plus three new ones specific to this round —
+   `TestMintPairingSecret_ForbiddenForNonAdmin` (pins the role gate, and that a rejected attempt
+   creates no row), `TestMintPairingSecret_DoesNotReturnOrAcceptThingsBoardAccessToken` (mints and
+   binds with **no** `TB` wired into `Deps` at all, so any accidental ThingsBoard dependency would
+   fail loudly rather than silently), and the rotation test above. Verified against the real local
+   stack: `migrate up`/`down 1`/`up` round-tripped cleanly on migration `000012`; the full built
+   binary plus `cmd/smoke -api` ran end to end (12/12, unchanged); and a live `curl` probe as a
+   throwaway `customer_user` confirmed both `POST /api/devices/some-devicename/pairing-secret` → 403
+   with no row created, and a guessed-device-name bind attempt → 401, against the running server.
+   `go test ./... -p 1 -count=1` stayed green throughout.
+
+   One operational note worth recording since it cost real debugging time on this pass: a stale
+   `cmd/server` process from an *earlier* verification round was still holding the test port after
+   being (incorrectly assumed) killed via a backgrounded shell job — each `Bash` tool invocation in
+   this environment does not reliably share job-control state (`%1`) with a previous invocation, so
+   `kill %1` silently no-opped. The symptom was a confusing `404` on the new route (the old binary
+   genuinely didn't have it) that briefly looked like a routing bug. `lsof -i :<port>` to find the
+   actual PID holding a port, rather than trusting a job-control kill, is the reliable way to check
+   before concluding a rebuilt binary isn't behaving as built.
 
 ## Architecture
 

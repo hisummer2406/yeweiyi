@@ -31,6 +31,7 @@ type Querier interface {
 	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
 	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
+	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
 	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
@@ -76,6 +77,9 @@ type Querier interface {
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
+	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
+	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
+	UpsertDevicePairingSecret(ctx context.Context, arg UpsertDevicePairingSecretParams) error
 	// Backs every device-scoped handler's authorization check (see internal/api's requireDeviceOwnership).
 	UserOwnsDevice(ctx context.Context, arg UserOwnsDeviceParams) (bool, error)
 	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error)

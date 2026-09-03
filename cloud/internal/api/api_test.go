@@ -9,15 +9,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"yeweiyi-cloud/internal/api"
+	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 )
 
@@ -110,22 +113,61 @@ func (e *testEnv) setRole(role string) {
 	e.token = e.login(e.username, "e2e-test-pass")
 }
 
-// secondUserToken creates and logs in a second, independent user sharing env's router/database —
-// for tests that need two distinct users' relationship to the same device, where env.token is the
-// "first" user's.
-func (e *testEnv) secondUserToken() string {
+// otherUserToken creates and logs in an additional, independent user sharing env's router/database,
+// with the given role ("" for the schema default, customer_user) — for tests that need two distinct
+// users' relationship to the same device, or a user with a different privilege tier than env's own.
+// env.token/env.username remain the "first" user's. Safe to call more than once per test: each call
+// gets its own unique username.
+func (e *testEnv) otherUserToken(role string) string {
 	e.t.Helper()
 	ctx := context.Background()
-	username := "api-test-user2-" + e.t.Name()
-	if _, err := e.pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
-		e.t.Fatalf("seed second user: %v", err)
+	username := fmt.Sprintf("api-test-other-%s-%d", e.t.Name(), time.Now().UnixNano())
+
+	var err error
+	if role == "" {
+		_, err = e.pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2)`, username, testUserPasswordHash)
+	} else {
+		_, err = e.pool.Exec(ctx, `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`, username, testUserPasswordHash, role)
+	}
+	if err != nil {
+		e.t.Fatalf("seed other user: %v", err)
 	}
 	e.t.Cleanup(func() {
 		if _, err := e.pool.Exec(context.Background(), `DELETE FROM users WHERE username = $1`, username); err != nil {
-			e.t.Errorf("cleanup second user: %v", err)
+			e.t.Errorf("cleanup other user: %v", err)
 		}
 	})
 	return e.login(username, "e2e-test-pass")
+}
+
+// secondUserToken is otherUserToken with the schema's default role (customer_user).
+func (e *testEnv) secondUserToken() string {
+	e.t.Helper()
+	return e.otherUserToken("")
+}
+
+// mintPairingSecret mints a fresh pairing secret for deviceName the way a real installer would:
+// authenticated as a (throwaway) platform_admin, through the real
+// POST /api/devices/:device/pairing-secret endpoint — not by inserting into
+// device_pairing_secrets directly, so these tests also exercise mintPairingSecretHandler itself.
+func (e *testEnv) mintPairingSecret(deviceName string) string {
+	e.t.Helper()
+	admin := e.otherUserToken(control.RolePlatformAdmin)
+
+	rec := e.do("POST", "/api/devices/"+deviceName+"/pairing-secret", []byte(admin), nil)
+	if rec.Code != http.StatusOK {
+		e.t.Fatalf("mint pairing secret for %s: expected 200, got %d: %s", deviceName, rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		PairingSecret string `json:"pairingSecret"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		e.t.Fatalf("decode mint response: %v", err)
+	}
+	if resp.PairingSecret == "" {
+		e.t.Fatal("mint response carried no pairingSecret")
+	}
+	return resp.PairingSecret
 }
 
 func (e *testEnv) login(username, password string) string {

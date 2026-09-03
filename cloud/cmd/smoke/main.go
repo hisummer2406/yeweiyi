@@ -178,7 +178,20 @@ func run() int {
 
 	if api != nil {
 		if !r.step("设备绑定（POST /api/devices/bind）", func() (string, error) {
-			code, _, err := api.do(ctx, http.MethodPost, "/api/devices/bind", map[string]string{"deviceName": name, "pairingToken": token}, nil)
+			// The pairing secret is minted directly in the business database, the same
+			// fixture-setup convention loginAsThrowawayUser above already uses — it stands in for
+			// whoever provisions the device physically (platform_admin, via
+			// POST /api/devices/:device/pairing-secret in the real flow; that handler and its
+			// role gate have their own dedicated tests in internal/api/devices_test.go). Doing it
+			// this way, rather than granting the throwaway login user platform_admin just to call
+			// that endpoint, keeps every later step exercising the ordinary customer_user
+			// ownership-gated path a real mini-program user actually takes.
+			pairingSecret, err := mintPairingSecretFixture(ctx, *dbURL, name)
+			if err != nil {
+				return "", fmt.Errorf("mint pairing secret fixture: %w", err)
+			}
+
+			code, _, err := api.do(ctx, http.MethodPost, "/api/devices/bind", map[string]string{"deviceName": name, "pairingToken": pairingSecret}, nil)
 			if err != nil {
 				return "", err
 			}
@@ -605,6 +618,43 @@ func (a *apiClient) deleteBusinessDevice(ctx context.Context, dbURL, deviceName 
 	defer pool.Close()
 	_, err = pool.Exec(ctx, `DELETE FROM devices WHERE device_name = $1`, deviceName)
 	return err
+}
+
+// mintPairingSecretFixture stands in for a real installer calling
+// POST /api/devices/:device/pairing-secret (platform_admin only) — see the call site's comment for
+// why this tool does it as a direct fixture write instead. Returns the plaintext secret;
+// deleteBusinessDevice's DELETE FROM devices above cascades into device_pairing_secrets, so no
+// separate cleanup is needed here.
+func mintPairingSecretFixture(ctx context.Context, dbURL, deviceName string) (string, error) {
+	pool, err := pgxpool.New(ctx, dbURL)
+	if err != nil {
+		return "", err
+	}
+	defer pool.Close()
+
+	if _, err := pool.Exec(ctx, `INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT DO NOTHING`, deviceName); err != nil {
+		return "", err
+	}
+
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	secret := base64.RawURLEncoding.EncodeToString(raw)
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO device_pairing_secrets (device_name, secret_hash) VALUES ($1, $2)
+		 ON CONFLICT (device_name) DO UPDATE SET secret_hash = EXCLUDED.secret_hash, created_at = now()`,
+		deviceName, string(hash)); err != nil {
+		return "", err
+	}
+
+	return secret, nil
 }
 
 // loginAsThrowawayUser seeds a random-password user directly in the business database — there is no

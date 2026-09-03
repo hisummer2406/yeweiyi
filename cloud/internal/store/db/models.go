@@ -111,6 +111,15 @@ type Device struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 设备配对密钥（哈希），与 ThingsBoard 设备凭据完全隔离，仅用于验证 /api/devices/bind 请求
+type DevicePairingSecret struct {
+	DeviceName string `json:"device_name"`
+	// bcrypt 哈希；明文仅在铸造接口的响应中返回一次，不落库
+	SecretHash string `json:"secret_hash"`
+	// 本条密钥的铸造/轮换时间
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // river 队列库自带的 schema（作业表），由 riverqueue/river 管理，非本项目业务表，不要手工改结构。
 type RiverJob struct {
 	ID           int64              `json:"id"`

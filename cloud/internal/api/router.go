@@ -55,6 +55,9 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.POST("/devices/bind", bindDeviceHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
+		// Provisioning-time only (platform_admin), not part of the mini-program's own pairing
+		// flow — see mintPairingSecretHandler's doc comment.
+		authorized.POST("/devices/:device/pairing-secret", mintPairingSecretHandler(deps))
 
 		// ThingsBoard single stack (issue #10).
 		// Telemetry is read through to ThingsBoard on demand, never served from a local copy.
