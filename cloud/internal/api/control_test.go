@@ -313,6 +313,49 @@ func TestListDeviceCommands_ReturnsHistoryMostRecentFirst(t *testing.T) {
 	}
 }
 
+// TestListDeviceCommands_PlatformAdminCanPollUnboundDevice is the regression test for the P1 found
+// in review of PR #11: internal/control.Service.authorize already lets a platform admin operate on
+// any device — scoped to all of them by definition — but requireDeviceOwnership (devices.go), which
+// every device-scoped READ handler calls including this status-polling endpoint, only ever checked
+// user_devices with no exception for role. A platform admin could therefore successfully issue a
+// command against a device nobody had bound them to, and then get 403 from the only endpoint that
+// lets them poll for that command's asynchronous result.
+func TestListDeviceCommands_PlatformAdminCanPollUnboundDevice(t *testing.T) {
+	env, _ := newControlEnv(t, control.Config{})
+	device := "ctl-api-admin-unbound"
+	env.seedDevice(device) // exists, but deliberately never bound to this user via user_devices
+	env.setRole(control.RolePlatformAdmin)
+
+	issued := env.authed("POST", "/api/devices/"+device+"/commands", issueBody(t, protocol.MethodAlarmMute, "平台管理员跨设备处置"))
+	if issued.Code != http.StatusAccepted {
+		t.Fatalf("platform admin issuing against an unbound device: expected 202, got %d: %s", issued.Code, issued.Body.String())
+	}
+
+	rec := env.authed("GET", "/api/devices/"+device+"/commands", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("platform admin polling an unbound device's commands: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got struct {
+		Commands []struct {
+			Reason string `json:"reason"`
+		} `json:"commands"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Commands) != 1 || got.Commands[0].Reason != "平台管理员跨设备处置" {
+		t.Errorf("got %+v, want the just-issued command", got.Commands)
+	}
+
+	// The fix lives in the shared requireDeviceOwnership helper, not a one-off patch on this
+	// handler — spot-check one more of its callers so a narrower fix would fail here too.
+	audit := env.authed("GET", "/api/audit?device="+device, nil)
+	if audit.Code != http.StatusOK {
+		t.Errorf("platform admin querying /api/audit for an unbound device: expected 200, got %d: %s", audit.Code, audit.Body.String())
+	}
+}
+
 func TestListDeviceCommands_ForbiddenForUnownedDevice(t *testing.T) {
 	env, _ := newControlEnv(t, control.Config{})
 	if rec := env.authed("GET", "/api/devices/ctl-api-list-not-mine/commands", nil); rec.Code != http.StatusForbidden {

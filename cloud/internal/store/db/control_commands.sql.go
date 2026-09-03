@@ -259,11 +259,12 @@ SET status        = $3,
     error_code    = $4,
     error_reason  = $5,
     result_detail = $6,
+    sent_at       = COALESCE(sent_at, now()),
     finished_at   = CASE WHEN $3 = 'executing' THEN finished_at ELSE now() END,
     updated_at    = now()
 WHERE command_id = $1
   AND device_name = $2
-  AND status IN ('sent', 'received', 'executing')
+  AND status IN ('pending', 'sent', 'received', 'executing')
 RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
 `
 
@@ -282,6 +283,20 @@ type MarkControlCommandFinishedParams struct {
 // on, not from anything inside the payload: without this, device B reporting a commandId that
 // belongs to device A would be able to complete A's command and have the audit trail misattribute
 // the result to B, breaking the per-device isolation the rest of this schema assumes.
+//
+// 'pending' is in the guard alongside the states you would expect, and that is not a relaxation —
+// it closes a real race. Issue() calls ThingsBoard's two-way RPC synchronously and only writes
+// 'sent'/'received' into this row *after* that call returns, but the device's cmdResult travels
+// over a completely independent channel (the telemetry WebSocket, read by internal/ingest) with no
+// ordering guarantee against it. A fast device can report a result before, or just as, the RPC call
+// above returns — while this row is still 'pending' in our own bookkeeping. Without 'pending' here,
+// that UPDATE would match zero rows, ApplyResult would treat the result as inapplicable and drop it
+// silently, the later MarkControlCommandSent/Acked calls would leave the row stuck at 'received',
+// and the command would eventually expire despite the device already having reported success.
+// Accepting the result from 'pending' is safe: a device can only ever learn a commandId by having
+// actually received it over the RPC, which cannot happen before this row exists — so there is no
+// earlier state a forged or premature result could be exploiting. sent_at is backfilled (only if
+// still unset) so a command that finishes via this race does not carry a permanently-null sent_at.
 func (q *Queries) MarkControlCommandFinished(ctx context.Context, arg MarkControlCommandFinishedParams) (ControlCommand, error) {
 	row := q.db.QueryRow(ctx, markControlCommandFinished,
 		arg.CommandID,

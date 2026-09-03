@@ -50,6 +50,10 @@ type fakeSender struct {
 	lastEnv  protocol.Envelope
 	lastMeth string
 	calls    int
+	// onSend, if set, runs synchronously inside SendCommand after recording the call but before
+	// returning an ack — lets a test pause Issue() mid-flight to exercise what a genuinely
+	// in-flight command looks like from elsewhere (see TestApplyResult_AppliesWhileStillPending).
+	onSend func(env protocol.Envelope)
 }
 
 func (f *fakeSender) GetDeviceByName(_ context.Context, name string) (tbclient.Device, error) {
@@ -67,6 +71,9 @@ func (f *fakeSender) GetDeviceByName(_ context.Context, name string) (tbclient.D
 func (f *fakeSender) SendCommand(_ context.Context, _ string, method string, env protocol.Envelope, _ int64) (protocol.Ack, error) {
 	f.calls++
 	f.lastMeth, f.lastEnv = method, env
+	if f.onSend != nil {
+		f.onSend(env)
+	}
 	if f.sendErr != nil {
 		return protocol.Ack{}, f.sendErr
 	}
@@ -205,6 +212,25 @@ func TestIssue_RequiresReason(t *testing.T) {
 	}
 }
 
+// TestIssue_RejectsWhitespaceOnlyReason covers the P2 found in review of PR #11: a whitespace-only
+// reason ("   ") passes the old `req.Reason == ""` check and Gin's `binding:"required"` alike, and
+// used to only be caught by the database's CHECK(length(btrim(reason)) > 0) constraint — surfacing
+// as an unrecognized error that internal/api/control.go's writeControlError maps to a generic 500,
+// not the 400 a bad user input deserves. Issue must reject it itself, before ever reaching the DB.
+func TestIssue_RejectsWhitespaceOnlyReason(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
+
+	req := issueReq(f, protocol.MethodAlarmMute)
+	req.Reason = "   \t  "
+
+	if _, err := f.svc.Issue(context.Background(), req); !errors.Is(err, control.ErrReasonRequired) {
+		t.Fatalf("got %v, want ErrReasonRequired", err)
+	}
+	if f.sender.calls != 0 {
+		t.Error("a command with a whitespace-only reason must never reach ThingsBoard")
+	}
+}
+
 func TestIssue_RejectsUnknownMethod(t *testing.T) {
 	f := newFixture(t, control.RolePlatformAdmin, control.Config{AllowPhysicalCommands: true})
 
@@ -315,6 +341,82 @@ func TestIssue_PlatformOutageLeavesCommandPending(t *testing.T) {
 	}
 	if cmd.Status != protocol.CmdStatusPending {
 		t.Errorf("status = %q, want %q", cmd.Status, protocol.CmdStatusPending)
+	}
+}
+
+// TestApplyResult_AppliesWhileStillPending is the regression test for the P1 found in review of
+// PR #11: Issue() calls ThingsBoard's two-way RPC synchronously and only writes 'sent'/'received'
+// into the row once that call returns, but the device's cmdResult arrives over a completely
+// independent channel (the telemetry WebSocket, read by internal/ingest) with no ordering guarantee
+// against it. A fast device can report its result while this row is still 'pending' in our own
+// bookkeeping. Without 'pending' in MarkControlCommandFinished's guard, that update matched zero
+// rows, ApplyResult treated the result as inapplicable and dropped it, and the command was left
+// stuck at 'received' until it expired — despite the device having already reported success.
+func TestApplyResult_AppliesWhileStillPending(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
+	ctx := context.Background()
+
+	// Block SendCommand so Issue() is provably still inside its synchronous RPC call — this row is
+	// guaranteed to still be 'pending' — while the test applies a result to it from another
+	// goroutine, reproducing the real race instead of hoping timing lines up.
+	release := make(chan struct{})
+	sentCommandID := make(chan string, 1)
+	f.sender.onSend = func(env protocol.Envelope) {
+		sentCommandID <- env.CommandID
+		<-release
+	}
+
+	type issueResult struct {
+		cmd db.ControlCommand
+		err error
+	}
+	issueDone := make(chan issueResult, 1)
+	go func() {
+		cmd, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute))
+		issueDone <- issueResult{cmd, err}
+	}()
+
+	var commandID string
+	select {
+	case commandID = <-sentCommandID:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Issue() never reached SendCommand")
+	}
+
+	updated, applied, err := f.svc.ApplyResult(ctx, f.device, protocol.CmdResult{
+		CommandID: commandID,
+		Status:    protocol.CmdStatusSucceeded,
+		Detail:    json.RawMessage(`{"muted":true}`),
+		TSMs:      time.Now().UnixMilli(),
+	})
+	if err != nil {
+		t.Fatalf("ApplyResult while the command is still pending: %v", err)
+	}
+	if !applied {
+		t.Fatal("a result arriving before the synchronous ACK bookkeeping must still apply, not be silently dropped")
+	}
+	if updated.Status != protocol.CmdStatusSucceeded {
+		t.Errorf("status = %q, want %q", updated.Status, protocol.CmdStatusSucceeded)
+	}
+	if !updated.SentAt.Valid {
+		t.Error("sent_at should be backfilled when a result closes a still-pending command")
+	}
+
+	close(release)
+	select {
+	case res := <-issueDone:
+		if res.err != nil {
+			t.Fatalf("Issue(): %v", res.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Issue() never returned after being released")
+	}
+
+	// The row must still show the already-applied terminal result — the ACK bookkeeping that runs
+	// after SendCommand returns must not be able to clobber it.
+	final := getCommand(t, f, commandID)
+	if final.Status != protocol.CmdStatusSucceeded {
+		t.Errorf("final status = %q, want %q", final.Status, protocol.CmdStatusSucceeded)
 	}
 }
 

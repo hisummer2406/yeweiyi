@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 )
 
@@ -17,6 +18,16 @@ import (
 // any "does this record/device even exist" check below it in the same handler, so an unauthorized
 // caller can't distinguish "not yours" from "doesn't exist" — otherwise the ownership boundary would
 // leak which device_name strings are real.
+//
+// A platform admin is scoped to every device by definition and skips the user_devices check
+// entirely — mirroring internal/control.Service.authorize's identical rule for issuing a command.
+// Without this, a platform admin could issue a command against a device nobody has bound them to
+// (authorize already allows that) but then get 403 from every one of this function's other callers,
+// including GET /api/devices/:device/commands — the only endpoint that polls for that command's
+// result — so admin-issued commands against unbound devices could never be checked on. Found in
+// review of PR #11. This does not weaken the "same answer for unauthorized vs nonexistent" property
+// above: that property protects a caller from enumerating *other people's* devices, and a platform
+// admin is already trusted with visibility into all of them.
 func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
 	userID, ok := c.Get("userID")
 	if !ok {
@@ -24,6 +35,10 @@ func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
 		// up without it, which is a wiring bug, not a client error.
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
 		return false
+	}
+
+	if role, _ := c.Get("role"); role == control.RolePlatformAdmin {
+		return true
 	}
 
 	owns, err := deps.Queries.UserOwnsDevice(c.Request.Context(), db.UserOwnsDeviceParams{

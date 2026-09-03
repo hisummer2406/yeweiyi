@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -140,6 +141,14 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		return db.ControlCommand{}, fmt.Errorf("%w: %q", ErrUnknownMethod, req.Method)
 	}
 
+	// Trim before checking: Gin's `binding:"required"` on the HTTP request only rejects a literally
+	// empty string, so a whitespace-only reason ("   ") used to sail past this check and only get
+	// caught by the database's CHECK(length(btrim(reason)) > 0) constraint — surfacing as a raw,
+	// unrecognized DB error that writeControlError falls through to a generic 500 for, instead of
+	// the ErrReasonRequired -> 400 a bad user input deserves. Found in review of PR #11. The trimmed
+	// value is what gets stored and sent from here on, so the record does not carry the whitespace
+	// either.
+	req.Reason = strings.TrimSpace(req.Reason)
 	if req.Reason == "" {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": "missing reason"})

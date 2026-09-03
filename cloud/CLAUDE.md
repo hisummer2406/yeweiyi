@@ -1873,6 +1873,55 @@ P2, plus a short list of items from the *first* round that were still unaddresse
 Not fixed here, and not this PR's to fix unilaterally: no CI checks exist yet for this repository —
 tracked as one of the Draft checklist items on the PR itself, not a code change.
 
+**2026-09-04 PR #11 third review-response round** — pushing the round above (head `3201897`) got a
+third independent review (submitted as a plain comment, since GitHub does not let a PR's own author
+request changes on it — the conclusion stands as "needs another fix pass" all the same). It credited
+everything fixed in the first two rounds and found 2 more P1s and 1 more P2, all genuine and all in
+code the second round's own new tests never happened to exercise together. Fixed all three:
+
+1. **A device's `cmdResult` could be silently dropped if it arrived before the synchronous ACK
+   bookkeeping caught up (P1).** `control.Service.Issue` calls ThingsBoard's two-way RPC
+   synchronously and only writes `sent`/`received` into the row *after* that call returns — but the
+   device's `cmdResult` travels over a completely independent channel (the telemetry WebSocket,
+   read by `internal/ingest`) with no ordering guarantee against it. A fast device can report its
+   result while the row is still `pending` in our own bookkeeping, and `MarkControlCommandFinished`'s
+   guard did not accept `pending` — so that `UPDATE` matched zero rows, `ApplyResult` treated the
+   result as inapplicable and dropped it, the ACK bookkeeping that ran moments later left the row
+   stuck at `received`, and the command eventually expired despite the device having already
+   reported success. Fixed by adding `pending` to the guard — safe to accept from there because a
+   device can only ever learn a `commandId` by having actually received it over the RPC, which
+   cannot happen before the row exists, so there is no earlier state a forged or premature result
+   could be exploiting — and backfilling `sent_at` with `COALESCE(sent_at, now())` so a command that
+   finishes via this race does not carry a permanently-null `sent_at`.
+   `TestApplyResult_AppliesWhileStillPending` (`internal/control/control_test.go`) reproduces the
+   real ordering rather than hoping timing lines up: it blocks the fake sender's `SendCommand` on a
+   channel so `Issue()` is provably still inside its synchronous RPC call — the row is guaranteed
+   `pending` — applies a result from a second goroutine, then releases `SendCommand` and confirms the
+   later ACK bookkeeping does not clobber the already-applied terminal result. Passes under
+   `-race`.
+2. **A platform admin could issue a command against an unbound device but then never read its result
+   back (P1).** `control.Service.authorize` already scopes a platform admin to every device by
+   definition, but `internal/api/devices.go`'s `requireDeviceOwnership` — called by every
+   device-scoped *read* handler, including the only endpoint that polls a command's asynchronous
+   result — checked `user_devices` unconditionally, with no exception for role. So a platform admin
+   could `POST` a command against a device nobody had bound them to (control's own authorize allows
+   it) and then get 403 from `GET /api/devices/:device/commands` when trying to see whether it
+   finished. Fixed by mirroring `authorize`'s exact rule in the one place `requireDeviceOwnership` is
+   defined, so every one of its callers (commands, audit, telemetry, alarms, stock) picks it up at
+   once rather than needing five separate patches.
+   `TestListDeviceCommands_PlatformAdminCanPollUnboundDevice` (`internal/api/control_test.go`)
+   issues against an unbound (but real) device as a platform admin, confirms the poll now reads
+   `200` with the issued command in it, and spot-checks `GET /api/audit` too — proving the fix is in
+   the shared helper and not a one-off patch on a single handler.
+3. **A whitespace-only 二次确认 reason surfaced as a 500, not a 400 (P2).** `Issue`'s own check was
+   `req.Reason == ""`, and Gin's `binding:"required"` on the HTTP side rejects only a literally empty
+   string — so `"   "` sailed past both and was only caught by the database's
+   `CHECK(length(btrim(reason)) > 0)` constraint, surfacing as an error `writeControlError` does not
+   recognize and therefore maps to a generic 500 instead of the `ErrReasonRequired` → 400 a bad
+   user input deserves. Fixed by trimming `req.Reason` before checking it (and using the trimmed
+   value from there on, so the stored record does not carry the whitespace either).
+   `TestIssue_RejectsWhitespaceOnlyReason` pins the correct sentinel/status for a `"   \t  "` reason.
+
 ## Architecture
 
 - `cmd/server/main.go` builds a `pgxpool.Pool` and a `redis.Client` from `DATABASE_URL`/
