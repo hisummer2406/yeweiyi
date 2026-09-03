@@ -88,7 +88,9 @@ go run ./cmd/tbdevicesim provision -name tank-farm-01
 go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 15s
 
 # the backend, on the single stack. Note what is NOT here: no MQTT_BROKER_URL, no
-# MQTT_PRODUCT_KEY, no broker of any kind. Setting MQTT_BROKER_URL starts the legacy stack.
+# MQTT_PRODUCT_KEY, no broker of any kind — the legacy stack those env vars used to start
+# (internal/mqtt, cmd/devicesim) was deleted outright on 2026-09-02 (issue #10), so cmd/server no
+# longer reads either variable at all; setting them now does nothing.
 JWT_SECRET=dev-secret \
 TB_BASE_URL=http://localhost:8081 TB_USERNAME=tenant@thingsboard.org TB_PASSWORD=tenant \
 go run ./cmd/server
@@ -1782,6 +1784,94 @@ below is a fix for something the review found already built.
    steps green end to end with `-api`, 8 green in the ThingsBoard-only fallback, and no leftover
    devices or users in either database afterward.
 7. **Nit**: trailing whitespace on `deploy/profiles/small.yml`'s `"-c"` line, removed.
+
+**2026-09-03 PR #11 second review-response round** — pushing the round above (head `81d697d`) got
+an independent re-review, which credited the round above's fixes but found 3 more P1s and one more
+P2, plus a short list of items from the *first* round that were still unaddressed. Fixed all of it:
+
+1. **`restore.sh` still let the Go backend itself write during a restore (P1).** The round-above fix
+   stopped ThingsBoard's own Java app from running during its DB restore, but said nothing about the
+   *business* PostgreSQL restore two steps earlier — the Go backend is a separate, independent writer
+   this script never touched, and it could still be holding connections or issuing queries against
+   tables mid-`DROP`/`CREATE` while `--clean` ran, or write rows after the backup's timestamp that
+   then disagree with the ThingsBoard snapshot restored right after. Fixed by adding an explicit
+   precondition, checked before the destructive-confirmation prompt: probe `$API_URL/healthz`
+   (default `http://localhost:8080`, overridable) and refuse to proceed with instructions if it
+   answers — this project has no single canonical way to stop the backend (bare `&`, systemd, and
+   the deploy docs mention both), so the script can only detect "is it still up," not safely kill an
+   arbitrary process on the operator's behalf. Also added a script-wide `ERR` trap (confirmed by
+   testing that it does *not* fire on the script's existing deliberate `exit 1` cancellation paths —
+   those are exempt from bash's `set -e`/`ERR` semantics as part of an `||`/`if`) that tells the
+   operator the system is still in a stopped, safe state and not to `docker start` the ThingsBoard
+   container until the failure is understood. **Verified live, not just read**: ran the script with
+   the real dev-stack backend up — refused, correctly, with the new message; stopped it, reran — the
+   full restore completed as before (device count intact, ThingsBoard healthy, no leftover
+   container).
+2. **`LatestSnapshot` trusted the device-reported `tankCount` with no bound (P1).** It passed the
+   value straight into `protocol.SnapshotKeys`, which allocates 12 keys per tank — a corrupted or
+   compromised device reporting one absurd `tankCount` value would sit as ThingsBoard's permanent
+   "latest" for that key, and every subsequent read would build an unbounded key list and query
+   string off it. Fixed by adding `protocol.MaxTankCount` (64 — the same ceiling the now-removed
+   client-supplied `tanks` query param used to enforce, moved to the trust boundary that actually
+   needed it once that param was removed) and rejecting anything outside `[0, MaxTankCount]` before
+   the expensive history query is ever built. `TestLatestSnapshot_RejectsOutOfRangeTankCount` (three
+   cases: negative, one past the bound, absurdly large) confirms both the rejection and — the part
+   that actually matters for the resource-exhaustion concern — that the history query is never
+   issued; `TestLatestSnapshot_AllowsBoundaryTankCount` pins that 0 and exactly `MaxTankCount` are
+   still accepted, so the fix isn't off-by-one in the strict direction.
+3. **A mass WebSocket disconnect could trigger a login storm against a recovering ThingsBoard, and a
+   slow-to-report stream could wipe out a fresher token (P1).** `internal/ingest` runs one
+   subscription per device, all sharing one `tbclient.Client`; the round-above fix has any WS read
+   or in-band error call `invalidateToken()`. Put together: a ThingsBoard restart or network blip
+   disconnects every device's subscription near-simultaneously, each independently calls `Token()`
+   with an empty/expired cache, and — since `Token()`'s check-then-Login was not coalesced — each
+   would fire its own `/api/auth/login` at a platform still recovering, a storm proportional to
+   fleet size. Separately, the previous `invalidateToken()` cleared the cache unconditionally, so a
+   connection that was slow to notice its own rejection could clear a token some *other* goroutine
+   had already refreshed to in the meantime, forcing a needless extra login wave right when load
+   should be settling. Fixed both: `Login()` now coalesces concurrent callers through
+   `golang.org/x/sync/singleflight` (promoted from an indirect to a direct dependency — no new
+   external dependency edge, since it was already vendored transitively), so N concurrent `Token()`
+   calls against an empty cache produce exactly one HTTP round trip; and `invalidateToken` became a
+   compare-and-clear, taking the specific token that failed and only clearing the cache if it still
+   holds that exact value — the WebSocket read loop now passes its own `token` variable through.
+   `TestClient_ConcurrentTokenCallsCoalesceIntoOneLogin` drives 50 goroutines at a login held open
+   until they have all queued behind it and asserts exactly one `/api/auth/login` hit; the same test,
+   like the fix, holds under `go test -race`.
+   `TestClient_InvalidateTokenDoesNotClearAFresherToken` opens a stream on token #1, forces an
+   independent second login to token #2 while the stream's rejection is deliberately held back (via
+   a channel the test controls, not a timing hope), then releases it and confirms the cache still
+   holds token #2 and no third login happened. Writing that second test surfaced a real bug in the
+   test helper itself, not the fix: `makeJWT` encoded `exp` at whole-second granularity, so two JWTs
+   minted within the same wall-clock second (routine for a fast test) came out byte-identical,
+   making the compare-and-clear spuriously match — fixed by giving `makeJWT` a monotonically
+   incrementing `jti` claim so generated tokens are always distinguishable regardless of timing.
+4. **The smoke tool's own doc comment overclaimed what it cleans up (P2).** It said it "never
+   touches existing devices, users or business data," but a successful `-api` run permanently leaves
+   its `control.issue`/`control.ack`/`control.result` rows in `audit_log` — not a bug, since
+   `audit_log` deliberately has no foreign key to `devices` or `control_commands` and never cascades
+   a delete (its own migration comment: a denied attempt against a device that turns out not to
+   exist is exactly the kind of event worth keeping). Deleting those rows from the smoke tool for its
+   own tidiness would punch a hole in that guarantee. Fixed by correcting the doc comment instead of
+   the behavior: it now says plainly that audit rows persist by design and are filterable by the
+   `smoke-` prefix every run's `device_name` (and, for the actor column, either that same login
+   username or `device:smoke-<nanos>`) already carries.
+5. **Two items left over from the *first* review round, both textual/behavioural, no dedicated new
+   test**: `internal/api/listparams.go`'s `parseListParams` defaulted a caller who omitted
+   `beginTime` to "since epoch" — combined with the default ascending sort and 50-row limit, this
+   silently answered "the 50 oldest records ever" for the common case of a client just wanting
+   recent history. Changed the default window to the last 24h, matching `/api/audit`'s own default
+   (`control.go`'s `timeRange`) — the codebase already had the right convention in one place and not
+   the other. And this file's own Part 1 quickstart still said "setting `MQTT_BROKER_URL` starts the
+   legacy stack" after that stack (`internal/mqtt`, `cmd/devicesim`) was deleted outright on
+   2026-09-02 — `cmd/server` no longer reads that variable at all, so the corrected line now says so
+   instead of describing a code path that no longer exists. (The PR body's own stale "12 commits"
+   count and its claim that parallel `go test ./...` "no longer needs `-p 1`" — the second of which
+   this file's own 2026-09-02 test-flake-correction entry above already retracted — were also fixed,
+   but in the PR description on GitHub, not in a file this journal tracks.)
+
+Not fixed here, and not this PR's to fix unilaterally: no CI checks exist yet for this repository —
+tracked as one of the Draft checklist items on the PR itself, not a code change.
 
 ## Architecture
 

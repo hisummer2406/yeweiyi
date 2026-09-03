@@ -146,10 +146,12 @@ func (c *Client) SubscribeTelemetry(ctx context.Context, deviceID string, keys [
 				}
 				// An unclean close is also how ThingsBoard rejects a bad in-band auth token in
 				// practice, so this is not necessarily "our side dropped the connection" — clear
-				// the cached token so a caller's reconnect does not hand the same rejected value
+				// the cached token (if it is still the one this connection used — see
+				// invalidateToken's comment on why that comparison matters with many subscriptions
+				// sharing one Client) so a caller's reconnect does not hand the same rejected value
 				// straight back to a fresh socket. Harmless to do for an ordinary network drop too:
 				// it just costs one extra login on the next attempt.
-				c.invalidateToken()
+				c.invalidateToken(token)
 				errc <- fmt.Errorf("thingsboard: ws read: %w", err)
 				return
 			}
@@ -162,7 +164,7 @@ func (c *Client) SubscribeTelemetry(ctx context.Context, deviceID string, keys [
 				// Covers both an explicit auth-rejection ack and any other subscription-level
 				// error ThingsBoard reports in-band; see the comment above ReadMessage's error
 				// path for why invalidating here is safe even when the cause was not auth.
-				c.invalidateToken()
+				c.invalidateToken(token)
 				errc <- fmt.Errorf("thingsboard: ws subscription error %d: %s", u.ErrorCode, u.ErrorMsg)
 				return
 			}

@@ -12,6 +12,17 @@
 // and deletes them afterwards, so it is safe to run against a live installation. It never touches
 // existing devices, users or business data.
 //
+// One deliberate exception, found worth calling out explicitly in review of PR #11: a successful
+// -api run leaves its own control.issue/control.ack/control.result rows in audit_log permanently.
+// This is not an oversight — audit_log has no foreign key to devices or control_commands and never
+// cascades a delete (see the table's own COMMENT in db/migrations/000010_control_and_audit.up.sql:
+// a denied attempt against a device_name that turns out not to exist is exactly the kind of event
+// worth keeping, so nothing here may quietly disappear when the thing it describes does). Deleting
+// these rows from here would mean this tool punching a hole in that guarantee for its own
+// convenience. They are cheap to filter out of a real audit review: every row a smoke run produces
+// has device_name = the throwaway device's own "smoke-<nanos>" name, and actor is either that same
+// login username or "device:smoke-<nanos>" for the device-reported result row.
+//
 //	smoke -tb http://localhost:8081 -mqtt tcp://localhost:1884
 //	smoke -api http://localhost:8080      # exercise the Go backend's own REST API, not just ThingsBoard
 //

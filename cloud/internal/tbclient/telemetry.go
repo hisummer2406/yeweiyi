@@ -107,6 +107,15 @@ func (c *Client) LatestSnapshot(ctx context.Context, deviceID string) (int64, ma
 	if err != nil {
 		return 0, nil, fmt.Errorf("latest snapshot for %s: %s value %q is not an integer: %w", deviceID, protocol.KeyTankCount, tc.Value, err)
 	}
+	// tankCount is device-reported and untrusted — an anomalous, corrupted or compromised device
+	// could report a huge value once, and it would then sit as ThingsBoard's "latest" for that key
+	// indefinitely. Without this bound, every subsequent LatestSnapshot call would build a
+	// SnapshotKeys list (12 keys per tank) and a query string sized off that number, unbounded —
+	// found in review of PR #11.
+	if tankCount < 0 || tankCount > protocol.MaxTankCount {
+		return 0, nil, fmt.Errorf("latest snapshot for %s: %s value %d is outside the allowed range [0, %d]",
+			deviceID, protocol.KeyTankCount, tankCount, protocol.MaxTankCount)
+	}
 
 	snapshotTs := tc.TS
 	keys := protocol.SnapshotKeys(tankCount)

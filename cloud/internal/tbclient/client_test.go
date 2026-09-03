@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -261,13 +263,164 @@ func TestSubscribeTelemetry_ReconnectsWithFreshTokenAfterWSAuthError(t *testing.
 	}
 }
 
-// makeJWT builds an unsigned-but-well-formed JWT carrying only an exp claim — enough for jwtExpiry
-// to parse, without needing a real signing key. ThingsBoard hands us a token we already trust
-// (it came back from our own authenticated login call), so this project never verifies the
-// signature either; the stub matches that.
+// TestClient_ConcurrentTokenCallsCoalesceIntoOneLogin covers the login-storm half of the PR #11
+// review finding: one Client is shared by every device's telemetry subscription in
+// internal/ingest, so a mass reconnect (ThingsBoard restarting, say) has many goroutines call
+// Token() with an empty/expired cache at roughly the same moment. Without coalescing, each would
+// fire its own /api/auth/login at a platform that may itself still be recovering — a login storm
+// whose size scales with fleet size. Login() must serialize concurrent callers onto one HTTP round
+// trip instead.
+func TestClient_ConcurrentTokenCallsCoalesceIntoOneLogin(t *testing.T) {
+	var logins int32
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/auth/login" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if atomic.AddInt32(&logins, 1) == 1 {
+			close(started)
+		}
+		<-release // hold the response open so every concurrent caller has a chance to pile up behind this one
+		tok := makeJWT(time.Now().Add(2 * time.Hour))
+		w.Write([]byte(`{"token":"` + tok + `","refreshToken":"r"}`))
+	}))
+	defer srv.Close()
+
+	c, err := tbclient.New(tbclient.Config{BaseURL: srv.URL, Username: "u@example.com", Password: "p"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	const n = 50
+	var wg sync.WaitGroup
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := c.Token(context.Background())
+			errs <- err
+		}()
+	}
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no login request arrived")
+	}
+	time.Sleep(200 * time.Millisecond) // let the other 49 goroutines reach Token() and queue up
+	close(release)
+
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Errorf("Token(): %v", err)
+		}
+	}
+
+	if got := atomic.LoadInt32(&logins); got != 1 {
+		t.Errorf("logins = %d, want 1 — %d concurrent Token() calls against an empty cache must coalesce into one login", got, n)
+	}
+}
+
+// TestClient_InvalidateTokenDoesNotClearAFresherToken covers the compare-and-clear half of the same
+// finding: with many subscriptions sharing one Client, a stream that was using an old token can be
+// slow to notice and report its rejection. If invalidateToken cleared the cache unconditionally, that
+// late report could wipe out a token some other caller had already refreshed to in the meantime,
+// forcing an unnecessary extra login. It must only clear the cache when the cache still holds the
+// exact token that failed.
+func TestClient_InvalidateTokenDoesNotClearAFresherToken(t *testing.T) {
+	var logins int
+	release := make(chan struct{})
+	upgrader := websocket.Upgrader{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		logins++
+		tok := makeJWT(time.Now().Add(2 * time.Hour))
+		w.Write([]byte(`{"token":"` + tok + `","refreshToken":"r"}`))
+	})
+	mux.HandleFunc("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		if _, _, err := conn.ReadMessage(); err != nil { // the authCmd
+			return
+		}
+		if _, _, err := conn.ReadMessage(); err != nil { // the subscribe cmd
+			return
+		}
+		<-release // held until the test has independently refreshed the token — see below
+		conn.WriteJSON(map[string]any{"cmdId": 0, "errorCode": 401, "errorMsg": "authentication failed"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	c, err := tbclient.New(tbclient.Config{BaseURL: srv.URL, Username: "u@example.com", Password: "p"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx := context.Background()
+
+	// This stream connects and authenticates with whatever is cached right now (login #1).
+	stream, err := c.SubscribeTelemetry(ctx, "device-1", nil)
+	if err != nil {
+		t.Fatalf("SubscribeTelemetry: %v", err)
+	}
+	defer stream.Close()
+
+	// Something else refreshes the cache independently while the stream above is still open — the
+	// same race an in-flight REST 401 retry could cause. This is login #2; the cache now holds a
+	// token the stream above was never told about.
+	if err := c.Login(ctx); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	fresh, err := c.Token(ctx)
+	if err != nil {
+		t.Fatalf("Token: %v", err)
+	}
+	if logins != 2 {
+		t.Fatalf("logins = %d, want 2 before the stream's rejection is allowed to land", logins)
+	}
+
+	// Only now let the stream's (stale-token) rejection land.
+	close(release)
+	select {
+	case streamErr := <-stream.Err:
+		if streamErr == nil {
+			t.Fatal("expected the stream to report the in-band auth rejection")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for the stream to report the auth rejection")
+	}
+
+	got, err := c.Token(ctx)
+	if err != nil {
+		t.Fatalf("Token() after the rejection: %v", err)
+	}
+	if got != fresh {
+		t.Fatal("a rejection from a stream using a stale token cleared the newer token the cache had already moved to")
+	}
+	if logins != 2 {
+		t.Errorf("logins = %d, want 2 — the stale rejection must not force an unnecessary third login", logins)
+	}
+}
+
+var jwtSeq int32
+
+// makeJWT builds an unsigned-but-well-formed JWT carrying an exp claim plus a monotonically
+// incrementing jti — the jti exists purely so that two calls made within the same wall-clock second
+// (routine in a fast test) still produce distinguishable tokens; exp alone truncates to whole
+// seconds and would otherwise make same-second tokens byte-identical, which silently defeats any
+// test asserting on token identity (e.g. that invalidation targeted the right one).
 func makeJWT(exp time.Time) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
-	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp.Unix())))
+	seq := atomic.AddInt32(&jwtSeq, 1)
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d,"jti":%d}`, exp.Unix(), seq)))
 	return header + "." + payload + ".sig"
 }
 

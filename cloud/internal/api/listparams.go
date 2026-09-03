@@ -40,7 +40,12 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 		return listParams{}, false
 	}
 
-	begin := time.Unix(0, 0).UTC()
+	// Default window is the last 24h, not "since epoch" — matching /api/audit's own default
+	// (control.go's timeRange). An epoch-to-now default combined with the default limit/ascending
+	// sort below silently answered "the oldest 50 records ever" for any caller that omitted
+	// beginTime, which is backwards for a history endpoint whose obvious default use is "what
+	// just happened". Found still open in review of PR #11.
+	begin := time.Now().Add(-24 * time.Hour).UTC()
 	if v := c.Query("beginTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {

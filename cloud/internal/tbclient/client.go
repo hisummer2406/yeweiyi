@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // ErrNotFound is returned when ThingsBoard answers 404 — most usefully for "no such device", which
@@ -99,6 +101,14 @@ type Client struct {
 	refreshToken string
 	tokenSetAt   time.Time
 	tokenExpiry  time.Time // zero means "unknown, treat as expiring at tokenSetAt+fallbackTokenTTL"
+
+	// loginGroup coalesces concurrent Login calls into one HTTP round trip. Without this, every
+	// device's telemetry subscription in internal/ingest shares this one Client, so a mass
+	// reconnect — ThingsBoard restarting, a network blip — has every subscription's goroutine call
+	// Token() at roughly the same moment; each would otherwise fire its own /api/auth/login,
+	// hitting a platform that is itself still recovering with a login storm proportional to fleet
+	// size. Found in review of PR #11.
+	loginGroup singleflight.Group
 }
 
 // fallbackTokenTTL is used only when a cached token's expiry cannot be determined (it is not a
@@ -135,7 +145,17 @@ type loginResponse struct {
 
 // Login authenticates and caches a JWT. Callers do not normally need to call this — every request
 // does it on demand — but the e2e checks use it to fail fast with a clear message.
+// Login authenticates and caches a JWT. Concurrent callers coalesce onto one HTTP round trip via
+// loginGroup — see its doc comment for why that matters here specifically (one Client shared by
+// every device subscription in internal/ingest).
 func (c *Client) Login(ctx context.Context) error {
+	_, err, _ := c.loginGroup.Do("login", func() (any, error) {
+		return nil, c.doLogin(ctx)
+	})
+	return err
+}
+
+func (c *Client) doLogin(ctx context.Context) error {
 	body, _ := json.Marshal(map[string]string{
 		"username": c.cfg.Username,
 		"password": c.cfg.Password,
@@ -189,12 +209,21 @@ func (c *Client) Token(ctx context.Context) (string, error) {
 	return c.token, nil
 }
 
-// invalidateToken clears the cached JWT so the next Token() call re-authenticates unconditionally,
-// regardless of what its recorded expiry says. Used when something has demonstrated the cached
-// token no longer works — a WebSocket rejecting it — rather than waiting for expiry to catch up.
-func (c *Client) invalidateToken() {
+// invalidateToken clears the cached JWT, but only if it still equals staleToken — a
+// compare-and-clear, not an unconditional clear.
+//
+// This one Client is shared by every device's telemetry subscription in internal/ingest, so on a
+// mass reconnect many goroutines can be reacting to a rejected token at roughly the same time. If
+// invalidation were unconditional, a slow-to-exit goroutine still holding an old, already-superseded
+// token could wipe out a fresh token another goroutine obtained in the meantime — turning one real
+// auth failure into a second, unnecessary login for everyone else. Comparing against the specific
+// token that actually failed makes this a no-op once someone else has already moved the cache
+// forward. Found in review of PR #11.
+func (c *Client) invalidateToken(staleToken string) {
 	c.mu.Lock()
-	c.token, c.tokenExpiry = "", time.Time{}
+	if c.token == staleToken {
+		c.token, c.tokenExpiry = "", time.Time{}
+	}
 	c.mu.Unlock()
 }
 

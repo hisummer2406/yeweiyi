@@ -44,6 +44,15 @@ const (
 	KeyTankCount   = "tankCount"   // int, number of tanks in this snapshot
 )
 
+// MaxTankCount bounds how many tanks a snapshot may claim to have. This is a sanity ceiling, not a
+// hardware spec — real terminals in the field are nowhere near it — chosen to keep SnapshotKeys'
+// output (12 keys per tank) and anything built from it (a ThingsBoard query string, a parsed
+// Snapshot) bounded even if a tankCount value is corrupted or comes from a compromised device.
+// tankCount is device-reported and untrusted; callers building keys from it (SnapshotKeys' own
+// callers, notably tbclient.Client.LatestSnapshot) must clamp against this rather than trust it
+// blindly — found in review of PR #11, where LatestSnapshot did not.
+const MaxTankCount = 64
+
 // AlarmState is the per-tank rollup shown in a snapshot. It is the *current* worst state of that
 // tank, not an event — alarm transitions are reported separately and immediately as an AlarmEvent
 // (see events.go), because a 30-second snapshot is far too slow to be an alarm channel.
