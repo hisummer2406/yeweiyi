@@ -8,19 +8,26 @@ interface RequestOptions {
   needAuth?: boolean;
 }
 
-// Carries the HTTP status alongside the message so callers can special-case e.g. 404 ("nothing
-// polled yet" on /api/oilcan/latest) without re-parsing a plain Error's message string.
+// Carries the HTTP status and the full parsed body alongside the message. Most callers only need
+// `message` (yeweiyi-cloud's handlers put a human string in `error`), but a couple of endpoints
+// return a structured body even on a non-2xx status specifically so a caller can do something
+// smarter than show an error toast — GET /api/oil-in-out's 502 still carries `rows` (whatever *did*
+// parse) plus `unparsable`/`legacySkipped` counts, and collapsing that to just the error string
+// would throw away the whole point of that response shape. See device-detail.ts's loadOilInOut.
 export class ApiError extends Error {
   status: number;
+  body: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body?: unknown) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
-// Every route except /api/login needs Authorization: Bearer {jwt} (see CLAUDE.md "Sibling repos").
-// A 403 means "not your device" (bound-or-not is indistinguishable by design) and must NOT log the
+// Every route except /api/login needs Authorization: Bearer {jwt} (see yeweiyi-cloud CLAUDE.md
+// "API surface"). A 403 means "not your device" (bound-or-not is indistinguishable by design, and
+// an unbound device answers the same 403 as one that does not exist at all) and must NOT log the
 // user out; only a 401 means the token itself is bad/expired.
 export function request<T>(options: RequestOptions): Promise<T> {
   const { url, method = 'GET', data, needAuth = true } = options;
@@ -49,7 +56,7 @@ export function request<T>(options: RequestOptions): Promise<T> {
           wx.reLaunch({ url: '/pages/login/login' });
         }
         const body = res.data as { error?: string } | undefined;
-        reject(new ApiError(body?.error || `请求失败 (${status})`, status));
+        reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
       },
       fail: (err) => {
         reject(new ApiError(err.errMsg || '网络请求失败', 0));

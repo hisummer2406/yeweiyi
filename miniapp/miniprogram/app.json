@@ -3,9 +3,7 @@
     "pages/login/login",
     "pages/devices/devices",
     "pages/device-detail/device-detail",
-    "pages/correct-oil-in-out/correct-oil-in-out",
-    "pages/correct-shift/correct-shift",
-    "pages/oil-can-set/oil-can-set",
+    "pages/issue-command/issue-command",
     "pages/profile/profile"
   ],
   "window": {

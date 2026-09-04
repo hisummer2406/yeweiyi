@@ -1,112 +1,207 @@
-// Field names/casing here are copied verbatim from yeweiyi-cloud's handlers and sqlc-generated
-// models (internal/api/*.go, internal/store/db/models.go) as of 2026-08-29 — do not "clean up"
-// the casing (e.g. beginHeigth/endHeigth/beginVolum/endVolum are the device's own field-name typos,
-// preserved on purpose; see internal/api/writeback.go's comments on those structs).
+// Field names/casing here are copied verbatim from yeweiyi-cloud's handler structs
+// (internal/api/*.go) and internal/protocol structs, current as of the yeweiyi-cloud commit named
+// in that repo's PR #12. This repo has no shared code with the backend, so this file is the one
+// place a wire-shape drift gets caught (`npm run typecheck` fails on a missing/renamed field used
+// somewhere) instead of failing silently on-device. Re-diff against yeweiyi-cloud before trusting
+// it if enough time has passed that the two could have drifted.
+//
+// Rewritten wholesale for the ThingsBoard single-stack backend (yeweiyi-cloud issue #10 / PR #11).
+// The previous version of this file described an API that no longer exists on the cloud side at
+// all: MQTT-derived Postgres tables, the async write-back queue, `/api/oilcan/latest`,
+// `/api/shifts`. See yeweiyi-cloud's CLAUDE.md "API surface" for the current, authoritative list.
+
+// ---- Auth ----
+
+export interface LoginResponse {
+  token: string;
+}
+
+// ---- Devices ----
 
 export interface Device {
   device_name: string;
+  // is_online is part of the wire response but is deliberately NOT surfaced anywhere in this app's
+  // UI. Nothing in the ThingsBoard single-stack backend updates this column any more — it was
+  // written by a legacy MQTT `isOline` handler that internal/mqtt's deletion took with it — so it
+  // is permanently whatever it was last left at (false, on a fresh row). Displaying it would show a
+  // confident, wrong answer. Real connectivity lives in ThingsBoard; nothing on the cloud side
+  // reads it through to REST yet (yeweiyi-cloud CLAUDE.md "Not verified").
   is_online: boolean;
   last_online_at: string | null;
   last_offline_at: string | null;
-}
-
-export interface Alarm {
-  id: number;
-  device_name: string;
-  device_local_id: number;
-  time: string;
-  info: string;
-  guanhao: string;
-  jiezhi: string;
-}
-
-export interface OilInOut {
-  id: number;
-  device_name: string;
-  device_local_id: number;
-  oil_id: number;
-  jiezhi: string;
-  time: string;
-  begin_height: number;
-  end_height: number;
-  begin_volume: number;
-  end_volume: number;
-  begin_weight: number;
-  end_weight: number;
-}
-
-export interface Shift {
-  id: number;
-  device_name: string;
-  device_local_id: number;
-  work_id: number;
-  time: string;
-  end_time: string;
-  info: string;
-}
-
-// Backend's cached/polled snapshot for one probe, mirroring the device's NetOilCan shape
-// (yeweiyi-cloud/internal/mqtt/payloads.go NetOilCanPayload). GET /api/oilcan/latest returns an
-// array of these directly (not wrapped in {rows:...}), one per probe/tank on the device.
-export interface OilCanSnapshot {
-  id: number;
-  oiltype: string;
-  oilColor: number;
-  oilLevel: number;
-  waterLevel: number;
-  temp: number;
-  oilVolume: number;
-  waterVolume: number;
-  oilWeight: number;
-  nullVolume: number;
-  oilRadio: number;
-  waterRadio: number;
-  alarmState: string;
-  probeAddress: string;
-  connect: boolean;
-  probeType: string;
-  address: string;
-  fatherAllProbe: number;
-  deviceName: string;
-}
-
-export type WriteBackStatus = 'pending' | 'sent' | 'acked' | 'failed';
-
-export interface WriteBackCommand {
-  id: number;
-  device_name: string;
-  command_type: string;
-  payload: unknown;
-  status: WriteBackStatus;
-  attempts: number;
-  created_at: string;
   updated_at: string;
 }
 
-export interface OilInOutCorrectionRequest {
-  device: string;
-  deviceLocalId: number;
-  oilId: number;
-  jieZhi: string;
-  time: string;
-  beginHeigth: number;
-  endHeigth: number;
-  beginVolum: number;
-  endVolum: number;
-  beginWeight: number;
-  endWeight: number;
+// yeweiyi-cloud's own CLAUDE.md: "The QR code's content format is not designed [there]... who
+// calls the minting endpoint at install time belong to whoever designs that label." This repo is
+// the one place that has to pick something, so it does: a JSON object. Documented as a placeholder,
+// not a frozen decision — see utils/pairing.ts.
+export interface BindDeviceRequest {
+  deviceName: string;
+  pairingToken: string;
 }
 
-export interface ShiftCorrectionRequest {
-  device: string;
-  deviceLocalId: number;
-  workId: number;
+// ---- Alarms ----
+
+// Mirrors yeweiyi-cloud internal/api/alarms.go's alarmResponse (itself internal/protocol.AlarmEvent
+// reshaped for the wire). GET /api/alarms answers a bare array, not {rows: [...]} — unlike every
+// other list endpoint in this file. That inconsistency is real and tracked cloud-side
+// (yeweiyi-cloud docs/protocol-v1-open-items.md §D item 2, left unresolved because the device-side
+// telemetry key this endpoint reads — `alarm` vs the Android repo's `alarmEvent` — is itself still
+// open); it is not a typo here.
+//
+// type/severity/status are closed enums server-side (internal/protocol/events.go); Chinese labels
+// for them live in utils/labels.ts rather than duplicated per screen.
+export interface Alarm {
+  alarmId: string;
+  tank: number;
+  type: string; // e.g. "HIGH_HIGH_LEVEL" — see ALARM_TYPE_LABELS
+  severity: string; // ThingsBoard's own enum: CRITICAL/MAJOR/MINOR/WARNING/INDETERMINATE
+  status: 'ACTIVE' | 'CLEARED';
+  text: string;
+  value?: number;
   time: string;
+}
+
+// The live-push message /ws/alarms sends (yeweiyi-cloud internal/ingest.handleAlarm's Redis
+// fanout). Richer than a v1 client would guess from the field name alone: `msg` is the alarm's
+// display text (kept under that name for continuity with the socket wrapper), the rest mirrors
+// Alarm above so the live banner and the history list can share the same label helpers.
+export interface AlarmPushMessage {
+  deviceName: string;
+  alarmId: string;
+  tank: number;
+  type: string;
+  severity: string;
+  status: 'ACTIVE' | 'CLEARED';
+  msg: string;
+  value?: number;
+  tsMs: number;
+}
+
+// ---- 出入库 (stock in/out) ----
+
+// Mirrors yeweiyi-cloud internal/api/stock.go's stockEventResponse. This endpoint depends on a
+// device-side change that has not shipped yet (zhongchengyeweiyi#39) — see OilInOutListResponse
+// below for what a real device on today's firmware actually produces.
+export interface OilInOutRow {
+  eventId: string;
+  tank: number;
+  direction: 'IN' | 'OUT';
+  oilType?: string;
+  beginTime: string;
   endTime: string;
-  info: string;
+  beginLevelMm: number;
+  endLevelMm: number;
+  beginVolumeL: number;
+  endVolumeL: number;
+  beginTempC: number;
+  endTempC: number;
+  beginWeightKg: number;
+  endWeightKg: number;
+  netVolumeL: number;
+  duringDeliveryVolumeL?: number;
+  deliveredVolumeL: number;
+  time: string;
 }
 
-export interface WriteBackAccepted {
-  id: number;
-  status: 'pending';
+// GET /api/oil-in-out returns this shape on BOTH the 200 and the 502 path (yeweiyi-cloud
+// docs/protocol-v1-stock-event.md). `rows` is always present and always an array — render it
+// before checking the status code, and a device still on pre-V1 firmware still shows whatever it
+// can instead of an error screen. `unparsable`/`legacySkipped` must be surfaced, not swallowed: a
+// caller that only checks `rows.length === 0` cannot tell "no deliveries" from "the records are
+// unreadable", which is the exact failure this response shape exists to prevent — see
+// device-detail.ts's loadOilInOut for how the 502 path recovers this full body via ApiError.body
+// rather than just the error string.
+export interface OilInOutListResponse {
+  rows: OilInOutRow[];
+  parsed: number;
+  unparsable: number;
+  legacySkipped: number;
+  error?: string;
+  code?: string; // "STOCK_EVENT_FORMAT_UNSUPPORTED" today; match on this, not on `error`'s text
+  device?: string;
+  sample?: string;
+  legacyCutoff?: string;
+}
+
+// ---- Telemetry ----
+
+// Mirrors internal/protocol.Tank. Every field carries its unit in the name; do not add a
+// display-only conversion here — the backend does not either. See yeweiyi-cloud
+// docs/protocol-v1-reconciliation.md §A on why units live in the key name rather than a side
+// "units" object (ThingsBoard aggregates a nested/nominal shape to a silent 0, not an error).
+export interface Tank {
+  index: number;
+  oilType: string;
+  oilLevelMm: number;
+  waterLevelMm: number;
+  tempC: number;
+  oilVolumeL: number;
+  waterVolumeL: number;
+  oilWeightKg: number;
+  nullVolumeL: number;
+  oilRatioPct: number;
+  waterRatioPct: number;
+  alarmState: 'NORMAL' | 'ALARM' | 'FAULT' | '';
+  probeConnected: boolean;
+}
+
+// GET /api/devices/:device/telemetry/latest. Replaces the deleted /api/oilcan/latest entirely —
+// different endpoint, different shape, no relation to the old NetOilCan payload. 404 means
+// "authorized and provisioned, but has never reported" — a real state, not an error; see
+// device-detail.ts's loadSnapshot.
+export interface LatestTelemetryResponse {
+  deviceName: string;
+  ts: string;
+  snapshotSeq: number;
+  tanks: Tank[];
+}
+
+// ---- Control commands ----
+//
+// Replaces the old asynchronous write-back queue entirely. `POST /api/oil-in-out/correct`,
+// `POST /api/shifts/correct` and `POST /api/devices/{device}/oil-can-set` are all gone with no
+// direct replacement — record *correction* specifically has no redesign yet (yeweiyi-cloud
+// CLAUDE.md: "If correcting a stored record remains a product requirement it needs redesigning on
+// top of internal/control, not restoring"). What replaced the queue is a synchronous-request /
+// asynchronous-result control command, which this app now exposes as "发送控制命令" rather than as
+// a record-specific correction form.
+
+export interface IssueCommandRequest {
+  method: string;
+  args?: Record<string, unknown>;
+  reason: string;
+}
+
+// Mirrors yeweiyi-cloud internal/api/control.go's commandResponse. `terminal` is computed
+// server-side specifically so a client never has to hard-code the status list
+// (pending/sent/received/rejected/executing/succeeded/failed/expired) — always branch on this
+// field to decide whether to keep polling, never on `status` directly.
+//
+// Two invariants worth knowing before building UI around this: an unacknowledged command is
+// `sent`, never `failed` (the device may have acted and lost its connection before replying), and
+// an ACK is not success — only a later, separate `succeeded`/`failed` means the action actually
+// happened. Do not render `received` as "done".
+export interface ControlCommand {
+  commandId: string;
+  deviceName: string;
+  method: string;
+  args?: Record<string, unknown>;
+  operator: string;
+  reason: string;
+  status: string;
+  terminal: boolean;
+  errorCode?: string;
+  errorReason?: string;
+  resultDetail?: unknown;
+  issuedAt?: string;
+  expiresAt?: string;
+  sentAt?: string;
+  ackedAt?: string;
+  finishedAt?: string;
+}
+
+export interface ListCommandsResponse {
+  commands: ControlCommand[];
 }

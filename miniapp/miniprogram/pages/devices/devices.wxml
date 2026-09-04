@@ -14,12 +14,11 @@
   >
     <view class="row">
       <text>{{item.device_name}}</text>
-      <text class="badge {{item.is_online ? 'badge-online' : 'badge-offline'}}">
-        {{item.is_online ? '在线' : '离线'}}
-      </text>
     </view>
+    <!-- 在线/离线状态刻意不展示：云端单栈改造后没有任何代码在更新 is_online 列，
+         这里显示它只会是一个永远不变的错误答案，见 types/api.d.ts 的说明。 -->
     <view class="muted" style="margin-top:8rpx;">
-      {{item.is_online ? '上线于 ' + item.last_online_at : '离线于 ' + (item.last_offline_at || '--')}}
+      最近上线 {{item.last_online_at || '--'}}
     </view>
   </view>
 </view>

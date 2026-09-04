@@ -1,5 +1,6 @@
 import { get, post } from '../../utils/request';
 import { getToken } from '../../utils/storage';
+import { parseDevicePairingQr } from '../../utils/pairing';
 import type { Device } from '../../types/api';
 
 Page({
@@ -38,8 +39,12 @@ Page({
     wx.scanCode({
       onlyFromCamera: false,
       success: (res) => {
-        const deviceName = res.result;
-        post('/api/devices/bind', { deviceName })
+        const pairing = parseDevicePairingQr(res.result);
+        if (!pairing) {
+          wx.showToast({ title: '二维码格式不正确，请联系管理员确认设备标签', icon: 'none' });
+          return;
+        }
+        post('/api/devices/bind', { deviceName: pairing.deviceName, pairingToken: pairing.pairingToken })
           .then(() => {
             wx.showToast({ title: '绑定成功', icon: 'success' });
             this.loadDevices();

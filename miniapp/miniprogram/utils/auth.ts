@@ -12,15 +12,31 @@ export function login(username: string, password: string): Promise<string> {
   });
 }
 
-// The JWT's "sub" claim carries the username (see yeweiyi-cloud/internal/api/auth.go). Decoding it
-// client-side is just for display — the token is opaque/untrusted input as far as this app's own
-// authorization goes, since every real check happens server-side.
+// The JWT's "sub" claim carries the username, and its top-level "role" claim
+// (platform_admin/customer_admin/customer_user) carries the role — see yeweiyi-cloud
+// internal/api/auth.go's apiClaims. Decoding either client-side is for display and UI gating only
+// (e.g. hiding an admin-only control method from a customer_user before they tap it and get a 403)
+// — the token is opaque/untrusted input as far as this app's own authorization goes, since every
+// real check happens server-side and this app must not rely on the client-side gate as security.
+//
+// One consequence worth knowing: a role change does not take effect in an already-issued token
+// until the user logs in again (yeweiyi-cloud's apiClaims comment) — the same caveat that repo's
+// CLAUDE.md documents for itself.
 export function usernameFromToken(token: string): string {
+  return claimFromToken(token, 'sub');
+}
+
+export function roleFromToken(token: string): string {
+  return claimFromToken(token, 'role');
+}
+
+function claimFromToken(token: string, key: 'sub' | 'role'): string {
   try {
     const payloadSegment = token.split('.')[1];
     const decoded = decodeBase64Url(payloadSegment);
-    const claims = JSON.parse(decoded) as { sub?: string };
-    return claims.sub || '';
+    const claims = JSON.parse(decoded) as Record<string, unknown>;
+    const value = claims[key];
+    return typeof value === 'string' ? value : '';
   } catch {
     return '';
   }

@@ -1,13 +1,12 @@
 import { WS_BASE_URL } from '../config/env';
 import { getToken } from './storage';
+import type { AlarmPushMessage } from '../types/api';
 
-export interface AlarmPushMessage {
-  deviceName: string;
-  msg: string;
-}
+export type { AlarmPushMessage };
 
-// GET /ws/alarms sends no ping/keepalive frames of its own yet (see CLAUDE.md "Sibling repos"),
-// so the client is responsible for noticing a drop and reconnecting on its own.
+// GET /ws/alarms sends no ping/keepalive frames of its own yet, so the client is responsible for
+// noticing a drop and reconnecting on its own. See yeweiyi-cloud internal/api/ws.go: the fan-out is
+// scoped server-side to one `device`, so this socket only ever needs to filter by nothing further.
 export class AlarmSocket {
   private device: string;
   private onMessage: (msg: AlarmPushMessage) => void;

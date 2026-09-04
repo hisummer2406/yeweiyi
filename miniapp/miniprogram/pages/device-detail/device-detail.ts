@@ -1,16 +1,58 @@
 import { ApiError, get } from '../../utils/request';
-import { AlarmSocket, type AlarmPushMessage } from '../../utils/ws';
-import type { Alarm, OilCanSnapshot, OilInOut, Shift, WriteBackCommand } from '../../types/api';
+import { AlarmSocket } from '../../utils/ws';
+import {
+  ALARM_SEVERITY_LABELS,
+  ALARM_STATUS_LABELS,
+  ALARM_TYPE_LABELS,
+  STOCK_DIRECTION_LABELS,
+  TANK_ALARM_STATE_LABELS,
+  controlMethodLabel,
+  label,
+} from '../../utils/labels';
+import type {
+  Alarm,
+  AlarmPushMessage,
+  ControlCommand,
+  LatestTelemetryResponse,
+  ListCommandsResponse,
+  OilInOutListResponse,
+  OilInOutRow,
+  Tank,
+} from '../../types/api';
 
-type TabKey = 'snapshot' | 'alarms' | 'oilInOut' | 'shifts' | 'writeBack';
+type TabKey = 'snapshot' | 'alarms' | 'oilInOut' | 'commands';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'snapshot', label: '实时数据' },
   { key: 'alarms', label: '报警记录' },
-  { key: 'oilInOut', label: '卸油记录' },
-  { key: 'shifts', label: '交班记录' },
-  { key: 'writeBack', label: '下发记录' },
+  { key: 'oilInOut', label: '出入库记录' },
+  { key: 'commands', label: '控制命令' },
 ];
+
+// View-model types add pre-computed Chinese labels so WXML never has to embed a lookup — wx:for
+// item interpolation can't call a function, so the label has to already be a plain field on the
+// row by the time it reaches data.
+type AlarmView = Alarm & { typeLabel: string; severityLabel: string; statusLabel: string };
+type TankView = Tank & { alarmStateLabel: string };
+type OilInOutView = OilInOutRow & { directionLabel: string };
+type CommandView = ControlCommand & { methodLabel: string };
+
+function toAlarmView(a: Alarm): AlarmView {
+  return {
+    ...a,
+    typeLabel: label(ALARM_TYPE_LABELS, a.type),
+    severityLabel: label(ALARM_SEVERITY_LABELS, a.severity),
+    statusLabel: label(ALARM_STATUS_LABELS, a.status),
+  };
+}
+
+function toOilInOutView(r: OilInOutRow): OilInOutView {
+  return { ...r, directionLabel: label(STOCK_DIRECTION_LABELS, r.direction) };
+}
+
+function toCommandView(c: ControlCommand): CommandView {
+  return { ...c, methodLabel: controlMethodLabel(c.method) };
+}
 
 Page({
   data: {
@@ -20,16 +62,22 @@ Page({
     loading: false,
     liveAlarm: '',
 
-    snapshot: [] as OilCanSnapshot[],
+    snapshotTs: '',
+    tanks: [] as TankView[],
     snapshotLoaded: false,
-    alarms: [] as Alarm[],
+
+    alarms: [] as AlarmView[],
     alarmsLoaded: false,
-    oilInOut: [] as OilInOut[],
+
+    oilInOut: [] as OilInOutView[],
+    // Set whenever the endpoint reports it could not show everything — unparsable (current device
+    // fault) or legacySkipped (closed historical hole) — so the list is never silently incomplete.
+    // See yeweiyi-cloud docs/protocol-v1-stock-event.md.
+    oilInOutNote: '',
     oilInOutLoaded: false,
-    shifts: [] as Shift[],
-    shiftsLoaded: false,
-    writeBack: [] as WriteBackCommand[],
-    writeBackLoaded: false,
+
+    commands: [] as CommandView[],
+    commandsLoaded: false,
   },
 
   socket: null as AlarmSocket | null,
@@ -41,13 +89,21 @@ Page({
     this.loadSnapshot();
 
     this.socket = new AlarmSocket(device, (msg: AlarmPushMessage) => {
-      this.setData({ liveAlarm: msg.msg });
+      this.setData({ liveAlarm: `${label(ALARM_TYPE_LABELS, msg.type)}：${msg.msg}` });
       // A live push means the alarm list is stale if the user is looking at it.
       if (this.data.activeTab === 'alarms') {
         this.loadAlarms();
       }
     });
     this.socket.connect();
+  },
+
+  onShow() {
+    // Coming back from issue-command after a submit — refresh so the new command's initial state
+    // (usually 'pending' or 'sent') is visible without a manual pull-to-refresh.
+    if (this.data.activeTab === 'commands' && this.data.commandsLoaded) {
+      this.loadCommands();
+    }
   },
 
   onUnload() {
@@ -65,19 +121,36 @@ Page({
     if (tab === 'snapshot' && !this.data.snapshotLoaded) this.loadSnapshot();
     if (tab === 'alarms' && !this.data.alarmsLoaded) this.loadAlarms();
     if (tab === 'oilInOut' && !this.data.oilInOutLoaded) this.loadOilInOut();
-    if (tab === 'shifts' && !this.data.shiftsLoaded) this.loadShifts();
-    if (tab === 'writeBack' && !this.data.writeBackLoaded) this.loadWriteBack();
+    if (tab === 'commands' && !this.data.commandsLoaded) this.loadCommands();
   },
 
+  onPullDownRefresh() {
+    const reload: Record<TabKey, () => Promise<unknown>> = {
+      snapshot: () => this.loadSnapshot(),
+      alarms: () => this.loadAlarms(),
+      oilInOut: () => this.loadOilInOut(),
+      commands: () => this.loadCommands(),
+    };
+    reload[this.data.activeTab as TabKey]().finally(() => wx.stopPullDownRefresh());
+  },
+
+  // GET /api/devices/:device/telemetry/latest — replaces the deleted /api/oilcan/latest entirely.
   loadSnapshot() {
     this.setData({ loading: true });
-    get<OilCanSnapshot[]>('/api/oilcan/latest', { device: this.data.device })
-      .then((rows) => {
-        this.setData({ snapshot: rows, snapshotLoaded: true });
+    return get<LatestTelemetryResponse>(
+      `/api/devices/${encodeURIComponent(this.data.device)}/telemetry/latest`,
+    )
+      .then((res) => {
+        const tanks: TankView[] = res.tanks.map((t) => ({
+          ...t,
+          alarmStateLabel: label(TANK_ALARM_STATE_LABELS, t.alarmState),
+        }));
+        this.setData({ snapshotTs: res.ts, tanks, snapshotLoaded: true });
       })
       .catch((err: ApiError) => {
         if (err.status === 404) {
-          this.setData({ snapshot: [], snapshotLoaded: true });
+          // Authorized and provisioned, but has never reported — a real state, not an error.
+          this.setData({ tanks: [], snapshotTs: '', snapshotLoaded: true });
         } else {
           wx.showToast({ title: err.message, icon: 'none' });
         }
@@ -85,53 +158,67 @@ Page({
       .finally(() => this.setData({ loading: false }));
   },
 
+  // GET /api/alarms answers a bare array, not {rows: [...]} — see types/api.d.ts's note on Alarm.
   loadAlarms() {
     this.setData({ loading: true });
-    get<{ rows: Alarm[] }>('/api/alarms', { device: this.data.device, limit: 50, sort: false })
-      .then((res) => this.setData({ alarms: res.rows, alarmsLoaded: true }))
+    return get<Alarm[]>('/api/alarms', { device: this.data.device, limit: 50, sort: false })
+      .then((rows) => {
+        this.setData({ alarms: rows.map(toAlarmView), alarmsLoaded: true });
+      })
       .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
       .finally(() => this.setData({ loading: false }));
   },
 
   loadOilInOut() {
     this.setData({ loading: true });
-    get<{ rows: OilInOut[] }>('/api/oil-in-out', { device: this.data.device, limit: 50, sort: false })
-      .then((res) => this.setData({ oilInOut: res.rows, oilInOutLoaded: true }))
-      .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
+    return get<OilInOutListResponse>('/api/oil-in-out', {
+      device: this.data.device,
+      limit: 50,
+      sort: false,
+    })
+      .then((res) => this.applyOilInOut(res))
+      .catch((err: ApiError) => {
+        // A 502 here is the endpoint's own degraded-but-informative response, not a transport
+        // failure — request.ts hands the full parsed body back on ApiError.body precisely so this
+        // case does not collapse to a bare error toast and lose the rows that DID parse. Fall back
+        // to the toast only if the body genuinely isn't that shape (a real outage, a 503, etc).
+        const body = err.body as OilInOutListResponse | undefined;
+        if (body && Array.isArray(body.rows)) {
+          this.applyOilInOut(body);
+        } else {
+          wx.showToast({ title: err.message, icon: 'none' });
+          this.setData({ oilInOut: [], oilInOutNote: err.message, oilInOutLoaded: true });
+        }
+      })
       .finally(() => this.setData({ loading: false }));
   },
 
-  loadShifts() {
+  applyOilInOut(res: OilInOutListResponse) {
+    let note = '';
+    if (res.unparsable > 0) {
+      note = `有 ${res.unparsable} 条记录暂时无法解析（设备固件版本较旧），本页仅展示可读取的 ${res.parsed} 条`;
+    } else if (res.legacySkipped > 0) {
+      note = `另有 ${res.legacySkipped} 条历史记录因设备固件升级前的旧格式而无法展示`;
+    }
+    this.setData({ oilInOut: res.rows.map(toOilInOutView), oilInOutNote: note, oilInOutLoaded: true });
+  },
+
+  loadCommands() {
     this.setData({ loading: true });
-    get<{ rows: Shift[] }>('/api/shifts', { device: this.data.device, limit: 50, sort: false })
-      .then((res) => this.setData({ shifts: res.rows, shiftsLoaded: true }))
+    return get<ListCommandsResponse>(
+      `/api/devices/${encodeURIComponent(this.data.device)}/commands`,
+      { limit: 50 },
+    )
+      .then((res) => {
+        this.setData({ commands: res.commands.map(toCommandView), commandsLoaded: true });
+      })
       .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
       .finally(() => this.setData({ loading: false }));
   },
 
-  loadWriteBack() {
-    this.setData({ loading: true });
-    get<{ rows: WriteBackCommand[] }>('/api/write-back', { device: this.data.device, limit: 50 })
-      .then((res) => this.setData({ writeBack: res.rows, writeBackLoaded: true }))
-      .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
-      .finally(() => this.setData({ loading: false }));
-  },
-
-  onCorrectOilInOut(e: WechatMiniprogram.BaseEvent) {
-    const item = e.currentTarget.dataset.item as OilInOut;
+  onIssueCommand() {
     wx.navigateTo({
-      url: `/pages/correct-oil-in-out/correct-oil-in-out?device=${encodeURIComponent(this.data.device)}&record=${encodeURIComponent(JSON.stringify(item))}`,
+      url: `/pages/issue-command/issue-command?device=${encodeURIComponent(this.data.device)}`,
     });
-  },
-
-  onCorrectShift(e: WechatMiniprogram.BaseEvent) {
-    const item = e.currentTarget.dataset.item as Shift;
-    wx.navigateTo({
-      url: `/pages/correct-shift/correct-shift?device=${encodeURIComponent(this.data.device)}&record=${encodeURIComponent(JSON.stringify(item))}`,
-    });
-  },
-
-  onGoOilCanSet() {
-    wx.navigateTo({ url: `/pages/oil-can-set/oil-can-set?device=${encodeURIComponent(this.data.device)}` });
   },
 });
