@@ -1,299 +1,35 @@
-# Engineering journal archive
+# 工程日志 / Engineering journal
 
-This file preserves the former long-form `CLAUDE.md`: its historical operating-guide snapshot,
-design investigations, build log, and review-response records. It is retained for traceability but
-is not the active instruction set. Start with the root `CLAUDE.md`; when this archive conflicts with
-it, the root guide wins.
-
----
-
-# Former CLAUDE.md snapshot
-
-> **`AGENTS.md` is a symlink to this file.** Codex, Claude Code, Cursor and anything else that reads
-> one of those two names gets exactly this content, so there is a single file to maintain and no way
-> for the two to drift apart. Edit `CLAUDE.md`; never replace `AGENTS.md` with a real file.
-> (Git stores it as a symlink, mode `120000`. A Windows checkout without `core.symlinks=true` would
-> materialise it as a 9-byte text file containing the string `CLAUDE.md` — harmless here, since dev
-> is macOS and deployment is Linux, but that is what you are looking at if it ever appears empty.)
+> **This is the project's long-term memory: *why* decisions were made, not what is true now.**
+> It was split out of `CLAUDE.md` on 2026-09-04 so the always-loaded operating guide stays short;
+> nothing was edited on the way out except cross-references that pointed at "Part 1".
 >
-> **How this file is organised, and how to read it:**
+> **`CLAUDE.md` wins over this file on any question of present-day fact.** Sections here describe
+> the architecture **as it was when they were written**, in the present tense, and several record
+> decisions that have since been reversed — they are kept, marked, rather than deleted, so a future
+> session can see that a road was already walked down and why it was walked back.
 >
-> - **Part 1 — Operating guide (below).** Current state: architecture, commands, layout, invariants,
->   conventions. Short. **Start here, and trust it over anything further down.**
-> - **Part 2 — Engineering journal (from "What this project is" onward).** ~1,000 lines recording
->   *why* decisions were made, including several that have since been superseded and are kept marked
->   rather than deleted. Go there when you need the reasoning or the history behind something — but
->   read it knowing that older sections describe the architecture **as it was when they were
->   written**, in the present tense. Where the two parts disagree about present-day fact, Part 1 wins.
+> **Read this when you need the reasoning or history behind something**, not to find out how the
+> system works today. Entries are marked `superseded` where a later one overrides them.
+>
+> **Append new entries under "Build"**, newest work at the end of that section, dated.
+
+## Where things are in here
+
+| section | what it holds | status |
+|---|---|---|
+| What this project is (2026-08-20 framing) | the original problem statement, 需求A vs 需求B | context, still true |
+| Sibling repo / The MQTT contract | the legacy Alink wire contract, read out of the Android source | **superseded** — that stack was deleted 2026-09-02 |
+| Cloud table design / Write-back queue | composite-key and offline-queue reasoning | **superseded** — river and the legacy tables are gone |
+| Device-side work this project depends on | blockers owned by `~/Developer/zhongchengyeweiyi` | partly current — OTA client and record-correction entry point still missing |
+| Real device scale | ~100 devices now, <1,000 in 3–5 years | **current, and corrects "~10,000" everywhere else in this file** |
+| Device connectivity platform | why the broker choice moved four times before ThingsBoard CE | current decision at the top; the rest is a trail |
+| Open product decisions | what nobody has answered yet | current |
+| Tech stack | why Go, gin, sqlc, ThingsBoard | current, except river |
+| **Build** | dated record of every substantial pass, including the seven PR #11 review rounds | current; the newest entries are the most reliable |
+| Architecture (last section) | **superseded in full** — describes the deleted legacy stack in the present tense | do not read as fact |
 
 ---
-
-# Part 1 — Operating guide
-
-## Project status: implementation underway (single-stack migration in progress)
-
-**Superseded note, kept for the record:** this section used to read "this repo is still an empty
-scaffold — no code exists yet", which was true when written on 2026-08-20 and stopped being true
-almost immediately. Corrected 2026-09-01.
-
-There is now a substantial Go codebase, containing **two device-connectivity stacks at once** — see
-the warning immediately below, which is the single most important thing to know before writing code
-here.
-
-## Architecture in one line
-
-**Devices connect only to ThingsBoard CE.** There is no EMQX, no second MQTT stack, no Alink/Paho
-compatibility layer, and no local copy of telemetry. The legacy Alink stack that used to live
-alongside this one was **deleted in full** on 2026-09-02 (GitHub issue #10) — `internal/mqtt`,
-`cmd/devicesim`, `internal/queue`, `internal/partitions`, the mosquitto service and the five
-legacy tables are all gone.
-
-If you find yourself writing a `productKey`, a `sys/{productKey}/...` topic, an EMQX config, a
-second MQTT client, or a table that stores telemetry locally, stop — none of those belong here, and
-the git history that shows them is history.
-
-## What this project is
-
-The cloud backend for 安卓液位仪 (`com.sansen.yeweiyi`) — an oil-tank level monitoring terminal.
-It provides remote monitoring and remote control for a WeChat mini-program and a fixed web console,
-in both a public-cloud deployment and a **fully offline (air-gapped) private deployment** that must
-run from the same code and the same deployment templates.
-
-```text
-Android device
-    ⇄ ThingsBoard native MQTT
-ThingsBoard CE          device access, credentials, telemetry, attributes, alarms, RPC, OTA
-    ⇄ REST / WebSocket
-Go backend (this repo)  business logic, tenancy, control state machine, audit
-    ⇄
-PostgreSQL / Redis + web console
-```
-
-Sibling repositories (do not edit from here; protocol changes require agreement with their owners):
-
-- `~/Developer/zhongchengyeweiyi` — the Android device firmware/app.
-- `~/Developer/yeweiyi-miniapp` — the mini-program frontend.
-
----
-
-## Quickstart
-
-```bash
-# business stack (Postgres, Redis)
-docker compose up -d
-
-# ThingsBoard CE — heavy; first boot installs its schema and takes 2–4 minutes
-docker compose -f docker-compose.thingsboard.yml up -d
-#   console  http://localhost:8081   tenant@thingsboard.org / tenant
-#   device MQTT  tcp://localhost:1884
-
-go build ./... && go vet ./...
-
-migrate -database "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable" \
-        -path db/migrations up
-
-# a simulated device speaking 设备协议 V1
-go run ./cmd/tbdevicesim provision -name tank-farm-01
-go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 15s
-
-# the backend, on the single stack. Note what is NOT here: no MQTT_BROKER_URL, no
-# MQTT_PRODUCT_KEY, no broker of any kind — the legacy stack those env vars used to start
-# (internal/mqtt, cmd/devicesim) was deleted outright on 2026-09-02 (issue #10), so cmd/server no
-# longer reads either variable at all; setting them now does nothing.
-JWT_SECRET=dev-secret \
-TB_BASE_URL=http://localhost:8081 TB_USERNAME=tenant@thingsboard.org TB_PASSWORD=tenant \
-go run ./cmd/server
-```
-
-Configuration is **defaults → `config.yaml` → environment**, loaded by `internal/config`; every key
-and its environment equivalent is documented in `config.example.yaml`. Pass `-config path.yaml`, or
-omit it and rely on defaults plus env (what the dev loop does).
-
-| setting | effect |
-|---|---|
-| `thingsboard.baseURL` / `TB_BASE_URL` (+ username/password) | **Unset ⇒ no ingestion, and device/control routes answer 503** — the server still boots, deliberately, so business-endpoint work needs no 2 GB container. |
-| `control.allowPhysicalCommands` / `ALLOW_PHYSICAL_COMMANDS` | opt-in gate for pump/valve/reboot. **Leave false.** A typo'd env value is an error, not a silent false. |
-| `control.commandTTL` / `COMMAND_TTL` | command validity window (default `60s`, a placeholder not a product decision) |
-
-Durations are `"30s"`-style strings everywhere; a bare number is rejected rather than read as
-nanoseconds. Unknown/misspelled YAML keys fail startup rather than being ignored — the motivating
-case is `allowPhysicalCommand` (singular) silently doing nothing.
-
-### Tests
-
-```bash
-go test ./internal/protocol/   # contract tests; needs NO containers
-go test ./internal/tbclient/   # needs ThingsBoard
-go test ./internal/control/    # needs Postgres
-go test ./internal/ingest/     # needs ThingsBoard + Postgres + Redis
-```
-
-Tests **skip with an explanatory message** when their infrastructure is absent rather than failing.
-If you see a skip, start the container it names — do not assume the test is broken.
-
-**Use `go test ./... -p 1`.** Three packages (`internal/api`, `internal/tbclient`,
-`internal/ingest`) each drive the same ThingsBoard instance, and on a development machine the load
-generator and the server share the same CPU. Run in parallel they occasionally miss a 25-second
-timeout — most often `TestFullLoop_CommandReachesTerminalStateViaIngest`. Serialised, the suite is
-green; each package alone is green; ThingsBoard itself stays healthy throughout (its queues report
-`totalFailed [0]`), so this is contention, not a defect in the system under test.
-
-An earlier entry below claimed parallel runs were reliable after the legacy packages were deleted.
-That was measured on a lightly-loaded instance and did not hold up once ThingsBoard had accumulated
-data and a fourth ThingsBoard-dependent package existed — the claim was made from three green runs,
-which was too small a sample to conclude "stable" from. The older river/mosquitto flakiness it
-described really is gone; this is a different, later contention.
-
----
-
-## Layout
-
-```
-internal/protocol/    设备协议 V1 — the single source of truth for the wire contract
-internal/tbclient/    the ONLY door into ThingsBoard (public REST/WS; never its database)
-internal/devicesim/   device-side reference implementation, driven in-process by tests
-internal/control/     control command state machine, authorization, audit
-internal/ingest/      per-device ThingsBoard telemetry subscription → business layer
-internal/api/         REST/WebSocket surface (still serving the legacy read model)
-internal/store/db/    sqlc OUTPUT — generated, never hand-edit
-db/migrations/        golang-migrate schema; also sqlc's schema input
-db/queries/           sqlc query input
-fixtures/protocol/v1/ cross-repo protocol fixtures, shared with the Android repo
-cmd/tbdevicesim/      simulated device CLI
-docs/                 protocol spec + architecture baseline
-
-internal/mqtt/, cmd/devicesim/, dev/mosquitto/   ← legacy, see the warning above
-```
-
----
-
-## Invariants you must not break
-
-These encode safety properties, not style preferences. Each is pinned by a test; if a test in this
-list fails, **the change is wrong**, not the test.
-
-1. **Physical commands are disabled by default.** `control.Config.AllowPhysicalCommands` defaults to
-   `false`, gating pump/valve/reboot. The device-side interlocks are unfinished and unverified on
-   real hardware, so "configure nothing" must mean "cannot start a pump". The gate applies to
-   platform admins too — it constrains unverified *hardware*, not trust levels.
-2. **An unacknowledged command is `sent`, never `failed`.** "The device did not answer" is not "the
-   device did not act" — it may have received the command, started the pump, and lost its connection
-   before replying. It stays non-terminal until a result arrives or it expires.
-3. **A device ACK is not success.** The ACK means received-and-accepted. Whether the action happened
-   arrives later as a separate `cmdResult`. Never collapse the two.
-4. **Command status transitions are guarded in SQL**, in `db/queries/control_commands.sql`
-   (`WHERE status IN (...)`), so a late or duplicated message cannot rewrite a terminal row. Do not
-   move these checks into Go.
-5. **Telemetry is never copied into the business database.** It lives in ThingsBoard and is read
-   back on demand. `TestIngest_DoesNotPersistTelemetry` fails if this is violated. Only commands,
-   audit and business records cross the boundary.
-6. **Authorization is checked before existence**, everywhere. An unauthorized caller must get the
-   same answer whether the device belongs to someone else or does not exist, or error codes become a
-   device-name oracle. See `internal/api/devices.go` and `control.Service.authorize`.
-7. **Never touch ThingsBoard's own database.** Public REST/WebSocket APIs only, so their upgrades
-   cannot break us through a schema change.
-8. **CE-only, offline-capable.** No ThingsBoard PE feature, no ThingsBoard Cloud, no online license
-   check, no reliance on outbound internet — the private deployment is fully air-gapped.
-
----
-
-## Conventions
-
-**Go.** Standard `gofmt`. `gin` for REST, `gorilla/websocket`, `pgx/v5` + `sqlc`, `golang-migrate`,
-`riverqueue/river`, `golang-jwt/jwt` + bcrypt. Prefer the stdlib over a new dependency for something
-small (the UUID generator in `internal/control` is hand-rolled for exactly this reason).
-
-**Comments explain *why*, not *what*.** The existing code comments are dense and deliberately so:
-they record the reasoning and the traps (e.g. why ThingsBoard stringifies telemetry but not
-attributes). Match that density. Do not add comments that restate the code.
-
-**Schema changes** — always this order:
-
-```bash
-# 1. write db/migrations/0000NN_name.{up,down}.sql   (both directions, always)
-# 2. apply, then verify the down→up round trip (repo convention, do not skip)
-migrate -database "$DSN" -path db/migrations up
-migrate -database "$DSN" -path db/migrations down 1
-migrate -database "$DSN" -path db/migrations up
-# 3. write/adjust db/queries/*.sql
-sqlc generate      # regenerates internal/store/db — never hand-edit that directory
-```
-
-New tables and columns get Chinese `COMMENT ON` (see migration `000009`).
-
-**Tests are integration tests against real infrastructure**, not mocks. The one place a fake is used
-(`control.Sender` in `internal/control`) is for branches a healthy ThingsBoard will not produce on
-demand — an outage, an offline device. Where a wire format is involved, tests use **hand-written
-JSON literals or shared fixtures**, never the repo's own marshalled structs, so a wrong field name
-is actually caught instead of the code agreeing with itself.
-
-**Verify against the real thing before writing conclusions.** This project has been burned by
-research-derived assumptions twice: Aliyun IoT Platform's ACL model, and its purchase availability.
-Two ThingsBoard behaviours documented here (telemetry stringification; attributes *not* being
-stringified) were found by running it, and contradicted expectations. If you write "X works", have
-run it.
-
-**Commit messages are in Chinese**, subject line ≤ ~50 chars, body explaining the *why* and calling
-out anything non-obvious or deliberately not done. Look at `git log` for the register. End with:
-
-```
-Claude-Session: <session url>     # or your agent's equivalent; omit if not applicable
-```
-
-Commit only when asked. Work on a feature branch; the default branch is `main`.
-
-**Documentation.** Record substantial work under "Build" further down this file (it is the project's
-long-term memory — additive, keeps superseded decisions marked rather than deleted), and update
-`docs/` when architecture or protocol changes. Keep the guide above current when the layout or the
-invariants change.
-
----
-
-## Do not assume these are decided
-
-- **设备协议 V1 is a draft, not frozen — and the Android side independently implemented an
-  INCOMPATIBLE version of it on the same day.** Both repos built "ThingsBoard single-stack protocol
-  V1" in parallel, each noting the other's fixtures did not exist yet. As things stand a device's
-  telemetry does not parse on the cloud side at all: flat `tank1.oilLevelMm` keys here versus a
-  nested `tanks` array there, `alarm` versus `alarmEvent`, and a dozen renamed fields.
-  **Read `docs/protocol-v1-reconciliation.md` before touching anything protocol-shaped**, and do not
-  add new fields to either side until the structure question is settled — renaming is cheap now and
-  gets expensive fast. The topics, the RPC envelope and the safety model did converge independently.
-- `docs/protocol-v1.md` §12 lists ten further open items requiring
-  the Android owner or product. Most consequential: the **units** (mm/L/kg/°C) are
-  industry-convention guesses never checked against the device's real register scaling, and
-  `config.setTank`/`config.setProbe` argument shapes are undefined on purpose because the device has
-  no handler for them yet. **Do not freeze the protocol or start device-side migration** without
-  that sign-off.
-- **Multi-tenancy is not built.** There are no customer entities and no tenant-scoped query
-  isolation. `users.role` (`platform_admin`/`customer_admin`/`customer_user`) plus the existing
-  `user_devices` binding is the entire authorization model today.
-- **All read endpoints are migrated.** `/api/alarms`, `/api/oil-in-out` and
-  `/api/devices/:device/telemetry/latest` read through to ThingsBoard; `/api/oilcan/latest` and
-  `/api/shifts` were deleted rather than migrated. **`/api/oil-in-out` depends on an unmerged
-  device-side change** (zhongchengyeweiyi#39): the device already publishes `stockEvent` on every
-  movement but as `DetailInoutRecord.toString()`, a Java debug string rather than JSON, so real
-  devices currently produce records the endpoint skips. It degrades to an empty list, not a 500.
-- **交班 (shift handover) is out of scope** unless product says otherwise: V1 has no uplink for it on
-  either side, so `/api/shifts` could only ever have returned an empty list.
-- **Record correction has no replacement yet.** The old write-back endpoints
-  (`POST /api/oil-in-out/correct` etc.) went with the river queue. If correcting a stored record
-  remains a product requirement it needs redesigning on top of `internal/control`, not restoring.
-- **Not verified:** MQTT over TLS (dev uses plaintext 1884), OTA delivery, ThingsBoard-side tenant
-  isolation, and any load/capacity testing. The device-side OTA client does not exist at all.
-- **river's own tables remain** (`river_job`/`river_leader`/`river_queue`/`river_notification`,
-  migrations 000002–000007) even though river itself is gone from `go.mod`. Dropping them from a
-  later migration while those six files still claim to create them makes the history inconsistent
-  both ways; retiring the six files together is a schema-history change worth doing on its own.
-
----
-
----
-
-# Part 2 — Engineering journal
-
-*Everything below is history and reasoning. Older sections describe superseded architectures in the
-present tense; Part 1 above is authoritative for present-day fact.*
 
 ## What this project is (original 2026-08-20 framing)
 
@@ -1410,7 +1146,7 @@ both lived entirely in the deleted packages. Three consecutive parallel runs wer
 **That "parallel is now reliable" conclusion was drawn from too few runs and did not survive**: once
 ThingsBoard had accumulated data and a fourth ThingsBoard-dependent package existed, parallel runs
 started missing timeouts again for an unrelated reason (contention on the single ThingsBoard). See
-Part 1 — `-p 1` is the standing recommendation.
+`CLAUDE.md` — `-p 1` is the standing recommendation.
 
 Data-boundary assertions were upgraded rather than deleted: tests that counted rows in `alarms` /
 `oil_in_out` / `commit_works` and required zero now assert those tables **do not exist**, which is
@@ -1624,7 +1360,7 @@ from a log window again.
 `go test ./...` "is now reliable in parallel", concluded from three green runs. The river/mosquitto
 flakiness it described genuinely is gone, but three runs was too small a sample to promote to
 "stable", and the claim did not survive a loaded ThingsBoard plus a fourth dependent package.
-`-p 1` is the standing recommendation again, now stated in Part 1 with the reason.
+`-p 1` is the standing recommendation again, now stated in `CLAUDE.md` with the reason.
 
 Deliberately not "fixed" by raising the timeout: 25 s for an operation that takes 2 s is already
 generous, and stretching it would hide real slowness rather than reveal it.
@@ -1878,7 +1614,7 @@ P2, plus a short list of items from the *first* round that were still unaddresse
    silently answered "the 50 oldest records ever" for the common case of a client just wanting
    recent history. Changed the default window to the last 24h, matching `/api/audit`'s own default
    (`control.go`'s `timeRange`) — the codebase already had the right convention in one place and not
-   the other. And this file's own Part 1 quickstart still said "setting `MQTT_BROKER_URL` starts the
+   the other. And `CLAUDE.md`'s own quickstart still said "setting `MQTT_BROKER_URL` starts the
    legacy stack" after that stack (`internal/mqtt`, `cmd/devicesim`) was deleted outright on
    2026-09-02 — `cmd/server` no longer reads that variable at all, so the corrected line now says so
    instead of describing a code path that no longer exists. (The PR body's own stale "12 commits"
@@ -2146,7 +1882,15 @@ one more plain PR comment, a P2 in the sixth round's own fix.
    `platform_admin` for minting, still independent of ThingsBoard. `go test ./... -p 1 -count=1` and
    a full `cmd/smoke -api` run (12/12) both stayed green.
 
-## Architecture
+## Architecture (as of 2026-08-29 — **SUPERSEDED IN FULL**)
+
+> **Do not read this section as fact.** It describes the legacy Alink stack in the present tense,
+> and every package it names as load-bearing — `internal/mqtt`, `internal/queue` (river),
+> `internal/partitions` — plus the `MQTT_BROKER_URL`/`MQTT_PRODUCT_KEY` env vars, the
+> `/api/oilcan/latest` and `/api/*/correct` endpoints and the five legacy tables were **deleted on
+> 2026-09-02** (see the legacy-stack-deletion entry above). It is kept because it is the only
+> written record of how that stack fitted together, which matters when reading the git history.
+> For today's architecture see `CLAUDE.md`; for the module map see "Module layout" above.
 
 - `cmd/server/main.go` builds a `pgxpool.Pool` and a `redis.Client` from `DATABASE_URL`/
   `REDIS_ADDR` (env, with localhost defaults matching `docker-compose.yml`), a JWT signing key from
