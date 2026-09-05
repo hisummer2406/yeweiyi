@@ -49,6 +49,12 @@ build
 # superpowers docs
 docs/superpowers
 
+# local design assets (not for repo)
+docs/
+
+# workbuddy local cache/memory
+.workbuddy/
+
 # cloudflare wrangler
 .wrangler
 requestRecord.mock.js
