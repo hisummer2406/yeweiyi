@@ -25,6 +25,7 @@ import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 import org.apache.commons.lang3.StringUtils;
 
+import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -209,6 +210,22 @@ public class SerialPortManager implements IParseDataListener {
                             // 按 SparseArray 实际条目遍历（valueAt），不假设罐位号连续编号——
                             // 罐没配置罐高时不在数组里，编号会有空洞，旧写法一撞到空洞就 break，
                             // 之后所有罐都轮询不到（代码审查发现，比 issue #28 本身更严重）。
+                            // 4-20mA（case 2）是多通道采集模块：一帧请求问 N 个寄存器，一帧应答带回 N 路通道。
+                            // 按当前实际配置的罐算出需要问多少路，而不是硬编码成 2——硬编码时超过
+                            // 2 个罐的探针地址永远不会出现在应答里（3 号罐及以后读不到数据）。
+                            int[] probeAddresses = new int[mOilCanData.size()];
+                            int probeAddressCount = 0;
+                            for (int k = 0; k < mOilCanData.size(); k++) {
+                                OilCan c = mOilCanData.valueAt(k);
+                                if (c == null) continue;
+                                try {
+                                    probeAddresses[probeAddressCount++] = Integer.parseInt(c.getProbeAdr());
+                                } catch (NumberFormatException e) {
+                                    Log.w(TAG, "4-20mA 探针地址非数字，跳过: " + c.getProbeAdr(), e);
+                                }
+                            }
+                            String ld2ChannelCountHex = String.format("%02X",
+                                    LD2Company.maxChannelNeeded(Arrays.copyOf(probeAddresses, probeAddressCount)));
                             for (j = 0; j < mOilCanData.size(); j++) {
                                 if (mOilCanData != null) {
                                     try {
@@ -264,14 +281,14 @@ public class SerialPortManager implements IParseDataListener {
                                                 break;
 
                                             case 2:
-                                                oilCanData = LD2Company.getInstance().sendProbeInfo("", "02", mContext);
+                                                oilCanData = LD2Company.getInstance().sendProbeInfo("", ld2ChannelCountHex, mContext);
                                                 //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
                                                 break;
                                         }
                                         serialPort.sendData(DataUtils.HexString2Bytes(oilCanData));
                                 Log.i(TAG, "发送到串口数据" + oilCanData);
                                         try {
-                                            Thread.sleep(50);
+                                            Thread.sleep(100);
                                         } catch (InterruptedException e1) {
                                             // 注：此处未调用 Thread.currentThread().interrupt() 恢复中断位。
                                             // 恢复后本轮循环内后续的 sleep 会立即抛异常，属于行为变更，
@@ -353,7 +370,7 @@ public class SerialPortManager implements IParseDataListener {
                                                 // 直接break结束这一轮；也不用continue——同一根探针刚发完
                                                 // 45温度应答，若零间隔紧接着收到下一条44请求，RS-485总线
                                                 // 来不及做收发切换，这条新请求很可能被探针错过（issue #28），
-                                                // 所以要让下面的 crcError()+sleep(50) 照常跑出这段间隔。
+                                                // 所以要让下面的 crcError()+sleep(100) 照常跑出这段间隔。
                                                 if (!(mOilCan.getProbeType() == 0 && i == 0 && isMyWenDuTurn)) {
                                                     break;
                                                 }
@@ -368,7 +385,7 @@ public class SerialPortManager implements IParseDataListener {
                                         }
                                         crcError(mOilCan);
                                         try {
-                                            Thread.sleep(50);
+                                            Thread.sleep(100);
                                         } catch (InterruptedException e) {
                                             Log.w(TAG, "轮询间隔等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e);
                                         }

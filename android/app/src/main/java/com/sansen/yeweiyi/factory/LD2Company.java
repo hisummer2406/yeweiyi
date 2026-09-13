@@ -58,6 +58,37 @@ public class LD2Company implements AbstractCompany {
         return data;
     }
 
+    /**
+     * 4-20mA 是多通道采集模块：一帧请求要问多少个寄存器（=多少路通道），必须覆盖当前实际配置的
+     * 所有罐的探针地址，否则地址号更大的罐永远不会出现在应答帧里（之前硬编码成 2，导致 3 号罐及
+     * 以后读不到数据）。空数组/全部非正数时返回 1，避免拼出数量为 0 的畸形请求帧。
+     * 不依赖 Context/SparseArray/Log，可在 JVM 单测里直接调用。
+     */
+    public static int maxChannelNeeded(int[] probeAddresses) {
+        int max = 0;
+        if (probeAddresses != null) {
+            for (int address : probeAddresses) {
+                if (address > max) {
+                    max = address;
+                }
+            }
+        }
+        return max > 0 ? max : 1;
+    }
+
+    /**
+     * 把 0-based 的通道下标转成通道地址字符串，补零规则与 {@link com.sansen.yeweiyi.bean.OilCan#getProbeAdr()}
+     * 保持一致（长度 <=1 才补一位 0），支持到两位数通道（10~16）。原先无条件拼 "0"+(i+1)，
+     * 通道 10 会拼成 "010"，永远匹配不上补零成 "10" 的探针地址。
+     */
+    public static String channelAddress(int channelIndex0Based) {
+        String address = String.valueOf(channelIndex0Based + 1);
+        if (address.length() <= 1) {
+            address = "0" + address;
+        }
+        return address;
+    }
+
     short crc;
     byte[] byte2 = new byte[2];
     OilCan oilCan;
@@ -89,7 +120,7 @@ public class LD2Company implements AbstractCompany {
                     if (map != null) {
                         for (int j = 0; j < map.size(); j++) {
                             oilCan = map.valueAt(j);
-                            String address = "0" + (i + 1);
+                            String address = channelAddress(i);
                             if (address.equals(oilCan.getProbeAdr())) {
                                // Log.e("CRC:高度 ", "   " + i + "   " + oilLevel + "   " + oilCan.getProbeAdr() + "  " + ("0" + (i + 1)));
                                 // 油高 + 补偿
