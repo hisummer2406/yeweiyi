@@ -13,6 +13,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
@@ -227,8 +228,9 @@ public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheck
         Window window = dialog.getWindow();
         if (window != null) {
             int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);   // 300dp
-            int height = (int) (230*1.3  * getResources().getDisplayMetrics().density);  // 400dp
-            window.setLayout(width, height);
+            // 高度不再写死——弹窗根布局本来就是 wrap_content，交给系统按实际内容（含英文下可能
+            // 换行的提示文案）自适应，避免内容比写死的高度还高时把底部按钮裁掉。
+            window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
         }
     }
 

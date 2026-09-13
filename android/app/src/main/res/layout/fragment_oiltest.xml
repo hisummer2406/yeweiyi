@@ -665,7 +665,10 @@
 
             <LinearLayout
                 android:id="@+id/ly_baoCunData"
-                android:layout_width="@dimen/dp_150"
+                android:layout_width="wrap_content"
+                android:minWidth="@dimen/dp_150"
+                android:paddingLeft="@dimen/dp_6"
+                android:paddingRight="@dimen/dp_6"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginRight="@dimen/dp_40"
@@ -708,7 +711,10 @@
 
             <LinearLayout
                 android:id="@+id/ly_upper_page"
-                android:layout_width="@dimen/dp_150"
+                android:layout_width="wrap_content"
+                android:minWidth="@dimen/dp_150"
+                android:paddingLeft="@dimen/dp_6"
+                android:paddingRight="@dimen/dp_6"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginLeft="@dimen/dp_40"

@@ -164,8 +164,16 @@ public class OilCanFragment extends BaseFragment {
         oilcan_label_wrap_temp = rootView.findViewById(R.id.oilcan_label_wrap_temp);
         // label 文案是静态的（只是标签，不随数据刷新），按当前语言实际渲染宽度统一量一次即可。
         // 宽度要设置在 wrap（label 外层 0dp+weight 的 LinearLayout）上，不是 TextView 自己身上。
+        //
+        // 注意：wrapperViews 里不能带 oilcan_label_wrap_type——fragment_oil_can.xml 里这一行
+        // （罐类型行）本身 visibility="gone"，压根不显示，配套的 label TextView 字段在上面也是
+        // 注释掉的死代码（// private TextView oilcan_label_type;），从没 findViewById 过。之前
+        // 这里把它也塞进了 wrapperViews，导致 wrapperViews 比 labelTextViews 多一个（9 vs 8），
+        // 而 unifyWeightedLabelWidth 一开始就有 size 不一致直接 return 的保护判断——这个方法因此
+        // 从没真正跑起来过，之前调大 paddingDp 在真机上完全没有效果的根因就是这个，不是数值本身
+        // 的问题。
         unifyWeightedLabelWidth(
-                java.util.Arrays.asList(oilcan_label_wrap_type, oilcan_label_wrap_capacity, oilcan_label_wrap_level,
+                java.util.Arrays.asList(oilcan_label_wrap_capacity, oilcan_label_wrap_level,
                         oilcan_label_wrap_volume, oilcan_label_wrap_empty, oilcan_label_wrap_density,
                         oilcan_label_wrap_weight, oilcan_label_wrap_waterlevel, oilcan_label_wrap_temp),
                 java.util.Arrays.asList(oilcan_label_capacity, oilcan_label_level,
@@ -174,6 +182,10 @@ public class OilCanFragment extends BaseFragment {
                 // 不设宽度上限：maxLines="1"+ellipsize="end" 已经是防止极端文案撑爆布局的兜底，
                 // 没必要再叠加一个拍脑袋的固定值——上次就是这个 160dp 的上限比"Water Level"实际
                 // 需要的宽度还小，才会被截断/挤压。宽度完全按当前语言的真实测量结果来。
+                //
+                // paddingDp=4：这里只是给测量出来的列宽留一点缓冲，防止文字贴着列边界；label 和
+                // 右边数值列之间看得见的间距不靠这个，是数值那边的 setText 自己在文本前加了一个
+                // 空格前缀（见 setData()），跟这个宽度测量机制无关。
                 4, 0);
 
     }
@@ -192,9 +204,12 @@ public class OilCanFragment extends BaseFragment {
         }
 
         if (oilCan != null) {
-            oilcan_tv_zhiliang.setText(DataUtils.doubleFoment(oilCan.getOilVolume() * oilCan.getDensity()) + " " + SystemUtils.getRsStr(R.string.unit_kg));
+            // 每个数值前面这个空格前缀，是跟左边 label 列之间唯一的视觉间距来源——label 右对齐、
+            // 数值左对齐，两列中间没有别的 margin/padding，不加这个空格两列文字会直接贴在一起
+            // （尤其英文下更明显）。
+            oilcan_tv_zhiliang.setText(" " + DataUtils.doubleFoment(oilCan.getOilVolume() * oilCan.getDensity()) + " " + SystemUtils.getRsStr(R.string.unit_kg));
 
-            oilcan_tv_midu.setText(oilCan.getDensity() + " kg/m³"
+            oilcan_tv_midu.setText(" " + oilCan.getDensity() + " kg/m³"
             );//+ " 地址：" + oilCan.getProbeAdr()
 
             if (oilCan.getErrorTimes() < 4) {
@@ -226,12 +241,12 @@ public class OilCanFragment extends BaseFragment {
             oilcan_view_progress.invalidate();
             oilcan_tv_tankno.setText(oilCan.getOilCanPos() + "#");
             oilcan_tv_oiltype.setText(SystemUtils.getRsStr(R.string.oilcan_type_format, oilCan.getOilCanPos(), DataUtils.getOilType()[oilCan.getOilType()]));
-            oilcan_tv_oillevel.setText((UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getOilLevel() ): DataUtils.doubleFomentStr2(oilCan.getOilLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
-            oilcan_tv_oilvolume.setText((UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ? DataUtils.doubleFomentStr(oilCan.getMaxVolume()) : DataUtils.doubleFomentStr2(oilCan.getMaxVolume() / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
-            oilcan_tv_oilweight.setText((UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ? DataUtils.doubleFomentStr(oilCan.getOilVolume()) : DataUtils.doubleFomentStr2(oilCan.getOilVolume() / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
-            oilcan_tv_oiladdible.setText((UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ?DataUtils.doubleFomentStr(oilCan.getSurPlus() ): DataUtils.doubleFomentStr2(DataUtils.doubleFoment(oilCan.getSurPlus() ) / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
-            oilcan_tv_waterlevel.setText((UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getWaterLevel()) : DataUtils.doubleFomentStr2(oilCan.getWaterLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
-            oilcan_tv_temperature.setText(DataUtils.doubleFomentStr(oilCan.getTemper() )+ " ℃");
+            oilcan_tv_oillevel.setText(" " + (UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getOilLevel() ): DataUtils.doubleFomentStr2(oilCan.getOilLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
+            oilcan_tv_oilvolume.setText(" " + (UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ? DataUtils.doubleFomentStr(oilCan.getMaxVolume()) : DataUtils.doubleFomentStr2(oilCan.getMaxVolume() / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
+            oilcan_tv_oilweight.setText(" " + (UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ? DataUtils.doubleFomentStr(oilCan.getOilVolume()) : DataUtils.doubleFomentStr2(oilCan.getOilVolume() / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
+            oilcan_tv_oiladdible.setText(" " + (UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ?DataUtils.doubleFomentStr(oilCan.getSurPlus() ): DataUtils.doubleFomentStr2(DataUtils.doubleFoment(oilCan.getSurPlus() ) / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
+            oilcan_tv_waterlevel.setText(" " + (UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getWaterLevel()) : DataUtils.doubleFomentStr2(oilCan.getWaterLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
+            oilcan_tv_temperature.setText(" " + DataUtils.doubleFomentStr(oilCan.getTemper() )+ " ℃");
         }
     }
 

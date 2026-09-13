@@ -643,7 +643,7 @@
 
     <!-- 以下为 Claude 翻译补充：蓝湖设计稿未覆盖，由 Claude 参照上下文拟定中英文案（2026-09），非设计稿原文 -->
     <string name="previous_page">Home Page</string>
-    <string name="hour_unit">Hour(s)</string>
+    <string name="hour_unit">Hours</string>
     <string name="tank_total_capacity">Total Capacity</string>
     <string name="tank_empty_capacity">Empty Vol.</string>
     <string name="tank_density">Density</string>

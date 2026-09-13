@@ -305,10 +305,11 @@
 
                         <EditText
                             android:id="@+id/et_time_minute"
-                            android:layout_width="@dimen/dp_60"
+                            android:layout_width="@dimen/dp_70"
                             android:layout_height="match_parent"
                             android:layout_marginStart="8dp"
                             android:hint="@string/hour_unit"
+                            android:maxLines="1"
                             android:imeOptions="actionDone"
                             android:inputType="number"
                             android:maxLength="3"
@@ -522,7 +523,10 @@
 
         <LinearLayout
             android:id="@+id/ly_upper_page"
-            android:layout_width="@dimen/dp_150"
+            android:layout_width="wrap_content"
+            android:minWidth="@dimen/dp_150"
+            android:paddingLeft="@dimen/dp_6"
+            android:paddingRight="@dimen/dp_6"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:layout_marginTop="@dimen/dp_20"

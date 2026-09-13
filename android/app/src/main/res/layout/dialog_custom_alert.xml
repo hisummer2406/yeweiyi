@@ -64,7 +64,8 @@
             android:id="@+id/btn_confirm"
             android:layout_width="@dimen/dp_120"
             android:layout_height="@dimen/dp_48"
-            android:background="@drawable/btn_confirm"
+            android:background="@drawable/bg_btn_blue_solid"
+            android:text="@string/confirm"
             android:textSize="@dimen/sp_20"
             android:textColor="#FFFFFF"
             />

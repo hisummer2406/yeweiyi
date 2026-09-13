@@ -46,11 +46,11 @@
 
 
         <TableLayout
-            android:layout_width="@dimen/dp_300"
+            android:layout_width="@dimen/dp_400"
             android:layout_height="match_parent"
             android:gravity="center"
             android:paddingLeft="5dp"
-            android:stretchColumns="*">
+            android:stretchColumns="1">
 
             <TableRow>
 
@@ -412,13 +412,13 @@
         android:gravity="center"
         android:textSize="50sp"
         android:textStyle="bold" />
-    <com.sansen.yeweiyi.view.CustomProgressView
+    <!--<com.sansen.yeweiyi.view.CustomProgressView
         android:visibility="gone"
         android:layout_alignLeft="@+id/oilcan_tv_tankno"
         android:id="@+id/oilcan_view_progress"
         android:layout_width="@dimen/dp_145"
         android:layout_height="@dimen/dp_312"
         android:layout_marginLeft="@dimen/dp_100"
-        android:layout_marginTop="@dimen/custom_progress_margintop" />
+        android:layout_marginTop="@dimen/custom_progress_margintop" />-->
 
 </RelativeLayout>
