@@ -50,7 +50,7 @@
             android:layout_gravity="center"
             android:layout_marginTop="@dimen/dp_15"
             android:layout_marginBottom="@dimen/dp_15"
-            android:text="返回上页"
+            android:text="@string/previous_page"
             android:textColor="@color/white"
             android:textSize="@dimen/sp_20" />
     </LinearLayout>

@@ -98,7 +98,7 @@ public class OutStockFragment extends BaseFragment implements OutStockAdapter.On
 // 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
-		tvTitle.setText("出库记录");
+		tvTitle.setText(R.string.chukujilu);
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 		ly_ruKu=rootView.findViewById(R.id.ly_ruKu);
 		ly_ruKu.setOnClickListener(this);

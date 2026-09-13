@@ -21,6 +21,7 @@ import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
+import com.sansen.yeweiyi.utils.UnitPref;
 
 
 public class MinOilCanView extends View {
@@ -230,9 +231,54 @@ public class MinOilCanView extends View {
                 //Log.i(TAG, "onDraw: 进度条总高度"+(proBootomRoait-proTopRoait)*mTotalHeight+"每个字体的高度"+(proBootomRoait-proTopRoait)*mTotalHeight/content.length);
 
                 mTextPaint.setTextSize((float) (textSize * 1));
+
+                // 除罐号那一行（i==0，单独画蓝色徽标）外，其余每一行都是 label/数值/单位 三列。
+                // 按设计稿要求：label 列统一按最长的 label 定宽、右对齐，数值列统一左对齐、按最长的
+                // 数值定宽，单位列统一左对齐——不再是"每行各自量自己的宽度"，改成整屏统一量一次，
+                // 画的时候三列都用同一组固定 X 坐标，行与行之间才能对齐成列。
+                // label 是静态文案，量一次足够；数值/单位每次刷新都会变，要每次 onDraw 都重新量。
+                float maxLabelWidth = 0f;
+                float maxValueWidth = 0f;
+                float maxUnitWidth = 0f;
+                String[][] rowParts = new String[content.length][];
+                for (int i = 1; i < content.length; i++) {
+                    rowParts[i] = getTextContentParts(arrIndex == null ? i : arrIndex[i]);
+                    maxLabelWidth = Math.max(maxLabelWidth, mTextPaint.measureText(content[i] + ""));
+                    maxValueWidth = Math.max(maxValueWidth, mTextPaint.measureText(rowParts[i][0]));
+                    maxUnitWidth = Math.max(maxUnitWidth, mTextPaint.measureText(rowParts[i][1]));
+                }
+                float originalTextSize = mTextPaint.getTextSize(); // 罐号徽标行用这个，不受下面的缩放影响
+                float colGap = 8f;
+                // 三列量出来的总宽度如果超过这个 View 实际可用的宽度（右边还留一点安全边距），就把
+                // 这几行的字号整体按比例缩小到刚好放得下，缩小后重新量一遍——不这样做的话，语言一长
+                // （比如"Water H." 把 label 列撑宽后，单位列会被顶到 View 右边界外面，直接被裁掉，
+                // 比如之前的 "kg"）。这个缩放只影响这几行（label/数值/单位），罐号徽标那一行不受影响。
+                float rightMargin = 20f;
+                float available = mTotalWidth - (right + 120) - rightMargin;
+                float needed = maxLabelWidth + colGap + maxValueWidth + colGap + maxUnitWidth;
+                if (needed > available && needed > 0) {
+                    float scale = available / needed;
+                    mTextPaint.setTextSize(originalTextSize * scale);
+                    maxLabelWidth = 0f;
+                    maxValueWidth = 0f;
+                    maxUnitWidth = 0f;
+                    for (int i = 1; i < content.length; i++) {
+                        maxLabelWidth = Math.max(maxLabelWidth, mTextPaint.measureText(content[i] + ""));
+                        maxValueWidth = Math.max(maxValueWidth, mTextPaint.measureText(rowParts[i][0]));
+                        maxUnitWidth = Math.max(maxUnitWidth, mTextPaint.measureText(rowParts[i][1]));
+                    }
+                    colGap *= scale;
+                }
+                float rowsTextSize = mTextPaint.getTextSize(); // 可能是缩小后的字号，i>=1 的行都用它
+                float labelColX = right + 120;
+                float labelColRight = labelColX + maxLabelWidth; // label 右对齐的基准线
+                float valueColX = labelColRight + colGap;
+                float unitColX = valueColX + maxValueWidth + colGap;
+
                 for (int i = 0; i < content.length; i++) {
                     // --- 为油品行绘制蓝色背景 ---
                     if (i == 0) {
+                        mTextPaint.setTextSize(originalTextSize); // 罐号徽标行用原始字号，不受上面的缩放影响
                         // 加粗
                         boolean oldFakeBold = mTextPaint.isFakeBoldText();
                         mTextPaint.setColor(tagColor);
@@ -244,10 +290,12 @@ public class MinOilCanView extends View {
                         float leftBg = right + 120;  // 与标签起始X一致
                         float topBg = top + i * textSize;
                         // 右边界需要包含标签和数值文本的总宽度
-                        String label = String.valueOf(" "+oilCan.getOilCanPos())+"号 ";//content[i] + ":";
+                        String label = " " + SystemUtils.getRsStr(R.string.oilcan_short_label_format, oilCan.getOilCanPos());//content[i] + ":";
                         String value = getTextContent(arrIndex == null ? i : arrIndex[i]);
                         float totalWidth = 125 + mTextPaint.measureText(label) + mTextPaint.measureText(value);
-                        float rightBg = 330;//right + totalWidth;
+                        // 背景框宽度按实际文案（label+value）测量结果撑开，不再写死；330 作为下限，
+                        // 保证文案很短时框不会比中文场景下的原有效果还窄，英文/西语等更长文案时会跟着变宽，不再溢出。
+                        float rightBg = Math.max(right + totalWidth, 330);
                         float bottomBg = top + (i + 1) * textSize;
 
                         // 保存当前画笔颜色，绘制蓝色矩形
@@ -271,8 +319,12 @@ public class MinOilCanView extends View {
                         continue;  // 跳过下方的通用绘制，避免重复
                     }
 
+                    mTextPaint.setTextSize(rowsTextSize);
                     mTextPaint.setColor(tagColor);
-                    canvas.drawText(content[i] + "", right + 120, top + (i*1.35f + 1.2f) * textSize - 38, mTextPaint);
+                    float rowY = top + (i*1.35f + 1.2f) * textSize - 38;
+                    // label 右对齐：短的 label 往右挪，跟最长的那条的右边缘对齐，数值列才能从同一条线开始
+                    String labelText = content[i] + "";
+                    canvas.drawText(labelText, labelColRight - mTextPaint.measureText(labelText), rowY, mTextPaint);
                     switch (oilCan.getProbeType()) {
                         case 0:
                             ErrorColor(4);
@@ -296,7 +348,10 @@ public class MinOilCanView extends View {
                             ErrorColor(4);
                             break;
                     }
-                    canvas.drawText(getTextContent(arrIndex==null?i:arrIndex[i]), right + 125 + mTextPaint.measureText(content[i] + ""), top + (i*1.35f + 1.2f) * textSize - 38, mTextPaint);
+                    canvas.drawText(rowParts[i][0], valueColX, rowY, mTextPaint);
+                    if (!rowParts[i][1].isEmpty()) {
+                        canvas.drawText(rowParts[i][1], unitColX, rowY, mTextPaint);
+                    }
                 }
 
             }
@@ -388,63 +443,80 @@ public class MinOilCanView extends View {
     }
 
     private String getTextContent(int i) {
+        String[] parts = getTextContentParts(i);
+        return parts[1].isEmpty() ? parts[0] : parts[0] + "  " + parts[1];
+    }
+
+    /**
+     * 数值和单位分开返回（{数值, 单位}，没有单位时单位为 ""），供按列对齐绘制用——数值列、单位列
+     * 分别按各自当前最长的一条统一定宽，不能像之前那样把两者拼成一个字符串一起测量/绘制。
+     * getTextContent() 仍然可用，内部就是把这两段拼回去，行为跟以前完全一样。
+     */
+    private String[] getTextContentParts(int i) {
         switch (i) {
             case 0:
                 switch (oilCan.getProbeType()) {
                     case 0:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                     case 1:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                     case 2:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                     case 3:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                     case 4:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                     case 5:
-                        return ErrorContent(20);
+                        return new String[]{ErrorContent(20), ""};
                     case 6:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                     default:
-                        return ErrorContent(4);
+                        return new String[]{ErrorContent(4), ""};
                 }
 
             case 1:
                 Log.e("TAG油高","油高:  "+DataUtils.doubleFomentStr(oilCan.getOilLevel()));
                 YeWeiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米");
-                return  ("毫米".equals(YeWeiUnit)?DataUtils.doubleFomentStr(oilCan.getOilLevel()):DataUtils.doubleFomentStr2(oilCan.getOilLevel()/1000)) + "  "+YeWeiUnit;
+                return new String[]{
+                        UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM?DataUtils.doubleFomentStr(oilCan.getOilLevel()):DataUtils.doubleFomentStr2(oilCan.getOilLevel()/1000),
+                        SystemUtils.localizedUnit(YeWeiUnit)};
             case 2:
                 RongJiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升");
-                return  ("升".equals(RongJiUnit)?DataUtils.doubleFomentStr(oilCan.getOilVolume()):DataUtils.doubleFomentStr2(oilCan.getOilVolume()/1000)) + "  "+RongJiUnit;
+                return new String[]{
+                        UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L?DataUtils.doubleFomentStr(oilCan.getOilVolume()):DataUtils.doubleFomentStr2(oilCan.getOilVolume()/1000),
+                        SystemUtils.localizedUnit(RongJiUnit)};
             case 3:
-
                 YeWeiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米");
-                return  ("毫米".equals(YeWeiUnit)?DataUtils.doubleFomentStr(oilCan.getWaterLevel()):DataUtils.doubleFomentStr2(oilCan.getWaterLevel()/1000)) + "  "+YeWeiUnit;
-
-
+                return new String[]{
+                        UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM?DataUtils.doubleFomentStr(oilCan.getWaterLevel()):DataUtils.doubleFomentStr2(oilCan.getWaterLevel()/1000),
+                        SystemUtils.localizedUnit(YeWeiUnit)};
 
             case 4:
                 ZhiLiangUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit,"千克");
-                return  ("千克".equals(ZhiLiangUnit)?DataUtils.doubleFomentStr(oilCan.getCanAddOilWeight()) :DataUtils.doubleFomentStr2(oilCan.getCanAddOilWeight() /1000)) + "  "+ZhiLiangUnit;
+                return new String[]{
+                        UnitPref.Mass.parse(ZhiLiangUnit) == UnitPref.Mass.KG?DataUtils.doubleFomentStr(oilCan.getCanAddOilWeight()) :DataUtils.doubleFomentStr2(oilCan.getCanAddOilWeight() /1000),
+                        SystemUtils.localizedUnit(ZhiLiangUnit)};
 
             case 5:
                 ZhiLiangUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit,"千克");
-                return  ("千克".equals(ZhiLiangUnit)?DataUtils.doubleFomentStr(oilCan.getOilWeight()) :DataUtils.doubleFomentStr2(oilCan.getOilWeight() /1000)) + "  "+ZhiLiangUnit;
-
+                return new String[]{
+                        UnitPref.Mass.parse(ZhiLiangUnit) == UnitPref.Mass.KG?DataUtils.doubleFomentStr(oilCan.getOilWeight()) :DataUtils.doubleFomentStr2(oilCan.getOilWeight() /1000),
+                        SystemUtils.localizedUnit(ZhiLiangUnit)};
 
             case 6:
                 RongJiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升");
-                return  ("升".equals(RongJiUnit)?DataUtils.doubleFomentStr(oilCan.getWaterVolume()):DataUtils.doubleFomentStr2(oilCan.getWaterVolume()/1000)) + "  "+RongJiUnit;
+                return new String[]{
+                        UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L?DataUtils.doubleFomentStr(oilCan.getWaterVolume()):DataUtils.doubleFomentStr2(oilCan.getWaterVolume()/1000),
+                        SystemUtils.localizedUnit(RongJiUnit)};
             case 7:
-                return oilCan.getTemper() + "  ℃";
-
+                return new String[]{String.valueOf(oilCan.getTemper()), "℃"};
 
             case 8:
-                return oilCan.getAlarmState()+"";
+                return new String[]{oilCan.getAlarmState()+"", ""};
             case 9:
-                return oilCan.getProbeType()+" "+oilCan.getProbeAdr();
+                return new String[]{oilCan.getProbeType()+" "+oilCan.getProbeAdr(), ""};
             default:
-                return "   " + i;
+                return new String[]{"   " + i, ""};
         }
     }
     private String YeWeiUnit,RongJiUnit,ZhiLiangUnit;

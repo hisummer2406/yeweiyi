@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Environment;
@@ -23,6 +24,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.baidu.mobstat.StatService;
@@ -35,6 +37,7 @@ import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 import java.io.File;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -326,6 +329,79 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 		if (dialog != null ) {
 			dialog.setCancelable(true);
 			dialog.dismiss();
+		}
+	}
+
+	/**
+	 * 按给定 TextView 的字体/字号，实际测量一组文案里最长的那条需要多宽，返回刚好能容纳它的宽度
+	 * （含左右各 paddingDp 的余量），并且不超过 maxWidthDp。
+	 *
+	 * 用于"同一列多个 label 需要统一宽度、且不因中英文长度差异换行"的场景——宽度是按当前语言
+	 * 实际渲染出来的文案量出来的，不需要为每种语言各猜一个固定 dp 值。
+	 *
+	 * @param sampleTextView 提供字体/字号信息的样板 TextView（这一列随便一个即可，只取它的 Paint）
+	 * @param texts          这一列所有 label 的实际文案
+	 * @param paddingDp      文案两侧预留的余量（dp）
+	 * @param maxWidthDp     宽度上限（dp），防止某条异常长的文案把布局撑爆；&lt;= 0 表示不限制
+	 * @return               这一列应该统一设置的宽度（px），可以直接赋给 LayoutParams.width
+	 */
+	protected int measureMaxLabelWidth(TextView sampleTextView, List<String> texts, float paddingDp, float maxWidthDp) {
+		Paint paint = sampleTextView.getPaint();
+		float maxTextWidth = 0f;
+		if (texts != null) {
+			for (String text : texts) {
+				if (text == null) {
+					continue;
+				}
+				float w = paint.measureText(text);
+				if (w > maxTextWidth) {
+					maxTextWidth = w;
+				}
+			}
+		}
+		float density = ct.getResources().getDisplayMetrics().density;
+		int width = (int) Math.ceil(maxTextWidth + paddingDp * density);
+		if (maxWidthDp > 0) {
+			width = Math.min(width, (int) (maxWidthDp * density));
+		}
+		return width;
+	}
+
+	/**
+	 * 把一组"外层 LinearLayout(width=0dp, weight&gt;0) 包一个 label TextView"的列统一成同一个
+	 * 固定宽度：宽度按 labelTextViews 里最长的文案实际测量得出，应用在 wrapperViews（label 外层的
+	 * LinearLayout）上——把 0dp+weight 换成测量出来的固定宽度、weight 清零。
+	 *
+	 * 之所以要改外层 wrapper 而不是直接改 TextView 自己的宽度：TextView 是 0dp+weight 的
+	 * LinearLayout 的子 View，宽度由外层的 weight 分配决定，只改 TextView 自身宽度不会让外层
+	 * 分到更多空间，文案会直接溢出/被裁切。改外层宽度后，同一行里另一个 weight&gt;0 的兄弟
+	 * （值列）会自动吃掉多出来的剩余空间，原有"值列占满剩余空间"的弹性布局不受影响。
+	 *
+	 * 对应的 label TextView 在 XML 里要用 layout_width="match_parent"，靠 gravity="right" 在
+	 * 外层给定的宽度里右对齐——而不是自己再声明一个固定宽度。
+	 *
+	 * @param wrapperViews    label 外层的 LinearLayout（0dp + weight），和 labelTextViews 一一对应
+	 * @param labelTextViews  wrapperViews 里包着的 label TextView，和 wrapperViews 一一对应
+	 * @param paddingDp       文案两侧预留的余量（dp）
+	 * @param maxWidthDp      宽度上限（dp），防止某条异常长的文案把布局撑爆；&lt;= 0 表示不限制
+	 */
+	protected void unifyWeightedLabelWidth(List<? extends View> wrapperViews, List<TextView> labelTextViews, float paddingDp, float maxWidthDp) {
+		if (wrapperViews == null || labelTextViews == null || wrapperViews.isEmpty()
+				|| wrapperViews.size() != labelTextViews.size()) {
+			return;
+		}
+		List<String> texts = new java.util.ArrayList<>();
+		for (TextView tv : labelTextViews) {
+			texts.add(tv.getText() == null ? null : tv.getText().toString());
+		}
+		int width = measureMaxLabelWidth(labelTextViews.get(0), texts, paddingDp, maxWidthDp);
+		for (View wrapper : wrapperViews) {
+			ViewGroup.LayoutParams lp = wrapper.getLayoutParams();
+			lp.width = width;
+			if (lp instanceof LinearLayout.LayoutParams) {
+				((LinearLayout.LayoutParams) lp).weight = 0f;
+			}
+			wrapper.setLayoutParams(lp);
 		}
 	}
 }

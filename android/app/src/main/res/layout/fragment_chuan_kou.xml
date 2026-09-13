@@ -26,7 +26,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="串口2设置"
+            android:text="@string/serial_port_2_settings"
             android:textColor="#1a1a1a"
             android:textSize="22sp"
            />
@@ -43,7 +43,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="中成探针协议"
+                android:text="@string/zhongcheng_probe_protocol"
                 android:textColor="#222222"
                 android:textSize="20sp" />
 
@@ -52,7 +52,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="80dp"
-                android:text="标准Modbus协议"
+                android:text="@string/standard_modbus_protocol"
                 android:textColor="#222222"
                 android:textSize="20sp" />
             <RadioButton
@@ -74,7 +74,7 @@
             android:layout_marginTop="@dimen/dp_80"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="串口4设置"
+            android:text="@string/serial_port_4_settings"
             android:textColor="#1a1a1a"
             android:textSize="22sp"
              />
@@ -91,7 +91,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:checked="true"
-                android:text="中成防溢油柜协议"
+                android:text="@string/zhongcheng_anti_spill_cabinet"
                 android:textColor="#222222"
                 android:textSize="20sp" />
 
@@ -100,7 +100,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="80dp"
-                android:text="标准Modbus协议"
+                android:text="@string/standard_modbus_protocol"
                 android:textColor="#222222"
                 android:textSize="20sp" />
         </RadioGroup>
@@ -139,7 +139,7 @@
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/dp_15"
                 android:layout_marginBottom="@dimen/dp_15"
-                android:text="返回上页"
+                android:text="@string/previous_page"
                 android:textColor="@color/white"
                 android:textSize="@dimen/sp_20" />
         </LinearLayout>

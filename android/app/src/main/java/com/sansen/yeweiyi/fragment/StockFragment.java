@@ -94,7 +94,7 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 // 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
-		tvTitle.setText("库存记录");
+		tvTitle.setText(R.string.inventory);
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 		ly_saveStock=rootView.findViewById(R.id.ly_saveStock);
 		ly_ruKu=rootView.findViewById(R.id.ly_ruKu);

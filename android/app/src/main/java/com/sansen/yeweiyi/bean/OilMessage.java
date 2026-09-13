@@ -2,8 +2,6 @@ package com.sansen.yeweiyi.bean;
 
 
 import com.sansen.yeweiyi.R;
-import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 public class OilMessage {
@@ -138,161 +136,46 @@ public class OilMessage {
         return getState(oilCanId, type, value);
     }
 
+    /**
+     * 各状态对应的提示文案资源。文案本身（含罐号占位符 %1$d 的位置/语序）由
+     * values / values-en 各自的资源串决定，这里不再按语言分支拼字符串——
+     * 否则每加一种语言就要在这里多加一个 else if。
+     */
     private String getState(int oilid, int state, double value) {
-        String language = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh");
-        //Log.i("语言", language);
-        String data = null;
-        String oilIdEn = getEnglishNum(oilid);
-        if (state == HEIGHT_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oilHeight_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oilHeight_alarm);
-            }else if ("zh".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oilHeight_alarm)+" " + oilid  ;
-            }
-
-        } else if (state == HHEIGHT_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oilHHeight_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oilHHeight_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oilHHeight_alarm)+" " + oilid  ;
-            }
-        } else if (state == LOW_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oillow_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oillow_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oillow_alarm)+" " + oilid  ;
-            }
-        } else if (state == LLOW_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oilllow_alarm);
-            }  else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oilllow_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oilllow_alarm)+" " + oilid  ;
-            }
-        } else if (state == HEIGHT_WATER) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.waterheight_alarm);
-            }else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.waterheight_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.waterheight_alarm)+" " + oilid  ;
-            }
-        } else if (state == HEIGHT_TEMPER) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.tempheight_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.tempheight_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.tempheight_alarm)+" " + oilid  ;
-            }
-        } else if (state == LOW_TEMPER) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.templow_alarm);
-            }else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.templow_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.templow_alarm)+" " + oilid  ;
-            }
-        } else if (state == IN_OIL) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.inoil);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.inoil);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.inoil)+" " + oilid  ;
-            }
-        } else if (state == OUT_OIL) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.outoil);
-            }else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.outoil);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.outoil)+" " + oilid  ;
-            }
-        } else if (state == IN_OILing) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.inoiling);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.inoiling);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.inoiling)+" " + oilid  ;
-            }
-        } else if (state == OUT_OILing) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.outoiling);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.outoiling);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.outoiling)+" " + oilid  ;
-            }
-        } else if (state == PRO_ERR_CONN) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oil_connect_error);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oil_connect_error);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oil_connect_error)+" " + oilid  ;
-            }
-        } else if (state == OIl_EXPLORATION) {
-            if ("en".equals(language)) {
-
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.tantou_height);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.tantou_height);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.tantou_height)+" " + oilid  ;
-            }
-        } else if (state == NET_ERR_CONN) {
-            data = SystemUtils.getRsStr(R.string.net_connect_err);
-        } else if (state == RELAY_DISCONNECT) {
-            data = SystemUtils.getRsStr(R.string.fyf_connect_error);
+        switch (state) {
+            case HEIGHT_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oilHeight_alarm, oilid);
+            case HHEIGHT_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oilHHeight_alarm, oilid);
+            case LOW_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oillow_alarm, oilid);
+            case LLOW_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oilllow_alarm, oilid);
+            case HEIGHT_WATER:
+                return SystemUtils.getRsStr(R.string.waterheight_alarm, oilid);
+            case HEIGHT_TEMPER:
+                return SystemUtils.getRsStr(R.string.tempheight_alarm, oilid);
+            case LOW_TEMPER:
+                return SystemUtils.getRsStr(R.string.templow_alarm, oilid);
+            case IN_OIL:
+                return SystemUtils.getRsStr(R.string.inoil, oilid);
+            case OUT_OIL:
+                return SystemUtils.getRsStr(R.string.outoil, oilid);
+            case IN_OILing:
+                return SystemUtils.getRsStr(R.string.inoiling, oilid);
+            case OUT_OILing:
+                return SystemUtils.getRsStr(R.string.outoiling, oilid);
+            case PRO_ERR_CONN:
+                return SystemUtils.getRsStr(R.string.oil_connect_error, oilid);
+            case OIl_EXPLORATION:
+                return SystemUtils.getRsStr(R.string.tantou_height, oilid);
+            case NET_ERR_CONN:
+                return SystemUtils.getRsStr(R.string.net_connect_err);
+            case RELAY_DISCONNECT:
+                return SystemUtils.getRsStr(R.string.fyf_connect_error);
+            default:
+                return null;
         }
-        return data;
-    }
-
-    private String getEnglishNum(int oilid) {
-        switch (oilid) {
-            case 1:
-                return "first";
-            case 2:
-                return "second";
-            case 3:
-                return "third";
-            case 4:
-                return "fourth";
-            case 5:
-                return "fifth";
-            case 6:
-                return "sixth";
-            case 7:
-                return "seventh";
-            case 8:
-                return "eighth";
-            case 9:
-                return "ninth";
-            case 10:
-                return "tenth";
-            case 11:
-                return "eleventh";
-            case 12:
-                return "twelfth";
-            case 13:
-                return "thirteenth";
-            case 14:
-                return "fourteenth";
-            case 15:
-                return "fifteenth";
-            case 16:
-                return "sixteenth";
-        }
-        return null;
     }
 
     public String getD2d() {

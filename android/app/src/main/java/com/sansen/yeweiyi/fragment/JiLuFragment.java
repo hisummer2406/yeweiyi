@@ -307,7 +307,7 @@ public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheck
         // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time = headerView.findViewById(R.id.main_time);
-        tvTitle.setText("记录设置");
+        tvTitle.setText(R.string.record_settings);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 
 
@@ -338,7 +338,6 @@ public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheck
         sw_create_out.setChecked(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsCreateOut, 0) == 0 ? false : true);
         sw_del_out.setChecked(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsDelOut, 0) == 0 ? false : true);
         et_time_minute.setText(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.StockTime, 0) + "");
-
     }
 
     @Override

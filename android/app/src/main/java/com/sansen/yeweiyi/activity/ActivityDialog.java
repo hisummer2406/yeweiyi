@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.activity;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -12,12 +13,19 @@ import android.widget.GridView;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 
 public class ActivityDialog extends Activity implements OnItemClickListener {
-	
+
 	private GridView activity_dialog_gridview;
 	String[]  valueData = null;
 	private int value;
+
+	@Override
+	protected void attachBaseContext(Context newBase) {
+		super.attachBaseContext(LanguageUtil.wrap(newBase));
+	}
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		// TODO Auto-generated method stub
@@ -25,6 +33,7 @@ public class ActivityDialog extends Activity implements OnItemClickListener {
 		setContentView(R.layout.activity_dialog);
 		value = getIntent().getIntExtra("value", 0);
 		 if (value == 0) {
+			setTitle(R.string.oilCanSelect);
 			valueData=getResources().getStringArray(R.array.oilcanArray);
 		}else if(value == 1){
 			setTitle(R.string.oil_type);
@@ -37,7 +46,7 @@ public class ActivityDialog extends Activity implements OnItemClickListener {
 			valueData = getResources().getStringArray(R.array.oilcanTableArray);
 		}
 		else if (value == 7) {
-			setTitle("传感器设置");
+			setTitle(R.string.sensor_settings);
 			valueData=getResources().getStringArray(R.array.tanZhenTableArray);
 		}
 		

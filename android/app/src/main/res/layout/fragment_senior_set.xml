@@ -62,7 +62,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:text="管理员密码"
+                    android:text="@string/admin_password_label"
                     android:textColor="#222222"
                     android:textSize="34sp" />
             </LinearLayout>
@@ -87,7 +87,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:text="报表设置"
+                    android:text="@string/report_settings"
                     android:textColor="#222222"
                     android:textSize="34sp" />
             </LinearLayout>
@@ -112,7 +112,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:text="补录记录"
+                    android:text="@string/backfill_records_title"
                     android:textColor="#222222"
                     android:textSize="34sp" />
             </LinearLayout>
@@ -146,7 +146,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:text="串口设置"
+                    android:text="@string/serial_port_settings"
                     android:textColor="#222222"
                     android:textSize="34sp" />
             </LinearLayout>
@@ -171,7 +171,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="5dp"
-                    android:text="演示模式"
+                    android:text="@string/demo_mode"
                     android:textColor="#222222"
                     android:textSize="34sp" />
             </LinearLayout>
@@ -215,7 +215,7 @@
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/dp_15"
                 android:layout_marginBottom="@dimen/dp_15"
-                android:text="返回首页"
+                android:text="@string/home"
                 android:textColor="@color/white"
                 android:textSize="@dimen/sp_20" />
         </LinearLayout>

@@ -76,7 +76,7 @@
                     android:layout_weight="0.3"
                     android:textSize="@dimen/sp_23"
                     android:gravity="left"
-                    android:text="毫米" />
+                    android:text="@string/mm" />
 
 
                 <TextView
@@ -102,7 +102,7 @@
                     android:textSize="@dimen/sp_23"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="毫米" />
+                    android:text="@string/mm" />
                 <View
                     android:layout_width="0dp"
                     android:layout_weight="2"
@@ -144,7 +144,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="0.3"
                     android:gravity="left"
-                    android:text="毫米" />
+                    android:text="@string/mm" />
                 <View
                     android:layout_width="0dp"
                     android:layout_weight="1"
@@ -175,7 +175,7 @@
                     android:layout_height="match_parent"
                     android:layout_weight="1.5"
                     android:gravity="center"
-                    android:text="编号"
+                    android:text="@string/bianhao"
 
                     android:textSize="@dimen/sp_20"
                     tools:ignore="Suspicious0dp" />
@@ -187,7 +187,7 @@
                     android:layout_height="match_parent"
                     android:layout_weight="3"
                     android:gravity="center"
-                    android:text="高度(毫米)"
+                    android:text="@string/height_mm"
 
                     android:textSize="@dimen/sp_20" />
 
@@ -198,7 +198,7 @@
                     android:layout_height="match_parent"
                     android:layout_weight="3"
                     android:gravity="center"
-                    android:text="容积(升)"
+                    android:text="@string/rongji_u"
                     android:textSize="@dimen/sp_20" />
             </LinearLayout>
             <android.support.v7.widget.RecyclerView
@@ -269,7 +269,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="预览数据"/>
+                android:text="@string/preview_data"/>
         </LinearLayout>
         <LinearLayout
             android:id="@+id/createtable_bt_copyoilcan"
@@ -300,7 +300,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="复制到"/>
+                android:text="@string/copy"/>
         </LinearLayout>
         <LinearLayout
             android:focusable="true"
@@ -329,7 +329,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="查看罐表"/>
+                android:text="@string/view_tank_chart"/>
         </LinearLayout>
         <LinearLayout
             android:id="@+id/createtable_bt_saveoilcan"
@@ -356,7 +356,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="U盘导入"/>
+                android:text="@string/usb_import"/>
         </LinearLayout>
         <LinearLayout
             android:id="@+id/createtable_bt_writeoilcan"
@@ -386,7 +386,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="U盘导出"/>
+                android:text="@string/usb_export"/>
         </LinearLayout>
         <LinearLayout
             android:layout_marginRight="@dimen/dp_40"
@@ -413,7 +413,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="返回上页"/>
+                android:text="@string/previous_page"/>
         </LinearLayout>
     </LinearLayout>
 

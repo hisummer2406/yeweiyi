@@ -328,7 +328,7 @@ public class OilCanSetFragment extends BaseFragment {
         // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time=headerView.findViewById(R.id.main_time);
-        tvTitle.setText("储罐设置");
+        tvTitle.setText(R.string.oilcanset);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
     Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {

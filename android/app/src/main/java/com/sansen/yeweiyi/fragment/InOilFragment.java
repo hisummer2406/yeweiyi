@@ -121,7 +121,7 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 // 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
-		tvTitle.setText("入库记录");
+		tvTitle.setText(R.string.rukujilu);
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 		rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 	}

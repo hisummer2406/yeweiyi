@@ -511,7 +511,7 @@ public class DataUtils {
 
     public static String[] getOilType() {
         String json = "";
-        String[] arr = MyApplication.getInstance().getResources().getStringArray(R.array.oiltypeArray);
+        String[] arr = SystemUtils.getStringsById(R.array.oiltypeArray);
         if (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh").equals("zh")) {
             json = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.CN_OIlTYPE, "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]");
         } else if (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh").equals("en")) {
