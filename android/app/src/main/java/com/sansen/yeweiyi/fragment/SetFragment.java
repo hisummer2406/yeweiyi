@@ -22,6 +22,7 @@ import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.PWDTools;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 public class SetFragment extends BaseFragment {
@@ -199,7 +200,7 @@ public class SetFragment extends BaseFragment {
 
                                                                                      dialog.dismiss();
                                                                                  } else {
-                                                                                     Toast.makeText(main, "输入内容：" + input + "  密码错误", Toast.LENGTH_SHORT).show();
+                                                                                     Toast.makeText(main, SystemUtils.getRsStr(R.string.wrong_password_input, input), Toast.LENGTH_SHORT).show();
                                                                                  }
 
                                                                              });
@@ -244,7 +245,7 @@ public class SetFragment extends BaseFragment {
 // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time = headerView.findViewById(R.id.main_time);
-        tvTitle.setText("设置");
+        tvTitle.setText(R.string.shezhi);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
         rootView.findViewById(R.id.ly_backHome).setOnClickListener(v -> main.main_but_main(v));
 

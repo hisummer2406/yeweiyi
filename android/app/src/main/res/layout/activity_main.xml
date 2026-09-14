@@ -52,7 +52,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="解警"
+                android:text="@string/jiejing"
                 
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
@@ -80,7 +80,7 @@
                 android:layout_height="wrap_content"
                 android:background="@android:color/transparent"
                 android:gravity="center"
-                android:text="报警记录 "
+                android:text="@string/baojingjilu"
                 
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
@@ -110,7 +110,7 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
 
-                android:text="出库记录"
+                android:text="@string/chukujilu"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -139,7 +139,7 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
 
-                android:text="入库记录"
+                android:text="@string/rukujilu"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -166,7 +166,7 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
 
-                android:text="交班记录"
+                android:text="@string/jiaobanjilu"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -192,7 +192,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="库存记录"
+                android:text="@string/inventory"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -219,7 +219,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="设置"
+                android:text="@string/shezhi"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>

@@ -29,7 +29,10 @@
 
     <LinearLayout
         android:id="@+id/ly_backHome"
-        android:layout_width="@dimen/dp_150"
+        android:layout_width="wrap_content"
+        android:minWidth="@dimen/dp_150"
+        android:paddingLeft="@dimen/dp_6"
+        android:paddingRight="@dimen/dp_6"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:layout_marginTop="@dimen/dp_20"
@@ -50,7 +53,7 @@
             android:layout_gravity="center"
             android:layout_marginTop="@dimen/dp_15"
             android:layout_marginBottom="@dimen/dp_15"
-            android:text="返回上页"
+            android:text="@string/previous_page"
             android:textColor="@color/white"
             android:textSize="@dimen/sp_20" />
     </LinearLayout>

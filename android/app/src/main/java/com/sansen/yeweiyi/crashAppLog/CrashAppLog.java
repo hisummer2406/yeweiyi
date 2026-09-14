@@ -1,4 +1,6 @@
 package com.sansen.yeweiyi.crashAppLog;
+import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.utils.SystemUtils;
 
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -158,7 +160,7 @@ public abstract class CrashAppLog implements Thread.UncaughtExceptionHandler{
                 public void run() {
 
                     Looper.prepare();
-                    Toast.makeText(mContext, "程序崩溃", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(mContext, SystemUtils.getRsStr(R.string.app_crashed), Toast.LENGTH_SHORT).show();
                     Looper.loop();
                 }
             }).start();

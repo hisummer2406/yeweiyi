@@ -1,53 +1,60 @@
 package com.sansen.yeweiyi.languageUtil;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.os.Build;
-import android.util.DisplayMetrics;
 
-import com.google.gson.Gson;
-import com.sansen.yeweiyi.activity.MainActivity;
+import com.sansen.yeweiyi.base.BaseActivity;
+import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 import java.util.Locale;
 
 /**
- * 语言切换
+ * 语言切换的唯一入口。
  *
+ * 持久化统一落在 {@link SharePrefUtil#LANGUAGE}（值 "zh"/"en"）这一个键上——
+ * 它也是 OilCan/OilMessage/DataUtils/CreateOilTableFragment 等业务代码原本就在读的键，
+ * 不再另开一份存储，避免"UI 语言切了、业务文案没跟着切"的不一致。
+ * 实际的 Configuration 修改委托给 {@link BaseActivity#settingLanguage(Locale)}，避免两处重复实现。
+ *
+ * Android 7.0（API 24）起每个 Context 可以有独立于 Application 的一份 Resources，
+ * 单靠 {@code Resources.updateConfiguration()} 改 Application 的那份不保证对已创建/新建的
+ * Activity 生效。所以 Application 和 Activity 都要在 {@code attachBaseContext()} 里调用
+ * {@link #wrap(Context)}，用持久化的语言包一层 {@code createConfigurationContext}，
+ * 这样每次冷启动都能从一开始就拿到正确语言的 Resources。
+ *
+ * 语言切换生效走的是整体重启 app（见 {@link com.sansen.yeweiyi.manager.AppManager#restartApp}），
+ * 不是 Activity.recreate()——本 app 里有几个 Fragment 只有带参构造函数、没有无参构造函数，
+ * recreate() 会触发 FragmentManager 用反射恢复它们从而崩溃，整体重启则保证新进程拿到的
+ * savedInstanceState 一定是 null，不会走到那条恢复路径。
  */
 public class LanguageUtil {
-    private static final String LOCALE_SP = "LOCALE_SP";
-    private static final String LOCALE_SP_KEY = "LOCALE_SP_KEY";
-
-
-
 
     public static Locale getLocale(Context context) {
-        SharedPreferences spLocale = context.getSharedPreferences(LOCALE_SP, Context.MODE_PRIVATE);
-        String localeJson = spLocale.getString(LOCALE_SP_KEY, "");
-        Gson gson = new Gson();
-        return gson.fromJson(localeJson, Locale.class);
+        String code = SharePrefUtil.getString(context, SharePrefUtil.LANGUAGE, "");
+        return code.isEmpty() ? null : new Locale(code);
     }
 
+    /**
+     * 在 attachBaseContext() 里调用：若已有持久化的语言选择，返回一个套上该 Locale 的
+     * ConfigurationContext；否则原样返回 base（跟随系统语言）。
+     */
+    public static Context wrap(Context base) {
+        Locale locale = getLocale(base);
+        if (locale == null) {
+            return base;
+        }
+        Configuration configuration = new Configuration(base.getResources().getConfiguration());
+        configuration.setLocale(locale);
+        return base.createConfigurationContext(configuration);
+    }
 
     private static void setLocale(Context pContext, Locale pUserLocale) {
-        SharedPreferences spLocal = pContext.getSharedPreferences(LOCALE_SP, Context.MODE_PRIVATE);
-        SharedPreferences.Editor edit = spLocal.edit();
-        String json = new Gson().toJson(pUserLocale);
-        edit.putString(LOCALE_SP_KEY, json);
-        edit.apply();
+        SharePrefUtil.saveString(pContext, SharePrefUtil.LANGUAGE, pUserLocale.getLanguage());
     }
-
 
     public static boolean updateLocale(Context context, Locale locale) {
         if (needUpdateLocale(context, locale)) {
-            Configuration configuration = context.getResources().getConfiguration();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
-                configuration.setLocale(locale);
-            } else {
-                configuration.locale = locale;
-            }
-            DisplayMetrics displayMetrics = context.getResources().getDisplayMetrics();
-            context.getResources().updateConfiguration(configuration, displayMetrics);
+            BaseActivity.settingLanguage(locale);
             setLocale(context, locale);
             return true;
         }

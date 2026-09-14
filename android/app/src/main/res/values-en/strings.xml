@@ -9,18 +9,18 @@
     <string name="oilCanAlarmOpen">Tank alarm switch</string>
     <string name="lable_commitwork">Shift</string>
     <string name="labe_updateCommitWork">Update shift info.</string>
-    <!--Alarm info.-->
-    <string name="oilHeight_alarm">tank high oil level alarm</string>
-    <string name="oilHHeight_alarm">tank high high oil level alarm</string>
-    <string name="oillow_alarm">tank low oil level alarm</string>
-    <string name="oilllow_alarm">tank low low oil level alarm</string>
-    <string name="waterheight_alarm">tank high water level alarm</string>
-    <string name="tempheight_alarm">tank high temperature alarm</string>
-    <string name="templow_alarm">tank low temperature alarm</string>
-    <string name="outoil">oil canoil outlet </string>
+    <!--Alarm info. (%1$d is the tank number placeholder)-->
+    <string name="oilHeight_alarm">Tank %1$d high oil level alarm</string>
+    <string name="oilHHeight_alarm">Tank %1$d high high oil level alarm</string>
+    <string name="oillow_alarm">Tank %1$d low oil level alarm</string>
+    <string name="oilllow_alarm">Tank %1$d low low oil level alarm</string>
+    <string name="waterheight_alarm">Tank %1$d high water level alarm</string>
+    <string name="tempheight_alarm">Tank %1$d high temperature alarm</string>
+    <string name="templow_alarm">Tank %1$d low temperature alarm</string>
+    <string name="outoil">Tank %1$d oil outlet</string>
     <string name="oil_rise">litre</string>
-    <string name="oil_connect_error">tank connection error</string>
-    <string name="tantou_height">probe too high concentration</string>
+    <string name="oil_connect_error">Tank %1$d connection error</string>
+    <string name="tantou_height">Tank %1$d probe concentration too high</string>
     <string name="net_connect_err">Network connection error</string>
     <string name="fyf_connect_error">Overflow valve mainboard connection error</string>
     <string name="open_external_lighting">Open external lighting</string>
@@ -50,7 +50,7 @@
     <string name="login_tv_username">User name</string>
     <string name="login_username_hint">User name</string>
     <string name="login_password_hint">Password</string>
-    <string name="login_tv_password">Please input psw</string>
+    <string name="login_tv_password">Enter Password</string>
     <string name="login_cb_rember">Remember the psw</string>
     <string name="login_bt_commit">Login</string>
     <string name="login_toast_login">Please login</string>
@@ -65,24 +65,24 @@
     <string name="begin_celou">Start detection</string>
     <string name="end_celou">Close detection</string>
     <!--Oil Gas Detection-->
-    <string name="probe_no">Probe No.：</string>
+    <string name="probe_no">Sensor ID</string>
     <string name="alert_value">Alert value：</string>
     <string name="filter">Filter</string>
     <string name="save_oilcan">Save</string>
     <string name="Log_out">|   Exit</string>
     <!-- Homepage -->
-    <string name="main_bt_alarmrecord">Alarm record</string>
+    <string name="main_bt_alarmrecord">Alarms</string>
     <string name="main_but_home">Homepage</string>
-    <string name="main_but_setting">Setting</string>
+    <string name="main_but_setting">Settings</string>
     <string name="main_but_strage">Store oil</string>
     <string name="main_but_alarm">Alarm</string>
-    <string name="main_but_alarmrecot">Alarm\nrecord</string>
+    <string name="main_but_alarmrecot">Alarms</string>
     <string name="main_but_print">Print</string>
     <string name="main_toast_savesuccess">Save successfully, please check in oil storage record</string>
     <string name="main_toast_saveerror">No probe settings</string>
     <!-- System Settings -->
     <string name="time">Time</string>
-    <string name="language_selection">Language selection</string>
+    <string name="language_selection">Language</string>
     <string name="systemset_tv_alarmtime">Alarm continuous display time(ms)</string>
     <string name="systemset_tv_noticetime">Notice continuous display time(ms)</string>
     <string name="verison_id">v1.1.1.0</string>
@@ -117,7 +117,7 @@
     <string name="commitwork">Shift</string>
     <string name="commitwork_success">Success shift </string>
     <string name="commitwork_errpr">Failed shift</string>
-    <string name="commitwork_record">Shift\nrecord</string>
+    <string name="commitwork_record">Shift Log</string>
     <string name="commitwork_toast_psderror">Psw error</string>
     <string name="long_touch_update_commitwork">Long-press record to update shift record</string>
     <string name="input_user_psw">Please input current user\'s psw</string>
@@ -136,7 +136,7 @@
 
     <!-- Alarm -->
     <string name="alarm_no">No alarm of current tank</string>
-    <string name="alarm_info">Alarm info</string>
+    <string name="alarm_info">Alarm Info</string>
 
     <!-- User Info. -->
     <string name="admin_user">Admin user</string>
@@ -144,7 +144,7 @@
     <string name="adduser">Creat user</string>
     <string name="updateuser">Update user</string>
     <string name="adduser_hint_userinfo">User name(cannot be modified after confirmation)</string>
-    <string name="adduser_hint_psd">Please input psw</string>
+    <string name="adduser_hint_psd">Enter Password</string>
     <string name="psdset_hit_againnewpsd">Please input psw again</string>
     <string name="check_toast_empty">Not null</string>
     <string name="check_toast_userlength">Length could not be less than 3</string>
@@ -163,25 +163,25 @@
     <!-- Oil Can Info. -->
     <string name="oil_no">tank</string>
     <string name="tank_no">Tank No</string>
-    <string name="oil_type">Oil type：</string>
+    <string name="oil_type">Medium Type</string>
 
     <string name="oil_type_language">Type</string>
     <string name="oil_level_language">Level</string>
-    <string name="oil_weight_language">Weight</string>
+    <string name="oil_weight_language">Mass</string>
     <string name="oil_volume_language">Volume</string>
     <string name="temperature_language">Temp</string>
 
 
-    <string name="oil_level">Oil level：</string>
+    <string name="oil_level">Medium Type</string>
     <string name="oil_level_1">Oil level</string>
-    <string name="water_level">Water level：</string>
+    <string name="water_level">Water H.</string>
     <string name="water_volume">Water volume：</string>
     <string name="oil_weight">Remaining oil weight：</string>
     <string name="oil_addible">Oil addible volume：</string>
     <string name="oil_volume">Oil volume：</string>
     <string name="oil_volume_1">Oil volume</string>
 
-    <string name="temperature">Temperature：</string>
+    <string name="temperature">Temp</string>
     <string name="alarm_status">Alarm status：</string>
     <string name="probe_communication">Probe connect status：</string>
     <string name="communication">Communication status：</string>
@@ -212,21 +212,21 @@
     <string name="backlight">Backlight</string>
     <string name="minute">min.</string>
     <string name="select_oilcan">Select tank</string>
-    <string name="oilheight">Tank height</string>
-    <string name="max_volume">Max. volume</string>
-    <string name="height_oil_alarm_value">High oil level alarm</string>
-    <string name="low_oil_alarm_value">Low oil level alarm</string>
-    <string name="hheight_oil_alarm_value">High high oil level alarm</string>
-    <string name="llow_oil_alarm_value">Low low oil level alarm</string>
-    <string name="height_water_alarm_value">High water level alarm</string>
+    <string name="oilheight">Tank Height</string>
+    <string name="max_volume">Tank Capacity</string>
+    <string name="height_oil_alarm_value">H Level Alarm</string>
+    <string name="low_oil_alarm_value">L Level Alarm</string>
+    <string name="hheight_oil_alarm_value">HH Level Alarm</string>
+    <string name="llow_oil_alarm_value">LL Level Alarm</string>
+    <string name="height_water_alarm_value">H Water Level Alarm</string>
     <string name="height_temp_alarm_value">High temperature alarm</string>
     <string name="low_temp_alarm_value">Low temperature alarm</string>
-    <string name="oil_level_compensation">Oil level compensation</string>
+    <string name="oil_level_compensation">Level Calib.</string>
     <string name="oil_type_density">Oil type density</string>
-    <string name="water_level_compensation">Water level compensation</string>
-    <string name="temp_ompensation">Temp compensation</string>
-    <string name="oiltype">Oil type</string>
-    <string name="density_change">Density change</string>
+    <string name="water_level_compensation">Water Level Calib.</string>
+    <string name="temp_ompensation">Temp. Calib.</string>
+    <string name="oiltype">Medium Type</string>
+    <string name="density_change">Medium Dens.</string>
     <string name="oil_color">Oil type color</string>
     <string name="select_color">Select color</string>
 
@@ -236,8 +236,8 @@
     <!-- Can Table Generation -->
     <string name="tank_table">Can Table</string>
     <string name="save">Save</string>
-    <string name="createtable_horizontal_tank">Horizontal type</string>
-    <string name="createtable_vertical_tank">Vertical can</string>
+    <string name="createtable_horizontal_tank">Horizontal Tank</string>
+    <string name="createtable_vertical_tank">Vertical Tank</string>
     <string name="createtable_createbable">Please create can table first</string>
     <string name="build_table">Creat can table</string>
     <string name="createtable_oillengtg_nonull">Can length cannot be null</string>
@@ -246,6 +246,7 @@
     <string name="createtable_b_nonull">End socket B cannot be null</string>
     <string name="createtable_daorudao">Import to</string>
     <string name="createtable_tanksucess">tank</string>
+    <string name="createtable_import_success">Imported to tank No.%1$d</string>
     <string name="oilcantable_copy_success">Copy successfully</string>
     <string name="oilcan_height">Tank height H：</string>
     <string name="oilcan_length">Tank length L：</string>
@@ -282,13 +283,13 @@
     <!-- Set List -->
     <string name="authorizationmanager">Authority Management</string>
     <string name="oilcanset">Tank settings</string>
-    <string name="oilcantableset">Can table settings</string>
+    <string name="oilcantableset">Tank Chart Settings</string>
     <string name="usermanager">User management</string>
     <string name="probeset">Probe settings</string>
     <string name="oilexplor">Oil gas detection</string>
     <string name="oilcantablecreate">Tank table created</string>
     <string name="datamanager">Data management</string>
-    <string name="systemset">System settings</string>
+    <string name="systemset">System Settings</string>
     <string name="aboutus">About us</string>
     <string name="oiltype_custom">Custom oil products</string>
     <string name="oilcan_custom">Self-contained oil cans</string>
@@ -297,11 +298,11 @@
     <string name="fyf">Overflow valve management</string>
     <!-- Data Management -->
     <string name="in_out_oil_record">Oil in and out record</string>
-    <string name="datamanager_clearalarm">Clear alarm records</string>
+    <string name="datamanager_clearalarm">Clear All Alarms</string>
     <string name="datamanager_clearinoutoil">Clear oil in and out records</string>
     <string name="datamanager_cleartemp">Clear temperature records</string>
     <string name="datamanager_clearsaveoil">Clear oil storage records</string>
-    <string name="datamanager_clarcommitwork">Clear shift records</string>
+    <string name="datamanager_clarcommitwork">Clear Shift Log</string>
     <string name="datamanager_clarsideleakage">Clear leakage records</string>
     <string name="datamanager_clarall">Clear all records</string>
     <string name="datamanager_saveLocation">Save to local</string>
@@ -319,8 +320,8 @@
     <string name="authorization_toast_noauth">No open access</string>
     <string name="order_number">Serial No</string>
     <string name="module">Module</string>
-    <string name="beginHeight">Start height</string>
-    <string name="endHeight">End height</string>
+    <string name="beginHeight">Level Before</string>
+    <string name="endHeight">Level After</string>
     <string name="authorization_allot"></string>
     <string name="in_out_v20">V20</string>
     <string name="in_out_volume">Oil in and out volume</string>
@@ -402,7 +403,7 @@
     <string name="u_unload">USB has been successfully unloaded</string>
     <string name="probe_type">Probe type：</string>
     <string name="oilcanset_info">Tank settings</string>
-    <string name="oilcantable_info">Tank table settings</string>
+    <string name="oilcantable_info">Tank Chart Settings</string>
 
     <!-- Print -->
     <string name="print_info">Print info.</string>
@@ -466,20 +467,21 @@
 
     <string name="recollection">Recollection</string>
     <string name="space_del">* SPACE to delete</string>
-    <string name="temp">Temperature</string>
+    <string name="temp">Temp</string>
     <string name="read_probe_address">Read probe address</string>
     <string name="modify_probe_address">Modify probe address</string>
 
-    <string name="inoil">tank unloading completed</string>
-    <string name="inoiling">tank unloading...</string>
+    <string name="inoil">Tank %1$d unloading completed</string>
+    <string name="inoiling">Tank %1$d unloading...</string>
+    <string name="outoiling">Tank %1$d discharging...</string>
     <string name="inoil_start">Start</string>
     <string name="inoil_height">Height</string>
     <string name="inoil_volume">Volume</string>
     <string name="inoil_tcvolume">TCVolume</string>
-    <string name="inoil_water">Water</string>
+    <string name="inoil_water">Water H.</string>
     <string name="inoil_watervolume">WaterVolume</string>
     <string name="inoil_weight">Weight</string>
-    <string name="inoil_temp">Temp.</string>
+    <string name="inoil_temp">Temp</string>
     <string name="inoil_end">End</string>
     <string name="inoil_total_delivery">Total Delivery</string>
     <string name="inoil_continue">Continue</string>
@@ -520,4 +522,170 @@
     <string name="uload_volume">Unloading volume</string>
     <string name="delete">Delete</string>
     <string name="modify">Modify</string>
+
+    <string name="down_app">Download APP</string>
+    <string name="relay_version">Version</string>
+    <string name="open_all">Open All</string>
+    <string name="close_all">Close All</string>
+    <string name="action_settings" translatable="false">Setting</string>
+    <string name="water_weight_language" translatable="false">Water H.</string>
+    <string name="chuan_gan_qi_leng">Sensor Len.</string>
+    <string name="createtable_changfangti_tank">Rectangular Tank</string>
+    <string name="linuo">Linuo</string>
+    <string name="toke_ncode">Token Code</string>
+    <string name="title_activity_fragment_driver_board">fragment_driver_board</string>
+
+    <string name="jiejing">Reset</string>
+    <string name="baojingjilu">Alarms</string>
+    <string name="chukujilu">Outbound</string>
+    <string name="rukujilu">Inbound</string>
+    <string name="jiaobanjilu">Shift Log</string>
+    <string name="baobiaochakan">View Reports</string>
+    <string name="shezhi">Settings</string>
+    <string name="base_set_title">Basic Settings</string>
+    <string name="guanbiaoxinxi">Tank Gauge Info</string>
+    <string name="bianhao">No.</string>
+    <string name="guanhao">Tank No.</string>
+    <string name="chanpin">Product</string>
+    <string name="jiebanshijian">Handover Time</string>
+    <string name="jiaobanshijian">Shift End Time</string>
+    <string name="qiangao">Level Before</string>
+    <string name="qianliang">Vol. Before</string>
+    <string name="hougao">Level After</string>
+    <string name="houliang">Vol. After</string>
+    <string name="chukuliangl">Stock-out (L)</string>
+    <string name="chukuliangkg">Stock-out (KG)</string>
+    <string name="baojingxinxi">Alarm Info</string>
+    <string name="baojingshijian">Alarm Time</string>
+
+    <string name="kucunshijian">Stock Gen. Time</string>
+    <string name="yewei">Level</string>
+    <string name="rongji">Volume</string>
+    <string name="shuigao">Water H.</string>
+    <string name="wendu">Temp</string>
+    <string name="zhiliang">Mass</string>
+    <string name="rukushijian">Entry time</string>
+    <string name="rukuliangl">Stock-in (L)</string>
+    <string name="rukuliangkg">Stock-in (KG)</string>
+
+    <string name="yewei_u">Liquid Level (mm)</string>
+    <string name="rongji_u">Volume (L)</string>
+    <string name="shuigao_u">Water H. (mm)</string>
+    <string name="wendu_u">Temp (℃)</string>
+    <string name="zhiliang_u">Mass (kg)</string>
+    <string name="kuncunshengchengshijian">Stock Gen. Time</string>
+
+    <string name="oilcan_pos_prefix_format">No.%1$d%2$s</string>
+
+    <!-- 蓝湖设计稿补齐：程序里原本硬编码/无资源的界面文案 -->
+    <string name="export_shift_handover_rec">Export Shift Handover Records</string>
+    <string name="zhongcheng_probe_protocol">Zhongcheng Probe Protocol</string>
+    <string name="export_inventory_records">Export Inventory Records</string>
+    <string name="standard_modbus_protocol">Standard Modbus Protocol</string>
+    <string name="export_outbound_records">Export Outbound Records</string>
+    <string name="export_inbound_records">Export Inbound Records</string>
+    <string name="serial_port_2_settings">Serial Port 2 Settings</string>
+    <string name="serial_port_4_settings">Serial Port 4 Settings</string>
+    <string name="export_alarm_records">Export Alarm Records</string>
+    <string name="serial_port_settings">Serial Port Settings</string>
+    <string name="l_water_level_alarm">L Water Level Alarm</string>
+    <string name="advanced_settings">Advanced Settings</string>
+    <string name="password_settings">Password Settings</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="temperature_c">Temperature (°C)</string>
+    <string name="clear_inv_rec">Clear Inv. Rec.</string>
+    <string name="record_settings">Record Settings</string>
+    <string name="report_settings">Report Settings</string>
+    <string name="click_to_enter">Click to enter</string>
+    <string name="del_inv_rec">Del. Inv. Rec.</string>
+    <string name="gen_inv_rec">Gen. Inv. Rec.</string>
+    <string name="generate_alarm">Generate Alarm</string>
+    <string name="start_takeover">Start Takeover</string>
+    <string name="clear_ib_rec">Clear IB Rec.</string>
+    <string name="clear_ob_rec">Clear OB Rec.</string>
+    <string name="outbound_time">Outbound time</string>
+    <string name="del_ib_rec">Del. IB Rec.</string>
+    <string name="del_ob_rec">Del. OB Rec.</string>
+    <string name="delete_alarm">Delete Alarm</string>
+    <string name="end_handover">End Handover</string>
+    <string name="gen_ib_rec">Gen. IB Rec.</string>
+    <string name="gen_ob_rec">Gen. OB Rec.</string>
+    <string name="please_enter">Please enter</string>
+    <string name="export_data">Export data</string>
+    <string name="height_mm">Height (mm)</string>
+    <string name="volume_unit">Volume Unit</string>
+    <string name="level_unit">Level Unit</string>
+    <string name="usb_export">USB Export</string>
+    <string name="usb_import">USB Import</string>
+    <string name="demo_mode">Demo Mode</string>
+    <string name="inventory">Inventory</string>
+    <string name="mass_unit">Mass Unit</string>
+    <string name="save_data">Save Data</string>
+    <string name="tank_type">Tank Type</string>
+    <string name="welcome">Welcome</string>
+    <string name="medium">Medium</string>
+    <string name="clear">Clear</string>
+    <string name="color">Color</string>
+    <string name="home">Home</string>
+    <string name="mm">mm</string>
+
+    <!-- 设计稿字符略有出入但语义一致的补充 -->
+    <string name="outlet_height_threshold">Outlet Height Threshold</string>
+    <string name="outlet_time_threshold">Outlet Time Threshold</string>
+    <string name="inlet_height_threshold">Inlet Height Threshold</string>
+    <string name="inlet_time_threshold">Inlet Time Threshold</string>
+    <string name="generate_shift_log2">Generate Shift Log</string>
+    <string name="delete_shift_log2">Delete Shift Log</string>
+    <string name="clear_shift_log2">Clear Shift Log</string>
+    <string name="set_admin_password_3">Set Admin Password</string>
+    <string name="zhongcheng_anti_spill_cabinet">Zhongcheng Anti-spill Cabinet Protocol</string>
+    <string name="delete_all_records_warning2">Warning! Delete all records? This cannot be undone.</string>
+
+    <!-- 以下为 Claude 翻译补充：蓝湖设计稿未覆盖，由 Claude 参照上下文拟定中英文案（2026-09），非设计稿原文 -->
+    <string name="previous_page">Home Page</string>
+    <string name="hour_unit">Hours</string>
+    <string name="tank_total_capacity">Total Capacity</string>
+    <string name="tank_empty_capacity">Empty Vol.</string>
+    <string name="tank_density">Density</string>
+    <string name="admin_password_label">Admin Password</string>
+    <string name="backfill_records_title">Backfill Records</string>
+    <string name="sensor_settings">Sensor Settings</string>
+    <string name="inbound_height_before">Inbound Height Before</string>
+    <string name="inbound_volume_l">Inbound Volume (L)</string>
+    <string name="outbound_record_backfill">Outbound Record Backfill</string>
+    <string name="outbound_height_before">Outbound Height Before</string>
+    <string name="outbound_volume_l">Outbound Volume (L)</string>
+    <string name="inbound_record_backfill">Inbound Record Backfill</string>
+    <string name="backfill_hint_long">If a record is missing due to a power outage or equipment fault during an inbound/outbound operation, you can add it manually. Only outbound and inbound records can currently be backfilled.</string>
+    <string name="preview_data">Preview Data</string>
+    <string name="view_tank_chart">View Tank Chart</string>
+    <string name="commitwork_start_time">Start Time</string>
+    <string name="commitwork_end_time">End Time</string>
+    <string name="probe_height_offset_mm">Probe Height Offset (mm):</string>
+    <string name="tank_default_volume_l">Default Tank Volume (L):</string>
+    <string name="delete_record_title">Delete Record</string>
+    <string name="app_crashed">App Crashed</string>
+    <string name="connect_server_failed">Failed to Connect to Server</string>
+    <string name="server_error">Server Error</string>
+    <string name="update_notice_title">Update Notice</string>
+    <string name="downloading_title">Downloading...</string>
+    <string name="wrong_password_input">Entered: %1$s  Wrong password</string>
+
+    <!-- OilCanFragment 单位本地化 + 罐号格式串 -->
+    <string name="unit_m">m</string>
+    <string name="unit_l">L</string>
+    <string name="unit_cubic">m³</string>
+    <string name="unit_kg">kg</string>
+    <string name="unit_ton">t</string>
+    <string name="unit_second">s</string>
+    <string name="oilcan_type_format">No.%1$d  %2$s</string>
+
+    <!-- 日历标题 + 百度定位失败提示 -->
+    <string name="calendar_year_month_format">%2$d/%1$d</string>
+    <string name="baidu_loc_server_error">Server-side network positioning failed. You can report the IMEI and approximate time to loc-bugs@baidu.com for investigation.</string>
+    <string name="baidu_loc_network_error">Positioning failed due to a network issue. Please check your network connection.</string>
+    <string name="baidu_loc_no_result">Positioning failed because no valid location data could be obtained. This is usually caused by the phone itself, such as being in airplane mode; try restarting the phone.</string>
+
+    <!-- MainFragment 罐列表 canvas 绘制的罐号标签 -->
+    <string name="oilcan_short_label_format">No.%1$d </string>
 </resources>

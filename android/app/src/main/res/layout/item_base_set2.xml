@@ -20,7 +20,7 @@
 		android:layout_height="wrap_content"
 		android:textStyle="bold"
 		android:textColor="@color/black"
-		android:text="立罐"
+		android:text="@string/createtable_vertical_tank"
 		android:textSize="@dimen/sp_38"/>
 
 	<!--	<Button -->

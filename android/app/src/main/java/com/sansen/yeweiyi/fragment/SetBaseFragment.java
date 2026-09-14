@@ -19,13 +19,17 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.User;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
+import com.sansen.yeweiyi.manager.AppManager;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
+import com.sansen.yeweiyi.utils.UnitPref;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 
 /**
@@ -82,14 +86,17 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         sp_yewei.setOnItemSelectedListener(this);
         sp_yuyan.setOnItemSelectedListener(this);
         sp_zhiliang.setOnItemSelectedListener(this);
-        language = getResources().getStringArray(R.array.language);
         rongji_unit = getResources().getStringArray(R.array.rongji_unit);
         zhiliang_unit = getResources().getStringArray(R.array.zhiliang_unit);
         yewei_unit = getResources().getStringArray(R.array.yewei_unit);
-        sp_zhiliang.setSelection("升".equals(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升" ))? 0:1);
-        sp_yuyan.setSelection("中文".equals(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.Language,"中文" ))? 0:1);
-        sp_yewei.setSelection("毫米".equals(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米" ))? 0:1);
-        sp_zhiliang.setSelection("千克".equals(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit,"千克" ))? 0:1);
+        // 单位偏好统一按 UnitPref 解析：既认新写入的规范值（"L"/"MM"/"KG"...），也认历史遗留的
+        // 中文原文和曾经被 bug 误存的英文，不会因为这次修复把用户已有的选择读错。
+        // 顺带修掉一个已有笔误：这里原来把容积单位的初始选中状态设到了 sp_zhiliang（质量）上，
+        // sp_rongji 反而从没被设置过。
+        sp_rongji.setSelection(UnitPref.Volume.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit, UnitPref.Volume.L.name())) == UnitPref.Volume.L ? 0 : 1);
+        sp_yuyan.setSelection("en".equals(LanguageUtil.getCurrentLocale(MyApplication.getInstance().getApplicationContext()).getLanguage())? 1:0);
+        sp_yewei.setSelection(UnitPref.Length.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit, UnitPref.Length.MM.name())) == UnitPref.Length.MM ? 0 : 1);
+        sp_zhiliang.setSelection(UnitPref.Mass.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit, UnitPref.Mass.KG.name())) == UnitPref.Mass.KG ? 0 : 1);
 
         inHight=SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.InHight,0 );
         et_inHight.setText(inHight+"");
@@ -101,7 +108,7 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time=headerView.findViewById(R.id.main_time);
-        tvTitle.setText("基础设置");
+        tvTitle.setText(R.string.base_set_title);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
 
@@ -134,6 +141,8 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
     }
 
     private int inHight,inTime,outHight,outTime;
+    // 语言切换跟其他几个设置项一样，选中后先缓存，点击"保存"才真正生效并重启 app
+    private Locale pendingLocale;
     @Override
     protected void processClick(View v) {
         switch (v.getId()) {
@@ -157,6 +166,13 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
                 {
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.OutTime ,outTime);
                     Singleton.getInstance().getSetData(Constans.OutTime);
+                }
+                if (pendingLocale != null && LanguageUtil.updateLocale(MyApplication.getInstance().getApplicationContext(), pendingLocale)) {
+                    // 语言切换涉及大量已渲染文案，且 recreate() 会对本 app 里缺无参构造函数的
+                    // 几个 Fragment 触发反射恢复崩溃（详见 AppManager.restartApp 注释），
+                    // 改成整体重启 app；后面的保存成功提示已经没有意义，直接结束
+                    AppManager.getAppManager().restartApp(MyApplication.getInstance());
+                    return;
                 }
                showWindDialog(2000);
                 break;
@@ -242,7 +258,6 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
 
     }
 
-    String[] language;
     String[] rongji_unit;
     String[] zhiliang_unit;
     String[] yewei_unit;
@@ -252,16 +267,23 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
     public void onItemSelected(AdapterView<?> adapterView, View view, int index, long l) {
         switch (adapterView.getId()) {
             case R.id.sp_rongji:
-                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit, rongji_unit[index]);
+                // Spinner 展示的是本地化文案（rongji_unit[index]），但存进偏好的必须是跟语言无关
+                // 的规范值，不然英文界面下选的选项会存成英文，后面按中文字面量比较全部失效。
+                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,
+                        (index == 0 ? UnitPref.Volume.L : UnitPref.Volume.CUBIC).name());
                 break;
             case R.id.sp_yewei:
-                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit, yewei_unit[index]);
+                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,
+                        (index == 0 ? UnitPref.Length.MM : UnitPref.Length.M).name());
                 break;
             case R.id.sp_zhiliang:
-                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit, zhiliang_unit[index]);
+                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit,
+                        (index == 0 ? UnitPref.Mass.KG : UnitPref.Mass.TON).name());
                 break;
             case R.id.sp_yuyan:
-                SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.Language, language[index]);
+                // 跟 inHight/inTime/outHight/outTime 一样只是先缓存，点"保存"（ly_saveData）
+                // 时才真正持久化并重启 app，不在选中的瞬间就有副作用
+                pendingLocale = index == 1 ? new Locale("en") : new Locale("zh");
                 break;
         }
     }

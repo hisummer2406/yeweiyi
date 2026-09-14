@@ -10,7 +10,6 @@ import android.support.multidex.MultiDex;
 import com.nostra13.universalimageloader.core.DisplayImageOptions;
 import com.nostra13.universalimageloader.core.ImageLoader;
 import com.nostra13.universalimageloader.core.ImageLoaderConfiguration;
-import com.sansen.yeweiyi.base.BaseActivity;
 import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.LevelmeterInfo;
 import com.sansen.yeweiyi.crashAppLog.CrashApphandler;
@@ -25,7 +24,6 @@ import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.manager.SerialPortManager;
 import com.sansen.yeweiyi.manager.SoundManager;
 import com.sansen.yeweiyi.utils.CRCheck;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -53,10 +51,6 @@ public class MyApplication extends Application {
 
 	// 当前用户的权限信息
 	private Authorization authorization;
-	// 当前的语言
-	private Locale curLocale;
-	// 系统的语言
-	private Locale systemLocale;
 	// 图片加载工具
 	private ImageLoader imageLoader;
 
@@ -81,7 +75,7 @@ public class MyApplication extends Application {
 
 	@Override
 	protected void attachBaseContext(Context base) {
-		super.attachBaseContext(base);
+		super.attachBaseContext(LanguageUtil.wrap(base));
 		MultiDex.install(this);
 	}
 
@@ -94,7 +88,7 @@ public class MyApplication extends Application {
 //
 // LeakCanary.install(instance);
 
-		//languageWork();
+		languageWork();
 	//	LogCatHelper.getInstance(this,null).start();
 		//初始化异常捕捉
 		CrashApphandler.getInstance().init(this.getApplicationContext());
@@ -118,10 +112,6 @@ public class MyApplication extends Application {
 		mSerialPortManager = SerialPortManager.getInstance(instance);
 
 		initImageLoader();
-//		Log.i(TAG, "onCreate:语言 "+SharePrefUtil.getString(this,SharePrefUtil.LANGUAGE,"zh"));
-		Locale locale = new Locale(SharePrefUtil.getString(this,SharePrefUtil.LANGUAGE,"zh"));
-		setLocale(locale);
-		BaseActivity.settingLanguage(locale);
 	}
 
 
@@ -188,10 +178,6 @@ public class MyApplication extends Application {
 		ImageLoader.getInstance().init(imageLoader);
 		this.imageLoader = ImageLoader.getInstance();
 	}
-	public void setLocale(Locale locale) {
-		this.curLocale = locale;
-	}
-
 	@Override
 	public void onConfigurationChanged(Configuration newConfig) {
 		super.onConfigurationChanged(newConfig);

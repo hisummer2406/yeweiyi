@@ -53,7 +53,7 @@ public class MainActions {
                     dialog.dismiss();
 
                 } else {
-                    Toast.makeText(main, "输入内容：" + input + "  密码错误", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(main, SystemUtils.getRsStr(R.string.wrong_password_input, input), Toast.LENGTH_SHORT).show();
                 }
 
             });

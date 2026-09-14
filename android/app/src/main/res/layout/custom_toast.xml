@@ -18,7 +18,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="15dip"
-        android:text="保存成功"
+        android:text="@string/data_save_success"
         android:textSize="@dimen/sp_28"
         android:textColor="@color/black" />
 

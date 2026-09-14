@@ -48,6 +48,7 @@ import com.sansen.yeweiyi.bean.LevelmeterInfo;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.ProbeToOil;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.AppManager;
 import com.sansen.yeweiyi.manager.DataRefreshCallback;
@@ -55,6 +56,7 @@ import com.sansen.yeweiyi.manager.SerialPortManager;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DialogUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.CustomToast;
 
 import java.util.List;
@@ -67,6 +69,11 @@ public abstract class BaseActivity extends FragmentActivity implements
     }
     protected Context ct;
     protected MyApplication app;
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LanguageUtil.wrap(newBase));
+    }
 
 //    public ImageButton iv_right;
 //
@@ -386,13 +393,13 @@ public abstract class BaseActivity extends FragmentActivity implements
                 mLocationClient.stop();
             } else if (location.getLocType() == BDLocation.TypeServerError) {
                 sb.append("\ndescribe : ");
-                sb.append("服务端网络定位失败，可以反馈IMEI号和大体定位时间到loc-bugs@baidu.com，会有人追查原因");
+                sb.append(SystemUtils.getRsStr(R.string.baidu_loc_server_error));
             } else if (location.getLocType() == BDLocation.TypeNetWorkException) {
                 sb.append("\ndescribe : ");
-                sb.append("网络不同导致定位失败，请检查网络是否通畅");
+                sb.append(SystemUtils.getRsStr(R.string.baidu_loc_network_error));
             } else if (location.getLocType() == BDLocation.TypeCriteriaException) {
                 sb.append("\ndescribe : ");
-                sb.append("无法获取有效定位依据导致定位失败，一般是由于手机的原因，处于飞行模式下一般会造成这种结果，可以试着重启手机");
+                sb.append(SystemUtils.getRsStr(R.string.baidu_loc_no_result));
             }
             sb.append("\nlocationdescribe : ");
             sb.append(location.getLocationDescribe());// 位置语义化信息
@@ -589,7 +596,7 @@ public abstract class BaseActivity extends FragmentActivity implements
                 .getConfiguration();// 获得设置对象
         Resources resources = MyApplication.getInstance().getResources();// 获得res资源对象
         DisplayMetrics dm = resources.getDisplayMetrics();// 获得屏幕参数：主要是分辨率，像素等。
-        config.locale = locale; // 简体中文
+        config.setLocale(locale);
         config.setLayoutDirection(locale);
         resources.updateConfiguration(config, dm);
     }

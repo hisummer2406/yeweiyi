@@ -66,7 +66,7 @@ public class SetPawFragment extends BaseFragment implements  TextWatcher {
 		// 再从该 View 中 findViewById 获取内部的 TextView
 		tvTitle = headerView.findViewById(R.id.tv_title);
 		tv_time=headerView.findViewById(R.id.main_time);
-		tvTitle.setText("密码设置");
+		tvTitle.setText(R.string.password_settings);
 		SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 	}
 

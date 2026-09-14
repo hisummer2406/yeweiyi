@@ -129,15 +129,15 @@ public class LoginHelper {
 				updateTipDialog();
 				break;
 			case CONNECTERROR:
-				Toast.makeText(context, "连接服务器失败", 1).show();
+				Toast.makeText(context, SystemUtils.getRsStr(R.string.connect_server_failed), 1).show();
 	
 				break;
 			case SERVICEERROR:
-				Toast.makeText(context, "服务器出错", 1).show();
+				Toast.makeText(context, SystemUtils.getRsStr(R.string.server_error), 1).show();
 		
 				break;
 			case DOWNLOADERROR:
-				Toast.makeText(context, "下载失败", 1).show();
+				Toast.makeText(context, SystemUtils.getRsStr(R.string.down_failed), 1).show();
 				break;
 			}
 			super.handleMessage(msg);
@@ -151,7 +151,7 @@ public class LoginHelper {
 	 */
 	protected void updateTipDialog() {
 		AlertDialog.Builder builder = new Builder(context);
-		builder.setTitle("升级提示");
+		builder.setTitle(SystemUtils.getRsStr(R.string.update_notice_title));
 		builder.setMessage(bean.getDes());
 		builder.setPositiveButton("升级", new OnClickListener() {
 			@Override
@@ -175,7 +175,7 @@ public class LoginHelper {
 	protected void updateApk() {
 		// 在下载的时候,显示一个进度条:动画 下载了多少
 		pd = new ProgressDialog(context);
-		pd.setTitle("正在下载...");
+		pd.setTitle(SystemUtils.getRsStr(R.string.downloading_title));
 		pd.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 		pd.show();
 

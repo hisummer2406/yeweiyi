@@ -2,6 +2,7 @@ package com.sansen.yeweiyi.view;
 
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.text.method.PasswordTransformationMethod;
@@ -14,6 +15,7 @@ import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 public class InputDialogActivity extends Activity implements OnClickListener {
@@ -28,6 +30,12 @@ public class InputDialogActivity extends Activity implements OnClickListener {
 	private String msg;
 	private boolean isPsw;
 	private boolean isNoEditext;
+
+	@Override
+	protected void attachBaseContext(Context newBase) {
+		super.attachBaseContext(LanguageUtil.wrap(newBase));
+	}
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);

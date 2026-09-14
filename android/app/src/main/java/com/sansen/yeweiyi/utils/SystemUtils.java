@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Resources;
 import android.net.Uri;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -26,6 +27,7 @@ import android.widget.Toast;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -170,8 +172,27 @@ public class SystemUtils {
 		return packageInfo.firstInstallTime;// 应用第一次安装的时间
 	}
 
+	/**
+	 * MyApplication.attachBaseContext() 里对 Configuration 的包装，实测在部分冷启动路径下
+	 * 没有真正反映到 MyApplication.getInstance().getResources() 上（跟 Activity 那边不一样，
+	 * 原因还没查清楚）——所以这里不再假设它已经生效，每次都用持久化的语言偏好重新包一层，
+	 * 拿到的 Resources 保证是当前语言的，不依赖 attachBaseContext 那次性包装是否"粘住"。
+	 */
+	private static Resources getLocalizedResources() {
+		Context ctx = LanguageUtil.wrap(MyApplication.getInstance());
+		return ctx.getResources();
+	}
+
 	public static String getRsStr(int id) {
-		return MyApplication.getInstance().getResources().getString(id);
+		return getLocalizedResources().getString(id);
+	}
+
+	/**
+	 * 带格式化参数的资源字符串获取。语言相关的措辞/语序差异应该体现在 values / values-en 的
+	 * 格式串本身（如 "%1$d号储罐..." vs "Tank %1$d..."），不要在调用方按语言分支拼字符串。
+	 */
+	public static String getRsStr(int id, Object... args) {
+		return getLocalizedResources().getString(id, args);
 	}
 
 	public static Toast toast;
@@ -190,7 +211,49 @@ public class SystemUtils {
 	}
 
 	public static String[] getStringsById(int id) {
-		return MyApplication.getInstance().getResources().getStringArray(id);
+		return getLocalizedResources().getStringArray(id);
+	}
+
+	/**
+	 * 用户在基础设置里选的单位偏好是以中文存储的（"毫米"/"米"/"升"/"立方"/"千克"/"吨"，
+	 * 见 Constans.YeWeiUnit/RongJiUnit/ZhiLiangUnit），拼进界面显示前要按当前语言转换一下，
+	 * 不要把存储值原样拼进去。存储值本身、以及跟它比较的判断逻辑不用变——单位偏好跟界面语言
+	 * 是两回事，内部一直用中文存储/比较是自洽的，只有"给用户看的这一步"需要本地化。
+	 * OilCanFragment、MinOilCanView 共用这一份，不要各自再写一遍 switch。
+	 */
+	/**
+	 * @param zhUnit 可能是 UnitPref 的规范值（"MM"/"M"/"L"/"CUBIC"/"KG"/"TON"），也可能是历史遗留的
+	 *               中文原文，或是曾经被 bug 误存的英文——三种都要认得，见 UnitPref 类注释。
+	 */
+	public static String localizedUnit(String zhUnit) {
+		switch (zhUnit) {
+			case "毫米":
+			case "MM":
+			case "mm":
+				return getRsStr(R.string.mm);
+			case "米":
+			case "M":
+			case "m":
+				return getRsStr(R.string.unit_m);
+			case "升":
+			case "L":
+				return getRsStr(R.string.unit_l);
+			case "立方":
+			case "CUBIC":
+			case "m³":
+			case "m3":
+				return getRsStr(R.string.unit_cubic);
+			case "千克":
+			case "KG":
+			case "kg":
+				return getRsStr(R.string.unit_kg);
+			case "吨":
+			case "TON":
+			case "t":
+				return getRsStr(R.string.unit_ton);
+			default:
+				return zhUnit;
+		}
 	}
 	
 	

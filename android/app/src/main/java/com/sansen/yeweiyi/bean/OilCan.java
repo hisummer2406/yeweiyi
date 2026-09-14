@@ -1,7 +1,6 @@
 package com.sansen.yeweiyi.bean;
 
-import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
@@ -108,15 +107,11 @@ public class OilCan {
 	}
 
 	public void setStateInfo(int oilCanPos,int stateInfo) {
-		if (oilCanPos==0){
-			this.stateInfo = SystemUtils.getRsStr(stateInfo);
-		}else if ("en".equals(SharePrefUtil.getString(MyApplication.getInstance(),SharePrefUtil.LANGUAGE,"zh"))){
-			this.stateInfo= "No."+oilCanPos+SystemUtils.getRsStr(stateInfo);
-		}else {
-			this.stateInfo= oilCanPos+SystemUtils.getRsStr(stateInfo);
-		}
-
-
+		// 罐号前缀的语序（"3xxx" vs "No.3xxx"）由 oilcan_pos_prefix_format 资源决定，
+		// 不在这里按语言分支拼字符串。
+		String text = SystemUtils.getRsStr(stateInfo);
+		this.stateInfo = oilCanPos == 0 ? text
+				: SystemUtils.getRsStr(R.string.oilcan_pos_prefix_format, oilCanPos, text);
 	}
 
 	public double getDensityVar() {

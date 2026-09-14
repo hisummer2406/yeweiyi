@@ -8,7 +8,7 @@
         android:layout_marginLeft="@dimen/dp_43"
         android:layout_marginTop="@dimen/dp_83"
         android:layout_width="@dimen/dp_120"
-        android:text="返回"
+        android:text="@string/back_page"
         android:gravity="center"
         android:textSize="@dimen/sp_24"
         android:textColor="@color/white"
@@ -46,15 +46,16 @@
 
 
         <TableLayout
-            android:layout_width="@dimen/dp_300"
+            android:layout_width="@dimen/dp_400"
             android:layout_height="match_parent"
             android:gravity="center"
             android:paddingLeft="5dp"
-            android:stretchColumns="*">
+            android:stretchColumns="1">
 
             <TableRow>
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_type"
                     android:visibility="gone"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -62,13 +63,15 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_type"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
                         android:text="@string/oil_type"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_marginLeft="@dimen/dp_16"
@@ -86,7 +89,7 @@
                         android:layout_width="match_parent"
                         android:textColor="@color/white"
                         android:layout_height="match_parent"
-                        android:gravity="left|center_vertical"
+                        android:gravity="center"
                         android:textSize="@dimen/sp_25" />
                 </LinearLayout>
             </TableRow>
@@ -95,19 +98,22 @@
                 >
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_capacity"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_capacity"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
-                        android:text="总容量"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:text="@string/tank_total_capacity"
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -131,19 +137,22 @@
                 >
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_level"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_level"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
                         android:text="@string/yewei"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -166,19 +175,22 @@
                  android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_volume"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_volume"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
-                        android:text="容积"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:text="@string/rongji"
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -200,19 +212,22 @@
                  android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_empty"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
-                        android:layout_width="@dimen/dp_90"
+                        android:id="@+id/oilcan_label_empty"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:gravity="right"
-                        android:text="空容"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:text="@string/tank_empty_capacity"
                         android:textColor="@color/black"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -239,19 +254,22 @@
                  android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_density"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_density"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
-                        android:text="密度"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:text="@string/tank_density"
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -271,19 +289,22 @@
                 android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_weight"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_weight"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
                         android:text="@string/zhiliang"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -303,19 +324,22 @@
                 android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_waterlevel"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_waterlevel"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
                         android:text="@string/water_level"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -336,19 +360,22 @@
                 android:layout_marginTop="@dimen/dp_6">
 
                 <LinearLayout
+                    android:id="@+id/oilcan_label_wrap_temp"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/oilcan_label_temp"
                         android:gravity="right"
-                        android:layout_width="@dimen/dp_90"
+                        android:maxLines="1"
+                        android:ellipsize="end"
+                        android:layout_width="match_parent"
                         android:textColor="@color/black"
                         android:layout_height="wrap_content"
                         android:text="@string/temperature"
-                        android:textSize="@dimen/sp_24" />
-                </LinearLayout>
+                        android:textSize="@dimen/sp_24" /></LinearLayout>
                 <!-- 关注人数 -->
 
                 <LinearLayout
@@ -385,13 +412,13 @@
         android:gravity="center"
         android:textSize="50sp"
         android:textStyle="bold" />
-    <com.sansen.yeweiyi.view.CustomProgressView
+    <!--<com.sansen.yeweiyi.view.CustomProgressView
         android:visibility="gone"
         android:layout_alignLeft="@+id/oilcan_tv_tankno"
         android:id="@+id/oilcan_view_progress"
         android:layout_width="@dimen/dp_145"
         android:layout_height="@dimen/dp_312"
         android:layout_marginLeft="@dimen/dp_100"
-        android:layout_marginTop="@dimen/custom_progress_margintop" />
+        android:layout_marginTop="@dimen/custom_progress_margintop" />-->
 
 </RelativeLayout>
