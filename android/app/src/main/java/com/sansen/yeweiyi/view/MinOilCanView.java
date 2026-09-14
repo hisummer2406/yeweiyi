@@ -232,48 +232,14 @@ public class MinOilCanView extends View {
 
                 mTextPaint.setTextSize((float) (textSize * 1));
 
-                // 除罐号那一行（i==0，单独画蓝色徽标）外，其余每一行都是 label/数值/单位 三列。
-                // 按设计稿要求：label 列统一按最长的 label 定宽、右对齐，数值列统一左对齐、按最长的
-                // 数值定宽，单位列统一左对齐——不再是"每行各自量自己的宽度"，改成整屏统一量一次，
-                // 画的时候三列都用同一组固定 X 坐标，行与行之间才能对齐成列。
-                // label 是静态文案，量一次足够；数值/单位每次刷新都会变，要每次 onDraw 都重新量。
-                float maxLabelWidth = 0f;
-                float maxValueWidth = 0f;
-                float maxUnitWidth = 0f;
-                String[][] rowParts = new String[content.length][];
-                for (int i = 1; i < content.length; i++) {
-                    rowParts[i] = getTextContentParts(arrIndex == null ? i : arrIndex[i]);
-                    maxLabelWidth = Math.max(maxLabelWidth, mTextPaint.measureText(content[i] + ""));
-                    maxValueWidth = Math.max(maxValueWidth, mTextPaint.measureText(rowParts[i][0]));
-                    maxUnitWidth = Math.max(maxUnitWidth, mTextPaint.measureText(rowParts[i][1]));
-                }
-                float originalTextSize = mTextPaint.getTextSize(); // 罐号徽标行用这个，不受下面的缩放影响
+                // 除罐号那一行（i==0，单独画蓝色徽标）外，其余每一行都是 label/数值/单位 三段。
+                // 三段都按默认字号（不做整屏统一定宽、不做缩放），每一行各自量自己的宽度：
+                // label 画在固定起始 X，数值紧跟在该行 label 的实际宽度后面，单位再紧跟在该行
+                // 数值的实际宽度后面——行与行之间不强制对齐成列，但也不会因为跟别的行比较最大
+                // 宽度而被压缩/裁切。
+                float originalTextSize = mTextPaint.getTextSize(); // 罐号徽标行用这个
                 float colGap = 8f;
-                // 三列量出来的总宽度如果超过这个 View 实际可用的宽度（右边还留一点安全边距），就把
-                // 这几行的字号整体按比例缩小到刚好放得下，缩小后重新量一遍——不这样做的话，语言一长
-                // （比如"Water H." 把 label 列撑宽后，单位列会被顶到 View 右边界外面，直接被裁掉，
-                // 比如之前的 "kg"）。这个缩放只影响这几行（label/数值/单位），罐号徽标那一行不受影响。
-                float rightMargin = 20f;
-                float available = mTotalWidth - (right + 120) - rightMargin;
-                float needed = maxLabelWidth + colGap + maxValueWidth + colGap + maxUnitWidth;
-                if (needed > available && needed > 0) {
-                    float scale = available / needed;
-                    mTextPaint.setTextSize(originalTextSize * scale);
-                    maxLabelWidth = 0f;
-                    maxValueWidth = 0f;
-                    maxUnitWidth = 0f;
-                    for (int i = 1; i < content.length; i++) {
-                        maxLabelWidth = Math.max(maxLabelWidth, mTextPaint.measureText(content[i] + ""));
-                        maxValueWidth = Math.max(maxValueWidth, mTextPaint.measureText(rowParts[i][0]));
-                        maxUnitWidth = Math.max(maxUnitWidth, mTextPaint.measureText(rowParts[i][1]));
-                    }
-                    colGap *= scale;
-                }
-                float rowsTextSize = mTextPaint.getTextSize(); // 可能是缩小后的字号，i>=1 的行都用它
                 float labelColX = right + 120;
-                float labelColRight = labelColX + maxLabelWidth; // label 右对齐的基准线
-                float valueColX = labelColRight + colGap;
-                float unitColX = valueColX + maxValueWidth + colGap;
 
                 for (int i = 0; i < content.length; i++) {
                     // --- 为油品行绘制蓝色背景 ---
@@ -319,12 +285,12 @@ public class MinOilCanView extends View {
                         continue;  // 跳过下方的通用绘制，避免重复
                     }
 
-                    mTextPaint.setTextSize(rowsTextSize);
+                    mTextPaint.setTextSize(originalTextSize);
                     mTextPaint.setColor(tagColor);
                     float rowY = top + (i*1.35f + 1.2f) * textSize - 38;
-                    // label 右对齐：短的 label 往右挪，跟最长的那条的右边缘对齐，数值列才能从同一条线开始
                     String labelText = content[i] + "";
-                    canvas.drawText(labelText, labelColRight - mTextPaint.measureText(labelText), rowY, mTextPaint);
+                    canvas.drawText(labelText, labelColX, rowY, mTextPaint);
+                    float valueColX = labelColX + mTextPaint.measureText(labelText) + colGap;
                     switch (oilCan.getProbeType()) {
                         case 0:
                             ErrorColor(4);
@@ -348,9 +314,11 @@ public class MinOilCanView extends View {
                             ErrorColor(4);
                             break;
                     }
-                    canvas.drawText(rowParts[i][0], valueColX, rowY, mTextPaint);
-                    if (!rowParts[i][1].isEmpty()) {
-                        canvas.drawText(rowParts[i][1], unitColX, rowY, mTextPaint);
+                    String[] parts = getTextContentParts(arrIndex == null ? i : arrIndex[i]);
+                    canvas.drawText(parts[0], valueColX, rowY, mTextPaint);
+                    if (!parts[1].isEmpty()) {
+                        float unitColX = valueColX + mTextPaint.measureText(parts[0]) + colGap;
+                        canvas.drawText(parts[1], unitColX, rowY, mTextPaint);
                     }
                 }
 
