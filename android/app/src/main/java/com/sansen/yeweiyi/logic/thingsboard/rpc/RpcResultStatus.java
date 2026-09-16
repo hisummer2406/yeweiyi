@@ -15,5 +15,28 @@ public enum RpcResultStatus {
     SUCCEEDED,
     FAILED,
     /** 收到命令时已经超过 expireAt。 */
-    EXPIRED
+    EXPIRED;
+
+    /**
+     * 跟 {@code yeweiyi-cloud} 侧 {@code internal/protocol.CmdStatus*} 常量对齐（issue #39）：
+     * 小写字符串，不是 Java 枚举名（{@link #name()} 是大写的 {@code "RECEIVED"} 等）。
+     */
+    public String wireValue() {
+        switch (this) {
+            case RECEIVED:
+                return "received";
+            case REJECTED:
+                return "rejected";
+            case EXECUTING:
+                return "executing";
+            case SUCCEEDED:
+                return "succeeded";
+            case FAILED:
+                return "failed";
+            case EXPIRED:
+                return "expired";
+            default:
+                throw new IllegalStateException("未覆盖的 RpcResultStatus: " + this);
+        }
+    }
 }

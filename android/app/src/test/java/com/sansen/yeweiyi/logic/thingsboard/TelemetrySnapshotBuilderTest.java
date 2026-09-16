@@ -12,13 +12,13 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 
 public class TelemetrySnapshotBuilderTest {
 
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
-    @Test
-    public void matchesFixturePayloadShape() {
+    private static NetOilCan fixtureTank() {
         NetOilCan tank = new NetOilCan();
         tank.setId(1);
         tank.setOiltype("0#柴油");
@@ -28,12 +28,18 @@ public class TelemetrySnapshotBuilderTest {
         tank.setOilVolume(5000.0);
         tank.setWaterVolume(10.0);
         tank.setOilWeight(4200.0);
+        tank.setNullVolume(300.0);
+        tank.setOilRadio(80);
+        tank.setWaterRadio(1);
         tank.setConnect(true);
-        tank.setProbeAddress("01");
-        // alarmState 留空：对应 fixture 里的 null，代表当前无报警。
+        tank.setProbeAddress("01"); // 有意保留：验证 probeAddress 不出现在 telemetry 里
+        return tank;
+    }
 
-        List<NetOilCan> tanks = Collections.singletonList(tank);
-        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, "online");
+    @Test
+    public void matchesFixturePayloadShape() {
+        List<NetOilCan> tanks = Collections.singletonList(fixtureTank());
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 7L);
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, 1735689600000L);
 
         JsonObject actual = GSON.toJsonTree(payload).getAsJsonObject();
@@ -42,12 +48,20 @@ public class TelemetrySnapshotBuilderTest {
     }
 
     @Test
-    public void unitsCoverEveryNumericTankField() {
-        assertEquals("mm", TelemetrySnapshotBuilder.UNITS.get("oilLevel"));
-        assertEquals("mm", TelemetrySnapshotBuilder.UNITS.get("waterLevel"));
-        assertEquals("C", TelemetrySnapshotBuilder.UNITS.get("temp"));
-        assertEquals("L", TelemetrySnapshotBuilder.UNITS.get("oilVolume"));
-        assertEquals("L", TelemetrySnapshotBuilder.UNITS.get("waterVolume"));
-        assertEquals("kg", TelemetrySnapshotBuilder.UNITS.get("oilWeight"));
+    public void tankCountAndSnapshotSeqAreDeviceLevelKeys() {
+        List<NetOilCan> tanks = Collections.singletonList(fixtureTank());
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 42L);
+
+        assertEquals(1, values.get("tankCount"));
+        assertEquals(42L, values.get("snapshotSeq"));
+    }
+
+    @Test
+    public void doesNotEmitAlarmStateOrProbeAddress() {
+        List<NetOilCan> tanks = Collections.singletonList(fixtureTank());
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 1L);
+
+        assertFalse(values.containsKey("tank1.alarmState"));
+        assertFalse(values.containsKey("tank1.probeAddress"));
     }
 }

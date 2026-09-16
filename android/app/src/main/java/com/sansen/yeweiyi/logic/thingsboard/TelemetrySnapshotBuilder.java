@@ -10,68 +10,68 @@ import java.util.Map;
  * 把一份 {@link NetOilCan} 快照组装成 ThingsBoard telemetry 上报 payload：
  * {@code {"ts": <毫秒时间戳>, "values": {...}}}。
  * <p>
- * 纯 Java、无 Android 依赖，方便在 JVM 单测里对着 fixture 校验字段/单位/结构，
+ * 纯 Java、无 Android 依赖，方便在 JVM 单测里对着 fixture 校验字段/结构，
  * 不必起 Service 或连 MQTT。
  * <p>
- * <b>单位说明</b>：{@code oilLevel}/{@code waterLevel} 的 mm 单位有
- * {@code bean/OilCan.java} 字段注释("mm 途径：油罐设置表")佐证，可信。
- * {@code temp}/{@code oilVolume}/{@code waterVolume}/{@code oilWeight} 的单位
- * （摄氏度/升/千克）是沿用现场惯例的假设，尚未有跨仓库协议文档或 fixture 确认
- * （yeweiyi-cloud#7 协议仍未冻结）——一旦协议冻结，先核对这四个单位再改
- * {@link #UNITS}，不要改字段名。
+ * <b>扁平键，不是嵌套数组</b>：{@code values} 里是 {@code tank{N}.{field}} 形式的扁平
+ * key（{@code N} 为 1-based 罐号），不是一个 {@code tanks} 数组——这是跟
+ * {@code yeweiyi-cloud} 侧 {@code internal/protocol/telemetry.go}（issue #39 核对结果）
+ * 对齐后的形状：ThingsBoard 的时序聚合/TTL/趋势图表控件按"一个数字类型的 key"为最小
+ * 单元工作，一个 JSON 数组塞进单个 key 会被当成不透明 blob，没法用这些内置能力。
+ * 单位已经并入字段名（{@code oilLevelMm}/{@code tempC} 等），不再需要单独的单位表。
  */
 public final class TelemetrySnapshotBuilder {
 
-    /** key 与 payload 里 tank 对象的字段名一一对应，值是单位标识，供云端/人工核对。 */
-    public static final Map<String, String> UNITS = buildUnits();
-
-    private static Map<String, String> buildUnits() {
-        Map<String, String> units = new LinkedHashMap<>();
-        units.put("oilLevel", "mm");
-        units.put("waterLevel", "mm");
-        units.put("temp", "C");
-        units.put("oilVolume", "L");
-        units.put("waterVolume", "L");
-        units.put("oilWeight", "kg");
-        return units;
-    }
+    /** 设备级 key：本次快照包含的罐数，云端 {@code LatestSnapshot} 靠这个锚定扁平键的范围。 */
+    private static final String KEY_TANK_COUNT = "tankCount";
+    /** 设备级 key：开机以来的快照序号，单调递增。 */
+    private static final String KEY_SNAPSHOT_SEQ = "snapshotSeq";
 
     private TelemetrySnapshotBuilder() {
     }
 
     /**
-     * @param tanks          当前全部油罐的快照（{@code OilcanDataManager.getNetOilcans()}）
-     * @param deviceTimeMs   设备本地时间（epoch 毫秒），不是 ThingsBoard 服务端收到消息的时间
-     * @param connectionState 例如 "online"/"degraded"，由调用方按探头轮询健康度决定
+     * @param tanks        当前全部油罐的快照（{@code OilcanDataManager.getNetOilcans()}）
+     * @param deviceTimeMs 设备本地时间（epoch 毫秒），不是 ThingsBoard 服务端收到消息的时间——
+     *                     由调用方通过 {@link #wrapWithTimestamp} 放进外层 {@code ts}，这里不再
+     *                     单独重复放一份（旧版本的 {@code deviceTime}/{@code connectionState}/
+     *                     {@code protocolVersion} 都不在云端 {@code Snapshot.Values()} 的字段
+     *                     范围内，本次一并去掉，不是遗漏）。
+     * @param snapshotSeq  开机以来的快照序号，由调用方（{@code ThingsBoardManager}）维护自增计数器。
      */
-    public static Map<String, Object> buildValues(List<NetOilCan> tanks, long deviceTimeMs, String connectionState) {
+    public static Map<String, Object> buildValues(List<NetOilCan> tanks, long deviceTimeMs, long snapshotSeq) {
         Map<String, Object> values = new LinkedHashMap<>();
-        values.put("protocolVersion", ProtocolVersion.CURRENT);
-        values.put("deviceTime", deviceTimeMs);
-        values.put("connectionState", connectionState);
-        values.put("units", UNITS);
-        values.put("tanks", buildTankList(tanks));
+        values.put(KEY_SNAPSHOT_SEQ, snapshotSeq);
+        values.put(KEY_TANK_COUNT, tanks.size());
+        for (NetOilCan tank : tanks) {
+            putTankFields(values, tank);
+        }
         return values;
     }
 
-    private static List<Map<String, Object>> buildTankList(List<NetOilCan> tanks) {
-        List<Map<String, Object>> result = new java.util.ArrayList<>(tanks.size());
-        for (NetOilCan tank : tanks) {
-            Map<String, Object> t = new LinkedHashMap<>();
-            t.put("id", tank.getId());
-            t.put("oilType", tank.getOiltype());
-            t.put("oilLevel", tank.getOilLevel());
-            t.put("waterLevel", tank.getWaterLevel());
-            t.put("temp", tank.getTemp());
-            t.put("oilVolume", tank.getOilVolume());
-            t.put("waterVolume", tank.getWaterVolume());
-            t.put("oilWeight", tank.getOilWeight());
-            t.put("alarmState", tank.getAlarmState());
-            t.put("probeConnected", tank.isConnect());
-            t.put("probeAddress", tank.getProbeAddress());
-            result.add(t);
-        }
-        return result;
+    private static void putTankFields(Map<String, Object> values, NetOilCan tank) {
+        int index = tank.getId();
+        values.put(tankKey(index, "oilType"), tank.getOiltype());
+        values.put(tankKey(index, "oilLevelMm"), tank.getOilLevel());
+        values.put(tankKey(index, "waterLevelMm"), tank.getWaterLevel());
+        values.put(tankKey(index, "tempC"), tank.getTemp());
+        values.put(tankKey(index, "oilVolumeL"), tank.getOilVolume());
+        values.put(tankKey(index, "waterVolumeL"), tank.getWaterVolume());
+        values.put(tankKey(index, "oilWeightKg"), tank.getOilWeight());
+        values.put(tankKey(index, "nullVolumeL"), tank.getNullVolume());
+        values.put(tankKey(index, "oilRatioPct"), tank.getOilRadio());
+        values.put(tankKey(index, "waterRatioPct"), tank.getWaterRadio());
+        values.put(tankKey(index, "probeConnected"), tank.isConnect());
+        // 有意不发 tank{N}.alarmState：NetOilCan.setAlarmState(String) 在整个代码库里
+        // 从未被真正调用过（唯一调用点在 OilcanDataManager 里是注释掉的），真实报警状态
+        // 在 AlarmDetection 一套布尔标志位状态机上（不同的 bean：OilCan，int 编码 0-5），
+        // 这次没有动它——见 CLAUDE.md 里报警恢复事件那条已知缺口，需要真机验证才能安全
+        // 重写。宁可不发这个 key（云端 ParseSnapshot 对缺失 key 留空字符串），也不要
+        // 发一个恒为 false 的 "NORMAL" 误导云端/小程序。
+    }
+
+    private static String tankKey(int index, String field) {
+        return "tank" + index + "." + field;
     }
 
     /** ThingsBoard 官方 telemetry 上行 payload 外层形状：{@code {"ts":..., "values":{...}}}。 */

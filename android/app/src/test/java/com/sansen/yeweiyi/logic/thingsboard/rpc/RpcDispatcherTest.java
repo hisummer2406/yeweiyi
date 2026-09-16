@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class RpcDispatcherTest {
@@ -35,18 +37,72 @@ public class RpcDispatcherTest {
         }
     }
 
+    /** 记录一次 ACK：{mqttRequestId, commandId, status(wire), errorCode(name 或 null), message, duplicate}. */
+    private static class Ack {
+        final String mqttRequestId;
+        final String commandId;
+        final RpcResultStatus status;
+        final RpcErrorCode errorCode;
+        final String message;
+        final boolean duplicate;
+
+        Ack(String mqttRequestId, String commandId, RpcResultStatus status, RpcErrorCode errorCode, String message,
+            boolean duplicate) {
+            this.mqttRequestId = mqttRequestId;
+            this.commandId = commandId;
+            this.status = status;
+            this.errorCode = errorCode;
+            this.message = message;
+            this.duplicate = duplicate;
+        }
+    }
+
     private static class RecordingAckPublisher implements RpcAckPublisher {
-        final List<String[]> acks = new ArrayList<>(); // {mqttRequestId, status, errorCode, message}
+        final List<Ack> acks = new ArrayList<>();
 
         @Override
-        public void publishAck(String mqttRequestId, RpcResultStatus status, RpcErrorCode errorCode, String message) {
-            acks.add(new String[]{mqttRequestId, status.name(), errorCode.name(), message});
+        public void publishAck(String mqttRequestId, String commandId, RpcResultStatus status,
+                                RpcErrorCode errorCode, String message, boolean duplicate, long tsMillis) {
+            acks.add(new Ack(mqttRequestId, commandId, status, errorCode, message, duplicate));
         }
 
         List<RpcResultStatus> statuses() {
             List<RpcResultStatus> result = new ArrayList<>();
-            for (String[] ack : acks) {
-                result.add(RpcResultStatus.valueOf(ack[1]));
+            for (Ack ack : acks) {
+                result.add(ack.status);
+            }
+            return result;
+        }
+    }
+
+    /** 记录一次异步 cmdResult：{commandId, status, errorCode, message}. */
+    private static class Result {
+        final String commandId;
+        final RpcResultStatus status;
+        final RpcErrorCode errorCode;
+        final String message;
+
+        Result(String commandId, RpcResultStatus status, RpcErrorCode errorCode, String message) {
+            this.commandId = commandId;
+            this.status = status;
+            this.errorCode = errorCode;
+            this.message = message;
+        }
+    }
+
+    private static class RecordingResultPublisher implements RpcResultPublisher {
+        final List<Result> results = new ArrayList<>();
+
+        @Override
+        public void publishResult(String commandId, RpcResultStatus status, RpcErrorCode errorCode, String message,
+                                   Map<String, Object> data, long tsMillis) {
+            results.add(new Result(commandId, status, errorCode, message));
+        }
+
+        List<RpcResultStatus> statuses() {
+            List<RpcResultStatus> result = new ArrayList<>();
+            for (Result r : results) {
+                result.add(r.status);
             }
             return result;
         }
@@ -56,6 +112,7 @@ public class RpcDispatcherTest {
     private InMemoryPersistence persistence;
     private ProcessedCommandStore commandStore;
     private RecordingAckPublisher ackPublisher;
+    private RecordingResultPublisher resultPublisher;
     private long now;
     private RpcDispatcher dispatcher;
 
@@ -65,17 +122,18 @@ public class RpcDispatcherTest {
         persistence = new InMemoryPersistence();
         commandStore = new ProcessedCommandStore(persistence, 86400000L);
         ackPublisher = new RecordingAckPublisher();
+        resultPublisher = new RecordingResultPublisher();
         now = 1_000_000L;
-        dispatcher = new RpcDispatcher(registry, commandStore, ackPublisher, () -> now);
+        dispatcher = new RpcDispatcher(registry, commandStore, ackPublisher, resultPublisher, () -> now);
     }
 
     private static String requestJson(String method, String commandId, long expireAt) {
-        return "{\"method\":\"" + method + "\",\"params\":{\"protocolVersion\":\"tb-v1\","
-                + "\"commandId\":\"" + commandId + "\",\"expireAt\":" + expireAt + "}}";
+        return "{\"method\":\"" + method + "\",\"params\":{\"protocolVersion\":1,"
+                + "\"commandId\":\"" + commandId + "\",\"expiresAtMs\":" + expireAt + "}}";
     }
 
     @Test
-    public void successfulCommandGetsReceivedThenSucceeded() {
+    public void successfulCommandGetsReceivedAckThenSucceededResult() {
         AtomicInteger calls = new AtomicInteger(0);
         registry.register("ping", req -> {
             calls.incrementAndGet();
@@ -85,8 +143,11 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
 
         assertEquals(1, calls.get());
-        assertEquals(java.util.Arrays.asList(RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED),
-                ackPublisher.statuses());
+        assertEquals(Collections.singletonList(RpcResultStatus.RECEIVED), ackPublisher.statuses());
+        assertEquals("cmd-1", ackPublisher.acks.get(0).commandId);
+        assertFalse(ackPublisher.acks.get(0).duplicate);
+        assertEquals(Collections.singletonList(RpcResultStatus.SUCCEEDED), resultPublisher.statuses());
+        assertEquals("cmd-1", resultPublisher.results.get(0).commandId);
     }
 
     @Test
@@ -94,7 +155,8 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-1", requestJson("doesNotExist", "cmd-1", now + 10_000));
 
         assertEquals(Collections.singletonList(RpcResultStatus.REJECTED), ackPublisher.statuses());
-        assertEquals(RpcErrorCode.UNKNOWN_METHOD, RpcErrorCode.valueOf(ackPublisher.acks.get(0)[2]));
+        assertEquals(RpcErrorCode.UNKNOWN_METHOD, ackPublisher.acks.get(0).errorCode);
+        assertTrue("未执行的命令不应该产生 cmdResult", resultPublisher.results.isEmpty());
     }
 
     @Test
@@ -108,23 +170,37 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now - 1));
 
         assertEquals(0, calls.get());
-        assertEquals(Collections.singletonList(RpcResultStatus.EXPIRED), ackPublisher.statuses());
+        // ACK topic 只表示 received/rejected——EXPIRED 在 ACK 上收口成 rejected，
+        // 具体原因看 errorCode=EXPIRED；内部去重表仍然记 EXPIRED（见下一个测试）。
+        assertEquals(Collections.singletonList(RpcResultStatus.REJECTED), ackPublisher.statuses());
+        assertEquals(RpcErrorCode.EXPIRED, ackPublisher.acks.get(0).errorCode);
+        assertTrue(resultPublisher.results.isEmpty());
+    }
+
+    @Test
+    public void expiredCommandIsRecordedAsExpiredInternallyForDedup() {
+        registry.register("ping", req -> RpcResult.succeeded("pong", Collections.emptyMap()));
+
+        dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now - 1));
+
+        ProcessedCommandStore.Record record = commandStore.find("cmd-1");
+        assertEquals(RpcResultStatus.EXPIRED, record.status);
     }
 
     @Test
     public void unsupportedProtocolVersionIsRejected() {
-        String json = "{\"method\":\"ping\",\"params\":{\"protocolVersion\":\"tb-v2\","
-                + "\"commandId\":\"cmd-1\",\"expireAt\":" + (now + 10_000) + "}}";
+        String json = "{\"method\":\"ping\",\"params\":{\"protocolVersion\":2,"
+                + "\"commandId\":\"cmd-1\",\"expiresAtMs\":" + (now + 10_000) + "}}";
         registry.register("ping", req -> RpcResult.succeeded("pong", Collections.emptyMap()));
 
         dispatcher.dispatch("req-1", json);
 
         assertEquals(Collections.singletonList(RpcResultStatus.REJECTED), ackPublisher.statuses());
-        assertEquals(RpcErrorCode.PROTOCOL_VERSION_UNSUPPORTED, RpcErrorCode.valueOf(ackPublisher.acks.get(0)[2]));
+        assertEquals(RpcErrorCode.PROTOCOL_VERSION_UNSUPPORTED, ackPublisher.acks.get(0).errorCode);
     }
 
     @Test
-    public void duplicateCommandIdReplaysWithoutReExecuting() {
+    public void duplicateCommandIdReplaysViaAckWithoutReExecutingOrNewResult() {
         AtomicInteger calls = new AtomicInteger(0);
         registry.register("ping", req -> {
             calls.incrementAndGet();
@@ -136,31 +212,36 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-2", requestJson("ping", "cmd-1", now + 10_000));
 
         assertEquals("handler 只应该真正执行一次", 1, calls.get());
-        assertEquals(java.util.Arrays.asList(
-                RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED, // 第一次
-                RpcResultStatus.SUCCEEDED // 第二次：直接回放终态
-        ), ackPublisher.statuses());
-        assertEquals("req-2", ackPublisher.acks.get(2)[0]);
+        // 第一次：RECEIVED ack + 一次异步 SUCCEEDED result。
+        // 第二次（重复投递）：直接在 ACK 上原样回放 SUCCEEDED，duplicate=true，不产生新的 result。
+        assertEquals(java.util.Arrays.asList(RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED),
+                ackPublisher.statuses());
+        assertTrue(ackPublisher.acks.get(1).duplicate);
+        assertEquals("req-2", ackPublisher.acks.get(1).mqttRequestId);
+        assertEquals("cmd-1", ackPublisher.acks.get(1).commandId);
+        assertEquals("重复投递不应该产生第二条 cmdResult", Collections.singletonList(RpcResultStatus.SUCCEEDED),
+                resultPublisher.statuses());
     }
 
     @Test
-    public void handlerExceptionBecomesFailedAck() {
+    public void handlerExceptionBecomesFailedResult() {
         registry.register("boom", req -> {
             throw new RuntimeException("模拟执行异常");
         });
 
         dispatcher.dispatch("req-1", requestJson("boom", "cmd-1", now + 10_000));
 
-        assertEquals(java.util.Arrays.asList(RpcResultStatus.RECEIVED, RpcResultStatus.FAILED),
-                ackPublisher.statuses());
+        assertEquals(Collections.singletonList(RpcResultStatus.RECEIVED), ackPublisher.statuses());
+        assertEquals(Collections.singletonList(RpcResultStatus.FAILED), resultPublisher.statuses());
     }
 
     @Test
-    public void malformedPayloadIsRejectedWithoutCrashing() {
+    public void malformedPayloadIsRejectedWithoutCrashingOrCommandId() {
         dispatcher.dispatch("req-1", "not json");
 
         assertEquals(Collections.singletonList(RpcResultStatus.REJECTED), ackPublisher.statuses());
-        assertEquals(RpcErrorCode.MALFORMED_PARAMS, RpcErrorCode.valueOf(ackPublisher.acks.get(0)[2]));
+        assertEquals(RpcErrorCode.MALFORMED_PARAMS, ackPublisher.acks.get(0).errorCode);
+        assertNull("连 commandId 都没解析出来，没有可关联的值", ackPublisher.acks.get(0).commandId);
     }
 
     @Test
@@ -178,7 +259,11 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
 
         assertEquals("重启前遗留的命令不应该重新执行", 0, calls.get());
+        // recoverAfterRestart 已经把 cmd-1 标成 FAILED（终态），这次 dispatch 命中的是
+        // "重复投递、回放终态" 分支，走 ACK 而不是新的 cmdResult。
         assertEquals(Collections.singletonList(RpcResultStatus.FAILED), ackPublisher.statuses());
+        assertTrue(ackPublisher.acks.get(0).duplicate);
+        assertTrue(resultPublisher.results.isEmpty());
     }
 
     @Test
@@ -194,9 +279,10 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
 
         assertEquals("写盘失败时不能执行 handler", 0, calls.get());
-        assertEquals("云端必须拿到一个明确的终态，而不是 RECEIVED 之后没了下文",
-                Collections.singletonList(RpcResultStatus.FAILED), ackPublisher.statuses());
-        assertEquals(RpcErrorCode.INTERNAL_ERROR, RpcErrorCode.valueOf(ackPublisher.acks.get(0)[2]));
+        assertEquals("受理阶段的失败在 ACK 上收口成 rejected，具体原因看 errorCode",
+                Collections.singletonList(RpcResultStatus.REJECTED), ackPublisher.statuses());
+        assertEquals(RpcErrorCode.INTERNAL_ERROR, ackPublisher.acks.get(0).errorCode);
+        assertTrue(resultPublisher.results.isEmpty());
     }
 
     @Test
@@ -215,14 +301,15 @@ public class RpcDispatcherTest {
 
         assertEquals("换一个 commandId 重下就能正常执行", 1, calls.get());
         assertEquals(java.util.Arrays.asList(
-                RpcResultStatus.FAILED,                                 // cmd-1：写盘失败，没执行
-                RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED     // cmd-2：磁盘恢复后正常
+                RpcResultStatus.REJECTED,   // cmd-1：写盘失败，没执行，ACK 收口成 rejected
+                RpcResultStatus.RECEIVED    // cmd-2：磁盘恢复后正常受理
         ), ackPublisher.statuses());
+        assertEquals(Collections.singletonList(RpcResultStatus.SUCCEEDED), resultPublisher.statuses());
     }
 
     @Test
-    public void terminalPersistenceFailureStillAcksTheRealResult() {
-        // 终态写盘失败跟受理阶段不同：动作已经做完，不能回退成"没执行"，ACK 必须照实发。
+    public void terminalPersistenceFailureStillReportsTheRealResult() {
+        // 终态写盘失败跟受理阶段不同：动作已经做完，不能回退成"没执行"，结果必须照实上报。
         AtomicInteger calls = new AtomicInteger(0);
         registry.register("ping", req -> {
             calls.incrementAndGet();
@@ -233,8 +320,8 @@ public class RpcDispatcherTest {
         dispatcher.dispatch("req-1", requestJson("ping", "cmd-1", now + 10_000));
 
         assertEquals(1, calls.get());
-        assertEquals(java.util.Arrays.asList(RpcResultStatus.RECEIVED, RpcResultStatus.SUCCEEDED),
-                ackPublisher.statuses());
+        assertEquals(Collections.singletonList(RpcResultStatus.RECEIVED), ackPublisher.statuses());
+        assertEquals(Collections.singletonList(RpcResultStatus.SUCCEEDED), resultPublisher.statuses());
     }
 
     @Test

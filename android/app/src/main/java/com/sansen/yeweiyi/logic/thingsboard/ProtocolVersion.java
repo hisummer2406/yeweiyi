@@ -1,18 +1,15 @@
 package com.sansen.yeweiyi.logic.thingsboard;
 
 /**
- * 跨仓库设备协议版本号。随 telemetry 快照和 RPC 请求/响应一起携带，
- * 用于 {@code yeweiyi-cloud} 侧判断是否需要按旧版本兼容解析。
- * <p>
- * yeweiyi-cloud#7（跨仓库协议 V1）截至本次改动仍未冻结、也没有发布可复用的 fixture ——
- * 该仓库最新决策（2026-09-01）甚至转向了 ThingsBoard 仅管身份/OTA、业务走自建 EMQX 的方案，
- * 与本仓库这次实现的"Android 只连 ThingsBoard 原生协议"前提不一致。这里的字段名、payload
- * 形状均为 Android 侧按 ThingsBoard 官方设备 MQTT API 惯例自行定义，协议冻结后如与云端点位
- * 对齐结果不同，需要回来改这个版本号和下面的 payload builder。
+ * 跨仓库设备协议版本号，只用于 RPC envelope（{@code params.protocolVersion}）。
+ * 类型和取值与 {@code yeweiyi-cloud} 侧 {@code internal/protocol.Version} 对齐——
+ * 那边是 {@code int}（{@code const Version = 1}），不是字符串，见 issue #39 核对结果。
+ * telemetry 快照 / alarm 事件不携带这个字段（云端 {@code Snapshot}/{@code AlarmEvent}
+ * 结构体都没有 protocolVersion 字段，只有 RPC 的 {@code Envelope} 有）。
  */
 public final class ProtocolVersion {
 
-    public static final String CURRENT = "tb-v1";
+    public static final int CURRENT = 1;
 
     private ProtocolVersion() {
     }

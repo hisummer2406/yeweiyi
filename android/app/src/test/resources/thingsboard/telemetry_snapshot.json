@@ -1,32 +1,19 @@
 {
-  "_comment": "TelemetrySnapshotBuilderTest 的参照 fixture。跨仓库协议 V1（yeweiyi-cloud#7）尚未冻结，也没有可复用的 fixture——这份是 Android 侧按 ThingsBoard 官方设备 telemetry API 惯例自行定义的，协议冻结后需要回来对齐字段名/单位。",
+  "_comment": "TelemetrySnapshotBuilderTest 的参照 fixture。跟 yeweiyi-cloud 侧 internal/protocol/telemetry.go（issue #39 核对结果）对齐后的扁平键形状——每罐每字段是独立的 tank{N}.{field} key，不再是 tanks 数组。",
   "ts": 1735689600000,
   "values": {
-    "protocolVersion": "tb-v1",
-    "deviceTime": 1735689600000,
-    "connectionState": "online",
-    "units": {
-      "oilLevel": "mm",
-      "waterLevel": "mm",
-      "temp": "C",
-      "oilVolume": "L",
-      "waterVolume": "L",
-      "oilWeight": "kg"
-    },
-    "tanks": [
-      {
-        "id": 1,
-        "oilType": "0#柴油",
-        "oilLevel": 1234.5,
-        "waterLevel": 12.3,
-        "temp": 26.5,
-        "oilVolume": 5000.0,
-        "waterVolume": 10.0,
-        "oilWeight": 4200.0,
-        "alarmState": null,
-        "probeConnected": true,
-        "probeAddress": "01"
-      }
-    ]
+    "snapshotSeq": 7,
+    "tankCount": 1,
+    "tank1.oilType": "0#柴油",
+    "tank1.oilLevelMm": 1234.5,
+    "tank1.waterLevelMm": 12.3,
+    "tank1.tempC": 26.5,
+    "tank1.oilVolumeL": 5000.0,
+    "tank1.waterVolumeL": 10.0,
+    "tank1.oilWeightKg": 4200.0,
+    "tank1.nullVolumeL": 300.0,
+    "tank1.oilRatioPct": 80,
+    "tank1.waterRatioPct": 1,
+    "tank1.probeConnected": true
   }
 }

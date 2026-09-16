@@ -19,8 +19,8 @@ public class RpcRequestEnvelopeTest {
         RpcRequestEnvelope req = RpcRequestEnvelope.parse("mqtt-req-1", fixture());
 
         assertEquals("mqtt-req-1", req.getMqttRequestId());
-        assertEquals("setAlarmThreshold", req.getMethod());
-        assertEquals("tb-v1", req.getProtocolVersion());
+        assertEquals("config.setAlarmThresholds", req.getMethod());
+        assertEquals(1, req.getProtocolVersion());
         assertEquals("cmd-0001", req.getCommandId());
         assertEquals(1735689600000L, req.getIssuedAt());
         assertEquals(1735689630000L, req.getExpireAt());
@@ -39,7 +39,7 @@ public class RpcRequestEnvelopeTest {
 
     @Test
     public void protocolVersionMismatchIsDetected() {
-        String json = fixture().replace("\"tb-v1\"", "\"tb-v2\"");
+        String json = fixture().replace("\"protocolVersion\": 1", "\"protocolVersion\": 2");
         RpcRequestEnvelope req = RpcRequestEnvelope.parse("mqtt-req-1", json);
         assertFalse(req.isProtocolVersionSupported());
     }
@@ -51,12 +51,12 @@ public class RpcRequestEnvelopeTest {
 
     @Test(expected = RpcRequestEnvelope.MalformedRpcRequestException.class)
     public void rejectsPayloadMissingMethod() {
-        RpcRequestEnvelope.parse("mqtt-req-1", "{\"params\":{\"commandId\":\"c1\",\"expireAt\":1}}");
+        RpcRequestEnvelope.parse("mqtt-req-1", "{\"params\":{\"commandId\":\"c1\",\"expiresAtMs\":1}}");
     }
 
     @Test(expected = RpcRequestEnvelope.MalformedRpcRequestException.class)
     public void rejectsPayloadMissingCommandId() {
-        RpcRequestEnvelope.parse("mqtt-req-1", "{\"method\":\"ping\",\"params\":{\"expireAt\":1}}");
+        RpcRequestEnvelope.parse("mqtt-req-1", "{\"method\":\"ping\",\"params\":{\"expiresAtMs\":1}}");
     }
 
     @Test(expected = RpcRequestEnvelope.MalformedRpcRequestException.class)

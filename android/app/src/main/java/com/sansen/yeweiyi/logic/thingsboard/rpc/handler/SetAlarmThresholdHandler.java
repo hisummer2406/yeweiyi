@@ -20,10 +20,13 @@ import java.util.Collections;
  * args 形状：{@code {"oilCanId": 1, "hheightOilAlarm": 5000, "heightOilAlarm": 4000,
  * "lowOilAlarm": 500, "llowOilAlarm": 200}}（单位 mm，与 {@code OilCanSet} 字段语义一致）。
  * 四个阈值字段都可选，只更新 args 里出现的字段。
+ * <p>
+ * 方法名 {@code config.setAlarmThresholds}——跟 {@code yeweiyi-cloud} 侧
+ * {@code MethodConfigAlarmThreshold} 对齐（issue #39），不是原来的 {@code setAlarmThreshold}。
  */
 public final class SetAlarmThresholdHandler implements RpcMethodHandler {
 
-    public static final String METHOD = "setAlarmThreshold";
+    public static final String METHOD = "config.setAlarmThresholds";
 
     private final OilTankRepository oilTankRepository;
 

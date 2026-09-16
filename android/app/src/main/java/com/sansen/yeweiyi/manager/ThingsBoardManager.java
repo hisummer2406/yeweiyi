@@ -80,6 +80,7 @@ public final class ThingsBoardManager {
             });
     private final Gson gson = new Gson();
     private final AtomicBoolean started = new AtomicBoolean(false);
+    private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
 
     private ThingsBoardManager(Context context) {
         this.credentialStore = new ThingsBoardCredentialStore(context);
@@ -103,8 +104,11 @@ public final class ThingsBoardManager {
         registry.register(HighRiskActionHandler.METHOD_STOP_PUMP, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_OPEN_VALVE, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_CLOSE_VALVE, highRiskActionHandler);
+        registry.register(HighRiskActionHandler.METHOD_ALARM_MUTE, highRiskActionHandler);
+        registry.register(HighRiskActionHandler.METHOD_ALARM_CLEAR, highRiskActionHandler);
+        registry.register(HighRiskActionHandler.METHOD_DEVICE_REBOOT, highRiskActionHandler);
 
-        this.rpcDispatcher = new RpcDispatcher(registry, commandStore, this::publishRpcAck,
+        this.rpcDispatcher = new RpcDispatcher(registry, commandStore, this::publishRpcAck, this::publishRpcResult,
                 System::currentTimeMillis);
 
         this.telemetryScheduler = new TelemetryScheduler(this::buildAndPublishSnapshot, TELEMETRY_PERIOD_MILLIS,
@@ -190,8 +194,7 @@ public final class ThingsBoardManager {
         }
         List<NetOilCan> tanks = OilcanDataManager.getInstance(MyApplication.getInstance()).getNetOilcans();
         long now = System.currentTimeMillis();
-        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, now,
-                connection.isConnected() ? "online" : "offline");
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, now, snapshotSeq.incrementAndGet());
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, now);
         connection.publishTelemetry(gson.toJson(payload));
     }
@@ -202,12 +205,58 @@ public final class ThingsBoardManager {
         rpcDispatcher.dispatch(mqttRequestId, payloadJson);
     }
 
-    private void publishRpcAck(String mqttRequestId, RpcResultStatus status, RpcErrorCode errorCode, String message) {
+    /**
+     * 发到 {@code v1/devices/me/rpc/response/{mqttRequestId}}：字段形状跟云端
+     * {@code internal/protocol.Ack} 对齐（issue #39）——{@code status} 用小写 wire 值，
+     * {@code errorCode}/{@code reason} 在没有内容时省略而不是发 {@code "NONE"}/空串，
+     * {@code duplicate} 只在真为 true 时才带上。
+     */
+    private void publishRpcAck(String mqttRequestId, String commandId, RpcResultStatus status,
+                                RpcErrorCode errorCode, String message, boolean duplicate, long tsMillis) {
         Map<String, Object> ack = new java.util.LinkedHashMap<>();
-        ack.put("status", status.name());
-        ack.put("errorCode", errorCode.name());
-        ack.put("message", message);
+        ack.put("commandId", commandId);
+        ack.put("status", status.wireValue());
+        if (errorCode != RpcErrorCode.NONE) {
+            ack.put("errorCode", errorCode.name());
+        }
+        if (message != null && !message.isEmpty()) {
+            ack.put("reason", message);
+        }
+        if (duplicate) {
+            ack.put("duplicate", true);
+        }
+        ack.put("tsMs", tsMillis);
         connection.publishRpcAck(mqttRequestId, gson.toJson(ack));
+    }
+
+    /**
+     * 命令真正执行结果的异步上报：{@code {"cmdResult": {...}}} telemetry，跟报警事件同属
+     * "必须送达、不能被下一次快照覆盖"的即时事件，复用同一条离线补投队列
+     * （{@link PendingAlarmStore}），不单独再起一个。
+     */
+    private void publishRpcResult(String commandId, RpcResultStatus status, RpcErrorCode errorCode, String message,
+                                   Map<String, Object> data, long tsMillis) {
+        Map<String, Object> cmdResult = new java.util.LinkedHashMap<>();
+        cmdResult.put("commandId", commandId);
+        cmdResult.put("status", status.wireValue());
+        if (errorCode != RpcErrorCode.NONE) {
+            cmdResult.put("errorCode", errorCode.name());
+        }
+        if (message != null && !message.isEmpty()) {
+            cmdResult.put("reason", message);
+        }
+        if (data != null && !data.isEmpty()) {
+            cmdResult.put("detail", data);
+        }
+        cmdResult.put("tsMs", tsMillis);
+
+        Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("cmdResult", cmdResult);
+        Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, tsMillis);
+        String json = gson.toJson(payload);
+        if (!connection.publishTelemetry(json)) {
+            pendingAlarmStore.enqueue(json);
+        }
     }
 
     // ---- 连接与退避重连 ----

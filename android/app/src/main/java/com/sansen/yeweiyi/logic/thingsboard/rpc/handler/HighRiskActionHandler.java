@@ -13,6 +13,14 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcResult;
  * "所有高风险动作默认功能开关关闭"。真正开放需要先完成 #34（补齐联锁 + 真机验证），
  * 不是加个配置开关就能打开——这里没有做成"关闭态可配置"，是因为目前设备侧联锁
  * 本来就不完整，打开开关也执行不安全，见 CLAUDE.md "远程控制范围与安全原则"。
+ * <p>
+ * {@code alarm.mute}/{@code alarm.clear}/{@code device.reboot}（issue #39 对齐后云端也有
+ * 这三个方法名）同样挂在这个 handler 上，跟泵/阀一视同仁地拒绝——它们虽然不是物理执行器
+ * 动作，但要真正实现需要碰 {@code SoundLightManager}/{@code AlarmManager} 那套现有的布尔
+ * 标志位报警状态机，而那套状态机目前的行为需要真机验证才能安全改动（同一个理由挡住了报警
+ * 恢复事件源，见 {@code ThingsBoardManager} 类注释）。这次只保证它们不再被当成
+ * {@code UNKNOWN_METHOD}，不代表功能已经打开——{@code yeweiyi-cloud} 的 {@code cmd/smoke}
+ * 装机验收脚本（issue #40）仍然会在这台设备上失败，直到真正实现。
  */
 public final class HighRiskActionHandler implements RpcMethodHandler {
 
@@ -20,6 +28,9 @@ public final class HighRiskActionHandler implements RpcMethodHandler {
     public static final String METHOD_STOP_PUMP = "stopPump";
     public static final String METHOD_OPEN_VALVE = "openValve";
     public static final String METHOD_CLOSE_VALVE = "closeValve";
+    public static final String METHOD_ALARM_MUTE = "alarm.mute";
+    public static final String METHOD_ALARM_CLEAR = "alarm.clear";
+    public static final String METHOD_DEVICE_REBOOT = "device.reboot";
 
     @Override
     public RpcResult handle(RpcRequestEnvelope request) {

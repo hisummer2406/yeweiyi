@@ -12,15 +12,18 @@ import com.sansen.yeweiyi.logic.thingsboard.ProtocolVersion;
  * topic 里（{@code v1/devices/me/rpc/request/{requestId}}），只用于把响应发回对应的
  * {@code v1/devices/me/rpc/response/{requestId}}，跟"命令是否已处理过"这件事无关。
  * <p>
- * 幂等去重、有效期用的是 {@code params} 里项目自定义的 {@code commandId}/{@code expireAt}
+ * 幂等去重、有效期用的是 {@code params} 里项目自定义的 {@code commandId}/{@code expiresAtMs}
  * 字段——同一个 commandId 换一个 MQTT requestId 重发（比如设备断线重连后云端重推），
- * 仍然要能识别成"这条命令已经处理过"。
+ * 仍然要能识别成"这条命令已经处理过"。字段名/类型跟 {@code yeweiyi-cloud} 侧
+ * {@code internal/protocol.Envelope} 对齐（issue #39）：{@code expiresAtMs}/
+ * {@code issuedAtMs}（不是 {@code expireAt}/{@code issuedAt}），{@code protocolVersion}
+ * 是数字（不是字符串）。
  */
 public final class RpcRequestEnvelope {
 
     private final String mqttRequestId;
     private final String method;
-    private final String protocolVersion;
+    private final int protocolVersion;
     private final String commandId;
     private final long issuedAt;
     private final long expireAt;
@@ -28,7 +31,7 @@ public final class RpcRequestEnvelope {
     private final String reason;
     private final JsonObject args;
 
-    private RpcRequestEnvelope(String mqttRequestId, String method, String protocolVersion, String commandId,
+    private RpcRequestEnvelope(String mqttRequestId, String method, int protocolVersion, String commandId,
                                 long issuedAt, long expireAt, String operator, String reason, JsonObject args) {
         this.mqttRequestId = mqttRequestId;
         this.method = method;
@@ -65,13 +68,13 @@ public final class RpcRequestEnvelope {
         if (commandId == null || commandId.trim().isEmpty()) {
             throw new MalformedRpcRequestException("缺少 commandId 字段——无法做幂等去重");
         }
-        long expireAt = optLong(params, "expireAt", -1L);
+        long expireAt = optLong(params, "expiresAtMs", -1L);
         if (expireAt < 0) {
-            throw new MalformedRpcRequestException("缺少或非法的 expireAt 字段——无法做有效期校验");
+            throw new MalformedRpcRequestException("缺少或非法的 expiresAtMs 字段——无法做有效期校验");
         }
 
-        String protocolVersion = optString(params, "protocolVersion", ProtocolVersion.CURRENT);
-        long issuedAt = optLong(params, "issuedAt", 0L);
+        int protocolVersion = optInt(params, "protocolVersion", ProtocolVersion.CURRENT);
+        long issuedAt = optLong(params, "issuedAtMs", 0L);
         String operator = optString(params, "operator", null);
         String reason = optString(params, "reason", null);
         JsonObject args = params.has("args") && params.get("args").isJsonObject()
@@ -93,12 +96,20 @@ public final class RpcRequestEnvelope {
         }
     }
 
+    private static int optInt(JsonObject obj, String key, int def) {
+        try {
+            return obj.has(key) && obj.get(key).isJsonPrimitive() ? obj.get(key).getAsInt() : def;
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
     public boolean isExpired(long nowMillis) {
         return nowMillis > expireAt;
     }
 
     public boolean isProtocolVersionSupported() {
-        return ProtocolVersion.CURRENT.equals(protocolVersion);
+        return ProtocolVersion.CURRENT == protocolVersion;
     }
 
     public String getMqttRequestId() {
@@ -109,7 +120,7 @@ public final class RpcRequestEnvelope {
         return method;
     }
 
-    public String getProtocolVersion() {
+    public int getProtocolVersion() {
         return protocolVersion;
     }
 

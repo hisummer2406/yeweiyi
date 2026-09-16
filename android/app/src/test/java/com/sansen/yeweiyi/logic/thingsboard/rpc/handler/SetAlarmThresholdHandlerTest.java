@@ -89,8 +89,8 @@ public class SetAlarmThresholdHandlerTest {
     }
 
     private static RpcRequestEnvelope envelopeWithArgs(String argsJson) {
-        String json = "{\"method\":\"setAlarmThreshold\",\"params\":{\"protocolVersion\":\"tb-v1\","
-                + "\"commandId\":\"cmd-1\",\"expireAt\":9999999999999,\"args\":" + argsJson + "}}";
+        String json = "{\"method\":\"config.setAlarmThresholds\",\"params\":{\"protocolVersion\":1,"
+                + "\"commandId\":\"cmd-1\",\"expiresAtMs\":9999999999999,\"args\":" + argsJson + "}}";
         return RpcRequestEnvelope.parse("req-1", json);
     }
 
