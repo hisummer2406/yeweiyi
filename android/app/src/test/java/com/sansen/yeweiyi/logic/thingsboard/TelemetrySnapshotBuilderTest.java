@@ -57,6 +57,21 @@ public class TelemetrySnapshotBuilderTest {
     }
 
     @Test
+    public void tankCountIsMaxTankIdNotEnabledTankCountWhenIdsAreSparse() {
+        NetOilCan tank1 = fixtureTank();
+        tank1.setId(1);
+        NetOilCan tank5 = fixtureTank();
+        tank5.setId(5);
+        List<NetOilCan> tanks = java.util.Arrays.asList(tank1, tank5);
+
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 1L);
+
+        assertEquals("只启用 1 号和 5 号罐时，tankCount 必须是 5（最大罐号）才能让消费方"
+                + "按 1..tankCount 遍历时不漏掉 tank5，而不是启用罐的数量 2", 5, values.get("tankCount"));
+        assertEquals(1234.5, values.get("tank5.oilLevelMm"));
+    }
+
+    @Test
     public void doesNotEmitAlarmStateOrProbeAddress() {
         List<NetOilCan> tanks = Collections.singletonList(fixtureTank());
         Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 1L);

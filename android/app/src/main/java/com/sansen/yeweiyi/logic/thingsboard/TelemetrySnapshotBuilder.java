@@ -22,7 +22,12 @@ import java.util.Map;
  */
 public final class TelemetrySnapshotBuilder {
 
-    /** 设备级 key：本次快照包含的罐数，云端 {@code LatestSnapshot} 靠这个锚定扁平键的范围。 */
+    /**
+     * 设备级 key：本次快照里出现的最大罐号（不是罐数），云端 {@code LatestSnapshot} 靠这个
+     * 锚定扁平键 {@code tank1.*..tank{tankCount}.*} 的范围。启用的罐号不保证连续（中间可能有
+     * 被禁用的罐），所以不能用 {@code tanks.size()}——比如只启用 1 号和 5 号罐时，
+     * {@code size()==2} 会让按 1..tankCount 遍历的消费方永远读不到 tank5（PR #38 Codex 审核）。
+     */
     private static final String KEY_TANK_COUNT = "tankCount";
     /** 设备级 key：开机以来的快照序号，单调递增。 */
     private static final String KEY_SNAPSHOT_SEQ = "snapshotSeq";
@@ -42,11 +47,19 @@ public final class TelemetrySnapshotBuilder {
     public static Map<String, Object> buildValues(List<NetOilCan> tanks, long deviceTimeMs, long snapshotSeq) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put(KEY_SNAPSHOT_SEQ, snapshotSeq);
-        values.put(KEY_TANK_COUNT, tanks.size());
+        values.put(KEY_TANK_COUNT, maxTankId(tanks));
         for (NetOilCan tank : tanks) {
             putTankFields(values, tank);
         }
         return values;
+    }
+
+    private static int maxTankId(List<NetOilCan> tanks) {
+        int max = 0;
+        for (NetOilCan tank : tanks) {
+            max = Math.max(max, tank.getId());
+        }
+        return max;
     }
 
     private static void putTankFields(Map<String, Object> values, NetOilCan tank) {

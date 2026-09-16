@@ -23,6 +23,7 @@ import com.sansen.yeweiyi.manager.DBDataManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.manager.SerialPortManager;
+import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SoundManager;
 import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
@@ -116,6 +117,13 @@ public class MyApplication extends Application {
 		mSaveOilManager = SaveOilManager.getInstance(instance);
 
 		mSerialPortManager = SerialPortManager.getInstance(instance);
+
+		// ThingsBoard 连接跑在 BackService 里，但 BackService 只在真正发生报警/出入库事件时才
+		// 被 SocketManager 的懒加载单例间接启动（见 SocketManager.initData）——安静开机（长时间
+		// 没有报警也没有出入库）会导致 30 秒遥测、MQTT 连接、RPC 订阅永远不会启动。这里在
+		// Application 启动时就主动建实例，确保 BackService 跟着 App 生命周期起来，不依赖第一次
+		// 业务事件当触发器（PR #38 Codex 审核）。
+		SocketManager.getInstance(instance);
 
 		initImageLoader();
 //		Log.i(TAG, "onCreate:语言 "+SharePrefUtil.getString(this,SharePrefUtil.LANGUAGE,"zh"));

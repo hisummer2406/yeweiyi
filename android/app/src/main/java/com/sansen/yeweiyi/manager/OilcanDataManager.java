@@ -436,7 +436,11 @@ public class OilcanDataManager {
             netOilcan.setTemp(oilCan.getTemper());
             netOilcan.setOilRadio(oilCan.getOilRatio());
             netOilcan.setWaterRadio(oilCan.getWaterRatio());
-            netOilcan.setNullVolume(oilCan.getCanAddOilWeight());
+            // surPlus 是剩余可加油体积（maxVolume - oilLitre - waterLitre，单位 L）；
+            // canAddOilWeight 是 surPlus * density，单位 kg，不是体积——之前这里把
+            // canAddOilWeight 塞进 nullVolume，导致 ThingsBoardManager 按 nullVolumeL 发出去
+            // 的其实是密度不为 1 时被压缩/放大过的重量，不是体积（PR #38 Codex 审核）。
+            netOilcan.setNullVolume(oilCan.getSurPlus());
             netOilcan.setAddress(oilCan.getProbeAdr());
 //            netOilcan.setAlarmState(oilCan.getAlarmStr());
             netOilcan.setProbeAddress(oilCan.getProbeAdr());
