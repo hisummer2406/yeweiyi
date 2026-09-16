@@ -79,4 +79,43 @@ public class TelemetrySnapshotBuilderTest {
         assertFalse(values.containsKey("tank1.alarmState"));
         assertFalse(values.containsKey("tank1.probeAddress"));
     }
+
+    // ---- PR #38 Codex 第四轮审核 P2：立即上报事件要用自身时间戳，不能用发送时刻 ----
+
+    @Test
+    public void resolveEventTimestampPrefersEmbeddedTsMsOverFallback() {
+        JsonObject event = new JsonObject();
+        event.addProperty("tsMs", 1700000000000L);
+        event.addProperty("eventId", "in-1-1700000000000");
+
+        long resolved = TelemetrySnapshotBuilder.resolveEventTimestamp(event, 1800000000000L);
+
+        assertEquals("事件自带的 tsMs 必须优先于调用方传入的兜底值（通常是发送时刻），"
+                        + "否则同一个 eventId 核对后补发会在 ThingsBoard 时序库里落成新的一个点",
+                1700000000000L, resolved);
+    }
+
+    @Test
+    public void resolveEventTimestampFallsBackWhenTsMsMissing() {
+        JsonObject event = new JsonObject();
+        event.addProperty("eventId", "in-1-1700000000000");
+
+        assertEquals(1800000000000L, TelemetrySnapshotBuilder.resolveEventTimestamp(event, 1800000000000L));
+    }
+
+    @Test
+    public void resolveEventTimestampFallsBackWhenTsMsIsNotNumeric() {
+        JsonObject event = new JsonObject();
+        event.addProperty("tsMs", "not-a-number");
+
+        assertEquals(1800000000000L, TelemetrySnapshotBuilder.resolveEventTimestamp(event, 1800000000000L));
+    }
+
+    @Test
+    public void resolveEventTimestampFallsBackWhenValueIsNotAJsonObject() {
+        assertEquals(1800000000000L,
+                TelemetrySnapshotBuilder.resolveEventTimestamp(new com.google.gson.JsonPrimitive("plain string"),
+                        1800000000000L));
+        assertEquals(1800000000000L, TelemetrySnapshotBuilder.resolveEventTimestamp(null, 1800000000000L));
+    }
 }

@@ -90,6 +90,21 @@ public final class ThingsBoardManager {
         t.setDaemon(true);
         return t;
     });
+    /**
+     * {@link #reportAlarmEvent}/{@link #reportRawEvent} 之前直接在调用方线程上跑，最终会走到
+     * {@link ThingsBoardMqttConnection#publish} 里同步阻塞的 {@code MqttClient.publish()}——
+     * 这两个方法目前所有调用路径都从 UI 线程的保存按钮点击事件发起（{@code InOilFragment}/
+     * {@code BuLuFragment}，经 {@code SocketManager} 同进程直连 {@code BackService}），
+     * broker 慢或连接半开时会一直卡到 PUBACK/异常返回，足以触发 ANR（PR #38 Codex 第四轮审核 P1）。
+     * 挪到独立线程池上跑，调用方（点击回调）立刻返回。单线程而不是线程池：这两类事件共用同一个
+     * {@link #pendingAlarmStore}（内部方法已经是 {@code synchronized}，可以跨线程调用），单线程
+     * 只是保留它们原本"逐个发生、顺序处理"的隐含顺序，不是为了避免并发损坏数据。
+     */
+    private final ExecutorService outboundEventExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "tb-outbound-event");
+        t.setDaemon(true);
+        return t;
+    });
     private final Gson gson = new Gson();
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
@@ -165,8 +180,14 @@ public final class ThingsBoardManager {
      *                  报警产生时触发，还没有一条真正的"恢复"事件源——见本类顶部说明和
      *                  issue #36 的已知缺口：恢复检测需要改 {@code AlarmDetection} 现有的
      *                  报警状态机，这次没有动它。
+     *                  <p>实际发布挪到 {@link #outboundEventExecutor} 上异步执行，本方法立刻
+     *                  返回——见该字段上的注释（PR #38 Codex 第四轮审核 P1）。
      */
     public void reportAlarmEvent(OilMessage message, boolean recovered) {
+        outboundEventExecutor.execute(() -> doReportAlarmEvent(message, recovered));
+    }
+
+    private void doReportAlarmEvent(OilMessage message, boolean recovered) {
         long now = System.currentTimeMillis();
         Map<String, Object> event = AlarmEventBuilder.build(message, recovered, message.toString(), now);
         if (event == null) {
@@ -195,18 +216,31 @@ public final class ThingsBoardManager {
      * 而不是一层双重转义的字符串——对齐 {@link AlarmEventBuilder}/{@code reportAlarmEvent}
      * 已经在用的"直接嵌对象"做法。解析失败（理论上不会发生，调用方现在只传合法 JSON）时
      * 退化为按字符串塞入，不丢事件，只是云端那一侧仍旧解析不了。
+     * <p>
+     * 实际发布挪到 {@link #outboundEventExecutor} 上异步执行，本方法立刻返回
+     * （PR #38 Codex 第四轮审核 P1）。
      */
     public void reportRawEvent(String telemetryKey, String rawValue) {
+        outboundEventExecutor.execute(() -> doReportRawEvent(telemetryKey, rawValue));
+    }
+
+    private void doReportRawEvent(String telemetryKey, String rawValue) {
         long now = System.currentTimeMillis();
         Map<String, Object> values = new java.util.LinkedHashMap<>();
         Object value;
+        long tsMillis = now;
         try {
-            value = new com.google.gson.JsonParser().parse(rawValue);
+            com.google.gson.JsonElement parsed = new com.google.gson.JsonParser().parse(rawValue);
+            value = parsed;
+            // 事件自带的时间戳（stockEvent.tsMs）优先于"现在"——一次核对后的补发/覆盖如果外层
+            // ts 用发送时刻，会在 ThingsBoard 时序库里落成新的一个点，而不是覆盖原来那个点
+            // （PR #38 Codex 第四轮审核 P2）。
+            tsMillis = TelemetrySnapshotBuilder.resolveEventTimestamp(parsed, now);
         } catch (com.google.gson.JsonSyntaxException e) {
             value = rawValue;
         }
         values.put(telemetryKey, value);
-        Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, now);
+        Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, tsMillis);
         String json = gson.toJson(payload);
         if (!connection.publishTelemetry(json)) {
             pendingAlarmStore.enqueue(json);
