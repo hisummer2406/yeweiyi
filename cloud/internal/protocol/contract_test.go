@@ -390,6 +390,10 @@ func TestClientAttributes_FixtureUsesDeclaredKeys(t *testing.T) {
 		declared[protocol.TankKey(i, protocol.AttrProbeType)] = true
 		declared[protocol.TankKey(i, protocol.AttrCapacityL)] = true
 	}
+	// Only tank1 has calibration attributes in the fixture — see its _comment for why that's
+	// deliberate rather than an oversight.
+	declared[protocol.TankKey(1, protocol.AttrCalibrationHeightMm)] = true
+	declared[protocol.TankKey(1, protocol.AttrCalibrationVolumeL)] = true
 
 	for k := range attrs {
 		if strings.HasPrefix(k, "_") {
@@ -401,6 +405,81 @@ func TestClientAttributes_FixtureUsesDeclaredKeys(t *testing.T) {
 	}
 	if v, _ := attrs[protocol.AttrProtocolVersion].(float64); int(v) != protocol.Version {
 		t.Errorf("fixture protocolVersion = %v, want %d", attrs[protocol.AttrProtocolVersion], protocol.Version)
+	}
+}
+
+// TestParseTankCalibration_FixtureRoundTrips covers both cases the client_attributes.json fixture
+// deliberately carries: tank1 has a calibration curve, tank2 does not.
+func TestParseTankCalibration_FixtureRoundTrips(t *testing.T) {
+	var attrs map[string]any
+	if err := json.Unmarshal(readFixture(t, "client_attributes.json"), &attrs); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	got, ok, err := protocol.ParseTankCalibration(attrs, 1)
+	if err != nil {
+		t.Fatalf("ParseTankCalibration(tank 1): %v", err)
+	}
+	if !ok {
+		t.Fatal("tank 1 should have a calibration curve in the fixture")
+	}
+	wantHeights := []float64{0, 500, 1000}
+	wantVolumes := []float64{0.0, 14225.1, 28450.2}
+	if !reflect.DeepEqual(got.HeightMm, wantHeights) || !reflect.DeepEqual(got.VolumeL, wantVolumes) {
+		t.Errorf("tank 1 calibration = %+v, want heights=%v volumes=%v", got, wantHeights, wantVolumes)
+	}
+
+	_, ok, err = protocol.ParseTankCalibration(attrs, 2)
+	if err != nil {
+		t.Fatalf("ParseTankCalibration(tank 2): %v", err)
+	}
+	if ok {
+		t.Error("tank 2 has no calibration attributes in the fixture; ok should be false, not an error")
+	}
+}
+
+// TestParseTankCalibration_ToleratesStringifiedArray covers the ThingsBoard REST/WebSocket read-back
+// shape — see convert.go's doc comment on why every value in this package tolerates a JSON-encoded
+// string in place of the native type.
+func TestParseTankCalibration_ToleratesStringifiedArray(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): "[0,500,1000]",
+		protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  "[0.0,14225.1,28450.2]",
+	}
+	got, ok, err := protocol.ParseTankCalibration(attrs, 1)
+	if err != nil {
+		t.Fatalf("ParseTankCalibration: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if !reflect.DeepEqual(got.HeightMm, []float64{0, 500, 1000}) {
+		t.Errorf("HeightMm = %v", got.HeightMm)
+	}
+}
+
+// TestParseTankCalibration_RejectsMismatchedLength pins that a height/volume length mismatch is a
+// parse error, not a silently truncated or zero-padded curve — a calibration curve with mismatched
+// pairs is corrupt data, not a shape a caller should have to defend against downstream.
+func TestParseTankCalibration_RejectsMismatchedLength(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): []any{0.0, 500.0, 1000.0},
+		protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  []any{0.0, 14225.1},
+	}
+	if _, _, err := protocol.ParseTankCalibration(attrs, 1); err == nil {
+		t.Error("expected a length-mismatch error, got nil")
+	}
+}
+
+// TestParseTankCalibration_RejectsPartialPublish pins that publishing only one of the two paired
+// attributes is an error, not a curve silently treated as absent — that would hide a real bug on the
+// device side (or a ThingsBoard attribute write that partially failed) as "not configured yet".
+func TestParseTankCalibration_RejectsPartialPublish(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): []any{0.0, 500.0},
+	}
+	if _, _, err := protocol.ParseTankCalibration(attrs, 1); err == nil {
+		t.Error("expected an error for a height-only publish, got nil")
 	}
 }
 

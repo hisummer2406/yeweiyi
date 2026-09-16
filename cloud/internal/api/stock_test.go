@@ -120,12 +120,55 @@ func TestListOilInOut_ReadsThroughToThingsBoard(t *testing.T) {
 	if n, _ := r["netVolumeL"].(float64); n != 18000.0 {
 		t.Errorf("netVolumeL = %v, want 18000", r["netVolumeL"])
 	}
+	// The device omits `source` entirely for automatic detection (see protocol.StockEvent.Source);
+	// the API must not surface that as a missing field, so a client never has to treat "absent" as a
+	// third state alongside AUTO/MANUAL.
+	if r["source"] != protocol.SourceAuto {
+		t.Errorf("source = %v, want %q (normalised from the omitted wire field)", r["source"], protocol.SourceAuto)
+	}
 
 	if _, err := time.Parse(time.RFC3339, fmt.Sprint(r["beginTime"])); err != nil {
 		t.Errorf("beginTime = %v, not RFC3339: %v", r["beginTime"], err)
 	}
 
 	assertNoLegacyTelemetryTables(t, env)
+}
+
+// TestListOilInOut_SurfacesManualSource covers BuLuFragment's backfill path (zhongchengyeweiyi#42
+// 待办2): the device sets source=MANUAL on the wire, and the API must pass it through unchanged
+// rather than normalising it away like the omitted/AUTO case above.
+func TestListOilInOut_SurfacesManualSource(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now().UnixMilli()
+	sent := publishStock(t, token, protocol.StockEvent{
+		EventID:     fmt.Sprintf("in-1-%d", now),
+		Tank:        1,
+		Direction:   protocol.StockIn,
+		BeginTimeMs: now - 3_600_000,
+		EndTimeMs:   now,
+		NetVolumeL:  1000.0,
+		Source:      protocol.SourceManual,
+		TSMs:        now,
+	})
+
+	path := "/api/oil-in-out?device=" + device + "&beginTime=2020-01-01T00:00:00Z&endTime=2030-01-01T00:00:00Z"
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		got := fetchStock(t, env, path)
+		for _, r := range got {
+			if r["eventId"] != sent.EventID {
+				continue
+			}
+			if r["source"] != protocol.SourceManual {
+				t.Errorf("source = %v, want %q", r["source"], protocol.SourceManual)
+			}
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatal("the manually-backfilled stock event never appeared through /api/oil-in-out")
 }
 
 // TestListOilInOut_OutboundDeliveredVolumeIsPositive pins the sign handling: netVolumeL is

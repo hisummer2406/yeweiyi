@@ -97,6 +97,10 @@ type stockEventResponse struct {
 	Tank      int    `json:"tank"`
 	Direction string `json:"direction"`
 	OilType   string `json:"oilType,omitempty"`
+	// Source is "MANUAL" for a BuLuFragment backfill, "AUTO" for InOilManager's automatic detection —
+	// normalised here (unlike protocol.StockEvent.Source) so API consumers never have to special-case
+	// an absent field as "must be automatic": see protocol.SourceAuto/SourceManual.
+	Source string `json:"source"`
 
 	BeginTime time.Time `json:"beginTime"`
 	EndTime   time.Time `json:"endTime"`
@@ -165,11 +169,17 @@ func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
 		delivered = -e.NetVolumeL
 	}
 
+	source := e.Source
+	if source == "" {
+		source = protocol.SourceAuto
+	}
+
 	return stockEventResponse{
 		EventID:               e.EventID,
 		Tank:                  e.Tank,
 		Direction:             e.Direction,
 		OilType:               e.OilType,
+		Source:                source,
 		BeginTime:             time.UnixMilli(e.BeginTimeMs).UTC(),
 		EndTime:               time.UnixMilli(e.EndTimeMs).UTC(),
 		BeginLevelMm:          e.BeginLevelMm,

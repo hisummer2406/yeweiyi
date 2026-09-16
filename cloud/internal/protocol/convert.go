@@ -69,6 +69,36 @@ func toString(raw any) (string, error) {
 	}
 }
 
+// toFloatSlice accepts the same three shapes as the scalar helpers above, applied to an array-valued
+// attribute: a native []any (decoded straight off JSON, whether from MQTT or a ThingsBoard attributes
+// response that preserved the JSON type), or a JSON-encoded string (defensive fallback — unconfirmed
+// whether ThingsBoard ever stringifies an array-valued attribute the way it does scalar timeseries
+// values). Used by ParseTankCalibration.
+func toFloatSlice(raw any) ([]float64, error) {
+	switch v := raw.(type) {
+	case []any:
+		out := make([]float64, len(v))
+		for i, item := range v {
+			f, err := toFloat(item)
+			if err != nil {
+				return nil, fmt.Errorf("index %d: %w", i, err)
+			}
+			out[i] = f
+		}
+		return out, nil
+	case string:
+		var arr []any
+		if err := json.Unmarshal([]byte(v), &arr); err != nil {
+			return nil, fmt.Errorf("not a JSON array: %q", v)
+		}
+		return toFloatSlice(arr)
+	case nil:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("expected an array, got %T", raw)
+	}
+}
+
 func toBool(raw any) (bool, error) {
 	switch v := raw.(type) {
 	case bool:

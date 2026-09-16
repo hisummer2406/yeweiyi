@@ -24,6 +24,14 @@ const (
 	StockOut = "OUT" // 出油/发油
 )
 
+// Stock event source. Distinguishes InOilManager's automatic detection (the default — omitted from
+// the wire payload, see StockEvent.Source) from BuLuFragment's manual backfill (断电/故障导致自动
+// 检测漏记后人工补一条). New/unconfirmed field, zhongchengyeweiyi#42 待办2 / yeweiyi-cloud#15.
+const (
+	SourceAuto   = "AUTO"
+	SourceManual = "MANUAL"
+)
+
 // StockEvent is one completed stock movement.
 //
 // Field naming follows the same rules as the telemetry snapshot: units in the name, no carried-over
@@ -68,6 +76,12 @@ type StockEvent struct {
 
 	// TSMs is when the device closed the record, epoch millis UTC.
 	TSMs int64 `json:"tsMs"`
+
+	// Source is SourceManual for a BuLuFragment backfill, and absent from the wire payload for
+	// InOilManager's automatic detection (the device omits it entirely rather than send SourceAuto —
+	// omitempty here mirrors that, and keeps every already-confirmed automatic-detection fixture
+	// byte-identical). New/unconfirmed field: see the const block above.
+	Source string `json:"source,omitempty"`
 }
 
 // Two device-side fields are deliberately absent from this struct until their meaning is confirmed,
