@@ -1,15 +1,16 @@
 {
-  "_comment": "AlarmEventBuilderTest 参照 fixture：同一个 eventId 的恢复事件，用于云端把产生/恢复关联成一次报警生命周期。",
+  "_comment": "AlarmEventBuilderTest 参照 fixture：同一个 alarmId 的恢复事件，用于云端把产生/恢复关联成一次报警生命周期。",
   "ts": 1735689630000,
   "values": {
-    "alarmEvent": {
-      "protocolVersion": "tb-v1",
-      "eventId": "2-1",
-      "state": "recovered",
-      "alarmType": 2,
-      "oilCanId": 1,
+    "alarm": {
+      "alarmId": "HIGH_HIGH_LEVEL-1",
+      "status": "CLEARED",
+      "type": "HIGH_HIGH_LEVEL",
+      "severity": "CRITICAL",
+      "tank": 1,
+      "text": "1 号储罐 高高液位报警",
       "value": 9000.0,
-      "deviceTime": 1735689630000
+      "tsMs": 1735689630000
     }
   }
 }

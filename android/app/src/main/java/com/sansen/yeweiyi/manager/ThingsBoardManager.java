@@ -155,7 +155,13 @@ public final class ThingsBoardManager {
      */
     public void reportAlarmEvent(OilMessage message, boolean recovered) {
         long now = System.currentTimeMillis();
-        Map<String, Object> event = AlarmEventBuilder.build(message, recovered, now);
+        Map<String, Object> event = AlarmEventBuilder.build(message, recovered, message.toString(), now);
+        if (event == null) {
+            // message.getType() 不在云端封闭报警类型集合里（出入库/低温/网络断线等）——
+            // 这个通道本来就不是给它们用的，不发不是丢事件，见 AlarmEventBuilder 类注释。
+            Log.d(TAG, "reportAlarmEvent: type=" + message.getType() + " 没有对应的云端报警类型，跳过上报");
+            return;
+        }
         Map<String, Object> payload = AlarmEventBuilder.wrapAsTelemetry(event, now);
         String json = gson.toJson(payload);
 
