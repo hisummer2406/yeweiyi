@@ -138,6 +138,10 @@ public class AlarmDetection {
                 oilMessage = new OilMessage();
                 oilMessage.setOilCanId(oilCan.getOilCanPos());
                 oilMessage.setType(OilMessage.HHEIGHT_OIL_ALARM);
+                // 触发这次报警的实际液位读数——之前这里从没设置过，上报到云端的报警事件
+                // value 字段永远是 double 默认值 0，跟真实的 0 液位读数无法区分
+                // （PR #38 Codex 第六轮审核 P2）。
+                oilMessage.setValue(oilCan.getOilLevel());
                 alarmManager.addAlarmState(oilMessage);
                 oilCan.setAlarmState(1);
                 oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.hheight_oil_alarm);
@@ -165,6 +169,7 @@ public class AlarmDetection {
 
                 oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
                 oilMessage.setType(OilMessage.HEIGHT_OIL_ALARM);
+                oilMessage.setValue(oilCan.getOilLevel());
                 alarmManager.addAlarmState(oilMessage);
                 oilCan.setAlarmState(1);
                 oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.height_oil_alarm);
@@ -234,6 +239,7 @@ public class AlarmDetection {
                     oilMessage = new OilMessage();
                     oilMessage.setOilCanId(oilCan.getOilCanPos());
                     oilMessage.setType(OilMessage.LLOW_OIL_ALARM);
+                    oilMessage.setValue(oilCan.getOilLevel());
                     alarmManager.addAlarmState(oilMessage);
                     oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.llow_oil_alarm);
                     SoundLightManager.getInstance().FYFL(oilCan.getOilCanPos(), isLLowAlarm);
@@ -259,6 +265,7 @@ public class AlarmDetection {
                     oilMessage = new OilMessage();
                     oilMessage.setOilCanId(oilCan.getOilCanPos());
                     oilMessage.setType(OilMessage.LOW_OIL_ALARM);
+                    oilMessage.setValue(oilCan.getOilLevel());
                     alarmManager.addAlarmState(oilMessage);
                     oilCan.setAlarmState(2);
                     oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.low_oil_alarm);
@@ -330,6 +337,7 @@ public class AlarmDetection {
         oilMessage = new OilMessage();
         oilMessage.setOilCanId(oilCan.getOilCanPos());
         oilMessage.setType(OilMessage.HEIGHT_WATER);
+        oilMessage.setValue(oilCan.getWaterLevel());
         alarmManager.addAlarmState(oilMessage);
         oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.height_water_alarm);
 
@@ -362,6 +370,7 @@ public class AlarmDetection {
         oilMessage = new OilMessage();
         oilMessage.setOilCanId(oilCan.getOilCanPos());
         oilMessage.setType(OilMessage.HEIGHT_TEMPER);
+        oilMessage.setValue(oilCan.getTemper());
         alarmManager.addAlarmState(oilMessage);
         oilCan.setAlarmState(4);
         oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.height_temp_alarm);

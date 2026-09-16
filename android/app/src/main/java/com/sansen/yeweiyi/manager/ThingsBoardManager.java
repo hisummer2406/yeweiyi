@@ -24,7 +24,6 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
-import com.sansen.yeweiyi.utils.NetUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -114,7 +113,7 @@ public final class ThingsBoardManager {
 
         String scheme = ApiConfig.THINGSBOARD_USE_TLS ? "ssl://" : "tcp://";
         String brokerUri = scheme + SharePreManager.getIpBean().getIp() + ":" + SharePreManager.getIpBean().getPort();
-        this.connection = new ThingsBoardMqttConnection(brokerUri, NetUtils.getMacAddr(),
+        this.connection = new ThingsBoardMqttConnection(brokerUri,
                 ApiConfig.THINGSBOARD_USE_TLS, new ThingsBoardCaStore(context),
                 this::onRpcRequest, this::onConnectionLost);
 

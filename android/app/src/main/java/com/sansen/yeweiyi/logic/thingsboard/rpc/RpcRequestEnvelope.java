@@ -21,6 +21,20 @@ import com.sansen.yeweiyi.logic.thingsboard.ProtocolVersion;
  */
 public final class RpcRequestEnvelope {
 
+    /**
+     * {@code params.protocolVersion} 缺失或不是数字时用这个占位，不能默认成
+     * {@link ProtocolVersion#CURRENT}——那样等于让版本校验对"根本没带版本号/版本号非法"
+     * 的请求直接放行，形同虚设：畸形请求或还在用旧协议的发送方，其 payload 语义完全
+     * 不能假定跟 V1 一致，版本门禁本来就是为了拦住这种情况（PR #38 Codex 第六轮审核 P2）。
+     * 取一个不可能等于任何真实协议版本号的负数（版本号跟云端 {@code const Version = 1}
+     * 一样恒为正数），让 {@link #isProtocolVersionSupported()} 自然返回 false，
+     * 走既有的"协议版本不支持"拒绝路径——这条路径会话按 commandId 去重记录，
+     * 比在 {@link #parse} 里直接抛 {@link MalformedRpcRequestException} 更合适：
+     * 这时候 commandId 已经解析出来了，值得保留去重能力，不是"连 commandId 都拿不到"
+     * 那种没法记录的畸形请求。
+     */
+    private static final int INVALID_PROTOCOL_VERSION = -1;
+
     private final String mqttRequestId;
     private final String method;
     private final int protocolVersion;
@@ -73,7 +87,7 @@ public final class RpcRequestEnvelope {
             throw new MalformedRpcRequestException("缺少或非法的 expiresAtMs 字段——无法做有效期校验");
         }
 
-        int protocolVersion = optInt(params, "protocolVersion", ProtocolVersion.CURRENT);
+        int protocolVersion = optInt(params, "protocolVersion", INVALID_PROTOCOL_VERSION);
         long issuedAt = optLong(params, "issuedAtMs", 0L);
         String operator = optString(params, "operator", null);
         String reason = optString(params, "reason", null);

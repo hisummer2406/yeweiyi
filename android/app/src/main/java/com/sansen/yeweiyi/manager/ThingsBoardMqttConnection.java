@@ -57,7 +57,6 @@ public final class ThingsBoardMqttConnection {
     }
 
     private final String brokerUri;
-    private final String clientId;
     private final boolean useTls;
     private final CaCertificateSource caCertificateSource;
     private final RpcRequestListener rpcRequestListener;
@@ -65,12 +64,16 @@ public final class ThingsBoardMqttConnection {
 
     private volatile MqttClient client;
 
-    public ThingsBoardMqttConnection(String brokerUri, String clientId, boolean useTls,
+    /**
+     * 不再接收单独的 {@code clientId} 构造参数——MQTT client ID 现在从每次 {@link #connect}
+     * 传入的 {@link DeviceCredentials#getDeviceId()} 取（见该方法上的注释，PR #38 Codex
+     * 第六轮审核 P2）。
+     */
+    public ThingsBoardMqttConnection(String brokerUri, boolean useTls,
                                       CaCertificateSource caCertificateSource,
                                       RpcRequestListener rpcRequestListener,
                                       ConnectionLostListener connectionLostListener) {
         this.brokerUri = brokerUri;
-        this.clientId = clientId;
         this.useTls = useTls;
         this.caCertificateSource = caCertificateSource;
         this.rpcRequestListener = rpcRequestListener;
@@ -87,6 +90,15 @@ public final class ThingsBoardMqttConnection {
      * 白白泄漏一个还在跑内部收发线程的 {@code MqttClient}（PR #38 Codex 第五轮审核 P2）。
      * 现在失败分支只操作本地变量，成功前 {@link #client} 字段保持不变，失败时把这个
      * 本地创建的实例关掉再返回。
+     * <p>
+     * MQTT client ID 用 {@code credentials.getDeviceId()}，不是之前构造时固定传入的一份
+     * {@code NetUtils.getMacAddr()}——那个值在 Android 6.0+（本项目 minSdk 21，绝大多数
+     * 真机都受影响）拿不到应用层可见的真实 MAC，要么返回空串要么返回固定的
+     * {@code "02:00:00:00:00:00"}：空串会让每次连接都失败，固定值会让多台设备用同一个
+     * client ID 抢着连 broker——MQTT 协议要求 client ID 唯一，后连的会把先连的挤下线，
+     * 两台设备来回互相顶替，谁都连不稳（PR #38 Codex 第六轮审核 P2）。{@code deviceId}
+     * 是配网时写入的、真正每台设备唯一的标识，{@link DeviceCredentials#isValid()} 已经保证
+     * 走到这里时非空。
      */
     public synchronized boolean connect(DeviceCredentials credentials) {
         if (!credentials.isValid()) {
@@ -96,6 +108,7 @@ public final class ThingsBoardMqttConnection {
         if (client != null && client.isConnected()) {
             return true;
         }
+        String clientId = credentials.getDeviceId();
         MqttClient created = null;
         try {
             created = new MqttClient(brokerUri, clientId, new MemoryPersistence());

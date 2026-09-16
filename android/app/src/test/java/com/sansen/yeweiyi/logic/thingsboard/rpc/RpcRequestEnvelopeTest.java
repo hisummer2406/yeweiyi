@@ -44,6 +44,30 @@ public class RpcRequestEnvelopeTest {
         assertFalse(req.isProtocolVersionSupported());
     }
 
+    // ---- PR #38 Codex 第六轮审核 P2：缺失/非法 protocolVersion 不能默认放行 ----
+
+    @Test
+    public void missingProtocolVersionIsTreatedAsUnsupportedNotDefaultedToCurrent() {
+        String json = fixture().replace("\"protocolVersion\": 1,\n    ", "");
+        RpcRequestEnvelope req = RpcRequestEnvelope.parse("mqtt-req-1", json);
+
+        assertFalse("缺少 protocolVersion 的请求语义不能假定跟当前协议版本一致，"
+                + "必须落进版本不支持的拒绝路径，而不是被当成当前版本直接放行",
+                req.isProtocolVersionSupported());
+        // commandId 仍然要能正常解析出来——这条走的是"版本不支持"拒绝路径（按 commandId
+        // 去重记录），不是解析阶段就失败的 MalformedRpcRequestException。
+        assertEquals("cmd-0001", req.getCommandId());
+    }
+
+    @Test
+    public void nonNumericProtocolVersionIsTreatedAsUnsupportedNotDefaultedToCurrent() {
+        String json = fixture().replace("\"protocolVersion\": 1", "\"protocolVersion\": \"not-a-number\"");
+        RpcRequestEnvelope req = RpcRequestEnvelope.parse("mqtt-req-1", json);
+
+        assertFalse(req.isProtocolVersionSupported());
+        assertEquals("cmd-0001", req.getCommandId());
+    }
+
     @Test(expected = RpcRequestEnvelope.MalformedRpcRequestException.class)
     public void rejectsNonJsonPayload() {
         RpcRequestEnvelope.parse("mqtt-req-1", "not json");

@@ -427,6 +427,10 @@ public class SerialPortManager implements IParseDataListener {
             oilMessage.setDate(DateUtils.getYYYMMddHHmmss());
             oilMessage.setOilCanId(msg.what);
             oilMessage.setType(OilMessage.PRO_ERR_CONN);
+            // 故意不 setValue：探头断线报警没有"触发时的读数"这个概念（断线就是读不到数），
+            // 不像液位/水位/温度报警那样有真实测量值可以填——跟 PR #38 Codex 第六轮审核 P2
+            // 指出的"value 恒为 0、跟真实 0 读数无法区分"是同一类问题，但这里没有值可填，
+            // 只能保持 0（其余 6 种映射到云端的报警类型在 AlarmDetection 里已经补上真实读数）。
             if (OilcanDataManager.getInstance(MyApplication.getInstance()).getData(msg.what) != null)
                 oilMessage.setJieZhi(DataUtils.getOilType()[OilcanDataManager.getInstance(MyApplication.getInstance()).getData(msg.what).getOilType()]);
 
