@@ -80,6 +80,11 @@ public class OilTankRepositoryImpl implements OilTankRepository {
     }
 
     @Override
+    public void updateOilCanSetSync(OilCanSet oilCanSet) throws DbException {
+        db.update(oilCanSet);
+    }
+
+    @Override
     public List<OilCanTable> findAllOilCanTable() {
         return findAllObject(OilCanTable.class);
     }

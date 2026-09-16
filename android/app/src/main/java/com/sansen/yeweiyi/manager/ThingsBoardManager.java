@@ -98,7 +98,8 @@ public final class ThingsBoardManager {
 
         RpcMethodRegistry registry = new RpcMethodRegistry();
         registry.register(SetAlarmThresholdHandler.METHOD,
-                new SetAlarmThresholdHandler(OilTankRepositoryImpl.getInstance()));
+                new SetAlarmThresholdHandler(OilTankRepositoryImpl.getInstance(),
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
         HighRiskActionHandler highRiskActionHandler = new HighRiskActionHandler();
         registry.register(HighRiskActionHandler.METHOD_START_PUMP, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_STOP_PUMP, highRiskActionHandler);

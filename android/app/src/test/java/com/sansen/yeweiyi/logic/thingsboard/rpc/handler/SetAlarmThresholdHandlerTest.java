@@ -41,8 +41,13 @@ public class SetAlarmThresholdHandlerTest {
 
         @Override
         public void updateOilCanSet(OilCanSet oilCanSet) {
+            throw new UnsupportedOperationException("handler 应该调用同步版本 updateOilCanSetSync");
+        }
+
+        @Override
+        public void updateOilCanSetSync(OilCanSet oilCanSet) throws com.lidroid.xutils.exception.DbException {
             if (throwOnUpdate) {
-                throw new RuntimeException("模拟数据库写入失败");
+                throw new com.lidroid.xutils.exception.DbException("模拟数据库写入失败");
             }
             lastSaved = oilCanSet;
         }
@@ -88,6 +93,16 @@ public class SetAlarmThresholdHandlerTest {
         }
     }
 
+    /** 记录被调用次数，代替真实的 {@code OilcanDataManager.refresh()}。 */
+    private static class CountingRefreshCallback implements Runnable {
+        int callCount = 0;
+
+        @Override
+        public void run() {
+            callCount++;
+        }
+    }
+
     private static RpcRequestEnvelope envelopeWithArgs(String argsJson) {
         String json = "{\"method\":\"config.setAlarmThresholds\",\"params\":{\"protocolVersion\":1,"
                 + "\"commandId\":\"cmd-1\",\"expiresAtMs\":9999999999999,\"args\":" + argsJson + "}}";
@@ -104,12 +119,46 @@ public class SetAlarmThresholdHandlerTest {
         existing.setLlowOilAlarm(1000);
         repo.byId.put(1, existing);
 
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, () -> { });
         RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"hheightOilAlarm\":5000}"));
 
         assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
         assertEquals(5000, repo.lastSaved.getHheightOilAlarm());
         assertEquals("未在 args 里出现的字段不应该被改动", 4000, repo.lastSaved.getHeightOilAlarm());
+    }
+
+    @Test
+    public void refreshesCacheOnlyAfterSuccessfulWrite() {
+        FakeOilTankRepository repo = new FakeOilTankRepository();
+        OilCanSet existing = new OilCanSet();
+        existing.setHeightOilAlarm(4000);
+        existing.setLowOilAlarm(2000);
+        existing.setLlowOilAlarm(1000);
+        repo.byId.put(1, existing);
+        CountingRefreshCallback onUpdated = new CountingRefreshCallback();
+
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, onUpdated);
+        RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"hheightOilAlarm\":5000}"));
+
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals("写入成功后应该刷新一次缓存，AlarmDetection 才能读到新阈值", 1, onUpdated.callCount);
+    }
+
+    @Test
+    public void doesNotRefreshCacheWhenWriteFails() {
+        FakeOilTankRepository repo = new FakeOilTankRepository();
+        OilCanSet existing = new OilCanSet();
+        existing.setHeightOilAlarm(4000);
+        existing.setLowOilAlarm(2000);
+        existing.setLlowOilAlarm(1000);
+        repo.byId.put(1, existing);
+        repo.throwOnUpdate = true;
+        CountingRefreshCallback onUpdated = new CountingRefreshCallback();
+
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, onUpdated);
+        handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"hheightOilAlarm\":5000}"));
+
+        assertEquals("写盘失败不该假装刷新出一份新缓存", 0, onUpdated.callCount);
     }
 
     @Test
@@ -121,7 +170,7 @@ public class SetAlarmThresholdHandlerTest {
         existing.setLlowOilAlarm(1000);
         repo.byId.put(1, existing);
 
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, () -> { });
         RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"llowOilAlarm\":-1}"));
 
         assertEquals(RpcResultStatus.REJECTED, result.getStatus());
@@ -139,7 +188,7 @@ public class SetAlarmThresholdHandlerTest {
         existing.setLlowOilAlarm(1000);
         repo.byId.put(1, existing);
 
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, () -> { });
         // 低 (3000) 超过了高 (4000) 之下但没超过——这里直接让低 > 高高，肯定乱序。
         RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"lowOilAlarm\":6000}"));
 
@@ -150,7 +199,7 @@ public class SetAlarmThresholdHandlerTest {
 
     @Test
     public void rejectsWhenOilCanIdMissing() {
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(new FakeOilTankRepository());
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(new FakeOilTankRepository(), () -> { });
         RpcResult result = handler.handle(envelopeWithArgs("{\"hheightOilAlarm\":5000}"));
 
         assertEquals(RpcResultStatus.REJECTED, result.getStatus());
@@ -159,7 +208,7 @@ public class SetAlarmThresholdHandlerTest {
 
     @Test
     public void failsWhenOilCanIdUnknown() {
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(new FakeOilTankRepository());
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(new FakeOilTankRepository(), () -> { });
         RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":99,\"hheightOilAlarm\":5000}"));
 
         assertEquals(RpcResultStatus.FAILED, result.getStatus());
@@ -170,7 +219,7 @@ public class SetAlarmThresholdHandlerTest {
         FakeOilTankRepository repo = new FakeOilTankRepository();
         repo.byId.put(1, new OilCanSet());
 
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, () -> { });
         RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"unknownField\":123}"));
 
         assertEquals(RpcResultStatus.REJECTED, result.getStatus());
@@ -187,7 +236,7 @@ public class SetAlarmThresholdHandlerTest {
         repo.byId.put(1, existing);
         repo.throwOnUpdate = true;
 
-        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo);
+        SetAlarmThresholdHandler handler = new SetAlarmThresholdHandler(repo, () -> { });
         RpcResult result = handler.handle(envelopeWithArgs("{\"oilCanId\":1,\"hheightOilAlarm\":5000}"));
 
         assertEquals(RpcResultStatus.FAILED, result.getStatus());

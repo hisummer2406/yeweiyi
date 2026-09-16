@@ -23,15 +23,25 @@ import java.util.Collections;
  * <p>
  * 方法名 {@code config.setAlarmThresholds}——跟 {@code yeweiyi-cloud} 侧
  * {@code MethodConfigAlarmThreshold} 对齐（issue #39），不是原来的 {@code setAlarmThreshold}。
+ * <p>
+ * 写入用 {@link OilTankRepository#updateOilCanSetSync} 而不是 fire-and-forget 的
+ * {@code updateOilCanSet}：这个 handler 的返回值会被 {@code RpcDispatcher} 当成终态缓存，
+ * 写盘真正失败却报 SUCCEEDED 会让云端和现场配置永久不一致。成功写盘后还要通过
+ * {@code onThresholdsUpdated} 回调让调用方刷新 {@code OilcanDataManager} 缓存——
+ * {@code AlarmDetection} 读的是那份缓存，不是数据库，不刷新的话现场报警仍然按旧阈值走，
+ * 直到下一次无关的刷新或重启才会生效。这个类保持不依赖 Android/{@code Context}，回调本身
+ * 由调用方（{@code ThingsBoardManager}）注入，保持在 JVM 上可测。
  */
 public final class SetAlarmThresholdHandler implements RpcMethodHandler {
 
     public static final String METHOD = "config.setAlarmThresholds";
 
     private final OilTankRepository oilTankRepository;
+    private final Runnable onThresholdsUpdated;
 
-    public SetAlarmThresholdHandler(OilTankRepository oilTankRepository) {
+    public SetAlarmThresholdHandler(OilTankRepository oilTankRepository, Runnable onThresholdsUpdated) {
         this.oilTankRepository = oilTankRepository;
+        this.onThresholdsUpdated = onThresholdsUpdated;
     }
 
     @Override
@@ -98,10 +108,12 @@ public final class SetAlarmThresholdHandler implements RpcMethodHandler {
         oilCanSet.setLlowOilAlarm(llow);
 
         try {
-            oilTankRepository.updateOilCanSet(oilCanSet);
+            oilTankRepository.updateOilCanSetSync(oilCanSet);
         } catch (Exception e) {
             return RpcResult.failed(RpcErrorCode.INTERNAL_ERROR, "写入油罐配置失败: " + e.getMessage());
         }
+
+        onThresholdsUpdated.run();
 
         return RpcResult.succeeded("阈值已更新", Collections.singletonMap("oilCanId", oilCanId));
     }
