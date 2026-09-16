@@ -77,18 +77,29 @@ public final class ThingsBoardMqttConnection {
         this.connectionLostListener = connectionLostListener;
     }
 
-    /** @return 连接并订阅 RPC 请求是否成功；失败原因已记日志，调用方按 {@link com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff} 排下一次重试。 */
+    /**
+     * @return 连接并订阅 RPC 请求是否成功；失败原因已记日志，调用方按
+     * {@link com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff} 排下一次重试。
+     * <p>
+     * 只有 {@code connect()}+{@code subscribe()} 都成功之后才会把新建的客户端赋给
+     * {@link #client} 字段——之前是先赋值再连接/订阅，{@code subscribe()} 在已经连上之后
+     * 失败时会走进 catch 直接把字段置空，但没有关闭那个仍然连着 broker 的客户端实例，
+     * 白白泄漏一个还在跑内部收发线程的 {@code MqttClient}（PR #38 Codex 第五轮审核 P2）。
+     * 现在失败分支只操作本地变量，成功前 {@link #client} 字段保持不变，失败时把这个
+     * 本地创建的实例关掉再返回。
+     */
     public synchronized boolean connect(DeviceCredentials credentials) {
         if (!credentials.isValid()) {
             Log.e(TAG, "设备未配网（缺 deviceId/accessToken），本次不发起连接");
             return false;
         }
+        if (client != null && client.isConnected()) {
+            return true;
+        }
+        MqttClient created = null;
         try {
-            if (client != null && client.isConnected()) {
-                return true;
-            }
-            client = new MqttClient(brokerUri, clientId, new MemoryPersistence());
-            client.setCallback(new InternalCallback());
+            created = new MqttClient(brokerUri, clientId, new MemoryPersistence());
+            created.setCallback(new InternalCallback(created));
 
             MqttConnectOptions options = new MqttConnectOptions();
             options.setCleanSession(true);
@@ -100,16 +111,32 @@ public final class ThingsBoardMqttConnection {
                 options.setSocketFactory(createTlsSocketFactory());
             }
 
-            client.connect(options);
-            client.subscribe(ThingsBoardTopics.RPC_REQUEST_SUBSCRIBE, QOS_AT_LEAST_ONCE);
+            created.connect(options);
+            created.subscribe(ThingsBoardTopics.RPC_REQUEST_SUBSCRIBE, QOS_AT_LEAST_ONCE);
+            client = created;
             Log.i(TAG, "ThingsBoard MQTT 连接成功: " + brokerUri);
             return true;
         } catch (Exception e) {
-            // 覆盖证书校验失败、凭据被吊销（broker 拒绝连接）、DNS/网络不通等——
-            // 统一记日志、返回 false，交给调用方走退避重连，不在这里吞掉细节。
+            // 覆盖证书校验失败、凭据被吊销（broker 拒绝连接）、连上了但订阅失败、
+            // DNS/网络不通等——统一记日志、返回 false，交给调用方走退避重连，
+            // 不在这里吞掉细节。created 从未赋给 client 字段，这里直接关掉它，不留泄漏。
             Log.e(TAG, "ThingsBoard MQTT 连接失败: broker=" + brokerUri + " clientId=" + clientId, e);
-            client = null;
+            closeQuietly(created);
             return false;
+        }
+    }
+
+    private static void closeQuietly(MqttClient c) {
+        if (c == null) {
+            return;
+        }
+        try {
+            if (c.isConnected()) {
+                c.disconnect(3000);
+            }
+            c.close();
+        } catch (MqttException e) {
+            Log.w(TAG, "释放 MQTT 客户端失败", e);
         }
     }
 
@@ -190,19 +217,40 @@ public final class ThingsBoardMqttConnection {
         return publish(ThingsBoardTopics.ATTRIBUTES_PUBLISH, payloadJson, QOS_AT_LEAST_ONCE);
     }
 
+    /**
+     * 每次 {@link #connect} 成功新建一个客户端实例时，都会配一个新的 {@link InternalCallback}
+     * 并把该实例本身绑进来（{@link #owner}）——{@link #connectionLost} 只能清空/关闭自己的
+     * {@code owner}，不能盲目操作共享的 {@link ThingsBoardMqttConnection#client} 字段。
+     * 之前是共享字段直接读写：一次连接失败（比如 connect 成功但 subscribe 失败）会在没有
+     * 关闭旧客户端的情况下把它遗弃在后台继续跑，如果这个被遗弃的实例后来自己触发
+     * connectionLost，会读到这时候已经指向"重试后新建的替换实例"的 client 字段，
+     * 把这个仍然工作正常的替换连接关掉、并误触发一次不必要的重连（PR #38 Codex 第五轮
+     * 审核 P2）。
+     */
     private final class InternalCallback implements MqttCallback {
+
+        private final MqttClient owner;
+
+        InternalCallback(MqttClient owner) {
+            this.owner = owner;
+        }
 
         @Override
         public void connectionLost(Throwable cause) {
             Log.w(TAG, "ThingsBoard MQTT 连接断开", cause);
-            MqttClient lost = client;
-            client = null;
-            if (lost != null) {
-                try {
-                    lost.close();
-                } catch (MqttException e) {
-                    Log.w(TAG, "释放断线的 MQTT 客户端失败", e);
+            boolean wasCurrent;
+            synchronized (ThingsBoardMqttConnection.this) {
+                wasCurrent = client == owner;
+                if (wasCurrent) {
+                    client = null;
                 }
+            }
+            closeQuietly(owner);
+            if (!wasCurrent) {
+                // 这个回调属于一个已经被替换/废弃的旧客户端实例——它的断线跟当前正在用的
+                // 连接无关，不通知重连监听器，避免对着一条本来好好的连接瞎重连一次。
+                Log.w(TAG, "忽略已废弃客户端实例的 connectionLost 回调");
+                return;
             }
             if (connectionLostListener != null) {
                 connectionLostListener.onConnectionLost(cause);

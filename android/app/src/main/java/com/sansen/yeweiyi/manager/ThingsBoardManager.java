@@ -181,14 +181,19 @@ public final class ThingsBoardManager {
      *                  issue #36 的已知缺口：恢复检测需要改 {@code AlarmDetection} 现有的
      *                  报警状态机，这次没有动它。
      *                  <p>实际发布挪到 {@link #outboundEventExecutor} 上异步执行，本方法立刻
-     *                  返回——见该字段上的注释（PR #38 Codex 第四轮审核 P1）。
+     *                  返回——见该字段上的注释（PR #38 Codex 第四轮审核 P1）。时间戳在提交任务
+     *                  之前、还在调用方线程上就取好并传给后台任务，不在任务真正执行时才取——
+     *                  报警事件不像 stockEvent 那样自带一份可以在发布时用来纠正的独立时间戳，
+     *                  前面排队的发布（比如一次卡住的 QoS 1 publish）攒起来的延迟会直接算到
+     *                  这条报警的 {@code ts}/{@code alarm.tsMs} 上，把它在时序历史里错位
+     *                  （PR #38 Codex 第五轮审核 P2）。
      */
     public void reportAlarmEvent(OilMessage message, boolean recovered) {
-        outboundEventExecutor.execute(() -> doReportAlarmEvent(message, recovered));
+        long now = System.currentTimeMillis();
+        outboundEventExecutor.execute(() -> doReportAlarmEvent(message, recovered, now));
     }
 
-    private void doReportAlarmEvent(OilMessage message, boolean recovered) {
-        long now = System.currentTimeMillis();
+    private void doReportAlarmEvent(OilMessage message, boolean recovered, long now) {
         Map<String, Object> event = AlarmEventBuilder.build(message, recovered, message.toString(), now);
         if (event == null) {
             // message.getType() 不在云端封闭报警类型集合里（出入库/低温/网络断线等）——
