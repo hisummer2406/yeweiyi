@@ -36,9 +36,11 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
+import com.sansen.yeweiyi.logic.thingsboard.StockEventMapper;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
+import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.repository.OilTankRepository;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
@@ -48,6 +50,7 @@ import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.DoubleUtil;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
+import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -534,6 +537,12 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 					inout_toal_delivery.setText(detailInoutRecord.getSaleVolume() + " L");
 					inout_sale_volume.setText("");
 					inout_sale_volume.setHint(String.valueOf(detailInoutRecord.getDuringDelivery()));
+					// 首次自动上报（InOilManager.handleEvent）发生在这个对话框存在之前，
+					// duringDeliveryVolumeL 那时必然是 0。这里用同一个 eventId 重发一次，
+					// 云端按 eventId 去重/覆盖即可拿到补录后的真实数字——见 StockEventMapper
+					// 类注释与 zhongchengyeweiyi#42 待办3。这个对话框只在"进油"列表打开，方向恒为入库。
+					String stockEventJson = GsonUtil.toJsonStr(StockEventMapper.build(detailInoutRecord, true));
+					SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(stockEventJson);
 					SystemUtils.showRsToast("Save Success.");
 				}
 			});

@@ -175,11 +175,25 @@ public final class ThingsBoardManager {
      * 出入库等其它"立即上报"事件的通用出口（原 {@code BackService.sendUnloadOils}）。
      * 复用报警的补投队列——两者都是"必须送达，不能被下一次快照覆盖"的即时事件，
      * 目前量级都很小，没必要为此单独再起一个队列。
+     * <p>
+     * {@code rawValue} 现在必须是 {@link StockEventMapper} 产出的 JSON（issue #42 待办3，
+     * 之前这里直接透传 {@code DetailInoutRecord.toString()} 调试字符串，云端完全解析不了）。
+     * 这里把它解析回 {@link com.google.gson.JsonElement} 再塞进 telemetry 的 {@code values}，
+     * 使 {@code values.stockEvent} 在最终 payload 里是一个结构化对象（跟 fixture 形状一致），
+     * 而不是一层双重转义的字符串——对齐 {@link AlarmEventBuilder}/{@code reportAlarmEvent}
+     * 已经在用的"直接嵌对象"做法。解析失败（理论上不会发生，调用方现在只传合法 JSON）时
+     * 退化为按字符串塞入，不丢事件，只是云端那一侧仍旧解析不了。
      */
     public void reportRawEvent(String telemetryKey, String rawValue) {
         long now = System.currentTimeMillis();
         Map<String, Object> values = new java.util.LinkedHashMap<>();
-        values.put(telemetryKey, rawValue);
+        Object value;
+        try {
+            value = new com.google.gson.JsonParser().parse(rawValue);
+        } catch (com.google.gson.JsonSyntaxException e) {
+            value = rawValue;
+        }
+        values.put(telemetryKey, value);
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, now);
         String json = gson.toJson(payload);
         if (!connection.publishTelemetry(json)) {

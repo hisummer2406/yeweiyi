@@ -13,10 +13,12 @@ import com.sansen.yeweiyi.logic.inout.InOutDirection;
 import com.sansen.yeweiyi.logic.inout.InOutEvent;
 import com.sansen.yeweiyi.logic.inout.InOutThresholds;
 import com.sansen.yeweiyi.logic.inout.MultiTankInOutDetector;
+import com.sansen.yeweiyi.logic.thingsboard.StockEventMapper;
 import com.sansen.yeweiyi.repository.StockRepository;
 import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.HashMap;
@@ -211,7 +213,10 @@ public class InOilManager {
             Log.w(TAG, "processEvent: " + (isIn ? "findLastIn" : "findLastOut") + " 未取到刚保存的记录，跳过详情落库");
         }
 
-        SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(detailInoutRecord.toString());
+        // 发给云端的必须是 StockEventMapper 产出的结构化 JSON，不能是 toString() 调试字符串——
+        // 后者不是 JSON，云端完全解析不了，见 zhongchengyeweiyi#42 待办3。
+        String stockEventJson = GsonUtil.toJsonStr(StockEventMapper.build(detailInoutRecord, isIn));
+        SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(stockEventJson);
 
         OilMessage oilMessage = new OilMessage();
         oilMessage.setDate(DateUtils.getYYYMMddHHmm());
