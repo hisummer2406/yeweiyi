@@ -135,4 +135,21 @@ public class StockEventMapperTest {
         assertEquals(18000.0, (Double) inEvent.get("netVolumeL"), 0.0001);
         assertEquals(-5000.0, (Double) outEvent.get("netVolumeL"), 0.0001);
     }
+
+    @Test
+    public void sourceIsOmittedForAutoDetectedEvents() {
+        DetailInoutRecord record = inRecord();
+        assertEquals("DetailInoutRecord.source 默认应为 AUTO", StockEventMapper.SOURCE_AUTO, record.getSource());
+        Map<String, Object> event = StockEventMapper.build(record, true);
+        assertFalse("自动检测事件不应该带 source，保持跟共享 fixture 字节相同",
+                event.containsKey("source"));
+    }
+
+    @Test
+    public void sourceIsPresentForManualBackfillEvents() {
+        DetailInoutRecord record = inRecord();
+        record.setSource(StockEventMapper.SOURCE_MANUAL);
+        Map<String, Object> event = StockEventMapper.build(record, true);
+        assertEquals(StockEventMapper.SOURCE_MANUAL, event.get("source"));
+    }
 }

@@ -32,12 +32,16 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
+import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.db.OutStock;
+import com.sansen.yeweiyi.logic.thingsboard.StockEventMapper;
+import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.repository.StockRepository;
 import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
+import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
@@ -357,7 +361,9 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
     }
 
     private double beginInHight, endInVoulme;
-    private String InTime, OutTime = "";
+    // 原来只有 OutTime 有 "" 默认值，InTime 保持 null——如果用户填了入库高度/升数
+    // 但没点开时间选择器就点保存，下面 !InTime.isEmpty() 会直接空指针崩溃。
+    private String InTime = "", OutTime = "";
     private double beginOutHight, endOutVoulme;
 
     @Override
@@ -413,6 +419,9 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         switch (v.getId()) {
             case R.id.ly_saveData:
                 v.setEnabled(false);
+                // 原来是 if/else if：两个区块都填了的话点一次保存，出库那份数据会被静默丢弃，
+                // 没有任何提示。改成两个独立 if，两个区块只要各自填完整就都落库，互不影响。
+                boolean savedAny = false;
                 if (inOilId != -1 && beginInHight != 0 && endInVoulme != 0 && !InTime.isEmpty()) {
                     //Log.i("TAG", "点击了保存数据");
                     if (MyApplication.getInstance().getmOilcanDataManager().getData(inOilId)==null){
@@ -426,10 +435,15 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
                         oilIn.setEndHeigth(getHiget(oilIn.getEndVolum(),inOilId));
                         oilIn.setTime(InTime);
                         oilIn.setOilId(inOilId);
+                        oilIn.setSource(StockEventMapper.SOURCE_MANUAL);
                         saveInOil(oilIn);
+                        reportManualStockEvent(true, inOilId, InTime, beginInHight, oilIn.getEndHeigth(),
+                                oilIn.getBeginVolum(), oilIn.getEndVolum());
+                        savedAny = true;
                     }
 
-                } else if (outOilId != -1 && beginOutHight != 0 && endOutVoulme != 0 && !OutTime.isEmpty()) {
+                }
+                if (outOilId != -1 && beginOutHight != 0 && endOutVoulme != 0 && !OutTime.isEmpty()) {
                     //Log.i("TAG", "点击了保存数据");
                     if (MyApplication.getInstance().getmOilcanDataManager().getData(outOilId)==null){
                         ToastUtils.showToast("请设置罐表",3);
@@ -441,12 +455,18 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
                         outStock.setEndHeigth(getHiget(outStock.getEndVolum(),outOilId));
                         outStock.setTime(OutTime);
                         outStock.setOilId(outOilId);
+                        outStock.setSource(StockEventMapper.SOURCE_MANUAL);
                         saveOutOil(outStock);
+                        reportManualStockEvent(false, outOilId, OutTime, beginOutHight, outStock.getEndHeigth(),
+                                outStock.getBeginVolum(), outStock.getEndVolum());
+                        savedAny = true;
                     }
 
                 }
                 v.postDelayed(() -> v.setEnabled(true), 1000);
-                showWindDialog(3000);
+                if (savedAny) {
+                    showWindDialog(3000);
+                }
 
                 break;
 
@@ -482,6 +502,29 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         stockRepository.saveOutRecord(outStock);
     }
 
+    /**
+     * 补录事件也复用 InOilManager.handleEvent 那条 stockEvent 上报通道，不然对云端/小程序永远
+     * 不可见（zhongchengyeweiyi#42 待办2）。跟自动检测不同，补录时设备处于断电/故障状态，没有
+     * 水位/温度/介质/重量这些实时快照——DetailInoutRecord 对应字段留 Java 默认值（0/null），
+     * 不伪造数据；beginTime/endTime 都用同一个用户填的事件时间，因为补录只有一个时刻，不像
+     * 自动检测那样有"开始变化"到"结束变化"的过程。
+     */
+    private void reportManualStockEvent(boolean isIn, int tankId, String time,
+                                         double beginHeightMm, double endHeightMm,
+                                         double beginVolumeL, double endVolumeL) {
+        DetailInoutRecord record = new DetailInoutRecord();
+        record.setOilcanId(tankId);
+        record.setBeginTime(time);
+        record.setEndTime(time);
+        record.setBeginHeith(beginHeightMm);
+        record.setEndHeight(endHeightMm);
+        record.setBeginVolume(beginVolumeL);
+        record.setEndVolume(endVolumeL);
+        record.setSaleVolume(endVolumeL - beginVolumeL);
+        record.setSource(StockEventMapper.SOURCE_MANUAL);
+        String stockEventJson = GsonUtil.toJsonStr(StockEventMapper.build(record, isIn));
+        SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(stockEventJson);
+    }
 
     @Override
     public void onNothingSelected(AdapterView<?> adapterView) {

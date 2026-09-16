@@ -81,7 +81,7 @@ public class DaoHelp {
 //			config.setDbVersion(1);
 //			// 创建数据库
 //			db = DbUtils.create(config);
-        db = DbUtils.create(ct, "sansen", 6,
+        db = DbUtils.create(ct, "sansen", 7,
                 new DbUtils.DbUpgradeListener() {
                     @Override
                     public void onUpgrade(DbUtils dbUtils, int oldVersion, int newVersion) {
@@ -133,6 +133,15 @@ public class DaoHelp {
                                     dbUtils.execNonQuery("ALTER TABLE commitwork ADD COLUMN endtime TEXT");
                                 } catch (DbException e) { }
                                 // 注意：如果你希望继续执行后续升级，不要 break
+                                break;
+                            case 6:  // 从版本6升级到7：出入库记录/详情加 source 列（手动补录 vs 自动检测，见 zhongchengyeweiyi#42 待办2）
+                                try {
+                                    dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OilInOut ADD COLUMN source TEXT");
+                                    dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OutStock ADD COLUMN source TEXT");
+                                    dbUtils.execNonQuery("ALTER TABLE detail_inout_record ADD COLUMN source TEXT");
+                                } catch (DbException e) {
+                                    Log.e(TAG, "onUpgrade 数据库操作失败", e);
+                                }
                                 break;
                         }
 

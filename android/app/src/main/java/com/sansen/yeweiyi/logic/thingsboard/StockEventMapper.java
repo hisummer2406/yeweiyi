@@ -31,11 +31,23 @@ import java.util.Map;
  *       {@code DetailInoutRecord} 已有的数据精度上限，不是本类引入的精度损失；要拿到秒级
  *       精度需要单独修 {@code DateUtils}/给 {@code DetailInoutRecord} 加新列，不在本次范围内。</li>
  * </ul>
+ * <p>
+ * <b>{@code source} 字段是新增的、尚未跨仓库确认的协议扩展</b>（zhongchengyeweiyi#42 待办2）：
+ * {@code BuLuFragment} 手动补录（断电/故障导致自动检测漏记后人工补一条）之前完全绕开这条
+ * 上报通道——补录事件对云端/小程序不可见。现在补录也复用这条通道上报。跟
+ * {@code duringDeliveryVolumeL} 一样用 {@code omitempty} 语义：只有 {@link #SOURCE_MANUAL}
+ * （补录）才带这个字段，{@link #SOURCE_AUTO}（{@code InOilManager} 自动检测，默认值）时不带——
+ * 这样已经和 yeweiyi-cloud 核对过、字节同步的两份 fixture（自动检测样例）不用改，新字段只在
+ * 新场景（补录）里出现，云端在决定怎么消费之前，未知字段会被 {@code encoding/json} 直接忽略、
+ * 不报错也不存，不影响现有自动检测事件的解析。
  */
 public final class StockEventMapper {
 
     public static final String DIRECTION_IN = "IN";
     public static final String DIRECTION_OUT = "OUT";
+
+    public static final String SOURCE_AUTO = "AUTO";
+    public static final String SOURCE_MANUAL = "MANUAL";
 
     // 与 DetailInoutRecord.beginTime/endTime 的实际写入格式一致——DateUtils.getYYYMMddHHmmss()，
     // 尽管方法名暗示到秒，真实 pattern 是 "yyyy-MM-dd HH:mm"（见该方法实现，:ss 版本被注释掉了）。
@@ -79,6 +91,11 @@ public final class StockEventMapper {
         // 跟云端 Go 结构体的 `json:"duringDeliveryVolumeL,omitempty"` 行为保持一致。
         if (record.getDuringDelivery() != 0.0) {
             event.put("duringDeliveryVolumeL", record.getDuringDelivery());
+        }
+        // omitempty：自动检测（默认值）不带这个字段，跟已核对过的两份共享 fixture 保持字节相同；
+        // 只有补录（SOURCE_MANUAL）才带，见类注释。
+        if (SOURCE_MANUAL.equals(record.getSource())) {
+            event.put("source", SOURCE_MANUAL);
         }
         event.put("tsMs", endTimeMs);
         return event;
