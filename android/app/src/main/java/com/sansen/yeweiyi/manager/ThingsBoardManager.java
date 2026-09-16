@@ -28,6 +28,7 @@ import com.sansen.yeweiyi.utils.NetUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -79,6 +80,16 @@ public final class ThingsBoardManager {
                 t.setDaemon(true);
                 return t;
             });
+    /**
+     * {@link #onRpcRequest} 把 dispatch 挪到这个独立单线程池上跑（PR #38 Codex 第三轮审核 P1）——
+     * 见该方法上的注释。单线程而不是线程池，是为了保留"同一时刻只有一条 RPC 在处理"这个
+     * {@link ProcessedCommandStore} 去重记录原本依赖的隐含串行顺序。
+     */
+    private final ExecutorService rpcDispatchExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "tb-rpc-dispatch");
+        t.setDaemon(true);
+        return t;
+    });
     private final Gson gson = new Gson();
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
@@ -242,8 +253,15 @@ public final class ThingsBoardManager {
 
     // ---- RPC ----
 
+    /**
+     * 这个方法是 {@link ThingsBoardMqttConnection.InternalCallback#messageArrived} 直接同步调进来的，
+     * 跑在 Paho 的 MQTT 回调线程上。{@link RpcDispatcher#dispatch} 会在执行 handler 之前先同步发一次
+     * RECEIVED ACK（{@code MqttClient.publish()} 阻塞等 PUBACK 完成）——Paho 官方明确警示不能在
+     * 消息回调里做阻塞的客户端操作，会有死锁风险。挪到独立单线程池上跑，回调线程立刻返回去处理
+     * 下一条 MQTT 消息（PR #38 Codex 第三轮审核 P1）。
+     */
     private void onRpcRequest(String mqttRequestId, String payloadJson) {
-        rpcDispatcher.dispatch(mqttRequestId, payloadJson);
+        rpcDispatchExecutor.execute(() -> rpcDispatcher.dispatch(mqttRequestId, payloadJson));
     }
 
     /**

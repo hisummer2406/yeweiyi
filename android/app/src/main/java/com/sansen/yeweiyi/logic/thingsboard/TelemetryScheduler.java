@@ -58,12 +58,22 @@ public final class TelemetryScheduler {
         };
     }
 
-    /** 幂等：已经在跑就不重复安排。 */
+    /**
+     * 幂等：已经在跑就不重复安排。
+     * <p>
+     * 用 {@code scheduleWithFixedDelay} 而不是 {@code scheduleAtFixedRate}（PR #38 Codex
+     * 第三轮审核 P2）：后者按固定节拍算下次触发时刻，跟单次 task 实际耗时无关——一旦某次
+     * {@link #tick} 跑得比 {@code periodMillis} 久（探头轮询/MQTT publish 卡住），
+     * 单线程 executor 会攒下若干个已经过期的触发，在当前 task 一结束就背靠背连续补跑，
+     * 跟类头注释"单飞保护、不排队攒任务"的意图矛盾——{@link #inFlight} 只挡得住真正的并发
+     * 重入，挡不住这种顺序补跑的连续 burst。{@code scheduleWithFixedDelay} 从上一次
+     * 执行**结束**时刻起再等一个 {@code periodMillis}，天然不会补跑。
+     */
     public synchronized void start() {
         if (future != null && !future.isDone()) {
             return;
         }
-        future = executor.scheduleAtFixedRate(this::tick, periodMillis, periodMillis, TimeUnit.MILLISECONDS);
+        future = executor.scheduleWithFixedDelay(this::tick, periodMillis, periodMillis, TimeUnit.MILLISECONDS);
     }
 
     public synchronized void stop() {
