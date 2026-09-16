@@ -186,6 +186,10 @@ public final class ThingsBoardMqttConnection {
         publish(ThingsBoardTopics.rpcResponse(mqttRequestId), payloadJson, QOS_AT_LEAST_ONCE);
     }
 
+    public boolean publishAttributes(String payloadJson) {
+        return publish(ThingsBoardTopics.ATTRIBUTES_PUBLISH, payloadJson, QOS_AT_LEAST_ONCE);
+    }
+
     private final class InternalCallback implements MqttCallback {
 
         @Override

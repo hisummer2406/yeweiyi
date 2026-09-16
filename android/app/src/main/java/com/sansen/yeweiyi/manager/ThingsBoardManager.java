@@ -12,6 +12,7 @@ import com.sansen.yeweiyi.logic.thingsboard.AlarmEventBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
+import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.ProcessedCommandStore;
@@ -205,6 +206,25 @@ public final class ThingsBoardManager {
         pendingAlarmStore.drainAndSend(connection::publishTelemetry);
     }
 
+    /**
+     * 罐体标定表（zhongchengyeweiyi#42 待办1）——不进 30 秒快照，也不走补投队列：
+     * 这是静态配置，不是"必须送达的事件"，下次连上（下次重连/重启）自然会带着最新值
+     * 重发一次，断线期间丢一次没有实际影响。目前唯一的触发点是连接建立成功之后，
+     * 跟"标定表被改" 这个动作本身没有绑定——{@code CreateOilTableFragment} 保存新标定表
+     * 时不会立即推送，要等下一次重连才会带上新值。设备一旦部署通常长期在线，这意味着
+     * 现场改标定表后云端可能要等到下次重启才能看到——已知的滞后，不是本次要解决的范围
+     * （标定本来就是安装阶段一次性动作，重启一次拿到最新值可以接受）。
+     */
+    private void publishTankCalibrationAttributes() {
+        List<com.sansen.yeweiyi.db.OilCanSet> oilCanSets = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
+        List<com.sansen.yeweiyi.db.OilCanTable> tables = OilTankRepositoryImpl.getInstance().findAllOilCanTable();
+        Map<String, Object> attributes = TankCalibrationAttributeBuilder.build(oilCanSets, tables);
+        if (attributes.isEmpty()) {
+            return;
+        }
+        connection.publishAttributes(gson.toJson(attributes));
+    }
+
     // ---- 30 秒快照 ----
 
     private void buildAndPublishSnapshot() {
@@ -313,6 +333,7 @@ public final class ThingsBoardManager {
         if (ok) {
             reconnectBackoff.reset();
             drainPendingAlarms();
+            publishTankCalibrationAttributes();
         } else {
             scheduleConnectAttempt(reconnectBackoff.nextDelayMillis());
         }
