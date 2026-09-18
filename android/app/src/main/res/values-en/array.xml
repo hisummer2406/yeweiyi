@@ -48,6 +48,13 @@
         <item>Methanol</item>
         <item>Toluene</item>
         <item>Kerosene</item>
+        <item>Sulfuric Acid</item>
+        <item>Xylene</item>
+        <item>n-Butyl</item>
+        <item>sec-Butyl</item>
+        <item>Methyl</item>
+        <item>Dimethyl</item>
+        <item>Solvent Oil</item>
         <item>Blank</item>
     </string-array>
 
