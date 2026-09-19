@@ -36,11 +36,9 @@ import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
 import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.logic.thingsboard.StockEventMapper;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
-import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.repository.OilTankRepository;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
@@ -50,7 +48,6 @@ import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.DoubleUtil;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
-import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -391,198 +388,25 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 		return stockRepository.findInPage(pageSize,pageIndex,isSort);
 	}
 
-	boolean isUnload;
+	/**
+	 * 废弃：这个方法（连同它打开的 {@code dialog_detail_inout.xml}"边卸边卖"人工核对
+	 * 详情框——查看快照、继续/停止卸油、录入售液补偿并重发 stockEvent）从来没有被真正
+	 * 触发过，也不打算再修：{@link InOutAdapter} 给列表行装的点击监听器
+	 * （{@code onBindViewHolder}）本身就是空实现，只有长按才会调
+	 * {@link InOutAdapter.OnItemClickListener#onLongClick}，那条路走的是
+	 * {@link #onLongClick} 里完全不同的删除确认框。2026-09 复核确认这不是接错线的 bug、
+	 * 是已经废弃不再使用的功能，因此把原本 ~190 行的详情/核对逻辑清空，只保留方法体
+	 * 以满足 {@link InOutAdapter.OnItemClickListener} 接口——不能删掉整个方法，
+	 * {@link #onLongClick} 这个真正在用的入口需要同一个接口。
+	 * <p>
+	 * 连带影响：{@link DetailInoutRecord#getDuringDelivery()} 因此永远不会被写成非零值
+	 * （唯一的写入点 {@code salesDuring}/{@code setDuringDelivery} 调用就在这段被清空的
+	 * 代码里）——{@code StockEventMapper} 对它的 omitempty 判断永远为 false，
+	 * {@code duringDeliveryVolumeL} 不会出现在真实上报的 stockEvent 里。这是这个功能被
+	 * 废弃后的自然结果，不是留待修复的缺陷，也不需要另外处理。
+	 */
 	@Override
 	public void onClick(int position) {
-		final OilInOut oilInOut = (OilInOut) myAdapter
-				.getItem(position);
-		final DetailInoutRecord detailInoutRecord = stockRepository.findDetailById(oilInOut.getId());
-		if (detailInoutRecord != null) {
-			AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
-			View v = LayoutInflater.from(getActivity()).inflate(R.layout.dialog_detail_inout, null);
-
-			TextView inout_detail_oil_id = (TextView) v.findViewById(R.id.inout_detail_oil_id);
-			TextView inout_detail_oil_product = (TextView) v.findViewById(R.id.inout_detail_oil_product);
-
-			TextView begin_date = (TextView) v.findViewById(R.id.begin_date);
-			TextView end_date = (TextView) v.findViewById(R.id.end_date);
-
-			final TextView detail_begin_height = (TextView) v.findViewById(R.id.detail_begin_height);
-			final TextView detail_end_height = (TextView) v.findViewById(R.id.detail_end_height);
-
-			TextView detail_begin_volume = (TextView) v.findViewById(R.id.detail_begin_volume);
-			final TextView detail_end_volume = (TextView) v.findViewById(R.id.detail_end_volume);
-
-			TextView detail_begin_tc_volume = (TextView) v.findViewById(R.id.detail_begin_tc_volume);
-			final TextView detail_end_tc_volume = (TextView) v.findViewById(R.id.detail_end_tc_volume);
-
-			TextView detail_begin_water = (TextView) v.findViewById(R.id.detail_begin_water);
-			final TextView detail_end_water = (TextView) v.findViewById(R.id.detail_end_water);
-
-			TextView detail_begin_water_volume = (TextView) v.findViewById(R.id.detail_begin_water_volume);
-			final TextView detail_end_water_volume = (TextView) v.findViewById(R.id.detail_end_water_volume);
-
-			TextView detail_begin_weight = (TextView) v.findViewById(R.id.detail_begin_weight);
-			final TextView detail_end_weight = (TextView) v.findViewById(R.id.detail_end_weight);
-
-			TextView detail_begin_temp = (TextView) v.findViewById(R.id.detail_begin_temp);
-			final TextView detail_end_temp = (TextView) v.findViewById(R.id.detail_end_temp);
-			final TextView inout_toal_delivery = (TextView) v.findViewById(R.id.inout_toal_delivery);
-			final EditText inout_sale_volume = (EditText) v.findViewById(R.id.inout_sale_volume);
-			inout_sale_volume.setFilters(new InputFilter[]{new DecimalDigitsInputFilter(1)});
-			Button inout_quit = (Button) v.findViewById(R.id.inout_quit);
-			final Button inout_save = (Button) v.findViewById(R.id.inout_save);
-			final Button inout_continue = (Button) v.findViewById(R.id.inout_continue);
-			final Button inout_stop = (Button) v.findViewById(R.id.inout_stop);
-			final TextView inout_detail_oil_state =(TextView) v.findViewById(R.id.inout_detail_oil_state);
-			inout_detail_oil_product.setText(detailInoutRecord.getOilType());
-			inout_detail_oil_id.setText(String.valueOf(detailInoutRecord.getOilcanId()));
-			inout_detail_oil_state.setText(R.string.inoil_unload_stop);
-			begin_date.setText(detailInoutRecord.getBeginTime());
-			end_date.setText(detailInoutRecord.getEndTime());
-
-			detail_begin_height.setText(detailInoutRecord.getBeginHeith() + " mm");
-			detail_begin_volume.setText(detailInoutRecord.getBeginVolume() + " L");
-			detail_begin_tc_volume.setText(detailInoutRecord.getBeginTcVolume() + " L");
-			detail_begin_water.setText(detailInoutRecord.getBeginWater() + " mm");
-			detail_begin_water_volume.setText(detailInoutRecord.getBeginWaterVolume() + " L");
-			detail_begin_weight.setText(detailInoutRecord.getBeginOilWeight() + " kg");
-			detail_begin_temp.setText(detailInoutRecord.getBeginTemp() + " ℃");
-
-			detail_end_height.setText(detailInoutRecord.getEndHeight() + " mm");
-			detail_end_volume.setText(detailInoutRecord.getEndVolume() + " L");
-			detail_end_tc_volume.setText(detailInoutRecord.getEndTcVolume() + " L");
-			detail_end_water.setText(detailInoutRecord.getEndWater() + " mm");
-			detail_end_water_volume.setText(detailInoutRecord.getEndWaterVolume() + " L");
-			detail_end_weight.setText(detailInoutRecord.getEndOilWeight() + " kg");
-			detail_end_temp.setText(detailInoutRecord.getEndTemp() + " ℃");
-			inout_toal_delivery.setText(detailInoutRecord.getSaleVolume() + " L");
-			inout_sale_volume.setHint(String.valueOf(detailInoutRecord.getDuringDelivery()));
-
-			builder.setView(v);
-			final AlertDialog dialog = builder.create();
-			dialog.setCancelable(false);
-			final CompositeDisposable mCompositeDisposable = new CompositeDisposable();
-			inout_stop.setEnabled(false);
-
-
-			final DisposableObserver observer = new DisposableObserver<Long>() {
-				@Override
-				public void onNext(@NonNull Long aLong) {
-					//Log.i(TAG, "循环执行" + aLong);
-					detailInoutRecord.setOilType(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilType()));
-					detailInoutRecord.setEndHeight((OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilLevel()));
-					detailInoutRecord.setEndVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilVolume());
-					detailInoutRecord.setEndWater(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getWaterLevel());
-					detailInoutRecord.setEndWaterVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getWaterVolume());
-					detailInoutRecord.setEndTcVolume(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getSurPlus());
-					detailInoutRecord.setEndOilWeight(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilWeight());
-					detailInoutRecord.setEndTemp(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getTemper());
-					detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmss());
-					detailInoutRecord.setSaleVolume(DoubleUtil.sub(detailInoutRecord.getEndVolume(), detailInoutRecord.getBeginVolume()));
-
-
-					detail_end_height.setText(detailInoutRecord.getEndHeight() + " mm");
-					detail_end_volume.setText(detailInoutRecord.getEndVolume() + " L");
-					detail_end_tc_volume.setText(detailInoutRecord.getEndTcVolume() + " L");
-					detail_end_water.setText(detailInoutRecord.getEndWater() + " mm");
-					detail_end_water_volume.setText(detailInoutRecord.getEndWaterVolume() + " L");
-					detail_end_weight.setText(detailInoutRecord.getEndOilWeight() + " kg");
-					detail_end_temp.setText(detailInoutRecord.getEndTemp() + " ℃");
-					inout_toal_delivery.setText(detailInoutRecord.getSaleVolume() + " L");
-					inout_sale_volume.setHint(String.valueOf(detailInoutRecord.getDuringDelivery()));
-				}
-
-				@Override
-				public void onError(@NonNull Throwable e) {
-					//e.printStackTrace();
-				}
-
-				@Override
-				public void onComplete() {
-
-				}
-			};
-
-			inout_quit.setOnClickListener(new OnClickListener() {
-				@Override
-				public void onClick(View view) {
-					if (!isUnload) {
-						InOilManager.getInstance().setEnable(oilInOut.getOilId(), true);
-						mCompositeDisposable.remove(observer);
-						dialog.dismiss();
-					}else{
-						SystemUtils.showRsToast("Please stop.");
-					}
-				}
-			});
-
-			inout_save.setOnClickListener(new OnClickListener() {
-				@Override
-				public void onClick(View view) {
-					String salVolume = inout_sale_volume.getText().toString();
-					double value = 0;
-					if (StringUtils.isNotEmpty(salVolume)) {
-						value = Double.parseDouble(salVolume);
-					}
-					detailInoutRecord.salesDuring(value);
-					Log.i("计算体积", "开始的体积" + detailInoutRecord.getBeginVolume() + "结束的体积" + detailInoutRecord.getEndVolume() + " SaleVolume" + detailInoutRecord.getSaleVolume());
-					detailInoutRecord.setDuringDelivery(DoubleUtil.sub(detailInoutRecord.getSaleVolume(), DoubleUtil.sub(detailInoutRecord.getEndVolume(), detailInoutRecord.getBeginVolume())));
-					stockRepository.updateDetail(detailInoutRecord);
-					OilInOut oilInOut = stockRepository.findInById(detailInoutRecord.getId());
-					oilInOut.setEndHeigth(detailInoutRecord.getEndHeight());
-					oilInOut.setBeginVolum(detailInoutRecord.getSaleVolume());
-					oilInOut.setEndWeight(DoubleUtil.mul(detailInoutRecord.getSaleVolume(),OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getDensity()));
-					stockRepository.updateIn(oilInOut);
-					inout_toal_delivery.setText(detailInoutRecord.getSaleVolume() + " L");
-					inout_sale_volume.setText("");
-					inout_sale_volume.setHint(String.valueOf(detailInoutRecord.getDuringDelivery()));
-					// 首次自动上报（InOilManager.handleEvent）发生在这个对话框存在之前，
-					// duringDeliveryVolumeL 那时必然是 0。这里用同一个 eventId 重发一次，
-					// 云端按 eventId 去重/覆盖即可拿到补录后的真实数字——见 StockEventMapper
-					// 类注释与 zhongchengyeweiyi#42 待办3。这个对话框只在"进油"列表打开，方向恒为入库。
-					String stockEventJson = GsonUtil.toJsonStr(StockEventMapper.build(detailInoutRecord, true));
-					SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(stockEventJson);
-					SystemUtils.showRsToast("Save Success.");
-				}
-			});
-
-
-			inout_continue.setOnClickListener(new OnClickListener() {
-				@Override
-				public void onClick(View view) {
-					isUnload = true;
-					inout_detail_oil_state.setText(R.string.inoil_unloading);
-					inout_save.setEnabled(false);
-					inout_continue.setEnabled(false);
-					inout_stop.setEnabled(true);
-					InOilManager.getInstance().setEnable(oilInOut.getOilId(), false);
-					mCompositeDisposable.add(io.reactivex.Observable.interval(1, 1, TimeUnit.SECONDS)
-							.subscribeOn(Schedulers.io())
-							.observeOn(AndroidSchedulers.mainThread())
-							.subscribeWith(observer));
-				}
-			});
-			inout_stop.setOnClickListener(new OnClickListener() {
-				@Override
-				public void onClick(View view) {
-					inout_detail_oil_state.setText(R.string.inoil_unload_stop);
-					inout_save.setEnabled(true);
-					isUnload = false;
-					InOilManager.getInstance().setEnable(oilInOut.getOilId(), true);
-					mCompositeDisposable.remove(observer);
-				}
-			});
-
-			Window window = dialog.getWindow();
-
-			window.setGravity(Gravity.CENTER);//此处可以设置dialog显示的位置
-			dialog.show();
-			//设置dialog的宽度和手机宽度一样
-			WindowManager.LayoutParams lp = dialog.getWindow().getAttributes();
-			lp.width = (int) (window.getWindowManager().getDefaultDisplay().getWidth() * 0.8);
-			dialog.getWindow().setAttributes(lp);//设置宽度
-		}
 	}
 
 	@Override
