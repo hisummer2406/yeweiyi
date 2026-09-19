@@ -68,6 +68,54 @@ public class TelemetrySchedulerTest {
         assertFalse(scheduler.isRunning());
     }
 
+    // ---- 共享属性 reportIntervalSec 运行期改周期（issue #39/#40 P1-4）----
+
+    @Test
+    public void updatePeriodWhileStoppedOnlyChangesFieldNotSchedule() {
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        TelemetryScheduler scheduler = new TelemetryScheduler(() -> {
+        }, 30000, null, executor);
+
+        scheduler.updatePeriod(60000);
+
+        assertEquals(60000L, scheduler.getPeriodMillis());
+        assertEquals("没 start() 就 updatePeriod 不应该现在就去排调度", 0, executor.fixedDelayCalls.size());
+
+        scheduler.start();
+        assertEquals("start() 之后新周期才生效", 60000L, executor.fixedDelayCalls.get(0).delay);
+    }
+
+    @Test
+    public void updatePeriodWhileRunningCancelsOldScheduleAndReschedulesWithNewPeriod() {
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        TelemetryScheduler scheduler = new TelemetryScheduler(() -> {
+        }, 30000, null, executor);
+        scheduler.start();
+        assertEquals(1, executor.fixedDelayCalls.size());
+
+        scheduler.updatePeriod(45000);
+
+        assertEquals("正在跑时 updatePeriod 必须重新排一次调度", 2, executor.fixedDelayCalls.size());
+        RecordingScheduledExecutor.Call second = executor.fixedDelayCalls.get(1);
+        assertEquals(45000L, second.initialDelay);
+        assertEquals(45000L, second.delay);
+        assertEquals(45000L, scheduler.getPeriodMillis());
+    }
+
+    @Test
+    public void updatePeriodRejectsNonPositiveValue() {
+        TelemetryScheduler scheduler = new TelemetryScheduler(() -> {
+        }, 30000, null);
+
+        try {
+            scheduler.updatePeriod(0);
+            fail("周期必须是正数");
+        } catch (IllegalArgumentException expected) {
+            // ok
+        }
+        assertEquals("拒绝非法值之后原周期不变", 30000L, scheduler.getPeriodMillis());
+    }
+
     // ---- PR #38 Codex 第三轮审核 P2：慢任务不能造成追赶式连续触发 ----
 
     @Test

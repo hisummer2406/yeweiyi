@@ -34,6 +34,19 @@ public class ThingsBoardTopicsTest {
     }
 
     @Test
+    public void extractsRequestIdFromAttributesResponseTopic() {
+        assertEquals("7", ThingsBoardTopics.extractAttributesResponseRequestId("v1/devices/me/attributes/response/7"));
+    }
+
+    @Test
+    public void returnsNullForNonAttributesResponseTopics() {
+        assertNull(ThingsBoardTopics.extractAttributesResponseRequestId("v1/devices/me/attributes"));
+        assertNull(ThingsBoardTopics.extractAttributesResponseRequestId("v1/devices/me/rpc/request/7"));
+        assertNull(ThingsBoardTopics.extractAttributesResponseRequestId("v1/devices/me/attributes/response/"));
+        assertNull(ThingsBoardTopics.extractAttributesResponseRequestId(null));
+    }
+
+    @Test
     public void noAlinkStyleTopicSurvives() {
         // 不保留 sys/{productKey}/{deviceName}/... 形状，见 issue #37 scope。
         String[] all = {

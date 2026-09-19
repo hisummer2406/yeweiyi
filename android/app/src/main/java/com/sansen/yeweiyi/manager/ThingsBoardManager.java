@@ -12,6 +12,7 @@ import com.sansen.yeweiyi.logic.thingsboard.AlarmEventBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
+import com.sansen.yeweiyi.logic.thingsboard.SharedAttributesParser;
 import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
@@ -107,6 +108,13 @@ public final class ThingsBoardManager {
     private final Gson gson = new Gson();
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
+    /**
+     * {@link #requestSharedAttributes()} 每次连接成功后调一次，用来把这次请求跟
+     * {@code attributes/response/{id}} 应答对上。只是本地请求/应答配对用的序号，不需要全局
+     * 唯一或跨进程重启保持，重启后从 0 重新计数完全没问题。
+     */
+    private final java.util.concurrent.atomic.AtomicInteger attributesRequestId =
+            new java.util.concurrent.atomic.AtomicInteger(0);
 
     private ThingsBoardManager(Context context) {
         this.credentialStore = new ThingsBoardCredentialStore(context);
@@ -115,7 +123,7 @@ public final class ThingsBoardManager {
         String brokerUri = scheme + SharePreManager.getIpBean().getIp() + ":" + SharePreManager.getIpBean().getPort();
         this.connection = new ThingsBoardMqttConnection(brokerUri,
                 ApiConfig.THINGSBOARD_USE_TLS, new ThingsBoardCaStore(context),
-                this::onRpcRequest, this::onConnectionLost);
+                this::onRpcRequest, new SharedAttributesListener(), this::onConnectionLost);
 
         this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context), MAX_PENDING_ALARMS);
         this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context),
@@ -274,6 +282,50 @@ public final class ThingsBoardManager {
         connection.publishAttributes(gson.toJson(attributes));
     }
 
+    // ---- 共享属性（服务端→设备下发，issue #39/#40 P1-4）----
+
+    /**
+     * 每次连接成功后调一次，主动拉当前的 {@code reportIntervalSec} 值——只订阅
+     * {@link ThingsBoardTopics#ATTRIBUTES_PUBLISH} 收不到"已经存在、这次连接之前就设置好"的值，
+     * 只能收到之后的变化（见 {@link ThingsBoardMqttConnection.AttributesListener} 类注释）。
+     * {@code alarmThresholds} 故意不在请求的 {@code sharedKeys} 里——{@link SharedAttributesParser}
+     * 同样故意不解析它，两处理由一致，见该类类注释。
+     */
+    private void requestSharedAttributes() {
+        connection.publishAttributesRequest(attributesRequestId.incrementAndGet(), "reportIntervalSec");
+    }
+
+    /**
+     * {@code newPeriodMillis} 为 {@code null}（缺失/非法/非正）时什么都不做，保持当前周期——
+     * 由 {@link SharedAttributesParser} 保证只有合法的正数才会走到这里。
+     */
+    private void applySharedAttributes(Long newPeriodMillis) {
+        if (newPeriodMillis == null) {
+            return;
+        }
+        Log.i(TAG, "共享属性下发 reportIntervalSec，快照周期改为 " + newPeriodMillis + "ms");
+        telemetryScheduler.updatePeriod(newPeriodMillis);
+    }
+
+    /**
+     * {@link ThingsBoardMqttConnection.AttributesListener} 有两个方法，不是函数式接口，
+     * 拆成具名内部类而不是就地匿名类，单纯是为了这段代码在构造函数里不至于太长。
+     * 两个入口最终都汇到同一个 {@link #applySharedAttributes}，区别只在解析载荷形状不同
+     * （推送是根对象本身，应答包一层 {@code shared}），交给 {@link SharedAttributesParser}
+     * 的两个不同入口处理。
+     */
+    private final class SharedAttributesListener implements ThingsBoardMqttConnection.AttributesListener {
+        @Override
+        public void onSharedAttributesPush(String payloadJson) {
+            applySharedAttributes(SharedAttributesParser.parsePushedReportIntervalMillis(payloadJson));
+        }
+
+        @Override
+        public void onAttributesResponse(String requestId, String payloadJson) {
+            applySharedAttributes(SharedAttributesParser.parseResponseReportIntervalMillis(payloadJson));
+        }
+    }
+
     // ---- 30 秒快照 ----
 
     private void buildAndPublishSnapshot() {
@@ -390,6 +442,7 @@ public final class ThingsBoardManager {
             reconnectBackoff.reset();
             drainPendingAlarms();
             publishTankCalibrationAttributes();
+            requestSharedAttributes();
         } else {
             scheduleConnectAttempt(reconnectBackoff.nextDelayMillis());
         }

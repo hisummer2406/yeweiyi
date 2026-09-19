@@ -42,6 +42,19 @@ public final class ThingsBoardMqttConnection {
         void onRpcRequest(String mqttRequestId, String payloadJson);
     }
 
+    /**
+     * 共享属性（服务端→设备下发）的两条消息路径——issue #39/#40 P1-4。{@link #onSharedAttributesPush}
+     * 对应 {@link ThingsBoardTopics#ATTRIBUTES_PUBLISH} 上的主动推送（根对象直接是变化的属性），
+     * {@link #onAttributesResponse} 对应 {@link ThingsBoardTopics#ATTRIBUTES_RESPONSE_SUBSCRIBE}
+     * 上对 {@link #publishAttributesRequest} 的应答（包一层 {@code {"shared":...,"client":...}}）。
+     * 两种载荷形状不同，交给 {@code SharedAttributesParser} 的两个不同入口解析，这一层只管路由。
+     */
+    public interface AttributesListener {
+        void onSharedAttributesPush(String payloadJson);
+
+        void onAttributesResponse(String requestId, String payloadJson);
+    }
+
     /** 连接建立之后（非首次 {@link #connect} 失败）意外断线时回调，交给调用方走退避重连。 */
     public interface ConnectionLostListener {
         void onConnectionLost(Throwable cause);
@@ -60,6 +73,7 @@ public final class ThingsBoardMqttConnection {
     private final boolean useTls;
     private final CaCertificateSource caCertificateSource;
     private final RpcRequestListener rpcRequestListener;
+    private final AttributesListener attributesListener;
     private final ConnectionLostListener connectionLostListener;
 
     private volatile MqttClient client;
@@ -72,16 +86,18 @@ public final class ThingsBoardMqttConnection {
     public ThingsBoardMqttConnection(String brokerUri, boolean useTls,
                                       CaCertificateSource caCertificateSource,
                                       RpcRequestListener rpcRequestListener,
+                                      AttributesListener attributesListener,
                                       ConnectionLostListener connectionLostListener) {
         this.brokerUri = brokerUri;
         this.useTls = useTls;
         this.caCertificateSource = caCertificateSource;
         this.rpcRequestListener = rpcRequestListener;
+        this.attributesListener = attributesListener;
         this.connectionLostListener = connectionLostListener;
     }
 
     /**
-     * @return 连接并订阅 RPC 请求是否成功；失败原因已记日志，调用方按
+     * @return 连接并订阅 RPC 请求、共享属性推送/应答是否成功；失败原因已记日志，调用方按
      * {@link com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff} 排下一次重试。
      * <p>
      * 只有 {@code connect()}+{@code subscribe()} 都成功之后才会把新建的客户端赋给
@@ -126,6 +142,11 @@ public final class ThingsBoardMqttConnection {
 
             created.connect(options);
             created.subscribe(ThingsBoardTopics.RPC_REQUEST_SUBSCRIBE, QOS_AT_LEAST_ONCE);
+            // 共享属性两条通道（issue #39/#40 P1-4）：ATTRIBUTES_PUBLISH 同一个 topic 字符串
+            // 既用于本类 publishAttributes() 上报 client attribute，也用于订阅服务端下发的共享
+            // 属性推送——这是 ThingsBoard 设备 MQTT API 本身的约定，不是本类的巧合复用。
+            created.subscribe(ThingsBoardTopics.ATTRIBUTES_PUBLISH, QOS_AT_LEAST_ONCE);
+            created.subscribe(ThingsBoardTopics.ATTRIBUTES_RESPONSE_SUBSCRIBE, QOS_AT_LEAST_ONCE);
             client = created;
             Log.i(TAG, "ThingsBoard MQTT 连接成功: " + brokerUri);
             return true;
@@ -231,6 +252,23 @@ public final class ThingsBoardMqttConnection {
     }
 
     /**
+     * 主动请求当前共享属性值——订阅 {@link ThingsBoardTopics#ATTRIBUTES_PUBLISH} 只能收到
+     * *之后* 发生的变化推送，不会重放已经存在的值（ThingsBoard 设备 MQTT API 的既有行为，
+     * 见 {@link AttributesListener} 类注释）。每次连接成功后调一次，应答从
+     * {@link ThingsBoardTopics#ATTRIBUTES_RESPONSE_SUBSCRIBE} 回来，交给
+     * {@link AttributesListener#onAttributesResponse}。
+     *
+     * @param requestId    调用方生成，用于跟应答 topic 里的 requestId 对上；这个 id 只是
+     *                     "这次请求/应答配对"的本地标识，不需要全局唯一或持久化。
+     * @param sharedKeysCsv 逗号分隔的共享属性 key 列表（ThingsBoard 官方 {@code sharedKeys}
+     *                     参数格式），比如 {@code "reportIntervalSec"}。
+     */
+    public boolean publishAttributesRequest(int requestId, String sharedKeysCsv) {
+        String payload = "{\"sharedKeys\":\"" + sharedKeysCsv + "\"}";
+        return publish(ThingsBoardTopics.attributesRequest(requestId), payload, QOS_AT_LEAST_ONCE);
+    }
+
+    /**
      * 每次 {@link #connect} 成功新建一个客户端实例时，都会配一个新的 {@link InternalCallback}
      * 并把该实例本身绑进来（{@link #owner}）——{@link #connectionLost} 只能清空/关闭自己的
      * {@code owner}，不能盲目操作共享的 {@link ThingsBoardMqttConnection#client} 字段。
@@ -277,21 +315,41 @@ public final class ThingsBoardMqttConnection {
 
         @Override
         public void messageArrived(String topic, MqttMessage message) {
-            String requestId = ThingsBoardTopics.extractRpcRequestId(topic);
-            if (requestId == null) {
-                Log.w(TAG, "收到无法识别的 topic，丢弃: " + topic);
-                return;
-            }
             String payload;
             try {
                 payload = new String(message.getPayload(), "UTF-8");
             } catch (Exception e) {
-                Log.e(TAG, "RPC 请求 payload 解码失败: " + topic, e);
+                Log.e(TAG, "消息 payload 解码失败: " + topic, e);
                 return;
             }
-            if (rpcRequestListener != null) {
-                rpcRequestListener.onRpcRequest(requestId, payload);
+
+            String rpcRequestId = ThingsBoardTopics.extractRpcRequestId(topic);
+            if (rpcRequestId != null) {
+                if (rpcRequestListener != null) {
+                    rpcRequestListener.onRpcRequest(rpcRequestId, payload);
+                }
+                return;
             }
+
+            // ATTRIBUTES_RESPONSE 前缀判断必须先于 ATTRIBUTES_PUBLISH 的精确匹配——两者是
+            // 不同的 topic 字符串（.../attributes 对 .../attributes/response/{id}），顺序其实
+            // 不影响正确性，这里先判断更具体的形状纯粹是习惯。
+            String attributesRequestId = ThingsBoardTopics.extractAttributesResponseRequestId(topic);
+            if (attributesRequestId != null) {
+                if (attributesListener != null) {
+                    attributesListener.onAttributesResponse(attributesRequestId, payload);
+                }
+                return;
+            }
+
+            if (ThingsBoardTopics.ATTRIBUTES_PUBLISH.equals(topic)) {
+                if (attributesListener != null) {
+                    attributesListener.onSharedAttributesPush(payload);
+                }
+                return;
+            }
+
+            Log.w(TAG, "收到无法识别的 topic，丢弃: " + topic);
         }
     }
 }

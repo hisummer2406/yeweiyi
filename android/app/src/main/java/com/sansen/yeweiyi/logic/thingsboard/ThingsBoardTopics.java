@@ -41,10 +41,23 @@ public final class ThingsBoardTopics {
      * 不匹配该形状时返回 null，调用方需要据此判断"未知消息，丢弃"而不是抛异常。
      */
     public static String extractRpcRequestId(String topic) {
-        if (topic == null || !topic.startsWith(RPC_REQUEST_PREFIX)) {
+        return extractSuffix(topic, RPC_REQUEST_PREFIX);
+    }
+
+    /**
+     * 从形如 {@code v1/devices/me/attributes/response/1} 的 topic 中取出 requestId，
+     * 用于把应答跟 {@link #attributesRequest} 发出去的那次请求对上（issue #39/#40 P1-4，
+     * 共享属性接入）。不匹配该形状时返回 null。
+     */
+    public static String extractAttributesResponseRequestId(String topic) {
+        return extractSuffix(topic, ATTRIBUTES_RESPONSE_PREFIX);
+    }
+
+    private static String extractSuffix(String topic, String prefix) {
+        if (topic == null || !topic.startsWith(prefix)) {
             return null;
         }
-        String id = topic.substring(RPC_REQUEST_PREFIX.length());
-        return id.isEmpty() ? null : id;
+        String suffix = topic.substring(prefix.length());
+        return suffix.isEmpty() ? null : suffix;
     }
 }

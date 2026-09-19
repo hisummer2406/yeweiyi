@@ -24,10 +24,17 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcResult;
  */
 public final class HighRiskActionHandler implements RpcMethodHandler {
 
-    public static final String METHOD_START_PUMP = "startPump";
-    public static final String METHOD_STOP_PUMP = "stopPump";
-    public static final String METHOD_OPEN_VALVE = "openValve";
-    public static final String METHOD_CLOSE_VALVE = "closeValve";
+    // 云端 internal/protocol/rpc.go 的方法名（MethodPumpStart 等）——2026-09-19 复核发现这四个
+    // 泵/阀常量此前一直是改造前的旧写法（startPump 等），issue #39 对齐时只顾上改了
+    // alarm.mute/alarm.clear/device.reboot/config.setAlarmThresholds 四个,漏了这四个。因为这七个
+    // 方法眼下都恒 FEATURE_DISABLED,名字错了也测不出来——真正会暴露这个问题的时刻是 #34 联锁补齐、
+    // 这些方法被真正打开之后:云端按自己的方法名发 RPC,设备端会因为方法名对不上返回
+    // UNKNOWN_METHOD 而不是 FEATURE_DISABLED,错误语义也是错的。趁现在改动量还小(纯改常量值,
+    // 不涉及任何需要跨仓库确认的语义)先修掉,不要等联锁开发那天才发现。
+    public static final String METHOD_START_PUMP = "pump.start";
+    public static final String METHOD_STOP_PUMP = "pump.stop";
+    public static final String METHOD_OPEN_VALVE = "valve.open";
+    public static final String METHOD_CLOSE_VALVE = "valve.close";
     public static final String METHOD_ALARM_MUTE = "alarm.mute";
     public static final String METHOD_ALARM_CLEAR = "alarm.clear";
     public static final String METHOD_DEVICE_REBOOT = "device.reboot";
