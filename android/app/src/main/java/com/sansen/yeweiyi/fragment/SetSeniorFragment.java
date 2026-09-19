@@ -19,7 +19,7 @@ import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
 
 public class SetSeniorFragment extends BaseFragment {
 
-    private LinearLayout ly_mima, ly_baobiao, ly_bulu, ly_chuankou, ly_yanshi,ly_upper_page;
+    private LinearLayout ly_mima, ly_baobiao, ly_bulu, ly_chuankou, ly_yanshi, ly_thingsboard, ly_upper_page;
 
 
     @Override
@@ -64,6 +64,10 @@ public class SetSeniorFragment extends BaseFragment {
                 ChuanKouFragment chuanKouFragment = new ChuanKouFragment();
                 main.switchContent(main.mContent, chuanKouFragment);
 				break;
+            case R.id.ly_thingsboard:
+                ThingsBoardSetFragment thingsBoardSetFragment = new ThingsBoardSetFragment();
+                main.switchContent(main.mContent, thingsBoardSetFragment);
+                break;
             case R.id.ly_upper_page:
                 if (main.setFragment == null) {
                     main.setFragment = new SetFragment();
@@ -84,12 +88,14 @@ public class SetSeniorFragment extends BaseFragment {
         ly_bulu = rootView.findViewById(R.id.ly_bulu);
         ly_chuankou = rootView.findViewById(R.id.ly_chuankou);
         ly_yanshi = rootView.findViewById(R.id.ly_yanshi);
+        ly_thingsboard = rootView.findViewById(R.id.ly_thingsboard);
         ly_upper_page=rootView.findViewById(R.id.ly_upper_page);
         ly_upper_page.setOnClickListener(this);
         ly_baobiao.setOnClickListener(this);
         ly_bulu.setOnClickListener(this);
         ly_chuankou.setOnClickListener(this);
         ly_yanshi.setOnClickListener(this);
+        ly_thingsboard.setOnClickListener(this);
         ly_mima.setOnClickListener(this);
 
         View headerView = rootView.findViewById(R.id.title_bar);

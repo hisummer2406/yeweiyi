@@ -69,7 +69,11 @@ public final class ThingsBoardMqttConnection {
         InputStream openCaCertificate() throws IOException;
     }
 
-    private final String brokerUri;
+    /**
+     * 非 final：{@link #updateBrokerUri} 允许配网页面改了 broker 地址之后，下一次
+     * {@link #connect} 用新地址重连，不需要重建整个 {@link ThingsBoardMqttConnection} 实例。
+     */
+    private volatile String brokerUri;
     private final boolean useTls;
     private final CaCertificateSource caCertificateSource;
     private final RpcRequestListener rpcRequestListener;
@@ -202,6 +206,16 @@ public final class ThingsBoardMqttConnection {
     public boolean isConnected() {
         MqttClient c = client;
         return c != null && c.isConnected();
+    }
+
+    /**
+     * 配网页面保存了新的 broker 地址后调用。只更新地址，不在这里主动断线——调用方
+     * （{@code ThingsBoardManager}）自己决定要不要先 {@link #disconnect()} 再重连；
+     * 如果当前客户端仍然连着旧地址，{@link #connect} 的"已连接直接返回 true"分支会让
+     * 新地址在下一次真正需要重连时才生效，不强制打断一个还工作正常的连接。
+     */
+    public void updateBrokerUri(String brokerUri) {
+        this.brokerUri = brokerUri;
     }
 
     public synchronized void disconnect() {

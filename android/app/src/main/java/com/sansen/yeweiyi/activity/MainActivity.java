@@ -46,6 +46,7 @@ import com.sansen.yeweiyi.fragment.SetFragment;
 import com.sansen.yeweiyi.fragment.SetPawFragment;
 import com.sansen.yeweiyi.fragment.SetSeniorFragment;
 import com.sansen.yeweiyi.fragment.StockFragment;
+import com.sansen.yeweiyi.fragment.ThingsBoardSetFragment;
 import com.sansen.yeweiyi.listener.SimpleWinCallback;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.PrintRunable;
@@ -101,6 +102,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public SetBaseFragment setBaseFragment;
     public ColorFragment colorFragment;
     public SetSeniorFragment setSeniorFragment;
+    public ThingsBoardSetFragment thingsBoardSetFragment;
     public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;

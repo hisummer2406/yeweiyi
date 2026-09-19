@@ -119,8 +119,7 @@ public final class ThingsBoardManager {
     private ThingsBoardManager(Context context) {
         this.credentialStore = new ThingsBoardCredentialStore(context);
 
-        String scheme = ApiConfig.THINGSBOARD_USE_TLS ? "ssl://" : "tcp://";
-        String brokerUri = scheme + SharePreManager.getIpBean().getIp() + ":" + SharePreManager.getIpBean().getPort();
+        String brokerUri = buildBrokerUri(SharePreManager.getIpBean().getIp(), SharePreManager.getIpBean().getPort());
         this.connection = new ThingsBoardMqttConnection(brokerUri,
                 ApiConfig.THINGSBOARD_USE_TLS, new ThingsBoardCaStore(context),
                 this::onRpcRequest, new SharedAttributesListener(), this::onConnectionLost);
@@ -177,6 +176,32 @@ public final class ThingsBoardManager {
     /** 供 {@code BackService.onReloadMqtt}/网络变化回调触发一次立即重连，不等退避到期。 */
     public void reconnectNow() {
         reconnectExecutor.execute(() -> attemptConnect());
+    }
+
+    private static String buildBrokerUri(String host, int port) {
+        String scheme = ApiConfig.THINGSBOARD_USE_TLS ? "ssl://" : "tcp://";
+        return scheme + host + ":" + port;
+    }
+
+    /**
+     * {@code ThingsBoardSetFragment} 保存新的 broker 地址/deviceId/accessToken 后调用——
+     * 这三样之前都不存在任何写入入口（PR #38 人工审核 item 6 + broker 地址硬编码在
+     * {@code SharePreManager.getIpBean()} 默认分支，从未真正可配置）。
+     * <p>
+     * 调用方已经把新的凭据写进 {@link #credentialStore}（{@code DeviceCredentials} 下次
+     * {@link #attemptConnect()} 会自动重新 {@code load()}），这里只需要处理 broker 地址——
+     * 它被 {@link ThingsBoardMqttConnection} 缓存在字段里，不会自己重新读
+     * {@code SharePreManager}。主动断开旧连接（哪怕旧地址还连着），保证新地址/新凭据立即生效，
+     * 而不是等到下一次意外断线才用上——凭据变更后应该主动重新认证，不能让设备继续用旧 session
+     * "假装"已配网（同一条人工审核意见）。
+     */
+    public void applyUpdatedConnectionSettings(String host, int port) {
+        connection.updateBrokerUri(buildBrokerUri(host, port));
+        connection.disconnect();
+        reconnectBackoff.reset();
+        if (started.get()) {
+            reconnectNow();
+        }
     }
 
     // ---- 报警立即上报 ----

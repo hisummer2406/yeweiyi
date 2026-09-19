@@ -176,11 +176,30 @@
                     android:textSize="34sp" />
             </LinearLayout>
 
-            <!-- 空白占位，保证两行对齐 -->
-            <View
+            <!-- 云平台设置 -->
+            <LinearLayout
+                android:id="@+id/ly_thingsboard"
                 android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageView
+                    android:id="@+id/iv_thingsboard_set"
+                    android:layout_width="160dp"
+                    android:layout_height="160dp"
+                    android:padding="16dp"
+                    android:src="@drawable/gj_ck" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="云平台设置"
+                    android:textColor="#222222"
+                    android:textSize="34sp" />
+            </LinearLayout>
         </LinearLayout>
 
     </LinearLayout>
