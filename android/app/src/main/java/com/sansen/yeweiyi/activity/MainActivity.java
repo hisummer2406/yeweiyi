@@ -308,14 +308,17 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 1000) {
-            if (resultCode != 0) {
-                resultCode -= 100;
-                PrintRunable printRunable = new PrintRunable(resultCode);
-                ThreadManager.getShortPool().execute(printRunable);
-            }
-        }
-        else if (requestCode == REQUEST_CODE) {
+        // [已屏蔽-2026-09-23] 全仓库没有任何地方以 requestCode=1000 发起 startActivityForResult，
+        // 这个分支进不来。先注释掉而不是删掉——万一以后要接回打印功能，逻辑还在。
+//        if (requestCode == 1000) {
+//            if (resultCode != 0) {
+//                resultCode -= 100;
+//                PrintRunable printRunable = new PrintRunable(resultCode);
+//                ThreadManager.getShortPool().execute(printRunable);
+//            }
+//        }
+//        else
+        if (requestCode == REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 if (Settings.canDrawOverlays(this)) {
                     // 权限已授予

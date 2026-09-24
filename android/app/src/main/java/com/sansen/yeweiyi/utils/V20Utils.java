@@ -3,9 +3,11 @@ package com.sansen.yeweiyi.utils;
 import android.util.Log;
 
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -13,7 +15,10 @@ import java.util.TreeMap;
 public class V20Utils {
 
     private static Map<Double,Double> map;
-    private static DecimalFormat df   = new DecimalFormat("########0.00");
+    // [已修复-2026-09-23] 不传 DecimalFormatSymbols 时用设备当前 locale 的小数点符号，西语下会
+    // 格式化成"3400,0"这种用逗号的字符串，再被 Double.valueOf()（只认"."）解析就崩溃——
+    // 跟 DataUtils.doubleFoment 是同一类 bug，固定用 Locale.US 避免跟着系统语言变。
+    private static DecimalFormat df   = new DecimalFormat("########0.00", DecimalFormatSymbols.getInstance(Locale.US));
 
     public static double getV20(double v,double p,double t){
         double y = getTemperatureCoefficient(p);

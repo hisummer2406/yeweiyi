@@ -37,6 +37,9 @@ import java.util.Locale;
  */
 public class SetBaseFragment extends BaseFragment implements OnItemClickListener, TextWatcher, AdapterView.OnItemSelectedListener {
 
+    // 顺序必须跟 R.array.language（中文/英文/西班牙语）的 item 顺序一一对应，
+    // Spinner 的下标直接映射这里的下标
+    private static final String[] LANGUAGE_CODES = {"zh", "en", "es"};
 
     private Spinner sp_yuyan, sp_yewei, sp_rongji, sp_zhiliang;
     private EditText et_outTime, et_outHight, et_inTime, et_inHight;
@@ -94,7 +97,7 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         // 顺带修掉一个已有笔误：这里原来把容积单位的初始选中状态设到了 sp_zhiliang（质量）上，
         // sp_rongji 反而从没被设置过。
         sp_rongji.setSelection(UnitPref.Volume.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit, UnitPref.Volume.L.name())) == UnitPref.Volume.L ? 0 : 1);
-        sp_yuyan.setSelection("en".equals(LanguageUtil.getCurrentLocale(MyApplication.getInstance().getApplicationContext()).getLanguage())? 1:0);
+        sp_yuyan.setSelection(languageCodeToIndex(LanguageUtil.getCurrentLocale(MyApplication.getInstance().getApplicationContext()).getLanguage()));
         sp_yewei.setSelection(UnitPref.Length.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit, UnitPref.Length.MM.name())) == UnitPref.Length.MM ? 0 : 1);
         sp_zhiliang.setSelection(UnitPref.Mass.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit, UnitPref.Mass.KG.name())) == UnitPref.Mass.KG ? 0 : 1);
 
@@ -138,6 +141,16 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
             lists = new ArrayList<User>();
         }
         return lists;
+    }
+
+    // LANGUAGE_CODES 里找不到（理论上不会发生，未来万一系统语言不在这三者之内）时落回中文
+    private static int languageCodeToIndex(String languageCode) {
+        for (int i = 0; i < LANGUAGE_CODES.length; i++) {
+            if (LANGUAGE_CODES[i].equals(languageCode)) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     private int inHight,inTime,outHight,outTime;
@@ -283,7 +296,7 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
             case R.id.sp_yuyan:
                 // 跟 inHight/inTime/outHight/outTime 一样只是先缓存，点"保存"（ly_saveData）
                 // 时才真正持久化并重启 app，不在选中的瞬间就有副作用
-                pendingLocale = index == 1 ? new Locale("en") : new Locale("zh");
+                pendingLocale = new Locale(LANGUAGE_CODES[index]);
                 break;
         }
     }

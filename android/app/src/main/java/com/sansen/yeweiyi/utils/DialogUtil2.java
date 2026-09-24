@@ -16,7 +16,10 @@ import com.sansen.yeweiyi.R;
 /**
  * Created by liliang on 2020/5/31.
  */
-
+// [范围外-2026-09-23，用户确认] saveTest() 弹出的 view_dialog_test.xml 是真实可达的（OilCanSetFragment
+// 连点 item_tv_oilheight 9 次触发，不是死代码——西语翻译覆盖率核查时曾被怀疑是漏标进去的，代码复核
+// 确认是真调用），但这是个彩蛋功能，用户确认不需要多语言支持，save/probe_height_offset_mm/
+// tank_default_volume_l 这三个字符串不用翻。
 public class DialogUtil2 {
 
     private Context context;

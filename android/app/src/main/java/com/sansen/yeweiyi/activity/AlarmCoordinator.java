@@ -44,6 +44,17 @@ public class AlarmCoordinator {
     /**
      * AlarmManager的回调函数
      */
+    // [不可达-2026-09-21] barMainAlram 就是 activity_main.xml 里 bar_main_alram，而它的父容器
+    // alarm_info 恒为 visibility="gone"、全仓库没有任何地方切回可见（西语翻译覆盖率核查时用户
+    // 复核指出，之前判定"可达"是错的——只看到 setText() 被调用，没往上查父容器是不是隐藏的）。
+    // 这个回调里 barMainAlram.setText(...) 写的所有文案（含下面 alarm_no）用户都看不到。
+    // SocketManager.sendAlarm(state.toString()) 那条备用路径也是死的——它转发给 iBackService，
+    // 而 BackService 全仓库没有任何地方真正 startService()/bindService() 过（见 BackService.java
+    // 里的注释），iBackService 恒为 null。alarm_no 不用优先翻。
+    // [已更正-2026-09-23] 这里原来还写了一句"OilMessage.getState() 产出的全部 15 个字符串资源都
+    // 不可达"——是错的，那句话只对"经本回调这条路径"成立，OilMessage 的文案还有另一条完全独立的
+    // 消费路径（AlarmRepositoryImpl.saveAlarm → 报警记录页），7 个类型经那条路径是可达的，具体
+    // 哪些可达/哪些不可达见 OilMessage.java 里 getState() 的逐条注释，不要看这个文件就下结论。
     public void initAlarm() {
         AlarmManager.getInstance().beginDetection();
         AlarmManager.getInstance().setMessageListener(new MessageListener() {
@@ -52,8 +63,9 @@ public class AlarmCoordinator {
             public void getAlarmSate(OilMessage state) {
                 if (state == null) {
                     if (System.currentTimeMillis() - time > 3000) {
-                        barMainAlram.setText(SystemUtils
-                                .getRsStr(R.string.alarm_no));
+                        // [已屏蔽-2026-09-23] alarm_no 已删除（这个回调整段文案不可达，见上方注释）。
+                        // barMainAlram.setText(SystemUtils
+                        //         .getRsStr(R.string.alarm_no));
                         Const.isOpenAlarm = false;
                     }
                 } else if (SharePrefUtil.getBoolean(main, SharePrefUtil.TEST_DATA, false) && main.myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
@@ -62,8 +74,9 @@ public class AlarmCoordinator {
                         barMainAlram.setText(state.toString());
 
                     } else {
-                        barMainAlram.setText(SystemUtils
-                                .getRsStr(R.string.alarm_no));
+                        // [已屏蔽-2026-09-23] alarm_no 已删除（这个回调整段文案不可达，见上方注释）。
+                        // barMainAlram.setText(SystemUtils
+                        //         .getRsStr(R.string.alarm_no));
                         Const.isOpenAlarm = false;
                     }
                 } else if (main.myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {

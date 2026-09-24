@@ -29,7 +29,6 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center_horizontal"
-            android:text="@string/page"
             android:textColor="@color/white"
             android:textSize="18sp" />
 
@@ -38,7 +37,6 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center_horizontal"
-            android:text="@string/event"
             android:textColor="@color/white"
             android:textSize="18sp" />
     </LinearLayout>
@@ -86,7 +84,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/delete_in_out"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -133,7 +130,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/update_commit_work"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -158,7 +154,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/usermanager"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -191,7 +186,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/probeset"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -224,7 +218,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/oilcantablecreate"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -257,7 +250,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/datamanager"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -323,7 +315,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/aboutus"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -357,7 +348,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/oilexploration"
                     android:textSize="20sp" />
 
                 <CheckBox
@@ -390,7 +380,6 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/fyf"
                     android:textSize="20sp" />
 
                 <CheckBox

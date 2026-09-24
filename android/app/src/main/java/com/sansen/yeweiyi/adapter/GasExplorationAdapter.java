@@ -30,6 +30,9 @@ public class GasExplorationAdapter extends BaseAdapter {
 
     }
 
+    // [不可达-2026-09-21] MainFragment.gasExplor 字段从来没被真正赋值过（见 MainFragment.java 里的
+    // 注释），传进来的 maps 恒为 null，这里恒返回 0（西语翻译覆盖率核查时发现）。Android 框架在
+    // getCount()==0 时不会调用下面的 getView()，item_gas_exploration.xml 的字符串资源不可达。
     @Override
     public int getCount() {
         if (maps == null) {
@@ -75,7 +78,8 @@ public class GasExplorationAdapter extends BaseAdapter {
         //Log.i("油气", "getView: "+maps.get(position));
         holder.progressView.setProgressValue(maps.get(position));
 
-        holder.id.setText((position+1) + SystemUtils.getRsStr(R.string.concentration));
+        // [已屏蔽-2026-09-23] concentration 已删除（getView() 不可达，见上方 getCount() 处注释）。
+        // holder.id.setText((position+1) + SystemUtils.getRsStr(R.string.concentration));
         holder.progressView.postInvalidate();
         return convertView;
     }

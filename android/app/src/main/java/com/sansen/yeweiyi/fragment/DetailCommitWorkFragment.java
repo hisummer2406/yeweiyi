@@ -129,10 +129,17 @@ public class DetailCommitWorkFragment extends BaseFragment {
 	}
 	
 	
+	// [不可达-2026-09-21] CommitWorkRecortFragment 里每次都是 new DetailCommitWorkFragment(...)，
+	// 从不缓存复用，MainNavigator.switchContent() 因此永远走 add() 分支而不是 show()——Android 只在
+	// show()/hide() 导致隐藏状态真的发生变化时才回调 onHiddenChanged()，这里永远不会被系统调用
+	// （西语翻译覆盖率核查时发现）。long_touch_update_commitwork 不用优先翻。如果这条提示原本想要
+	// 生效，修法是把它挪到 initData()/onCreateView() 里直接 toast 一次，或者把这个 Fragment 也改成
+	// 像其他 Fragment 一样做实例缓存复用。
 	@Override
 	public void onHiddenChanged(boolean hidden) {
 		if (!hidden) {
-			SystemUtils.showRsToast(R.string.long_touch_update_commitwork);
+			// [已屏蔽-2026-09-23] long_touch_update_commitwork 已删除（不可达，见上方注释）。
+			// SystemUtils.showRsToast(R.string.long_touch_update_commitwork);
 		}
 	}
 }

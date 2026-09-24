@@ -8,7 +8,9 @@ import com.sansen.yeweiyi.bean.OilCan;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 
 import atg.jni.ATGJNI;
@@ -16,6 +18,13 @@ import atg.jni.ATGJNI;
 public class DataUtils {
     private static DecimalFormat douFormat;
 
+    // [已修复-2026-09-23] DecimalFormat 不传 DecimalFormatSymbols 时用的是设备当前 locale 的小数点
+    // 符号——西语（"es"）默认用逗号（"3400,0"），而下面又用 Double.parseDouble() 把格式化结果转回
+    // 数字，parseDouble 永远只认"."，两边一不一致就直接 NumberFormatException 崩溃。真机日志：
+    // 切到西语后解析探针数据（ZhongChengCompany.parseValidatedFrame → doubleFoment）反复崩溃，
+    // 报的正是这个 "3400,0" 字符串。这里及本文件其余用到 DecimalFormat 的地方统一固定用 Locale.US
+    // 的小数点符号，不跟着系统语言变——这个 app 里数字要么用于反解析、要么是探针原始读数，从来
+    // 没有"数字本身要本地化成西语习惯的逗号"这个需求，固定用"."更安全。
     public static double doubleFoment(double value) {
 
 //        douFormat = new DecimalFormat("#.00");
@@ -23,11 +32,11 @@ public class DataUtils {
 //        return result;
 
         // 保留一位小数
-        DecimalFormat df1 = new DecimalFormat("0.0");
+        DecimalFormat df1 = new DecimalFormat("0.0", DecimalFormatSymbols.getInstance(Locale.US));
         String str = df1.format(value);
         // 如果字符串长度超过7，则只显示整数
         if (str.length() > 7) {
-            DecimalFormat df2 = new DecimalFormat("0");
+            DecimalFormat df2 = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.US));
             str = df2.format(value);
         }
 
@@ -40,11 +49,11 @@ public class DataUtils {
 //        return result;
 
         // 保留一位小数
-        DecimalFormat df1 = new DecimalFormat("0.0");
+        DecimalFormat df1 = new DecimalFormat("0.0", DecimalFormatSymbols.getInstance(Locale.US));
         String str = df1.format(value);
         // 如果字符串长度超过7，则只显示整数
         if (str.length() > 7) {
-            DecimalFormat df2 = new DecimalFormat("0");
+            DecimalFormat df2 = new DecimalFormat("0", DecimalFormatSymbols.getInstance(Locale.US));
             str = df2.format(value);
         }
 
@@ -55,7 +64,7 @@ public class DataUtils {
 
 
         // 保留一位小数
-        DecimalFormat df1 = new DecimalFormat("0.0000");
+        DecimalFormat df1 = new DecimalFormat("0.0000", DecimalFormatSymbols.getInstance(Locale.US));
         String str = df1.format(value);
         return str;
     }
@@ -508,11 +517,15 @@ public class DataUtils {
     }
 
     public static String[] getOilType() {
-        String json = "";
+        String json;
         String[] arr = SystemUtils.getStringsById(R.array.oiltypeArray);
+        // 自定义油品类型名只按中/英两份存（SharePrefUtil.CN_OIlTYPE/EN_OIlTYPE），没有西语单独的一份。
+        // 之前这里写成 if/else if 两个分支，语言是 "es"（或任何非 zh/en 的将来值）时两个分支都不命中，
+        // json 停留在空字符串，JSONObject.parseArray("") 返回 null，下面 data.size() 直接 NPE。
+        // 改成 zh 用中文表、其余语言一律落到英文表（安全默认值，不是最终西语文案，只是不崩）。
         if (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh").equals("zh")) {
             json = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.CN_OIlTYPE, "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]");
-        } else if (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh").equals("en")) {
+        } else {
             json = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.EN_OIlTYPE, "[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"]");
         }
         List<String> data = JSONObject.parseArray(json, String.class);

@@ -52,7 +52,12 @@ public class MinOilCanView extends View {
     float textLeft = (float) 0.50471493;//具体数据的值
     float textID = (float) 0;//油罐id
 
-    String[] content = {SystemUtils.getRsStr(R.string.oil_type_language), SystemUtils.getRsStr(R.string.oil_level_language),
+    // [不可达-2026-09-23] content[0]（oil_type_language）被算出来放进数组，但 onDraw() 里
+    // i==0 那一轮画的是罐号徽标（oilcan_short_label_format），画完直接 continue，不会走到下面
+    // 画 content[i] 的通用逻辑——content[0] 因此从未被绘制到屏幕上（用户凭印象指出、这里代码复核
+    // 确认属实）。oil_type_language 不用优先翻。
+    // [已屏蔽-2026-09-23] oil_type_language 已删除（content[0] 不可达，见上方注释），用空串占位保持编译。
+    String[] content = {/* SystemUtils.getRsStr(R.string.oil_type_language) */ "", SystemUtils.getRsStr(R.string.oil_level_language),
             SystemUtils.getRsStr(R.string.oil_volume_language),SystemUtils.getRsStr(R.string.water_weight_language),
             SystemUtils.getRsStr(R.string.temperature_language), SystemUtils.getRsStr(R.string.oil_weight_language)};
     private int top;
@@ -489,6 +494,10 @@ public class MinOilCanView extends View {
     }
     private String YeWeiUnit,RongJiUnit,ZhiLiangUnit;
 
+    // [可达-2026-09-23] 用户反馈"探针连不上时，首页小罐图标上的通信中断提示还是中文"，查出来是
+    // R.string.oil_Communication_interrupt 之前被误判不可达——它同时也在 PrintRunable.java（已确认
+    // 死）里出现过，之前的核查只看到那个死用法就把整个 key 判死了，没查到这条：oilCan.getErrorTimes()
+    // 是真实的探针错误计数，超过阈值时这个分支会执行、显示在首页每个罐图标上，是可达的。
     private String ErrorContent(int error) {
         if (oilCan.getErrorTimes() < error) {
             return Const.getOilType(oilCan.getOilType());

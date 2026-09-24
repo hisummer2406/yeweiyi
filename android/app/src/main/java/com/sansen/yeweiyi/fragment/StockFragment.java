@@ -162,6 +162,10 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 
 	}
 	@Override
+	// [可达-2026-09-23] R.string.main_toast_savesuccess 之前被误判不可达——它同时也在
+	// BaseFragment.getSaveListener()（已确认死代码）里出现过，之前的核查只看到那个死用法就把
+	// 整个 key 判死了，没查到这里：ly_saveStock 真实绑定了 setOnClickListener(this)，点击后无条件
+	// 走到这行 toast，是可达的。
 	protected void processClick(View v) {
 		if (v.getId()==R.id.ly_saveStock){
 			myApplication.getmSaveOilManager().SaveOilDB();

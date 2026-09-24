@@ -115,6 +115,11 @@ public class InOutAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> 
                 viewHolder.inout_tv_zhiliangl.setText(String.valueOf(NumberTools.formatDouble4(oilInOut.getEndVolum() / scaleVolume-oilInOut.getBeginVolum() / scaleVolume)));
                 viewHolder.inout_tv_zhiliangkg.setText(String.valueOf(NumberTools.formatDouble4(Double.parseDouble(viewHolder.inout_tv_zhiliangl.getText().toString())*density)));//density
                 if (mOnItemClickListener != null) {
+                    // [不可达-2026-09-21] 这个 onClick 是空实现，从来没有调用 mOnItemClickListener.onClick(position)——
+                    // 短按列表项什么都不会发生（西语翻译覆盖率核查时发现）。只有长按会走下面的 onLongClick。
+                    // InOilFragment.onClick(int) 整个方法（inflate dialog_detail_inout.xml 那段，含
+                    // inoil_unload_stop/inoil_unloading 等字符串资源）因此是死代码，不用优先翻。
+                    // 如果这是需求上的疏漏（短按本该弹详情），修法是在这里调 mOnItemClickListener.onClick(position)。
                     viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {

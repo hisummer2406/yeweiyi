@@ -846,12 +846,22 @@ public class DBDataManager {
     /**
      * @deprecated 油罐数据读写已迁移到 {@link com.sansen.yeweiyi.repository.OilTankRepository#exportOilCanTable}。
      */
+    // [不可达-2026-09-21] 不只是"不建议用"：这个方法唯一的调用点是 CreateOilTableFragment.java 里
+    // 一行被注释掉的代码，全仓库没有真正执行到它的路径；"迁移后"那个 OilTankRepositoryImpl.exportOilCanTable
+    // 的唯一调用方 CreateOilTableFragment.saveRunnable 本身也从未被 execute()，同样是死路径（西语翻译
+    // 覆盖率核查时发现）。ExportExcel.exportOilCanTable() 里用到的 tank/tank_table_points 字符串
+    // 资源因此也不可达，不用优先翻。
+    // [不可达-2026-09-23] 补充：这个方法体内触发的 data_save_success（下面 handler 的
+    // R.string.data_save_success）同理不可达——它跟"迁移后"版本 OilTankRepositoryImpl.exportOilCanTable
+    // 内部的同名 handler 是完全独立的两处代码，但两条路径都挂在各自这个从未真正执行到的方法上，
+    // 谁都传不到用户眼前。
     @Deprecated
     public void SaveOilCanTable(String path) {
 
         ExportExcel<OilCanTable> exportExcel = new ExportExcel<OilCanTable>();
         String headers[] = new String[31];
-        headers[0] = SystemUtils.getRsStr(R.string.tan_no);
+        // [已屏蔽-2026-09-23] tan_no 已删除（不可达，见上方注释）。
+        // headers[0] = SystemUtils.getRsStr(R.string.tan_no);
         for (int i = 1; i < headers.length; i++) {
             headers[i] = i + "";
         }
@@ -868,8 +878,9 @@ public class DBDataManager {
         try {
             file = new File(path + "/" + "OilCan_set" + ".xls");
             out = new FileOutputStream(file);
-            exportExcel.exportOilCanTable(SystemUtils.getRsStr(R.string.tan_table_data), headers, dataset,
-                    new OilCanTable().getParams(), out, "");
+            // [已屏蔽-2026-09-23] tan_table_data 已删除（不可达，见上方注释）。
+            // exportExcel.exportOilCanTable(SystemUtils.getRsStr(R.string.tan_table_data), headers, dataset,
+            //         new OilCanTable().getParams(), out, "");
 
 
         } catch (Exception e) {
@@ -879,7 +890,8 @@ public class DBDataManager {
             out.close();
             handler.sendEmptyMessageDelayed(0, 3000);
         } catch (IOException e) {
-            SystemUtils.showRsToast(R.string.io_no_close);
+            // [已屏蔽-2026-09-23] io_no_close 已删除（不可达，见上方注释）。
+            // SystemUtils.showRsToast(R.string.io_no_close);
 
             //e.printStackTrace();
         }
@@ -888,7 +900,8 @@ public class DBDataManager {
 
     Handler handler = new Handler() {
         public void handleMessage(android.os.Message msg) {
-            SystemUtils.showRsToast(R.string.data_save_success);
+            // [已屏蔽-2026-09-23] data_save_success 已删除（不可达，见上方注释）。
+            // SystemUtils.showRsToast(R.string.data_save_success);
         }
 
         ;

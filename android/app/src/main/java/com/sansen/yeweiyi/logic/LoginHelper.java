@@ -26,6 +26,10 @@ import com.sansen.yeweiyi.utils.XmlParseUtil;
 
 import java.io.File;
 
+// [不可达-2026-09-23] LoginHelper 类全仓库没有任何地方 new LoginHelper(...)，其静态方法
+// loginUserNameCheck/loginPsdCheck 也全仓库零调用者（西语翻译覆盖率核查时发现）。这个类里
+// connect_server_failed/server_error/down_failed/update_notice_title/downloading_title/
+// name_not_null/name_legth/psw_not_null/psw_length 这几个字符串资源不用优先翻。
 public class LoginHelper {
 
 	private static LoginHelper login;
@@ -129,15 +133,18 @@ public class LoginHelper {
 				updateTipDialog();
 				break;
 			case CONNECTERROR:
-				Toast.makeText(context, SystemUtils.getRsStr(R.string.connect_server_failed), 1).show();
-	
+				// [已屏蔽-2026-09-23] connect_server_failed 已删除（类不可达，见上方类注释）。
+				// Toast.makeText(context, SystemUtils.getRsStr(R.string.connect_server_failed), 1).show();
+
 				break;
 			case SERVICEERROR:
-				Toast.makeText(context, SystemUtils.getRsStr(R.string.server_error), 1).show();
-		
+				// [已屏蔽-2026-09-23] server_error 已删除（类不可达，见上方类注释）。
+				// Toast.makeText(context, SystemUtils.getRsStr(R.string.server_error), 1).show();
+
 				break;
 			case DOWNLOADERROR:
-				Toast.makeText(context, SystemUtils.getRsStr(R.string.down_failed), 1).show();
+				// [已屏蔽-2026-09-23] down_failed 已删除（类不可达，见上方类注释）。
+				// Toast.makeText(context, SystemUtils.getRsStr(R.string.down_failed), 1).show();
 				break;
 			}
 			super.handleMessage(msg);
@@ -151,7 +158,8 @@ public class LoginHelper {
 	 */
 	protected void updateTipDialog() {
 		AlertDialog.Builder builder = new Builder(context);
-		builder.setTitle(SystemUtils.getRsStr(R.string.update_notice_title));
+		// [已屏蔽-2026-09-23] update_notice_title 已删除（类不可达，见上方类注释）。
+		// builder.setTitle(SystemUtils.getRsStr(R.string.update_notice_title));
 		builder.setMessage(bean.getDes());
 		builder.setPositiveButton("升级", new OnClickListener() {
 			@Override
@@ -175,7 +183,8 @@ public class LoginHelper {
 	protected void updateApk() {
 		// 在下载的时候,显示一个进度条:动画 下载了多少
 		pd = new ProgressDialog(context);
-		pd.setTitle(SystemUtils.getRsStr(R.string.downloading_title));
+		// [已屏蔽-2026-09-23] downloading_title 已删除（类不可达，见上方类注释）。
+		// pd.setTitle(SystemUtils.getRsStr(R.string.downloading_title));
 		pd.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
 		pd.show();
 
@@ -225,11 +234,13 @@ public class LoginHelper {
 	 */
 	public static boolean loginUserNameCheck(String info) {
 		if (TextUtils.isEmpty(info)) {
-			SystemUtils.showRsToast(R.string.name_not_null);
+			// [已屏蔽-2026-09-23] name_not_null 已删除（类不可达，见上方类注释）。
+			// SystemUtils.showRsToast(R.string.name_not_null);
 			return false;
 		}
 		if (info.length() < 2) {
-			SystemUtils.showRsToast(R.string.name_legth);
+			// [已屏蔽-2026-09-23] name_legth 已删除（类不可达，见上方类注释）。
+			// SystemUtils.showRsToast(R.string.name_legth);
 			return false;
 		}
 		return true;
@@ -241,13 +252,15 @@ public class LoginHelper {
 	 */
 	public static boolean loginPsdCheck(String info) {
 		if (TextUtils.isEmpty(info) && info.length() < 4) {
-			SystemUtils.showRsToast(R.string.psw_not_null);
+			// [已屏蔽-2026-09-23] psw_not_null 已删除（类不可达，见上方类注释）。
+			// SystemUtils.showRsToast(R.string.psw_not_null);
 			return false;
 		}
 		if (info.length()< 4) {
-			SystemUtils.showRsToast(R.string.psw_length);
+			// [已屏蔽-2026-09-23] psw_length 已删除（类不可达，见上方类注释）。
+			// SystemUtils.showRsToast(R.string.psw_length);
 			return false;
-		} 
+		}
 		
 		return true;
 	}

@@ -41,9 +41,13 @@ public class OilTankRepositoryImpl implements OilTankRepository {
 
     private final DbUtils db;
 
+    // [不可达-2026-09-23] 唯一触发点在 exportOilCanTable(String) 方法体内，而那个方法的唯一调用方
+    // CreateOilTableFragment.saveRunnable 全仓库从未被 execute() 过（西语翻译覆盖率核查时发现，
+    // 详见 CreateOilTableFragment.java 里 saveRunnable 声明处）。R.string.data_save_success 不用优先翻。
     private final Handler handler = new Handler() {
         public void handleMessage(android.os.Message msg) {
-            SystemUtils.showRsToast(R.string.data_save_success);
+            // [已屏蔽-2026-09-23] data_save_success 已删除（不可达，见上方注释）；解封时记得放回原文案。
+            // SystemUtils.showRsToast(R.string.data_save_success);
         }
     };
 
@@ -93,7 +97,8 @@ public class OilTankRepositoryImpl implements OilTankRepository {
     public void exportOilCanTable(String path) {
         ExportExcel<OilCanTable> exportExcel = new ExportExcel<OilCanTable>();
         String headers[] = new String[31];
-        headers[0] = SystemUtils.getRsStr(R.string.tan_no);
+        // [已屏蔽-2026-09-23] tan_no 已删除（不可达，exportOilCanTable 整个方法无调用方，见上方注释）。
+        // headers[0] = SystemUtils.getRsStr(R.string.tan_no);
         for (int i = 1; i < headers.length; i++) {
             headers[i] = i + "";
         }
@@ -106,8 +111,9 @@ public class OilTankRepositoryImpl implements OilTankRepository {
         try {
             file = new File(path + "/" + "OilCan_set" + ".xls");
             out = new FileOutputStream(file);
-            exportExcel.exportOilCanTable(SystemUtils.getRsStr(R.string.tan_table_data), headers, dataset,
-                    new OilCanTable().getParams(), out, "");
+            // [已屏蔽-2026-09-23] tan_table_data 已删除（不可达，见上方注释）。
+            // exportExcel.exportOilCanTable(SystemUtils.getRsStr(R.string.tan_table_data), headers, dataset,
+            //         new OilCanTable().getParams(), out, "");
         } catch (Exception e) {
             Log.e(TAG, "exportOilCanTable 数据库操作失败", e);
         }
@@ -115,7 +121,8 @@ public class OilTankRepositoryImpl implements OilTankRepository {
             out.close();
             handler.sendEmptyMessageDelayed(0, 3000);
         } catch (IOException e) {
-            SystemUtils.showRsToast(R.string.io_no_close);
+            // [已屏蔽-2026-09-23] io_no_close 已删除（不可达，见上方注释）。
+            // SystemUtils.showRsToast(R.string.io_no_close);
         }
         double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
     }

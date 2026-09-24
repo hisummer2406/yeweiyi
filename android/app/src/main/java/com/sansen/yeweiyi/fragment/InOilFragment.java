@@ -390,6 +390,10 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	}
 
 	boolean isUnload;
+	// [不可达-2026-09-21] InOutAdapter.onBindViewHolder() 里给 itemView 设的短按监听器是空实现，
+	// 从来没有调用这个方法（西语翻译覆盖率核查时发现，详见 InOutAdapter.java 里的注释）。
+	// inflate dialog_detail_inout.xml 的这整段、以及 inoil_unload_stop/inoil_unloading/
+	// long_touch_delte_inoil 这几个字符串资源都不用优先翻。
 	@Override
 	public void onClick(int position) {
 		final OilInOut oilInOut = (OilInOut) myAdapter
@@ -435,7 +439,8 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 			final TextView inout_detail_oil_state =(TextView) v.findViewById(R.id.inout_detail_oil_state);
 			inout_detail_oil_product.setText(detailInoutRecord.getOilType());
 			inout_detail_oil_id.setText(String.valueOf(detailInoutRecord.getOilcanId()));
-			inout_detail_oil_state.setText(R.string.inoil_unload_stop);
+			// [已屏蔽-2026-09-23] inoil_unload_stop 已删除（onClick(int) 整个方法不可达，见上方注释）。
+			// inout_detail_oil_state.setText(R.string.inoil_unload_stop);
 			begin_date.setText(detailInoutRecord.getBeginTime());
 			end_date.setText(detailInoutRecord.getEndTime());
 
@@ -544,7 +549,8 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 				@Override
 				public void onClick(View view) {
 					isUnload = true;
-					inout_detail_oil_state.setText(R.string.inoil_unloading);
+					// [已屏蔽-2026-09-23] inoil_unloading 已删除（onClick(int) 整个方法不可达，见上方注释）。
+					// inout_detail_oil_state.setText(R.string.inoil_unloading);
 					inout_save.setEnabled(false);
 					inout_continue.setEnabled(false);
 					inout_stop.setEnabled(true);
@@ -558,7 +564,8 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 			inout_stop.setOnClickListener(new OnClickListener() {
 				@Override
 				public void onClick(View view) {
-					inout_detail_oil_state.setText(R.string.inoil_unload_stop);
+					// [已屏蔽-2026-09-23] inoil_unload_stop 已删除（onClick(int) 整个方法不可达，见上方注释）。
+					// inout_detail_oil_state.setText(R.string.inoil_unload_stop);
 					inout_save.setEnabled(true);
 					isUnload = false;
 					InOilManager.getInstance().setEnable(oilInOut.getOilId(), true);

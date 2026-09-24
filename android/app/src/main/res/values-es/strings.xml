@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 本文件为部分翻译：以下条目来自蓝湖设计稿西语导出（temp/Android_strings/，未入库），
+         经过与 values-en/strings.xml 逐条比对英文原文 + 人工核对语义后确认可用。
+         2026-09-21：对照表里带"错位警告"的 45 行之前被整批跳过了——警告标的是
+         "这一行的中文/英文配对在不同画板不一致"，跟"西语翻译本身对不对"是两回事，
+         整批跳过误伤了一些实际正确的翻译（比如首页罐图标的 液位/质量/温度/水高 四个
+         标签），逐条人工核对后捞回 25 条。
+         2026-09-22：用户指出批量提取工具本身有系统性遗漏（不止"错位警告"那批），
+         直接用 psd-tools 重新解析原始设计稿 temp/中成-西班牙语.psd（30 个 artboard，
+         712 个文本图层）逐条核对——证实"容积/Volume"当时判定"设计稿本身没有"是错的，
+         PSD 里其实有（首页字段列表 Nivel/Volumen/Agua/Temp./Masa 第 2 项，旧提取工具
+         漏提取了），连带修正了另外 3 条已知错配（出库时间/入库时间/确定按钮，旧工具
+         按坐标对齐算法算错了列），再新增一批之前完全没匹配到的表格列头/表单标签/
+         弹窗按钮文案，都是按图层坐标/图层命名/所在 artboard 直接核对的，不是猜的。
+         其余 ~440 个 key 这份 PSD 完全没画到对应界面（防溢阀/WiFi/地图定位/打印机等），
+         没有写在这里——不是遗漏，是没有可靠来源；这些 key 会自动回退到默认
+         values/strings.xml（中文）显示，直到有官方西语文案，不要用机器翻译占位填充。
+         缺失清单见项目内文档。 -->
+    <string name="login_password_hint">Contraseña</string>
+    <string name="login_tv_password">Contraseña</string>
+    <string name="probe_no">ID Sensor</string>
+    <string name="main_bt_alarmrecord">Alarmas</string>
+    <string name="main_but_setting">Ajustes</string>
+    <string name="main_but_alarmrecot">Alarmas</string>
+    <string name="language_selection">Idioma</string>
+    <string name="commitwork_record">Turnos</string>
+    <string name="alarm_info">Info de Alarma</string>
+    <string name="adduser_hint_psd">Contraseña</string>
+    <string name="oil_type">Tipo Medio</string>
+    <string name="oil_level">Tipo Medio</string>
+    <string name="copy">Copiar a</string>
+    <string name="oilheight">Altura Depósito</string>
+    <string name="max_volume">Capacidad Depósito</string>
+    <string name="height_oil_alarm_value">Alarma Nivel Alto</string>
+    <string name="low_oil_alarm_value">Alarma Nivel Bajo</string>
+    <string name="hheight_oil_alarm_value">Alarma Nivel Alto Alto</string>
+    <string name="llow_oil_alarm_value">Alarma Nivel Bajo Bajo</string>
+    <string name="height_water_alarm_value">Alarma Agua Alta</string>
+    <string name="oil_level_compensation">Corr. Nivel Líq.</string>
+    <string name="water_level_compensation">Corr. Nivel Agua</string>
+    <string name="temp_ompensation">Corr. Temperatura</string>
+    <string name="oiltype">Tipo Medio</string>
+    <string name="density_change">Densidad Medio</string>
+    <string name="createtable_horizontal_tank">Tanque Horiz.</string>
+    <string name="createtable_vertical_tank">Tanque Vert.</string>
+    <string name="low_temp_alarm">Alarma Temp. Baja</string>
+    <string name="oilcanset">Config. Tanques</string>
+    <string name="oilcantableset">Config. de Tanques</string>
+    <string name="systemset">Ajustes</string>
+    <string name="data_save_success">Guardado con éxito</string>
+    <string name="datamanager_clearalarm">Vac. reg. alarma</string>
+    <string name="datamanager_clarcommitwork">Vaciar traspasos</string>
+    <string name="beginHeight">Alt. ant.</string>
+    <string name="cancle">Cancelar</string>
+    <string name="oilcanset_info">Config. Tanques</string>
+    <string name="oilcantable_info">Config. de Tanques</string>
+    <string name="chuan_gan_qi_leng">Longitud Sensor</string>
+    <string name="createtable_changfangti_tank">Caja</string>
+    <string name="jiejing">Silenciar</string>
+    <string name="baojingjilu">Alarmas</string>
+    <string name="chukujilu">Salidas</string>
+    <string name="rukujilu">Entradas</string>
+    <string name="jiaobanjilu">Turnos</string>
+    <string name="shezhi">Ajustes</string>
+    <string name="base_set_title">Básico</string>
+    <string name="jiebanshijian">Hora inicio</string>
+    <string name="qiangao">Alt. ant.</string>
+    <string name="baojingxinxi">Info de Alarma</string>
+    <string name="baojingshijian">Hora de Alarma</string>
+    <string name="kucunshijian">Hora Inv.</string>
+    <string name="yewei_u">Nivel (mm)</string>
+    <string name="rongji_u">Vol. (L)</string>
+    <string name="zhiliang_u">Masa (kg)</string>
+    <string name="kuncunshengchengshijian">Hora Inv.</string>
+    <string name="export_shift_handover_rec">Exportar Turnos</string>
+    <string name="zhongcheng_probe_protocol">Protocolo Zhongcheng</string>
+    <string name="export_inventory_records">Exportar Inventario</string>
+    <string name="export_outbound_records">Exportar Salidas</string>
+    <string name="export_inbound_records">Exportar Entradas</string>
+    <string name="serial_port_2_settings">Config. Puerto 2</string>
+    <string name="serial_port_4_settings">Config. Puerto 4</string>
+    <string name="export_alarm_records">Exportar Alarmas</string>
+    <string name="serial_port_settings">Puerto Serie</string>
+    <string name="l_water_level_alarm">Alarma Agua Baja</string>
+    <string name="password_settings">Contraseña</string>
+    <string name="confirm_password">Confirmar</string>
+    <string name="temperature_c">Temp (°C)</string>
+    <string name="clear_inv_rec">Vaciar registro</string>
+    <string name="record_settings">Registros</string>
+    <string name="report_settings">Informes</string>
+    <string name="click_to_enter">Entrar</string>
+    <string name="del_inv_rec">Eliminar registro</string>
+    <string name="gen_inv_rec">Generar registro</string>
+    <string name="generate_alarm">Gen. registro alarma</string>
+    <string name="start_takeover">Iniciar turno</string>
+    <string name="clear_ib_rec">Vaciar Entradas</string>
+    <string name="del_ib_rec">Borrar Entrada</string>
+    <string name="del_ob_rec">Eliminar Salida</string>
+    <string name="delete_alarm">Bor. reg. alarma</string>
+    <string name="end_handover">Finalizar</string>
+    <string name="gen_ib_rec">Crear Entrada</string>
+    <string name="gen_ob_rec">Generar Salida</string>
+    <string name="export_data">Exportar</string>
+    <string name="volume_unit">Unidad volumen</string>
+    <string name="level_unit">Unidad nivel líquido</string>
+    <string name="demo_mode">Demo</string>
+    <string name="inventory">Inventario</string>
+    <string name="mass_unit">Unidad masa</string>
+    <string name="tank_type">Tipo Depósito</string>
+    <string name="welcome">Bienvenido</string>
+    <string name="color">Color</string>
+    <string name="outlet_height_threshold">Umbral altura salida</string>
+    <string name="outlet_time_threshold">Umbral tiempo salida</string>
+    <string name="inlet_height_threshold">Umbral altura entrada</string>
+    <string name="inlet_time_threshold">Umbral tiempo entrada</string>
+    <string name="generate_shift_log2">Generar traspaso</string>
+    <string name="delete_shift_log2">Eliminar traspaso</string>
+    <string name="set_admin_password_3">Configurar contraseña de administrador</string>
+    <string name="zhongcheng_anti_spill_cabinet">Anti-derrame Zhongcheng</string>
+    <string name="delete_all_records_warning2">Precaución: ¿Vaciar registros? No se podrán recuperar.</string>
+
+    <!-- 以下 25 条是从"带错位警告"的 45 行里逐条人工核对后捞回的，来源同上（蓝湖设计稿）。
+         首页小罐图标（MinOilCanView）的四个标签字段就在这一批里。 -->
+    <string name="oil_level_language">Nivel</string>
+    <string name="oil_level_1">Nivel</string>
+    <string name="yewei">Nivel</string>
+    <string name="oil_weight_language">Masa</string>
+    <string name="zhiliang">Masa</string>
+    <string name="water_weight_language">Agua</string>
+    <string name="shuigao">Agua</string>
+    <string name="temperature_language">Temp.</string>
+    <string name="temperature">Temp.</string>
+    <string name="temp">Temp.</string>
+    <string name="inoil_temp">Temp.</string>
+    <string name="wendu">Temp.</string>
+    <string name="advanced_settings">Avanzado</string>
+    <string name="admin_password_label">Clave Admin</string>
+    <string name="clear_ob_rec">Vaciar Salidas</string>
+    <string name="medium">Medio</string>
+    <string name="clear">Vaciar</string>
+    <string name="usb_export">Exportar USB</string>
+    <string name="usb_import">Importar USB</string>
+    <string name="height_mm">Altura (mm)</string>
+    <string name="tank_no">Nº Tanque</string>
+    <string name="guanhao">Nº Tanque</string>
+    <string name="bianhao">Nº</string>
+    <string name="mm">mm</string>
+    <string name="save_data">Guardar</string>
+
+    <!-- 以下 28 条来自 2026-09-22 用 psd-tools 重新解析 temp/中成-西班牙语.psd 原始设计稿后
+         新核实的内容，按图层坐标/图层命名/所在 artboard 逐条核对，不是靠旧的批量提取工具。
+         前 4 条是对已知错配的修正（原来判定"设计稿没给"或"设计稿给错了"，其实是旧工具的
+         提取/对齐算法问题）。 -->
+    <string name="oil_volume_language">Volumen</string>
+    <string name="rongji">Volumen</string>
+    <string name="rukushijian">Hora Entrada</string>
+    <string name="outbound_time">Hora Salida</string>
+    <string name="confirm">Aceptar</string>
+    <string name="standard_modbus_protocol">Modbus Estándar</string>
+    <string name="backfill_records_title">Historial</string>
+    <string name="inbound_record_backfill">Registro de Entrada</string>
+    <string name="outbound_record_backfill">Registro de Salida</string>
+    <string name="preview_data">Vista previa</string>
+    <string name="qianliang">Vol. Ant.</string>
+    <string name="hougao">Alt. Post.</string>
+    <string name="endHeight">Alt. Post.</string>
+    <string name="houliang">Vol. Post.</string>
+    <string name="inbound_height_before">Altura Prev.</string>
+    <string name="outbound_height_before">Altura Prev.</string>
+    <string name="inbound_volume_l">Volumen Ent.</string>
+    <string name="outbound_volume_l">Volumen Sal.</string>
+    <string name="back_page">Atrás</string>
+    <string name="tank_density">Densidad</string>
+    <string name="tank_total_capacity">Cap. Total</string>
+    <string name="rukuliangl">Cant. (L)</string>
+    <string name="rukuliangkg">Cant. (kg)</string>
+    <string name="chukuliangl">Salida (L)</string>
+    <string name="chukuliangkg">Salida (kg)</string>
+    <string name="commitwork_end_time">Hora fin</string>
+    <string name="oilcan_length">L</string>
+    <string name="oilcan_height">H</string>
+
+    <!-- 以下 21 条是用户直接对照设计稿人工整理给出的（2026-09-23），不是自动提取/匹配。
+         oilCanSelect 一条例外：用户明确要求"直接 AI 翻译"，没有设计稿来源，是 Claude 按上下文拟的。
+         lable_commitwork 设计稿上"开始交班"(Iniciar turno)/"结束交班"(Finalizar) 两个候选用户说
+         随便选一个，这里选了 Iniciar turno。 -->
+    <string name="height_temp_alarm_value">Alarma Temp. Alta</string>
+    <string name="low_temp_alarm_value">Alarma Temp. Baja</string>
+    <string name="select_color">Color</string>
+    <string name="oilcan_diameter">H</string>
+    <string name="head_a">R</string>
+    <string name="lable_commitwork">Iniciar turno</string>
+    <string name="oilcan_short_label_format">Tanque %1$d</string>
+    <string name="water_level">Agua</string>
+    <string name="tank_empty_capacity">Espacio</string>
+    <string name="order_number">Nº</string>
+    <string name="home">Volver</string>
+    <string name="backfill_hint_long">Permite añadir registros manualmente por fallos o cortes de luz. Actualmente, solo para entradas y salidas.</string>
+    <string name="unit_l">L</string>
+    <string name="shuigao_u">Agua (mm)</string>
+    <string name="wendu_u">Temp. (°C)</string>
+    <string name="unit_second">s</string>
+    <string name="clear_shift_log2">Vaciar traspasos</string>
+    <string name="hour_unit">Horas</string>
+    <string name="unit_kg">kg</string>
+    <string name="oilcan_type_format">Tanque %1$d:%2$s</string>
+    <!-- 无设计稿来源，用户要求直接 AI 翻译 -->
+    <string name="oilCanSelect">Selección de Tanque</string>
+    <string name="previous_page">Volver</string>
+
+    <!-- ============================================================
+         以下 37 条（2026-09-23）没有设计稿来源，是 Claude 按 values-en/strings.xml 的英文原文
+         直接 AI 翻译的草稿，没有经过人工/母语者审校——文案同学 review 之前不要当最终版本用。
+         对照表见 temp/Android_strings/多语言文案对照表_2026-09-23.xlsx，「文案对照」sheet 里
+         这批都标了红底，跟已经过设计稿/人工核实的其余条目区分开。
+         ============================================================ -->
+    <string name="app_name">Medidor de Nivel de Líquido</string>
+    <!-- ⚠️ 这条本身还有个范围未决问题：fragment_recode_inout.xml 的 time 这个 key 被入库/出库/
+         存油三个表共用，之前判定"Hora Salida"只对出库语境对、没敢用；这里先给一个三个语境都通用
+         的中性译法，文案同学 review 时可以直接确认或者改成更贴切的表述。 -->
+    <string name="time">Hora</string>
+    <string name="commitwork_success">Cambio de turno exitoso</string>
+    <string name="commitwork_errpr">Cambio de turno fallido</string>
+    <string name="record_loading">Cargando…</string>
+    <string name="psdset_hit_againnewpsd">Ingrese la contraseña de nuevo</string>
+    <string name="color_picker">Selección de Color</string>
+    <string name="createtable_createbable">Genere primero la tabla del tanque</string>
+    <string name="createtable_oillengtg_nonull">La longitud del tanque no puede estar vacía</string>
+    <string name="createtable__nodiameternull">El diámetro no puede estar vacío</string>
+    <string name="createtable_import_success">Importado al tanque Nº %1$d</string>
+    <string name="datamanager_chek_out">La ruta no existe, verifique el dispositivo externo</string>
+    <string name="view_tank_chart">Ver Tabla del Tanque</string>
+    <string name="height_oil_alarm">Alarma Nivel Alto</string>
+    <string name="hheight_oil_alarm">Alarma Nivel Alto Alto</string>
+    <string name="low_oil_alarm">Alarma Nivel Bajo</string>
+    <string name="llow_oil_alarm">Alarma Nivel Bajo Bajo</string>
+    <string name="height_water_alarm">Alarma Agua Alta</string>
+    <string name="height_temp_alarm">Alarma Temp. Alta</string>
+    <string name="fyf_connect_error">Conexión de placa de válvula interrumpida</string>
+    <string name="oilHeight_alarm">Tanque %1$d: alarma de nivel alto</string>
+    <string name="oilHHeight_alarm">Tanque %1$d: alarma de nivel alto alto</string>
+    <string name="oillow_alarm">Tanque %1$d: alarma de nivel bajo</string>
+    <string name="oilllow_alarm">Tanque %1$d: alarma de nivel bajo bajo</string>
+    <string name="waterheight_alarm">Tanque %1$d: alarma de agua alta</string>
+    <string name="tempheight_alarm">Tanque %1$d: alarma de temperatura alta</string>
+    <!-- ⚠️ 这条本身也有个范围未决问题，见 temp/Android_strings/多语言文案对照表_2026-09-23.xlsx
+         的说明页：目前唯一读它的地方是内嵌 HTTP 服务，传给局域网 PC 客户端，app 自己界面不显示。 -->
+    <string name="oilcan_pos_prefix_format">Nº%1$d%2$s</string>
+    <string name="please_enter">Ingrese</string>
+    <string name="commitwork_start_time">Hora inicio</string>
+    <string name="delete_record_title">Eliminar Registro</string>
+    <string name="app_crashed">La aplicación falló</string>
+    <string name="wrong_password_input">Ingresado: %1$s  Contraseña incorrecta</string>
+    <string name="unit_m">m</string>
+    <string name="unit_cubic">m³</string>
+    <string name="unit_ton">t</string>
+    <string name="calendar_year_month_format">%2$d/%1$d</string>
+    <string name="authorization_toast_noauth">Sin permiso de acceso</string>
+
+    <!-- 以下 2 条（2026-09-23）是补漏的：之前被误判不可达（一个 key 被多个文件引用时，其中一个
+         文件被判定整体死代码，就连带把这个 key 也一起归进了不可达清单，没有检查它是不是还有别的
+         活的引用路径——用户反馈"MainFragment 罐表连接不上探针，item 里的通信中断还是中文"，
+         顺着查出来的，详见 MinOilCanView.java/StockFragment.java 里的注释）。同样是 AI 翻译草稿，
+         没有设计稿来源，未经审校。 -->
+    <string name="oil_Communication_interrupt">Interrumpido</string>
+    <string name="main_toast_savesuccess">Guardado correctamente, consúltelo en el registro de almacenamiento</string>
+</resources>

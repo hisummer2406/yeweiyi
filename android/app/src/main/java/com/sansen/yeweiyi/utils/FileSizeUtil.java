@@ -4,6 +4,8 @@ import android.util.Log;
 import java.io.File;
 import java.io.FileInputStream;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 
 public class FileSizeUtil {
 	public static final int SIZETYPE_B = 1;// 获取文件大小单位为B的double值
@@ -103,7 +105,11 @@ public class FileSizeUtil {
 	 * @return
 	 */
 	private static String FormetFileSize(long fileS) {
-		DecimalFormat df = new DecimalFormat("#.00");
+		// [已修复-2026-09-23] 固定用 Locale.US 的小数点符号，不跟着系统语言变——见
+		// DataUtils.doubleFoment 处的注释，同一类 bug。这个方法本身只拼字符串显示，没有再解析
+		// 回数字，但下面那个重载（FormetFileSize(long, int)）确实用 Double.valueOf() 解析了，
+		// 两个统一处理更安全。
+		DecimalFormat df = new DecimalFormat("#.00", DecimalFormatSymbols.getInstance(Locale.US));
 		String fileSizeString = "";
 		String wrongSize = "0B";
 		if (fileS == 0) {
@@ -129,7 +135,9 @@ public class FileSizeUtil {
 	 * @return
 	 */
 	private static double FormetFileSize(long fileS, int sizeType) {
-		DecimalFormat df = new DecimalFormat("#.00");
+		// [已修复-2026-09-23] 格式化结果马上被 Double.valueOf()（只认"."）解析回去，西语下不固定
+		// locale 会崩溃——跟 DataUtils.doubleFoment 是同一类 bug。
+		DecimalFormat df = new DecimalFormat("#.00", DecimalFormatSymbols.getInstance(Locale.US));
 		double fileSizeLong = 0;
 		switch (sizeType) {
 		case SIZETYPE_B:

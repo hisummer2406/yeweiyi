@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- [不可达-2026-09-24] prints/data_manager/data_service 全仓库 Java/XML 零引用（西语数组
+         可达性核查时发现），压根没人读过，比"确认不可达"更进一步。不用翻译；对照见
+         temp/Android_strings/多语言文案对照表_2026-09-23.xlsx「说明」sheet。 -->
     <string-array name="prints">
         <item>粗略信息</item>
         <item>详细信息</item>
@@ -7,7 +10,7 @@
         <item>存油记录</item>
         <item>交班记录</item>
         <item>测漏记录</item>
-    </string-array>     
+    </string-array>
     <string-array name="data_manager">
         <item>清空报警记录</item>
         <item>清空进出油记录</item>
@@ -73,6 +76,9 @@
         <item>12号罐</item>
     </string-array>
 
+    <!-- [不可达-2026-09-24] 唯一读取点是 ActivityDialog.java 的 value==6 分支，全仓库没有调用方
+         传这个 value（见 ActivityDialog.java 里的注释，Java 侧引用已屏蔽），跟 oilcantable_info 是
+         同一批死代码。不用翻译。 -->
     <string-array name="oilcanTableArray">
         <item>1号罐表</item>
         <item>2号罐表</item>
@@ -91,6 +97,8 @@
         <item>15号罐表</item>
         <item>16号罐表</item>
     </string-array>
+    <!-- [不可达-2026-09-24] 唯一读取点是 ActivityDialog.java 的 value==7 分支，全仓库没有调用方
+         传这个 value（Java 侧引用已屏蔽），跟 sensor_settings 是同一批死代码。不用翻译。 -->
     <string-array name="tanZhenTableArray">
         <item>1号探针</item>
         <item>2号探针</item>
@@ -110,6 +118,8 @@
         <item>16号探针</item>
     </string-array>
 
+    <!-- [不可达-2026-09-24] 唯一读取点是 ActivityDialog.java 的 value==5 分支，全仓库没有调用方
+         传这个 value（Java 侧引用已屏蔽），跟 oilcanset_info 是同一批死代码。不用翻译。 -->
     <string-array name="oilcanSetArray">
         <item>1号油罐设置表</item>
         <item>2号油罐设置表</item>
@@ -135,6 +145,8 @@
         <item>温度</item>
     </string-array>
 
+    <!-- [不可达-2026-09-24] oilCurItem/mqttAddress 全仓库 Java/XML 零引用（西语数组可达性核查时
+         发现），压根没人读过。不用翻译。 -->
     <string-array name="oilCurItem">
         <item>油品</item>
         <item>油位</item>
@@ -153,6 +165,7 @@
     <string-array name="language">
         <item>中文</item>
         <item>英文</item>
+        <item>西班牙语</item>
     </string-array>
     <string-array name="yewei_unit">
         <item>毫米</item>

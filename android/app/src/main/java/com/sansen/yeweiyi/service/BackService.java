@@ -52,6 +52,10 @@ import io.reactivex.Observable;
 import io.reactivex.functions.Consumer;
 import rxjava.RxScheduler;
 import rxjava.intf.IOTask;
+// [不可达-2026-09-21] 在 AndroidManifest.xml 里声明了，但全仓库没有任何地方真正
+// startService()/bindService() 过它——唯一非声明引用是 SocketManager.java 里被注释掉的
+// mServiceIntent/bindService(...) 代码（西语翻译覆盖率核查时发现）。这个类从未真正启动过，
+// 里面用到的字符串资源（如 R.string.net_connect_err，经 OilMessage.NET_ERR_CONN）不用优先翻。
 public class BackService extends Service {
 
     private String productKey;

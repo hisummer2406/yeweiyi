@@ -155,6 +155,16 @@ public abstract class CrashAppLog implements Thread.UncaughtExceptionHandler{
             if (throwable == null)
                 return false;
 
+            // [不可达疑似-2026-09-21] 跟本文件其它 [不可达] 标记性质不一样：这行代码本身每次崩溃
+            // 都真的会跑（不是死代码），但大概率来不及被用户看到（西语翻译覆盖率核查时用户复核
+            // 指出，值得记一笔）——这里另起一个线程走 Looper.prepare()/show()/Looper.loop() 才能
+            // 显示 Toast，而 uncaughtException() 里 hanlderException() 一返回就立刻把异常转给系统
+            // 默认处理器，那个处理器通常会几乎同步地 Process.killProcess() 杀掉整个进程（含这个
+            // 刚起的新线程）。本该留出渲染时间的 Thread.sleep(1000)（见 uncaughtException() 里）
+            // 又在永远走不到的 else 分支里（hanlderException() 结尾写死 return false，那个分支已经
+            // 用另一条 [不可达] 注释标过了）。R.string.app_crashed 这个 Toast 有没有真被用户看到，
+            // 取决于这个线程能不能在进程被杀之前抢到时间片——不保证，需要有人拿真机验证一下能不能
+            // 看到，不要假设这个提示一定生效。
             new Thread(new Runnable() {
                 @Override
                 public void run() {

@@ -122,6 +122,9 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 		processClick(arg0);
 	}
 	
+	// [不可达-2026-09-21] 这个重载、下面的 getSaveListener()/私有 showInputDialog() 全仓库零调用者，
+	// 没有任何子类真正用到（西语翻译覆盖率核查时发现）。input_alertdialog.xml 的字符串资源、
+	// 以及 main_toast_saveerror/input_remarks/main_toast_savesuccess 这几个字符串不用优先翻。
 	public TextView showInputDialog(String title, String leftButText, String rightButText, OnClickListener leftClickListener, OnClickListener rightClickListener ) {
 		
 		// 1. 布局文件转换为View对象
@@ -210,7 +213,8 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 				if (mOilcanDataManager.getData().size() > 0) {
 					showInputDialog();
 				} else {
-					SystemUtils.showRsToast(R.string.main_toast_saveerror);
+					// [已屏蔽-2026-09-23] main_toast_saveerror 已删除（getSaveListener() 全仓库零调用者，不可达）。
+					// SystemUtils.showRsToast(R.string.main_toast_saveerror);
 				}
 			}
 		};
@@ -233,7 +237,8 @@ public abstract class BaseFragment extends Fragment implements OnClickListener {
 
 		// 3. 标题
 		TextView dialog_msg = (TextView) layout.findViewById(R.id.main_dialog_title);
-		dialog_msg.setText(SystemUtils.getRsStr(R.string.input_remarks));
+		// [已屏蔽-2026-09-23] input_remarks 已删除（showInputDialog() 全仓库零调用者，不可达）。
+		// dialog_msg.setText(SystemUtils.getRsStr(R.string.input_remarks));
 		// 4.对话框
 		final EditText dialog_remark = (EditText) layout.findViewById(R.id.main_dialog_remark);
 

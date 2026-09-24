@@ -2,7 +2,6 @@
 <resources>
     <item name="tag_first" type="id" />
     <string name="app_name">ระบบเครื่องวัดระดับของเหลว</string>
-    <string name="onLoading">กำลังเริ่มต้นใหม่...</string>
     <string name="welcomSaSen">ยินดีต้อนรับที่ใช้เครื่องวัดระดับของเหลวแอนดรอยด์อัจฉริยะ</string>
     <!--Activity Lable-->
     <string name="oilCanSelect">เลือกถังน้ำมัน</string>
@@ -16,12 +15,7 @@
     <string name="oilllow_alarm">น้ำมัเบอร์ แจ้งระดับน้ำมันต่ำมาก</string>
     <string name="waterheight_alarm">ถังน้ำมัเบอร์ แจ้งระดับน้ำมันสูง</string>
     <string name="tempheight_alarm">ถังน้ำมัเบอร์ แจ้งอุณหภูมิสูง</string>
-    <string name="templow_alarm">ถังน้ำมัเบอร์ แจ้งอุณหภูมิต่ำ</string>
-    <string name="outoil">ถังน้ำมัเบอร์ จ่ายน้ำมัน</string>
     <string name="oil_rise">ขึ้น</string>
-    <string name="oil_connect_error">ถังน้ำมัเบอร์เชื่อมต่อล้มเหลว</string>
-    <string name="tantou_height">หัวตรวจสอบเบอร์ ความเข้มข้นสูงเกิน</string>
-    <string name="net_connect_err">เชื่อมต่ออินเตอร์เน็ตล้มเหลว</string>
     <string name="fyf_connect_error">เชื่อมต่อเมนบอร์ดของวาล์วกันน้ำล้นขัดตอน</string>
     <string name="open_external_lighting">เปิดเสียงและแสงที่ต่อจากภายนอก</string>
     <string name="close_external_lighting">ปิดเสียงและแสงที่ต่อจากภายนอก</string>
@@ -57,19 +51,12 @@
     <string name="login_toast_success">ล็อกอินสำเร็จ</string>
     <string name="login_toast_fail">ผู้ใช้ยืนยันผิดพลาด โปรดล็อกอินใหม่</string>
     <string name="login_home">โหลดหน้าหลัก...</string>
-    <string name="name_not_null">ห้ามเว้นว่างชื่อผู้ใช้</string>
-    <string name="name_legth">ความยาวชื่อผู้ใช้ห้ามสั้นกว่าสองอักขระ</string>
-    <string name="psw_not_null">ห้ามเว้นว่างรหัสผ่าน</string>
-    <string name="psw_length">ความยาวรหัสผ่านห้ามนอยกว่าสี่หลัก</string>
     <string name="celou">ตรวจสอบการรั่วไหลด้านข้าง</string>
     <string name="begin_celou">เริ่มตรวจสอบ</string>
     <string name="end_celou">ตรวจสอบเสร็จ</string>
     <!-- ตรวจสอบน้ำมันและแก๊ซ-->
     <string name="probe_no">เบอร์หัวตรวจสอบ:</string>
     <string name="alert_value">ค่าการเตือน:</string>
-    <string name="filter">คัดเลือก</string>
-    <string name="save_oilcan">บันทึก</string>
-    <string name="Log_out">| ยกเลิก</string>
     <!-- หน้าหลัก -->
     <string name="main_bt_alarmrecord">บันทึกการเตือน</string>
     <string name="main_but_home">หน้าหลัก</string>
@@ -79,7 +66,6 @@
     <string name="main_but_alarmrecot">บันทึกการเตือน</string>
     <string name="main_but_print">ตีพิมพ์</string>
     <string name="main_toast_savesuccess">บันทึกสำเร็จ โปรดตรวจสอบการบันทึกเก็บน้ำมัน</string>
-    <string name="main_toast_saveerror">ไม่ได้ตั้งค่าหัวตรวจสอบ</string>
     <!-- ตั้งค่าระบบ -->
     <string name="time">เวลา</string>
     <string name="language_selection">เลือกภาษา</string>
@@ -115,10 +101,7 @@
     <string name="commitwork_errpr">เปลี่ยนเวรล้มเหลว</string>
     <string name="commitwork_record">บันทึกการเปลี่ยนเวร</string>
     <string name="commitwork_toast_psderror">รหัสผ่านผิดพลาด</string>
-    <string name="long_touch_update_commitwork">กดค้างเพื่อแก้ไขการบันทึกเปลี่ยนเวร</string>
     <string name="input_user_psw">โปรดป้อนรหัสผ่านผู้ใช้ปัจจุบัน</string>
-    <string name="all">ทั้งหมด</string>
-    <string name="update_commit_work">แก้ไขข้อมูลเปลี่ยนเวร</string>
     <!-- บันทึก -->
     <string name="record_sort">เรียงลำดับ</string>
     <string name="record_loading">กำลังโหลด...</string>
@@ -126,9 +109,7 @@
     <!-- น้ำมันเข้าออก -->
     <string name="oilinout_in">ถังน้ำมันเบอร์ กำลังถ่ายน้ำมัน</string>
     <string name="oilinout_out">ถังน้ำมันเบอร์ กำลังจ่ายน้ำมัน</string>
-    <string name="long_touch_delte_inoil">กำค้างเพื่อลบการบันทึกน้ำมันเข้าออก</string>
     <!-- แจ้งเตือน -->
-    <string name="alarm_no">ถังน้ำมันปัจจุบันไม่ได้แจ้งเตือน</string>
     <string name="alarm_info">ข้อมูลแจ้งเตือน</string>
     <!-- ข้อมูลผู้ใช้ -->
     <string name="admin_user">ผู้ดูแลผู้ใช้</string>
@@ -151,43 +132,32 @@
     <string name="input_new_psw">โปรดป้อนรหัสผ่านใหม่</string>
     <string name="exit_user">ออกจากผู้ใช้</string>
     <string name="employee_account">บัญชีพนักงาน</string>
-    <string name="oil_type_language">คุณภาพน้ำมัน</string>
     <string name="oil_level_language">ระดับน้ำมัน</string>
     <string name="oil_weight_language">น้ำหนัก</string>
     <string name="oil_volume_language">ปริมาณ</string>
     <string name="temperature_language">อุณหภูมิ</string>
     <!-- ข้อมูลถังน้ำมัน -->
-    <string name="oil_no">ถังน้ำมันเบอร์</string>
     <string name="tank_no"> เบอร์ถัง</string>
     <string name="oil_type">คุณภาพน้ำมัน:</string>
     <string name="oil_level">ระดับน้ำมัน:</string>
     <string name="oil_level_1">ระดับน้ำมัน</string>
     <string name="water_level">ระดับน้ำ:</string>
-    <string name="water_volume">ปริมาณน้ำ:</string>
-    <string name="oil_weight">ปริมาณน้ำมันที่เก็บ:</string>
-    <string name="oil_addible">ปริมาณน้ำมันเปล่า:</string>
-    <string name="oil_volume">ปริมาณน้ำมัน:</string>
     <string name="oil_volume_1">ปริมาณน้ำมัน</string>
     <string name="temperature">อุณหภูมิ:</string>
     <string name="alarm_status">สถานะแจ้งเตือน:</string>
     <string name="probe_communication">สถานะการสื่อสารของหัวตรวจสอบ:</string>
-    <string name="communication">สถานะสื่อสาร:</string>
     <string name="oiltank">ถังน้ำมัน</string>
     <string name="probe_address">ที่อยู่:</string>
     <string name="oil_type2">คุณภาพน้ำมัน:</string>
     <string name="all_check">เลือกทั้งหมด</string>
     <string name="test_result">ผลการตรวจสอบ</string><!-- บันทึกการเก็บน้ำมัน -->
-    <string name="save_record">บันทึกการเก็บน้ำมัน</string>
-    <string name="input_remarks">โปรดกรอกหมายเหตุ</string>
     <string name="remarks">ข้อมูลหมายเหตุ</string>
-    <string name="enter_input">ยืนยันอินพุต</string>
-    <string name="no_maker">ไมจำเป็นหมายเหตุ</string><!-- ตั้งค่าถังน้ำมัน -->
+<!-- ตั้งค่าถังน้ำมัน -->
     <string name="color_picker">เลือกสี</string>
     <string name="save_color">บันทึกสี</string>
     <string name="select_tank">เลือกถังน้ำมัน</string>
     <string name="copy">คัดลอกไปยัง</string>
     <string name="points">กำหนดจำนวนแต้มเอง</string>
-    <string name="tank_table_points">จำนวนแต้มทิเตอร์ถัง</string>
     <string name="enter_table_points">จำนวนแต้มทิเตอร์ถัง</string><!--ตั้งค่าระบบ-->
     <string name="simplified_chinese">ภาษาจีน</string>
     <string name="backlight">แบ็คไลท์</string>
@@ -216,7 +186,6 @@
     <string name="createtable_horizontal_tank">ท่านอน</string>
     <string name="createtable_vertical_tank">ถังตั้ง</string>
     <string name="createtable_createbable">โปรดสร้างตารางถังน้ำมันก่อน</string>
-    <string name="build_table">สร้างตารางถังน้ำมัน</string>
     <string name="createtable_oillengtg_nonull">ห้ามเว้นว่างความยาวถัง</string>
     <string name="createtable__nodiameternull">ห้ามเว้นว่างเส้นผ่าศูนย์กลางของถัง</string>
     <string name="createtable_a_nonull">ห้ามเว้นว่างหัวปิด A</string>
@@ -231,7 +200,6 @@
     <string name="head_b">หัวปิB :</string>
     <string name="impor_u_disk">ถ่ายเขา USB</string>
     <string name="into_the_tank">ถ่ายเข้าถังน้ำมัน</string><!-- ข้อมูลแจ้งเตือน -->
-    <string name="communication_interrupted">ถังน้ำมันเบอร์:การสื่อสารหัวตรวจสอบขัดข้อง！</string>
     <string name="height_oil_alarm">ถังน้ำมันเบอร์:เตือนระดับน้ำมันสูง！</string>
     <string name="hheight_oil_alarm">ถังน้ำมันเบอร์:เตือนระดับน้ำมันสูงมาก！</string>
     <string name="low_oil_alarm">ถังน้ำมันเบอร์:เตือนระดับน้ำมันต่ำ！</string>
@@ -254,18 +222,12 @@
     <string name="authorizationmanager">บริหารสิทธิ</string>
     <string name="oilcanset">ตั้งค่าถังน้ำมัน</string>
     <string name="oilcantableset">ตั้งค่าตารางถังน้ำมัน</string>
-    <string name="usermanager">บริหารผู้ใช้</string>
-    <string name="probeset">ตั้งค่าหัวตรวจสอบ</string>
     <string name="oilexplor">ตรวจสอบน้ำมันและแก๊ซ</string>
-    <string name="oilcantablecreate">สร้าตารางถังน้ำมัน</string>
-    <string name="datamanager">บริหารข้อมูล</string>
     <string name="systemset">ตั้งค่าระบบ</string>
-    <string name="aboutus">เกี่ยวกับเรา</string>
     <string name="oiltype_custom">กำหนดคุณภาพน้ำมันเอง</string>
     <string name="oilcan_custom">กำหนดการแสดงผลของถังน้ำมัน</string>
-    <string name="oilexploration">ตรวจสอบน้ำมันและแก๊ซ</string>
-    <string name="fyf">บริหารวาล์วกันน้ำล้น</string><!-- บริหารข้อมูล -->
-    <string name="in_out_oil_record">บันทึกน้ำมันเข้าออก</string>
+<!-- บริหารข้อมูล -->
+    <string name="data_save_success">บันทึกสำเร็จ</string>
     <string name="datamanager_clearalarm">ลบการบันทึกแจ้งเตือน</string>
     <string name="datamanager_clearinoutoil">ลบการบันทึกน้ำมันเข้าออก</string>
     <string name="datamanager_cleartemp">ลบการบันทึกอุณหภูมิ</string>
@@ -278,10 +240,8 @@
     <string name="datamanager_savecloud">บันทึกข้อมูลการกำหนดค่าไปยังคลาวด์</string>
     <string name="datamanager_readcloud">อ่านข้อมูลการกำหนดค่าจากคลาวด์</string>
     <string name="datamanager_chek_out">ไม่มีเส้นทาง โปรดตรวจสอบอุปกรณ์ภายนอก</string>
-    <string name="io_no_close">กระแสIOไม่ได้ปิดตามปกติ</string><!-- บริหารสิทธิ -->
+<!-- บริหารสิทธิ -->
     <string name="user_name">ชื่อผู้ใช้</string>
-    <string name="page">หน้าเพจ</string>
-    <string name="event">เหตุการณ์</string>
     <string name="access_barred">อนุญาตหน้าเพจ</string>
     <string name="authorization_toast_noauth">ไม่ได้เปิดสิทธิ</string>
     <string name="order_number">เลขที่</string>
@@ -289,9 +249,6 @@
     <string name="beginHeight">ระดับเริ่มต้น</string>
     <string name="endHeight">ระดับตอนจบ</string>
     <string name="authorization_allot" />
-    <string name="in_out_volume">进出ปริมาณน้ำมัน</string>
-    <string name="in_out_v20">V20</string>
-    <string name="in_out_weight">ปริมาณน้ำมันเข้าออก</string>
     <string name="content">เนื้อหา</string>
     <string name="type">ประเภท</string>
     <string name="maintenance_ersonnel">เจ้าหน้าที่บำรุงรักษา</string><!-- ชนิดน้ำมัน -->
@@ -302,16 +259,10 @@
     <string name="acetic_acid">กรดอะซิติก</string>
     <string name="ethyl_ester">เอทิลเอสเตอร์</string>
     <string name="not_set">ยังไม่ตั้งค่า</string><!-- บันทึก -->
-    <string name="celou_record">บันทึกการรั่วไหลด้านข้าง</string>
     <string name="inout_record">บันทึกน้ำมันเข้า</string>
     <string name="temp_record">บันทึกอุณหภูมิ</string>
     <string name="record_manager">บริหารการบันทึก</string>
     <string name="load_data_success">โหลดข้อมูลทั้งหมดแล้ว</string>
-    <string name="delete_in_out">ลบการบันทึกน้ำมันเข้า</string>
-    <string name="jieban_height">ระดับเมื่อรับเวรmm</string>
-    <string name="jiaoban_height">ระดับเมื่อเปลี่ยนเวรmm</string>
-    <string name="shell_volue">ปริมาณน้ำมันจำหน่ายL</string>
-    <string name="shell_weight">น้ำหนักน้ำมันจำหน่ายkg</string>
     <string name="save_oil_heigth">ระดับน้ำมันคงเหลือmm</string>
     <string name="save_water_heith">ระดับน้ำคงเหลือmm</string>
     <string name="save_oil_volume">ปริมาณน้ำมันคงเหลือL</string>
@@ -334,7 +285,7 @@
     <string name="help">ช่วยเหลือ</string>
     <string name="enter_step_1">You are now</string>
     <string name="enter_step_2">steps away from being adeveloper.</string>
-    <string name="down_failed">ดาวน์โหลดล้มเหลว</string><!-- ข้อมูล -->
+<!-- ข้อมูล -->
     <string name="check_value_success">โปรดตรวจสอบค่าดัชนีถูกต้องหรือไม่</string><!-- อินเตอร์เน็ต -->
     <string name="request_error">ร้องขอล้มเหลว</string>
     <string name="psw_null">รหัสผ่านว่างเปล่า</string>
@@ -346,21 +297,18 @@
     <string name="forget_the_network">ลืมอินเตอร์เน็ต</string>
     <string name="disconnect">ตัดการเชื่อมต่อ</string>
     <string name="password_connection">เชื่อมด้วยรหัสผ่าน</string><!-- บันทึกข้อมูล -->
-    <string name="data_save_success">บันทึกสำเร็จ</string>
     <string name="data_save_error">บันทึกล้มเหลว</string>
     <string name="data_storge">บันทึกข้อมูล </string>
     <string name="service_read_data">อ่านข้อมูลจากเซิร์ฟเวอร์สำเร็จ</string>
     <string name="please_set_d2d">"โปรดตั้งค่ารหัสD2D"</string>
     <string name="save_oilcan_service_success">บันทึกถังน้ำมันที่เซิร์ฟเวอร์สำเร็จ</string>
     <string name="read_error">อ่านล้มเหลว</string>
-    <string name="u_load">อัพโหลด USBสำเร็จ</string>
-    <string name="u_unload">ลบจากUSBสำเร็จ</string>
     <string name="probe_type">ประเภทหัวตรวจสอบ:</string>
     <string name="oilcanset_info">ตั้งค่าถังน้ำมัน</string>
     <string name="oilcantable_info">ตั้งค่าตารางถัง</string><!-- ตีพิมพ์ -->
     <string name="print_info">ตีพิมพ์ข้อมูล</string>
-    <string name="no_connect_print">ไม่ได้เชื่อมต่อเครื่องพิมพ์</string><!-- ไดรฟ์บอร์ด -->
-    <string name="concentration">เบอร์ความเข้มข้น</string><!-- หัวข้อ -->
+<!-- ไดรฟ์บอร์ด -->
+<!-- หัวข้อ -->
     <string name="back_page">กลับ</string><!--บริหารวาล์วกันน้ำล้น-->
     <string name="fyf_title">บริหารวาล์วกันน้ำล้น</string>
     <string name="fyf_open">เปิดวาล์วกันน้ำล้น</string>
@@ -372,7 +320,6 @@
     <string name="fyf_time">เวลา</string>
     <string name="fyf_way">วิวิธีเปิด</string>
     <string name="fyf_refulsh">คลิกเพื่อรีแฟลช</string>
-    <string name="no_alarm">ไม่แจ้งเตือน</string>
     <string name="no_fyf">วาล์วกันน้ำล้นเบอร์</string>
     <string name="cooling">กำลังหล่อเย็น</string>
     <string name="coolied">หล่อเย็นเสร็จ</string>
@@ -389,15 +336,9 @@
     <string name="detectord">กำลังตรวจสอบ...</string>
     <string name="time_detect">เวลา(นาที)</string><!--เนื้อหาส่วนที่ลืมแปล-->
     <string name="isDeleteRecord">ลบการบันทึกที่เลือกหรือไม่</string>
-    <string name="connect_normal">การสื่อสารปกติ</string>
     <string name="Disablealarm">ห้ามเตือน</string>
     <string name="Enablealarm">เปิดการแจ้งเตือน</string>
     <string name="volume_calibration">แก้ไขปริมาณ</string>
-    <string name="height">ระดับความสูง</string>
-    <string name="volume">ปริมาณ</string>
-    <string name="tan_no">ถังน้ำมันเบอร์</string>
-    <string name="tan_table_data">ข้อมูลตารางถัง</string>
-    <string name="tank">ถังน้ำมัน</string>
     <string name="immorality">ไม่อนุมัติ</string>
     <string name="akira_ri">ไม่มีการตอบสนอง</string>
     <string name="token_code">รหัสโทเค็น</string>
@@ -411,29 +352,7 @@
     <string name="temp">อุณหภูมิ</string>
     <string name="read_probe_address">อ่านที่ที่อยู่หัวตรวจสอบ</string>
     <string name="modify_probe_address">แก้ไขที่อยู่หัวตรวจสอบ</string>
-    <string name="inoiling">ถังน้ำมันเบอร์ กำลังถ่ายน้ำมัน...</string>
-    <string name="outoiling">ถังน้ำมันเบอร์ กำลังจ่ายน้ำมัน...</string>
-    <string name="inoil">ถังน้ำมันเบอร์ ถ่ายน้ำมันเสร็จ</string>
-    <string name="inoil_start">เริ่ม</string>
-    <string name="inoil_height">ระดับความสูง</string>
-    <string name="inoil_volume">ปริมาณ</string>
-    <string name="inoil_tcvolume">ปริมาณน้ำมันเปล่า</string>
-    <string name="inoil_water">ระดับน้ำ</string>
-    <string name="inoil_watervolume">ปริมาณน้ำ</string>
-    <string name="inoil_weight">น้ำหนักน้ำมัน</string>
     <string name="inoil_temp">อุณหภูมิ</string>
-    <string name="inoil_end">จบ</string>
-    <string name="inoil_total_delivery">น้ำมันจำหน่ายรวม</string>
-    <string name="inoil_continue">ต่อ</string>
-    <string name="inoil_save">บันทึก</string>
-    <string name="inoil_quite">ออก</string>
-    <string name="inoil_stop">หยุด</string>
-    <string name="inoil_during">ชดเชยน้ำมันที่จำหน่าย</string>
-    <string name="inoil_tank">ถังน้ำมัน </string>
-    <string name="inoil_product">คุณภาพน้ำมัน: </string>
-    <string name="inoil_statu">สถานะ: </string>
-    <string name="inoil_unload_stop">หยุดถ่ายน้ำมัน</string>
-    <string name="inoil_unloading">กำลังถ่ายน้ำมัน...</string>
     <string name="about_device">ข้อมูลอุปกรณ์</string>
     <string name="baudR">อัตรารับส่งข้อมูล</string>
     <string name="dpaity" >ตรวจสอบตัวเลข</string>
@@ -456,9 +375,6 @@
     <string name="fyf_content_waring">กรุณา</string>
     <string name="input_psw">โปรดป้อนรหัสผ่านของโอเวอร์โฟลว์วาล์ว</string>
     <string name="switch_mod">การสลับโหมดวาล์วป้องกันการล้น</string>
-    <string name="details">ข้อมูลรายละเอียด</string>
-    <string name="uload_weight">ขนถ่ายน้ำหนัก</string>
-    <string name="uload_volume">ขนถ่ายปริมาณ</string>
     <string name="delete">ลบ</string>
     <string name="modify">การแก้ไข</string>
 </resources>

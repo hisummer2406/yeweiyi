@@ -33,7 +33,7 @@ public class SetFragment extends BaseFragment {
             R.drawable.set_guanbiao,
             R.drawable.set_mima,
             R.drawable.set_jichu,
-             R.drawable.set_jilu,
+            R.drawable.set_jilu,
             R.drawable.set_gaoji,
 
     };
@@ -171,32 +171,32 @@ public class SetFragment extends BaseFragment {
 
                                                                          break;
                                                                      case 3:
-                                                                             if (main.setBaseFragment == null) {
-                                                                                 main.setBaseFragment = new SetBaseFragment();
-                                                                             }
-                                                                             main.switchContent(main.mContent, main.setBaseFragment);
+                                                                         if (main.setBaseFragment == null) {
+                                                                             main.setBaseFragment = new SetBaseFragment();
+                                                                         }
+                                                                         main.switchContent(main.mContent, main.setBaseFragment);
 
                                                                          break;
                                                                      case 4:
 
-                                                                             if (main.jiLuFragment == null) {
-                                                                                 main.jiLuFragment = new JiLuFragment();
-                                                                             }
-                                                                             main.switchContent(main.mContent, main.jiLuFragment);
+                                                                         if (main.jiLuFragment == null) {
+                                                                             main.jiLuFragment = new JiLuFragment();
+                                                                         }
+                                                                         main.switchContent(main.mContent, main.jiLuFragment);
 
                                                                          break;
                                                                      case 5:
                                                                          String pwd = SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.GJPWD, "123456");
                                                                          LoginDialog dialog = new LoginDialog();
-                                                                        // Log.i("TAG", "密码: " + PWDTools.getGaoJiSetPwd());
+                                                                         // Log.i("TAG", "密码: " + PWDTools.getGaoJiSetPwd());
                                                                          if (!"123456".equals(pwd)) {
                                                                              dialog.setOnConfirmListener(input -> {
                                                                                  if (input.equals(pwd) || input.equals(PWDTools.getGaoJiSetPwd())) {
 
-                                                                                         if (main.setSeniorFragment == null) {
-                                                                                             main.setSeniorFragment = new SetSeniorFragment();
-                                                                                         }
-                                                                                         main.switchContent(main.mContent, main.setSeniorFragment);
+                                                                                     if (main.setSeniorFragment == null) {
+                                                                                         main.setSeniorFragment = new SetSeniorFragment();
+                                                                                     }
+                                                                                     main.switchContent(main.mContent, main.setSeniorFragment);
 
                                                                                      dialog.dismiss();
                                                                                  } else {
@@ -207,20 +207,14 @@ public class SetFragment extends BaseFragment {
                                                                              dialog.show(getActivity().getFragmentManager(), "LoginDialog");
                                                                          } else {
 
-                                                                                 if (main.setSeniorFragment == null) {
-                                                                                     main.setSeniorFragment = new SetSeniorFragment();
-                                                                                 }
-                                                                                 main.switchContent(main.mContent, main.setSeniorFragment);
+                                                                             if (main.setSeniorFragment == null) {
+                                                                                 main.setSeniorFragment = new SetSeniorFragment();
+                                                                             }
+                                                                             main.switchContent(main.mContent, main.setSeniorFragment);
 
                                                                          }
 
                                                                          break;
-
-
-
-
-
-
 
 
 //                                                                     case 11:
@@ -257,7 +251,7 @@ public class SetFragment extends BaseFragment {
             // 如果需要区分是哪个字段，可通过 propertyId 判断
             // 直接获取当前值
             String newValue = ((ObservableField<String>) sender).get();
-          //  Log.d("监听", "新值：" + newValue);
+            //  Log.d("监听", "新值：" + newValue);
             tv_time.setText(newValue);
         }
     };

@@ -229,12 +229,14 @@
 
         </LinearLayout>
     </LinearLayout>
+    <!-- [不可达-2026-09-21] 硬编码 visibility="gone" 且没有 android:id，
+         CreateOilTableFragment.java 里没有任何代码能引用它去切换可见性（西语翻译覆盖率核查时发现）。
+         build_table 不用优先翻。 -->
     <android.support.v7.widget.AppCompatButton
        android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:text="@string/build_table"
         android:textSize="@dimen/sp_28" />
     <LinearLayout
         android:focusable="true"

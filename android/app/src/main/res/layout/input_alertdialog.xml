@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- [不可达-2026-09-21] 唯二入口 BaseFragment.showInputDialog()/getSaveListener() 全仓库零调用者
+     （西语翻译覆盖率核查时发现）。里面的字符串资源不用优先翻。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -26,7 +28,6 @@
             android:layout_marginTop="20dp"
             android:gravity="center"
             android:singleLine="true"
-            android:text="@string/input_remarks"
             android:textSize="18sp" />
 
         <EditText
@@ -50,7 +51,6 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="@string/enter_input"
                 />
 
             <Button
@@ -59,7 +59,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="5dp"
                 android:layout_weight="1"
-                android:text="@string/no_maker" />
+/>
         </LinearLayout>
     </RelativeLayout>
 

@@ -38,16 +38,25 @@ public class ActivityDialog extends Activity implements OnItemClickListener {
 		}else if(value == 1){
 			setTitle(R.string.oil_type);
 			valueData= getResources().getStringArray(R.array.oiltypeArray);//DataUtils.getOilType();
+		// [不可达-2026-09-21] value==5/6/7 这三个分支：全仓库穷举了所有
+		// new Intent(..., ActivityDialog.class) 的调用点，传的 value 只有 0、1，或者压根没
+		// putExtra("value",...)（走默认值 0）。没有任何调用方传 5/6/7（西语翻译覆盖率核查时发现）。
+		// oilcanset_info/oilcantable_info 这两个字符串虽然已经有西语翻译（历史遗留，不算错，
+		// 只是翻了不会显示的分支），sensor_settings 还没翻——三个都不用优先翻。
 		}else if (value==5) {
 			setTitle(R.string.oilcanset_info);
-			valueData = getResources().getStringArray(R.array.oilcanSetArray);
+			// [已屏蔽-2026-09-24] oilcanSetArray 不可达（value==5 无调用方传入，见上方注释）。
+			// valueData = getResources().getStringArray(R.array.oilcanSetArray);
 		}else if (value==6) {
 			setTitle(R.string.oilcantable_info);
-			valueData = getResources().getStringArray(R.array.oilcanTableArray);
+			// [已屏蔽-2026-09-24] oilcanTableArray 不可达（value==6 无调用方传入，见上方注释）。
+			// valueData = getResources().getStringArray(R.array.oilcanTableArray);
 		}
 		else if (value == 7) {
-			setTitle(R.string.sensor_settings);
-			valueData=getResources().getStringArray(R.array.tanZhenTableArray);
+			// [已屏蔽-2026-09-23] sensor_settings 已删除（value==7 无调用方传入，不可达，见上方注释）。
+			// setTitle(R.string.sensor_settings);
+			// [已屏蔽-2026-09-24] tanZhenTableArray 不可达（value==7 无调用方传入，同上）。
+			// valueData=getResources().getStringArray(R.array.tanZhenTableArray);
 		}
 		
 		overridePendingTransition(0,0);

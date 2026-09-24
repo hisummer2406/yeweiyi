@@ -153,6 +153,7 @@
     <string-array name="language">
         <item>Chinese</item>
         <item>English</item>
+        <item>Spanish</item>
     </string-array>
     <string-array name="yewei_unit">
         <item>mm</item>
