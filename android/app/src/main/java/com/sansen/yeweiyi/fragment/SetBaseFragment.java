@@ -96,7 +96,9 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         // 中文原文和曾经被 bug 误存的英文，不会因为这次修复把用户已有的选择读错。
         // 顺带修掉一个已有笔误：这里原来把容积单位的初始选中状态设到了 sp_zhiliang（质量）上，
         // sp_rongji 反而从没被设置过。
-        sp_rongji.setSelection(UnitPref.Volume.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit, UnitPref.Volume.L.name())) == UnitPref.Volume.L ? 0 : 1);
+        // Volume 枚举声明顺序（L, CUBIC, GALLON）必须跟 R.array.rongji_unit 的 item 顺序一一
+        // 对应，直接拿 ordinal() 当下标；以后再加新容积单位，两边顺序要一起改。
+        sp_rongji.setSelection(UnitPref.Volume.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit, UnitPref.Volume.L.name())).ordinal());
         sp_yuyan.setSelection(languageCodeToIndex(LanguageUtil.getCurrentLocale(MyApplication.getInstance().getApplicationContext()).getLanguage()));
         sp_yewei.setSelection(UnitPref.Length.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit, UnitPref.Length.MM.name())) == UnitPref.Length.MM ? 0 : 1);
         sp_zhiliang.setSelection(UnitPref.Mass.parse(SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.ZhiLiangUnit, UnitPref.Mass.KG.name())) == UnitPref.Mass.KG ? 0 : 1);
@@ -282,8 +284,10 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
             case R.id.sp_rongji:
                 // Spinner 展示的是本地化文案（rongji_unit[index]），但存进偏好的必须是跟语言无关
                 // 的规范值，不然英文界面下选的选项会存成英文，后面按中文字面量比较全部失效。
+                // Volume.values()[index] 依赖 Volume 声明顺序跟 R.array.rongji_unit 的 item
+                // 顺序一一对应（见上面 setSelection 那句注释）。
                 SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,
-                        (index == 0 ? UnitPref.Volume.L : UnitPref.Volume.CUBIC).name());
+                        UnitPref.Volume.values()[index].name());
                 break;
             case R.id.sp_yewei:
                 SharePrefUtil.saveString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,

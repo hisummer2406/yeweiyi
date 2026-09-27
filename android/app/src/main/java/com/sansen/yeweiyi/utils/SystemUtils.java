@@ -251,6 +251,10 @@ public class SystemUtils {
 			case "TON":
 			case "t":
 				return getRsStr(R.string.unit_ton);
+			case "加仑":
+			case "GALLON":
+			case "Gal":
+				return getRsStr(R.string.unit_gallon);
 			default:
 				return zhUnit;
 		}

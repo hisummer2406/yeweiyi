@@ -580,6 +580,7 @@
     <string name="unit_cubic">立方</string>
     <string name="unit_kg">千克</string>
     <string name="unit_ton">吨</string>
+    <string name="unit_gallon">加仑</string>
     <string name="unit_second">秒</string>
     <string name="oilcan_type_format">%1$d号  %2$s</string>
 

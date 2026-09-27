@@ -28,13 +28,42 @@ public class UnitPref {
     }
 
     public enum Volume {
-        L, CUBIC;
+        L, CUBIC, GALLON;
+
+        public static final double LITERS_PER_GALLON = 0.26417;
 
         public static Volume parse(String raw) {
             if ("立方".equals(raw) || "CUBIC".equalsIgnoreCase(raw) || "m³".equalsIgnoreCase(raw) || "m3".equalsIgnoreCase(raw)) {
                 return CUBIC;
             }
+            // 故意不认裸的 "G"：这里跟上面 CUBIC 分支认 "m³"/"m3" 不是同一种情况——那两个是
+            // 历史上真的存进过 SharedPreferences 的展示文案，parse() 要兼容旧数据；加仑是全新
+            // 选项，SharedPreferences 里不可能已经存在任何历史脏值，没有必须认 "G" 的理由，反而
+            // 单字母字符串作为 parse() 的合法输入风险偏高（容易被将来别的东西撞上）。西语界面
+            // Spinner 显示的 "G" 只是 UI 文案，不代表 parse() 也要认它。
+            if ("加仑".equals(raw) || "GALLON".equalsIgnoreCase(raw) || "Gal".equalsIgnoreCase(raw)) {
+                return GALLON;
+            }
             return L; // 默认 / "升" / "L" / 无法识别的旧值
+        }
+
+        /** raw 恒为升数；返回换算到当前单位后的数值。 */
+        public double convert(double liters) {
+            switch (this) {
+                case CUBIC:
+                    return liters / 1000;
+                case GALLON:
+                    return liters * LITERS_PER_GALLON;
+                default:
+                    return liters;
+            }
+        }
+
+        /** raw 恒为升数；返回换算 + 格式化后可直接展示的字符串。 */
+        public String format(double liters) {
+            return this == CUBIC
+                    ? DataUtils.doubleFomentStr2(convert(liters))
+                    : DataUtils.doubleFomentStr(convert(liters)); // L 和 GALLON 都保留 1 位小数
         }
     }
 

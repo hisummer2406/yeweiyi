@@ -581,6 +581,7 @@
     <string name="unit_cubic">m³</string>
     <string name="unit_kg">kg</string>
     <string name="unit_ton">t</string>
+    <string name="unit_gallon">Gal</string>
     <string name="unit_second">s</string>
     <string name="oilcan_type_format">No.%1$d  %2$s</string>
 

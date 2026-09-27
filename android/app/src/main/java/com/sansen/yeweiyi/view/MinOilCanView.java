@@ -456,7 +456,7 @@ public class MinOilCanView extends View {
             case 2:
                 RongJiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升");
                 return new String[]{
-                        UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L?DataUtils.doubleFomentStr(oilCan.getOilVolume()):DataUtils.doubleFomentStr2(oilCan.getOilVolume()/1000),
+                        UnitPref.Volume.parse(RongJiUnit).format(oilCan.getOilVolume()),
                         SystemUtils.localizedUnit(RongJiUnit)};
             case 3:
                 YeWeiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.YeWeiUnit,"毫米");
@@ -479,7 +479,7 @@ public class MinOilCanView extends View {
             case 6:
                 RongJiUnit=SharePrefUtil.getString(MyApplication.getInstance().getApplicationContext(), Constans.RongJiUnit,"升");
                 return new String[]{
-                        UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L?DataUtils.doubleFomentStr(oilCan.getWaterVolume()):DataUtils.doubleFomentStr2(oilCan.getWaterVolume()/1000),
+                        UnitPref.Volume.parse(RongJiUnit).format(oilCan.getWaterVolume()),
                         SystemUtils.localizedUnit(RongJiUnit)};
             case 7:
                 return new String[]{String.valueOf(oilCan.getTemper()), "℃"};

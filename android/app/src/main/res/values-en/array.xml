@@ -162,6 +162,7 @@
     <string-array name="rongji_unit">
         <item>L</item>
         <item>m³</item>
+        <item>Gal</item>
     </string-array>
     <string-array name="zhiliang_unit">
         <item>kg</item>

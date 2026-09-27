@@ -242,9 +242,12 @@ public class OilCanFragment extends BaseFragment {
             oilcan_tv_tankno.setText(oilCan.getOilCanPos() + "#");
             oilcan_tv_oiltype.setText(SystemUtils.getRsStr(R.string.oilcan_type_format, oilCan.getOilCanPos(), DataUtils.getOilType()[oilCan.getOilType()]));
             oilcan_tv_oillevel.setText(" " + (UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getOilLevel() ): DataUtils.doubleFomentStr2(oilCan.getOilLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
-            oilcan_tv_oilvolume.setText(" " + (UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ? DataUtils.doubleFomentStr(oilCan.getMaxVolume()) : DataUtils.doubleFomentStr2(oilCan.getMaxVolume() / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
-            oilcan_tv_oilweight.setText(" " + (UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ? DataUtils.doubleFomentStr(oilCan.getOilVolume()) : DataUtils.doubleFomentStr2(oilCan.getOilVolume() / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
-            oilcan_tv_oiladdible.setText(" " + (UnitPref.Volume.parse(RongJiUnit) == UnitPref.Volume.L ?DataUtils.doubleFomentStr(oilCan.getSurPlus() ): DataUtils.doubleFomentStr2(DataUtils.doubleFoment(oilCan.getSurPlus() ) / 1000)) + "  " + SystemUtils.localizedUnit(RongJiUnit));
+            oilcan_tv_oilvolume.setText(" " + UnitPref.Volume.parse(RongJiUnit).format(oilCan.getMaxVolume()) + "  " + SystemUtils.localizedUnit(RongJiUnit));
+            oilcan_tv_oilweight.setText(" " + UnitPref.Volume.parse(RongJiUnit).format(oilCan.getOilVolume()) + "  " + SystemUtils.localizedUnit(RongJiUnit));
+            // 提前用 doubleFoment 预处理一次是延续原来 CUBIC 分支就有的写法（对 L/GALLON 分支是
+            // 幂等操作，不改变显示结果——doubleFoment 跟 doubleFomentStr 用的是同一套保留1位小数
+            // 的 DecimalFormat，只是返回 double 不是 String）。
+            oilcan_tv_oiladdible.setText(" " + UnitPref.Volume.parse(RongJiUnit).format(DataUtils.doubleFoment(oilCan.getSurPlus())) + "  " + SystemUtils.localizedUnit(RongJiUnit));
             oilcan_tv_waterlevel.setText(" " + (UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getWaterLevel()) : DataUtils.doubleFomentStr2(oilCan.getWaterLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
             oilcan_tv_temperature.setText(" " + DataUtils.doubleFomentStr(oilCan.getTemper() )+ " ℃");
         }
