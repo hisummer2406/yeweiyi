@@ -417,8 +417,11 @@ public class CreateOilTableFragment extends BaseFragment {
             SystemUtils.showRsToast(R.string.createtable__nodiameternull);
         } else if (createtable_ed_diameter.getText().length() < 3) {
             SystemUtils.showRsToast("灌高不能小于10厘米");
-        } else if (tableType == TableType.HORIZONTALTANK & createtable_ed_headA.getText().length() < 3) {
-            SystemUtils.showRsToast("罐头不能小于10厘米");
+        } else if (tableType == TableType.HORIZONTALTANK & StringUtils.isEmpty(createtable_ed_headA.getText().toString())) {
+            // R（封头半径）允许填 0——平封头（没有弧度）是真实存在的罐型，不是"太小"，
+            // 之前用 length()<3 卡最小值，跟罐长/罐高的"不能小于10厘米"混在一起是错的。
+            // createtable_a_nonull 这个资源之前就存在（设计稿留的），但全仓库零引用，这次接上。
+            SystemUtils.showRsToast(R.string.createtable_a_nonull);
         } else {
             L = Double.parseDouble(createtable_ed_length.getText()
                     .toString()) / 1000;

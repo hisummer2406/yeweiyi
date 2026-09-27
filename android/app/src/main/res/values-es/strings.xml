@@ -228,6 +228,10 @@
     <string name="createtable_createbable">Genere primero la tabla del tanque</string>
     <string name="createtable_oillengtg_nonull">La longitud del tanque no puede estar vacía</string>
     <string name="createtable__nodiameternull">El diámetro no puede estar vacío</string>
+    <!-- [已翻译-2026-09-27] createtable_a_nonull 之前设计稿留了资源但全仓库零引用，这次接到
+         CreateOilTableFragment.java 的卧罐 R 字段空值校验上。西语输入框上的字段标签本身是"R"
+         （不是英文那边的"End socket A"），所以译文跟着字段标签走，不是逐字翻英文。 -->
+    <string name="createtable_a_nonull">R no puede estar vacío</string>
     <string name="createtable_import_success">Importado al tanque Nº %1$d</string>
     <string name="datamanager_chek_out">La ruta no existe, verifique el dispositivo externo</string>
     <string name="view_tank_chart">Ver Tabla del Tanque</string>
