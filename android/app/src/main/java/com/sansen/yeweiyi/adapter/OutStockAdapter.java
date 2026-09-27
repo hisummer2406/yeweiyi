@@ -9,11 +9,10 @@ import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.db.OutStock;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
-import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.NumberTools;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
@@ -25,18 +24,12 @@ public class OutStockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private List<OutStock> outStocks;
     private OnItemClickListener mOnItemClickListener;
 
-    private double density = 0;
     private double wendu = 0;
 
 
     public OutStockAdapter() {
 
         outStocks = new ArrayList<OutStock>();
-        List<OilCanSet> os = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
-        if (os != null && os.size() > 0) {
-            density = os.get(0).getDensity();
-            //Log.i("TAG","密度"+density);
-        }
     }
  
     public void setData(List<OutStock> lists) {
@@ -88,7 +81,6 @@ public class OutStockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
                     scaleHeight = oilcanDataManager.getTestData(oilInOut.getOilId()).getScaleHight();
                     scaleVolume = oilcanDataManager.getTestData(oilInOut.getOilId()).getScaleVolume();
-                  //  density = oilcanDataManager.getTestData(oilInOut.getOilId()).getDensity();
                     if (scaleHeight == 0)
                         scaleHeight = 1;
                     if (scaleVolume == 0)
@@ -100,11 +92,12 @@ public class OutStockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                 viewHolder.inout_tv_id.setText(String.valueOf(position + 1));
                 viewHolder.inout_tv_guan_hao.setText(String.valueOf(oilInOut.getOilId()));
                 int oilId=oilInOut.getOilId();
-                if (OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId())==null){
+                OilCan tankForThisRow = OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId());
+                if (tankForThisRow==null){
                     jieZhi=Const.getOilType(0);
                 }
                 else {
-                    jieZhi=Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilInOut.getOilId()).getOilType());
+                    jieZhi=Const.getOilType(tankForThisRow.getOilType());
                 }
                 viewHolder.inout_tv_jie_zhi.setText(jieZhi);
                 viewHolder.inout_tv_time.setText(String.valueOf(oilInOut.getTime()));
@@ -113,7 +106,12 @@ public class OutStockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                 viewHolder.input_tv_beginvolum.setText(String.valueOf(NumberTools.formatDouble4(oilInOut.getBeginVolum() / scaleVolume)));
                 viewHolder.input_tv_endvolum.setText(String.valueOf(NumberTools.formatDouble4(oilInOut.getEndVolum() / scaleVolume)));
                 viewHolder.inout_tv_zhiliangl.setText(String.valueOf(NumberTools.formatDouble4(Double.parseDouble(viewHolder.input_tv_beginvolum.getText().toString())-Double.parseDouble(viewHolder.input_tv_endvolum.getText().toString()))));
-                viewHolder.inout_tv_zhiliangkg.setText(String.valueOf(NumberTools.formatDouble4(Double.parseDouble(viewHolder.inout_tv_zhiliangl.getText().toString())*density)));//density
+                // [已更正-2026-09-27，二次更正] 上一版改成直接读 beginWeight/endWeight 相减，真机测试发现是
+                // 负数——查了 InOilManager.java 才发现 beginWeight 那个字段本身写入时就是个 bug（存的是容积差，
+                // 没乘密度，跟 endWeight 不是同一种量纲，两者相减没有意义）。改回按密度现算，但用这条记录自己
+                // 所属的罐（oilInOut.getOilId()）现查密度，不再是 adapter 构造时缓存的"数据库第一个罐"密度。
+                double densityForThisRow = tankForThisRow == null ? 0 : tankForThisRow.getDensity();
+                viewHolder.inout_tv_zhiliangkg.setText(String.valueOf(NumberTools.formatDouble4(Double.parseDouble(viewHolder.inout_tv_zhiliangl.getText().toString())*densityForThisRow)));
                 if (mOnItemClickListener != null) {
                     viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
                         @Override
