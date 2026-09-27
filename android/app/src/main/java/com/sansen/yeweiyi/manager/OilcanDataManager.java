@@ -401,19 +401,13 @@ public class OilcanDataManager {
     }
 
 
-    /**
-     * 根据key查找和Map中的数据
-     *
-     * @return OilCan
-     */
-    public OilCan getDataByProbe(String address) {
-//		Log.i("在什么线程下执行啊+++++)))))",Thread.currentThread().getName());
-
-        int key = 0;
-        for (int i = 0; i < mOilCanData.size(); i++) {
-            key = mOilCanData.keyAt(i);
-            OilCan oilCan = mOilCanData.get(key);
-            if (oilCan.getProbeAdr().equals(address)) {
+    /** 按协议帧里的地址字节查油罐（中成/LD 应答用），地址字节 = 十进制探针ID。 */
+    public OilCan getDataByProbeAddress(int addressByte) {
+        // 先取局部引用：refresh() 会整体替换 mOilCanData，循环中途不能换到另一个数组上。
+        SparseArray<OilCan> data = mOilCanData;
+        for (int i = 0; i < data.size(); i++) {
+            OilCan oilCan = data.valueAt(i);
+            if (oilCan != null && oilCan.getProbeAddressByte() == addressByte) {
                 return oilCan;
             }
         }

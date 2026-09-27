@@ -241,8 +241,10 @@ public class OilCanSetFragment extends BaseFragment {
         //item_et_chuanGanQiLeng.setText(Singleton.getInstance().TanZhenLang[oilCanSet.getPk_tanZhenId()]+"");
         item_et_chuanGanQiLeng.setText(String.valueOf(oilCanSet.getChuanGanQiHight()));
 
-        if (Singleton.getInstance().TanZhenLang[oilCanSet.getPk_tanZhenId()]!=0){
-            item_et_chuanGanQiLeng.setText(Singleton.getInstance().TanZhenLang[oilCanSet.getPk_tanZhenId()]+"");
+        int tanZhenId = oilCanSet.getPk_tanZhenId();
+        double[] tanZhenLang = Singleton.getInstance().TanZhenLang;
+        if (tanZhenId >= 0 && tanZhenId < tanZhenLang.length && tanZhenLang[tanZhenId] != 0) {
+            item_et_chuanGanQiLeng.setText(tanZhenLang[tanZhenId] + "");
             saveData(item_et_chuanGanQiLeng.getText().toString(),"ChuanGanQiHight", double.class);
 
         }
@@ -391,7 +393,13 @@ public class OilCanSetFragment extends BaseFragment {
 
             case R.id.ly_baoCunData:
                 Log.e("TAG",item_tv_tanzhenID.getText().toString());
-                saveData(item_tv_tanzhenID.getText().toString(),"Pk_tanZhenId", int.class);
+                // 探针ID 即协议地址字节（十进制输入），只接受 1-255；越界不保存并恢复原值。
+                if (isValidTanZhenId(item_tv_tanzhenID.getText().toString())) {
+                    saveData(item_tv_tanzhenID.getText().toString(),"Pk_tanZhenId", int.class);
+                } else {
+                    Log.w(TAG, "探针ID不在 1-255 范围内，不保存: " + item_tv_tanzhenID.getText());
+                    item_tv_tanzhenID.setText(String.valueOf(oilCanSet.getPk_tanZhenId()));
+                }
                 saveData(item_et_oilheight.getText().toString(),"Height", int.class);
                 saveData(item_et_maxvolum.getText().toString(),"MaxVolume", int.class);
                 saveData(item_et_chuanGanQiLeng.getText().toString(), "ChuanGanQiHight", double.class);
@@ -463,6 +471,15 @@ public class OilCanSetFragment extends BaseFragment {
             Const.isUpdate = false;
         } else {
             onReflushData();
+        }
+    }
+
+    private static boolean isValidTanZhenId(String text) {
+        try {
+            int id = Integer.parseInt(text.trim());
+            return id >= 1 && id <= 255;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 

@@ -20,7 +20,7 @@ public class Singleton {
     public boolean IsJiaoBan;//交班记录导出
     public boolean IsKuCun;//库存记录导出
     public long StockTime = 0;
-    public double[] TanZhenLang = new double[16];
+    public double[] TanZhenLang = new double[256];// 下标 = 探针地址字节（1-255）
     public int ChuanKou2;//串口2设置
     public boolean ChuanKou4;//串口4设置
     public boolean ChuanKou5;//串口5设置

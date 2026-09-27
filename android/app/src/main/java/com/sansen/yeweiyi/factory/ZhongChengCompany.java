@@ -162,11 +162,11 @@ public class ZhongChengCompany implements AbstractCompany {
                 bytes3[1] = bytes1[10];
                 bytes3[2] = bytes1[11];
                 bytes3[3] = bytes1[12];
-                String address = DataUtils.byteToHexString(bytes[2]);
+                int address = bytes[2] & 0xFF;
                 double oilLevel = Math.floor(DataUtils.byteToFloat(bytes2, bytes2.length) * 10f) / 10f;
                 double waterLevel = Math.floor(DataUtils.byteToFloat(bytes3, bytes3.length) * 10f) / 10f;
                 Log.e("TAG"," 油高 "+oilLevel+" 探针地址 "+address);
-                oilCan = MyApplication.getInstance().getmOilcanDataManager().getDataByProbe(address);
+                oilCan = MyApplication.getInstance().getmOilcanDataManager().getDataByProbeAddress(address);
                 if (oilCan != null) {
                     oilCan.setOilLevel(BigDecimal.valueOf(oilLevel).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue());
                     oilCan.setWaterLevel(Math.max(0, BigDecimal.valueOf(waterLevel).add(BigDecimal.valueOf(oilCan.getWaterLevelCorrection())).doubleValue()));
@@ -211,9 +211,9 @@ public class ZhongChengCompany implements AbstractCompany {
            // Log.i("CRC", "probeInfoPase: 准备crc的数据"+str+"   "+DataUtils.bytesToHexString(bytes1,3));
             if (str.equals("45")) {
                 // 45帧按探针地址绑定到对应油罐，取址方式与44帧一致，不再写共享字段（issue #28）。
-                String address = DataUtils.byteToHexString(bytes[2]);
+                int address = bytes[2] & 0xFF;
                 double temp = Math.floor(calcTemperature(bytes1[1], bytes1[2]));
-                OilCan can = MyApplication.getInstance().getmOilcanDataManager().getDataByProbe(address);
+                OilCan can = MyApplication.getInstance().getmOilcanDataManager().getDataByProbeAddress(address);
                 if (can != null) {
                     can.setTemper(BigDecimal.valueOf(temp).add(BigDecimal.valueOf(can.getTempCorrection())).doubleValue());
                     return true;
@@ -232,10 +232,13 @@ public class ZhongChengCompany implements AbstractCompany {
                     .getShort() & 0xFFFF;
 
             int decimal = bytes[2] & 0xFF;
-            // TanZhenLang 只开16位，探针地址理论上到255，越界就丢弃这次数据（历史遗留）。
+            // 地址字节 = 十进制探针ID，与 OilCanSetFragment 按 pk_tanZhenId 读取的下标一致。
             if (decimal < Singleton.getInstance().TanZhenLang.length) {
                 Singleton.getInstance().TanZhenLang[decimal] = value;
             }
+            // 解析成功也不 return true，落到下面的 return false：SerialPortManager 会把这次
+            // 长度应答记为一次错误（errorTimes+1），随后 44 成功时清零。原有行为，暂不修改，
+            // 详见 SerialPortManager 里发送 42 处的注释。
         }
 
         return false;

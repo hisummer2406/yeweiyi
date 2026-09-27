@@ -659,6 +659,26 @@ public class OilCan {
 		return probeAdr;
 	}
 
+	/**
+	 * 探针ID（十进制输入）对应的协议地址字节，中成/LD 帧里的地址都是一个原始字节：
+	 * ID 10 → 0x0A，而不是把 "10" 当十六进制读成 0x10。不在 1-255 内返回 -1。
+	 * LD2（4-20mA）按十进制通道号匹配，仍用 {@link #getProbeAdr()}。
+	 */
+	public int getProbeAddressByte() {
+		try {
+			int address = Integer.parseInt(probeAdr.trim());
+			return (address >= 1 && address <= 255) ? address : -1;
+		} catch (NumberFormatException | NullPointerException e) {
+			return -1;
+		}
+	}
+
+	/** 协议帧里的两位大写十六进制地址（ID 10 → "0A"），地址无效返回 null。 */
+	public String getProbeAddressHex() {
+		int address = getProbeAddressByte();
+		return address < 0 ? null : String.format("%02X", address);
+	}
+
 	public void setProbeAdr(String probeAdr) {
 		this.probeAdr = probeAdr;
 	}

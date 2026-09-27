@@ -5,6 +5,8 @@ import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
 import android.util.SparseArray;
+import android.util.SparseBooleanArray;
+import android.util.SparseIntArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.BrandBean;
@@ -174,12 +176,15 @@ public class SerialPortManager implements IParseDataListener {
     class RequestThread extends Thread {
         private SerialPortHelper serialPort;
         private String name;
-        // 42（ChangDu/传感器长度）请求节流计数器，跟温度请求（见 wenDuTurnPos）无关（原名 isWenDu）。
-        int changDuThrottle = 0;
+        // 42（ChangDu/传感器长度）请求节流：按罐位号各自计数，每个罐每轮询 10 次问一次长度。
+        // 原先所有罐共用一个计数器，每罐每轮发出的请求条数固定，计数器相位被罐号锁死，
+        // 4 罐时 2、4 号罐永远轮不到 42（现场日志 alarm-race-20260925 证实）。
+        private final SparseIntArray changDuCountByPos = new SparseIntArray();
+        // 探针地址非法的罐位，每个罐位只打一次警告日志，避免刷屏灌满落盘日志。
+        private final SparseBooleanArray invalidAddressLogged = new SparseBooleanArray();
         // 温度轮询指针，存罐位号（SparseArray key）。替代原先共享计数器巧合命中
         // 的机制（issue #28）。初值 -1，保证首次使用时自动定位到第一个真实罐位。
         private int wenDuTurnPos = -1;
-        private boolean isGetChangDu=true;
         //IoBufferManager buffManager;
 
         public RequestThread(String name, SerialPortHelper serialPort) {
@@ -255,28 +260,56 @@ public class SerialPortManager implements IParseDataListener {
                                             wenDuTurnPos = mOilCanData.keyAt((wenDuTurnIndex + 1) % oilCanCount);
                                         }
                                     }
+                                    // 中成/LD 协议的地址是一个字节：探针ID按十进制输入（10 → 0x0A），
+                                    // 不能把十进制字符串直接当十六进制发（"10" 会变成 0x10）。
+                                    int probeType = mOilCan.getProbeType();
+                                    if ((probeType == 0 || probeType == 1) && mOilCan.getProbeAddressHex() == null) {
+                                        if (!invalidAddressLogged.get(mOilCan.getOilCanPos())) {
+                                            invalidAddressLogged.put(mOilCan.getOilCanPos(), true);
+                                            Log.w(TAG, "探针地址不在 1-255 范围内，跳过: " + mOilCan.getProbeAdr()
+                                                    + ", 油罐位=" + mOilCan.getOilCanPos());
+                                        }
+                                        // 按"没收到应答"计错，照常走通讯故障报警——否则配错地址的罐
+                                        // 界面停在旧值却不报警，跟正常罐看起来一样。sleep 模拟一次
+                                        // 请求的耗时，所有罐地址都非法时 while 循环也不会空转。
+                                        mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);
+                                        crcError(mOilCan);
+                                        try {
+                                            Thread.sleep(200);
+                                        } catch (InterruptedException e) {
+                                            Log.w(TAG, "非法地址等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e);
+                                        }
+                                        continue;
+                                    }
+                                    invalidAddressLogged.delete(mOilCan.getOilCanPos());
+                                    boolean askChangDu = false;
+                                    if (probeType == 0) {
+                                        int visit = (changDuCountByPos.get(mOilCan.getOilCanPos()) + 1) % 10;
+                                        changDuCountByPos.put(mOilCan.getOilCanPos(), visit);
+                                        askChangDu = (visit == 1);
+                                    }
                                     for (int i = 0; i < 5; i++) { //0x01,0x06,0x00,0x01,0x00,0x02修改波特率
-                                        switch (mOilCan.getProbeType()) {
+                                        switch (probeType) {
                                             case 0:
                                                 Log.e("TAG探针地址",i+"===");
                                                 if (i == 0 && isMyWenDuTurn) {
-                                                    oilCanData = ZhongChengCompany.getInstance().sendWenDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-                                                } else if (changDuThrottle % 10 == 1) {
-                                                    oilCanData = ZhongChengCompany.getInstance().sendChangDuInfo("FEFE", mOilCan.getProbeAdr(), mContext);
+                                                    oilCanData = ZhongChengCompany.getInstance().sendWenDuInfo("FEFE", mOilCan.getProbeAddressHex(), mContext);
+                                                } else if (askChangDu) {
+                                                    // 本次轮询只问一次长度。
+                                                    // 注意（沿用原代码行为，并非设计意图）：42 应答走 ZhongChengCompany 的
+                                                    // 14 字节分支，只写 TanZhenLang、不 return true，落到末尾 return false，
+                                                    // 所以这里 isRight=false → errorTimes+1，并继续下一次 i 问液位；44 成功
+                                                    // 时 setErrorTimes(0) 清零。影响：只有后面的 44 也连续失败时，才会让通讯
+                                                    // 故障提前一次触发。历史版本（8ff8d69 起）一直如此，2026-09-27 核对后决定
+                                                    // 暂不修改，如需修正要连同通讯故障计数一起在真机上验证。
+                                                    askChangDu = false;
+                                                    oilCanData = ZhongChengCompany.getInstance().sendChangDuInfo("FEFE", mOilCan.getProbeAddressHex(), mContext);
                                                 } else {
-                                                    oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAdr(), mContext);
-                                                }
-                                                changDuThrottle++;
-                                                if (changDuThrottle > 100) {
-                                                    changDuThrottle = 0;
-                                                }
-                                                if (isGetChangDu) {
-                                                    isGetChangDu = false;
-
+                                                    oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAddressHex(), mContext);
                                                 }
                                                 break;
                                             case 1:
-                                                oilCanData = LDCompany.getInstance().sendProbeInfo("", mOilCan.getProbeAdr(), mContext);
+                                                oilCanData = LDCompany.getInstance().sendProbeInfo("", mOilCan.getProbeAddressHex(), mContext);
                                                 //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
                                                 break;
 
