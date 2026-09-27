@@ -12,11 +12,13 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SerialPortManager.PCPortThread;
-import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.StringUtils;
+
+import java.util.HashMap;
+import java.util.Map;
 
 import serialport.help.SerialPortHelper;
 
@@ -110,38 +112,45 @@ public class VR350Factory implements PCDataFactory {
 
 		if (data.contains("69 32 30 31 30 30")) {
 			backOilcanData();
+			return;
 		}
-		else if (data.contains("08 03 03 E7")){
-			backOilcanData2();
+		ZhongChengModbusSlave.Request request =
+				ZhongChengModbusSlave.findRequest(DataUtils.hexString2Bytes(data.replace(" ", "")));
+		if (request != null) {
+			backOilcanData2(request);
 		}
-	}
-	private void backOilcanData2() {
-		SparseArray<OilCan> mOilcanData;
-		mOilcanData = mOilcanDataManager.getData();
-		StringBuffer stringBuffer = new StringBuffer();
-		stringBuffer.append("0803");// 命令头
-		stringBuffer.append(Integer.toHexString((mOilcanData.size())*24));
-		for (int i=0;i<mOilcanData.size();i++) {
-			OilCan oilCan = mOilcanData.valueAt(i);
-			stringBuffer.append(DataUtils.floatToHex((float) oilCan.getOilLevel()));// Height油高
-			stringBuffer.append(DataUtils.dou2AscHex((float)oilCan.getWaterLevel()));// Water水高
-			stringBuffer.append(DataUtils.dou2AscHex((float)oilCan.getTemper()));// Temper温度
-			stringBuffer.append(DataUtils.dou2AscHex((float)oilCan.getOilVolume()));
-			stringBuffer.append("0000000000000000");
-		}
-		String crc= getString(CRCheck.crc16(DataUtils.HexString2Bytes(stringBuffer.toString())));
-		stringBuffer.append(crc.substring(2));
-		stringBuffer.append(crc.substring(0, 2));
-		Log.e("TAG",stringBuffer.toString());
-		mSerialPort.sendData(DataUtils.hexString2Bytes(stringBuffer.toString()));
-	}
-	public String getString(String data) {
-		while (data.length() < 4) {
-			data = 0 + data;
-		}
-		return data;
 	}
 
+	/** 文档寄存器表列到 12 号罐；实际配置的罐号更大时按实际扩展 */
+	private static final int MODBUS_DOC_TANK_COUNT = 12;
+
+	/** 对外 Modbus（《中成液位modbus协议》）：按请求的起始地址和寄存器数量应答 */
+	private void backOilcanData2(ZhongChengModbusSlave.Request request) {
+		SparseArray<OilCan> mOilcanData = mOilcanDataManager.getData();
+		Map<Integer, float[]> tanks = new HashMap<>();
+		int maxTank = MODBUS_DOC_TANK_COUNT;
+		for (int i = 0; i < mOilcanData.size(); i++) {
+			OilCan oilCan = mOilcanData.valueAt(i);
+			int pos = oilCan.getOilCanPos();
+			maxTank = Math.max(maxTank, pos);
+			// oilVolume 是油面高度对应的总体积(含水)，与 MinOilCanView 的"油体积 = 体积-水体积"口径一致
+			double totalVolume = oilCan.getOilVolume();
+			double waterVolume = oilCan.getWaterVolume();
+			tanks.put(pos, new float[]{
+					// 高度按毫米发：文档举例是米，但现场客户 PLC 按毫米配置（2026-09-27 确认）
+					(float) oilCan.getOilLevel(),            // 油高 mm
+					(float) oilCan.getWaterLevel(),          // 水高 mm
+					(float) oilCan.getTemper(),              // 温度 ℃
+					(float) totalVolume,                     // 油水体积 L
+					(float) Math.max(0, totalVolume - waterVolume), // 油体积 L
+					(float) waterVolume,                     // 水体积 L
+			});
+		}
+		byte[] response = ZhongChengModbusSlave.buildResponse(request, tanks, maxTank);
+		Log.i("VR350Factory", "Modbus 请求 start=" + request.start + " qty=" + request.quantity
+				+ " 应答=" + DataUtils.bytesToHexString(response, response.length));
+		mSerialPort.sendData(response);
+	}
 
 	public void transportData(String data) {
 		Message msg = Message.obtain();
