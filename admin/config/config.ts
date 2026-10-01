@@ -2,6 +2,7 @@
 
 import { join } from 'node:path';
 import { defineConfig } from '@umijs/max';
+import { antdTheme } from '../src/design-tokens';
 import defaultSettings from './defaultSettings';
 import proxy from './proxy';
 
@@ -148,11 +149,7 @@ export default defineConfig({
     appConfig: {},
     configProvider: {
       variant: 'filled',
-      theme: {
-        token: {
-          fontFamily: 'AlibabaSans, sans-serif',
-        },
-      },
+      theme: antdTheme,
     },
   },
   /**

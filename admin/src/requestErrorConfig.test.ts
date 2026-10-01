@@ -12,10 +12,29 @@ vi.mock('antd', () => ({
   },
 }));
 
+const { mockHistoryReplace, mockHistory, mockGetToken, mockClearToken } = vi.hoisted(() => {
+  const mockHistoryReplace = vi.fn();
+  return {
+    mockHistoryReplace,
+    mockHistory: {
+      location: { pathname: '/console/devices', search: '', hash: '' },
+      replace: mockHistoryReplace,
+    },
+    mockGetToken: vi.fn(),
+    mockClearToken: vi.fn(),
+  };
+});
+
 vi.mock('@umijs/max', () => ({
   getIntl: vi.fn(() => ({
     formatMessage: vi.fn(({ defaultMessage }) => defaultMessage),
   })),
+  history: mockHistory,
+}));
+
+vi.mock('@/utils/auth', () => ({
+  getToken: mockGetToken,
+  clearToken: mockClearToken,
 }));
 
 describe('requestErrorConfig', () => {
@@ -26,6 +45,7 @@ describe('requestErrorConfig', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.pushState({}, '', '/console/devices');
   });
 
   describe('errorThrower', () => {
@@ -190,6 +210,31 @@ describe('requestErrorConfig', () => {
       expect(message.error).toHaveBeenCalledWith('Response status:500');
     });
 
+    it('should clear the token and redirect to login on a 401 response', () => {
+      const error: any = new Error('Unauthorized');
+      error.response = { status: 401, data: { error: 'missing bearer token' } };
+
+      errorHandler(error, {});
+
+      expect(mockClearToken).toHaveBeenCalled();
+      expect(mockHistoryReplace).toHaveBeenCalledWith(
+        `/user/login?redirect=${encodeURIComponent('/console/devices')}`,
+      );
+      // 401 走专用分支，不应该再弹通用的 "Response status:401" 提示
+      expect(message.error).not.toHaveBeenCalled();
+    });
+
+    it('should not redirect again on a 401 response while already on the login page', () => {
+      window.history.pushState({}, '', '/user/login');
+      const error: any = new Error('Unauthorized');
+      error.response = { status: 401, data: { error: 'missing bearer token' } };
+
+      errorHandler(error, {});
+
+      expect(mockClearToken).toHaveBeenCalled();
+      expect(mockHistoryReplace).not.toHaveBeenCalled();
+    });
+
     it('should handle offline error', () => {
       const error: any = new Error('Network error');
       error.request = {};
@@ -242,22 +287,42 @@ describe('requestErrorConfig', () => {
     const interceptor = errorConfig.requestInterceptors?.[0] as (config: {
       url?: string;
       method?: string;
-    }) => { url?: string };
+      headers?: Record<string, string>;
+    }) => { url?: string; headers?: Record<string, string> };
 
-    it('should pass through config without modification', () => {
-      const config = {
-        url: 'https://api.example.com/users',
-        method: 'GET',
-      };
+    it('attaches an Authorization header when a token is stored', () => {
+      mockGetToken.mockReturnValue('abc.def.ghi');
+      const config = { url: 'https://api.example.com/users', method: 'GET' };
 
       const result = interceptor(config);
 
-      // Token attachment is intentionally commented out in the source;
-      // interceptor currently returns config as-is
+      expect(result.headers?.Authorization).toBe('Bearer abc.def.ghi');
       expect(result.url).toBe('https://api.example.com/users');
     });
 
+    it('omits the Authorization header when no token is stored', () => {
+      mockGetToken.mockReturnValue(null);
+      const config = { url: 'https://api.example.com/users', method: 'GET' };
+
+      const result = interceptor(config);
+
+      expect(result.headers?.Authorization).toBeUndefined();
+    });
+
+    it('preserves existing headers when attaching the token', () => {
+      mockGetToken.mockReturnValue('abc.def.ghi');
+      const config = { headers: { 'Content-Type': 'application/json' } };
+
+      const result = interceptor(config);
+
+      expect(result.headers).toEqual({
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer abc.def.ghi',
+      });
+    });
+
     it('should handle URL without config', () => {
+      mockGetToken.mockReturnValue(null);
       const config = {};
 
       const result = interceptor(config);

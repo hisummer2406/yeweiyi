@@ -8,6 +8,7 @@ import type { MenuProps } from 'antd';
 import { Spin } from 'antd';
 import React, { startTransition } from 'react';
 import { outLogin } from '@/services/ant-design-pro/api';
+import { clearToken } from '@/utils/auth';
 import HeaderDropdown from '../HeaderDropdown';
 
 type GlobalHeaderRightProps = {
@@ -36,6 +37,9 @@ const menuItems: MenuProps['items'] = [
 ];
 
 const loginOut = async () => {
+  // 先清本地 token，再尝试通知后端——即使 outLogin() 失败（网络问题，或该接口本身
+  // 还是模板占位），也不能让一个已登出的会话继续持有有效 token。
+  clearToken();
   try {
     await outLogin();
   } catch {

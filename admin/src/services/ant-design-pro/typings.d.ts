@@ -23,11 +23,10 @@ declare namespace API {
     phone?: string;
   };
 
-  type LoginResult = {
-    status?: string;
-    type?: string;
-    currentAuthority?: string;
-  };
+  // Mirrors yeweiyi-cloud's real POST /api/login success response (internal/api/auth.go):
+  // 200 { token }. A 4xx { error } response never resolves here — axios rejects on any
+  // non-2xx status, so the failure path is a caught error, not a returned value.
+  type LoginResult = { token: string };
 
   type PageParams = {
     current?: number;
@@ -61,11 +60,11 @@ declare namespace API {
     status?: string;
   };
 
+  // Mirrors yeweiyi-cloud's real POST /api/login request body (internal/api/auth.go's
+  // loginRequest) — no autoLogin/type fields, the real backend doesn't accept them.
   type LoginParams = {
-    username?: string;
-    password?: string;
-    autoLogin?: boolean;
-    type?: string;
+    username: string;
+    password: string;
   };
 
   type ErrorResponse = {

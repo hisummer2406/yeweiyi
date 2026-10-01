@@ -25,6 +25,7 @@ import React, { startTransition, useState } from 'react';
 import { Footer } from '@/components';
 import { login } from '@/services/ant-design-pro/api';
 import { getFakeCaptcha } from '@/services/ant-design-pro/login';
+import { setToken } from '@/utils/auth';
 import Settings from '../../../../config/defaultSettings';
 
 /**
@@ -128,7 +129,7 @@ const LoginMessage: React.FC<{
 };
 
 const Login: React.FC = () => {
-  const [userLoginState, setUserLoginState] = useState<API.LoginResult>({});
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [type, setType] = useState<string>('account');
   const { initialState, setInitialState } = useModel('@@initialState');
   const { styles } = useStyles();
@@ -148,32 +149,33 @@ const Login: React.FC = () => {
   };
 
   const handleSubmit = async (values: API.LoginParams) => {
+    setLoginError(null);
     try {
-      // 登录
-      const msg = await login({ ...values, type });
-      if (msg.status === 'ok') {
-        const defaultLoginSuccessMessage = intl.formatMessage({
-          id: 'pages.login.success',
-          defaultMessage: '登录成功！',
-        });
-        message.success(defaultLoginSuccessMessage);
-        await fetchUserInfo();
-        const urlParams = new URL(window.location.href).searchParams;
-        const redirectUrl = getSafeRedirectUrl(urlParams.get('redirect'));
-        window.location.href = redirectUrl;
-        return;
-      }
-      // 如果失败去设置用户错误信息
-      setUserLoginState(msg);
-    } catch {
-      const defaultLoginFailureMessage = intl.formatMessage({
-        id: 'pages.login.failure',
-        defaultMessage: '登录失败，请重试！',
+      // 登录。skipErrorHandler：凭据错误（401）是登录页自己要处理的正常失败路径，不是
+      // 会话过期，不应该走全局的 401 处理（见 src/requestErrorConfig.ts）。
+      const msg = await login(values, { skipErrorHandler: true });
+      setToken(msg.token);
+      const defaultLoginSuccessMessage = intl.formatMessage({
+        id: 'pages.login.success',
+        defaultMessage: '登录成功！',
       });
-      message.error(defaultLoginFailureMessage);
+      message.success(defaultLoginSuccessMessage);
+      await fetchUserInfo();
+      const urlParams = new URL(window.location.href).searchParams;
+      const redirectUrl = getSafeRedirectUrl(urlParams.get('redirect'));
+      window.location.href = redirectUrl;
+    } catch (err) {
+      const backendMessage = (err as { response?: { data?: { error?: string } } })?.response
+        ?.data?.error;
+      setLoginError(
+        backendMessage ||
+          intl.formatMessage({
+            id: 'pages.login.failure',
+            defaultMessage: '登录失败，请重试！',
+          }),
+      );
     }
   };
-  const { status, type: loginType } = userLoginState;
 
   return (
     <div className={styles.container}>
@@ -240,14 +242,7 @@ const Login: React.FC = () => {
             ]}
           />
 
-          {status === 'error' && loginType === 'account' && (
-            <LoginMessage
-              content={intl.formatMessage({
-                id: 'pages.login.accountLogin.errorMessage',
-                defaultMessage: '账户或密码错误(admin/ant.design)',
-              })}
-            />
-          )}
+          {type === 'account' && loginError && <LoginMessage content={loginError} />}
           {type === 'account' && (
             <>
               <ProFormText
@@ -297,9 +292,7 @@ const Login: React.FC = () => {
             </>
           )}
 
-          {status === 'error' && loginType === 'mobile' && (
-            <LoginMessage content="验证码错误" />
-          )}
+          {type === 'mobile' && loginError && <LoginMessage content={loginError} />}
           {type === 'mobile' && (
             <>
               <ProFormText

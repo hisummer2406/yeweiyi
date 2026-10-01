@@ -1,7 +1,10 @@
 ﻿import type { RequestOptions } from '@@/plugin-request/request';
 import type { RequestConfig } from '@umijs/max';
-import { getIntl } from '@umijs/max';
+import { getIntl, history } from '@umijs/max';
 import { message, notification } from 'antd';
+import { clearToken, getToken } from '@/utils/auth';
+
+const loginPath = '/user/login';
 
 // 错误处理方案： 错误类型
 enum ErrorShowType {
@@ -70,6 +73,16 @@ export const errorConfig: RequestConfig = {
               message.error(errorMessage);
           }
         }
+      } else if (error.response?.status === 401) {
+        // 会话结束：token 缺失/无效，或已过 24h 有效期（yeweiyi-cloud 的 JWT 不可刷新）。
+        // 登录页自己的 401（凭据错误）走 skipErrorHandler，不会落到这里。
+        clearToken();
+        if (window.location.pathname !== loginPath) {
+          const { pathname, search, hash } = history.location;
+          history.replace(
+            `${loginPath}?redirect=${encodeURIComponent(pathname + search + hash)}`,
+          );
+        }
       } else if (error.response) {
         // Axios 的错误
         // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
@@ -90,15 +103,14 @@ export const errorConfig: RequestConfig = {
     },
   },
 
-  // 请求拦截器
+  // 请求拦截器：每次请求都现读 localStorage，不用内存缓存——避免 logout/401 清掉 token
+  // 后，缓存里还留着一份旧值。
   requestInterceptors: [
     (config: RequestOptions) => {
-      // 拦截请求配置，进行个性化处理。
-      // 示例：为请求附加 token（按需启用）
-      // const token = localStorage.getItem('token');
-      // if (token) {
-      //   config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
-      // }
+      const token = getToken();
+      if (token) {
+        config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
+      }
       return config;
     },
   ],

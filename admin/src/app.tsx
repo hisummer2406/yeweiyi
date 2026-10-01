@@ -18,7 +18,7 @@ import {
   OfflineBanner,
   VersionDropdown,
 } from '@/components';
-import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';
+import { clearToken, decodeToken, getToken, isTokenExpired } from '@/utils/auth';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 
@@ -35,18 +35,20 @@ export async function getInitialState(): Promise<{
   fetchUserInfo?: () => Promise<API.CurrentUser | undefined>;
   settingDrawerOpen?: boolean;
 }> {
-  const fetchUserInfo = async () => {
-    try {
-      const msg = await queryCurrentUser({
-        skipErrorHandler: true,
-      });
-      return msg.data;
-    } catch (_error) {
-      const { pathname, search, hash } = history.location;
-      history.replace(
-        `${loginPath}?redirect=${encodeURIComponent(pathname + search + hash)}`,
-      );
+  // yeweiyi-cloud 没有 currentUser 接口，用户身份完全编码在登录时拿到的 JWT 里
+  // （internal/api/auth.go 的 apiClaims: {uid, role, sub, exp, iat}），这里只解码本地
+  // 存的 token，不发请求。
+  const fetchUserInfo = async (): Promise<API.CurrentUser | undefined> => {
+    const token = getToken();
+    const claims = token ? decodeToken(token) : null;
+    if (claims && !isTokenExpired(claims)) {
+      return { access: claims.role, name: claims.sub };
     }
+    if (token) clearToken();
+    const { pathname, search, hash } = history.location;
+    history.replace(
+      `${loginPath}?redirect=${encodeURIComponent(pathname + search + hash)}`,
+    );
     return undefined;
   };
   // 如果不是登录页面，执行

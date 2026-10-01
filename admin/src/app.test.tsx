@@ -11,15 +11,21 @@ const mockHistory = {
   replace: mockReplace,
 };
 
-const mockQueryCurrentUser = vi.fn();
+const mockGetToken = vi.fn();
+const mockDecodeToken = vi.fn();
+const mockIsTokenExpired = vi.fn();
+const mockClearToken = vi.fn();
 
 vi.mock('@umijs/max', () => ({
   history: mockHistory,
   Link: ({ children }: any) => children,
 }));
 
-vi.mock('@/services/ant-design-pro/api', () => ({
-  currentUser: mockQueryCurrentUser,
+vi.mock('@/utils/auth', () => ({
+  getToken: mockGetToken,
+  decodeToken: mockDecodeToken,
+  isTokenExpired: mockIsTokenExpired,
+  clearToken: mockClearToken,
 }));
 
 vi.mock('@/components', () => ({
@@ -47,6 +53,14 @@ vi.mock('../config/defaultSettings', () => ({
   default: { navTheme: 'light' },
 }));
 
+const validClaims = {
+  uid: 4402,
+  role: 'customer_admin',
+  sub: 'test-user',
+  exp: 9999999999,
+  iat: 1,
+};
+
 describe('app getInitialState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,29 +71,24 @@ describe('app getInitialState', () => {
     };
   });
 
-  it('should fetch currentUser when not on login page', async () => {
+  it('should build currentUser from a valid stored token when not on login page', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockResolvedValue({
-      data: {
-        name: 'Test User',
-        access: 'admin',
-      },
-    });
+    mockGetToken.mockReturnValue('a.b.c');
+    mockDecodeToken.mockReturnValue(validClaims);
+    mockIsTokenExpired.mockReturnValue(false);
 
     const state = await getInitialState();
 
-    expect(mockQueryCurrentUser).toHaveBeenCalled();
-    expect(state.currentUser).toEqual({
-      name: 'Test User',
-      access: 'admin',
-    });
+    expect(state.currentUser).toEqual({ access: 'customer_admin', name: 'test-user' });
     expect(state.settingDrawerOpen).toBe(false);
     expect(state.fetchUserInfo).toBeDefined();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockClearToken).not.toHaveBeenCalled();
   });
 
-  it('should redirect to login when currentUser fetch fails (401)', async () => {
+  it('should redirect to login when no token is stored', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockRejectedValue(new Error('401 Unauthorized'));
+    mockGetToken.mockReturnValue(null);
 
     const state = await getInitialState();
 
@@ -87,9 +96,39 @@ describe('app getInitialState', () => {
       expect.stringContaining('/user/login?redirect='),
     );
     expect(state.currentUser).toBeUndefined();
+    expect(mockClearToken).not.toHaveBeenCalled();
   });
 
-  it('should not fetch currentUser on login page', async () => {
+  it('should clear the token and redirect when the stored token is expired', async () => {
+    const { getInitialState } = await import('./app');
+    mockGetToken.mockReturnValue('a.b.c');
+    mockDecodeToken.mockReturnValue(validClaims);
+    mockIsTokenExpired.mockReturnValue(true);
+
+    const state = await getInitialState();
+
+    expect(mockClearToken).toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith(
+      expect.stringContaining('/user/login?redirect='),
+    );
+    expect(state.currentUser).toBeUndefined();
+  });
+
+  it('should clear the token and redirect when the stored token is malformed', async () => {
+    const { getInitialState } = await import('./app');
+    mockGetToken.mockReturnValue('not-a-jwt');
+    mockDecodeToken.mockReturnValue(null);
+
+    const state = await getInitialState();
+
+    expect(mockClearToken).toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith(
+      expect.stringContaining('/user/login?redirect='),
+    );
+    expect(state.currentUser).toBeUndefined();
+  });
+
+  it('should not decode a token on the login page', async () => {
     const { getInitialState } = await import('./app');
     mockHistory.location = {
       pathname: '/user/login',
@@ -99,19 +138,19 @@ describe('app getInitialState', () => {
 
     const state = await getInitialState();
 
-    expect(mockQueryCurrentUser).not.toHaveBeenCalled();
+    expect(mockGetToken).not.toHaveBeenCalled();
     expect(state.currentUser).toBeUndefined();
     expect(state.fetchUserInfo).toBeDefined();
   });
 
-  it('should encode redirect path correctly on 401', async () => {
+  it('should encode redirect path correctly when no token is stored', async () => {
     const { getInitialState } = await import('./app');
     mockHistory.location = {
       pathname: '/admin/users',
       search: '?page=2',
       hash: '#section',
     };
-    mockQueryCurrentUser.mockRejectedValue(new Error('401'));
+    mockGetToken.mockReturnValue(null);
 
     await getInitialState();
 
@@ -122,9 +161,9 @@ describe('app getInitialState', () => {
 
   it('should include default settings in initial state', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockResolvedValue({
-      data: { name: 'User' },
-    });
+    mockGetToken.mockReturnValue('a.b.c');
+    mockDecodeToken.mockReturnValue(validClaims);
+    mockIsTokenExpired.mockReturnValue(false);
 
     const state = await getInitialState();
 
@@ -133,13 +172,13 @@ describe('app getInitialState', () => {
 
   it('fetchUserInfo should return user data on success', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockResolvedValue({
-      data: { name: 'Fetched User', access: 'user' },
-    });
+    mockGetToken.mockReturnValue('a.b.c');
+    mockDecodeToken.mockReturnValue(validClaims);
+    mockIsTokenExpired.mockReturnValue(false);
 
     const state = await getInitialState();
 
     const user = await state.fetchUserInfo?.();
-    expect(user).toEqual({ name: 'Fetched User', access: 'user' });
+    expect(user).toEqual({ access: 'customer_admin', name: 'test-user' });
   });
 });
