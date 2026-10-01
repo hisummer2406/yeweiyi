@@ -1,6 +1,6 @@
 <view>
-  <view wx:if="{{liveAlarm}}" class="card" style="background-color:#fff1f0;border:1rpx solid #ffa39e;">
-    <text style="color:#cf1322;">实时报警：{{liveAlarm}}</text>
+  <view wx:if="{{liveAlarm}}" class="card banner-danger">
+    <text class="text-danger">实时报警：{{liveAlarm}}</text>
   </view>
 
   <view class="tabs">
@@ -23,19 +23,48 @@
       </view>
       <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">上报时间 {{snapshotTs}}</view>
       <view wx:for="{{tanks}}" wx:key="index" class="card">
-        <view class="row">
-          <text>{{item.index}} 号罐　{{item.oilType || '--'}}</text>
+        <view class="row" style="margin-bottom:16rpx;">
+          <text class="tag">{{item.index}} 号罐　{{item.oilType || '--'}}</text>
           <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">
             {{item.alarmStateLabel}}
           </text>
         </view>
-        <view class="muted" style="margin-top:8rpx;">
-          油位 {{item.oilLevelMm}}mm　水位 {{item.waterLevelMm}}mm　油温 {{item.tempC}}℃
+        <view class="tank-card-head">
+          <image class="tank-illustration" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
+          <view class="tank-card-body">
+            <view class="stat-row">
+              <text class="stat-row-label">液位</text>
+              <text class="stat-row-value">{{item.oilLevelMm}}</text>
+              <text class="stat-row-unit">毫米</text>
+            </view>
+            <view class="stat-row">
+              <text class="stat-row-label">容积</text>
+              <text class="stat-row-value">{{item.oilVolumeL}}</text>
+              <text class="stat-row-unit">升</text>
+            </view>
+            <view class="stat-row">
+              <text class="stat-row-label">水高</text>
+              <text class="stat-row-value">{{item.waterLevelMm}}</text>
+              <text class="stat-row-unit">毫米</text>
+            </view>
+            <view class="stat-row">
+              <text class="stat-row-label">温度</text>
+              <text class="stat-row-value">{{item.tempC}}</text>
+              <text class="stat-row-unit">℃</text>
+            </view>
+            <view class="stat-row">
+              <text class="stat-row-label">质量</text>
+              <text class="stat-row-value">{{item.oilWeightKg}}</text>
+              <text class="stat-row-unit">千克</text>
+            </view>
+            <view class="stat-row">
+              <text class="stat-row-label">空高</text>
+              <text class="stat-row-value">{{item.nullVolumeL}}</text>
+              <text class="stat-row-unit">升</text>
+            </view>
+          </view>
         </view>
-        <view class="muted">
-          油量 {{item.oilVolumeL}}L　油重 {{item.oilWeightKg}}kg　空高 {{item.nullVolumeL}}L
-        </view>
-        <view class="muted" wx:if="{{!item.probeConnected}}" style="color:#cf1322;">探针未连接</view>
+        <view class="muted text-danger" wx:if="{{!item.probeConnected}}" style="margin-top:8rpx;">探针未连接</view>
       </view>
     </view>
 
@@ -48,16 +77,13 @@
           <text class="badge {{item.status === 'ACTIVE' ? 'badge-failed' : 'badge-online'}}">{{item.statusLabel}}</text>
         </view>
         <view class="muted" style="margin-top:8rpx;">{{item.text}}</view>
-        <view class="muted">{{item.severityLabel}}　{{item.time}}</view>
+        <view class="muted tabular-nums">{{item.severityLabel}}　{{item.time}}</view>
       </view>
     </view>
 
-    <!-- 出入库记录：GET /api/oil-in-out，两条路径都返回 {rows, parsed, unparsable, legacySkipped, ...} -->
+    <!-- 出入库记录：GET /api/oil-in-out，跟 /api/alarms 一样答一个裸数组，无法解析的记录后端会直接跳过 -->
     <view wx:if="{{activeTab === 'oilInOut'}}">
-      <view wx:if="{{oilInOutNote}}" class="card" style="background-color:#fffbe6;border:1rpx solid #ffe58f;">
-        <text style="color:#d48806;">{{oilInOutNote}}</text>
-      </view>
-      <view wx:if="{{!loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote}}" class="empty">
+      <view wx:if="{{!loading && oilInOutLoaded && oilInOut.length === 0}}" class="empty">
         暂无出入库记录
       </view>
       <view wx:for="{{oilInOut}}" wx:key="eventId" class="card">
@@ -65,19 +91,19 @@
           <text>{{item.tank}} 号罐　{{item.directionLabel}}　{{item.oilType || ''}}</text>
           <text class="muted">{{item.time}}</text>
         </view>
-        <view class="muted" style="margin-top:8rpx;">
+        <view class="muted tabular-nums" style="margin-top:8rpx;">
           液位 {{item.beginLevelMm}} → {{item.endLevelMm}}mm　容积 {{item.beginVolumeL}} → {{item.endVolumeL}}L
         </view>
-        <view class="muted">
+        <view class="muted tabular-nums">
           净变化 {{item.netVolumeL}}L　实际到货/发出 {{item.deliveredVolumeL}}L
         </view>
-        <view class="muted">{{item.beginTime}} - {{item.endTime}}</view>
+        <view class="muted tabular-nums">{{item.beginTime}} - {{item.endTime}}</view>
       </view>
     </view>
 
     <!-- 控制命令：POST /api/devices/:device/commands 下发，GET 轮询结果 -->
     <view wx:if="{{activeTab === 'commands'}}">
-      <button size="mini" bindtap="onIssueCommand" style="margin-bottom:16rpx;">发送控制命令</button>
+      <button class="btn-primary" size="mini" bindtap="onIssueCommand" style="margin-bottom:16rpx;">发送控制命令</button>
       <view wx:if="{{!loading && commandsLoaded && commands.length === 0}}" class="empty">暂无控制命令记录</view>
       <view wx:for="{{commands}}" wx:key="commandId" class="card">
         <view class="row">
@@ -87,8 +113,8 @@
           </text>
         </view>
         <view class="muted" style="margin-top:8rpx;">原因：{{item.reason}}</view>
-        <view class="muted">操作人 {{item.operator}}　{{item.issuedAt}}</view>
-        <view class="muted" wx:if="{{item.errorReason}}" style="color:#cf1322;">{{item.errorReason}}</view>
+        <view class="muted tabular-nums">操作人 {{item.operator}}　{{item.issuedAt}}</view>
+        <view class="muted text-danger" wx:if="{{item.errorReason}}">{{item.errorReason}}</view>
         <view class="muted" wx:if="{{!item.terminal}}">未收到终态前请勿重复下发——ACK 不代表执行成功，仅代表设备已受理</view>
       </view>
     </view>

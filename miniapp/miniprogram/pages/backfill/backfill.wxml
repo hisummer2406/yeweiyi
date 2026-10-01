@@ -1,0 +1,62 @@
+<view class="container">
+  <view class="card muted">
+    对应设计稿「补录记录」画板——手工新增一条历史上漏报的出入库记录，和"修正已有记录"是两件事
+    （后者 CLAUDE.md 已明确"无可行设计"）。云端没有对应的新增接口，这里的保存/预览不会真的提交。
+  </view>
+
+  <view class="section-title">入库记录补录</view>
+  <view class="card">
+    <view class="field">
+      <text class="field-label">罐号</text>
+      <picker mode="selector" range="{{tankOptions}}" value="{{inbound.tankIndex}}" bindchange="onInboundTankChange">
+        <view class="field-input">{{tankOptions[inbound.tankIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">入库时间</text>
+      <picker mode="date" value="{{inbound.date}}" bindchange="onInboundDateChange">
+        <view class="field-input">{{inbound.date || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">入库前高度（毫米）</text>
+      <input class="field-input" type="digit" value="{{inbound.beforeLevel}}" bindinput="onInboundLevelInput" />
+    </view>
+    <view class="field">
+      <text class="field-label">入库升数（升）</text>
+      <input class="field-input" type="digit" value="{{inbound.volume}}" bindinput="onInboundVolumeInput" />
+    </view>
+  </view>
+  <view class="row" style="gap:16rpx;">
+    <button class="btn-primary" style="flex:1;" data-kind="入库" bindtap="onSave">保存</button>
+    <button class="btn-secondary" style="flex:1;" data-kind="入库" bindtap="onPreview">点击预览</button>
+  </view>
+
+  <view class="section-title">出库记录补录</view>
+  <view class="card">
+    <view class="field">
+      <text class="field-label">罐号</text>
+      <picker mode="selector" range="{{tankOptions}}" value="{{outbound.tankIndex}}" bindchange="onOutboundTankChange">
+        <view class="field-input">{{tankOptions[outbound.tankIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">出库时间</text>
+      <picker mode="date" value="{{outbound.date}}" bindchange="onOutboundDateChange">
+        <view class="field-input">{{outbound.date || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">出库前高度（毫米）</text>
+      <input class="field-input" type="digit" value="{{outbound.beforeLevel}}" bindinput="onOutboundLevelInput" />
+    </view>
+    <view class="field">
+      <text class="field-label">出库升数（升）</text>
+      <input class="field-input" type="digit" value="{{outbound.volume}}" bindinput="onOutboundVolumeInput" />
+    </view>
+  </view>
+  <view class="row" style="gap:16rpx;">
+    <button class="btn-primary" style="flex:1;" data-kind="出库" bindtap="onSave">保存</button>
+    <button class="btn-secondary" style="flex:1;" data-kind="出库" bindtap="onPreview">点击预览</button>
+  </view>
+</view>

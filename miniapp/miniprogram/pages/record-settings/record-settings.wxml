@@ -1,0 +1,26 @@
+<view class="container">
+  <view class="card muted">
+    对应设计稿「记录设置」画板。协议里没有任何"清空设备侧记录"类方法——这类操作一旦误触就是数据
+    永久丢失，这里的开关和"清空"按钮只做交互演示，不会真的发起请求。"库存记录"是一个全新的记录
+    类型，目前不在任何一条现有接口里。
+  </view>
+
+  <view class="card" wx:for="{{groups}}" wx:key="key" style="padding:0 24rpx;">
+    <view class="switch-row">
+      <text>生成{{item.label}}</text>
+      <switch checked="{{item.generate}}" color="#05507c" data-key="{{item.key}}" data-field="generate" bindchange="onSwitchChange" />
+    </view>
+    <view class="switch-row">
+      <text>删除{{item.label}}</text>
+      <switch checked="{{item.deleteOn}}" color="#05507c" data-key="{{item.key}}" data-field="deleteOn" bindchange="onSwitchChange" />
+    </view>
+    <view class="switch-row">
+      <text>清空{{item.label}}</text>
+      <button class="btn-danger-mini" size="mini" data-key="{{item.key}}" bindtap="onClearTap">清空</button>
+    </view>
+    <view class="switch-row" wx:if="{{item.key === 'stock'}}">
+      <text>库存生成时间（分）</text>
+      <input class="field-input" style="width:160rpx;text-align:right;" type="number" value="{{item.intervalMin}}" bindinput="onIntervalInput" />
+    </view>
+  </view>
+</view>

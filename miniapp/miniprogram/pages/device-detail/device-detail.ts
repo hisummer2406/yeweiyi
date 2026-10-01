@@ -15,7 +15,6 @@ import type {
   ControlCommand,
   LatestTelemetryResponse,
   ListCommandsResponse,
-  OilInOutListResponse,
   OilInOutRow,
   Tank,
 } from '../../types/api';
@@ -70,10 +69,6 @@ Page({
     alarmsLoaded: false,
 
     oilInOut: [] as OilInOutView[],
-    // Set whenever the endpoint reports it could not show everything — unparsable (current device
-    // fault) or legacySkipped (closed historical hole) — so the list is never silently incomplete.
-    // See yeweiyi-cloud docs/protocol-v1-stock-event.md.
-    oilInOutNote: '',
     oilInOutLoaded: false,
 
     commands: [] as CommandView[],
@@ -81,12 +76,19 @@ Page({
   },
 
   socket: null as AlarmSocket | null,
+  // Set from the `direction` query param when arriving from the 我的记录 page's 出库/入库 entries
+  // (device-detail itself only has one combined 出入库记录 tab; those two rows are the same tab
+  // pre-filtered by direction).
+  oilInOutDirection: '' as '' | 'IN' | 'OUT',
 
   onLoad(query: Record<string, string>) {
     const device = query.device || '';
-    this.setData({ device });
+    const requestedTab = query.tab as TabKey | undefined;
+    const tab: TabKey = TABS.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
+    this.oilInOutDirection = query.direction === 'IN' || query.direction === 'OUT' ? query.direction : '';
+    this.setData({ device, activeTab: tab });
     wx.setNavigationBarTitle({ title: device || '设备详情' });
-    this.loadSnapshot();
+    this.loadTabIfNeeded(tab);
 
     this.socket = new AlarmSocket(device, (msg: AlarmPushMessage) => {
       this.setData({ liveAlarm: `${label(ALARM_TYPE_LABELS, msg.type)}：${msg.msg}` });
@@ -169,38 +171,25 @@ Page({
       .finally(() => this.setData({ loading: false }));
   },
 
+  // GET /api/oil-in-out answers a bare array, same as /api/alarms — internal/api/stock.go reads
+  // through to ThingsBoard's stockEvent telemetry and silently skips any record it can't parse
+  // (pre-V1 firmware still publishing debug strings) rather than reporting an unparsable/legacySkipped
+  // count. There is no envelope to recover from a 502 body any more; an error here is a real failure.
   loadOilInOut() {
     this.setData({ loading: true });
-    return get<OilInOutListResponse>('/api/oil-in-out', {
+    return get<OilInOutRow[]>('/api/oil-in-out', {
       device: this.data.device,
       limit: 50,
       sort: false,
     })
-      .then((res) => this.applyOilInOut(res))
-      .catch((err: ApiError) => {
-        // A 502 here is the endpoint's own degraded-but-informative response, not a transport
-        // failure — request.ts hands the full parsed body back on ApiError.body precisely so this
-        // case does not collapse to a bare error toast and lose the rows that DID parse. Fall back
-        // to the toast only if the body genuinely isn't that shape (a real outage, a 503, etc).
-        const body = err.body as OilInOutListResponse | undefined;
-        if (body && Array.isArray(body.rows)) {
-          this.applyOilInOut(body);
-        } else {
-          wx.showToast({ title: err.message, icon: 'none' });
-          this.setData({ oilInOut: [], oilInOutNote: err.message, oilInOutLoaded: true });
-        }
+      .then((rows) => {
+        const filtered = this.oilInOutDirection
+          ? rows.filter((r) => r.direction === this.oilInOutDirection)
+          : rows;
+        this.setData({ oilInOut: filtered.map(toOilInOutView), oilInOutLoaded: true });
       })
+      .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
       .finally(() => this.setData({ loading: false }));
-  },
-
-  applyOilInOut(res: OilInOutListResponse) {
-    let note = '';
-    if (res.unparsable > 0) {
-      note = `有 ${res.unparsable} 条记录暂时无法解析（设备固件版本较旧），本页仅展示可读取的 ${res.parsed} 条`;
-    } else if (res.legacySkipped > 0) {
-      note = `另有 ${res.legacySkipped} 条历史记录因设备固件升级前的旧格式而无法展示`;
-    }
-    this.setData({ oilInOut: res.rows.map(toOilInOutView), oilInOutNote: note, oilInOutLoaded: true });
   },
 
   loadCommands() {

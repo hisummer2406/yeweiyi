@@ -1,0 +1,58 @@
+<view class="container">
+  <view class="card muted">
+    对应设计稿「储罐设置」画板。字段来自设计稿，云端 config.setTank / config.setAlarmThresholds
+    两个方法名已存在，但参数结构未定义，这里的保存按钮不会真的下发。
+  </view>
+
+  <view class="card">
+    <view class="field">
+      <text class="field-label">罐号</text>
+      <picker mode="selector" range="{{tankOptions}}" value="{{tankIndex}}" bindchange="onTankChange">
+        <view class="field-input">{{tankOptions[tankIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">传感器ID</text>
+      <picker mode="selector" range="{{sensorOptions}}" value="{{sensorIndex}}" bindchange="onSensorChange">
+        <view class="field-input">{{sensorOptions[sensorIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">储罐类型</text>
+      <picker mode="selector" range="{{shapeOptions}}" value="{{shapeIndex}}" bindchange="onShapeChange">
+        <view class="field-input">{{shapeOptions[shapeIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">物料颜色</text>
+      <picker mode="selector" range="{{colorOptions}}" value="{{colorIndex}}" bindchange="onColorChange">
+        <view class="field-input">{{colorOptions[colorIndex] || '请选择'}}</view>
+      </picker>
+    </view>
+    <view class="field">
+      <text class="field-label">介质密度（kg/m³）</text>
+      <input class="field-input" type="digit" value="{{density}}" bindinput="onDensityInput" />
+    </view>
+    <view class="field">
+      <text class="field-label">储罐高度（毫米）</text>
+      <input class="field-input" type="digit" value="{{height}}" bindinput="onHeightInput" />
+    </view>
+    <view class="field">
+      <text class="field-label">储罐容量（升）</text>
+      <input class="field-input" type="digit" value="{{capacity}}" bindinput="onCapacityInput" />
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">报警阈值</view>
+    <view class="field" wx:for="{{thresholds}}" wx:key="key">
+      <text class="field-label">{{item.label}}（{{item.unit}}）</text>
+      <input class="field-input" type="digit" value="{{item.value}}" data-key="{{item.key}}" bindinput="onThresholdInput" />
+    </view>
+  </view>
+
+  <view class="row" style="gap:16rpx;">
+    <button class="btn-primary" style="flex:1;" bindtap="onSave">保存</button>
+    <button class="btn-secondary" style="flex:1;" bindtap="onReset">恢复默认</button>
+  </view>
+</view>

@@ -1,24 +1,34 @@
-<view class="container">
-  <button class="btn-primary" bindtap="onScanBind">扫码绑定设备</button>
+<view wx:if="{{!loading && devices.length === 0}}" class="center-page">
+  <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+  <view class="brand-title">还没有绑定设备</view>
+  <view class="brand-subtitle">设备上贴有二维码和设备编号，扫码即可绑定</view>
+  <button class="btn-primary center-card" bindtap="onScanBind">扫码绑定设备</button>
+</view>
 
-  <view wx:if="{{!loading && devices.length === 0}}" class="empty">
-    还没有绑定任何设备，点击上方按钮扫码绑定
+<view class="container" wx:else>
+  <view class="row" style="margin-bottom:20rpx;">
+    <text class="section-title" style="margin:0;">我的设备</text>
+    <view class="list-row-icon" style="margin-right:0;background-color:#05507c;" bindtap="onMoreActions">
+      <image src="/assets/icons/add.png" mode="aspectFit" style="width:28rpx;height:28rpx;" />
+    </view>
   </view>
 
-  <view
-    wx:for="{{devices}}"
-    wx:key="device_name"
-    class="card"
-    bindtap="onTapDevice"
-    data-device="{{item.device_name}}"
-  >
-    <view class="row">
-      <text>{{item.device_name}}</text>
-    </view>
-    <!-- 在线/离线状态刻意不展示：云端单栈改造后没有任何代码在更新 is_online 列，
-         这里显示它只会是一个永远不变的错误答案，见 types/api.d.ts 的说明。 -->
-    <view class="muted" style="margin-top:8rpx;">
-      最近上线 {{item.last_online_at || '--'}}
+  <view class="card" wx:if="{{devices.length > 0}}" style="padding:0 24rpx;">
+    <view
+      wx:for="{{devices}}"
+      wx:key="device_name"
+      class="list-row"
+      bindtap="onTapDevice"
+      data-device="{{item.device_name}}"
+    >
+      <image class="tank-illustration" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
+      <view class="list-row-body">
+        <text>{{item.device_name}}</text>
+        <!-- 在线/离线状态刻意不展示：云端单栈改造后没有任何代码在更新 is_online 列，
+             这里显示它只会是一个永远不变的错误答案，见 types/api.d.ts 的说明。 -->
+        <view class="muted" style="margin-top:4rpx;">最近上线 {{item.last_online_at || '--'}}</view>
+      </view>
+      <image class="list-row-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
     </view>
   </view>
 </view>

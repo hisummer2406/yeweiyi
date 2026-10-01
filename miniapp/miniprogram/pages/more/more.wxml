@@ -1,0 +1,36 @@
+<view class="container">
+  <view class="card" style="padding:0 24rpx;">
+    <view class="list-row" bindtap="onAccountTap">
+      <view class="list-row-icon">户</view>
+      <view class="list-row-body">
+        <text>{{username || '--'}}</text>
+        <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}　·　账号与退出登录</view>
+      </view>
+      <image class="list-row-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+    </view>
+  </view>
+
+  <view class="card muted">
+    对应设计稿「首页-设置05」画板。以下入口云端 yeweiyi-cloud 暂无对应接口或参数结构未定义，
+    有静态演示的会进入演示页（不会真的下发任何请求）。缺口清单已整理成
+    docs/miniprogram-design-gaps.md 发给 yeweiyi-cloud。
+  </view>
+
+  <view class="card" style="padding:0 24rpx;">
+    <view
+      wx:for="{{items}}"
+      wx:key="title"
+      class="list-row"
+      bindtap="onItemTap"
+      data-reason="{{item.reason}}"
+      data-page="{{item.page}}"
+    >
+      <image class="list-row-icon-plain" src="/assets/icons/{{item.icon}}.png" mode="aspectFit" />
+      <view class="list-row-body">
+        <text>{{item.title}}</text>
+        <view class="muted" style="margin-top:4rpx;">{{item.reason}}</view>
+      </view>
+      <image class="list-row-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+    </view>
+  </view>
+</view>

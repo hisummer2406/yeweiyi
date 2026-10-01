@@ -9,7 +9,7 @@
       <picker mode="selector" range="{{methods}}" range-key="label" value="{{methodIndex}}" bindchange="onMethodChange">
         <view class="field-input">{{methods[methodIndex].label}}</view>
       </picker>
-      <view class="muted" wx:if="{{methods[methodIndex].physical}}" style="margin-top:8rpx;color:#d48806;">
+      <view class="muted text-warning" wx:if="{{methods[methodIndex].physical}}" style="margin-top:8rpx;">
         物理动作：默认关闭，设备端联锁验证完成前会被拒绝（返回 409），并非本应用的故障。
       </view>
     </view>
@@ -30,7 +30,7 @@
     </view>
 
     <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交</button>
-    <view wx:if="{{errorMsg}}" class="muted" style="color:#cf1322;margin-top:16rpx;">{{errorMsg}}</view>
+    <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;">{{errorMsg}}</view>
   </view>
 
   <view class="card muted">

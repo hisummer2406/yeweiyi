@@ -1,7 +1,13 @@
 <view class="container">
   <view class="card">
-    <text>账号：{{username || '--'}}</text>
-    <view class="muted" style="margin-top:8rpx;">角色：{{roleLabel || '--'}}</view>
+    <view class="list-row" style="border-bottom:none;padding-top:8rpx;">
+      <view class="list-row-icon">户</view>
+      <view class="list-row-body">
+        <text>{{username || '--'}}</text>
+        <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>
+      </view>
+    </view>
   </view>
-  <button bindtap="onLogout">退出登录</button>
+
+  <button class="btn-secondary" bindtap="onLogout">退出登录</button>
 </view>

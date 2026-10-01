@@ -1,5 +1,9 @@
-<view class="container">
-  <view class="card">
+<view class="center-page">
+  <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+  <view class="brand-title">智能液位管理系统</view>
+  <view class="brand-subtitle">登录查看设备数据、下发控制命令</view>
+
+  <view class="card center-card">
     <view class="field">
       <text class="field-label">账号</text>
       <input class="field-input" value="{{username}}" bindinput="onUsernameInput" placeholder="请输入账号" />
@@ -9,6 +13,6 @@
       <input class="field-input" password value="{{password}}" bindinput="onPasswordInput" placeholder="请输入密码" />
     </view>
     <button class="btn-primary" loading="{{loading}}" bindtap="onSubmit">登录</button>
-    <view wx:if="{{errorMsg}}" class="muted" style="color:#cf1322;margin-top:16rpx;">{{errorMsg}}</view>
+    <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;text-align:center;">{{errorMsg}}</view>
   </view>
 </view>

@@ -82,8 +82,8 @@ export interface AlarmPushMessage {
 // ---- 出入库 (stock in/out) ----
 
 // Mirrors yeweiyi-cloud internal/api/stock.go's stockEventResponse. This endpoint depends on a
-// device-side change that has not shipped yet (zhongchengyeweiyi#39) — see OilInOutListResponse
-// below for what a real device on today's firmware actually produces.
+// device-side change that has not shipped yet (zhongchengyeweiyi#39) for *real* devices to produce
+// parseable records — the shape below is what a device on the finished firmware would send.
 export interface OilInOutRow {
   eventId: string;
   tank: number;

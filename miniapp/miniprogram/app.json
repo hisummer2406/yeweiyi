@@ -2,28 +2,47 @@
   "pages": [
     "pages/login/login",
     "pages/devices/devices",
+    "pages/records/records",
+    "pages/more/more",
     "pages/device-detail/device-detail",
     "pages/issue-command/issue-command",
-    "pages/profile/profile"
+    "pages/profile/profile",
+    "pages/tank-config/tank-config",
+    "pages/calibration/calibration",
+    "pages/tank-shape/tank-shape",
+    "pages/record-settings/record-settings",
+    "pages/report-settings/report-settings",
+    "pages/backfill/backfill",
+    "pages/org/org"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarBackgroundColor": "#05507c",
     "navigationBarTitleText": "液位仪远程监控",
-    "navigationBarTextStyle": "black",
-    "backgroundColor": "#f5f5f5"
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f2f2f2"
   },
   "tabBar": {
-    "color": "#888888",
-    "selectedColor": "#1677ff",
+    "color": "#8697a4",
+    "selectedColor": "#05507c",
     "backgroundColor": "#ffffff",
     "list": [
       {
         "pagePath": "pages/devices/devices",
-        "text": "设备"
+        "text": "首页",
+        "iconPath": "assets/tabbar/home.png",
+        "selectedIconPath": "assets/tabbar/home-active.png"
       },
       {
-        "pagePath": "pages/profile/profile",
-        "text": "我的"
+        "pagePath": "pages/records/records",
+        "text": "我的记录",
+        "iconPath": "assets/tabbar/record.png",
+        "selectedIconPath": "assets/tabbar/record-active.png"
+      },
+      {
+        "pagePath": "pages/more/more",
+        "text": "设置",
+        "iconPath": "assets/tabbar/settings.png",
+        "selectedIconPath": "assets/tabbar/settings-active.png"
       }
     ]
   },

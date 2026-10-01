@@ -63,4 +63,18 @@ Page({
     const device = e.currentTarget.dataset.device as string;
     wx.navigateTo({ url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}` });
   },
+
+  // 对应设计稿「首页-添加」画板里"+"按钮弹出的菜单：添加设备/邀请加入/员工管理
+  onMoreActions() {
+    wx.showActionSheet({
+      itemList: ['添加设备', '邀请加入', '员工管理'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          this.onScanBind();
+        } else {
+          wx.navigateTo({ url: '/pages/org/org' });
+        }
+      },
+    });
+  },
 });

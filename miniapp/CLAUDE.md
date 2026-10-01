@@ -45,6 +45,11 @@ shared code).
   (that's `yeweiyi-cloud`'s job to mediate), but relevant background if a screen's behavior depends
   on device-side reality — e.g. why a physical control command is refused, or why 出入库 history can
   come back partial.
+- `~/Developer/yeweiyi-admin` — the desktop equivalent of this app: one Ant Design Pro project with
+  an `/ops/*` section (platform_admin only) and a `/console/*` section that is meant to cover the
+  same capability set this mini-program covers (device list, device detail/telemetry, issue-command,
+  oil-in-out) for the same customer roles. If a capability is added here, it should end up on both
+  clients — check that repo's `CLAUDE.md` when adding or renaming a screen so the two don't drift.
 
 Every route below except `/api/login` requires `Authorization: Bearer {jwt}` (from `/api/login`'s
 response). Every route that takes a `device` is scoped to devices *this user has bound* — an
@@ -70,15 +75,15 @@ assumes a `device` string typed/pasted by the user will work without binding fir
   `device` (required) + `beginTime`/`endTime` (RFC3339, optional, default last 24h) + `limit`/`offset`
   (paginate, default 50/max 500 — `offset` is a 400, both endpoints page by time window, not row
   offset) + `sort` (`true`=ascending, default `false`≈newest first passed explicitly by this app).
-  **The two endpoints do not share a response envelope**: `/api/alarms` answers a **bare array**,
-  `/api/oil-in-out` answers `{rows, parsed, unparsable, legacySkipped, error?, code?, sample?,
-  legacyCutoff?}` on **both** its 200 and its 502 path. That inconsistency is real, tracked
-  cloud-side (`yeweiyi-cloud/docs/protocol-v1-open-items.md` §D item 2), and not something to "fix"
-  in this repo by guessing at a shape — see `types/api.d.ts`. The 502 on `/api/oil-in-out` means "some
-  records on this device could not be parsed" (pre-V1 firmware still publishing debug strings,
-  zhongchengyeweiyi#39) — it still carries whatever *did* parse in `rows`, which is why
-  `device-detail.ts`'s `loadOilInOut` reads `ApiError.body` on that path instead of just showing the
-  error string.
+  **Both endpoints answer a bare array on 200** — confirmed 2026-09-10 against the live
+  `yeweiyi-cloud` server (`internal/api/stock.go`'s `listOilInOutHandler` was rewritten to the same
+  read-through-ThingsBoard pattern as `/api/alarms` and no longer returns an envelope at all; the
+  `{rows, parsed, unparsable, legacySkipped, ...}` shape this file used to describe is gone from the
+  handler). An unparsable record (pre-V1 firmware still publishing debug strings, zhongchengyeweiyi#39)
+  is now silently skipped server-side rather than surfaced — there is no longer a way for this client
+  to distinguish "no records" from "some records were unparsable." `device-detail.ts`'s `loadOilInOut`
+  and `types/api.d.ts`'s `OilInOutRow` were updated to match; if that gap needs surfacing again it has
+  to be re-added cloud-side first.
 - `GET /api/devices/:device/telemetry/latest` — the realtime tank snapshot, read straight through to
   ThingsBoard on request (not a cache, not a push stream — poll or re-fetch on tab switch).
   `404` means "authorized, provisioned, never reported" — a real state, not an error. Replaces the

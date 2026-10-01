@@ -1,6 +1,9 @@
+/* 色板/字号/圆角来自 docs/智能液位仪-小程序.psd 的解析结果，见发布的《液位仪视觉规范》。
+   画板设计宽度 750px = 小程序 750rpx 基准，PSD 里量出的像素值可以直接当 rpx 数值用。 */
+
 page {
-  background-color: #f5f5f5;
-  color: #333333;
+  background-color: #f2f2f2;
+  color: #131313;
   font-size: 28rpx;
   box-sizing: border-box;
 }
@@ -9,12 +12,52 @@ page {
   padding: 24rpx;
 }
 
+/* 整屏居中容器：用于登录页、"扫码绑定设备"这类没有列表内容、
+   只有一组表单/按钮的页面，避免内容顶在屏幕最上方。 */
+.center-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx 48rpx 120rpx;
+}
+
+/* 品牌标志：直接用公司 LOGO 切图（docs/公司LOGO(7)），不是 CSS 画的方块 */
+.brand-logo {
+  width: 96rpx;
+  height: 96rpx;
+  margin-bottom: 24rpx;
+}
+
+.brand-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #131313;
+  margin-bottom: 8rpx;
+  text-align: center;
+}
+
+.brand-subtitle {
+  font-size: 24rpx;
+  color: #8697a4;
+  margin-bottom: 48rpx;
+  text-align: center;
+}
+
+.center-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .card {
   background-color: #ffffff;
-  border-radius: 12rpx;
+  border-radius: 24rpx;
   padding: 24rpx;
   margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  border: 1rpx solid #ededed;
+  box-shadow: 0 2rpx 12rpx rgba(20, 32, 43, 0.05);
 }
 
 .row {
@@ -24,63 +67,103 @@ page {
 }
 
 .muted {
-  color: #999999;
+  color: #606060;
   font-size: 24rpx;
 }
 
 .empty {
   text-align: center;
-  color: #999999;
+  color: #8697a4;
   padding: 80rpx 0;
   font-size: 26rpx;
 }
 
-.btn-primary {
-  background-color: #1677ff;
+.text-danger {
+  color: #b23b3b;
+}
+
+.text-warning {
+  color: #9c6b00;
+}
+
+.banner-danger {
+  background-color: #fbe7e7;
+  border: 1rpx solid #f3b4b4;
+}
+
+.banner-warning {
+  background-color: #fff3d6;
+  border: 1rpx solid #f0d48a;
+}
+
+.tag {
+  display: inline-block;
+  background-color: #05507c;
   color: #ffffff;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+button.btn-primary {
+  background: linear-gradient(135deg, #05507c, #0066a2);
+  color: #ffffff;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  line-height: 2.6;
+}
+
+button.btn-primary::after {
+  border: none;
+}
+
+button.btn-secondary {
+  background-color: #ffffff;
+  color: #b23b3b;
+  border: 1rpx solid #e1e1e1;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  line-height: 2.6;
+}
+
+button.btn-secondary::after {
+  border: none;
 }
 
 .badge {
   display: inline-block;
-  padding: 4rpx 16rpx;
-  border-radius: 8rpx;
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
   font-size: 22rpx;
+  font-weight: 600;
 }
 
 .badge-online {
-  background-color: #e6f7e9;
-  color: #17a34a;
+  background-color: #e4f5ec;
+  color: #1e7a4c;
 }
 
 .badge-offline {
-  background-color: #f5f5f5;
-  color: #999999;
+  background-color: #ededed;
+  color: #606060;
 }
 
 .badge-pending {
-  background-color: #fff7e6;
-  color: #d48806;
-}
-
-.badge-acked {
-  background-color: #e6f7e9;
-  color: #17a34a;
-}
-
-.badge-sent {
-  background-color: #e6f0ff;
-  color: #1677ff;
+  background-color: #e4f1fb;
+  color: #0066a2;
 }
 
 .badge-failed {
-  background-color: #fff1f0;
-  color: #cf1322;
+  background-color: #fbe7e7;
+  color: #b23b3b;
 }
 
 .tabs {
   display: flex;
   background-color: #ffffff;
-  border-bottom: 1rpx solid #eeeeee;
+  border-bottom: 1rpx solid #ededed;
 }
 
 .tab-item {
@@ -88,13 +171,13 @@ page {
   text-align: center;
   padding: 20rpx 0;
   font-size: 26rpx;
-  color: #666666;
+  color: #606060;
 }
 
 .tab-item-active {
-  color: #1677ff;
+  color: #05507c;
   font-weight: 600;
-  border-bottom: 4rpx solid #1677ff;
+  border-bottom: 4rpx solid #05507c;
 }
 
 .field {
@@ -103,14 +186,187 @@ page {
 
 .field-label {
   font-size: 26rpx;
-  color: #666666;
+  color: #606060;
   margin-bottom: 8rpx;
   display: block;
 }
 
 .field-input {
-  background-color: #f7f7f7;
-  border-radius: 8rpx;
+  background-color: #f7f8fa;
+  border: 1rpx solid #e1e1e1;
+  border-radius: 12rpx;
   padding: 16rpx;
   font-size: 28rpx;
+  color: #131313;
+}
+
+/* 列表行：图标 + 文本 + 右侧箭头，对应设计稿里"设置/我的记录"弹层的菜单行样式 */
+.list-row {
+  display: flex;
+  align-items: center;
+  padding: 28rpx 8rpx;
+  border-bottom: 1rpx solid #ededed;
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+.list-row-icon {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 16rpx;
+  background-color: #e4f1fb;
+  color: #05507c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+/* 无底色的图标行，用于「设置/我的记录」菜单——设计稿里这些图标是直接放在白底上的，没有色块背景 */
+.list-row-icon-plain {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.list-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-row-chevron {
+  width: 28rpx;
+  height: 28rpx;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+/* 选中态勾选标记：PSD 里"油站选择"没有导出专门的勾选图层，就是个状态符号，非插画 */
+.text-selected-mark {
+  color: #05507c;
+  font-size: 32rpx;
+  font-weight: 700;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+/* 罐体读数行：标签 + 加粗数值 + 单位，对应设计稿"液位 1666.8 毫米"的样式 */
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  font-size: 26rpx;
+  color: #606060;
+  padding: 6rpx 0;
+}
+
+.stat-row-label {
+  width: 96rpx;
+  flex-shrink: 0;
+}
+
+.stat-row-value {
+  font-weight: 600;
+  color: #131313;
+  font-variant-numeric: tabular-nums;
+  margin-right: 8rpx;
+}
+
+.stat-row-unit {
+  color: #8697a4;
+  font-size: 22rpx;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卧罐插画：从设计稿 PSD 里直接裁切导出（首页-卧罐01 画板），非 CSS 绘制 */
+.tank-illustration {
+  width: 112rpx;
+  height: 148rpx;
+  flex-shrink: 0;
+  margin-right: 20rpx;
+}
+
+.tank-card-head {
+  display: flex;
+  align-items: flex-start;
+}
+
+.tank-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 设置项开关行：标签 + switch，用于"记录设置/报表设置"这类静态预览页 */
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 8rpx;
+  border-bottom: 1rpx solid #ededed;
+}
+
+.switch-row:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  font-size: 26rpx;
+  color: #606060;
+  font-weight: 600;
+  margin: 24rpx 0 12rpx;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
+button.btn-danger-mini {
+  background-color: #fbe7e7;
+  color: #b23b3b;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  line-height: 2;
+  padding: 0 24rpx;
+}
+
+button.btn-danger-mini::after {
+  border: none;
+}
+
+/* 罐体形状选择卡片：对应设计稿"罐表设置"的卧罐/立罐/长方体选择 */
+.shape-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+.shape-card {
+  background-color: #f7f8fa;
+  border: 2rpx solid transparent;
+  border-radius: 16rpx;
+  padding: 32rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: #606060;
+}
+
+.shape-card-active {
+  border-color: #05507c;
+  color: #05507c;
+  font-weight: 600;
+  background-color: #e4f1fb;
+}
+
+.shape-glyph {
+  width: 72rpx;
+  height: 72rpx;
+  display: block;
+  margin: 0 auto 12rpx;
 }
