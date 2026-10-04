@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- [不可达-2026-09-21] 唯一入口 InOilFragment.onClick(int) 是死代码：InOutAdapter 给列表项设的
+     短按监听器是空实现，从来没有调用回来（西语翻译覆盖率核查时发现，详见
+     InOutAdapter.java/InOilFragment.java 里的注释）。这里的 17 个字符串资源不用优先翻。 -->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -16,7 +19,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="@dimen/fontSize"
-            android:text="@string/inoil_tank" />
+/>
 
         <TextView
             android:id="@+id/inout_detail_oil_id"
@@ -30,7 +33,7 @@
             android:layout_height="wrap_content"
             android:layout_marginLeft="20dp"
             android:textSize="@dimen/fontSize"
-            android:text="@string/inoil_product" />
+/>
 
         <TextView
             android:id="@+id/inout_detail_oil_product"
@@ -42,7 +45,6 @@
             android:layout_width="wrap_content"
             android:textSize="@dimen/fontSize"
             android:layout_height="wrap_content"
-            android:text="@string/inoil_statu"
             android:layout_marginLeft="20dp"
             />
         <TextView
@@ -71,7 +73,7 @@
                 android:layout_width="match_parent"
                 android:textSize="@dimen/fontSize"
                 android:layout_height="wrap_content"
-                android:text="@string/inoil_start" />
+/>
 
             <TextView
                 android:id="@+id/begin_date"
@@ -94,7 +96,7 @@
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
                         android:textSize="@dimen/fontSize"
-                        android:text="@string/inoil_height" />
+/>
 
                     <TextView
                         android:id="@+id/detail_begin_height"
@@ -110,7 +112,7 @@
                         android:layout_width="1dp"
                         android:textSize="@dimen/fontSize"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_volume" />
+/>
 
                     <TextView
                         android:id="@+id/detail_begin_volume"
@@ -126,7 +128,7 @@
                         android:layout_width="1dp"
                         android:textSize="@dimen/fontSize"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_tcvolume" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -142,7 +144,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_water" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -158,7 +160,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_watervolume" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -174,7 +176,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_weight" />
+/>
 
                     <TextView
                         android:id="@+id/detail_begin_weight"
@@ -215,7 +217,7 @@
                 android:id="@+id/end"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/inoil_end" />
+/>
 
             <TextView
                 android:textSize="@dimen/fontSize"
@@ -238,7 +240,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_height" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -254,7 +256,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_volume" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -270,7 +272,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_tcvolume" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -286,7 +288,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_water" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -302,7 +304,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_watervolume" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -318,7 +320,7 @@
                         android:textSize="@dimen/fontSize"
                         android:layout_width="1dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/inoil_weight" />
+/>
 
                     <TextView
                         android:textSize="@dimen/fontSize"
@@ -358,7 +360,6 @@
                     android:id="@+id/inout_msg"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/inoil_during"
                     android:textSize="@dimen/fontSize"
                     />
                 <android.support.v7.widget.AppCompatEditText
@@ -384,7 +385,6 @@
                     android:layout_below="@id/inout_sale_volume"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/inoil_total_delivery"
                     android:textSize="@dimen/fontSize"
                     />
                 <TextView
@@ -415,7 +415,6 @@
                 android:id="@+id/inout_continue"
                 android:layout_height="wrap_content"
                 android:layout_width="120dp"
-                android:text="@string/inoil_continue"
                 android:textSize="18sp"
                 />
         </RelativeLayout>
@@ -429,7 +428,6 @@
                 android:id="@+id/inout_stop"
                 android:layout_height="wrap_content"
                 android:layout_width="120dp"
-                android:text="@string/inoil_stop"
                 android:textSize="18sp"
                 />
         </RelativeLayout>
@@ -443,7 +441,6 @@
                 android:id="@+id/inout_save"
                 android:layout_height="wrap_content"
                 android:layout_width="120dp"
-                android:text="@string/inoil_save"
                 android:textSize="18sp"
                 />
         </RelativeLayout>
@@ -459,7 +456,6 @@
                 android:id="@+id/inout_quit"
                 android:layout_width="120dp"
                 android:layout_height="wrap_content"
-                android:text="@string/inoil_quite"
                 android:textSize="18sp"
                 />
         </RelativeLayout>

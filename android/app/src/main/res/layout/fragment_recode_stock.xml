@@ -40,7 +40,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="介质"
+            android:text="@string/medium"
             android:textColor="@color/white"
             android:textSize="18sp"/>
         <TextView
@@ -118,7 +118,10 @@
         <LinearLayout
         android:id="@+id/ly_ruKu"
         android:layout_marginRight="@dimen/dp_40"
-        android:layout_width="@dimen/dp_150"
+        android:layout_width="wrap_content"
+        android:minWidth="@dimen/dp_150"
+        android:paddingLeft="@dimen/dp_6"
+        android:paddingRight="@dimen/dp_6"
         android:layout_height="wrap_content"
         android:background="#0066A2"
         android:layout_gravity="center"
@@ -137,11 +140,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="@color/white"
-            android:text="导出数据"/>
+            android:text="@string/export_data"/>
     </LinearLayout>
         <LinearLayout
             android:id="@+id/ly_saveStock"
-            android:layout_width="@dimen/dp_150"
+            android:layout_width="wrap_content"
+            android:minWidth="@dimen/dp_150"
+            android:paddingLeft="@dimen/dp_6"
+            android:paddingRight="@dimen/dp_6"
             android:layout_height="wrap_content"
             android:background="#0066A2"
             android:layout_gravity="center"
@@ -160,12 +166,15 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="保存数据"/>
+                android:text="@string/save_data"/>
         </LinearLayout>
         <LinearLayout
             android:id="@+id/ly_backHome"
             android:layout_marginLeft="@dimen/dp_40"
-            android:layout_width="@dimen/dp_150"
+            android:layout_width="wrap_content"
+            android:minWidth="@dimen/dp_150"
+            android:paddingLeft="@dimen/dp_6"
+            android:paddingRight="@dimen/dp_6"
             android:layout_height="wrap_content"
             android:background="#0066A2"
             android:layout_gravity="center"
@@ -185,7 +194,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="返回首页"/>
+                android:text="@string/home"/>
         </LinearLayout>
     </LinearLayout>
 

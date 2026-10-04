@@ -169,8 +169,12 @@ public class InOilManager {
             in.setEndHeigth(event.getEndHeight());
             in.setBeginVolum(beginVolume);
             in.setEndVolum(endVolume);
-            in.setBeginWeight(endVolume - beginVolume);
-            in.setEndWeight(DataUtils.doubleFoment((endVolume - beginVolume) * density));
+            // [已更正-2026-09-27] beginWeight 原来存的是容积差（没乘密度），跟 endWeight 不是同一种
+            // 量纲，两者相减没有意义（真机测试暴露：算出来的质量是负数）。改成跟 beginVolum/endVolum
+            // 一样的"事件始末快照"语义——beginWeight/endWeight 分别是事件开始/结束时刻的质量，
+            // 结束-开始就是这次入库增加的质量，量纲上跟 beginVolum/endVolum 的关系完全对应。
+            in.setBeginWeight(DataUtils.doubleFoment(beginVolume * density));
+            in.setEndWeight(DataUtils.doubleFoment(endVolume * density));
             stockRepository.saveInRecord(in);
             OilInOut saved = stockRepository.findLastIn();
             savedIdFound = saved != null;
@@ -187,8 +191,10 @@ public class InOilManager {
             out.setEndHeigth(DataUtils.doubleFoment(event.getEndHeight()));
             out.setBeginVolum(beginVolume);
             out.setEndVolum(endVolume);
-            out.setBeginWeight(beginVolume - endVolume);
-            out.setEndWeight(DataUtils.doubleFoment((beginVolume - endVolume) * density));
+            // [已更正-2026-09-27] 同上——beginWeight/endWeight 改成事件始末的质量快照，
+            // 跟 beginVolum/endVolum 的语义对应，而不是把容积差直接存进 beginWeight。
+            out.setBeginWeight(DataUtils.doubleFoment(beginVolume * density));
+            out.setEndWeight(DataUtils.doubleFoment(endVolume * density));
             stockRepository.saveOutRecord(out);
             OutStock saved = stockRepository.findLastOut();
             savedIdFound = saved != null;

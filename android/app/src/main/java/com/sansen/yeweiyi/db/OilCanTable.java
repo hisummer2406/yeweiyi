@@ -137,6 +137,8 @@ public class OilCanTable {
 		this.gmt_modified = gmt_modified;
 	}
 
+	// [不可达-2026-09-21] 全仓库没有任何地方对 OilCanTable 实例调用 toString()（西语翻译覆盖率
+	// 核查时发现）。里面用到的字符串资源不用优先翻。
 	@Override
 	public String toString() {
 
@@ -144,8 +146,9 @@ public class OilCanTable {
 		if (height != null) {
 			for (int i = 0; i < height.length; i++) {
 				buffer.append(" " + (i + 1) + "  ");
-				buffer.append(SystemUtils.getRsStr(R.string.height)+ height[i] + "  ");
-				buffer.append(SystemUtils.getRsStr(R.string.volume) + volum[i]);
+				// [已屏蔽-2026-09-23] height/volume 已删除（toString() 不可达，见上方注释）。
+				// buffer.append(SystemUtils.getRsStr(R.string.height)+ height[i] + "  ");
+				// buffer.append(SystemUtils.getRsStr(R.string.volume) + volum[i]);
 				buffer.append("\n");
 			}
 		}

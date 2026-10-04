@@ -48,6 +48,7 @@ import com.sansen.yeweiyi.bean.LevelmeterInfo;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.ProbeToOil;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.AppManager;
 import com.sansen.yeweiyi.manager.DataRefreshCallback;
@@ -55,6 +56,7 @@ import com.sansen.yeweiyi.manager.SerialPortManager;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.utils.DialogUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.CustomToast;
 
 import java.util.List;
@@ -68,6 +70,15 @@ public abstract class BaseActivity extends FragmentActivity implements
     protected Context ct;
     protected MyApplication app;
 
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LanguageUtil.wrap(newBase));
+    }
+
+    // [不可达-2026-09-21] 这几个字段和下面 findViewById 赋值都被注释掉了，对应的
+    // layout_title_bar.xml 里 bar_tv_left/bar_tv_right/bar_tv_filter/bar_imbut_left/bar_tv_unlogin
+    // 恒为 visibility="gone" 且没有任何代码能切换可见性（西语翻译覆盖率核查时发现）。
+    // filter/save_oilcan/Log_out 这几个字符串资源不用优先翻。
 //    public ImageButton iv_right;
 //
 //    // Title 控件
@@ -194,6 +205,9 @@ public abstract class BaseActivity extends FragmentActivity implements
             bar_tv_time.setText(newValue);
         }
     };
+    // [不可达-2026-09-21] mLocationClient.start() 整段被注释掉（见下），百度定位从未真正发起，
+    // MyLocationListener.onReceiveLocation() 回调永远不会触发（西语翻译覆盖率核查时发现）。
+    // baidu_loc_server_error/baidu_loc_network_error/baidu_loc_no_result 这三个字符串资源不用优先翻。
     protected void initLocation() {
 
 //        mLocationClient.start();
@@ -359,6 +373,9 @@ public abstract class BaseActivity extends FragmentActivity implements
     public abstract void oilcanDismiss(OilCan obj);
 
     // 百度定位的回调方法
+    // [不可达-2026-09-21] initLocation() 里 mLocationClient.start() 被注释掉，这个回调永远不会
+    // 触发（西语翻译覆盖率核查时发现）。baidu_loc_server_error/baidu_loc_network_error/
+    // baidu_loc_no_result 三个字符串资源不用优先翻。
     public class MyLocationListener implements BDLocationListener {
 
         @Override
@@ -386,13 +403,16 @@ public abstract class BaseActivity extends FragmentActivity implements
                 mLocationClient.stop();
             } else if (location.getLocType() == BDLocation.TypeServerError) {
                 sb.append("\ndescribe : ");
-                sb.append("服务端网络定位失败，可以反馈IMEI号和大体定位时间到loc-bugs@baidu.com，会有人追查原因");
+                // [已屏蔽-2026-09-23] baidu_loc_server_error 已删除（不可达，见上方注释）。
+                // sb.append(SystemUtils.getRsStr(R.string.baidu_loc_server_error));
             } else if (location.getLocType() == BDLocation.TypeNetWorkException) {
                 sb.append("\ndescribe : ");
-                sb.append("网络不同导致定位失败，请检查网络是否通畅");
+                // [已屏蔽-2026-09-23] baidu_loc_network_error 已删除（不可达，见上方注释）。
+                // sb.append(SystemUtils.getRsStr(R.string.baidu_loc_network_error));
             } else if (location.getLocType() == BDLocation.TypeCriteriaException) {
                 sb.append("\ndescribe : ");
-                sb.append("无法获取有效定位依据导致定位失败，一般是由于手机的原因，处于飞行模式下一般会造成这种结果，可以试着重启手机");
+                // [已屏蔽-2026-09-23] baidu_loc_no_result 已删除（不可达，见上方注释）。
+                // sb.append(SystemUtils.getRsStr(R.string.baidu_loc_no_result));
             }
             sb.append("\nlocationdescribe : ");
             sb.append(location.getLocationDescribe());// 位置语义化信息
@@ -589,7 +609,7 @@ public abstract class BaseActivity extends FragmentActivity implements
                 .getConfiguration();// 获得设置对象
         Resources resources = MyApplication.getInstance().getResources();// 获得res资源对象
         DisplayMetrics dm = resources.getDisplayMetrics();// 获得屏幕参数：主要是分辨率，像素等。
-        config.locale = locale; // 简体中文
+        config.setLocale(locale);
         config.setLayoutDirection(locale);
         resources.updateConfiguration(config, dm);
     }

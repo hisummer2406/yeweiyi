@@ -31,6 +31,12 @@ public class UpdateCommitDialog extends Activity implements OnClickListener {
 	private final ShiftRepository shiftRepository = ShiftRepositoryImpl.getInstance();
 	private int oilCanId;
 	
+	// [不可达-2026-09-23] 用户确认（非代码追踪结论）：代码路径本身是接通的（DetailCommitWorkFragment 长按记录 →
+	// startActivityForResult(..., UpdateCommitDialog.class, ...)，默认 admin 账号的
+	// getUpdateCommitInfo()==1），但用户在实际产品/设计稿层面确认这个交班记录修改功能
+	// 目前没有真正在用——不是代码追踪出来的结论，是产品侧确认，供参考。item_commit_work.xml
+	// 的字符串资源（jieban_hieght_1/jiaoban_hieght_1/shell_volue_1/shell_weight_1/update）
+	// 不用优先翻。
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);

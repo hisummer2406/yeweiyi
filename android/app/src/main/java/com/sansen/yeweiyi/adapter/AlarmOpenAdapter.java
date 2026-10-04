@@ -21,6 +21,8 @@ import com.sansen.yeweiyi.utils.SystemUtils;
 
 import java.util.List;
 
+// [不可达-2026-09-23] AlarmOpenAdapter 类全仓库没有任何地方 new AlarmOpenAdapter(...)（西语翻译
+// 覆盖率核查时发现）。oil_no/all 这两个字符串资源不用优先翻。
 public class AlarmOpenAdapter extends BaseAdapter implements
 		OnCheckedChangeListener {
 
@@ -71,8 +73,9 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 				alarmByte = oilcanSet.getAlarmByte();
 
 				popuwindow_cb_alarm.setChecked(alarmByte == 1);
-				popuwindow_cb_alarm.setText(position + 1
-						+ SystemUtils.getRsStr(R.string.oil_no));
+				// [已屏蔽-2026-09-23] oil_no 已删除（类不可达，见上方类注释）。
+				// popuwindow_cb_alarm.setText(position + 1
+				// 		+ SystemUtils.getRsStr(R.string.oil_no));
 				popuwindow_cb_alarm
 						.setOnCheckedChangeListener(new OnCheckedChangeListener() {
 
@@ -100,7 +103,8 @@ public class AlarmOpenAdapter extends BaseAdapter implements
 		}
 		
 		if (position == lists.size()) {
-			popuwindow_cb_alarm.setText(SystemUtils.getRsStr(R.string.all));
+			// [已屏蔽-2026-09-23] all 已删除（类不可达，见上方类注释）。
+			// popuwindow_cb_alarm.setText(SystemUtils.getRsStr(R.string.all));
 			popuwindow_cb_alarm.setChecked(SharePrefUtil.getBoolean(ct,
 					"isAllAlarm", false));
 			popuwindow_cb_alarm.setOnCheckedChangeListener(this);

@@ -1,7 +1,6 @@
 package com.sansen.yeweiyi.bean;
 
-import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
@@ -108,15 +107,11 @@ public class OilCan {
 	}
 
 	public void setStateInfo(int oilCanPos,int stateInfo) {
-		if (oilCanPos==0){
-			this.stateInfo = SystemUtils.getRsStr(stateInfo);
-		}else if ("en".equals(SharePrefUtil.getString(MyApplication.getInstance(),SharePrefUtil.LANGUAGE,"zh"))){
-			this.stateInfo= "No."+oilCanPos+SystemUtils.getRsStr(stateInfo);
-		}else {
-			this.stateInfo= oilCanPos+SystemUtils.getRsStr(stateInfo);
-		}
-
-
+		// 罐号前缀的语序（"3xxx" vs "No.3xxx"）由 oilcan_pos_prefix_format 资源决定，
+		// 不在这里按语言分支拼字符串。
+		String text = SystemUtils.getRsStr(stateInfo);
+		this.stateInfo = oilCanPos == 0 ? text
+				: SystemUtils.getRsStr(R.string.oilcan_pos_prefix_format, oilCanPos, text);
 	}
 
 	public double getDensityVar() {
@@ -662,6 +657,26 @@ public class OilCan {
 			probeAdr="0"+probeAdr;
 		}
 		return probeAdr;
+	}
+
+	/**
+	 * 探针ID（十进制输入）对应的协议地址字节，中成/LD 帧里的地址都是一个原始字节：
+	 * ID 10 → 0x0A，而不是把 "10" 当十六进制读成 0x10。不在 1-255 内返回 -1。
+	 * LD2（4-20mA）按十进制通道号匹配，仍用 {@link #getProbeAdr()}。
+	 */
+	public int getProbeAddressByte() {
+		try {
+			int address = Integer.parseInt(probeAdr.trim());
+			return (address >= 1 && address <= 255) ? address : -1;
+		} catch (NumberFormatException | NullPointerException e) {
+			return -1;
+		}
+	}
+
+	/** 协议帧里的两位大写十六进制地址（ID 10 → "0A"），地址无效返回 null。 */
+	public String getProbeAddressHex() {
+		int address = getProbeAddressByte();
+		return address < 0 ? null : String.format("%02X", address);
 	}
 
 	public void setProbeAdr(String probeAdr) {

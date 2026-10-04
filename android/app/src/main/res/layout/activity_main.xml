@@ -13,6 +13,9 @@
         android:paddingTop="@dimen/dp_30"
         android:layout_alignParentBottom="true" >
 
+        <!-- [不可达-2026-09-21] 这个容器恒为 visibility="gone"，全仓库没有任何地方把它切回可见
+             （西语翻译覆盖率核查时发现，跟 CLAUDE.md 记录的 menu_right 同类）。AlarmCoordinator 仍会
+             调用 bar_main_alram.setText(...) 写入文案，只是用户永远看不到。@string/onLoading 不用优先翻。 -->
         <LinearLayout
             android:id="@+id/alarm_info"
             android:layout_width="0dp"
@@ -27,7 +30,6 @@
                 android:layout_height="match_parent"
                 android:background="@drawable/sansen_dibu_text"
                 android:gravity="center"
-                android:text="@string/onLoading"
                 android:textColor="@color/main_boom_alarm" />
         </LinearLayout>
 
@@ -52,7 +54,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="解警"
+                android:text="@string/jiejing"
                 
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
@@ -80,7 +82,7 @@
                 android:layout_height="wrap_content"
                 android:background="@android:color/transparent"
                 android:gravity="center"
-                android:text="报警记录 "
+                android:text="@string/baojingjilu"
                 
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
@@ -110,7 +112,7 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
 
-                android:text="出库记录"
+                android:text="@string/chukujilu"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -139,7 +141,7 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
 
-                android:text="入库记录"
+                android:text="@string/rukujilu"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -166,7 +168,7 @@
                 android:background="@android:color/transparent"
                 android:gravity="center"
 
-                android:text="交班记录"
+                android:text="@string/jiaobanjilu"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -192,7 +194,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="库存记录"
+                android:text="@string/inventory"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>
@@ -219,7 +221,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:text="设置"
+                android:text="@string/shezhi"
                 android:textColor="@color/white"
                 android:textSize="@dimen/dp_24" />
         </LinearLayout>

@@ -9,6 +9,8 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 
 /**
  * double的计算不精确，会有类似0.0000000000000002的误差，正确的方法是使用BigDecimal或者用整型
@@ -103,14 +105,22 @@ public class DoubleUtil implements Serializable {
         return b.divide(one, scale, RoundingMode.HALF_UP).doubleValue();
     }
 
+    // [已修复-2026-09-23] 不传 DecimalFormatSymbols 时用设备当前 locale 的小数点符号，西语下会
+    // 格式化成"3400,0"这种用逗号的字符串，再被 Double.parseDouble()（只认"."）解析就崩溃——
+    // 跟 DataUtils.doubleFoment 是同一类 bug，固定用 Locale.US 避免跟着系统语言变。
     public static double double2(double value) {
         DecimalFormat decimalFormat=new DecimalFormat();
+        decimalFormat.setDecimalFormatSymbols(DecimalFormatSymbols.getInstance(Locale.US));
         decimalFormat.applyPattern("#0.00");
         return Double.parseDouble(decimalFormat.format(value));
     }
 
+    // [已修复-2026-09-23] 同上：不管这个返回值现在有没有被再次解析，固定用 Locale.US 更安全，
+    // 不给以后埋雷。用 setDecimalFormatSymbols 而不是构造函数传 pattern，是为了不动默认 pattern
+    // （"#,##0.###"之类），只换小数点/千分位符号。
     public static String double2Str(float value) {
         DecimalFormat decimalFormat=new DecimalFormat();
+        decimalFormat.setDecimalFormatSymbols(DecimalFormatSymbols.getInstance(Locale.US));
         return decimalFormat.format(value);
     }
 }

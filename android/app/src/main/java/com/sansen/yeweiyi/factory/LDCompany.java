@@ -78,7 +78,7 @@ public class LDCompany implements AbstractCompany {
                 bytes2[1] = bytes[4];
                 bytes2[2] = bytes[5];
                 bytes2[3] = bytes[6];
-                String address = DataUtils.byteToHexString(bytes[0]);
+                int address = bytes[0] & 0xFF;
                 double oilLevel = DataUtils.byte2Short(bytes2);
                //  Log.i(TAG, "probeInfoPase: 油位"+DataUtils.byte2Short(bytes2) +" "+oilLevel);
                 map = MyApplication.getInstance().getmOilcanDataManager().getData();
@@ -86,7 +86,7 @@ public class LDCompany implements AbstractCompany {
                     for (int i = 0; i < map.size(); i++) {
                         oilCan = map.valueAt(i);
                        //  Log.i(TAG, "probeInfoPase:地址 "+address+ "   "+oilCan.getProbeAdr());
-                        if (address.equals(oilCan.getProbeAdr())) {
+                        if (oilCan.getProbeAddressByte() == address) {
                             // 油高 + 补偿
                             oilCan.setOilLevel(BigDecimal.valueOf(oilLevel).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue());
                             //判断是否显示体积

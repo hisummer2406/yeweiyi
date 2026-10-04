@@ -1,28 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <item name="tag_first" type="id"></item>
-    <string name="action_settings" translatable="false">Setting</string>
     <string name="app_name">液位仪系统</string>
-    <string name="onLoading">  </string>
     <string name="welcomSaSen">欢迎使用安卓智能液位仪</string>
     <!--Activity Lable-->
     <string name="oilCanSelect">储罐选择</string>
     <string name="oilCanAlarmOpen">储罐报警开关</string>
     <string name="lable_commitwork">交班</string>
     <string name="labe_updateCommitWork">修正交班信息</string>
-    <!--报警信息-->
-    <string name="oilHeight_alarm">号储罐 高液位报警</string>
-    <string name="oilHHeight_alarm">号储罐 高高液位报警</string>
-    <string name="oillow_alarm">号储罐 低液位报警</string>
-    <string name="oilllow_alarm">号储罐 低低液位报警</string>
-    <string name="waterheight_alarm">号储罐 高水位报警</string>
-    <string name="tempheight_alarm">号储罐高温度报警</string>
-    <string name="templow_alarm">号储罐 低温度报警</string>
-    <string name="outoil">号储罐 出液</string>
+    <!--报警信息（%1$d 为罐号占位符，语序/措辞由各语言资源自己决定，代码不再按语言拼字符串）-->
+    <string name="oilHeight_alarm">%1$d 号储罐 高液位报警</string>
+    <string name="oilHHeight_alarm">%1$d 号储罐 高高液位报警</string>
+    <string name="oillow_alarm">%1$d 号储罐 低液位报警</string>
+    <string name="oilllow_alarm">%1$d 号储罐 低低液位报警</string>
+    <string name="waterheight_alarm">%1$d 号储罐 高水位报警</string>
+    <string name="tempheight_alarm">%1$d 号储罐高温度报警</string>
     <string name="oil_rise">升</string>
-    <string name="oil_connect_error">号储罐连接失败</string>
-    <string name="tantou_height">号探头浓度过高</string>
-    <string name="net_connect_err">网络连接失败</string>
     <string name="fyf_connect_error">驱动板连接中断</string>
     <string name="open_external_lighting">打开外接声光</string>
     <string name="close_external_lighting">关闭外接声光</string>
@@ -58,19 +51,12 @@
     <string name="login_toast_success">登录成功</string>
     <string name="login_toast_fail">用户校验失败，请重新登录</string>
     <string name="login_home">加载主页...</string>
-    <string name="name_not_null">用户名不能为空</string>
-    <string name="name_legth">用户名长度不能小于两个字符</string>
-    <string name="psw_not_null">密码不能为空</string>
-    <string name="psw_length">密码长度不能小于四位</string>
     <string name="celou">测漏检测</string>
     <string name="begin_celou">开始检测</string>
     <string name="end_celou">结束检测</string>
     <!--液气探测-->
     <string name="probe_no">传感器ID</string>
     <string name="alert_value">警戒值：</string>
-    <string name="filter">筛选</string>
-    <string name="save_oilcan">保存</string>
-    <string name="Log_out">|  注销</string>
     <!-- 主页 -->
     <string name="main_bt_alarmrecord">报警记录</string>
     <string name="main_but_home">主页</string>
@@ -80,7 +66,6 @@
     <string name="main_but_alarmrecot">报警记录</string>
     <string name="main_but_print">打印</string>
     <string name="main_toast_savesuccess">保存成功，请在存液记录中查看</string>
-    <string name="main_toast_saveerror">未设置探针</string>
     <!-- 系统设置 -->
     <string name="time">时间</string>
     <string name="language_selection">语言选择</string>
@@ -118,10 +103,7 @@
     <string name="commitwork_errpr">交班失败</string>
     <string name="commitwork_record">交班记录</string>
     <string name="commitwork_toast_psderror">密码错误</string>
-    <string name="long_touch_update_commitwork">长按记录即可修改交班记录</string>
     <string name="input_user_psw">请输入当前用户密码</string>
-    <string name="all">全部</string>
-    <string name="update_commit_work">修改交班信息</string>
 
     <!-- 记录 -->
     <string name="record_sort">排序</string>
@@ -131,10 +113,8 @@
     <!-- 进出液 -->
     <string name="oilinout_in">号储罐正在卸液</string>
     <string name="oilinout_out">号储罐正在出液</string>
-    <string name="long_touch_delte_inoil">长按记录即可删除进出液记录</string>
 
     <!-- 报警 -->
-    <string name="alarm_no">当前储罐无报警</string>
     <string name="alarm_info">报警信息</string>
 
     <!-- 用户信息 -->
@@ -159,7 +139,6 @@
     <string name="exit_user">退出用户</string>
     <string name="employee_account">员工账户</string>
 
-    <string name="oil_type_language">液品</string>
     <string name="oil_level_language">液位</string>
     <string name="oil_weight_language">质量</string>
     <string name="oil_volume_language">容积</string>
@@ -167,21 +146,15 @@
     <string name="water_weight_language" translatable="false">水高</string>
 
     <!-- 储罐信息 -->
-    <string name="oil_no">号储罐</string>
     <string name="tank_no">罐号</string>
     <string name="oil_type">介质类型</string>
     <string name="oil_level">介质类型</string>
     <string name="oil_level_1">液位</string>
     <string name="water_level">水位</string>
-    <string name="water_volume">水体积：</string>
-    <string name="oil_weight">存液重量：</string>
-    <string name="oil_addible">空液量：</string>
-    <string name="oil_volume">液体积：</string>
     <string name="oil_volume_1">液体积</string>
     <string name="temperature">温度</string>
     <string name="alarm_status">报警状态：</string>
     <string name="probe_communication">探针通讯状态：</string>
-    <string name="communication">通讯状态：</string>
     <string name="oiltank">储罐</string>
     <string name="probe_address">地址：</string>
     <string name="oil_type2">液品：</string>
@@ -190,11 +163,7 @@
 
 
     <!-- 存液记录 -->
-    <string name="save_record">存液记录</string>
-    <string name="input_remarks">请输入备注信息</string>
     <string name="remarks">备注信息</string>
-    <string name="enter_input">确定输入</string>
-    <string name="no_maker">不需要备注</string>
 
     <!-- 储罐设置 -->
     <string name="color_picker">颜色选择</string>
@@ -202,7 +171,6 @@
     <string name="select_tank">选择储罐</string>
     <string name="copy">复制到</string>
     <string name="points">自定义点数</string>
-    <string name="tank_table_points">罐表点数</string>
     <string name="enter_table_points">罐表点数</string>
 
 
@@ -240,13 +208,13 @@
     <string name="createtable_vertical_tank">立罐</string>
     <string name="createtable_changfangti_tank">长方体</string>
     <string name="createtable_createbable">请先生成罐表</string>
-    <string name="build_table">生成罐表</string>
     <string name="createtable_oillengtg_nonull">罐长不能输入空值</string>
     <string name="createtable__nodiameternull">直径不能输入空值</string>
     <string name="createtable_a_nonull">封头A不能输入空值</string>
     <string name="createtable_b_nonull">封头B不能输入空值</string>
     <string name="createtable_daorudao">导入到</string>
     <string name="createtable_tanksucess">号储罐 </string>
+    <string name="createtable_import_success">导入到%1$d号储罐 </string>
     <string name="oilcantable_copy_success">复制成功</string>
     <string name="oilcan_height">H：</string>
     <string name="oilcan_length">L：</string>
@@ -257,7 +225,6 @@
     <string name="into_the_tank">导入储罐</string>
 
     <!-- 报警信息 -->
-    <string name="communication_interrupted">号储罐：探针通讯中断！</string>
     <string name="height_oil_alarm">号储罐：高液位报警！</string>
     <string name="hheight_oil_alarm">号储罐：高高液位报警！</string>
     <string name="low_oil_alarm">号储罐：低液位报警！</string>
@@ -285,20 +252,19 @@
     <string name="authorizationmanager">权限管理</string>
     <string name="oilcanset">储罐设置</string>
     <string name="oilcantableset">罐表设置</string>
-    <string name="usermanager">用户管理</string>
-    <string name="probeset">探针设置</string>
     <string name="oilexplor">液气探测</string>
-    <string name="oilcantablecreate">罐表生成</string>
-    <string name="datamanager">数据管理</string>
     <string name="systemset">系统设置</string>
-    <string name="aboutus">关于我们</string>
     <string name="oiltype_custom">自定义液品</string>
     <string name="oilcan_custom">自定义储罐显示</string>
 
-    <string name="oilexploration">液气探测</string>
-    <string name="fyf">驱动板管理</string>
     <!-- 数据管理 -->
-    <string name="in_out_oil_record">进出液记录</string>
+    <!-- [已更正-2026-09-24] 用户指出：这条不是不可达——custom_toast.xml 的 TextView 用
+         android:text="@string/data_save_success" 静态引用它，这个布局被 BaseFragment.initWindowDialog()
+         inflate、BaseFragment.showWindDialog()/showWindDialog(int) 显示，全仓库有 5 个活 Fragment 直接调用
+         （BuLuFragment/OilCanSetFragment/OilTestFragment/SetBaseFragment/SetPawFragment）。之前只查了
+         R.string.data_save_success 在 Java 里的两处引用（都在已确认死的导出方法里），没查这个 key 在布局
+         XML 里的 android:text 引用，是同一类"只查一个 consumer 就下结论"的错误。 -->
+    <string name="data_save_success">保存成功</string>
     <string name="datamanager_clearalarm">清空报警记录</string>
     <string name="datamanager_clearinoutoil">清空进出液记录</string>
     <string name="datamanager_cleartemp">清空温度记录</string>
@@ -311,12 +277,9 @@
     <string name="datamanager_savecloud">保存配置信息到云端</string>
     <string name="datamanager_readcloud">从云端读取配置信息</string>
     <string name="datamanager_chek_out">路径不存在，请检查外部设备</string>
-    <string name="io_no_close">IO流没有正常关闭</string>
 
     <!-- 权限管理 -->
     <string name="user_name">用户名</string>
-    <string name="page">页面</string>
-    <string name="event">事件</string>
     <string name="access_barred">允许页面</string>
     <string name="authorization_toast_noauth">没有打开权限</string>
     <string name="order_number">序号</string>
@@ -324,9 +287,6 @@
     <string name="beginHeight">前高</string>
     <string name="endHeight">后高</string>
     <string name="authorization_allot"></string>
-    <string name="in_out_volume">进出液体积</string>
-    <string name="in_out_v20">V20</string>
-    <string name="in_out_weight">进出液重量</string>
     <string name="content">内容</string>
     <string name="type">类型</string>
     <string name="maintenance_ersonnel">维护人员</string>
@@ -342,16 +302,10 @@
 
 
     <!-- 记录 -->
-    <string name="celou_record">测漏记录</string>
     <string name="inout_record">进液记录</string>
     <string name="temp_record">温度记录</string>
     <string name="record_manager">记录管理</string>
     <string name="load_data_success">数据全部加载完</string>
-    <string name="delete_in_out">删除进液记录</string>
-    <string name="jieban_height">接班高度mm</string>
-    <string name="jiaoban_height">交班高度mm</string>
-    <string name="shell_volue">售液体积L</string>
-    <string name="shell_weight">售液重量kg</string>
     <string name="save_oil_heigth">存液高度mm</string>
     <string name="save_water_heith">存水高度mm</string>
     <string name="save_oil_volume">存液体积L</string>
@@ -376,7 +330,6 @@
     <string name="help">帮助</string>
     <string name="enter_step_1">You are now</string>
     <string name="enter_step_2">steps away from being adeveloper.</string>
-    <string name="down_failed">下载失败</string>
     <!-- 数据 -->
     <string name="check_value_success">请检查数值是否正确</string>
 
@@ -393,25 +346,20 @@
     <string name="password_connection">密码连接</string>
 
     <!-- 数据存储 -->
-    <string name="data_save_success">保存成功</string>
     <string name="data_save_error">保存失败</string>
     <string name="data_storge">数据存储 </string>
     <string name="service_read_data">从服务器中读取数据成功</string>
     <string name="please_set_d2d">"请设置D2D码"</string>
     <string name="save_oilcan_service_success">将储罐数据保存到服务器成功</string>
     <string name="read_error">读取失败</string>
-    <string name="u_load">U盘已经成功挂载</string>
-    <string name="u_unload">U盘已经成功移除</string>
     <string name="probe_type">探针类型：</string>
     <string name="oilcanset_info">储罐设置</string>
     <string name="oilcantable_info">罐表设置</string>
 
     <!-- 打印 -->
     <string name="print_info">打印信息</string>
-    <string name="no_connect_print">没有连接打印机</string>
 
     <!-- 驱动板 -->
-    <string name="concentration">号浓度</string>
 
     <!-- 标题 -->
     <string name="back_page">返回</string>
@@ -426,7 +374,6 @@
     <string name="fyf_time">时间</string>
     <string name="fyf_way">打开方式</string>
     <string name="fyf_refulsh">点击刷新</string>
-    <string name="no_alarm">无报警</string>
     <string name="no_fyf">号继电器</string>
     <string name="cooling">冷却中</string>
     <string name="coolied">冷却完毕</string>
@@ -447,16 +394,10 @@
     <string name="time_detect">时间(分)</string>
     <!--忘记翻译的-->
     <string name="isDeleteRecord">是否删除记录，删除后无法恢复</string>
-    <string name="connect_normal">通信正常</string>
     <string name="Disablealarm">禁用报警</string>
     <string name="Enablealarm">启用报警</string>
 
     <string name="volume_calibration">容积校正</string>
-    <string name="height">高度</string>
-    <string name="volume">体积</string>
-    <string name="tan_no">储罐号</string>
-    <string name="tan_table_data">罐表数据</string>
-    <string name="tank">储罐</string>
     <string name="immorality">不允许</string>
     <string name="akira_ri">无响应</string>
     <string name="token_code">令牌码</string>
@@ -470,29 +411,7 @@
     <string name="temp">温度</string>
     <string name="read_probe_address">读取探针地址</string>
     <string name="modify_probe_address">修改探针地址</string>
-    <string name="inoiling">号储罐 卸液中...</string>
-    <string name="outoiling">号储罐 出液中...</string>
-    <string name="inoil">号储罐 卸液完成</string>
-    <string name="inoil_start">开始</string>
-    <string name="inoil_height">高度</string>
-    <string name="inoil_volume">体积</string>
-    <string name="inoil_tcvolume">空液量</string>
-    <string name="inoil_water">水位</string>
-    <string name="inoil_watervolume">水体积</string>
-    <string name="inoil_weight">液重量</string>
     <string name="inoil_temp">温度</string>
-    <string name="inoil_end">结束</string>
-    <string name="inoil_total_delivery">总售液</string>
-    <string name="inoil_continue">继续</string>
-    <string name="inoil_save">保存</string>
-    <string name="inoil_quite">退出</string>
-    <string name="inoil_stop">停止</string>
-    <string name="inoil_during">售液补偿</string>
-    <string name="inoil_tank">储罐 </string>
-    <string name="inoil_product">液品: </string>
-    <string name="inoil_statu">状态: </string>
-    <string name="inoil_unload_stop">卸液停止</string>
-    <string name="inoil_unloading">卸液中...</string>
     <string name="about_device">设备信息</string>
     <string name="baudR">波特率</string>
     <string name="down_app">下载APP</string>
@@ -520,9 +439,6 @@
     <string name="input_psw">请输入防溢阀密码</string>
     <string name="switch_mod">切换防溢阀模式</string>
     <string name="mqtt_connect_error">Mqtt服务器连接失败</string>
-    <string name="details">详细数据</string>
-    <string name="uload_weight">卸液重量</string>
-    <string name="uload_volume">卸液体积</string>
     <string name="delete">删除</string>
     <string name="modify">修改</string>
     <string name="title_activity_fragment_driver_board">fragment_driver_board</string>
@@ -535,6 +451,8 @@
     <string name="jiaobanjilu" tools:ignore="MissingTranslation">交班记录</string>
     <string name="baobiaochakan" tools:ignore="MissingTranslation">报表查看</string>
     <string name="shezhi" tools:ignore="MissingTranslation">设置</string>
+    <string name="base_set_title" tools:ignore="MissingTranslation">基础设置</string>
+    <string name="oilcan_pos_prefix_format" tools:ignore="MissingTranslation">%1$d%2$s</string>
     <string name="guanbiaoxinxi" tools:ignore="MissingTranslation">罐表信息</string>
     <string name="bianhao" tools:ignore="MissingTranslation">编号</string>
     <string name="guanhao" tools:ignore="MissingTranslation">罐号</string>
@@ -566,4 +484,109 @@
     <string name="wendu_u" tools:ignore="MissingTranslation">温度(‌℃)</string>
     <string name="zhiliang_u" tools:ignore="MissingTranslation">质量(千克)</string>
     <string name="kuncunshengchengshijian" tools:ignore="MissingTranslation">库存生成时间</string>
+
+    <!-- 蓝湖设计稿补齐：程序里原本硬编码/无资源的界面文案 -->
+    <string name="export_shift_handover_rec">交班记录导出</string>
+    <string name="zhongcheng_probe_protocol">中成探针协议</string>
+    <string name="export_inventory_records">库存记录导出</string>
+    <string name="standard_modbus_protocol">标准Modbus协议</string>
+    <string name="export_outbound_records">出库记录导出</string>
+    <string name="export_inbound_records">入库记录导出</string>
+    <string name="serial_port_2_settings">串口2设置</string>
+    <string name="serial_port_4_settings">串口4设置</string>
+    <string name="export_alarm_records">报警记录导出</string>
+    <string name="serial_port_settings">串口设置</string>
+    <string name="l_water_level_alarm">低水位报警</string>
+    <string name="advanced_settings">高级设置</string>
+    <string name="password_settings">密码设置</string>
+    <string name="confirm_password">确认密码</string>
+    <string name="temperature_c">温度(℃)</string>
+    <string name="clear_inv_rec">清空库存记录</string>
+    <string name="record_settings">记录设置</string>
+    <string name="report_settings">报表设置</string>
+    <string name="click_to_enter">点击进入</string>
+    <string name="del_inv_rec">删除库存记录</string>
+    <string name="gen_inv_rec">生成库存记录</string>
+    <string name="generate_alarm">生成报警记录</string>
+    <string name="start_takeover">开始接班</string>
+    <string name="clear_ib_rec">清空入库记录</string>
+    <string name="clear_ob_rec">清空出库记录</string>
+    <string name="outbound_time">出库时间</string>
+    <string name="del_ib_rec">删除入库记录</string>
+    <string name="del_ob_rec">删除出库记录</string>
+    <string name="delete_alarm">删除报警记录</string>
+    <string name="end_handover">结束交班</string>
+    <string name="gen_ib_rec">生成入库记录</string>
+    <string name="gen_ob_rec">生成出库记录</string>
+    <string name="please_enter">请输入</string>
+    <string name="export_data">导出数据</string>
+    <string name="height_mm">高度(毫米)</string>
+    <string name="volume_unit">容积单位选择</string>
+    <string name="level_unit">液位单位选择</string>
+    <string name="usb_export">U盘导出</string>
+    <string name="usb_import">U盘导入</string>
+    <string name="demo_mode">演示模式</string>
+    <string name="inventory">库存记录</string>
+    <string name="mass_unit">质量单位选择</string>
+    <string name="save_data">保存数据</string>
+    <string name="tank_type">储罐类型</string>
+    <string name="welcome">欢迎登录</string>
+    <string name="medium">介质</string>
+    <string name="clear">清空</string>
+    <string name="color">颜色</string>
+    <string name="home">返回首页</string>
+    <string name="mm">毫米</string>
+
+    <!-- 设计稿字符略有出入但语义一致的补充 -->
+    <string name="outlet_height_threshold">出库高度阈值</string>
+    <string name="outlet_time_threshold">出库时间阈值</string>
+    <string name="inlet_height_threshold">入库高度阈值</string>
+    <string name="inlet_time_threshold">入库时间阈值</string>
+    <string name="generate_shift_log2">生成交接班记录</string>
+    <string name="delete_shift_log2">删除交接班记录</string>
+    <string name="clear_shift_log2">清空交接班记录</string>
+    <string name="set_admin_password_3">请设置你的管理员密码</string>
+    <string name="zhongcheng_anti_spill_cabinet">中成防溢油柜协议</string>
+    <string name="delete_all_records_warning2">谨慎！是否删除记录，记录无法恢复</string>
+
+    <!-- 以下为 Claude 翻译补充：蓝湖设计稿未覆盖，由 Claude 参照上下文拟定中英文案（2026-09），非设计稿原文 -->
+    <string name="previous_page">返回上页</string>
+    <string name="hour_unit">小时</string>
+    <string name="tank_total_capacity">总容量</string>
+    <string name="tank_empty_capacity">空容</string>
+    <string name="tank_density">密度</string>
+    <string name="admin_password_label">管理员密码</string>
+    <string name="backfill_records_title">补录记录</string>
+    <string name="inbound_height_before">入库前高度</string>
+    <string name="inbound_volume_l">入库升数</string>
+    <string name="outbound_record_backfill">出库记录补录</string>
+    <string name="outbound_height_before">出库前高度</string>
+    <string name="outbound_volume_l">出库升数</string>
+    <string name="inbound_record_backfill">入库记录补录</string>
+    <string name="backfill_hint_long">当入库或出库过程中，由于停电或设备故障前导致记录缺失，可手动补录。目前仅支持补录出库记录和入库记录</string>
+    <string name="preview_data">预览数据</string>
+    <string name="view_tank_chart">查看罐表</string>
+    <string name="commitwork_start_time">开始时间</string>
+    <string name="commitwork_end_time">结束时间</string>
+    <string name="probe_height_offset_mm">探针高度补偿(mm):</string>
+    <string name="tank_default_volume_l">油罐默认升数(L):</string>
+    <string name="delete_record_title">删除记录</string>
+    <string name="app_crashed">程序崩溃</string>
+    <string name="wrong_password_input">输入内容：%1$s  密码错误</string>
+
+    <!-- OilCanFragment 单位本地化 + 罐号格式串 -->
+    <string name="unit_m">米</string>
+    <string name="unit_l">升</string>
+    <string name="unit_cubic">立方</string>
+    <string name="unit_kg">千克</string>
+    <string name="unit_ton">吨</string>
+    <string name="unit_gallon">加仑</string>
+    <string name="unit_second">秒</string>
+    <string name="oilcan_type_format">%1$d号  %2$s</string>
+
+    <!-- 日历标题 + 百度定位失败提示 -->
+    <string name="calendar_year_month_format">%1$d年%2$d月</string>
+
+    <!-- MainFragment 罐列表 canvas 绘制的罐号标签 -->
+    <string name="oilcan_short_label_format">%1$d号 </string>
 </resources>

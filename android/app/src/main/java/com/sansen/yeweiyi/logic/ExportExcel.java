@@ -30,7 +30,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.text.SimpleDateFormat;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
@@ -330,7 +332,11 @@ public class ExportExcel<T> {
                                     cell.setCellStyle(styleInteger);
                                 } else {
                                     boolean isDensityField = fieldName.toLowerCase().contains("density");
-                                    DecimalFormat roundFormat = new DecimalFormat(isDensityField ? "0.000" : "0.0");
+                                    // [已修复-2026-09-23] 不传 DecimalFormatSymbols 时用设备当前 locale 的
+                                    // 小数点符号，西语下格式化结果会带逗号，紧接着又用 Double.parseDouble()
+                                    // （只认"."）解析回去就崩溃——跟 DataUtils.doubleFoment 是同一类 bug。
+                                    DecimalFormat roundFormat = new DecimalFormat(isDensityField ? "0.000" : "0.0",
+                                            DecimalFormatSymbols.getInstance(Locale.US));
                                     cell.setCellValue(Double.parseDouble(roundFormat.format(Double.parseDouble(textValue))));
                                     cell.setCellStyle(isDensityField ? styleNumberDensity : styleNumber);
                                 }
@@ -395,6 +401,9 @@ public class ExportExcel<T> {
      * @param out     与输出设备关联的流对象，可以将EXCEL文档导出到本地文件或者网络中
      * @param pattern 如果有时间数据，设定输出格式。默认为"yyy-MM-dd"
      */
+    // [不可达-2026-09-21] 唯一调用方是 DBDataManager.SaveOilCanTable()（已 @Deprecated 且本身也是死路径，
+    // 见那边的注释），西语翻译覆盖率核查时发现。方法体里 R.string.tank / R.string.tank_table_points
+    // 这两个字符串资源不用优先翻。
     @SuppressWarnings("unchecked")
     public boolean exportOilCanTable(String title, String[] headers,
                                      List<OilCanTable> dataset, String[] params, OutputStream out,
@@ -444,23 +453,27 @@ public class ExportExcel<T> {
             index = (table.getPk_oilCanId() - 1) * 3;
 
             // 生成一个表格
-            HSSFSheet sheet = workbook.createSheet(SystemUtils.getRsStr(R.string.tank) + table.getPk_oilCanId());
+            // [已屏蔽-2026-09-23] tank 已删除（这个方法不可达，见上方注释），用空串占位保持编译。
+            HSSFSheet sheet = workbook.createSheet(/* SystemUtils.getRsStr(R.string.tank) */ "" + table.getPk_oilCanId());
             // 设置表格默认列宽度为15个字节
             sheet.setDefaultColumnWidth(15);
             HSSFRow row = sheet.createRow(0);
             HSSFCell cell = row.createCell(0);
             cell.setCellStyle(style2);
-            cell.setCellValue(SystemUtils.getRsStr(R.string.tank_table_points));
+            // [已屏蔽-2026-09-23] tank_table_points 已删除（不可达，见上方注释）。
+            // cell.setCellValue(SystemUtils.getRsStr(R.string.tank_table_points));
             cell = row.createCell(1);
             cell.setCellStyle(style2);
             cell.setCellValue(table.getHeight().length);
             row = sheet.createRow(1);
             cell = row.createCell(0);
             cell.setCellStyle(style2);
-            cell.setCellValue(SystemUtils.getRsStr(R.string.height));
+            // [已屏蔽-2026-09-23] height 已删除（不可达，见上方注释）。
+            // cell.setCellValue(SystemUtils.getRsStr(R.string.height));
             cell = row.createCell(1);
             cell.setCellStyle(style2);
-            cell.setCellValue(SystemUtils.getRsStr(R.string.volume));
+            // [已屏蔽-2026-09-23] volume 已删除（不可达，见上方注释）。
+            // cell.setCellValue(SystemUtils.getRsStr(R.string.volume));
             // i行 j列
             for (int i = 2; i < table.getHeight().length + 2; i++) {
                 // 得到某一行

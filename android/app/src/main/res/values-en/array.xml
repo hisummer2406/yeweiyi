@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="prints">
+        <item>Brief Info</item>
+        <item>Detailed Info</item>
+        <item>Stock In/Out Records</item>
+        <item>Oil Storage Records</item>
+        <item>Shift Records</item>
+        <item>Leak Test Records</item>
+    </string-array>
+    <string-array name="data_manager">
+        <item>Clear Alarm Records</item>
+        <item>Clear Stock In/Out Records</item>
+        <item>Clear Temperature Records</item>
+        <item>Clear Oil Storage Records</item>
+        <item>Clear Shift Records</item>
+        <item>Clear Leak Test Records</item>
+        <item>Clear All Records</item>
+    </string-array>
+
+    <string-array name="data_service">
+        <item>Save Config to Cloud</item>
+        <item>Load Config from Cloud</item>
+        <item>Save to USB Drive</item>
+        <item>Load Data from USB Drive</item>
+    </string-array>
+
+    <string-array name="set_array">
+        <item>Tank Settings</item>
+        <item>Tank Table Settings</item>
+        <item>Password Settings</item>
+        <item>Basic Settings</item>
+        <item>Record Settings</item>
+        <item>Advanced Settings</item>
+    </string-array>
+
+
+    <!-- Oil type -->
+    <string-array name="oiltypeArray">
+        <item>Not set</item>
+        <item>0# Diesel</item>
+        <item>Sulfuric Acid</item>
+        <item>-20# Diesel</item>
+        <item>-35# Diesel</item>
+        <item>92# Gasoline</item>
+        <item>95# Gasoline</item>
+        <item>98# Gasoline</item>
+        <item>Methanol</item>
+        <item>Toluene</item>
+        <item>Kerosene</item>
+        <item>Sulfuric Acid</item>
+        <item>Xylene</item>
+        <item>n-Butyl</item>
+        <item>sec-Butyl</item>
+        <item>Methyl</item>
+        <item>Dimethyl</item>
+        <item>Solvent Oil</item>
+        <item>Blank</item>
+    </string-array>
+
+    <string-array name="oilcanArray">
+        <item>Tank No. 1</item>
+        <item>Tank No. 2</item>
+        <item>Tank No. 3</item>
+        <item>Tank No. 4</item>
+        <item>Tank No. 5</item>
+        <item>Tank No. 6</item>
+        <item>Tank No. 7</item>
+        <item>Tank No. 8</item>
+        <item>Tank No. 9</item>
+        <item>Tank No. 10</item>
+        <item>Tank No. 11</item>
+        <item>Tank No. 12</item>
+    </string-array>
+
+    <string-array name="oilcanTableArray">
+        <item>Tank Table 1</item>
+        <item>Tank Table 2</item>
+        <item>Tank Table 3</item>
+        <item>Tank Table 4</item>
+        <item>Tank Table 5</item>
+        <item>Tank Table 6</item>
+        <item>Tank Table 7</item>
+        <item>Tank Table 8</item>
+        <item>Tank Table 9</item>
+        <item>Tank Table 10</item>
+        <item>Tank Table 11</item>
+        <item>Tank Table 12</item>
+        <item>Tank Table 13</item>
+        <item>Tank Table 14</item>
+        <item>Tank Table 15</item>
+        <item>Tank Table 16</item>
+    </string-array>
+    <string-array name="tanZhenTableArray">
+        <item>Probe 1</item>
+        <item>Probe 2</item>
+        <item>Probe 3</item>
+        <item>Probe 4</item>
+        <item>Probe 5</item>
+        <item>Probe 6</item>
+        <item>Probe 7</item>
+        <item>Probe 8</item>
+        <item>Probe 9</item>
+        <item>Probe 10</item>
+        <item>Probe 11</item>
+        <item>Probe 12</item>
+        <item>Probe 13</item>
+        <item>Probe 14</item>
+        <item>Probe 15</item>
+        <item>Probe 16</item>
+    </string-array>
+
+    <string-array name="oilcanSetArray">
+        <item>Tank Setting Table 1</item>
+        <item>Tank Setting Table 2</item>
+        <item>Tank Setting Table 3</item>
+        <item>Tank Setting Table 4</item>
+        <item>Tank Setting Table 5</item>
+        <item>Tank Setting Table 6</item>
+        <item>Tank Setting Table 7</item>
+        <item>Tank Setting Table 8</item>
+        <item>Tank Setting Table 9</item>
+        <item>Tank Setting Table 10</item>
+        <item>Tank Setting Table 11</item>
+        <item>Tank Setting Table 12</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>Product</item>
+        <item>Level</item>
+        <item>Volume</item>
+        <item>Weight</item>
+        <item>Empty Volume</item>
+        <item>Water Level</item>
+        <item>Water Volume</item>
+        <item>Temperature</item>
+    </string-array>
+
+    <string-array name="oilCurItem">
+        <item>Product</item>
+        <item>Level</item>
+        <item>Oil Volume</item>
+        <item>Stored Weight</item>
+        <item>Temperature</item>
+    </string-array>
+    <string-array name="mqttAddress">
+        <item>Server 01</item>
+        <item>Server 02</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>Horizontal Tank</item>
+        <item>Vertical Tank</item>
+    </string-array>
+    <string-array name="language">
+        <item>Chinese</item>
+        <item>English</item>
+        <item>Spanish</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>mm</item>
+        <item>m</item>
+    </string-array>
+    <string-array name="rongji_unit">
+        <item>L</item>
+        <item>m³</item>
+        <item>Gal</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>kg</item>
+        <item>t</item>
+    </string-array>
+</resources>

@@ -43,7 +43,6 @@ import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
@@ -162,7 +161,7 @@ public class CreateOilTableFragment extends BaseFragment {
         // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time=headerView.findViewById(R.id.main_time);
-        tvTitle.setText("罐表设置");
+        tvTitle.setText(R.string.oilcantableset);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
 
     }
@@ -418,8 +417,11 @@ public class CreateOilTableFragment extends BaseFragment {
             SystemUtils.showRsToast(R.string.createtable__nodiameternull);
         } else if (createtable_ed_diameter.getText().length() < 3) {
             SystemUtils.showRsToast("灌高不能小于10厘米");
-        } else if (tableType == TableType.HORIZONTALTANK & createtable_ed_headA.getText().length() < 3) {
-            SystemUtils.showRsToast("罐头不能小于10厘米");
+        } else if (tableType == TableType.HORIZONTALTANK & StringUtils.isEmpty(createtable_ed_headA.getText().toString())) {
+            // R（封头半径）允许填 0——平封头（没有弧度）是真实存在的罐型，不是"太小"，
+            // 之前用 length()<3 卡最小值，跟罐长/罐高的"不能小于10厘米"混在一起是错的。
+            // createtable_a_nonull 这个资源之前就存在（设计稿留的），但全仓库零引用，这次接上。
+            SystemUtils.showRsToast(R.string.createtable_a_nonull);
         } else {
             L = Double.parseDouble(createtable_ed_length.getText()
                     .toString()) / 1000;
@@ -479,13 +481,8 @@ public class CreateOilTableFragment extends BaseFragment {
                 createOilCanTalbe.setGmt_modified(DateUtils.getYYYMMddHHmmss());
                 oilTankRepository.updateOilCanTable(createOilCanTalbe);
 
-                if ("en".equals(SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh"))) {
-                    SystemUtils.showRsToast("No." + SystemUtils.getRsStr(R.string.createtable_daorudao) + (resultCode + 1) + SystemUtils.getRsStr(R.string.createtable_tanksucess));
-                } else if ("zh".equals(SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh"))) {
-                    SystemUtils.showRsToast(SystemUtils.getRsStr(R.string.createtable_daorudao) + (resultCode + 1) + SystemUtils.getRsStr(R.string.createtable_tanksucess));
-                } else if ("th".equals(SharePrefUtil.getString(ct, SharePrefUtil.LANGUAGE, "zh"))) {
-                    SystemUtils.showRsToast(SystemUtils.getRsStr(R.string.createtable_daorudao) + (resultCode + 1) + SystemUtils.getRsStr(R.string.createtable_tanksucess));
-                }
+                // 罐号在句子里的位置由 createtable_import_success 资源自己决定，不按语言分支拼字符串。
+                SystemUtils.showRsToast(SystemUtils.getRsStr(R.string.createtable_import_success, resultCode + 1));
             }
         } else if (requestCode == 1) {
             if (resultCode != 0) {

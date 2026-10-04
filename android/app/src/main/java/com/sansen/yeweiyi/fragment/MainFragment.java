@@ -30,6 +30,11 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
 
     public static SparseArray<OilCan> oilCanMaps;
 
+    // [不可达-2026-09-21] 这个字段声明后从没被真正赋值过——唯一赋值代码在下面被注释掉了
+    // （西语翻译覆盖率核查时发现）。传给 GasExplorationAdapter.setData() 的永远是 null，
+    // 导致 getCount() 恒为 0，Android 框架不会调用 getView()，item_gas_exploration.xml 里的
+    // R.string.concentration 因此不可达，不用优先翻。如果油气探测这块要真的接上，需要先找到
+    // 数据源填充这个字段（并取消下面 76-77 行注释）。
     private SparseArray gasExplor;
 
     int curSpCount = 0;

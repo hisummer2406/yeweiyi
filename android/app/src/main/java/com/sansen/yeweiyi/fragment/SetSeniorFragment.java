@@ -13,9 +13,11 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 
 public class SetSeniorFragment extends BaseFragment {
 
@@ -96,13 +98,16 @@ public class SetSeniorFragment extends BaseFragment {
         ly_chuankou.setOnClickListener(this);
         ly_yanshi.setOnClickListener(this);
         ly_thingsboard.setOnClickListener(this);
+        // 云平台设置页（ThingsBoardSetFragment）的文案目前写死中文、还没有多语言版本，
+        // 暂时只在中文界面下开放入口；GONE 让同行其余按钮按权重重新铺满，非中文界面布局和加这个入口之前一致
+        ly_thingsboard.setVisibility(LanguageUtil.isChinese(MyApplication.getInstance().getApplicationContext()) ? View.VISIBLE : View.GONE);
         ly_mima.setOnClickListener(this);
 
         View headerView = rootView.findViewById(R.id.title_bar);
         // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time=headerView.findViewById(R.id.main_time);
-        tvTitle.setText("高级设置");
+        tvTitle.setText(R.string.advanced_settings);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
 

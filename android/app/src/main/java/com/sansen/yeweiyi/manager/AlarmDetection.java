@@ -30,15 +30,6 @@ public class AlarmDetection {
     private AlarmRepository alarmRepository;
     AlarmRecord record;
     Map<Integer, AlarmState> alarmStates;
-    public static final String NoAlarm = SystemUtils.getRsStr(R.string.no_alarm);
-    public static final String ConnectError = SystemUtils.getRsStr(R.string.communication_interrupted);
-    public static final String HeightOilError = SystemUtils.getRsStr(R.string.height_oil_alarm);
-    public static final String HHeightOilError = SystemUtils.getRsStr(R.string.hheight_oil_alarm);
-    public static final String LowOilError = SystemUtils.getRsStr(R.string.low_oil_alarm);
-    public static final String LLowOilError = SystemUtils.getRsStr(R.string.llow_oil_alarm);
-    public static final String HeightWaterError = SystemUtils.getRsStr(R.string.height_water_alarm);
-    public static final String HeightTempError = SystemUtils.getRsStr(R.string.height_temp_alarm);
-    public static final String LowTempError = SystemUtils.getRsStr(R.string.low_temp_alarm);
 
     private AlarmDetection(AlarmManager alarmManager) {
         this.alarmManager = alarmManager;
@@ -395,6 +386,11 @@ public class AlarmDetection {
      *
      * @return true or false
      */
+    // [不可达-2026-09-21] 全仓库没有任何地方调用这个方法——beginDection() 里只走了
+    // oilHeightDection/oilLowDection/waterHeightDection/tempHeightDection 四个，唯独漏了这个
+    // （西语翻译覆盖率核查时发现）。low_temp_alarm 不会被这条路径触发；OilMessage.getState() 里
+    // LOW_TEMPER 分支对应的 templow_alarm 字符串同理不可达。如果"低温报警"本该是真需求，
+    // 修法是在 beginDection() 里也调一下 tempLowDection(oilCan)。
     private boolean tempLowDection(OilCan oilCan) {
 
         AlarmState alarmState;

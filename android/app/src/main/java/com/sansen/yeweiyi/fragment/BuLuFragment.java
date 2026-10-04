@@ -43,6 +43,7 @@ import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
 import java.text.SimpleDateFormat;
@@ -114,7 +115,7 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         // 再从该 View 中 findViewById 获取内部的 TextView
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time=headerView.findViewById(R.id.main_time);
-        tvTitle.setText("补录记录");
+        tvTitle.setText(R.string.backfill_records_title);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
     Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
@@ -308,7 +309,7 @@ public class BuLuFragment extends BaseFragment implements TextWatcher, AdapterVi
         }
         calendarAdapter.notifyDataSetChanged();
         // 更新标题
-        titleTv.setText(year + "年" + (month + 1) + "月");
+        titleTv.setText(SystemUtils.getRsStr(R.string.calendar_year_month_format, year, month + 1));
     }
 
     /**

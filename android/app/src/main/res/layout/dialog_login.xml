@@ -26,7 +26,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/dp_72"
                 android:gravity="center"
-                android:text="欢迎登录"
+                android:text="@string/welcome"
                 android:textColor="@color/black"
                 android:textSize="@dimen/sp_30"
                 android:textStyle="bold" />
@@ -38,7 +38,7 @@
                 android:layout_gravity="center"
                 android:layout_marginTop="@dimen/dp_30"
                 android:background="@drawable/shap_login_pwd"
-                android:hint="请输入密码"
+                android:hint="@string/login_tv_password"
                 android:inputType="numberPassword"
                 android:imeOptions="actionDone"
                 android:paddingLeft="@dimen/dp_20"
@@ -52,7 +52,7 @@
                 android:layout_marginTop="@dimen/dp_30"
                 android:background="@drawable/shap_login_enter"
                 android:textSize="@dimen/sp_22"
-                android:text="点击进入"
+                android:text="@string/click_to_enter"
 
                 android:textColor="@color/white" />
 

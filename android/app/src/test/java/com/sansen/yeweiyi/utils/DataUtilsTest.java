@@ -239,13 +239,12 @@ public class DataUtilsTest {
     }
 
     /**
-     * [现状固化] 当"0.0"格式化后长度超过 7，会改用"0.0000"重新格式化。
-     * 代码注释写的是"只显示整数"，实际效果相反——精度反而变高了。
+     * 当"0.0"格式化后长度超过 7，改用"0"重新格式化，只显示整数——符合代码注释的原意。
      */
     @Test
-    public void doubleFoment_超过7位时反而保留更多小数() {
-        // "123456.8" 长度为 8 > 7，于是改用 0.0000 格式 -> "123456.7800"
-        assertEquals(123456.78, DataUtils.doubleFoment(123456.78), 1e-9);
+    public void doubleFoment_超过7位时只显示整数() {
+        // "123456.8" 长度为 8 > 7，于是改用 0 格式（只显示整数）-> 123457
+        assertEquals(123457.0, DataUtils.doubleFoment(123456.78), 1e-9);
     }
 
     @Test

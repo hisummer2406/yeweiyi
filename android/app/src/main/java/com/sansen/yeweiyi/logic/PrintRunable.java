@@ -29,6 +29,14 @@ import java.util.List;
 
 import serialport.help.SerialPortHelper;
 
+// [不可达-2026-09-21] 唯一构造点是 MainActivity.onActivityResult() 的 requestCode==1000 分支，
+// 全仓库没有任何地方以这个请求码发起调用（西语翻译覆盖率核查时发现）。这个类里 println() 用到的
+// 约 18 个字符串资源目前不会被用户看到，加新语言不用优先翻它们。
+// [已更正-2026-09-23] 这条注释只覆盖"这个类自己 println() 用到的字符串"——R.string.oil_no /
+// R.string.inoil_water / R.string.oil_Communication_interrupt 这几个虽然也在这个类里出现过，
+// 但同时还被别的活页面独立引用（oil_Communication_interrupt 被 MinOilCanView 用于首页罐图标的
+// 通信中断提示，是可达的，已移出不可达清单，见那边的注释）。判定一个 key 不可达前要看它*全部*
+// 引用处，不能因为在这个类里出现就默认它整体死了。
 public class PrintRunable implements Runnable {
     private SerialPortHelper serialPort;
     private String TAG = "PrintRunable";
@@ -79,18 +87,23 @@ public class PrintRunable implements Runnable {
                     println("--------END-------");
                     for (int i = 0; i < map.size(); i++) {
                         oilCan = map.valueAt(i);
-                        println(SystemUtils.getRsStr(R.string.communication)
-                                + (oilCan.getErrorTimes() == 0 ? SystemUtils.getRsStr(R.string.connect_normal) : SystemUtils.getRsStr(R.string.oil_Communication_interrupt)));
+                        // [已屏蔽-2026-09-23] communication/connect_normal 已删除（PrintRunable 类不可达，见上方类注释）。
+                        // println(SystemUtils.getRsStr(R.string.communication)
+                        //         + (oilCan.getErrorTimes() == 0 ? SystemUtils.getRsStr(R.string.connect_normal) : SystemUtils.getRsStr(R.string.oil_Communication_interrupt)));
                         println( SystemUtils.getRsStr(R.string.temperature)+ oilCan.getTemper() + " ℃");
-                        println(SystemUtils.getRsStr(R.string.water_volume) + oilCan.getWaterVolume() + " L");
+                        // [已屏蔽-2026-09-23] water_volume 已删除（不可达，见上方类注释）。
+                        // println(SystemUtils.getRsStr(R.string.water_volume) + oilCan.getWaterVolume() + " L");
                         println(SystemUtils.getRsStr(R.string.water_level) + oilCan.getWaterLevel() + " mm");
-                        println(SystemUtils.getRsStr(R.string.oil_addible) + oilCan.getSurPlus() + " L");
-                        println(SystemUtils.getRsStr(R.string.oil_volume)+ oilCan.getOilVolume() + " L");
+                        // [已屏蔽-2026-09-23] oil_addible 已删除（不可达，见上方类注释）。
+                        // println(SystemUtils.getRsStr(R.string.oil_addible) + oilCan.getSurPlus() + " L");
+                        // [已屏蔽-2026-09-23] oil_volume 已删除（不可达，见上方类注释）。
+                        // println(SystemUtils.getRsStr(R.string.oil_volume)+ oilCan.getOilVolume() + " L");
                         println(SystemUtils.getRsStr(R.string.oil_level) + oilCan.getOilLevel() + " mm");
                         println(SystemUtils.getRsStr(R.string.oil_type)  + Const.getOilType(oilCan.getOilType()));
                         println(SystemUtils.getRsStr(R.string.tank_no) + oilCan.getOilCanPos());
                     }
-                    println("-------"+SystemUtils.getRsStr(R.string.details)+"-------");
+                    // [已屏蔽-2026-09-23] details 已删除（PrintRunable 类不可达，见上方类注释）。
+                    // println("-------"+SystemUtils.getRsStr(R.string.details)+"-------");
                     break;
 
                 case 2:
@@ -101,13 +114,15 @@ public class PrintRunable implements Runnable {
                         println("--------记录不存在-------");
                         return;
                     }
-                    println(SystemUtils.getRsStr(R.string.uload_weight)+":" + oilInOut.getBeginHeigth());
-                    println(SystemUtils.getRsStr(R.string.uload_volume) +":"+ oilInOut.getBeginVolum());
+                    // [已屏蔽-2026-09-23] uload_weight/uload_volume 已删除（不可达，见上方类注释）。
+                    // println(SystemUtils.getRsStr(R.string.uload_weight)+":" + oilInOut.getBeginHeigth());
+                    // println(SystemUtils.getRsStr(R.string.uload_volume) +":"+ oilInOut.getBeginVolum());
                     println(SystemUtils.getRsStr(R.string.endHeight) +":" + oilInOut.getEndHeigth());
                     println(SystemUtils.getRsStr(R.string.beginHeight)+":"+ oilInOut.getBeginHeigth());
                     println(SystemUtils.getRsStr(R.string.time)+":" + oilInOut.getTime());
                     println(SystemUtils.getRsStr(R.string.tank_no)+":" + oilInOut.getOilId());
-                    println("-------"+SystemUtils.getRsStr(R.string.in_out_oil_record)+"------");
+                    // [已屏蔽-2026-09-23] in_out_oil_record 已删除（不可达，见上方类注释）。
+                    // println("-------"+SystemUtils.getRsStr(R.string.in_out_oil_record)+"------");
                     break;
                 case 3:
                     println("--------END-------");
@@ -121,14 +136,16 @@ public class PrintRunable implements Runnable {
                     List<Oil> oils = dbDataManager.stringToArray(oilInfoGosn,
                             Oil[].class);
                     for (Oil oil : oils) {
-                        println(SystemUtils.getRsStr(R.string.oil_weight) + oil.getOilWeigh());
-                        println(SystemUtils.getRsStr(R.string.oil_volume) + oil.getOilVolum());
-                        println(SystemUtils.getRsStr(R.string.inoil_water) + oil.getWaterHeight());
+                        // [已屏蔽-2026-09-23] oil_weight/oil_volume/inoil_water/oil_no 已删除（不可达，见上方类注释）。
+                        // println(SystemUtils.getRsStr(R.string.oil_weight) + oil.getOilWeigh());
+                        // println(SystemUtils.getRsStr(R.string.oil_volume) + oil.getOilVolum());
+                        // println(SystemUtils.getRsStr(R.string.inoil_water) + oil.getWaterHeight());
                         println(SystemUtils.getRsStr(R.string.oil_level) + oil.getOilHeight());
-                        println(SystemUtils.getRsStr(R.string.oil_no)  + oil.getOilId());
+                        // println(SystemUtils.getRsStr(R.string.oil_no)  + oil.getOilId());
                         println(SystemUtils.getRsStr(R.string.time) + oilSaveInfo.getTime());
                     }
-                    println("-------"+SystemUtils.getRsStr(R.string.save_record)+"------");
+                    // [已屏蔽-2026-09-23] save_record 已删除（不可达，见上方类注释）。
+                    // println("-------"+SystemUtils.getRsStr(R.string.save_record)+"------");
                     break;
                 case 4:
                     CommitWork commitWork = shiftRepository.findLast();
@@ -143,10 +160,11 @@ public class PrintRunable implements Runnable {
                         return;
                     }
                     for (OilWork oilWork : oilWorks) {
-                        println(SystemUtils.getRsStr(R.string.shell_weight)+":" + oilWork.getShellWeight());
-                        println(SystemUtils.getRsStr(R.string.shell_volue)+":" + oilWork.getShellVolume());
-                        println(SystemUtils.getRsStr(R.string.jiaoban_height)+":" + oilWork.getEndHeight());
-                        println(SystemUtils.getRsStr(R.string.jieban_height)+":"+ oilWork.getBeginHeight());
+                        // [已屏蔽-2026-09-23] shell_weight/shell_volue/jiaoban_height/jieban_height 已删除（不可达，见上方类注释）。
+                        // println(SystemUtils.getRsStr(R.string.shell_weight)+":" + oilWork.getShellWeight());
+                        // println(SystemUtils.getRsStr(R.string.shell_volue)+":" + oilWork.getShellVolume());
+                        // println(SystemUtils.getRsStr(R.string.jiaoban_height)+":" + oilWork.getEndHeight());
+                        // println(SystemUtils.getRsStr(R.string.jieban_height)+":"+ oilWork.getBeginHeight());
                         println(SystemUtils.getRsStr(R.string.tank_no)+":" + oilWork.getOilId());
                     }
                     println(SystemUtils.getRsStr(R.string.time) + commitWork.getTime());
@@ -161,7 +179,8 @@ public class PrintRunable implements Runnable {
                     }
                     println(sideleakage.getInfo());
                     println(SystemUtils.getRsStr(R.string.time)+":" + sideleakage.getTime());
-                    println("-------"+SystemUtils.getRsStr(R.string.celou_record)+"------");
+                    // [已屏蔽-2026-09-23] celou_record 已删除（PrintRunable 类不可达，见上方类注释）。
+                    // println("-------"+SystemUtils.getRsStr(R.string.celou_record)+"------");
                     break;
             }
         } else {
@@ -171,7 +190,8 @@ public class PrintRunable implements Runnable {
 
     Handler handler = new Handler() {
         public void handleMessage(android.os.Message msg) {
-            SystemUtils.showRsToast(R.string.no_connect_print);
+            // [已屏蔽-2026-09-23] no_connect_print 已删除（PrintRunable 类不可达，见上方类注释）。
+            // SystemUtils.showRsToast(R.string.no_connect_print);
         }
 
         ;

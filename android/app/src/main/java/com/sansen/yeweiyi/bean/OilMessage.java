@@ -2,8 +2,6 @@ package com.sansen.yeweiyi.bean;
 
 
 import com.sansen.yeweiyi.R;
-import com.sansen.yeweiyi.application.MyApplication;
-import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.SystemUtils;
 
 public class OilMessage {
@@ -138,161 +136,89 @@ public class OilMessage {
         return getState(oilCanId, type, value);
     }
 
+    /**
+     * 各状态对应的提示文案资源。文案本身（含罐号占位符 %1$d 的位置/语序）由
+     * values / values-en 各自的资源串决定，这里不再按语言分支拼字符串——
+     * 否则每加一种语言就要在这里多加一个 else if。
+     */
+    // [已更正-2026-09-23] 这里之前有一条 [不可达] 注释，说"整个方法都没有活的消费方"——是错的，
+    // 用户复核时指出 AlarmDetection 的报警记录明明显示在报警记录页，我才发现漏查了第三条消费路径：
+    // AlarmRepositoryImpl.saveAlarm(pos, oilMessage) 会把 oilMessage.toString()（也就是本方法的
+    // 返回值）存进 Alarm.info 字段，AlarmAdapter.onBindViewHolder() 直接
+    // alarm_tv_alarminfo.setText(alarm.getInfo()) 显示在报警记录页列表里——这条路径是活的，
+    // 我之前只查了 AlarmCoordinator.barMainAlram（死）和 SocketManager.sendAlarm（死）两条，
+    // 漏了这条。HEIGHT_OIL_ALARM/HHEIGHT_OIL_ALARM/LOW_OIL_ALARM/LLOW_OIL_ALARM/HEIGHT_WATER/
+    // HEIGHT_TEMPER 这 6 个 case 经 AlarmDetection 对应方法 setType() 后确实会走到
+    // alarmRepository.saveAlarm(...)，是可达的，要优先翻。RELAY_DISCONNECT 同理，AsyManager2 的
+    // errorListener 直接调 AlarmRepositoryImpl.saveAlarmRecord(oilMessage.toString(),"","")，
+    // 也可达（受 SharePreManager.getRelaySwitch() 开关控制，运行时可开可关，不是恒假分支）。
+    // 真正确认不可达的只有：LOW_TEMPER（producer 侧的 tempLowDection() 从未被调用，见下方注释）、
+    // IN_OIL/OUT_OIL/IN_OILing/OUT_OILing（全仓库没人 setType() 过这 4 个，见下方注释）、
+    // OIl_EXPLORATION（producer 侧 GasExplorationAdapter 死，见下方注释）、PRO_ERR_CONN——这个比较
+    // 特殊：AlarmRepositoryImpl.saveAlarm() 方法体第一行就是
+    // `if (oilMessage.getType() == OilMessage.PRO_ERR_CONN) return;`，明确把它排除在存库逻辑外，
+    // 所以虽然 SerialPortManager 里确实调用了 saveAlarm(...)，实际会被这个 return 挡掉，consumer
+    // 侧仍是死的——oil_connect_error 不用优先翻；NET_ERR_CONN 原来唯一的 setType() 调用点在旧
+    // Alink 版 BackService.java 里，ThingsBoard 迁移时随旧代码一起删了，现在全仓库没人 setType()
+    // 过它，net_connect_err 不用优先翻。
     private String getState(int oilid, int state, double value) {
-        String language = SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.LANGUAGE, "zh");
-        //Log.i("语言", language);
-        String data = null;
-        String oilIdEn = getEnglishNum(oilid);
-        if (state == HEIGHT_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oilHeight_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oilHeight_alarm);
-            }else if ("zh".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oilHeight_alarm)+" " + oilid  ;
-            }
-
-        } else if (state == HHEIGHT_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oilHHeight_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oilHHeight_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oilHHeight_alarm)+" " + oilid  ;
-            }
-        } else if (state == LOW_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oillow_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oillow_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oillow_alarm)+" " + oilid  ;
-            }
-        } else if (state == LLOW_OIL_ALARM) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oilllow_alarm);
-            }  else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oilllow_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oilllow_alarm)+" " + oilid  ;
-            }
-        } else if (state == HEIGHT_WATER) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.waterheight_alarm);
-            }else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.waterheight_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.waterheight_alarm)+" " + oilid  ;
-            }
-        } else if (state == HEIGHT_TEMPER) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.tempheight_alarm);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.tempheight_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.tempheight_alarm)+" " + oilid  ;
-            }
-        } else if (state == LOW_TEMPER) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.templow_alarm);
-            }else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.templow_alarm);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.templow_alarm)+" " + oilid  ;
-            }
-        } else if (state == IN_OIL) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.inoil);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.inoil);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.inoil)+" " + oilid  ;
-            }
-        } else if (state == OUT_OIL) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.outoil);
-            }else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.outoil);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.outoil)+" " + oilid  ;
-            }
-        } else if (state == IN_OILing) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.inoiling);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.inoiling);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.inoiling)+" " + oilid  ;
-            }
-        } else if (state == OUT_OILing) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.outoiling);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.outoiling);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.outoiling)+" " + oilid  ;
-            }
-        } else if (state == PRO_ERR_CONN) {
-            if ("en".equals(language)) {
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.oil_connect_error);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.oil_connect_error);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.oil_connect_error)+" " + oilid  ;
-            }
-        } else if (state == OIl_EXPLORATION) {
-            if ("en".equals(language)) {
-
-                data = "The " + oilIdEn + " " + SystemUtils.getRsStr(R.string.tantou_height);
-            } else if ("zh".equals(language)){
-                data = oilid + " " + SystemUtils.getRsStr(R.string.tantou_height);
-            }else if ("th".equals(language)){
-                data =SystemUtils.getRsStr(R.string.tantou_height)+" " + oilid  ;
-            }
-        } else if (state == NET_ERR_CONN) {
-            data = SystemUtils.getRsStr(R.string.net_connect_err);
-        } else if (state == RELAY_DISCONNECT) {
-            data = SystemUtils.getRsStr(R.string.fyf_connect_error);
+        switch (state) {
+            case HEIGHT_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oilHeight_alarm, oilid);
+            case HHEIGHT_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oilHHeight_alarm, oilid);
+            case LOW_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oillow_alarm, oilid);
+            case LLOW_OIL_ALARM:
+                return SystemUtils.getRsStr(R.string.oilllow_alarm, oilid);
+            case HEIGHT_WATER:
+                return SystemUtils.getRsStr(R.string.waterheight_alarm, oilid);
+            case HEIGHT_TEMPER:
+                return SystemUtils.getRsStr(R.string.tempheight_alarm, oilid);
+            // [不可达-2026-09-21] LOW_TEMPER：唯一 setType 调用点是 AlarmDetection.tempLowDection()，
+            // 而这个方法全仓库没有任何地方调用（西语翻译覆盖率核查时发现）。templow_alarm 不用优先翻。
+            case LOW_TEMPER:
+                // [已屏蔽-2026-09-23] templow_alarm 已删除（不可达，见上方注释）。
+                return null; // return SystemUtils.getRsStr(R.string.templow_alarm, oilid);
+            // [不可达-2026-09-21] IN_OIL/OUT_OIL/IN_OILing/OUT_OILing 这 4 个 type 全仓库没有任何地方
+            // setType() 过（西语翻译覆盖率核查时发现）。inoil/outoil/inoiling/outoiling 不用优先翻。
+            // [已屏蔽-2026-09-23] inoil/outoil/inoiling/outoiling 已删除（不可达，见上方注释）。
+            case IN_OIL:
+                return null; // return SystemUtils.getRsStr(R.string.inoil, oilid);
+            case OUT_OIL:
+                return null; // return SystemUtils.getRsStr(R.string.outoil, oilid);
+            case IN_OILing:
+                return null; // return SystemUtils.getRsStr(R.string.inoiling, oilid);
+            case OUT_OILing:
+                return null; // return SystemUtils.getRsStr(R.string.outoiling, oilid);
+            // [不可达-2026-09-23] SerialPortManager 确实调用了 alarmRepository.saveAlarm(...)，但
+            // AlarmRepositoryImpl.saveAlarm() 方法体第一行就是
+            // `if (oilMessage.getType() == OilMessage.PRO_ERR_CONN) return;`——明确把这个类型
+            // 排除在存库/报警记录页展示之外，consumer 侧仍是死的。oil_connect_error 不用优先翻。
+            case PRO_ERR_CONN:
+                // [已屏蔽-2026-09-23] oil_connect_error 已删除（不可达，见上方注释）。
+                return null; // return SystemUtils.getRsStr(R.string.oil_connect_error, oilid);
+            // [不可达-2026-09-21] 唯一 setType 调用点是 GasExplorationAdapter，而那个类的 getView()
+            // 因为数据源从未赋值、getCount() 恒为 0 而永远不会被框架调用（见 GasExplorationAdapter.java
+            // 里的注释，西语翻译覆盖率核查时发现）。tantou_height 不用优先翻。
+            case OIl_EXPLORATION:
+                // [已屏蔽-2026-09-23] tantou_height 已删除（不可达，见上方注释）。
+                return null; // return SystemUtils.getRsStr(R.string.tantou_height, oilid);
+            // [不可达-2026-09-21] 原来唯一的 setType 调用点在旧 Alink 版 BackService.java 里（当时那个
+            // Service 也没人启动过），ThingsBoard 迁移时随旧代码一起删了，现在全仓库无人 setType()
+            // 这个类型。net_connect_err 不用优先翻。
+            case NET_ERR_CONN:
+                // [已屏蔽-2026-09-23] net_connect_err 已删除（不可达，见上方注释）。
+                return null; // return SystemUtils.getRsStr(R.string.net_connect_err);
+            // [可达-2026-09-23] AsyManager2 的 errorListener 直接调
+            // AlarmRepositoryImpl.saveAlarmRecord(oilMessage.toString(),"","")，存进报警记录表、
+            // 显示在报警记录页——受 SharePreManager.getRelaySwitch() 开关控制（运行时可开可关，
+            // 不是恒假分支）。fyf_connect_error 要优先翻。
+            case RELAY_DISCONNECT:
+                return SystemUtils.getRsStr(R.string.fyf_connect_error);
+            default:
+                return null;
         }
-        return data;
-    }
-
-    private String getEnglishNum(int oilid) {
-        switch (oilid) {
-            case 1:
-                return "first";
-            case 2:
-                return "second";
-            case 3:
-                return "third";
-            case 4:
-                return "fourth";
-            case 5:
-                return "fifth";
-            case 6:
-                return "sixth";
-            case 7:
-                return "seventh";
-            case 8:
-                return "eighth";
-            case 9:
-                return "ninth";
-            case 10:
-                return "tenth";
-            case 11:
-                return "eleventh";
-            case 12:
-                return "twelfth";
-            case 13:
-                return "thirteenth";
-            case 14:
-                return "fourteenth";
-            case 15:
-                return "fifteenth";
-            case 16:
-                return "sixteenth";
-        }
-        return null;
     }
 
     public String getD2d() {
