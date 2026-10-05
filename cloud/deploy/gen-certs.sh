@@ -10,8 +10,7 @@
 # 而拒绝连接。写 IP 也可以，脚本会自动识别放进 IP SAN。
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUT="${CERT_DIR:-$HERE/certs}"
+OUT="${CERT_DIR:-./deploy/certs}"
 CA_DAYS="${CA_DAYS:-3650}"       # CA 十年：离线环境换 CA 要重新分发到每台设备，代价很高
 SRV_DAYS="${SRV_DAYS:-825}"      # 服务端证书约 2.25 年，是多数 TLS 客户端接受的上限
 

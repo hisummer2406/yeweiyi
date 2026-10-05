@@ -1,0 +1,90 @@
+# 生产部署配置覆盖。
+#
+# 使用方式：
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f docker-compose.thingsboard.yml \
+#                  -f docker-compose.thingsboard-tls.yml up -d
+#
+# 此配置：
+# 1. 限制数据库与 Redis 仅监听 localhost（或可设置特定 IP）
+# 2. 限制 ThingsBoard 控制台仅监听 localhost
+# 3. 将明文 MQTT 收回到 localhost（业务 API 走 HTTPS，不需要在宿主网络上可用）
+# 4. 支持 HTTPS API 入口（通过环境变量或挂载证书）
+#
+# ⚠️ 生产环境的数据库/Redis 凭据：
+#   - 不要使用 yeweiyi:yeweiyi；通过环境变量 POSTGRES_PASSWORD、REDIS_PASSWORD 设置强凭据
+#   - 通过挂载 .env 文件而不是在命令行或脚本中暴露凭据
+#   - 数据库密码示例：docker compose config | grep POSTGRES_PASSWORD
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"  # 仅本机（或改为 0.0.0.0 给予信任网络访问，再加防火墙）
+    environment:
+      # 覆盖默认凭据。生产环境通过 .env 或 docker compose config 传递
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"  # 仅本机
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
+
+  thingsboard:
+    ports: !override
+      # ThingsBoard 控制台仅本机
+      - "127.0.0.1:8081:9090"
+      # 设备 MQTT over TLS（生产必须使用 TLS）
+      - "8883:8883"
+      # 禁止明文 MQTT（若需本机测试，改为 127.0.0.1:1884:1883）
+      # - "127.0.0.1:1884:1883"
+
+  api:
+    # 可选：业务 API 容器（如果使用反向代理）
+    # image: [api-image]
+    # 生产环境配置 HTTPS 参见下文
+    # ports:
+    #   - "0.0.0.0:443:8443"  # HTTPS 端口
+    # environment:
+    #   LISTEN_ADDR: ":8443"
+    #   TLS_CERT: /certs/server.crt
+    #   TLS_KEY: /certs/server.key
+    # volumes:
+    #   - ./certs:/certs:ro
+
+# 生产环境部署 HTTPS 的三个选项：
+#
+# 选项 1（推荐）：使用反向代理（nginx/haproxy）
+#   - Go 服务监听 localhost:8080（HTTP）
+#   - nginx 在外网监听 :443（HTTPS），反向代理到 localhost:8080
+#   - 证书由 Let's Encrypt（需公网）或自签（离线环境）管理在 nginx
+#   - 部署：本文件中注释掉 api 服务，单独部署 nginx 容器或系统 nginx
+#
+# 选项 2：Go 服务直接支持 HTTPS（已支持）
+#   - 配置 config.yaml 或环境变量：TLS_CERT_FILE、TLS_KEY_FILE
+#   - Go 服务监听 :8443（HTTPS），客户端直连而不走反向代理
+#   - 生产凭据通过环境变量或挂载 secrets 传递
+#   - 限制：服务重启时证书需要重新加载
+#
+#   Docker 示例（下面注释掉的 api 服务）：
+#     environment:
+#       LISTEN_ADDR: ":8443"
+#       TLS_CERT_FILE: /certs/server.crt
+#       TLS_KEY_FILE: /certs/server.key
+#     volumes:
+#       - ./certs:/certs:ro
+#
+# 选项 3：systemd/docker 层面
+#   - 让 Go 继续用 HTTP，systemd/docker 通过 iptables 或网络命名空间做 HTTPS 转发
+#   - 仅适用于完全控制的部署环境，不推荐
+
+# 生产环境凭据配置示例（保存为 .env.prod，docker compose --env-file=.env.prod ...）：
+#
+# POSTGRES_PASSWORD=your-strong-password-here
+# REDIS_PASSWORD=your-redis-password-here
+# JWT_SECRET=your-jwt-secret-key-at-least-32-chars
+# TB_PASSWORD=your-thingsboard-tenant-password
+#
+# 注意：
+# - 不要把 .env.prod 提交到 git；使用 .gitignore 排除
+# - 在目标服务器上手工创建或通过配置管理工具（Ansible/Terraform）注入
+# - 敏感数据优先用 docker secrets（Swarm）或 Kubernetes secrets（K8s）

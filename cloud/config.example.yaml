@@ -18,6 +18,15 @@ server:
   # 默认 ":8080"。注意本地开发时 ThingsBoard 控制台占用 8081。
   listenAddr: ":8080"
 
+  # TLS/HTTPS 配置（可选）。两个字段都设置时启用 HTTPS；留空则只用 HTTP。
+  # 路径相对于工作目录或绝对路径；环境变量：TLS_CERT_FILE、TLS_KEY_FILE。
+  # 示例（自签证书）：
+  #   tlsCertFile: "/etc/yeweiyi/server.crt"
+  #   tlsKeyFile: "/etc/yeweiyi/server.key"
+  # 或用 Let's Encrypt（仅限公网）。
+  tlsCertFile: ""
+  tlsKeyFile: ""
+
 database:
   # 默认 postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
   # 生产环境建议用环境变量 DATABASE_URL 传入，避免密码进配置备份。

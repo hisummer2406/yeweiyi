@@ -59,6 +59,29 @@ JWT_SECRET=<强随机值> ./bin/server -config config.yaml &
 遥测上行与读回、即时报警、控制命令 RPC→ACK→异步结果。它会自建一台临时设备并在结束时删除，
 **可以对生产环境运行**；用的控制方法是 `alarm.mute`（非物理动作），不会让现场设备动作。
 
+### 首次业务账号初始化
+
+业务 API（Go 后台）与 ThingsBoard 是两套独立的身份体系。Go 后台的首次账号需要**首先创建**：
+
+```bash
+# 创建管理员账号（通过 SQL 直接写入业务库，因为还没有 API 可注册）
+export DATABASE_URL="postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"
+
+# 如果你有现成的创建用户工具，这里调用它；暂时没有官方工具，需手工或通过脚本执行 SQL：
+docker run --rm -it --network host \
+  -e PGPASSWORD=yeweiyi \
+  postgres:16 psql -h localhost -U yeweiyi -d yeweiyi \
+  -c "INSERT INTO users (id, name, mobile, role) VALUES \
+      (gen_random_uuid(), '管理员', '19000000000', 'admin') \
+      ON CONFLICT DO NOTHING;"
+
+# 用户首次登录时会通过 JWT 获取 token，密码在 API 服务侧设置。
+# 详见 internal/store/db/migrations 中的 users 表定义。
+```
+
+**生产环境建议**：建立一个管理员初始化脚本或在配置管理工具（Ansible/Terraform）中自动化此步骤，
+不要每次装机都手工跑 SQL。
+
 ### 首次登录后必做
 
 ThingsBoard 出厂账号是公开默认值，装完立即改：
@@ -70,6 +93,112 @@ ThingsBoard 出厂账号是公开默认值，装完立即改：
 | `customer@thingsboard.org` | `customer` | 本项目不使用，建议禁用 |
 
 ThingsBoard 还自带若干演示设备（`Test Device A1`、`Thermostat T1` 等），可一并删除。
+
+### 服务托管与开机恢复
+
+生产环境不能用 `&` 后台启动。需要确保：
+- 进程异常退出时自动重启
+- 开机时自动启动相关服务
+- 日志被正确收集
+
+**选项 A：Docker Compose 方式（推荐 Docker 部署）**
+
+在前面 `up -d` 命令中已启用了容器重启策略（`docker-compose.yml` 中 `restart: unless-stopped`），
+确保容器异常退出时自动恢复。若需要手动管理启停：
+
+```bash
+# 启动所有服务
+docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+               -f profiles/small.yml up -d
+
+# 查看状态
+docker compose ps
+
+# 停止（保留数据卷）
+docker compose down
+
+# 在 systemd 中管理 Docker Compose 自身（可选）
+# 参见下方 Option B 的 systemd 例子
+```
+
+**选项 B：systemd 服务（传统服务器部署）**
+
+如果要在 systemd 中管理 Go 服务（Docker Compose 仍由 systemd 或 systemd-timer 管理）：
+
+1. **编写 systemd 单元文件**
+
+创建 `/etc/systemd/system/yeweiyi.service`：
+
+```ini
+[Unit]
+Description=Yeweiyi Cloud Server
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+# 工作目录（离线包解开或项目目录）
+WorkingDirectory=/path/to/yeweiyi-offline-xxx
+# 环境变量：强凭据通过 .env 文件或 EnvironmentFile 注入
+EnvironmentFile=/etc/yeweiyi/server.env
+ExecStart=/path/to/yeweiyi-offline-xxx/bin/server -config config.yaml
+Restart=always
+RestartSec=5s
+# 日志输出到 systemd journal（自动轮转）
+StandardOutput=journal
+StandardError=journal
+# 安全选项（可选）
+User=yeweiyi
+PrivateTmp=yes
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+2. **创建凭据文件**（不提交到 git）
+
+`/etc/yeweiyi/server.env`（权限 600）：
+
+```bash
+JWT_SECRET=your-strong-secret-here
+TB_PASSWORD=tenant-password-here
+DATABASE_URL=postgres://yeweiyi:strongpass@localhost:5432/yeweiyi?sslmode=disable
+REDIS_ADDR=localhost:6379
+```
+
+3. **启用和启动**
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable yeweiyi          # 开机自启
+sudo systemctl start yeweiyi           # 立即启动
+sudo systemctl status yeweiyi          # 查看状态
+sudo journalctl -u yeweiyi -f          # 实时日志
+```
+
+4. **Docker Compose 的 systemd 管理（可选）**
+
+若要 systemd 托管 Docker Compose，参考 [Compose Service Manager](https://docs.docker.com/compose/production/)
+或使用简单的 timer：
+
+```ini
+[Unit]
+Description=Yeweiyi Docker Compose Stack
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/yeweiyi-offline-xxx
+ExecStart=/usr/bin/docker-compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+                                   -f profiles/small.yml up -d
+ExecStop=/usr/bin/docker-compose down
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ---
 
@@ -215,6 +344,36 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 
 建议每日一次并异地留存；`manifest.txt` 记录了 ThingsBoard 镜像版本与业务库 schema 版本，
 恢复时据此判断目标环境是否匹配。
+
+### 备份验证与演练
+
+定期执行备份恢复演练，确保备份可用：
+
+```bash
+# 1. 制作备份
+./backup.sh /tmp/test-backup
+
+# 2. 验证备份完整性
+cd /tmp/test-backup/$(ls -t | head -1)    # 进入最新备份目录
+cat SHA256SUMS | sha256sum -c             # 逐一验证所有文件
+
+# 3. 在测试环境恢复并验证
+# （在独立的测试主机或虚拟机上）
+./restore.sh /tmp/test-backup/20260902-003000
+
+# 4. 运行冒烟测试验证功能可用
+./bin/smoke -api http://localhost:8080
+
+# 5. 验证完毕后清理测试数据
+docker compose down -v
+```
+
+定期演练的好处：
+- 及时发现备份损坏或脚本 bug（最坏的情况是真正需要时才发现备份不可用）
+- 确保运维人员熟悉恢复流程
+- 测量实际的恢复时间与资源占用
+
+建议每月执行一次，并将演练结果记录在变更日志中。
 
 ## 恢复
 

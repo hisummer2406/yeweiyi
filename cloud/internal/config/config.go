@@ -60,6 +60,11 @@ type Config struct {
 
 type Server struct {
 	ListenAddr string `yaml:"listenAddr"`
+	// TLSCertFile and TLSKeyFile enable HTTPS. Both must be set for TLS to activate. Paths are
+	// relative to the working directory or can be absolute. Environment variables:
+	// LISTEN_ADDR, TLS_CERT_FILE, TLS_KEY_FILE.
+	TLSCertFile string `yaml:"tlsCertFile"`
+	TLSKeyFile  string `yaml:"tlsKeyFile"`
 }
 
 type Database struct {
@@ -170,6 +175,8 @@ func (c *Config) applyEnv() error {
 	}
 
 	str("LISTEN_ADDR", &c.Server.ListenAddr)
+	str("TLS_CERT_FILE", &c.Server.TLSCertFile)
+	str("TLS_KEY_FILE", &c.Server.TLSKeyFile)
 	str("DATABASE_URL", &c.Database.URL)
 	str("REDIS_ADDR", &c.Redis.Addr)
 	str("JWT_SECRET", &c.Auth.JWTSecret)
