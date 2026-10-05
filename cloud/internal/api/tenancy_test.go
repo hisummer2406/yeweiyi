@@ -1027,3 +1027,63 @@ func TestTenancy_UnauthorizedCallerGetsTheSame403ForPhysicalMethods(t *testing.T
 		t.Errorf("ThingsBoard was called %d times although every request was refused", tn.sender.calls)
 	}
 }
+
+// TestTenancy_BindRacesATransfer: the customer check and the insert are one statement that locks the
+// device row, so a bind that arrives while a transfer is in progress queues behind it and is judged
+// against the post-transfer state. Without that, the bind could pass its check, the transfer could
+// delete the bindings and commit, and the insert would then land *behind* the cleanup.
+func TestTenancy_BindRacesATransfer(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	secret := tn.secretFrom(t, tn.mint(tn.platform, tn.devA2, fmt.Sprintf(`{"customerId":%d}`, tn.custA)))
+	token, id := tn.env.userIn(control.RoleCustomerUser, tn.custA)
+
+	rec, elapsed := holdLockThen(t, tn, `SELECT 1 FROM devices WHERE device_name = $1 FOR UPDATE`, tn.devA2,
+		func() *httptest.ResponseRecorder { return tn.bindAs(token, tn.devA2, secret) },
+		func(tx pgx.Tx) {
+			// What assignDeviceHandler does: move the device, then clear its bindings, atomically.
+			if _, err := tx.Exec(ctx, `UPDATE devices SET customer_id = $1 WHERE device_name = $2`, tn.custB, tn.devA2); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := tx.Exec(ctx, `DELETE FROM user_devices WHERE device_name = $1`, tn.devA2); err != nil {
+				t.Fatal(err)
+			}
+		})
+	if elapsed < 400*time.Millisecond {
+		t.Errorf("the bind finished in %v: it did not wait for the transfer", elapsed)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("a bind racing a transfer to another customer: got %d %s, want the same 401 as a wrong secret", rec.Code, rec.Body.String())
+	}
+	var n int
+	tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_name = $2`, id, tn.devA2).Scan(&n)
+	if n != 0 {
+		t.Errorf("a binding survived behind the transfer's cleanup (%d row)", n)
+	}
+}
+
+// TestTenancy_UnauthorizedCallerIsRefusedBeforeTheMethodIsExamined: a caller who may not touch the
+// device gets 403 even for a method that does not exist; only someone allowed to send the request is
+// told what is wrong with it.
+func TestTenancy_UnauthorizedCallerIsRefusedBeforeTheMethodIsExamined(t *testing.T) {
+	tn := newTenancy(t)
+	const bogus = "no.such.method"
+
+	for name, tc := range map[string]struct {
+		token, device string
+		want          int
+	}{
+		"another customer's user":  {tn.userB, tn.devA1, http.StatusForbidden},
+		"unbound customer user":    {tn.userA, tn.devA2, http.StatusForbidden},
+		"device that is a ghost":   {tn.adminA, tn.devGhost, http.StatusForbidden},
+		"authorized: now it's 400": {tn.userA, tn.devA1, http.StatusBadRequest},
+	} {
+		if rec := tn.issueMethod(t, tc.token, tc.device, bogus); rec.Code != tc.want {
+			t.Errorf("%s: unknown method got %d, want %d (%s)", name, rec.Code, tc.want, rec.Body.String())
+		}
+	}
+	// The refusals are audited under the caller's customer like any other denial.
+	if n := tn.auditCount(t, `action = 'control.issue' AND outcome = 'denied' AND customer_id = $1 AND detail->>'method' = $2`, tn.custB, bogus); n != 1 {
+		t.Errorf("expected the cross-customer attempt audited under customer B once, got %d", n)
+	}
+}

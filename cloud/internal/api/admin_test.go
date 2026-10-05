@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"yeweiyi-cloud/internal/control"
 )
 
@@ -669,5 +671,150 @@ func TestAdmin_UpdateUserRechecksUnderLock(t *testing.T) {
 	tn.env.pool.QueryRow(ctx, `SELECT disabled_at IS NOT NULL FROM users WHERE id = $1`, cu.ID).Scan(&disabled)
 	if disabled {
 		t.Error("the old customer's admin disabled a user who had already been moved to another customer")
+	}
+}
+
+// holdLockThen runs request while the test's own transaction holds the given row lock, waits long
+// enough for the request to pass its early checks and queue on that lock, applies change inside the
+// same transaction, and commits — reproducing "something else commits while this request is in
+// flight" deterministically. It returns the request's result and how long it took.
+func holdLockThen(t *testing.T, tn *tenancy, lockSQL string, lockArg any, request func() *httptest.ResponseRecorder, change func(tx pgx.Tx)) (*httptest.ResponseRecorder, time.Duration) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := tn.env.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, lockSQL, lockArg); err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		rec     *httptest.ResponseRecorder
+		elapsed time.Duration
+	}
+	done := make(chan result, 1)
+	go func() {
+		start := time.Now()
+		r := request()
+		done <- result{r, time.Since(start)}
+	}()
+
+	time.Sleep(500 * time.Millisecond)
+	change(tx)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-done:
+		return r.rec, r.elapsed
+	case <-time.After(10 * time.Second):
+		t.Fatal("the request never returned")
+		return nil, 0
+	}
+}
+
+// TestAdmin_CreateUserRechecksTheCreator: bcrypt runs between the early check and the insert, and
+// that is exactly when an administrator can be moved or disabled. The creator is locked and reloaded
+// inside the transaction, and the new user's customer is derived from that current row.
+func TestAdmin_CreateUserRechecksTheCreator(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	create := func(token, username string) func() *httptest.ResponseRecorder {
+		return func() *httptest.ResponseRecorder {
+			return tn.send(t, "POST", "/api/users", token, map[string]any{
+				"username": username, "password": testPassword, "role": control.RoleCustomerUser,
+			})
+		}
+	}
+	exists := func(username string) bool {
+		var n int
+		tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE username = $1`, username).Scan(&n)
+		return n > 0
+	}
+
+	// Moved from A to B while the request is in flight: the account must not appear in A.
+	movedToken, movedID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
+	name1 := uniqueName("raced-move")
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE username = $1`, name1) })
+	rec, elapsed := holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, movedID, create(movedToken, name1),
+		func(tx pgx.Tx) {
+			if _, err := tx.Exec(ctx, `UPDATE users SET customer_id = $1 WHERE id = $2`, tn.custB, movedID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	if elapsed < 400*time.Millisecond {
+		t.Errorf("the request finished in %v: it did not wait for the lock", elapsed)
+	}
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("a customer admin who was moved mid-request: got %d %s", rec.Code, rec.Body.String())
+	}
+	if u := decodeAs[adminUser](t, rec); u.CustomerID == nil || *u.CustomerID != tn.custB {
+		t.Errorf("the account was created in customer %v, want the creator's *current* customer %d, not %d", u.CustomerID, tn.custB, tn.custA)
+	}
+
+	// Disabled while the request is in flight: nothing may be created.
+	disabledToken, disabledID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
+	name2 := uniqueName("raced-disable")
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE username = $1`, name2) })
+	rec, _ = holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, disabledID, create(disabledToken, name2),
+		func(tx pgx.Tx) {
+			if _, err := tx.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	if rec.Code != http.StatusForbidden || exists(name2) {
+		t.Errorf("an administrator disabled mid-request: got %d, account exists=%v; want 403 and no account", rec.Code, exists(name2))
+	}
+}
+
+// TestAdmin_ConcurrentMovesAreAuditedFromTheLockedRow: when the user was already moved to C by
+// someone else, a move to B is C→B and the departure is filed under C — not under the A the request
+// saw before it queued.
+func TestAdmin_ConcurrentMovesAreAuditedFromTheLockedRow(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	custC := tn.env.newCustomer("c")
+	cu, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, nil)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d", rec.Code)
+	}
+
+	rec, _ = holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, cu.ID,
+		func() *httptest.ResponseRecorder {
+			return tn.send(t, "PUT", fmt.Sprintf("/api/users/%d/customer", cu.ID), tn.platform, map[string]int64{"customerId": tn.custB})
+		},
+		func(tx pgx.Tx) {
+			if _, err := tx.Exec(ctx, `UPDATE users SET customer_id = $1 WHERE id = $2`, custC, cu.ID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("move: %d %s", rec.Code, rec.Body.String())
+	}
+
+	rows, err := tn.env.pool.Query(ctx,
+		`SELECT customer_id, detail->>'direction', (detail->>'from')::bigint FROM audit_log
+		 WHERE action = 'user.move' AND (detail->>'userId')::bigint = $1`, cu.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	type side struct{ customer, from int64 }
+	got := map[string]side{}
+	for rows.Next() {
+		var dir string
+		var sd side
+		if err := rows.Scan(&sd.customer, &dir, &sd.from); err != nil {
+			t.Fatal(err)
+		}
+		got[dir] = sd
+	}
+	if got["out"].customer != custC || got["out"].from != custC {
+		t.Errorf("departure audit = %+v, want it filed under customer %d with from=%d (the user's customer when the lock was taken), not %d", got["out"], custC, custC, tn.custA)
+	}
+	if got["in"].customer != tn.custB {
+		t.Errorf("arrival audit = %+v, want customer %d", got["in"], tn.custB)
 	}
 }

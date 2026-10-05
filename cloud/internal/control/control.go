@@ -149,6 +149,16 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	}
 	req.Actor.CustomerID = customerID
 
+	// A caller who may not touch this device is refused here, before anything else is said about the
+	// request — not "unknown method", not "reason required", not the interlock. Whatever else is
+	// wrong with the request is information for someone allowed to send it.
+	if !allowed {
+		err := fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": err.Error()})
+		return db.ControlCommand{}, err
+	}
+
 	spec, known := protocol.Methods[req.Method]
 	if !known {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
@@ -174,7 +184,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	// get the same answer whether the device is someone else's real device or does not exist at
 	// all, or the error codes become a device-name oracle. This mirrors the ordering already
 	// established in internal/api/devices.go.
-	if err := s.authorize(req.Actor, req.DeviceName, spec, allowed); err != nil {
+	if err := s.authorize(req.Actor, spec); err != nil {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
 		return db.ControlCommand{}, err
@@ -458,25 +468,16 @@ func (s *Service) RunExpirySweep(ctx context.Context, every time.Duration, logf 
 	}
 }
 
-// authorize applies the device-scope decision resolveAccess already made, the interlock gate and the
-// role/method check — in that order. The device check comes first so that a caller who may not touch
-// the device gets the same 403 whatever else would have been said about the request: not a 409
-// because physical commands happen to be disabled, not a different 403 because of their role.
-func (s *Service) authorize(actor Actor, deviceName string, spec protocol.MethodSpec, allowedOnDevice bool) error {
-	// The device-scope rule (platform admin: any; customer admin: own customer; customer user: own
-	// customer and bound) is the same one internal/api uses, decided from the database's current
-	// role, customer and disabled flag.
-	if !allowedOnDevice {
-		return fmt.Errorf("%w: device %q", ErrForbidden, deviceName)
-	}
-
+// authorize applies the interlock gate and the role/method check. The device-scope decision has
+// already been made — and acted on — at the top of Issue, before any of this runs.
+func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 	// The interlock gate applies to every role, platform admins included. It is a statement about
 	// the *hardware* being unverified, not about who is trusted.
 	if spec.Physical && !s.cfg.AllowPhysicalCommands {
 		return fmt.Errorf("%w: %s", ErrPhysicalCommandsDisabled, spec.Method)
 	}
 
-	// The role gates *which methods*; the device check above gates *which devices*.
+	// The role gates *which methods*; the device decision gates *which devices*.
 	if !roleAllows(actor.Role, spec.Permission) {
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
 	}

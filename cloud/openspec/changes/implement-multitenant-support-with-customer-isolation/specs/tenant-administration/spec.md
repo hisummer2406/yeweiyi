@@ -40,7 +40,7 @@
 - **THEN** 分别返回 404 与 400
 
 ### Requirement: 用户创建与列出
-`platform_admin` SHALL 能创建任意角色的用户；`customer_admin` SHALL 只能在本客户内创建 `customer_user`；`customer_user` MUST NOT 创建或列出用户。创建者设置初始密码（8–72 字节），响应与审计 MUST NOT 含密码或哈希。平台管理员账号不得带客户，其余角色必须带客户。用户列表：`platform_admin` 可见全部（可按客户过滤），`customer_admin` 只见本客户。
+`platform_admin` SHALL 能创建任意角色的用户；`customer_admin` SHALL 只能在本客户内创建 `customer_user`；`customer_user` MUST NOT 创建或列出用户。创建者设置初始密码（8–72 字节），响应与审计 MUST NOT 含密码或哈希。创建 SHALL 在事务内锁定并重新读取创建者行（`FOR SHARE`），新用户的客户与所创建角色的授权均从该当前行得出，密码哈希在加锁之前完成；创建者在请求途中被迁走，账号建在其**当前**客户，被停用则不创建。平台管理员账号不得带客户，其余角色必须带客户。用户列表：`platform_admin` 可见全部（可按客户过滤），`customer_admin` 只见本客户。
 
 #### Scenario: 客户管理员越权创建
 - **WHEN** `customer_admin` 创建 `customer_admin`、`platform_admin`，或在他客户创建用户
@@ -49,6 +49,11 @@
 #### Scenario: 输入校验
 - **WHEN** 密码过短或超过 72 字节、角色未知、用户名为空、缺少客户、客户不存在，或平台管理员带客户
 - **THEN** 返回 400；用户名重复返回 409
+
+#### Scenario: 创建者在请求途中被迁走或停用
+- **GIVEN** 客户管理员的请求已通过早期检查，另一事务正持有其行锁
+- **WHEN** 该事务把管理员迁到另一客户并提交，或将其停用并提交
+- **THEN** 前者创建的账号归属管理员的当前客户（不是旧客户）；后者返回 403 且不创建账号
 
 #### Scenario: 新用户可登录
 - **WHEN** 创建成功后用初始密码登录
@@ -83,7 +88,7 @@
 - **THEN** 管理员的请求在锁下重新判定，返回 404，目标未被停用
 
 ### Requirement: 用户迁移客户
-`platform_admin` SHALL 能把非平台管理员用户迁到另一客户，迁移 MUST 在同一事务内清除其全部 `user_devices` 绑定，并在旧、新客户名下各写一条审计。迁移到当前所属客户是保留绑定的无变化成功；迁移平台管理员返回 400；其他角色 MUST 被拒绝。
+`platform_admin` SHALL 能把非平台管理员用户迁到另一客户，迁移 MUST 在同一事务内锁定目标行，并以锁下读到的行判定是否无变化、取“原客户”，清除其全部 `user_devices` 绑定，并在旧、新客户名下各写一条审计。两个平台管理员并发迁移同一用户（A→B 与 A→C）时，后到的一次 MUST 按用户当时实际所在的客户记录来源。迁移到当前所属客户是保留绑定的无变化成功；迁移平台管理员返回 400；其他角色 MUST 被拒绝。
 
 #### Scenario: 迁移用户
 - **GIVEN** 用户在 A 且绑定了设备

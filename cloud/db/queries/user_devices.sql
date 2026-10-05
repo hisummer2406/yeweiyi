@@ -1,8 +1,37 @@
--- name: BindUserDevice :exec
--- Idempotent: scanning the same QR code twice (or the same device already bound) is a no-op, not
--- an error — matches this project's general "safe to redeliver" preference for write paths.
-INSERT INTO user_devices (user_id, device_name) VALUES ($1, $2)
-ON CONFLICT (user_id, device_name) DO NOTHING;
+-- name: BindUserDeviceIfAllowed :one
+-- Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
+-- FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
+-- can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that
+-- passed its check earlier then inserts a binding *behind* that cleanup. Here the bind queues behind
+-- the transfer's lock and is evaluated against the post-transfer state (Postgres re-reads the locked
+-- row after the wait), so it is refused — or, if it went first, the transfer's cleanup removes it.
+--
+-- A platform admin may bind anything (as before); everyone else only a device of their own
+-- customer, and a disabled user nothing. Idempotent: binding an already-bound device is a success.
+-- `bound` is false when the bind was refused; the handler reports that exactly like a wrong pairing
+-- secret so the endpoint cannot be used to learn which devices exist or who owns them.
+WITH u AS (
+    SELECT users.id, users.role, users.customer_id
+    FROM users
+    WHERE users.id = sqlc.arg('user_id') AND users.disabled_at IS NULL
+    FOR SHARE
+), d AS (
+    SELECT devices.device_name, devices.customer_id
+    FROM devices
+    WHERE devices.device_name = sqlc.arg('device_name')
+    FOR SHARE
+), ok AS (
+    SELECT u.id AS user_id, sqlc.arg('device_name')::text AS device_name
+    FROM u
+    WHERE u.role = 'platform_admin'
+       OR EXISTS (SELECT 1 FROM d WHERE d.customer_id = u.customer_id)
+), ins AS (
+    INSERT INTO user_devices (user_id, device_name)
+    SELECT ok.user_id, ok.device_name FROM ok
+    ON CONFLICT (user_id, device_name) DO NOTHING
+    RETURNING user_id
+)
+SELECT EXISTS (SELECT 1 FROM ok) AS bound;
 
 -- name: UnbindUserDevice :exec
 DELETE FROM user_devices WHERE user_id = $1 AND device_name = $2;
@@ -46,26 +75,6 @@ SELECT
 FROM users u
 LEFT JOIN devices d ON d.device_name = sqlc.arg('device_name')
 WHERE u.id = sqlc.arg('user_id');
-
--- name: UserMayBindDevice :one
--- Pairing-time tenant check, run after the pairing secret has been verified. A platform admin may
--- bind anything (as before); everyone else only a device of their own customer. A device that is
--- unassigned or belongs to another customer answers false, and the handler reports that exactly
--- like a wrong secret so the endpoint cannot be used to learn which devices exist or who owns them.
-SELECT EXISTS (
-    SELECT 1
-    FROM users u
-    WHERE u.id = sqlc.arg('user_id')
-      AND u.disabled_at IS NULL
-      AND (
-          u.role = 'platform_admin'
-          OR EXISTS (
-              SELECT 1 FROM devices d
-              WHERE d.device_name = sqlc.arg('device_name')
-                AND d.customer_id = u.customer_id
-          )
-      )
-) AS allowed;
 
 -- name: ListDevicesForUser :many
 -- Same three-way rule as UserMayAccessDevice, expressed as a list.

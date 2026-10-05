@@ -137,26 +137,22 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 
 		userID := c.MustGet("userID").(int64)
 
-		// A valid pairing secret proves possession of the device, not that it is *this user's
-		// customer's* device. Check the customer boundary after the secret so the two failures are
-		// indistinguishable from outside: a QR code from another customer's device, an unassigned
-		// device and a wrong secret all get the identical 401 above.
-		may, err := deps.Queries.UserMayBindDevice(ctx, db.UserMayBindDeviceParams{UserID: userID, DeviceName: req.DeviceName})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if !may {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
-			return
-		}
-
 		if err := deps.Queries.EnsureDevice(ctx, req.DeviceName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if err := deps.Queries.BindUserDevice(ctx, db.BindUserDeviceParams{UserID: userID, DeviceName: req.DeviceName}); err != nil {
+
+		// A valid pairing secret proves possession of the device, not that it is *this user's
+		// customer's* device. The customer check and the insert are one statement (see the query), and
+		// a refusal is indistinguishable from a wrong secret: a QR code from another customer's
+		// device, an unassigned device and a wrong secret all get the identical 401 above.
+		bound, err := deps.Queries.BindUserDeviceIfAllowed(ctx, db.BindUserDeviceIfAllowedParams{UserID: userID, DeviceName: req.DeviceName})
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !bound {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
 			return
 		}
 

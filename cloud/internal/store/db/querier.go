@@ -11,9 +11,18 @@ import (
 )
 
 type Querier interface {
-	// Idempotent: scanning the same QR code twice (or the same device already bound) is a no-op, not
-	// an error — matches this project's general "safe to redeliver" preference for write paths.
-	BindUserDevice(ctx context.Context, arg BindUserDeviceParams) error
+	// Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
+	// FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
+	// can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that
+	// passed its check earlier then inserts a binding *behind* that cleanup. Here the bind queues behind
+	// the transfer's lock and is evaluated against the post-transfer state (Postgres re-reads the locked
+	// row after the wait), so it is refused — or, if it went first, the transfer's cleanup removes it.
+	//
+	// A platform admin may bind anything (as before); everyone else only a device of their own
+	// customer, and a disabled user nothing. Idempotent: binding an already-bound device is a success.
+	// `bound` is false when the bind was refused; the handler reports that exactly like a wrong pairing
+	// secret so the endpoint cannot be used to learn which devices exist or who owns them.
+	BindUserDeviceIfAllowed(ctx context.Context, arg BindUserDeviceIfAllowedParams) (bool, error)
 	// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
 	// from the SAME clock. Letting the column default to the database's now() while the application
 	// computes expires_at from its own clock means the two can disagree by however long the round trip
@@ -162,11 +171,6 @@ type Querier interface {
 	// An unassigned device never matches a customer; a user that no longer exists, or that has been
 	// disabled, matches nothing.
 	UserMayAccessDevice(ctx context.Context, arg UserMayAccessDeviceParams) (bool, error)
-	// Pairing-time tenant check, run after the pairing secret has been verified. A platform admin may
-	// bind anything (as before); everyone else only a device of their own customer. A device that is
-	// unassigned or belongs to another customer answers false, and the handler reports that exactly
-	// like a wrong secret so the endpoint cannot be used to learn which devices exist or who owns them.
-	UserMayBindDevice(ctx context.Context, arg UserMayBindDeviceParams) (bool, error)
 	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error)
 }
 

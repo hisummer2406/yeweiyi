@@ -408,39 +408,26 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		var customer pgtype.Int8
-		switch actor.Role {
-		case control.RolePlatformAdmin:
-			if req.Role == control.RolePlatformAdmin {
-				if req.CustomerID != nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "a platform admin belongs to no customer"})
+
+		// Fast path: refuse what is plainly not allowed before spending a bcrypt on it. Not trusted
+		// for the write — planUserCreation runs again below on the locked actor row.
+		if _, v := planUserCreation(actor, req); v.status != 0 {
+			respondVerdict(c, deps, actor, 0, "user.create", v)
+			return
+		}
+		if req.CustomerID != nil {
+			if _, err := deps.Queries.GetCustomer(ctx, *req.CustomerID); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
 					return
 				}
-			} else {
-				if req.CustomerID == nil {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required for this role"})
-					return
-				}
-				if _, err := deps.Queries.GetCustomer(ctx, *req.CustomerID); err != nil {
-					if errors.Is(err, pgx.ErrNoRows) {
-						c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
-						return
-					}
-					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-					return
-				}
-				customer = int8(*req.CustomerID)
-			}
-		case control.RoleCustomerAdmin:
-			if req.Role != control.RoleCustomerUser ||
-				(req.CustomerID != nil && !(actor.CustomerID.Valid && *req.CustomerID == actor.CustomerID.Int64)) {
-				refuse(c, deps, actor, "user.create", "a customer admin may only create customer users in their own customer",
-					map[string]any{"role": req.Role})
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
-			customer = actor.CustomerID
 		}
 
+		// Hashed before anything is locked: bcrypt is slow on purpose, and it is exactly the stretch
+		// during which the administrator can be moved, demoted or disabled.
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -449,24 +436,80 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 
 		var created db.User
 		err = withTx(ctx, deps, func(q *db.Queries) error {
-			var err error
+			// Lock the creator against being moved, demoted or disabled for the rest of the
+			// transaction, reload them, and derive the customer and the permission to create this
+			// role from that current row. Using the row read before the hash would let an
+			// administrator who lost authority in the meantime still create an active account.
+			actorNow, err := q.GetUserForShare(ctx, actor.ID)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return verdictError{status: http.StatusForbidden, msg: "not authorized"}
+				}
+				return err
+			}
+			if actorNow.DisabledAt.Valid {
+				return verdictError{status: http.StatusForbidden, audit: true, msg: "not authorized"}
+			}
+			customer, v := planUserCreation(actorNow, req)
+			if v.status != 0 {
+				return verdictError(v)
+			}
 			if created, err = q.CreateUser(ctx, db.CreateUserParams{
 				Username: username, PasswordHash: string(hash), Role: req.Role, CustomerID: customer,
 			}); err != nil {
 				return err
 			}
-			return auditAdmin(ctx, q, actor, "user.create", "", customer, "allowed",
+			return auditAdmin(ctx, q, actorNow, "user.create", "", customer, "allowed",
 				map[string]any{"userId": created.ID, "username": created.Username, "role": created.Role})
 		})
 		if err != nil {
-			if isPgCode(err, "23505") {
+			var v verdictError
+			switch {
+			case errors.As(err, &v):
+				respondVerdict(c, deps, actor, 0, "user.create", userVerdict(v))
+			case isPgCode(err, "23505"):
 				c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
-				return
+			case isPgCode(err, "23503"):
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+			default:
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusCreated, toUserResponse(created))
+	}
+}
+
+// planUserCreation is the rule for an administrator creating a user: it returns the customer the new
+// user belongs to, or the reason it is not allowed. A platform admin may create any role; a customer
+// admin only customer users, and always in their own customer — naming a different one is refused,
+// leaving it out means "mine". It is called twice, once on the row read at the start of the request
+// and once on the locked row inside the transaction, and only the second answer is acted on.
+func planUserCreation(actor db.User, req createUserRequest) (pgtype.Int8, userVerdict) {
+	switch actor.Role {
+	case control.RolePlatformAdmin:
+		if req.Role == control.RolePlatformAdmin {
+			if req.CustomerID != nil {
+				return pgtype.Int8{}, userVerdict{status: http.StatusBadRequest, msg: "a platform admin belongs to no customer"}
+			}
+			return pgtype.Int8{}, userVerdict{}
+		}
+		if req.CustomerID == nil {
+			return pgtype.Int8{}, userVerdict{status: http.StatusBadRequest, msg: "customerId is required for this role"}
+		}
+		return int8(*req.CustomerID), userVerdict{}
+	case control.RoleCustomerAdmin:
+		if req.Role != control.RoleCustomerUser ||
+			!actor.CustomerID.Valid ||
+			(req.CustomerID != nil && *req.CustomerID != actor.CustomerID.Int64) {
+			return pgtype.Int8{}, userVerdict{
+				status: http.StatusForbidden, audit: true,
+				msg: "a customer admin may only create customer users in their own customer",
+			}
+		}
+		return actor.CustomerID, userVerdict{}
+	default:
+		return pgtype.Int8{}, userVerdict{status: http.StatusForbidden, audit: true, msg: "customer users cannot create users"}
 	}
 }
 
@@ -570,7 +613,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if v := decideUserUpdate(actor, pre, disabling); v.status != 0 {
-			respondVerdict(c, deps, actor, id, v)
+			respondVerdict(c, deps, actor, id, "user.update", v)
 			return
 		}
 
@@ -637,7 +680,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 		if err != nil {
 			var v verdictError
 			if errors.As(err, &v) {
-				respondVerdict(c, deps, actor, id, userVerdict(v))
+				respondVerdict(c, deps, actor, id, "user.update", userVerdict(v))
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -678,12 +721,16 @@ func decideUserUpdate(actor, target db.User, disabling bool) userVerdict {
 	return userVerdict{}
 }
 
-// respondVerdict writes a refusal. A 403 is audited and answered with the generic body; other
-// statuses carry their own message.
-func respondVerdict(c *gin.Context, deps Deps, actor db.User, targetID int64, v userVerdict) {
+// respondVerdict writes a refusal. A 403 is audited (under the given action) and answered with the
+// generic body; other statuses carry their own message. targetID is 0 when there is no target user.
+func respondVerdict(c *gin.Context, deps Deps, actor db.User, targetID int64, action string, v userVerdict) {
 	if v.status == http.StatusForbidden {
 		if v.audit {
-			refuse(c, deps, actor, "user.update", v.msg, map[string]any{"userId": targetID})
+			detail := map[string]any{}
+			if targetID != 0 {
+				detail["userId"] = targetID
+			}
+			refuse(c, deps, actor, action, v.msg, detail)
 			return
 		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
@@ -740,14 +787,26 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if target.CustomerID.Valid && target.CustomerID.Int64 == req.CustomerID {
-			c.JSON(http.StatusOK, toUserResponse(target))
-			return
-		}
-
 		var moved db.User
 		err = withTx(ctx, deps, func(q *db.Queries) error {
-			var err error
+			// The user row is locked and re-read here, and everything below — the no-op test, the
+			// "from" customer, the audit — comes from that locked row. Using the row read before the
+			// transaction would, when two platform admins move the same user at once (A→B and A→C),
+			// record the second as A→C although the user was already in B.
+			locked, err := q.GetUserForUpdate(ctx, id)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return verdictError{status: http.StatusNotFound, msg: "user not found"}
+				}
+				return err
+			}
+			if locked.Role == control.RolePlatformAdmin {
+				return verdictError{status: http.StatusBadRequest, msg: "a platform admin belongs to no customer and cannot be moved"}
+			}
+			if locked.CustomerID.Valid && locked.CustomerID.Int64 == req.CustomerID {
+				moved = locked // already there: nothing to do, and the bindings stay
+				return nil
+			}
 			if moved, err = q.MoveUserToCustomer(ctx, db.MoveUserToCustomerParams{ID: id, CustomerID: int8(req.CustomerID)}); err != nil {
 				return err
 			}
@@ -759,10 +818,10 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 			for _, side := range []struct {
 				customer  pgtype.Int8
 				direction string
-			}{{target.CustomerID, "out"}, {int8(req.CustomerID), "in"}} {
+			}{{locked.CustomerID, "out"}, {int8(req.CustomerID), "in"}} {
 				if err := auditAdmin(ctx, q, actor, "user.move", "", side.customer, "allowed", map[string]any{
-					"userId": id, "username": target.Username, "direction": side.direction,
-					"from": int8Ptr(target.CustomerID), "to": req.CustomerID, "bindingsCleared": cleared,
+					"userId": id, "username": locked.Username, "direction": side.direction,
+					"from": int8Ptr(locked.CustomerID), "to": req.CustomerID, "bindingsCleared": cleared,
 				}); err != nil {
 					return err
 				}
@@ -770,6 +829,11 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 			return nil
 		})
 		if err != nil {
+			var v verdictError
+			if errors.As(err, &v) {
+				respondVerdict(c, deps, actor, id, "user.move", userVerdict(v))
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
