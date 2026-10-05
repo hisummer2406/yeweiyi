@@ -81,9 +81,12 @@
       </view>
     </view>
 
-    <!-- 出入库记录：GET /api/oil-in-out，跟 /api/alarms 一样答一个裸数组，无法解析的记录后端会直接跳过 -->
+    <!-- 出入库记录：GET /api/oil-in-out，两条路径都返回 {rows, parsed, unparsable, legacySkipped, ...} -->
     <view wx:if="{{activeTab === 'oilInOut'}}">
-      <view wx:if="{{!loading && oilInOutLoaded && oilInOut.length === 0}}" class="empty">
+      <view wx:if="{{oilInOutNote}}" class="card" style="background-color:#fffbe6;border:1rpx solid #ffe58f;">
+        <text style="color:#d48806;">{{oilInOutNote}}</text>
+      </view>
+      <view wx:if="{{!loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote}}" class="empty">
         暂无出入库记录
       </view>
       <view wx:for="{{oilInOut}}" wx:key="eventId" class="card">

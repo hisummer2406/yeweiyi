@@ -1,5 +1,6 @@
 import { ApiError, get } from '../../utils/request';
 import { AlarmSocket } from '../../utils/ws';
+import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
 import {
   ALARM_SEVERITY_LABELS,
   ALARM_STATUS_LABELS,
@@ -15,6 +16,7 @@ import type {
   ControlCommand,
   LatestTelemetryResponse,
   ListCommandsResponse,
+  OilInOutListResponse,
   OilInOutRow,
   Tank,
 } from '../../types/api';
@@ -69,6 +71,10 @@ Page({
     alarmsLoaded: false,
 
     oilInOut: [] as OilInOutView[],
+    // Set whenever the endpoint reports it could not show everything — unparsable (current device
+    // fault) or legacySkipped (closed historical hole) — so the list is never silently incomplete.
+    // See yeweiyi-cloud docs/protocol-v1-stock-event.md.
+    oilInOutNote: '',
     oilInOutLoaded: false,
 
     commands: [] as CommandView[],
@@ -171,25 +177,41 @@ Page({
       .finally(() => this.setData({ loading: false }));
   },
 
-  // GET /api/oil-in-out answers a bare array, same as /api/alarms — internal/api/stock.go reads
-  // through to ThingsBoard's stockEvent telemetry and silently skips any record it can't parse
-  // (pre-V1 firmware still publishing debug strings) rather than reporting an unparsable/legacySkipped
-  // count. There is no envelope to recover from a 502 body any more; an error here is a real failure.
+  // GET /api/oil-in-out answers {rows, parsed, unparsable, legacySkipped, ...} on BOTH its 200 and its
+  // 502 path (internal/api/stock.go, stockListResponse) — unlike /api/alarms, which is a bare array.
   loadOilInOut() {
     this.setData({ loading: true });
-    return get<OilInOutRow[]>('/api/oil-in-out', {
+    return get<OilInOutListResponse>('/api/oil-in-out', {
       device: this.data.device,
       limit: 50,
       sort: false,
     })
-      .then((rows) => {
-        const filtered = this.oilInOutDirection
-          ? rows.filter((r) => r.direction === this.oilInOutDirection)
-          : rows;
-        this.setData({ oilInOut: filtered.map(toOilInOutView), oilInOutLoaded: true });
+      .then((res) => this.applyOilInOut(res))
+      .catch((err: ApiError) => {
+        // A 502 here is the endpoint's own degraded-but-informative response, not a transport
+        // failure — request.ts hands the full parsed body back on ApiError.body precisely so this
+        // case does not collapse to a bare error toast and lose the rows that DID parse. Fall back
+        // to the toast only if the body genuinely isn't that shape (a real outage, a 503, etc).
+        if (isOilInOutListResponse(err.body)) {
+          this.applyOilInOut(err.body);
+        } else {
+          wx.showToast({ title: err.message, icon: 'none' });
+          this.setData({ oilInOut: [], oilInOutNote: err.message, oilInOutLoaded: true });
+        }
       })
-      .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
       .finally(() => this.setData({ loading: false }));
+  },
+
+  applyOilInOut(res: OilInOutListResponse) {
+    if (!isOilInOutListResponse(res)) {
+      // The response is not the shape this page was written against. Say so rather than throw.
+      const message = '出入库记录的响应格式不符合预期，请联系管理员';
+      wx.showToast({ title: message, icon: 'none' });
+      this.setData({ oilInOut: [], oilInOutNote: message, oilInOutLoaded: true });
+      return;
+    }
+    const { rows, note } = summarizeOilInOut(res, this.oilInOutDirection);
+    this.setData({ oilInOut: rows.map(toOilInOutView), oilInOutNote: note, oilInOutLoaded: true });
   },
 
   loadCommands() {

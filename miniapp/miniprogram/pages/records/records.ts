@@ -1,4 +1,5 @@
 import { get } from '../../utils/request';
+import { devicePage } from '../../utils/devicePicker';
 import type { Device } from '../../types/api';
 
 type RecordTab = 'alarms' | 'oilInOut';
@@ -43,12 +44,26 @@ Page({
           this.openDevice(devices[0].device_name, tab, direction);
           return;
         }
-        wx.showActionSheet({
-          itemList: devices.map((d) => d.device_name),
-          success: (r) => this.openDevice(devices[r.tapIndex].device_name, tab, direction),
-        });
+        this.chooseDevice(devices.map((d) => d.device_name), 0, tab, direction);
       })
       .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }));
+  },
+
+  // wx.showActionSheet takes at most 6 items and fails beyond that, and a customer admin or platform
+  // admin can have far more devices — so a long list is paged through the sheet, 5 at a time plus a
+  // "更多…" row. Dismissing the sheet also lands in `fail`; that needs no message.
+  chooseDevice(names: string[], offset: number, tab: RecordTab, direction?: 'IN' | 'OUT') {
+    const page = devicePage(names, offset);
+    wx.showActionSheet({
+      itemList: page.items,
+      success: (r) => {
+        if (r.tapIndex < page.devices.length) {
+          this.openDevice(page.devices[r.tapIndex], tab, direction);
+        } else {
+          this.chooseDevice(names, page.nextOffset, tab, direction);
+        }
+      },
+    });
   },
 
   openDevice(device: string, tab: RecordTab, direction?: 'IN' | 'OUT') {
