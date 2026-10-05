@@ -108,5 +108,13 @@ func ParseStockEvent(raw any) (StockEvent, error) {
 	if err := decodeJSONValue(raw, &e); err != nil {
 		return StockEvent{}, fmt.Errorf("%s: %w", KeyStockEvent, err)
 	}
+	// Rejected rather than passed through: an unknown source would otherwise reach API consumers as
+	// a third state they have no way to interpret, and "AUTO" is not a safe fallback — it would
+	// present an unrecognised record as machine-measured.
+	switch e.Source {
+	case "", SourceAuto, SourceManual:
+	default:
+		return StockEvent{}, fmt.Errorf("%s: unknown source %q (want %q or %q)", KeyStockEvent, e.Source, SourceAuto, SourceManual)
+	}
 	return e, nil
 }

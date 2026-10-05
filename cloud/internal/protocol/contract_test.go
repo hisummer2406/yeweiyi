@@ -483,6 +483,49 @@ func TestParseTankCalibration_RejectsPartialPublish(t *testing.T) {
 	}
 }
 
+func TestParseTankCalibration_RejectsMalformedCurves(t *testing.T) {
+	cases := map[string]struct{ h, v []any }{
+		"descending heights": {[]any{0.0, 500.0, 400.0}, []any{0.0, 1.0, 2.0}},
+		"repeated height":    {[]any{0.0, 500.0, 500.0}, []any{0.0, 1.0, 2.0}},
+		"decreasing volume":  {[]any{0.0, 500.0, 1000.0}, []any{0.0, 9.0, 5.0}},
+		"negative volume":    {[]any{0.0, 500.0}, []any{-1.0, 5.0}},
+		"empty":              {[]any{}, []any{}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			attrs := map[string]any{
+				protocol.TankKey(1, protocol.AttrCalibrationHeightMm): c.h,
+				protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  c.v,
+			}
+			if _, ok, err := protocol.ParseTankCalibration(attrs, 1); err == nil || ok {
+				t.Errorf("ok=%v err=%v, want a rejection", ok, err)
+			}
+		})
+	}
+}
+
+func TestParseTankCalibration_NullAttributesAreAbsent(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): nil,
+		protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  nil,
+	}
+	if _, ok, err := protocol.ParseTankCalibration(attrs, 1); ok || err != nil {
+		t.Errorf("ok=%v err=%v, want absent without error", ok, err)
+	}
+}
+
+func TestParseStockEvent_Source(t *testing.T) {
+	for _, src := range []string{"", "AUTO", "MANUAL"} {
+		raw := `{"eventId":"in-1-1","direction":"IN","source":"` + src + `"}`
+		if _, err := protocol.ParseStockEvent(raw); err != nil {
+			t.Errorf("source %q rejected: %v", src, err)
+		}
+	}
+	if _, err := protocol.ParseStockEvent(`{"eventId":"in-1-1","direction":"IN","source":"manual"}`); err == nil {
+		t.Error("lower-case/unknown source accepted; want a parse error")
+	}
+}
+
 func TestValidateEnvelope_RejectsMalformedCommands(t *testing.T) {
 	base := protocol.Envelope{
 		CommandID:       "c1a7e3d8-5b62-4d19-8f30-1e9a4c77b201",

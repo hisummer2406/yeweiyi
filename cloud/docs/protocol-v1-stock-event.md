@@ -205,6 +205,18 @@ stock:
 跨度增长；遥测保留 7 天生效后（issue #23）这一跨度自然有界。是否需要显式的 `revision` 字段待与 Android
 侧确认；若确认，应以该字段取代信封 `ts` 作为选择依据。
 
+### `source`：自动检测与人工补录（issue #15，未冻结）
+
+可选字段，取值 `AUTO`（缺省，设备不上报）或 `MANUAL`（`BuLuFragment` 补录）。云端 `/api/oil-in-out`
+对外始终带 `source`，缺省读成 `AUTO`；**其他取值按无法解析处理**（计入 `unparsable`，返回 502），
+不会静默当作 `AUTO`。
+
+`MANUAL` 事件发生在断电/故障期间，没有实时探头快照：`begin/endLevelMm`、`begin/endTempC`、
+`begin/endWeightKg`、`oilType` 是"无数据"，**不是测得 0**。消费方（报表、图表）遇到 `MANUAL` 不得把
+这些零值当测量值绘制或求平均。补录的 `beginTime == endTime`（用户手填的单一时刻）；用户改时间重新
+提交会生成新的 `eventId`，因此不会与旧记录折叠，旧记录需要人工作废——这一点尚无协议机制，待与 Android
+侧确认。
+
 ### 两列刻意不进 V1
 
 - `beginTcVolume` / `endTcVolume`：名字读作温度补偿体积（标准体积），但赋值来自

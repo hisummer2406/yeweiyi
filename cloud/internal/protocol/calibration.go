@@ -1,6 +1,9 @@
 package protocol
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // TankCalibration is one tank's height→volume calibration curve, as published by the device in its
 // AttrCalibrationHeightMm/AttrCalibrationVolumeL client attributes (zhongchengyeweiyi#42 待办1). The
@@ -35,8 +38,13 @@ type TankCalibration struct {
 // been connected for a long time since its calibration table last changed, or a device running an
 // older build that predates this attribute, will not have it.
 func ParseTankCalibration(attrs map[string]any, tankIndex int) (TankCalibration, bool, error) {
+	// A key present with a null value is "not published": ThingsBoard reports a deleted or never-set
+	// attribute that way, and treating it as an empty curve would be indistinguishable from a
+	// device that published a zero-point table.
 	heightRaw, hasHeight := attrs[TankKey(tankIndex, AttrCalibrationHeightMm)]
 	volumeRaw, hasVolume := attrs[TankKey(tankIndex, AttrCalibrationVolumeL)]
+	hasHeight = hasHeight && heightRaw != nil
+	hasVolume = hasVolume && volumeRaw != nil
 	if !hasHeight && !hasVolume {
 		return TankCalibration{}, false, nil
 	}
@@ -59,5 +67,35 @@ func ParseTankCalibration(attrs map[string]any, tankIndex int) (TankCalibration,
 			"tank %d: calibrationHeightMm/calibrationVolumeL length mismatch: %d vs %d",
 			tankIndex, len(heights), len(volumes))
 	}
+	if err := validateCalibrationCurve(heights, volumes); err != nil {
+		return TankCalibration{}, false, fmt.Errorf("tank %d: %w", tankIndex, err)
+	}
 	return TankCalibration{HeightMm: heights, VolumeL: volumes}, true, nil
+}
+
+// validateCalibrationCurve rejects a curve a lookup could not interpolate over: every value must be
+// finite and non-negative, heights strictly ascending (the device builds a 1cm-step table, so a
+// repeat or reversal is corruption), and volume non-decreasing (a taller liquid column never holds
+// less oil). An empty pair is rejected too — a published-but-empty table is a device bug.
+func validateCalibrationCurve(heights, volumes []float64) error {
+	if len(heights) == 0 {
+		return fmt.Errorf("calibration curve is empty")
+	}
+	for i := range heights {
+		for _, v := range []float64{heights[i], volumes[i]} {
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+				return fmt.Errorf("calibration point %d has invalid value %v", i, v)
+			}
+		}
+		if i == 0 {
+			continue
+		}
+		if heights[i] <= heights[i-1] {
+			return fmt.Errorf("calibrationHeightMm not strictly ascending at index %d: %v after %v", i, heights[i], heights[i-1])
+		}
+		if volumes[i] < volumes[i-1] {
+			return fmt.Errorf("calibrationVolumeL decreases at index %d: %v after %v", i, volumes[i], volumes[i-1])
+		}
+	}
+	return nil
 }
