@@ -271,6 +271,11 @@ func (c *Config) Validate() error {
 	if c.ThingsBoard.BaseURL != "" && (c.ThingsBoard.Username == "" || c.ThingsBoard.Password == "") {
 		return errors.New("thingsboard.username and thingsboard.password are required when thingsboard.baseURL is set")
 	}
+
+	// TLS must be fully specified or not at all: if only one is set, it's a misconfiguration.
+	if (c.Server.TLSCertFile != "") != (c.Server.TLSKeyFile != "") {
+		return errors.New("server.tlsCertFile and server.tlsKeyFile must both be set or both be unset")
+	}
 	return nil
 }
 

@@ -30,7 +30,7 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:-changeme}
 
   thingsboard:
-    ports: !override
+    ports:
       # ThingsBoard 控制台仅本机
       - "127.0.0.1:8081:9090"
       # 设备 MQTT over TLS（生产必须使用 TLS）

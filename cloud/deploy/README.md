@@ -71,9 +71,9 @@ export DATABASE_URL="postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=d
 docker run --rm -it --network host \
   -e PGPASSWORD=yeweiyi \
   postgres:16 psql -h localhost -U yeweiyi -d yeweiyi \
-  -c "INSERT INTO users (id, name, mobile, role) VALUES \
-      (gen_random_uuid(), '管理员', '19000000000', 'admin') \
-      ON CONFLICT DO NOTHING;"
+  -c "INSERT INTO users (username, password_hash) VALUES \
+      ('admin', crypt('change-me-immediately', gen_salt('bf'))) \
+      ON CONFLICT (username) DO NOTHING;"
 
 # 用户首次登录时会通过 JWT 获取 token，密码在 API 服务侧设置。
 # 详见 internal/store/db/migrations 中的 users 表定义。
@@ -354,7 +354,9 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 ./backup.sh /tmp/test-backup
 
 # 2. 验证备份完整性
-cd /tmp/test-backup/$(ls -t | head -1)    # 进入最新备份目录
+LATEST=$(ls -t /tmp/test-backup | head -1)
+[[ -n "$LATEST" ]] || { echo "ERROR: No backup found in /tmp/test-backup"; exit 1; }
+cd "/tmp/test-backup/$LATEST"
 cat SHA256SUMS | sha256sum -c             # 逐一验证所有文件
 
 # 3. 在测试环境恢复并验证
