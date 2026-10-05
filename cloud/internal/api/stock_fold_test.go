@@ -77,3 +77,21 @@ func TestFoldByEventID_CountsCopies(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectWindow(t *testing.T) {
+	row := func(id string, tsMs int64, copies int) stockRow {
+		return stockRow{ev: protocol.StockEvent{EventID: id, TSMs: tsMs}, copies: copies}
+	}
+	rows := []stockRow{row("early", 50, 2), row("a", 100, 1), row("b", 200, 3), row("late", 900, 2)}
+
+	listed, folded, truncated := selectWindow(rows, 100, 900, 10)
+	if len(listed) != 2 || folded != 2 || truncated {
+		t.Errorf("in window: listed=%d folded=%d truncated=%v, want 2/2/false (out-of-window folds not counted; end is exclusive)", len(listed), folded, truncated)
+	}
+
+	// The cut keeps "a" (unmodified), hiding "b" whose two folded duplicates must not be reported.
+	listed, folded, truncated = selectWindow(rows, 100, 900, 1)
+	if len(listed) != 1 || listed[0].ev.EventID != "a" || folded != 0 || !truncated {
+		t.Errorf("limit 1: listed=%v folded=%d truncated=%v, want [a]/0/true", listed, folded, truncated)
+	}
+}

@@ -239,6 +239,25 @@ func foldByEventID(rows []stockRow, asc bool) (out []stockRow, folded int) {
 	return out, folded
 }
 
+// selectWindow keeps the folded movements whose close time lies in [beginMs, endMs), cuts them to
+// limit, and counts the duplicate reports folded into the movements that remain. The count is taken
+// after the cut so it describes the listed rows only, as the response documents; counting before it
+// would report folds hidden behind the limit.
+func selectWindow(rows []stockRow, beginMs, endMs int64, limit int) (listed []stockRow, folded int, truncated bool) {
+	for _, r := range rows {
+		if r.ev.TSMs >= beginMs && r.ev.TSMs < endMs {
+			listed = append(listed, r)
+		}
+	}
+	if len(listed) > limit {
+		listed, truncated = listed[:limit], true
+	}
+	for _, r := range listed {
+		folded += r.copies - 1
+	}
+	return listed, folded, truncated
+}
+
 // stockEnvelopeSkew widens the lower bound of the raw read. A movement is listed by its own close
 // time (tsMs), but ThingsBoard selects points by envelope ts, which the device stamps when it
 // generates the report; the two are the same instant in the normal case and may differ by device
@@ -390,18 +409,10 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		// window: the latest revision of a movement is chosen across everything read, and membership
 		// is decided once, by the event's own time, so one delivery is listed in exactly one window.
 		rows, _ = foldByEventID(rows, p.asc)
-		out := make([]stockEventResponse, 0, len(rows))
-		folded := 0
-		for _, r := range rows {
-			if r.ev.TSMs < beginMs || r.ev.TSMs >= endMs {
-				continue
-			}
-			folded += r.copies - 1
+		listed, folded, truncated := selectWindow(rows, beginMs, endMs, int(p.limit))
+		out := make([]stockEventResponse, 0, len(listed))
+		for _, r := range listed {
 			out = append(out, toStockEventResponse(r.ev))
-		}
-		truncated := len(out) > int(p.limit)
-		if truncated {
-			out = out[:p.limit]
 		}
 
 		body := stockListResponse{
