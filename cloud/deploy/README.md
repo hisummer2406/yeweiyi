@@ -334,6 +334,24 @@ Postgres、Redis 和 Go 后台。
 
 ---
 
+## 遥测保留（7 天）
+
+`docker-compose.thingsboard.yml` 通过 `SQL_TTL_TS_TS_KEY_VALUE_TTL` 把原始遥测保留期设为 7 天
+（`TS_RETENTION_SECONDS`，默认 604800；设为 0 关闭）。ThingsBoard 自身默认是 0，即永不过期。
+
+2026-10-06 在 CE 4.2.1.1 上实测（issue #23）：写入 40/9/8/6 天前和现在的点，开启后 8 天及更早的被
+删，6 天前的保留；客户端属性不受影响。清理按行进行，不是整月分区，尽管分区粒度是 MONTHS。
+
+- 清理每天跑一次（`SQL_TTL_TS_EXECUTION_INTERVAL`，毫秒），所以过期数据最多多留约一天。
+- 业务库里的命令、审计、报警处置不在 ThingsBoard，不受此 TTL 影响；它们没有自动清理，属长期保留。
+- **限制：每个 key 的“最新值”（`ts_kv_latest`）不随 TTL 清除。** 历史查询对已过期的 key 返回空，但
+  “最新值”查询仍返回那个旧点。设备不再上报的 key（例如减少了罐数）会一直显示最后一个值；
+  `LatestSnapshot` 以 `tankCount` 为锚点所以不受影响，直接按 key 取最新值的调用方需自行判断时间戳。
+- ThingsBoard 自带的审计日志 TTL（`SQL_TTL_AUDIT_LOGS_SECS`）默认也是 0，会缓慢增长；本项目的
+  审计在业务库，这份是平台自己的，容量规划时留意，未在此处调整。
+- 验证方法：向测试设备 POST 带历史 `ts` 的遥测，把 `SQL_TTL_TS_EXECUTION_INTERVAL` 临时调成
+  `60000` 重启，等一两分钟再查询；日志里有 `Total telemetry removed stats by TTL`。
+
 ## 数据卷与删除行为
 
 | 卷 | 内容 | 删掉会怎样 |

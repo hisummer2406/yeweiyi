@@ -38,6 +38,12 @@ services:
       # Bounded so a dev laptop running Postgres, Redis and the Go server alongside it stays
       # usable. Production sizing is a separate question — see the ECS note in CLAUDE.md.
       JAVA_OPTS: "-Xms1G -Xmx2G"
+      # 原始遥测保留 7 天（issue #23）。ThingsBoard 默认 0 = 永不过期，磁盘会无限增长。
+      # 秒为单位；清理按行删除（实测 8 天前的点被删、6 天前的保留），每 EXECUTION_INTERVAL 毫秒
+      # 跑一次，默认一天一次，所以过期数据最多多留约一天。改 TS_RETENTION_SECONDS 即可调整，
+      # 0 表示不清理。只作用于时序；属性、业务库（命令/审计/报警处置）不受影响。
+      # 已知限制：每个 key 的“最新值”（ts_kv_latest）不随 TTL 清除，见 deploy/README.md。
+      SQL_TTL_TS_TS_KEY_VALUE_TTL: "${TS_RETENTION_SECONDS:-604800}"
     volumes:
       - thingsboard_data:/data
       - thingsboard_logs:/var/log/thingsboard
