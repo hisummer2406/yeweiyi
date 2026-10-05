@@ -2,7 +2,9 @@ package api_test
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +15,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
 	"yeweiyi-cloud/internal/control"
@@ -861,5 +865,165 @@ func TestTenancy_ResolveDeviceAccessAgreesWithUserMayAccessDevice(t *testing.T) 
 		if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
 			t.Errorf("%s: snapshot = %v, want %v", name, got, tc.want)
 		}
+	}
+}
+
+func (tn *tenancy) issueMethod(t *testing.T, token, device, method string) *httptest.ResponseRecorder {
+	t.Helper()
+	return tn.send(t, "POST", "/api/devices/"+device+"/commands", token,
+		map[string]any{"method": method, "reason": "tenancy test"})
+}
+
+// TestTenancy_DemotedAdminLosesAdminMethodsImmediately: the role that gates *which methods* a user may
+// issue must come from the database too. A demoted administrator who is still bound to a device
+// keeps the control-level methods and loses the admin-level ones on the very next request, with the
+// token they already hold.
+func TestTenancy_DemotedAdminLosesAdminMethodsImmediately(t *testing.T) {
+	tn := newTenancy(t)
+	tn.bind(t, tn.adminAID, tn.devA1)
+
+	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusAccepted {
+		t.Fatalf("precondition: a customer admin may issue %s, got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
+	}
+	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user' WHERE id = $1`, tn.adminAID); err != nil {
+		t.Fatal(err)
+	}
+	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusForbidden {
+		t.Errorf("a demoted admin issuing an admin-level method with an old token: got %d, want 403", rec.Code)
+	}
+	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodAlarmMute); rec.Code != http.StatusAccepted {
+		t.Errorf("the control-level method should still work for the bound user: got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTenancy_CommandInsertEnforcesAccessItself: the insert re-checks the access rule in the same
+// statement, so authorization cannot go stale between an early decision and the write — which in
+// Issue is separated by a ThingsBoard round trip. Zero rows means "no longer allowed".
+func TestTenancy_CommandInsertEnforcesAccessItself(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := tn.env.queries
+
+	insert := func(userID int64, device string) (db.ControlCommand, error) {
+		id := pgtype.UUID{Valid: true}
+		if _, err := rand.Read(id.Bytes[:]); err != nil {
+			t.Fatal(err)
+		}
+		now := time.Now()
+		return q.CreateControlCommand(ctx, db.CreateControlCommandParams{
+			CommandID: id, DeviceName: device, Method: protocol.MethodAlarmMute, Args: []byte(`{}`),
+			OperatorID: userID, Operator: "insert-test", Reason: "r",
+			IssuedAt:  pgtype.Timestamptz{Time: now, Valid: true},
+			ExpiresAt: pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
+		})
+	}
+	_, disabledID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
+	tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID)
+
+	for name, tc := range map[string]struct {
+		user    int64
+		device  string
+		allowed bool
+		want    int64
+	}{
+		"customer admin on their device":        {tn.adminAID, tn.devA1, true, tn.custA},
+		"bound customer user":                   {tn.userAID, tn.devA1, true, tn.custA},
+		"platform admin: the device's customer": {tn.platformID, tn.devA1, true, tn.custA},
+		"unbound customer user":                 {tn.userAID, tn.devA2, false, 0},
+		"another customer's admin":              {tn.adminBID, tn.devA1, false, 0},
+		"unassigned device":                     {tn.adminAID, tn.devUnassigned, false, 0},
+		"disabled user":                         {disabledID, tn.devA1, false, 0},
+		"user that does not exist":              {999999999, tn.devA1, false, 0},
+	} {
+		cmd, err := insert(tc.user, tc.device)
+		switch {
+		case tc.allowed && err != nil:
+			t.Errorf("%s: %v", name, err)
+		case tc.allowed && (!cmd.CustomerID.Valid || cmd.CustomerID.Int64 != tc.want):
+			t.Errorf("%s: filed under %+v, want customer %d", name, cmd.CustomerID, tc.want)
+		case !tc.allowed && !errors.Is(err, pgx.ErrNoRows):
+			t.Errorf("%s: got err=%v, want pgx.ErrNoRows (nothing recorded)", name, err)
+		}
+	}
+
+	// Authorized a moment ago, then the device changes hands before the write: refused, and nothing
+	// is filed under the old customer.
+	if _, err := insert(tn.adminAID, tn.devA1); err != nil {
+		t.Fatalf("precondition: %v", err)
+	}
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE devices SET customer_id = $1 WHERE device_name = $2`, tn.custB, tn.devA1); err != nil {
+		t.Fatal(err)
+	}
+	var before int
+	tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM control_commands WHERE device_name = $1`, tn.devA1).Scan(&before)
+	if _, err := insert(tn.adminAID, tn.devA1); !errors.Is(err, pgx.ErrNoRows) {
+		t.Errorf("after the device was transferred, the old customer's admin: err=%v, want pgx.ErrNoRows", err)
+	}
+	var after int
+	tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM control_commands WHERE device_name = $1`, tn.devA1).Scan(&after)
+	if after != before {
+		t.Errorf("the refused insert still recorded a command (%d -> %d)", before, after)
+	}
+}
+
+// TestTenancy_DeviceListAgreesWithAccessRule: the list query is the one place the rule is written
+// out as a list rather than a predicate, so it gets its own agreement check against the function.
+func TestTenancy_DeviceListAgreesWithAccessRule(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := tn.env.queries
+
+	_, disabledID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
+	tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID)
+
+	existing := []string{tn.devA1, tn.devA2, tn.devB1, tn.devUnassigned}
+	for name, id := range map[string]int64{
+		"platform": tn.platformID, "adminA": tn.adminAID, "adminB": tn.adminBID,
+		"userA": tn.userAID, "userB": tn.userBID, "disabled": disabledID,
+	} {
+		rows, err := q.ListDevicesForUser(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		listed := map[string]bool{}
+		for _, r := range rows {
+			listed[r.DeviceName] = true
+		}
+		for _, d := range existing {
+			want, err := q.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{UserID: id, DeviceName: d})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if listed[d] != want {
+				t.Errorf("%s / %s: listed=%v but UserMayAccessDevice=%v", name, d, listed[d], want)
+			}
+		}
+	}
+}
+
+// TestTenancy_UnauthorizedCallerGetsTheSame403ForPhysicalMethods: with the interlock closed (the
+// default), a caller who may not touch the device must still be told 403 — not 409 because the
+// method happens to be physical. Only a caller who *is* authorized learns the gate is closed.
+func TestTenancy_UnauthorizedCallerGetsTheSame403ForPhysicalMethods(t *testing.T) {
+	tn := newTenancy(t) // control.Config{}: physical commands disabled
+
+	for name, tc := range map[string]struct {
+		token, device string
+		want          int
+	}{
+		"another customer's user":        {tn.userB, tn.devA1, http.StatusForbidden},
+		"another customer's admin":       {tn.adminB, tn.devA1, http.StatusForbidden},
+		"unbound customer user":          {tn.userA, tn.devA2, http.StatusForbidden},
+		"unassigned device":              {tn.adminA, tn.devUnassigned, http.StatusForbidden},
+		"device that does not exist":     {tn.adminA, tn.devGhost, http.StatusForbidden},
+		"authorized: the gate is closed": {tn.userA, tn.devA1, http.StatusConflict},
+		"platform admin: gate applies":   {tn.platform, tn.devA1, http.StatusConflict},
+	} {
+		if rec := tn.issueMethod(t, tc.token, tc.device, protocol.MethodPumpStart); rec.Code != tc.want {
+			t.Errorf("%s: pump.start got %d, want %d (%s)", name, rec.Code, tc.want, rec.Body.String())
+		}
+	}
+	if tn.sender.calls != 0 {
+		t.Errorf("ThingsBoard was called %d times although every request was refused", tn.sender.calls)
 	}
 }

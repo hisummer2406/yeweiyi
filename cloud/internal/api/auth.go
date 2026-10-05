@@ -13,9 +13,9 @@ import (
 )
 
 // defaultTokenTTL is used when Deps.TokenTTL is left zero (tests, and any caller that does not
-// care). Production sets it from config — see config.example.yaml's auth.tokenTTL, which also
-// explains the one behavioural consequence: the user's role travels inside the token, so a role
-// change does not take effect until the token expires or the user logs in again.
+// care). Production sets it from config — see config.example.yaml's auth.tokenTTL. The token only
+// proves who the caller is; their role, customer and disabled flag are read from the database on
+// every request (authMiddleware), so none of those changes waits for a token to expire.
 const defaultTokenTTL = 24 * time.Hour
 
 type loginRequest struct {
@@ -23,15 +23,10 @@ type loginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// apiClaims carries the user's id alongside the standard claims, added 2026-08-29 so
-// requireDeviceOwnership (devices.go) can check user_devices without an extra GetUserByUsername
-// round trip per request. Role was added 2026-09-01 for the same reason: control authorization
-// (internal/control) is role-tiered, and re-reading the user on every command would put a database
-// round trip in front of every control action.
-//
-// Consequence worth knowing: a role change does not take effect until the user's next login, since
-// the old token keeps its old role until it expires (tokenTTL, 24h). Acceptable for role
-// *promotion*; if a demotion ever needs to be immediate, this is the thing to revisit.
+// apiClaims carries the user's id alongside the standard claims. The Role claim is still issued, but
+// nothing trusts it any more: authMiddleware loads the user row on every request and puts *that*
+// role into the request context. It used to be trusted (to save a query), which meant a demoted
+// administrator kept administrator-level control methods until their token expired.
 type apiClaims struct {
 	UserID int64  `json:"uid"`
 	Role   string `json:"role"`
@@ -123,9 +118,10 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		c.Set("username", claims.Subject)
-		c.Set("userID", claims.UserID)
-		c.Set("role", claims.Role)
+		// From the database row, not the claims: a role change must apply to the very next request.
+		c.Set("username", user.Username)
+		c.Set("userID", user.ID)
+		c.Set("role", user.Role)
 		c.Next()
 	}
 }

@@ -29,3 +29,12 @@ UPDATE users SET password_hash = $2 WHERE id = $1;
 -- name: MoveUserToCustomer :one
 -- A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
 UPDATE users SET customer_id = $2 WHERE id = $1 AND role <> 'platform_admin' RETURNING *;
+
+-- name: GetUserForUpdate :one
+-- Locks the row for the rest of the transaction. Administration re-reads its target here and decides
+-- again, so a concurrent move or disable cannot slip in between the first check and the write.
+SELECT * FROM users WHERE id = $1 FOR UPDATE;
+
+-- name: GetUserForShare :one
+-- Locks the acting administrator against being demoted, moved or disabled mid-transaction.
+SELECT * FROM users WHERE id = $1 FOR SHARE;

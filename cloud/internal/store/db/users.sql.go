@@ -82,6 +82,47 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUserForShare = `-- name: GetUserForShare :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1 FOR SHARE
+`
+
+// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
+func (q *Queries) GetUserForShare(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForShare, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const getUserForUpdate = `-- name: GetUserForUpdate :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
+// again, so a concurrent move or disable cannot slip in between the first check and the write.
+func (q *Queries) GetUserForUpdate(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForUpdate, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users
 WHERE ($1::BIGINT IS NULL OR customer_id = $1::BIGINT)

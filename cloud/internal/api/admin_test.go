@@ -609,3 +609,65 @@ func TestAdmin_HistoryStaysAfterReassignment(t *testing.T) {
 		}
 	}
 }
+
+// TestAdmin_UpdateUserRechecksUnderLock reproduces the race deterministically. Our own transaction
+// holds the target's row lock — as a platform admin in the middle of moving them to another customer
+// would — while the customer admin's request, which already passed its early check, arrives. It must
+// block on the lock, and when the move commits it must decide again and find the user is no longer
+// its customer's, instead of acting on the stale answer.
+func TestAdmin_UpdateUserRechecksUnderLock(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	cu, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, nil)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d", rec.Code)
+	}
+
+	tx, err := tn.env.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, cu.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		rec     *httptest.ResponseRecorder
+		elapsed time.Duration
+	}
+	done := make(chan result, 1)
+	go func() {
+		start := time.Now()
+		r := tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", cu.ID), tn.adminA, map[string]any{"disabled": true})
+		done <- result{r, time.Since(start)}
+	}()
+
+	time.Sleep(500 * time.Millisecond) // let the request pass its early check and queue on the lock
+	if _, err := tx.Exec(ctx, `UPDATE users SET customer_id = $1 WHERE id = $2`, tn.custB, cu.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM user_devices WHERE user_id = $1`, cu.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case r := <-done:
+		if r.elapsed < 400*time.Millisecond {
+			t.Errorf("the request finished in %v: it did not wait for the lock", r.elapsed)
+		}
+		if r.rec.Code != http.StatusNotFound {
+			t.Errorf("after the user moved to another customer: got %d %s, want 404", r.rec.Code, r.rec.Body.String())
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the request never returned")
+	}
+	var disabled bool
+	tn.env.pool.QueryRow(ctx, `SELECT disabled_at IS NOT NULL FROM users WHERE id = $1`, cu.ID).Scan(&disabled)
+	if disabled {
+		t.Error("the old customer's admin disabled a user who had already been moved to another customer")
+	}
+}

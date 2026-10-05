@@ -16,71 +16,31 @@ SELECT EXISTS (
 
 -- name: UserMayAccessDevice :one
 -- The single source of truth for "may this user touch this device" — REST, WebSocket and control
--- commands all go through it. Decided from the database's *current* role and customer, never from
--- JWT claims, so moving a user to another customer cuts their access immediately instead of when
--- their token expires (design D3).
+-- commands all go through it. The rule itself lives in the SQL function user_may_access_device
+-- (migration 000015) so there is exactly one definition. Decided from the database's *current* role,
+-- customer and disabled flag, never from JWT claims, so moving or disabling a user takes effect
+-- immediately instead of when their token expires (design D3).
 --
 --   platform_admin  any device, including one that does not exist (authorization comes before
 --                   existence — CLAUDE.md invariant 6)
 --   customer_admin  every device of their own customer, bound or not
 --   customer_user   a device of their own customer AND bound to it
 --
--- An unassigned device (customer_id NULL) never matches a customer, because NULL = anything is not
--- true. A user id that no longer exists, or that has been disabled, matches nothing.
-SELECT EXISTS (
-    SELECT 1
-    FROM users u
-    WHERE u.id = sqlc.arg('user_id')
-      AND u.disabled_at IS NULL
-      AND (
-          u.role = 'platform_admin'
-          OR EXISTS (
-              SELECT 1
-              FROM devices d
-              WHERE d.device_name = sqlc.arg('device_name')
-                AND d.customer_id = u.customer_id
-                AND (
-                    u.role = 'customer_admin'
-                    OR EXISTS (
-                        SELECT 1 FROM user_devices ud
-                        WHERE ud.user_id = u.id AND ud.device_name = d.device_name
-                    )
-                )
-          )
-      )
-) AS allowed;
+-- An unassigned device never matches a customer; a user that no longer exists, or that has been
+-- disabled, matches nothing.
+SELECT user_may_access_device(sqlc.arg('user_id'), sqlc.arg('device_name'))::bool AS allowed;
 
 -- name: ResolveDeviceAccess :one
--- The same rule as UserMayAccessDevice, plus the customer a command or audit row should be filed
--- under, read in ONE statement so both come from the same database state. Two separate reads let a
--- concurrent transfer land between them: a user moved from A to B could be authorized against B's
--- device while the command was still filed under A, showing its operator, reason and arguments to
--- the wrong customer.
+-- The access decision (via the same function) plus the pieces the caller needs to pick the customer
+-- a command or audit row is filed under, read in ONE statement so they come from one database
+-- state. The caller picks the snapshot: the user's own customer, or — for a platform admin, who has
+-- none — the device's customer right now (NULL when the device does not exist). No row at all means
+-- the user does not exist.
 --
--- The caller picks the snapshot: the user's own customer, or — for a platform admin, who has none —
--- the device's customer right now (NULL when the device does not exist). No row at all means the
--- user does not exist.
--- internal/api/tenancy_test.go checks this agrees with UserMayAccessDevice for every role/device
--- combination, because the rule is written out in both places.
+-- This is for deciding early (and for auditing denials under the right customer). It is NOT what
+-- keeps a command honest: CreateControlCommand re-checks the rule inside the INSERT itself.
 SELECT
-    COALESCE(
-        u.disabled_at IS NULL
-        AND (
-            u.role = 'platform_admin'
-            OR (
-                d.device_name IS NOT NULL
-                AND d.customer_id = u.customer_id
-                AND (
-                    u.role = 'customer_admin'
-                    OR EXISTS (
-                        SELECT 1 FROM user_devices ud
-                        WHERE ud.user_id = u.id AND ud.device_name = d.device_name
-                    )
-                )
-            )
-        ),
-        false
-    )::bool AS allowed,
+    user_may_access_device(u.id, sqlc.arg('device_name'))::bool AS allowed,
     u.customer_id AS user_customer_id,
     d.customer_id AS device_customer_id
 FROM users u

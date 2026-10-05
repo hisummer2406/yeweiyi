@@ -210,17 +210,27 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		DeviceName: req.DeviceName,
 		Method:     req.Method,
 		Args:       args,
-		OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: req.Actor.UserID != 0},
+		OperatorID: req.Actor.UserID,
 		Operator:   req.Actor.Username,
 		Reason:     req.Reason,
-		CustomerID: req.Actor.CustomerID,
 		// Both timestamps come from this one clock reading — see CreateControlCommand's comment.
 		IssuedAt:  pgtype.Timestamptz{Time: issuedAt, Valid: true},
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The insert re-checks the access rule in the same statement and found the user no
+			// longer allowed — they were moved, demoted or disabled, or the device changed hands,
+			// between the early decision and now. Nothing was recorded or sent.
+			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+				map[string]any{"method": req.Method, "error": "access changed while the command was being issued"})
+			return db.ControlCommand{}, fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
+		}
 		return db.ControlCommand{}, fmt.Errorf("record command: %w", err)
 	}
+	// From here on everything — this audit row, the ACK, the send audit — is filed under the customer
+	// the command row itself carries, which was decided in the same statement that authorized it.
+	req.Actor.CustomerID = cmd.CustomerID
 
 	s.audit(ctx, req.Actor, "control.issue", req.DeviceName, commandID, "allowed",
 		map[string]any{"method": req.Method, "reason": req.Reason, "args": json.RawMessage(args)})
@@ -448,26 +458,27 @@ func (s *Service) RunExpirySweep(ctx context.Context, every time.Duration, logf 
 	}
 }
 
-// authorize applies the interlock gate, the role/method check and the device-scope decision that
-// resolveAccess already made. Its checks run in this order so a caller who may not touch the device
-// still gets the same answer however the other checks would have gone.
+// authorize applies the device-scope decision resolveAccess already made, the interlock gate and the
+// role/method check — in that order. The device check comes first so that a caller who may not touch
+// the device gets the same 403 whatever else would have been said about the request: not a 409
+// because physical commands happen to be disabled, not a different 403 because of their role.
 func (s *Service) authorize(actor Actor, deviceName string, spec protocol.MethodSpec, allowedOnDevice bool) error {
-	// The interlock gate is checked first and applies to every role, platform admins included.
-	// It is a statement about the *hardware* being unverified, not about who is trusted.
+	// The device-scope rule (platform admin: any; customer admin: own customer; customer user: own
+	// customer and bound) is the same one internal/api uses, decided from the database's current
+	// role, customer and disabled flag.
+	if !allowedOnDevice {
+		return fmt.Errorf("%w: device %q", ErrForbidden, deviceName)
+	}
+
+	// The interlock gate applies to every role, platform admins included. It is a statement about
+	// the *hardware* being unverified, not about who is trusted.
 	if spec.Physical && !s.cfg.AllowPhysicalCommands {
 		return fmt.Errorf("%w: %s", ErrPhysicalCommandsDisabled, spec.Method)
 	}
 
+	// The role gates *which methods*; the device check above gates *which devices*.
 	if !roleAllows(actor.Role, spec.Permission) {
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
-	}
-
-	// The device-scope rule (platform admin: any; customer admin: own customer; customer user: own
-	// customer and bound) is the same one internal/api uses, decided from the database's current
-	// role, customer and disabled flag. The role above gates *which methods*, this gates *which
-	// devices*.
-	if !allowedOnDevice {
-		return fmt.Errorf("%w: device %q", ErrForbidden, deviceName)
 	}
 	return nil
 }

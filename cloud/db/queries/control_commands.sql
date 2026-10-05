@@ -5,10 +5,25 @@
 -- takes — which violates the expires_at > issued_at constraint outright once the command TTL is
 -- shorter than that, and silently shortens every command's real validity window even when it does
 -- not. The envelope sent to the device carries the same issued_at, so device and cloud agree too.
+--
+-- The access rule is re-checked *inside this statement* (WHERE user_may_access_device) and the
+-- customer snapshot is read here too, so the authorization and the record come from one database
+-- state. Checking earlier and inserting later leaves a window — a ThingsBoard lookup sits between
+-- them — in which a user or device transfer can commit, and the command would then be authorized
+-- against the new state yet filed under the old customer. Zero rows back means the user may no
+-- longer touch the device (or never could); the caller treats that as forbidden.
+-- The snapshot is the user's own customer, or for a platform admin (who has none) the device's.
 INSERT INTO control_commands (
     command_id, device_name, method, args,
     operator_id, operator, reason, issued_at, expires_at, customer_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+)
+SELECT sqlc.arg('command_id'), sqlc.arg('device_name'), sqlc.arg('method'), sqlc.arg('args'),
+       u.id, sqlc.arg('operator'), sqlc.arg('reason'), sqlc.arg('issued_at'), sqlc.arg('expires_at'),
+       COALESCE(u.customer_id, d.customer_id)
+FROM users u
+LEFT JOIN devices d ON d.device_name = sqlc.arg('device_name')
+WHERE u.id = sqlc.arg('operator_id')
+  AND user_may_access_device(u.id, sqlc.arg('device_name'))
 RETURNING *;
 
 -- name: GetControlCommand :one

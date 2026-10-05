@@ -20,6 +20,14 @@ type Querier interface {
 	// takes — which violates the expires_at > issued_at constraint outright once the command TTL is
 	// shorter than that, and silently shortens every command's real validity window even when it does
 	// not. The envelope sent to the device carries the same issued_at, so device and cloud agree too.
+	//
+	// The access rule is re-checked *inside this statement* (WHERE user_may_access_device) and the
+	// customer snapshot is read here too, so the authorization and the record come from one database
+	// state. Checking earlier and inserting later leaves a window — a ThingsBoard lookup sits between
+	// them — in which a user or device transfer can commit, and the command would then be authorized
+	// against the new state yet filed under the old customer. Zero rows back means the user may no
+	// longer touch the device (or never could); the caller treats that as forbidden.
+	// The snapshot is the user's own customer, or for a platform admin (who has none) the device's.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -56,6 +64,11 @@ type Querier interface {
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
+	GetUserForShare(ctx context.Context, id int64) (User, error)
+	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
+	// again, so a concurrent move or disable cannot slip in between the first check and the write.
+	GetUserForUpdate(ctx context.Context, id int64) (User, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
 	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
@@ -114,17 +127,14 @@ type Querier interface {
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
 	RenameCustomer(ctx context.Context, arg RenameCustomerParams) (Customer, error)
-	// The same rule as UserMayAccessDevice, plus the customer a command or audit row should be filed
-	// under, read in ONE statement so both come from the same database state. Two separate reads let a
-	// concurrent transfer land between them: a user moved from A to B could be authorized against B's
-	// device while the command was still filed under A, showing its operator, reason and arguments to
-	// the wrong customer.
+	// The access decision (via the same function) plus the pieces the caller needs to pick the customer
+	// a command or audit row is filed under, read in ONE statement so they come from one database
+	// state. The caller picks the snapshot: the user's own customer, or — for a platform admin, who has
+	// none — the device's customer right now (NULL when the device does not exist). No row at all means
+	// the user does not exist.
 	//
-	// The caller picks the snapshot: the user's own customer, or — for a platform admin, who has none —
-	// the device's customer right now (NULL when the device does not exist). No row at all means the
-	// user does not exist.
-	// internal/api/tenancy_test.go checks this agrees with UserMayAccessDevice for every role/device
-	// combination, because the rule is written out in both places.
+	// This is for deciding early (and for auditing denials under the right customer). It is NOT what
+	// keeps a command honest: CreateControlCommand re-checks the rule inside the INSERT itself.
 	ResolveDeviceAccess(ctx context.Context, arg ResolveDeviceAccessParams) (ResolveDeviceAccessRow, error)
 	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
@@ -139,17 +149,18 @@ type Querier interface {
 	// customer boundary and the role tiers. Every device-scoped handler must call UserMayAccessDevice.
 	UserDeviceBindingExists(ctx context.Context, arg UserDeviceBindingExistsParams) (bool, error)
 	// The single source of truth for "may this user touch this device" — REST, WebSocket and control
-	// commands all go through it. Decided from the database's *current* role and customer, never from
-	// JWT claims, so moving a user to another customer cuts their access immediately instead of when
-	// their token expires (design D3).
+	// commands all go through it. The rule itself lives in the SQL function user_may_access_device
+	// (migration 000015) so there is exactly one definition. Decided from the database's *current* role,
+	// customer and disabled flag, never from JWT claims, so moving or disabling a user takes effect
+	// immediately instead of when their token expires (design D3).
 	//
 	//   platform_admin  any device, including one that does not exist (authorization comes before
 	//                   existence — CLAUDE.md invariant 6)
 	//   customer_admin  every device of their own customer, bound or not
 	//   customer_user   a device of their own customer AND bound to it
 	//
-	// An unassigned device (customer_id NULL) never matches a customer, because NULL = anything is not
-	// true. A user id that no longer exists, or that has been disabled, matches nothing.
+	// An unassigned device never matches a customer; a user that no longer exists, or that has been
+	// disabled, matches nothing.
 	UserMayAccessDevice(ctx context.Context, arg UserMayAccessDeviceParams) (bool, error)
 	// Pairing-time tenant check, run after the pairing secret has been verified. A platform admin may
 	// bind anything (as before); everyone else only a device of their own customer. A device that is

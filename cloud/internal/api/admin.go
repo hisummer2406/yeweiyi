@@ -544,51 +544,72 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		ctx := c.Request.Context()
-		target, err := deps.Queries.GetUserByID(ctx, id)
-		notFound := func() { c.JSON(http.StatusNotFound, gin.H{"error": "user not found"}) }
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				notFound()
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if actor.Role == control.RoleCustomerAdmin {
-			if !target.CustomerID.Valid || !actor.CustomerID.Valid || target.CustomerID.Int64 != actor.CustomerID.Int64 {
-				notFound()
-				return
-			}
-			if target.Role != control.RoleCustomerUser {
-				refuse(c, deps, actor, "user.update", "a customer admin may only manage customer users",
-					map[string]any{"userId": id})
-				return
-			}
-		}
-		if req.Disabled != nil && *req.Disabled && target.ID == actor.ID {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "you cannot disable yourself"})
-			return
-		}
-
+		// The password is hashed before anything is locked: bcrypt is slow on purpose, and the target
+		// row must not stay locked (nor the window between check and write stay open) while it runs.
 		var hash []byte
 		if req.Password != nil {
+			var err error
 			if hash, err = bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		}
+		disabling := req.Disabled != nil && *req.Disabled
 
-		// A platform admin has no customer of their own, so file the action under the target's.
-		snapshot := actor.CustomerID
-		if !snapshot.Valid {
-			snapshot = target.CustomerID
+		ctx := c.Request.Context()
+
+		// Fast path: refuse obviously unauthorized requests before taking any lock. This decision is
+		// NOT trusted for the write — it is made again below, on rows locked for the transaction.
+		pre, err := deps.Queries.GetUserByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if v := decideUserUpdate(actor, pre, disabling); v.status != 0 {
+			respondVerdict(c, deps, actor, id, v)
+			return
 		}
 
-		updated := target
+		var updated db.User
 		err = withTx(ctx, deps, func(q *db.Queries) error {
+			// Lock the acting administrator against being demoted, moved or disabled, and the target
+			// against being moved or disabled by someone else, then decide again. Without this a
+			// platform admin moving the target to another customer between the check above and the
+			// write below would let the old customer's administrator disable, or reset the password
+			// of, a user who is no longer theirs.
+			actorNow, err := q.GetUserForShare(ctx, actor.ID)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return verdictError{status: http.StatusForbidden, audit: false, msg: "not authorized"}
+				}
+				return err
+			}
+			if actorNow.DisabledAt.Valid || actorNow.Role == control.RoleCustomerUser {
+				return verdictError{status: http.StatusForbidden, audit: true, msg: "not authorized"}
+			}
+			target, err := q.GetUserForUpdate(ctx, id)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return verdictError{status: http.StatusNotFound, msg: "user not found"}
+				}
+				return err
+			}
+			if v := decideUserUpdate(actorNow, target, disabling); v.status != 0 {
+				return verdictError(v)
+			}
+
+			// A platform admin has no customer of their own, so file the action under the target's.
+			snapshot := actorNow.CustomerID
+			if !snapshot.Valid {
+				snapshot = target.CustomerID
+			}
+
+			updated = target
 			if req.Disabled != nil {
-				var err error
 				if updated, err = q.SetUserDisabled(ctx, db.SetUserDisabledParams{ID: id, Disabled: *req.Disabled}); err != nil {
 					return err
 				}
@@ -596,7 +617,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 				if *req.Disabled {
 					action = "user.disable"
 				}
-				if err := auditAdmin(ctx, q, actor, action, "", snapshot, "allowed",
+				if err := auditAdmin(ctx, q, actorNow, action, "", snapshot, "allowed",
 					map[string]any{"userId": id, "username": target.Username}); err != nil {
 					return err
 				}
@@ -606,7 +627,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 					return err
 				}
 				// The new password is never written down — only that it was reset.
-				if err := auditAdmin(ctx, q, actor, "user.reset-password", "", snapshot, "allowed",
+				if err := auditAdmin(ctx, q, actorNow, "user.reset-password", "", snapshot, "allowed",
 					map[string]any{"userId": id, "username": target.Username}); err != nil {
 					return err
 				}
@@ -614,11 +635,61 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 			return nil
 		})
 		if err != nil {
+			var v verdictError
+			if errors.As(err, &v) {
+				respondVerdict(c, deps, actor, id, userVerdict(v))
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, toUserResponse(updated))
 	}
+}
+
+// userVerdict is the outcome of deciding whether an administrator may change a user. status 0 means
+// allowed. audit marks refusals worth recording (a real 403, as opposed to a 404/400).
+type userVerdict struct {
+	status int
+	audit  bool
+	msg    string
+}
+
+// verdictError carries a userVerdict out of a transaction so the transaction rolls back.
+type verdictError userVerdict
+
+func (e verdictError) Error() string { return e.msg }
+
+// decideUserUpdate is the rule for an administrator changing a user. A customer admin may only touch
+// customer users of their own customer; a user of another customer is answered exactly like one that
+// does not exist, so the endpoint is not a user-id oracle. Nobody may disable themselves.
+func decideUserUpdate(actor, target db.User, disabling bool) userVerdict {
+	if actor.Role == control.RoleCustomerAdmin {
+		if !target.CustomerID.Valid || !actor.CustomerID.Valid || target.CustomerID.Int64 != actor.CustomerID.Int64 {
+			return userVerdict{status: http.StatusNotFound, msg: "user not found"}
+		}
+		if target.Role != control.RoleCustomerUser {
+			return userVerdict{status: http.StatusForbidden, audit: true, msg: "a customer admin may only manage customer users"}
+		}
+	}
+	if disabling && target.ID == actor.ID {
+		return userVerdict{status: http.StatusBadRequest, msg: "you cannot disable yourself"}
+	}
+	return userVerdict{}
+}
+
+// respondVerdict writes a refusal. A 403 is audited and answered with the generic body; other
+// statuses carry their own message.
+func respondVerdict(c *gin.Context, deps Deps, actor db.User, targetID int64, v userVerdict) {
+	if v.status == http.StatusForbidden {
+		if v.audit {
+			refuse(c, deps, actor, "user.update", v.msg, map[string]any{"userId": targetID})
+			return
+		}
+		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+		return
+	}
+	c.JSON(v.status, gin.H{"error": v.msg})
 }
 
 type customerIDRequest struct {
