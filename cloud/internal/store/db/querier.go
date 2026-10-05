@@ -11,40 +11,119 @@ import (
 )
 
 type Querier interface {
-	// Idempotent: scanning the same QR code twice (or the same device already bound) is a no-op, not
-	// an error — matches this project's general "safe to redeliver" preference for write paths.
-	BindUserDevice(ctx context.Context, arg BindUserDeviceParams) error
+	// Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
+	// FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
+	// can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that
+	// passed its check earlier then inserts a binding *behind* that cleanup. Here the bind queues behind
+	// the transfer's lock and is evaluated against the post-transfer state (Postgres re-reads the locked
+	// row after the wait), so it is refused — or, if it went first, the transfer's cleanup removes it.
+	//
+	// A platform admin may bind anything (as before); everyone else only a device of their own
+	// customer, and a disabled user nothing. Idempotent: binding an already-bound device is a success.
+	// `bound` is false when the bind was refused; the handler reports that exactly like a wrong pairing
+	// secret so the endpoint cannot be used to learn which devices exist or who owns them.
+	BindUserDeviceIfAllowed(ctx context.Context, arg BindUserDeviceIfAllowedParams) (bool, error)
 	// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
 	// from the SAME clock. Letting the column default to the database's now() while the application
 	// computes expires_at from its own clock means the two can disagree by however long the round trip
 	// takes — which violates the expires_at > issued_at constraint outright once the command TTL is
 	// shorter than that, and silently shortens every command's real validity window even when it does
 	// not. The envelope sent to the device carries the same issued_at, so device and cloud agree too.
+	//
+	// The access rule is re-checked *inside this statement* (WHERE user_may_access_device) and the
+	// customer snapshot is read here too, so the authorization and the record come from one database
+	// state. Checking earlier and inserting later leaves a window — a ThingsBoard lookup sits between
+	// them — in which a user or device transfer can commit, and the command would then be authorized
+	// against the new state yet filed under the old customer. Zero rows back means the user may no
+	// longer touch the device (or never could); the caller treats that as forbidden.
+	// The snapshot is the user's own customer, or for a platform admin (who has none) the device's.
+	//
+	// Deliberately NOT FOR SHARE, unlike the bind query: a transfer cleans up bindings, so a binding
+	// inserted around it has to be ordered against that cleanup — but a transfer never touches commands,
+	// so there is nothing to order against. Under READ COMMITTED this statement runs against one
+	// snapshot, i.e. the command logically happens before any transfer that commits after it started,
+	// and records the customer it was authorized under. What remains — the command being *sent* after
+	// the device changed hands — happens after this statement and no lock here could prevent it.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
+	CreateCustomer(ctx context.Context, name string) (Customer, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Run in the same transaction as a device changing customer: bindings made under the old customer
+	// must not survive into the new one.
+	DeleteBindingsForDevice(ctx context.Context, deviceName string) (int64, error)
+	// Run in the same transaction as a user changing customer.
+	DeleteBindingsForUser(ctx context.Context, userID int64) (int64, error)
+	// Refused by the foreign keys (ON DELETE RESTRICT) while any user, device, command or audit row still
+	// references the customer; the handler turns that into 409. `default` is protected as above.
+	DeleteCustomer(ctx context.Context, id int64) (int64, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
 	EnsureDevice(ctx context.Context, deviceName string) error
+	// Provisioning-time registration (pairing-secret minting). Creates the device under the given
+	// customer, or claims an existing *unassigned* one for it. A device that already belongs to a
+	// different customer is left alone and its current customer_id is returned, so the caller can see
+	// the mismatch and refuse: minting must never silently move a device between customers — that is
+	// a reassignment, which also has to clear the old customer's user_devices bindings.
+	EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceForCustomerParams) (pgtype.Int8, error)
 	// The cloud-side half of the validity window: anything past its expiry that never reached a
 	// terminal state is closed as 'expired'. The device enforces the same rule independently on
 	// arrival, so this is about the command *record*, not about preventing the action.
 	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
 	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	GetCustomer(ctx context.Context, id int64) (Customer, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
+	// Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
+	// both win.
+	GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error)
 	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
+	// Used where a decision must reflect the user's *current* role and customer rather than what their
+	// token said when it was issued.
+	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
+	GetUserForShare(ctx context.Context, id int64) (User, error)
+	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
+	// again, so a concurrent move or disable cannot slip in between the first check and the write.
+	GetUserForUpdate(ctx context.Context, id int64) (User, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
 	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
 	ListAllDeviceNames(ctx context.Context) ([]string, error)
-	// device_name is optional: passing NULL lists across all devices, which is a platform-admin view.
-	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
 	ListAuditLogForCommand(ctx context.Context, commandID pgtype.UUID) ([]AuditLog, error)
-	ListControlCommandsForDevice(ctx context.Context, arg ListControlCommandsForDeviceParams) ([]ControlCommand, error)
-	ListDevicesForUser(ctx context.Context, userID int64) ([]Device, error)
+	// INTERNAL and test use only: no authorization. Anything that answers a user's request must use
+	// ListAuditLogVisibleToUser.
+	ListAuditLogUnscoped(ctx context.Context, arg ListAuditLogUnscopedParams) ([]AuditLog, error)
+	// What a user may read of the audit log, with the whole policy decided in the statement that reads
+	// it (see ListControlCommandsVisibleToUser for why):
+	//   * a disabled or unknown user reads nothing;
+	//   * naming a device requires access to it (user_may_access_device);
+	//   * a customer user must name a device;
+	//   * a platform admin sees every customer's rows, optionally narrowed by customer_id;
+	//   * everyone else is pinned to their own customer's rows, even when a device is named, so a device
+	//     that changed hands never shows its previous owner's history to the new one.
+	ListAuditLogVisibleToUser(ctx context.Context, arg ListAuditLogVisibleToUserParams) ([]AuditLog, error)
+	// INTERNAL and test use only: no authorization and no customer scoping. Anything that answers a
+	// user's request must use ListControlCommandsVisibleToUser.
+	ListControlCommandsForDeviceUnscoped(ctx context.Context, arg ListControlCommandsForDeviceUnscopedParams) ([]ControlCommand, error)
+	// What a user may read of a device's command history, decided in the same statement that reads it:
+	// the access rule (user_may_access_device) and the customer scope both come from the database state
+	// this statement sees. Checking access in one statement and loading the user's customer in another
+	// lets a user move between them — and then get history snapshotted under the customer they just
+	// joined for a device they can no longer reach.
+	//
+	// A platform admin sees every command for the device. Anyone else sees only commands filed under
+	// their own customer, so a device that changed hands never shows its previous owner's commands
+	// (operator, reason, arguments, results) to the new one.
+	ListControlCommandsVisibleToUser(ctx context.Context, arg ListControlCommandsVisibleToUserParams) ([]ControlCommand, error)
+	ListCustomers(ctx context.Context) ([]Customer, error)
+	// Same three-way rule as UserMayAccessDevice, expressed as a list.
+	ListDevicesForUser(ctx context.Context, id int64) ([]Device, error)
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
+	// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
+	// everyone else to their own customer.
+	ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User, error)
 	// Applies the device's ACK: 'received' (accepted, not yet done) or 'rejected' (terminal).
 	// Only a command we have actually sent can be acked.
 	MarkControlCommandAcked(ctx context.Context, arg MarkControlCommandAckedParams) (ControlCommand, error)
@@ -75,13 +154,52 @@ type Querier interface {
 	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
+	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
+	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
+	RenameCustomer(ctx context.Context, arg RenameCustomerParams) (Customer, error)
+	// The access decision (via the same function) plus the pieces the caller needs to pick the customer
+	// a command or audit row is filed under, read in ONE statement so they come from one database
+	// state. The caller picks the snapshot: the user's own customer, or — for a platform admin, who has
+	// none — the device's customer right now (NULL when the device does not exist). No row at all means
+	// the user does not exist.
+	//
+	// This is for deciding early (and for auditing denials under the right customer). It is NOT what
+	// keeps a command honest: CreateControlCommand re-checks the rule inside the INSERT itself.
+	ResolveDeviceAccess(ctx context.Context, arg ResolveDeviceAccessParams) (ResolveDeviceAccessRow, error)
+	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
+	// Disabling keeps the original timestamp if already disabled; enabling clears it.
+	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
+	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
 	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
-	UpsertDevicePairingSecret(ctx context.Context, arg UpsertDevicePairingSecretParams) error
-	// Backs every device-scoped handler's authorization check (see internal/api's requireDeviceOwnership).
-	UserOwnsDevice(ctx context.Context, arg UserOwnsDeviceParams) (bool, error)
+	//
+	// The device must still belong to the given customer, checked in this same statement with its row
+	// locked FOR SHARE. The handler checks ownership first and hashes the new secret (slow, on purpose)
+	// before writing; a transfer that lands in between must not let the old customer's request rotate
+	// the secret of a device that is now somebody else's — that would hand back a QR code the old
+	// customer cannot use and silently invalidate the new owner's. Zero rows back means ownership
+	// changed (or never held), and the handler answers 409.
+	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
+	// Only answers "is there a user_devices row". It is NOT an authorization check: it ignores the
+	// customer boundary and the role tiers. Every device-scoped handler must call UserMayAccessDevice.
+	UserDeviceBindingExists(ctx context.Context, arg UserDeviceBindingExistsParams) (bool, error)
+	// The single source of truth for "may this user touch this device" — REST, WebSocket and control
+	// commands all go through it. The rule itself lives in the SQL function user_may_access_device
+	// (migration 000015) so there is exactly one definition. Decided from the database's *current* role,
+	// customer and disabled flag, never from JWT claims, so moving or disabling a user takes effect
+	// immediately instead of when their token expires (design D3).
+	//
+	//   platform_admin  any device, including one that does not exist (authorization comes before
+	//                   existence — CLAUDE.md invariant 6)
+	//   customer_admin  every device of their own customer, bound or not
+	//   customer_user   a device of their own customer AND bound to it
+	//
+	// An unassigned device never matches a customer; a user that no longer exists, or that has been
+	// disabled, matches nothing.
+	UserMayAccessDevice(ctx context.Context, arg UserMayAccessDeviceParams) (bool, error)
 	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error)
 }
 

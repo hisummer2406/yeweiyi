@@ -7,10 +7,64 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, $4) RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at
+`
+
+type CreateUserParams struct {
+	Username     string      `json:"username"`
+	PasswordHash string      `json:"password_hash"`
+	Role         string      `json:"role"`
+	CustomerID   pgtype.Int8 `json:"customer_id"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Username,
+		arg.PasswordHash,
+		arg.Role,
+		arg.CustomerID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1
+`
+
+// Used where a decision must reflect the user's *current* role and customer rather than what their
+// token said when it was issued.
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, role FROM users WHERE username = $1
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -22,6 +76,155 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
 	)
 	return i, err
+}
+
+const getUserForShare = `-- name: GetUserForShare :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1 FOR SHARE
+`
+
+// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
+func (q *Queries) GetUserForShare(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForShare, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const getUserForUpdate = `-- name: GetUserForUpdate :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
+// again, so a concurrent move or disable cannot slip in between the first check and the write.
+func (q *Queries) GetUserForUpdate(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, getUserForUpdate, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users
+WHERE ($1::BIGINT IS NULL OR customer_id = $1::BIGINT)
+ORDER BY id
+`
+
+// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
+// everyone else to their own customer.
+func (q *Queries) ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.PasswordHash,
+			&i.CreatedAt,
+			&i.Role,
+			&i.CustomerID,
+			&i.DisabledAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const moveUserToCustomer = `-- name: MoveUserToCustomer :one
+UPDATE users SET customer_id = $2 WHERE id = $1 AND role <> 'platform_admin' RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at
+`
+
+type MoveUserToCustomerParams struct {
+	ID         int64       `json:"id"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
+}
+
+// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
+func (q *Queries) MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error) {
+	row := q.db.QueryRow(ctx, moveUserToCustomer, arg.ID, arg.CustomerID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const setUserDisabled = `-- name: SetUserDisabled :one
+UPDATE users
+SET disabled_at = CASE WHEN $1::bool THEN COALESCE(disabled_at, now()) ELSE NULL END
+WHERE id = $2
+RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at
+`
+
+type SetUserDisabledParams struct {
+	Disabled bool  `json:"disabled"`
+	ID       int64 `json:"id"`
+}
+
+// Disabling keeps the original timestamp if already disabled; enabling clears it.
+func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserDisabled, arg.Disabled, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+	)
+	return i, err
+}
+
+const setUserPassword = `-- name: SetUserPassword :execrows
+UPDATE users SET password_hash = $2 WHERE id = $1
+`
+
+type SetUserPasswordParams struct {
+	ID           int64  `json:"id"`
+	PasswordHash string `json:"password_hash"`
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setUserPassword, arg.ID, arg.PasswordHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

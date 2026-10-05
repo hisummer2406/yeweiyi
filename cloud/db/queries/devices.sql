@@ -32,3 +32,22 @@ SELECT device_name FROM devices WHERE is_online;
 -- Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 -- already exist when a device comes back, or its first snapshot after reconnecting is missed.
 SELECT device_name FROM devices ORDER BY device_name;
+
+-- name: EnsureDeviceForCustomer :one
+-- Provisioning-time registration (pairing-secret minting). Creates the device under the given
+-- customer, or claims an existing *unassigned* one for it. A device that already belongs to a
+-- different customer is left alone and its current customer_id is returned, so the caller can see
+-- the mismatch and refuse: minting must never silently move a device between customers — that is
+-- a reassignment, which also has to clear the old customer's user_devices bindings.
+INSERT INTO devices (device_name, customer_id) VALUES ($1, $2)
+ON CONFLICT (device_name) DO UPDATE
+    SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)
+RETURNING customer_id;
+
+-- name: GetDeviceForUpdate :one
+-- Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
+-- both win.
+SELECT * FROM devices WHERE device_name = $1 FOR UPDATE;
+
+-- name: SetDeviceCustomer :exec
+UPDATE devices SET customer_id = $2, updated_at = now() WHERE device_name = $1;

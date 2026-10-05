@@ -104,12 +104,16 @@ func newStack(t *testing.T, cfg control.Config) *stack {
 
 	var userID int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1,'x',$2) RETURNING id`,
+		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x',$2::text,
+			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE (SELECT id FROM customers WHERE name = 'default') END) RETURNING id`,
 		username, control.RoleCustomerAdmin).Scan(&userID); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	if err := q.EnsureDevice(ctx, deviceName); err != nil {
 		t.Fatalf("seed device: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE devices SET customer_id = (SELECT id FROM customers WHERE name = 'default') WHERE device_name = $1`, deviceName); err != nil {
+		t.Fatalf("assign device to default customer: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO user_devices (user_id, device_name) VALUES ($1,$2)`, userID, deviceName); err != nil {
 		t.Fatalf("bind: %v", err)
@@ -311,19 +315,32 @@ func TestIngest_DoesNotPersistTelemetry(t *testing.T) {
 	}
 }
 
-// TestControl_CrossTenantAccessIsRejected covers #10's "跨租户访问和控制被后端拒绝".
+// TestControl_CrossTenantAccessIsRejected covers #10's "跨租户访问和控制被后端拒绝": an administrator
+// of a *different customer* — even a customer_admin, who may control every device of their own
+// customer — is refused, and the refusal is audited under the intruder's customer.
 func TestControl_CrossTenantAccessIsRejected(t *testing.T) {
 	s := newStack(t, control.Config{})
 	ctx := context.Background()
 
-	// A second user, bound to nothing, attempts to control the first user's device.
+	var customerID int64
+	if err := s.pool.QueryRow(ctx,
+		`INSERT INTO customers (name) VALUES ($1) RETURNING id`,
+		fmt.Sprintf("intruder-co-%d", time.Now().UnixNano())).Scan(&customerID); err != nil {
+		t.Fatalf("seed customer: %v", err)
+	}
+
 	var intruderID int64
 	username := fmt.Sprintf("intruder-%d", time.Now().UnixNano())
 	if err := s.pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1,'x',$2) RETURNING id`,
-		username, control.RoleCustomerAdmin).Scan(&intruderID); err != nil {
+		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x',$2,$3) RETURNING id`,
+		username, control.RoleCustomerAdmin, customerID).Scan(&intruderID); err != nil {
 		t.Fatalf("seed intruder: %v", err)
 	}
+	// LIFO: the audit rows and the user must go before the customer they reference.
+	t.Cleanup(func() {
+		c := context.Background()
+		s.pool.Exec(c, `DELETE FROM customers WHERE id = $1`, customerID)
+	})
 	t.Cleanup(func() {
 		c := context.Background()
 		s.pool.Exec(c, `DELETE FROM audit_log WHERE actor = $1`, username)
@@ -337,18 +354,19 @@ func TestControl_CrossTenantAccessIsRejected(t *testing.T) {
 		Actor:      control.Actor{UserID: intruderID, Username: username, Role: control.RoleCustomerAdmin},
 	})
 	if err == nil {
-		t.Fatal("a user bound to no device must not be able to control one")
+		t.Fatal("an administrator of another customer must not be able to control the device")
 	}
 
 	// The attempt must be on the record — a denied cross-tenant control attempt is precisely the
-	// kind of event an audit log exists for.
+	// kind of event an audit log exists for — and filed under the intruder's customer.
 	var audited int
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM audit_log WHERE actor = $1 AND outcome = 'denied'`, username).Scan(&audited); err != nil {
+		`SELECT count(*) FROM audit_log WHERE actor = $1 AND outcome = 'denied' AND customer_id = $2`,
+		username, customerID).Scan(&audited); err != nil {
 		t.Fatalf("count audit: %v", err)
 	}
 	if audited == 0 {
-		t.Error("the denied cross-tenant attempt was not audited")
+		t.Error("the denied cross-tenant attempt was not audited under the intruder's customer")
 	}
 }
 
@@ -374,8 +392,8 @@ func awaitStatus(t *testing.T, s *stack, commandID string, timeout time.Duration
 	deadline := time.Now().Add(timeout)
 	var last db.ControlCommand
 	for time.Now().Before(deadline) {
-		cmds, err := s.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
-			DeviceName: s.device, Limit: 20, Offset: 0,
+		cmds, err := s.q.ListControlCommandsForDeviceUnscoped(context.Background(), db.ListControlCommandsForDeviceUnscopedParams{
+			DeviceName: s.device, Lim: 20, Off: 0,
 		})
 		if err != nil {
 			t.Fatalf("list commands: %v", err)

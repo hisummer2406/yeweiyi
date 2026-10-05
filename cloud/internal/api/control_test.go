@@ -404,14 +404,20 @@ func TestListAudit_RecordsTheWholeCommandLifecycle(t *testing.T) {
 	}
 }
 
-// TestListAudit_NonAdminMustNameADevice: the audit log spans tenants, so a shared unfiltered
-// listing would leak other customers' activity.
-func TestListAudit_NonAdminMustNameADevice(t *testing.T) {
+// TestListAudit_ScopeByRole: the audit log spans customers, so only a platform admin gets an
+// unfiltered listing. A customer admin may list their own customer's trail without naming a device;
+// a customer user must name one they can access.
+func TestListAudit_ScopeByRole(t *testing.T) {
 	env, _ := newControlEnv(t, control.Config{})
-	env.setRole(control.RoleCustomerAdmin)
 
+	env.setRole(control.RoleCustomerUser)
 	if rec := env.authed("GET", "/api/audit", nil); rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 without a device filter, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("a customer user without a device filter: expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	env.setRole(control.RoleCustomerAdmin)
+	if rec := env.authed("GET", "/api/audit", nil); rec.Code != http.StatusOK {
+		t.Errorf("a customer admin may list their own customer's audit trail: got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	env.setRole(control.RolePlatformAdmin)

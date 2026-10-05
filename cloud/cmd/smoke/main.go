@@ -632,7 +632,8 @@ func mintPairingSecretFixture(ctx context.Context, dbURL, deviceName string) (st
 	}
 	defer pool.Close()
 
-	if _, err := pool.Exec(ctx, `INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT DO NOTHING`, deviceName); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO devices (device_name, customer_id) VALUES ($1, (SELECT id FROM customers WHERE name = 'default'))
+		 ON CONFLICT (device_name) DO UPDATE SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)`, deviceName); err != nil {
 		return "", err
 	}
 
@@ -686,7 +687,7 @@ func loginAsThrowawayUser(ctx context.Context, apiURL, dbURL string) (*apiClient
 
 	var userID int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3) RETURNING id`,
+		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, (SELECT id FROM customers WHERE name = 'default')) RETURNING id`,
 		username, string(hash), control.RoleCustomerUser,
 	).Scan(&userID); err != nil {
 		pool.Close()

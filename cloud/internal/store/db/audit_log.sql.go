@@ -11,62 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const listAuditLog = `-- name: ListAuditLog :many
-SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail FROM audit_log
-WHERE ($1::TEXT IS NULL OR device_name = $1::TEXT)
-  AND occurred_at >= $2
-  AND occurred_at <= $3
-ORDER BY occurred_at DESC
-LIMIT $5 OFFSET $4
-`
-
-type ListAuditLogParams struct {
-	DeviceName pgtype.Text        `json:"device_name"`
-	BeginTime  pgtype.Timestamptz `json:"begin_time"`
-	EndTime    pgtype.Timestamptz `json:"end_time"`
-	Off        int32              `json:"off"`
-	Lim        int32              `json:"lim"`
-}
-
-// device_name is optional: passing NULL lists across all devices, which is a platform-admin view.
-func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error) {
-	rows, err := q.db.Query(ctx, listAuditLog,
-		arg.DeviceName,
-		arg.BeginTime,
-		arg.EndTime,
-		arg.Off,
-		arg.Lim,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []AuditLog
-	for rows.Next() {
-		var i AuditLog
-		if err := rows.Scan(
-			&i.ID,
-			&i.OccurredAt,
-			&i.ActorID,
-			&i.Actor,
-			&i.Action,
-			&i.DeviceName,
-			&i.CommandID,
-			&i.Outcome,
-			&i.Detail,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAuditLogForCommand = `-- name: ListAuditLogForCommand :many
-SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail FROM audit_log
+SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail, customer_id FROM audit_log
 WHERE command_id = $1
 ORDER BY occurred_at ASC
 `
@@ -90,6 +36,141 @@ func (q *Queries) ListAuditLogForCommand(ctx context.Context, commandID pgtype.U
 			&i.CommandID,
 			&i.Outcome,
 			&i.Detail,
+			&i.CustomerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAuditLogUnscoped = `-- name: ListAuditLogUnscoped :many
+SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail, customer_id FROM audit_log
+WHERE ($1::TEXT IS NULL OR device_name = $1::TEXT)
+  AND ($2::BIGINT IS NULL OR customer_id = $2::BIGINT)
+  AND occurred_at >= $3
+  AND occurred_at <= $4
+ORDER BY occurred_at DESC
+LIMIT $6 OFFSET $5
+`
+
+type ListAuditLogUnscopedParams struct {
+	DeviceName pgtype.Text        `json:"device_name"`
+	CustomerID pgtype.Int8        `json:"customer_id"`
+	BeginTime  pgtype.Timestamptz `json:"begin_time"`
+	EndTime    pgtype.Timestamptz `json:"end_time"`
+	Off        int32              `json:"off"`
+	Lim        int32              `json:"lim"`
+}
+
+// INTERNAL and test use only: no authorization. Anything that answers a user's request must use
+// ListAuditLogVisibleToUser.
+func (q *Queries) ListAuditLogUnscoped(ctx context.Context, arg ListAuditLogUnscopedParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, listAuditLogUnscoped,
+		arg.DeviceName,
+		arg.CustomerID,
+		arg.BeginTime,
+		arg.EndTime,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.ActorID,
+			&i.Actor,
+			&i.Action,
+			&i.DeviceName,
+			&i.CommandID,
+			&i.Outcome,
+			&i.Detail,
+			&i.CustomerID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAuditLogVisibleToUser = `-- name: ListAuditLogVisibleToUser :many
+SELECT a.id, a.occurred_at, a.actor_id, a.actor, a.action, a.device_name, a.command_id, a.outcome, a.detail, a.customer_id
+FROM audit_log a
+JOIN users u ON u.id = $1 AND u.disabled_at IS NULL
+WHERE ($2::TEXT IS NULL OR a.device_name = $2::TEXT)
+  AND ($2::TEXT IS NULL OR user_may_access_device(u.id, $2::TEXT))
+  AND (u.role <> 'customer_user' OR $2::TEXT IS NOT NULL)
+  AND CASE
+          WHEN u.role = 'platform_admin'
+              THEN ($3::BIGINT IS NULL OR a.customer_id = $3::BIGINT)
+          ELSE a.customer_id = u.customer_id
+      END
+  AND a.occurred_at >= $4
+  AND a.occurred_at <= $5
+ORDER BY a.occurred_at DESC
+LIMIT $7 OFFSET $6
+`
+
+type ListAuditLogVisibleToUserParams struct {
+	UserID     int64              `json:"user_id"`
+	DeviceName pgtype.Text        `json:"device_name"`
+	CustomerID pgtype.Int8        `json:"customer_id"`
+	BeginTime  pgtype.Timestamptz `json:"begin_time"`
+	EndTime    pgtype.Timestamptz `json:"end_time"`
+	Off        int32              `json:"off"`
+	Lim        int32              `json:"lim"`
+}
+
+// What a user may read of the audit log, with the whole policy decided in the statement that reads
+// it (see ListControlCommandsVisibleToUser for why):
+//   - a disabled or unknown user reads nothing;
+//   - naming a device requires access to it (user_may_access_device);
+//   - a customer user must name a device;
+//   - a platform admin sees every customer's rows, optionally narrowed by customer_id;
+//   - everyone else is pinned to their own customer's rows, even when a device is named, so a device
+//     that changed hands never shows its previous owner's history to the new one.
+func (q *Queries) ListAuditLogVisibleToUser(ctx context.Context, arg ListAuditLogVisibleToUserParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, listAuditLogVisibleToUser,
+		arg.UserID,
+		arg.DeviceName,
+		arg.CustomerID,
+		arg.BeginTime,
+		arg.EndTime,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AuditLog
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.OccurredAt,
+			&i.ActorID,
+			&i.Actor,
+			&i.Action,
+			&i.DeviceName,
+			&i.CommandID,
+			&i.Outcome,
+			&i.Detail,
+			&i.CustomerID,
 		); err != nil {
 			return nil, err
 		}
@@ -103,9 +184,9 @@ func (q *Queries) ListAuditLogForCommand(ctx context.Context, commandID pgtype.U
 
 const writeAuditLog = `-- name: WriteAuditLog :one
 INSERT INTO audit_log (
-    actor_id, actor, action, device_name, command_id, outcome, detail
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail
+    actor_id, actor, action, device_name, command_id, outcome, detail, customer_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail, customer_id
 `
 
 type WriteAuditLogParams struct {
@@ -116,6 +197,7 @@ type WriteAuditLogParams struct {
 	CommandID  pgtype.UUID `json:"command_id"`
 	Outcome    string      `json:"outcome"`
 	Detail     []byte      `json:"detail"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
 }
 
 func (q *Queries) WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error) {
@@ -127,6 +209,7 @@ func (q *Queries) WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (A
 		arg.CommandID,
 		arg.Outcome,
 		arg.Detail,
+		arg.CustomerID,
 	)
 	var i AuditLog
 	err := row.Scan(
@@ -139,6 +222,7 @@ func (q *Queries) WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (A
 		&i.CommandID,
 		&i.Outcome,
 		&i.Detail,
+		&i.CustomerID,
 	)
 	return i, err
 }

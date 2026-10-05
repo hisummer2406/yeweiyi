@@ -50,7 +50,7 @@ func TestVerifyPairingToken_CostsTheSameWhetherOrNotASecretExists(t *testing.T) 
 	deviceWithSecret := fmt.Sprintf("api-pairing-timing-%d", time.Now().UnixNano())
 	deviceWithoutSecret := fmt.Sprintf("api-pairing-timing-none-%d", time.Now().UnixNano())
 
-	if _, err := pool.Exec(ctx, `INSERT INTO devices (device_name) VALUES ($1), ($2)`, deviceWithSecret, deviceWithoutSecret); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO devices (device_name, customer_id) VALUES ($1, (SELECT id FROM customers WHERE name = 'default')), ($2, (SELECT id FROM customers WHERE name = 'default'))`, deviceWithSecret, deviceWithoutSecret); err != nil {
 		t.Fatalf("seed devices: %v", err)
 	}
 	t.Cleanup(func() {
@@ -61,10 +61,9 @@ func TestVerifyPairingToken_CostsTheSameWhetherOrNotASecretExists(t *testing.T) 
 	if err != nil {
 		t.Fatalf("bcrypt: %v", err)
 	}
-	if err := deps.Queries.UpsertDevicePairingSecret(ctx, db.UpsertDevicePairingSecretParams{
-		DeviceName: deviceWithSecret,
-		SecretHash: string(realHash),
-	}); err != nil {
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO device_pairing_secrets (device_name, secret_hash) VALUES ($1, $2)`,
+		deviceWithSecret, string(realHash)); err != nil {
 		t.Fatalf("seed pairing secret: %v", err)
 	}
 	// deviceWithoutSecret deliberately gets no row in device_pairing_secrets at all.

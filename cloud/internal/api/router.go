@@ -49,7 +49,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	r.GET("/ws/alarms", wsAlarmsHandler(deps))
 
 	authorized := r.Group("/api")
-	authorized.Use(authMiddleware(deps.JWTSecret))
+	authorized.Use(authMiddleware(deps))
 	{
 		// /api/alarms (alarms.go) and /api/oil-in-out (stock.go) read from ThingsBoard, not from
 		// the business database. Two routes were removed rather than migrated:
@@ -73,6 +73,18 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.POST("/devices/:device/commands", issueCommandHandler(deps))
 		authorized.GET("/devices/:device/commands", listDeviceCommandsHandler(deps))
 		authorized.GET("/audit", listAuditHandler(deps))
+
+		// Tenant administration (admin.go). Who may do what is decided inside each handler from the
+		// caller's current database row, not from the token.
+		authorized.POST("/customers", createCustomerHandler(deps))
+		authorized.GET("/customers", listCustomersHandler(deps))
+		authorized.PUT("/customers/:id", renameCustomerHandler(deps))
+		authorized.DELETE("/customers/:id", deleteCustomerHandler(deps))
+		authorized.POST("/users", createUserHandler(deps))
+		authorized.GET("/users", listUsersHandler(deps))
+		authorized.PUT("/users/:id", updateUserHandler(deps))
+		authorized.PUT("/users/:id/customer", moveUserHandler(deps))
+		authorized.PUT("/devices/:device/customer", assignDeviceHandler(deps))
 	}
 
 	return r

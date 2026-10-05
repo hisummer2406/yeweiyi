@@ -111,13 +111,17 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 
 	var userID int64
 	err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'x', $2) RETURNING id`,
+		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, 'x', $2::text,
+			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE (SELECT id FROM customers WHERE name = 'default') END) RETURNING id`,
 		username, role).Scan(&userID)
 	if err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	if err := q.EnsureDevice(ctx, deviceName); err != nil {
 		t.Fatalf("seed device: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE devices SET customer_id = (SELECT id FROM customers WHERE name = 'default') WHERE device_name = $1`, deviceName); err != nil {
+		t.Fatalf("assign device to default customer: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO user_devices (user_id, device_name) VALUES ($1, $2)`, userID, deviceName); err != nil {
@@ -604,8 +608,8 @@ func TestExpireStale_ClosesCommandsPastTheirWindow(t *testing.T) {
 
 func getCommand(t *testing.T, f *fixture, commandID string) db.ControlCommand {
 	t.Helper()
-	cmds, err := f.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
-		DeviceName: f.device, Limit: 50, Offset: 0,
+	cmds, err := f.q.ListControlCommandsForDeviceUnscoped(context.Background(), db.ListControlCommandsForDeviceUnscopedParams{
+		DeviceName: f.device, Lim: 50, Off: 0,
 	})
 	if err != nil {
 		t.Fatalf("list commands: %v", err)
@@ -625,7 +629,7 @@ func uuidText(b [16]byte) string {
 
 func assertAudit(t *testing.T, f *fixture, action, outcome string) {
 	t.Helper()
-	rows, err := f.q.ListAuditLog(context.Background(), db.ListAuditLogParams{
+	rows, err := f.q.ListAuditLogUnscoped(context.Background(), db.ListAuditLogUnscopedParams{
 		DeviceName: pgtype.Text{}, // NULL: list across all devices
 		BeginTime:  pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 		EndTime:    pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},
@@ -748,7 +752,7 @@ func TestIssue_ResultBeforeAckReturnsTheStoredStateAndAuditsTruthfully(t *testin
 // the caller is to inspect the outcome that was actually written.
 func findAudit(t *testing.T, f *fixture, action, commandID string) db.AuditLog {
 	t.Helper()
-	rows, err := f.q.ListAuditLog(context.Background(), db.ListAuditLogParams{
+	rows, err := f.q.ListAuditLogUnscoped(context.Background(), db.ListAuditLogUnscopedParams{
 		DeviceName: pgtype.Text{String: f.device, Valid: true},
 		BeginTime:  pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 		EndTime:    pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},

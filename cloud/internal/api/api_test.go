@@ -88,7 +88,7 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 	router := api.NewRouter(deps)
 
 	username := "api-test-user-" + t.Name()
-	if _, err := pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO users (username, password_hash, customer_id) VALUES ($1, $2, `+defaultCustomerSQL+`) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	t.Cleanup(func() {
@@ -102,42 +102,94 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 	return env
 }
 
+// defaultCustomerSQL selects the customer the migration backfills everything into. Tests that do
+// not care about tenancy seed their users and devices there, so they behave as they did before
+// customers existed.
+const defaultCustomerSQL = `(SELECT id FROM customers WHERE name = 'default')`
+
 // setRole changes the seeded user's role and re-logs-in, because the role travels in the JWT and an
-// already-issued token keeps the role it was minted with.
+// already-issued token keeps the role it was minted with. A platform admin belongs to no customer
+// (users_customer_role_check), so promoting to it clears the customer and demoting restores default.
 func (e *testEnv) setRole(role string) {
 	e.t.Helper()
 	if _, err := e.pool.Exec(context.Background(),
-		`UPDATE users SET role = $1 WHERE username = $2`, role, e.username); err != nil {
+		`UPDATE users SET role = $1::text,
+		        customer_id = CASE WHEN $1::text = 'platform_admin' THEN NULL
+		                           ELSE COALESCE(customer_id, `+defaultCustomerSQL+`) END
+		 WHERE username = $2`, role, e.username); err != nil {
 		e.t.Fatalf("set role: %v", err)
 	}
 	e.token = e.login(e.username, "e2e-test-pass")
 }
 
-// otherUserToken creates and logs in an additional, independent user sharing env's router/database,
-// with the given role ("" for the schema default, customer_user) — for tests that need two distinct
-// users' relationship to the same device, or a user with a different privilege tier than env's own.
-// env.token/env.username remain the "first" user's. Safe to call more than once per test: each call
-// gets its own unique username.
+// otherUserToken creates and logs in an additional, independent user in the default customer, with
+// the given role ("" for customer_user) — for tests that need two distinct users' relationship to
+// the same device, or a user with a different privilege tier than env's own. env.token/env.username
+// remain the "first" user's. Safe to call more than once per test: each call gets its own username.
 func (e *testEnv) otherUserToken(role string) string {
 	e.t.Helper()
-	ctx := context.Background()
+	token, _ := e.userIn(role, e.defaultCustomerID())
+	return token
+}
+
+func (e *testEnv) defaultCustomerID() int64 {
+	e.t.Helper()
+	var id int64
+	if err := e.pool.QueryRow(context.Background(), `SELECT id FROM customers WHERE name = 'default'`).Scan(&id); err != nil {
+		e.t.Fatalf("look up default customer: %v", err)
+	}
+	return id
+}
+
+// newCustomer creates a customer for the duration of the test. Registered before any user or device
+// the test creates in it, so cleanup (LIFO) removes those first; the history rows that reference the
+// customer with ON DELETE RESTRICT are removed explicitly.
+func (e *testEnv) newCustomer(label string) int64 {
+	e.t.Helper()
+	var id int64
+	name := fmt.Sprintf("api-test-%s-%s-%d", label, e.t.Name(), time.Now().UnixNano())
+	if err := e.pool.QueryRow(context.Background(),
+		`INSERT INTO customers (name) VALUES ($1) RETURNING id`, name).Scan(&id); err != nil {
+		e.t.Fatalf("seed customer: %v", err)
+	}
+	e.t.Cleanup(func() {
+		ctx := context.Background()
+		e.pool.Exec(ctx, `DELETE FROM audit_log WHERE customer_id = $1`, id)
+		e.pool.Exec(ctx, `DELETE FROM control_commands WHERE customer_id = $1`, id)
+		if _, err := e.pool.Exec(ctx, `DELETE FROM customers WHERE id = $1`, id); err != nil {
+			e.t.Errorf("cleanup customer %d: %v", id, err)
+		}
+	})
+	return id
+}
+
+// userIn creates a user of the given role in the given customer (ignored for platform_admin, which
+// belongs to none) and returns a logged-in token and the user's id.
+func (e *testEnv) userIn(role string, customerID int64) (string, int64) {
+	e.t.Helper()
+	if role == "" {
+		role = control.RoleCustomerUser
+	}
 	username := fmt.Sprintf("api-test-other-%s-%d", e.t.Name(), time.Now().UnixNano())
 
-	var err error
-	if role == "" {
-		_, err = e.pool.Exec(ctx, `INSERT INTO users (username, password_hash) VALUES ($1, $2)`, username, testUserPasswordHash)
-	} else {
-		_, err = e.pool.Exec(ctx, `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`, username, testUserPasswordHash, role)
+	var customer any = customerID
+	if role == control.RolePlatformAdmin {
+		customer = nil
 	}
-	if err != nil {
+	var id int64
+	if err := e.pool.QueryRow(context.Background(),
+		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, $4) RETURNING id`,
+		username, testUserPasswordHash, role, customer).Scan(&id); err != nil {
 		e.t.Fatalf("seed other user: %v", err)
 	}
 	e.t.Cleanup(func() {
-		if _, err := e.pool.Exec(context.Background(), `DELETE FROM users WHERE username = $1`, username); err != nil {
+		// Audit rows survive their actor (actor_id is SET NULL), so remove what this user caused.
+		e.pool.Exec(context.Background(), `DELETE FROM audit_log WHERE actor = $1`, username)
+		if _, err := e.pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, id); err != nil {
 			e.t.Errorf("cleanup other user: %v", err)
 		}
 	})
-	return e.login(username, "e2e-test-pass")
+	return e.login(username, "e2e-test-pass"), id
 }
 
 // secondUserToken is otherUserToken with the schema's default role (customer_user).
@@ -154,7 +206,9 @@ func (e *testEnv) mintPairingSecret(deviceName string) string {
 	e.t.Helper()
 	admin := e.otherUserToken(control.RolePlatformAdmin)
 
-	rec := e.do("POST", "/api/devices/"+deviceName+"/pairing-secret", []byte(admin), nil)
+	// Minted for the default customer, like every device these tests seed.
+	body, _ := json.Marshal(map[string]int64{"customerId": e.defaultCustomerID()})
+	rec := e.do("POST", "/api/devices/"+deviceName+"/pairing-secret", []byte(admin), body)
 	if rec.Code != http.StatusOK {
 		e.t.Fatalf("mint pairing secret for %s: expected 200, got %d: %s", deviceName, rec.Code, rec.Body.String())
 	}
@@ -212,7 +266,18 @@ func (e *testEnv) authed(method, path string, body []byte) *httptest.ResponseRec
 
 func (e *testEnv) seedDevice(deviceName string) {
 	e.t.Helper()
-	if _, err := e.pool.Exec(context.Background(), `INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT DO NOTHING`, deviceName); err != nil {
+	e.seedDeviceIn(deviceName, e.defaultCustomerID())
+}
+
+// seedDeviceIn seeds a device owned by customerID; 0 leaves it unassigned (customer_id NULL).
+func (e *testEnv) seedDeviceIn(deviceName string, customerID int64) {
+	e.t.Helper()
+	var customer any = customerID
+	if customerID == 0 {
+		customer = nil
+	}
+	if _, err := e.pool.Exec(context.Background(),
+		`INSERT INTO devices (device_name, customer_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, deviceName, customer); err != nil {
 		e.t.Fatalf("seed device %s: %v", deviceName, err)
 	}
 	e.t.Cleanup(func() {

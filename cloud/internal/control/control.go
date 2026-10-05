@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"yeweiyi-cloud/internal/protocol"
@@ -55,11 +56,15 @@ var (
 	ErrPlatformUnavailable = errors.New("control: device platform unavailable")
 )
 
-// Actor is the authenticated user issuing a command.
+// Actor is who an action — and therefore its audit row — is attributed to.
 type Actor struct {
 	UserID   int64
 	Username string
 	Role     string
+	// CustomerID is the customer snapshot stored on the command and its audit rows. Issue fills it in
+	// for a user (the user's own customer, or for a platform admin the device's current customer);
+	// the device and system actors below carry their command's customer instead.
+	CustomerID pgtype.Int8
 }
 
 // Sender is the slice of tbclient.Client this package needs. Narrowing it to an interface keeps the
@@ -134,6 +139,26 @@ type IssueRequest struct {
 // not a Go error — the call worked, and the resulting row has status "rejected" with the device's
 // reason — because a refusal is information the operator must see, not a transport failure.
 func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlCommand, error) {
+	// Decided first, and in one statement: the answer to "may this user touch this device" and the
+	// customer everything below is filed under must come from the same database state, so a transfer
+	// that lands mid-command cannot authorize against one customer and record under another. Doing
+	// it up front also means even the earliest denial below is audited under a customer.
+	allowed, customerID, err := s.resolveAccess(ctx, req.Actor.UserID, req.DeviceName)
+	if err != nil {
+		return db.ControlCommand{}, err
+	}
+	req.Actor.CustomerID = customerID
+
+	// A caller who may not touch this device is refused here, before anything else is said about the
+	// request — not "unknown method", not "reason required", not the interlock. Whatever else is
+	// wrong with the request is information for someone allowed to send it.
+	if !allowed {
+		err := fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": err.Error()})
+		return db.ControlCommand{}, err
+	}
+
 	spec, known := protocol.Methods[req.Method]
 	if !known {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
@@ -159,7 +184,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	// get the same answer whether the device is someone else's real device or does not exist at
 	// all, or the error codes become a device-name oracle. This mirrors the ordering already
 	// established in internal/api/devices.go.
-	if err := s.authorize(ctx, req.Actor, req.DeviceName, spec); err != nil {
+	if err := s.authorize(req.Actor, spec); err != nil {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
 		return db.ControlCommand{}, err
@@ -195,7 +220,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		DeviceName: req.DeviceName,
 		Method:     req.Method,
 		Args:       args,
-		OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: req.Actor.UserID != 0},
+		OperatorID: req.Actor.UserID,
 		Operator:   req.Actor.Username,
 		Reason:     req.Reason,
 		// Both timestamps come from this one clock reading — see CreateControlCommand's comment.
@@ -203,8 +228,19 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The insert re-checks the access rule in the same statement and found the user no
+			// longer allowed — they were moved, demoted or disabled, or the device changed hands,
+			// between the early decision and now. Nothing was recorded or sent.
+			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+				map[string]any{"method": req.Method, "error": "access changed while the command was being issued"})
+			return db.ControlCommand{}, fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
+		}
 		return db.ControlCommand{}, fmt.Errorf("record command: %w", err)
 	}
+	// From here on everything — this audit row, the ACK, the send audit — is filed under the customer
+	// the command row itself carries, which was decided in the same statement that authorized it.
+	req.Actor.CustomerID = cmd.CustomerID
 
 	s.audit(ctx, req.Actor, "control.issue", req.DeviceName, commandID, "allowed",
 		map[string]any{"method": req.Method, "reason": req.Reason, "args": json.RawMessage(args)})
@@ -384,7 +420,7 @@ func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protoc
 		outcome = "failed"
 	}
 	// The actor on a result is the device, not a user — this row is the device reporting back.
-	s.audit(ctx, Actor{Username: "device:" + deviceName}, "control.result", deviceName, commandID, outcome,
+	s.audit(ctx, Actor{Username: "device:" + deviceName, CustomerID: updated.CustomerID}, "control.result", deviceName, commandID, outcome,
 		map[string]any{"status": status, "errorCode": res.ErrorCode, "reason": res.Reason})
 
 	return updated, true, nil
@@ -398,7 +434,7 @@ func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, cmd := range expired {
-		s.audit(ctx, Actor{Username: "system"}, "control.expire", cmd.DeviceName, cmd.CommandID, "failed",
+		s.audit(ctx, Actor{Username: "system", CustomerID: cmd.CustomerID}, "control.expire", cmd.DeviceName, cmd.CommandID, "failed",
 			map[string]any{"method": cmd.Method, "previousStatus": cmd.Status})
 	}
 	return len(expired), nil
@@ -432,31 +468,18 @@ func (s *Service) RunExpirySweep(ctx context.Context, every time.Duration, logf 
 	}
 }
 
-// authorize applies both the device-scope check and the role/method check.
-func (s *Service) authorize(ctx context.Context, actor Actor, deviceName string, spec protocol.MethodSpec) error {
-	// The interlock gate is checked first and applies to every role, platform admins included.
-	// It is a statement about the *hardware* being unverified, not about who is trusted.
+// authorize applies the interlock gate and the role/method check. The device-scope decision has
+// already been made — and acted on — at the top of Issue, before any of this runs.
+func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
+	// The interlock gate applies to every role, platform admins included. It is a statement about
+	// the *hardware* being unverified, not about who is trusted.
 	if spec.Physical && !s.cfg.AllowPhysicalCommands {
 		return fmt.Errorf("%w: %s", ErrPhysicalCommandsDisabled, spec.Method)
 	}
 
+	// The role gates *which methods*; the device decision gates *which devices*.
 	if !roleAllows(actor.Role, spec.Permission) {
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
-	}
-
-	// A platform admin is scoped to every device by definition; everyone else must be bound to it.
-	if actor.Role == RolePlatformAdmin {
-		return nil
-	}
-	owns, err := s.q.UserOwnsDevice(ctx, db.UserOwnsDeviceParams{
-		UserID:     actor.UserID,
-		DeviceName: deviceName,
-	})
-	if err != nil {
-		return fmt.Errorf("check device authorization: %w", err)
-	}
-	if !owns {
-		return fmt.Errorf("%w: device %q", ErrForbidden, deviceName)
 	}
 	return nil
 }
@@ -470,6 +493,26 @@ func roleAllows(role string, need protocol.PermissionLevel) bool {
 	default:
 		return false
 	}
+}
+
+// resolveAccess answers, from one database state, whether the user may touch the device and which
+// customer the command and its audit rows are filed under: the user's own, or — for a platform
+// admin, who belongs to none — the device's customer at this moment, so a customer reviewing their
+// audit trail sees what platform staff did to their devices. A device that does not exist yields
+// NULL. A user that no longer exists is simply not allowed.
+func (s *Service) resolveAccess(ctx context.Context, userID int64, deviceName string) (bool, pgtype.Int8, error) {
+	row, err := s.q.ResolveDeviceAccess(ctx, db.ResolveDeviceAccessParams{UserID: userID, DeviceName: deviceName})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, pgtype.Int8{}, nil
+		}
+		return false, pgtype.Int8{}, fmt.Errorf("resolve device access: %w", err)
+	}
+	customer := row.UserCustomerID
+	if !customer.Valid {
+		customer = row.DeviceCustomerID
+	}
+	return row.Allowed, customer, nil
 }
 
 // audit writes one audit row. Audit failures are deliberately swallowed rather than propagated: an
@@ -490,6 +533,7 @@ func (s *Service) audit(ctx context.Context, actor Actor, action, deviceName str
 		CommandID:  commandID,
 		Outcome:    outcome,
 		Detail:     encoded,
+		CustomerID: actor.CustomerID,
 	})
 }
 
