@@ -60,6 +60,22 @@
 - **WHEN** 客户 A 的 `customer_admin` 向客户 B 的设备下发命令
 - **THEN** 返回 403、不创建命令行，并写入一条 `denied` 审计
 
+### Requirement: 命令历史按客户隔离
+`GET /api/devices/:device/commands` SHALL 只返回归属调用者所属客户的命令；`platform_admin` 可见该设备的全部命令。设备转移后，新客户 MUST NOT 读到旧客户的命令（含操作者、原因、参数与结果）。
+
+#### Scenario: 设备转移后新主人看不到旧历史
+- **GIVEN** 客户 A 的管理员对设备 D 下发过命令，之后 D 被转给客户 B
+- **WHEN** B 的管理员列出 D 的命令
+- **THEN** 结果不含 A 的命令；B 自己随后下发的命令可见；平台管理员两者都能看到
+
+### Requirement: 铸造配对密钥读数据库角色
+`POST /api/devices/:device/pairing-secret` SHALL 按调用者在数据库中的当前角色与停用状态授权，而不是 JWT 里的角色。已停用或已降级的平台管理员持旧 token MUST 被拒绝，且 MUST NOT 创建或认领设备。
+
+#### Scenario: 停用或降级后铸造
+- **GIVEN** 平台管理员持有未过期的 token
+- **WHEN** 该账号被停用，或被降为 `customer_user`，再调用铸造
+- **THEN** 返回 403，设备归属不变
+
 ### Requirement: 审计查询范围
 `GET /api/audit` SHALL 按角色限定范围：`platform_admin` 可查全部（可按客户过滤）；`customer_admin` 可不指定设备查看本客户审计；`customer_user` MUST 指定其可访问的设备。
 

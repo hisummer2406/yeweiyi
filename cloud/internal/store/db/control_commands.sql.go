@@ -158,18 +158,29 @@ func (q *Queries) GetControlCommand(ctx context.Context, commandID pgtype.UUID) 
 const listControlCommandsForDevice = `-- name: ListControlCommandsForDevice :many
 SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id FROM control_commands
 WHERE device_name = $1
+  AND ($2::BIGINT IS NULL OR customer_id = $2::BIGINT)
 ORDER BY issued_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $4 OFFSET $3
 `
 
 type ListControlCommandsForDeviceParams struct {
-	DeviceName string `json:"device_name"`
-	Limit      int32  `json:"limit"`
-	Offset     int32  `json:"offset"`
+	DeviceName string      `json:"device_name"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
+	Off        int32       `json:"off"`
+	Lim        int32       `json:"lim"`
 }
 
+// customer_id NULL means no customer filter, which only a platform admin gets. Everyone else is
+// pinned to their own customer's snapshot: a command stays with the customer it was issued under,
+// so a device that changed hands never shows its previous owner's commands (operator, reason, args,
+// results) to the new one.
 func (q *Queries) ListControlCommandsForDevice(ctx context.Context, arg ListControlCommandsForDeviceParams) ([]ControlCommand, error) {
-	rows, err := q.db.Query(ctx, listControlCommandsForDevice, arg.DeviceName, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listControlCommandsForDevice,
+		arg.DeviceName,
+		arg.CustomerID,
+		arg.Off,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -66,6 +66,10 @@ type Querier interface {
 	// owner's history to the new one.
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
 	ListAuditLogForCommand(ctx context.Context, commandID pgtype.UUID) ([]AuditLog, error)
+	// customer_id NULL means no customer filter, which only a platform admin gets. Everyone else is
+	// pinned to their own customer's snapshot: a command stays with the customer it was issued under,
+	// so a device that changed hands never shows its previous owner's commands (operator, reason, args,
+	// results) to the new one.
 	ListControlCommandsForDevice(ctx context.Context, arg ListControlCommandsForDeviceParams) ([]ControlCommand, error)
 	ListCustomers(ctx context.Context) ([]Customer, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list.

@@ -393,7 +393,7 @@ func awaitStatus(t *testing.T, s *stack, commandID string, timeout time.Duration
 	var last db.ControlCommand
 	for time.Now().Before(deadline) {
 		cmds, err := s.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
-			DeviceName: s.device, Limit: 20, Offset: 0,
+			DeviceName: s.device, Lim: 20, Off: 0,
 		})
 		if err != nil {
 			t.Fatalf("list commands: %v", err)

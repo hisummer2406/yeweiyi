@@ -262,8 +262,14 @@ type mintPairingSecretRequest struct {
 
 func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, _ := c.Get("role")
-		if role != control.RolePlatformAdmin {
+		// The caller's role comes from the database, not the token: a platform admin who has since
+		// been disabled or demoted must not keep minting (and claiming devices for customers) on a
+		// token that is still unexpired.
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "only a platform administrator may mint a device pairing secret"})
 			return
 		}

@@ -550,13 +550,28 @@ func TestAdmin_AssignDevice(t *testing.T) {
 	}
 }
 
+func (tn *tenancy) commandCount(t *testing.T, token, device string) int {
+	t.Helper()
+	rec := tn.get(token, "/api/devices/"+device+"/commands")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list commands for %s: %d %s", device, rec.Code, rec.Body.String())
+	}
+	return len(decodeAs[struct {
+		Commands []json.RawMessage `json:"commands"`
+	}](t, rec).Commands)
+}
+
 // TestAdmin_HistoryStaysAfterReassignment ties the two phases together: a command issued while the
-// device belonged to A is still A's history after the device is moved to B.
+// device belonged to A is still A's history after the device is moved to B — in the audit trail and
+// in the command listing, which carries the operator, the reason and the arguments.
 func TestAdmin_HistoryStaysAfterReassignment(t *testing.T) {
 	tn := newTenancy(t)
 
 	if rec := tn.issue(t, tn.adminA, tn.devA1); rec.Code != http.StatusAccepted {
 		t.Fatalf("issue: %d %s", rec.Code, rec.Body.String())
+	}
+	if n := tn.commandCount(t, tn.adminA, tn.devA1); n != 1 {
+		t.Fatalf("precondition: customer A's admin should see its own command, got %d", n)
 	}
 	if rec := tn.send(t, "PUT", "/api/devices/"+tn.devA1+"/customer", tn.platform, map[string]int64{"customerId": tn.custB}); rec.Code != http.StatusOK {
 		t.Fatalf("move: %d", rec.Code)
@@ -567,9 +582,29 @@ func TestAdmin_HistoryStaysAfterReassignment(t *testing.T) {
 			t.Errorf("command customer = %d after the move, want it to stay %d", c, tn.custA)
 		}
 	}
+
+	// The new owner must not read the previous owner's commands.
+	if n := tn.commandCount(t, tn.adminB, tn.devA1); n != 0 {
+		t.Errorf("customer B sees %d of customer A's commands for the device it just received", n)
+	}
+	// Platform staff still see everything.
+	if n := tn.commandCount(t, tn.platform, tn.devA1); n != 1 {
+		t.Errorf("platform admin sees %d commands, want 1", n)
+	}
+	// And the new owner's own commands show up for it, alongside nothing of the old owner's.
+	if rec := tn.issue(t, tn.adminB, tn.devA1); rec.Code != http.StatusAccepted {
+		t.Fatalf("customer B issuing on its new device: %d %s", rec.Code, rec.Body.String())
+	}
+	if n := tn.commandCount(t, tn.adminB, tn.devA1); n != 1 {
+		t.Errorf("customer B sees %d commands, want only its own 1", n)
+	}
+	if n := tn.commandCount(t, tn.platform, tn.devA1); n != 2 {
+		t.Errorf("platform admin sees %d commands, want 2", n)
+	}
+
 	// A's admin no longer reaches the device, but B's audit view of it excludes A's history.
 	for _, e := range auditEntries(t, tn.get(tn.adminB, "/api/audit?device="+tn.devA1)) {
-		if e.Action == "control.issue" {
+		if e.Action == "control.issue" && e.Actor != "" && strings.Contains(e.Actor, "adminA") {
 			t.Errorf("customer B sees customer A's control history for the device it just received: %+v", e)
 		}
 	}

@@ -695,3 +695,41 @@ func TestTenancy_SchemaInvariants(t *testing.T) {
 		t.Error("a customer that still owns devices and users must not be deletable")
 	}
 }
+
+// TestTenancy_MintUsesTheCurrentDatabaseRole: minting a pairing secret can claim a device for any
+// customer, so it must follow the user's row in the database, not the role baked into a token that is
+// still unexpired. A platform admin who was disabled or demoted afterwards gets refused.
+func TestTenancy_MintUsesTheCurrentDatabaseRole(t *testing.T) {
+	tn := newTenancy(t)
+	body := fmt.Sprintf(`{"customerId":%d}`, tn.custA)
+
+	disabledToken, disabledID := tn.env.userIn(control.RolePlatformAdmin, 0)
+	demotedToken, demotedID := tn.env.userIn(control.RolePlatformAdmin, 0)
+	for name, token := range map[string]string{"disabled": disabledToken, "demoted": demotedToken} {
+		if rec := tn.mint(token, tn.devA1, body); rec.Code != http.StatusOK {
+			t.Fatalf("precondition: an active platform admin may mint (%s): %d %s", name, rec.Code, rec.Body.String())
+		}
+	}
+
+	ctx := context.Background()
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET role = 'customer_user', customer_id = $2 WHERE id = $1`, demotedID, tn.custA); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, token := range map[string]string{"disabled": disabledToken, "demoted": demotedToken} {
+		if rec := tn.mint(token, tn.devA1, body); rec.Code != http.StatusForbidden {
+			t.Errorf("a %s platform admin with an old token minted a secret: got %d, want 403", name, rec.Code)
+		}
+		if rec := tn.mint(token, tn.devUnassigned, body); rec.Code != http.StatusForbidden {
+			t.Errorf("a %s platform admin with an old token claimed a device: got %d, want 403", name, rec.Code)
+		}
+	}
+	var owner *int64
+	tn.env.pool.QueryRow(ctx, `SELECT customer_id FROM devices WHERE device_name = $1`, tn.devUnassigned).Scan(&owner)
+	if owner != nil {
+		t.Errorf("the refused mint still assigned the unassigned device to customer %d", *owner)
+	}
+}

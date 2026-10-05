@@ -609,7 +609,7 @@ func TestExpireStale_ClosesCommandsPastTheirWindow(t *testing.T) {
 func getCommand(t *testing.T, f *fixture, commandID string) db.ControlCommand {
 	t.Helper()
 	cmds, err := f.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
-		DeviceName: f.device, Limit: 50, Offset: 0,
+		DeviceName: f.device, Lim: 50, Off: 0,
 	})
 	if err != nil {
 		t.Fatalf("list commands: %v", err)

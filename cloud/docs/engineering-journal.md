@@ -2219,6 +2219,19 @@ something unproven. Same failure mode as the first round, in two new places.
 Redis 上 165 通过、0 失败、0 跳过。旧测试 `api-bind-*`、`api-pairing-timing-*`、`ctl-api-async` 仍会在库里留下
 设备/审计行（不是本变更引入，未处理）。
 
+### 2026-10-05 — Codex 评审 PR #18：两个 P1，都是"设计里写了、实现里漏了"
+
+1. **命令列表漏了客户过滤。** design D4 写的是"设备易主后新主人看不到旧主人的历史"，我只在审计查询上做到了，
+   `GET /api/devices/:device/commands` 仍只按 `device_name` 过滤，设备转移后新客户的管理员能读到旧客户命令的
+   操作者、原因、参数和结果。修法同审计：非平台管理员按所属客户快照过滤。教训：写完一条"历史归属"规则后，
+   应该 grep **所有**读取该表的地方，而不是只改最先想到的那个。
+2. **铸造配对密钥仍读 JWT 角色。** 阶段 1 把设备访问判定改成读库，但 `mintPairingSecretHandler` 当时没有
+   经过那条路径，已停用或已降级的平台管理员持未过期 token 仍能铸造并认领设备。改为 `requireAdminActor`。
+   仍读 token 角色的只剩 `control.Issue` 的方法级权限（`roleAllows`）：设备范围已读库，所以被停用的人进不来，
+   仅"被降级的管理员在其仍有权访问的设备上继续下发 `admin` 级方法直到 token 过期"这一窄缝存在，沿用 24h 的既有取舍。
+
+两条都先写回归测试，再临时去掉修复确认测试会变红，最后恢复。
+
 ## Architecture (as of 2026-08-29 — **SUPERSEDED IN FULL**)
 
 > **Do not read this section as fact.** It describes the legacy Alink stack in the present tense,

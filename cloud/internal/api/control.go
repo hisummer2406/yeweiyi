@@ -152,10 +152,25 @@ func listDeviceCommandsHandler(deps Deps) gin.HandlerFunc {
 
 		limit, offset := pageParams(c, 50)
 
-		rows, err := deps.Queries.ListControlCommandsForDevice(c.Request.Context(), db.ListControlCommandsForDeviceParams{
+		// Ownership above already proved the caller exists and is active, so this only decides the
+		// scope: a platform admin sees every command for the device, anyone else only the ones filed
+		// under their own customer.
+		ctx := c.Request.Context()
+		user, err := deps.Queries.GetUserByID(ctx, c.MustGet("userID").(int64))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		var customerFilter pgtype.Int8
+		if user.Role != control.RolePlatformAdmin {
+			customerFilter = user.CustomerID
+		}
+
+		rows, err := deps.Queries.ListControlCommandsForDevice(ctx, db.ListControlCommandsForDeviceParams{
 			DeviceName: device,
-			Limit:      limit,
-			Offset:     offset,
+			CustomerID: customerFilter,
+			Lim:        limit,
+			Off:        offset,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

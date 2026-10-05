@@ -85,7 +85,12 @@ WHERE expires_at < now()
 RETURNING *;
 
 -- name: ListControlCommandsForDevice :many
+-- customer_id NULL means no customer filter, which only a platform admin gets. Everyone else is
+-- pinned to their own customer's snapshot: a command stays with the customer it was issued under,
+-- so a device that changed hands never shows its previous owner's commands (operator, reason, args,
+-- results) to the new one.
 SELECT * FROM control_commands
-WHERE device_name = $1
+WHERE device_name = sqlc.arg('device_name')
+  AND (sqlc.narg('customer_id')::BIGINT IS NULL OR customer_id = sqlc.narg('customer_id')::BIGINT)
 ORDER BY issued_at DESC
-LIMIT $2 OFFSET $3;
+LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
