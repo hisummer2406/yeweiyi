@@ -58,3 +58,22 @@ func TestFoldByEventID(t *testing.T) {
 		}
 	})
 }
+
+func TestDropEarlierOrigins(t *testing.T) {
+	row := func(id string, env int64) stockRow {
+		return stockRow{ev: protocol.StockEvent{EventID: id}, envTS: env}
+	}
+	rows := []stockRow{row("a", 300), row("b", 200), row("c", 100), row("", 50)}
+	back := []stockRow{row("a", 10), row("a", 20)}
+
+	kept, dropped := dropEarlierOrigins(rows, back)
+	if dropped != 1 {
+		t.Errorf("dropped = %d, want 1 movement (two earlier copies of one id count once)", dropped)
+	}
+	if len(kept) != 3 || kept[0].ev.EventID != "b" || kept[2].ev.EventID != "" {
+		t.Errorf("kept = %+v, want b, c and the id-less row", kept)
+	}
+	if kept, dropped = dropEarlierOrigins(rows, nil); len(kept) != 4 || dropped != 0 {
+		t.Errorf("no earlier copies must keep everything: %d kept, %d dropped", len(kept), dropped)
+	}
+}

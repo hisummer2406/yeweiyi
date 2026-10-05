@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -137,6 +138,10 @@ type stockListResponse struct {
 	// Folded counts superseded re-reports of an eventId already in the list (see foldByEventID).
 	// Not a fault; reported so a row count that differs from the raw telemetry count is explicable.
 	Folded int `json:"folded"`
+	// EarlierOrigin counts movements omitted because their first report predates this window: only a
+	// later correction landed here, and the movement is listed (corrected) in the earlier window.
+	// Not a fault; it keeps one movement from appearing in two windows.
+	EarlierOrigin int `json:"earlierOrigin"`
 
 	// Only on the 502 path.
 	Error  string `json:"error,omitempty"`
@@ -225,6 +230,87 @@ func foldByEventID(rows []stockRow, asc bool) (out []stockRow, folded int) {
 		return out[a].envTS > out[b].envTS
 	})
 	return out, folded
+}
+
+// stockRevisionGrace is how far on either side of the requested window revisions of a movement are
+// looked for. It equals the raw telemetry retention (deploy/README.md "遥测保留"): beyond that the
+// platform has deleted the points anyway, so a longer search could not find anything.
+const stockRevisionGrace = 7 * 24 * time.Hour
+
+// stockRevisionLimit bounds each of the two extra reads. Stock events are a handful a day per device,
+// so 5000 over a week is not a practical ceiling; it exists so a misbehaving device cannot make the
+// lookup unbounded.
+const stockRevisionLimit = 5000
+
+// stockRevisionsAcrossWindow finds the other reports of the movements in rows that fall just outside
+// the requested window: later ones (ahead) and earlier ones (back).
+//
+// ThingsBoard selects points by envelope ts, and a correction is generated after the original — so
+// without this a window ending between the two returns the stale original, and the next window
+// returns the corrected one, listing one delivery twice across a month boundary. That is the
+// double-count issue #13 exists to prevent. Only events whose eventId is already in rows are kept,
+// so this adds no unrelated rows.
+func stockRevisionsAcrossWindow(ctx context.Context, tb *tbclient.Client, deviceID string,
+	rows []stockRow, begin, end time.Time) (ahead, back []stockRow, err error) {
+	ids := make(map[string]bool, len(rows))
+	for _, r := range rows {
+		if r.ev.EventID != "" {
+			ids[r.ev.EventID] = true
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil, nil
+	}
+	fetch := func(from, to time.Time) ([]stockRow, error) {
+		series, err := tb.Timeseries(ctx, deviceID, tbclient.TimeseriesQuery{
+			Keys:    []string{protocol.KeyStockEvent},
+			StartMs: from.UnixMilli(),
+			EndMs:   to.UnixMilli(),
+			Limit:   stockRevisionLimit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		var out []stockRow
+		for _, pt := range series[protocol.KeyStockEvent] {
+			ev, perr := protocol.ParseStockEvent(pt.Value)
+			if perr != nil || !ids[ev.EventID] {
+				continue // unreadable records are reported by the main read; here they cannot match an id
+			}
+			if ev.TSMs == 0 {
+				ev.TSMs = pt.TS
+			}
+			out = append(out, stockRow{ev: ev, envTS: pt.TS})
+		}
+		return out, nil
+	}
+	if ahead, err = fetch(end, end.Add(stockRevisionGrace)); err != nil {
+		return nil, nil, err
+	}
+	if back, err = fetch(begin.Add(-stockRevisionGrace), begin); err != nil {
+		return nil, nil, err
+	}
+	return ahead, back, nil
+}
+
+// dropEarlierOrigins removes rows whose movement was first reported before the window (it appears
+// in back). Such a row is only a late correction that happens to land here; the movement belongs to,
+// and is fully resolved in, the earlier window. Returns the remaining rows and how many were dropped.
+func dropEarlierOrigins(rows, back []stockRow) ([]stockRow, int) {
+	earlier := make(map[string]bool, len(back))
+	for _, b := range back {
+		earlier[b.ev.EventID] = true
+	}
+	kept := make([]stockRow, 0, len(rows))
+	dropped := map[string]bool{}
+	for _, r := range rows {
+		if r.ev.EventID != "" && earlier[r.ev.EventID] {
+			dropped[r.ev.EventID] = true
+			continue
+		}
+		kept = append(kept, r)
+	}
+	return kept, len(dropped)
 }
 
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {
@@ -318,6 +404,16 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			}
 			rows = append(rows, stockRow{ev: ev, envTS: pt.TS})
 		}
+		earlier := 0
+		if len(rows) > 0 {
+			ahead, back, err := stockRevisionsAcrossWindow(ctx, deps.TB, dev.ID.ID, rows, p.begin.Time, p.end.Time)
+			if err != nil {
+				writeThingsBoardError(c, err, p.device)
+				return
+			}
+			rows, earlier = dropEarlierOrigins(rows, back)
+			rows = append(rows, ahead...)
+		}
 		rows, folded := foldByEventID(rows, p.asc)
 		out := make([]stockEventResponse, 0, len(rows))
 		for _, r := range rows {
@@ -330,6 +426,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			Unparsable:    unparsable,
 			LegacySkipped: legacy,
 			Folded:        folded,
+			EarlierOrigin: earlier,
 		}
 
 		if unparsable > 0 {
