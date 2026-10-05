@@ -547,6 +547,9 @@ func TestListOilInOut_RecordWithoutAnEnvelopeTimestampCountsAsCurrent(t *testing
 // TestListOilInOut_ResentEventIsFoldedToTheLatest pins issue #13: the device re-sends a stockEvent
 // under the same eventId once the operator fills in duringDeliveryVolumeL. Both telemetry points
 // exist in ThingsBoard, but the delivery must be listed once, with the corrected figure.
+//
+// Both reports carry the SAME payload tsMs (the record-close time) and differ only in the envelope
+// ts, so this fails if the fold ever starts keying on tsMs — which is not a revision counter.
 func TestListOilInOut_ResentEventIsFoldedToTheLatest(t *testing.T) {
 	env, _, device, token := newStockEnv(t)
 
@@ -556,16 +559,24 @@ func TestListOilInOut_ResentEventIsFoldedToTheLatest(t *testing.T) {
 		Tank:         1,
 		Direction:    protocol.StockIn,
 		BeginTimeMs:  now - 3_600_000,
-		EndTimeMs:    now,
+		EndTimeMs:    now - 60_000,
 		BeginVolumeL: 6030.0,
 		EndVolumeL:   24030.0,
 		NetVolumeL:   18000.0,
-		TSMs:         now - 2000,
+		TSMs:         now - 60_000,
 	}
-	publishStock(t, token, ev)
+	post := func(envelopeTS int64, e protocol.StockEvent) {
+		payload, err := json.Marshal(map[string]any{
+			"ts": envelopeTS, "values": map[string]any{protocol.KeyStockEvent: e},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		postDeviceTelemetry(t, token, payload)
+	}
+	post(now-2000, ev)
 	ev.DuringDeliveryVolumeL = 420.0
-	ev.TSMs = now
-	publishStock(t, token, ev)
+	post(now, ev)
 
 	path := "/api/oil-in-out?device=" + device + stockWindow
 	deadline := time.Now().Add(20 * time.Second)

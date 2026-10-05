@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -177,32 +178,52 @@ func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
 	}
 }
 
+// stockRow is a parsed event plus the ThingsBoard envelope timestamp it arrived under.
+type stockRow struct {
+	ev protocol.StockEvent
+	// envTS is the telemetry envelope ts: when the device *generated* this report, preserved verbatim
+	// across offline replay (docs/protocol-v1-stock-event.md §3 makes that a hard requirement, and the
+	// legacy-cutoff logic below already depends on it). It orders revisions of one movement, rather
+	// than the payload's tsMs, because tsMs is the record-close time the API exposes as `time` and
+	// redefining it as a revision counter would be a one-sided change to the cross-repo contract.
+	envTS int64
+}
+
 // foldByEventID collapses re-reports of one movement into a single event. The device re-sends a
 // stockEvent under the same eventId when the operator later fills in duringDeliveryVolumeL, so the
 // raw telemetry holds two points for one delivery; listing both double-counts it against the
-// supplier. The copy with the greatest TSMs wins (the correction is generated after the original);
-// on a tie the earlier-listed one stays, so the result is deterministic. Rows keep the position of
-// the first occurrence of their eventId, so the query's ordering is preserved. Events with an empty
-// eventId are never folded: there is nothing to say they are the same movement.
-func foldByEventID(events []protocol.StockEvent) (out []protocol.StockEvent, folded int) {
-	idx := make(map[string]int, len(events))
-	out = make([]protocol.StockEvent, 0, len(events))
-	for _, ev := range events {
-		if ev.EventID == "" {
-			out = append(out, ev)
+// supplier. The copy with the greatest envelope ts wins (the correction is generated after the
+// original); on a tie the earlier-listed one stays, so the result is deterministic. Events with an
+// empty eventId are never folded: there is nothing to say they are the same movement.
+//
+// The survivors are then re-sorted by envelope ts in the requested direction. Replacing a copy in
+// place would otherwise leave a correction sitting in the original's slot, out of order relative to
+// events between the two. The sort is stable, so equal timestamps keep the query's order.
+func foldByEventID(rows []stockRow, asc bool) (out []stockRow, folded int) {
+	idx := make(map[string]int, len(rows))
+	out = make([]stockRow, 0, len(rows))
+	for _, r := range rows {
+		if r.ev.EventID == "" {
+			out = append(out, r)
 			continue
 		}
-		i, seen := idx[ev.EventID]
+		i, seen := idx[r.ev.EventID]
 		if !seen {
-			idx[ev.EventID] = len(out)
-			out = append(out, ev)
+			idx[r.ev.EventID] = len(out)
+			out = append(out, r)
 			continue
 		}
 		folded++
-		if ev.TSMs > out[i].TSMs {
-			out[i] = ev
+		if r.envTS > out[i].envTS {
+			out[i] = r
 		}
 	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if asc {
+			return out[a].envTS < out[b].envTS
+		}
+		return out[a].envTS > out[b].envTS
+	})
 	return out, folded
 }
 
@@ -252,7 +273,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		points := series[protocol.KeyStockEvent]
-		events := make([]protocol.StockEvent, 0, len(points))
+		rows := make([]stockRow, 0, len(points))
 		unparsable, legacy := 0, 0
 		sample := ""
 		for _, pt := range points {
@@ -295,12 +316,12 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			if ev.TSMs == 0 {
 				ev.TSMs = pt.TS
 			}
-			events = append(events, ev)
+			rows = append(rows, stockRow{ev: ev, envTS: pt.TS})
 		}
-		events, folded := foldByEventID(events)
-		out := make([]stockEventResponse, 0, len(events))
-		for _, ev := range events {
-			out = append(out, toStockEventResponse(ev))
+		rows, folded := foldByEventID(rows, p.asc)
+		out := make([]stockEventResponse, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, toStockEventResponse(r.ev))
 		}
 
 		body := stockListResponse{

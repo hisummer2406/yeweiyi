@@ -7,35 +7,52 @@ import (
 )
 
 func TestFoldByEventID(t *testing.T) {
-	ev := func(id string, ts int64, during float64) protocol.StockEvent {
-		return protocol.StockEvent{EventID: id, TSMs: ts, DuringDeliveryVolumeL: during}
+	// row builds a report of eventId id received under envelope ts env. The payload's own tsMs is
+	// the same for every report of one movement (the record-close time) and must not decide anything.
+	row := func(id string, env int64, during float64) stockRow {
+		return stockRow{ev: protocol.StockEvent{EventID: id, TSMs: 1, DuringDeliveryVolumeL: during}, envTS: env}
+	}
+	ids := func(rs []stockRow) string {
+		s := ""
+		for _, r := range rs {
+			s += r.ev.EventID
+		}
+		return s
 	}
 
-	t.Run("latest tsMs wins regardless of list order", func(t *testing.T) {
-		// Descending query: the correction (ts 200) is listed before the original (ts 100).
-		got, folded := foldByEventID([]protocol.StockEvent{ev("a", 200, 420), ev("b", 150, 0), ev("a", 100, 0)})
-		if folded != 1 || len(got) != 2 {
-			t.Fatalf("folded=%d len=%d, want 1 and 2", folded, len(got))
+	t.Run("greatest envelope ts wins even when tsMs is identical", func(t *testing.T) {
+		got, folded := foldByEventID([]stockRow{row("a", 100, 0), row("a", 200, 420)}, true)
+		if folded != 1 || len(got) != 1 || got[0].ev.DuringDeliveryVolumeL != 420 {
+			t.Errorf("got %+v folded=%d, want the 200-envelope correction", got, folded)
 		}
-		if got[0].EventID != "a" || got[0].DuringDeliveryVolumeL != 420 || got[1].EventID != "b" {
-			t.Errorf("wrong survivor or order: %+v", got)
+		got, _ = foldByEventID([]stockRow{row("a", 200, 420), row("a", 100, 0)}, false)
+		if len(got) != 1 || got[0].ev.DuringDeliveryVolumeL != 420 {
+			t.Errorf("descending input: got %+v, want the correction", got)
 		}
-		// Ascending query: original first, correction later; the later one must replace in place.
-		got, _ = foldByEventID([]protocol.StockEvent{ev("a", 100, 0), ev("b", 150, 0), ev("a", 200, 420)})
-		if got[0].EventID != "a" || got[0].DuringDeliveryVolumeL != 420 || got[1].EventID != "b" {
-			t.Errorf("wrong survivor or order: %+v", got)
+	})
+
+	t.Run("survivors stay sorted when a correction replaces an earlier slot", func(t *testing.T) {
+		// Ascending: a@100, b@150, a@200 must not come out as a@200, b@150.
+		got, _ := foldByEventID([]stockRow{row("a", 100, 0), row("b", 150, 0), row("a", 200, 420)}, true)
+		if ids(got) != "ba" || got[0].envTS != 150 || got[1].envTS != 200 {
+			t.Errorf("ascending order broken: %+v", got)
+		}
+		// Descending: a@200, b@150, a@100.
+		got, _ = foldByEventID([]stockRow{row("a", 200, 420), row("b", 150, 0), row("a", 100, 0)}, false)
+		if ids(got) != "ab" || got[0].envTS != 200 || got[1].envTS != 150 {
+			t.Errorf("descending order broken: %+v", got)
 		}
 	})
 
 	t.Run("tie keeps the first listed", func(t *testing.T) {
-		got, folded := foldByEventID([]protocol.StockEvent{ev("a", 100, 1), ev("a", 100, 2)})
-		if folded != 1 || len(got) != 1 || got[0].DuringDeliveryVolumeL != 1 {
+		got, folded := foldByEventID([]stockRow{row("a", 100, 1), row("a", 100, 2)}, true)
+		if folded != 1 || len(got) != 1 || got[0].ev.DuringDeliveryVolumeL != 1 {
 			t.Errorf("got %+v folded=%d", got, folded)
 		}
 	})
 
 	t.Run("empty eventId is never folded", func(t *testing.T) {
-		got, folded := foldByEventID([]protocol.StockEvent{ev("", 1, 0), ev("", 2, 0)})
+		got, folded := foldByEventID([]stockRow{row("", 1, 0), row("", 2, 0)}, true)
 		if folded != 0 || len(got) != 2 {
 			t.Errorf("got %+v folded=%d", got, folded)
 		}
