@@ -166,6 +166,20 @@ stock:
 `stock_event_out.json`。云端的 `TestListOilInOut_ValidJSONFromTheSharedFixtureIsServed`
 把这两个文件的字节原样发给真实设备端点并断言结果，Android 侧应当对同一文件做同样的事。
 
+### 同一 `eventId` 可上报多次，以 `tsMs` 最大者为准（issue #13）
+
+`duringDeliveryVolumeL` 要操作员事后核对保存才有真实值，所以设备会用**同一个 `eventId`** 把补全后的
+记录再发一次。云端 `/api/oil-in-out` 按 `eventId` 折叠：保留 `tsMs` 最大的一条，`tsMs` 相同则保留查询
+结果中靠前的；折叠掉的条数在响应的 `folded` 字段里。`eventId` 为空的记录不参与折叠。
+
+约束（设备端须遵守）：
+- 重发必须使用**重发时刻**的 `tsMs`，且严格大于首次上报的值；
+- 离线补投队列原样重发的是**同一份**报文（`tsMs` 不变），折叠后结果不变，不会与"补录重发"混淆。
+
+折叠发生在查询时，且发生在 `limit` 截断之后：窗口边界处同一笔事件的两个副本若被分在窗口内外，只会看到
+窗口内的那一个。`eventId` 不变是前提——补录改时间会改变 `eventId`（见 issue #15），此类情形不会被折叠。
+是否需要显式的 `revision` 字段仍待与 Android 侧确认。
+
 ### 两列刻意不进 V1
 
 - `beginTcVolume` / `endTcVolume`：名字读作温度补偿体积（标准体积），但赋值来自

@@ -41,6 +41,7 @@ type stockBody struct {
 	Parsed        int              `json:"parsed"`
 	Unparsable    int              `json:"unparsable"`
 	LegacySkipped int              `json:"legacySkipped"`
+	Folded        int              `json:"folded"`
 	Error         string           `json:"error"`
 	Code          string           `json:"code"`
 	Device        string           `json:"device"`
@@ -541,4 +542,49 @@ func TestListOilInOut_RecordWithoutAnEnvelopeTimestampCountsAsCurrent(t *testing
 			"on, an unreadable record must not be written off as history",
 			body.Unparsable, body.LegacySkipped)
 	}
+}
+
+// TestListOilInOut_ResentEventIsFoldedToTheLatest pins issue #13: the device re-sends a stockEvent
+// under the same eventId once the operator fills in duringDeliveryVolumeL. Both telemetry points
+// exist in ThingsBoard, but the delivery must be listed once, with the corrected figure.
+func TestListOilInOut_ResentEventIsFoldedToTheLatest(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now().UnixMilli()
+	ev := protocol.StockEvent{
+		EventID:      fmt.Sprintf("in-1-%d", now),
+		Tank:         1,
+		Direction:    protocol.StockIn,
+		BeginTimeMs:  now - 3_600_000,
+		EndTimeMs:    now,
+		BeginVolumeL: 6030.0,
+		EndVolumeL:   24030.0,
+		NetVolumeL:   18000.0,
+		TSMs:         now - 2000,
+	}
+	publishStock(t, token, ev)
+	ev.DuringDeliveryVolumeL = 420.0
+	ev.TSMs = now
+	publishStock(t, token, ev)
+
+	path := "/api/oil-in-out?device=" + device + stockWindow
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		b := decodeStock(t, rec.Body.Bytes())
+		if b.Folded == 1 {
+			if len(b.Rows) != 1 {
+				t.Fatalf("rows = %d, want 1 after folding: %v", len(b.Rows), b.Rows)
+			}
+			if d, _ := b.Rows[0]["deliveredVolumeL"].(float64); d != 18420.0 {
+				t.Errorf("deliveredVolumeL = %v, want 18420 from the corrected re-send", d)
+			}
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatal("the re-sent event was never folded into one row")
 }

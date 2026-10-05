@@ -133,6 +133,9 @@ type stockListResponse struct {
 	// the history rather than a fault. Reported rather than hidden, because the operator
 	// reconciling this window still needs to know the numbers are incomplete.
 	LegacySkipped int `json:"legacySkipped"`
+	// Folded counts superseded re-reports of an eventId already in the list (see foldByEventID).
+	// Not a fault; reported so a row count that differs from the raw telemetry count is explicable.
+	Folded int `json:"folded"`
 
 	// Only on the 502 path.
 	Error  string `json:"error,omitempty"`
@@ -172,6 +175,35 @@ func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
 		DeliveredVolumeL:      delivered,
 		Time:                  time.UnixMilli(e.TSMs).UTC(),
 	}
+}
+
+// foldByEventID collapses re-reports of one movement into a single event. The device re-sends a
+// stockEvent under the same eventId when the operator later fills in duringDeliveryVolumeL, so the
+// raw telemetry holds two points for one delivery; listing both double-counts it against the
+// supplier. The copy with the greatest TSMs wins (the correction is generated after the original);
+// on a tie the earlier-listed one stays, so the result is deterministic. Rows keep the position of
+// the first occurrence of their eventId, so the query's ordering is preserved. Events with an empty
+// eventId are never folded: there is nothing to say they are the same movement.
+func foldByEventID(events []protocol.StockEvent) (out []protocol.StockEvent, folded int) {
+	idx := make(map[string]int, len(events))
+	out = make([]protocol.StockEvent, 0, len(events))
+	for _, ev := range events {
+		if ev.EventID == "" {
+			out = append(out, ev)
+			continue
+		}
+		i, seen := idx[ev.EventID]
+		if !seen {
+			idx[ev.EventID] = len(out)
+			out = append(out, ev)
+			continue
+		}
+		folded++
+		if ev.TSMs > out[i].TSMs {
+			out[i] = ev
+		}
+	}
+	return out, folded
 }
 
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {
@@ -220,7 +252,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		points := series[protocol.KeyStockEvent]
-		out := make([]stockEventResponse, 0, len(points))
+		events := make([]protocol.StockEvent, 0, len(points))
 		unparsable, legacy := 0, 0
 		sample := ""
 		for _, pt := range points {
@@ -263,6 +295,11 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			if ev.TSMs == 0 {
 				ev.TSMs = pt.TS
 			}
+			events = append(events, ev)
+		}
+		events, folded := foldByEventID(events)
+		out := make([]stockEventResponse, 0, len(events))
+		for _, ev := range events {
 			out = append(out, toStockEventResponse(ev))
 		}
 
@@ -271,6 +308,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			Parsed:        len(out),
 			Unparsable:    unparsable,
 			LegacySkipped: legacy,
+			Folded:        folded,
 		}
 
 		if unparsable > 0 {
