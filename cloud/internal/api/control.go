@@ -152,23 +152,13 @@ func listDeviceCommandsHandler(deps Deps) gin.HandlerFunc {
 
 		limit, offset := pageParams(c, 50)
 
-		// Ownership above already proved the caller exists and is active, so this only decides the
-		// scope: a platform admin sees every command for the device, anyone else only the ones filed
-		// under their own customer.
-		ctx := c.Request.Context()
-		user, err := deps.Queries.GetUserByID(ctx, c.MustGet("userID").(int64))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		var customerFilter pgtype.Int8
-		if user.Role != control.RolePlatformAdmin {
-			customerFilter = user.CustomerID
-		}
-
-		rows, err := deps.Queries.ListControlCommandsForDevice(ctx, db.ListControlCommandsForDeviceParams{
+		// Ownership above decides the response code (403 vs a list). What the user may actually read
+		// is decided again inside the query, in the statement that reads it — access and customer
+		// scope from one database state — so a user moved between the two cannot get another
+		// customer's history for a device they can no longer reach.
+		rows, err := deps.Queries.ListControlCommandsVisibleToUser(c.Request.Context(), db.ListControlCommandsVisibleToUserParams{
+			UserID:     c.MustGet("userID").(int64),
 			DeviceName: device,
-			CustomerID: customerFilter,
 			Lim:        limit,
 			Off:        offset,
 		})
@@ -226,9 +216,10 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		customerFilter := user.CustomerID
+		// Only a platform admin may narrow by customer; everyone else's scope is pinned to their own
+		// customer inside the query itself, from the same database state that authorizes the read.
+		var customerFilter pgtype.Int8
 		if user.Role == control.RolePlatformAdmin {
-			customerFilter = pgtype.Int8{}
 			if raw := c.Query("customerId"); raw != "" {
 				id, perr := strconv.ParseInt(raw, 10, 64)
 				if perr != nil || id <= 0 {
@@ -245,7 +236,8 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 		}
 		limit, offset := pageParams(c, 100)
 
-		rows, err := deps.Queries.ListAuditLog(ctx, db.ListAuditLogParams{
+		rows, err := deps.Queries.ListAuditLogVisibleToUser(ctx, db.ListAuditLogVisibleToUserParams{
+			UserID:     user.ID,
 			DeviceName: deviceFilter,
 			CustomerID: customerFilter,
 			BeginTime:  pgtype.Timestamptz{Time: begin, Valid: true},

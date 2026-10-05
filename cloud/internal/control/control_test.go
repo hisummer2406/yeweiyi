@@ -608,7 +608,7 @@ func TestExpireStale_ClosesCommandsPastTheirWindow(t *testing.T) {
 
 func getCommand(t *testing.T, f *fixture, commandID string) db.ControlCommand {
 	t.Helper()
-	cmds, err := f.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
+	cmds, err := f.q.ListControlCommandsForDeviceUnscoped(context.Background(), db.ListControlCommandsForDeviceUnscopedParams{
 		DeviceName: f.device, Lim: 50, Off: 0,
 	})
 	if err != nil {
@@ -629,7 +629,7 @@ func uuidText(b [16]byte) string {
 
 func assertAudit(t *testing.T, f *fixture, action, outcome string) {
 	t.Helper()
-	rows, err := f.q.ListAuditLog(context.Background(), db.ListAuditLogParams{
+	rows, err := f.q.ListAuditLogUnscoped(context.Background(), db.ListAuditLogUnscopedParams{
 		DeviceName: pgtype.Text{}, // NULL: list across all devices
 		BeginTime:  pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 		EndTime:    pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},
@@ -752,7 +752,7 @@ func TestIssue_ResultBeforeAckReturnsTheStoredStateAndAuditsTruthfully(t *testin
 // the caller is to inspect the outcome that was actually written.
 func findAudit(t *testing.T, f *fixture, action, commandID string) db.AuditLog {
 	t.Helper()
-	rows, err := f.q.ListAuditLog(context.Background(), db.ListAuditLogParams{
+	rows, err := f.q.ListAuditLogUnscoped(context.Background(), db.ListAuditLogUnscopedParams{
 		DeviceName: pgtype.Text{String: f.device, Valid: true},
 		BeginTime:  pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
 		EndTime:    pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},

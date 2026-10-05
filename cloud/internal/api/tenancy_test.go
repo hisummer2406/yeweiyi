@@ -1087,3 +1087,203 @@ func TestTenancy_UnauthorizedCallerIsRefusedBeforeTheMethodIsExamined(t *testing
 		t.Errorf("expected the cross-customer attempt audited under customer B once, got %d", n)
 	}
 }
+
+// seedHistory writes one command and one audit row for the device filed under customerID, as the
+// history of a past ownership period would be.
+func (tn *tenancy) seedHistory(t *testing.T, device string, customerID int64, tag string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := tn.env.pool.Exec(ctx, `
+		INSERT INTO control_commands (command_id, device_name, method, operator, reason, expires_at, customer_id)
+		VALUES (gen_random_uuid(), $1, 'alarm.mute', $2, 'history', now() + interval '1 hour', $3)`,
+		device, tag, customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tn.env.pool.Exec(ctx, `
+		INSERT INTO audit_log (actor, action, device_name, outcome, customer_id)
+		VALUES ($1, 'control.issue', $2, 'allowed', $3)`, tag, device, customerID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestTenancy_ReadsDecideAccessAndScopeInOneStatement: the command listing and the audit listing
+// authorize the read and scope it to the caller's customer inside the statement that reads. The setup
+// is the dangerous one — device D belongs to A now but carries history filed under B from an earlier
+// owner — and the callers are the ones who could reach it if access and scope came from different
+// moments: users of B, who have the customer the history is filed under but no access to D.
+func TestTenancy_ReadsDecideAccessAndScopeInOneStatement(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := tn.env.queries
+	tn.seedHistory(t, tn.devA1, tn.custA, "history-of-A")
+	tn.seedHistory(t, tn.devA1, tn.custB, "history-of-B")
+
+	_, disabledID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
+	tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID)
+
+	commandOperators := func(user int64) map[string]bool {
+		rows, err := q.ListControlCommandsVisibleToUser(ctx, db.ListControlCommandsVisibleToUserParams{
+			UserID: user, DeviceName: tn.devA1, Lim: 100, Off: 0,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, r := range rows {
+			out[r.Operator] = true
+		}
+		return out
+	}
+	auditActors := func(user int64, device string, customer pgtype.Int8) map[string]bool {
+		rows, err := q.ListAuditLogVisibleToUser(ctx, db.ListAuditLogVisibleToUserParams{
+			UserID:     user,
+			DeviceName: pgtype.Text{String: device, Valid: device != ""},
+			CustomerID: customer,
+			BeginTime:  pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+			EndTime:    pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+			Lim:        1000, Off: 0,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, r := range rows {
+			out[r.Actor] = true
+		}
+		return out
+	}
+	only := func(got map[string]bool, want ...string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for _, w := range want {
+			if !got[w] {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Commands for D.
+	for name, tc := range map[string]struct {
+		user int64
+		want []string
+	}{
+		"admin of A: its own history only":      {tn.adminAID, []string{"history-of-A"}},
+		"bound user of A: its own history only": {tn.userAID, []string{"history-of-A"}},
+		"admin of B: no access to D, nothing":   {tn.adminBID, nil},
+		"user of B: no access to D, nothing":    {tn.userBID, nil},
+		"disabled admin of A: nothing":          {disabledID, nil},
+		"platform admin: both periods":          {tn.platformID, []string{"history-of-A", "history-of-B"}},
+		"user that does not exist: nothing":     {999999999, nil},
+	} {
+		if got := commandOperators(tc.user); !only(got, tc.want...) {
+			t.Errorf("commands, %s: got %v, want %v", name, got, tc.want)
+		}
+	}
+
+	// Audit, naming D.
+	for name, tc := range map[string]struct {
+		user int64
+		want []string
+	}{
+		"admin of A naming D": {tn.adminAID, []string{"history-of-A"}},
+		"user of A naming D":  {tn.userAID, []string{"history-of-A"}},
+		"admin of B naming D": {tn.adminBID, nil},
+		"user of B naming D":  {tn.userBID, nil},
+		"disabled admin":      {disabledID, nil},
+		"platform naming D":   {tn.platformID, []string{"history-of-A", "history-of-B"}},
+	} {
+		if got := auditActors(tc.user, tn.devA1, pgtype.Int8{}); !only(got, tc.want...) {
+			t.Errorf("audit, %s: got %v, want %v", name, got, tc.want)
+		}
+	}
+	// Audit, no device named.
+	if got := auditActors(tn.userAID, "", pgtype.Int8{}); len(got) != 0 {
+		t.Errorf("a customer user without a device must read nothing, got %v", got)
+	}
+	if got := auditActors(tn.adminAID, "", pgtype.Int8{}); got["history-of-B"] || !got["history-of-A"] {
+		t.Errorf("a customer admin without a device sees their own customer only, got %v", got)
+	}
+	// A customer filter narrows a platform admin and is ignored for anyone else.
+	if got := auditActors(tn.platformID, "", pgtype.Int8{Int64: tn.custB, Valid: true}); !got["history-of-B"] || got["history-of-A"] {
+		t.Errorf("platform admin narrowed to B: got %v", got)
+	}
+	if got := auditActors(tn.adminAID, "", pgtype.Int8{Int64: tn.custB, Valid: true}); got["history-of-B"] {
+		t.Errorf("a customer admin widened their audit scope with a customer filter: %v", got)
+	}
+}
+
+// TestTenancy_PairingSecretWriteRechecksOwnership: the secret write carries its own ownership check
+// and locks the device row, because the handler checks ownership first and hashes (slowly) before it
+// writes. A transfer in that gap must not let the old customer's request rotate the secret of a
+// device that is now someone else's.
+func TestTenancy_PairingSecretWriteRechecksOwnership(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := tn.env.queries
+	upsert := func(device string, customer int64, hash string) error {
+		_, err := q.UpsertDevicePairingSecretForCustomer(ctx, db.UpsertDevicePairingSecretForCustomerParams{
+			DeviceName: device, CustomerID: pgtype.Int8{Int64: customer, Valid: true}, SecretHash: hash,
+		})
+		return err
+	}
+	currentHash := func(device string) string {
+		h, err := q.GetDevicePairingSecretHash(ctx, device)
+		if err != nil {
+			return ""
+		}
+		return h
+	}
+
+	if err := upsert(tn.devA2, tn.custA, "hash-original"); err != nil {
+		t.Fatalf("rotating for the owning customer: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		device   string
+		customer int64
+	}{
+		"another customer's device":   {tn.devA2, tn.custB},
+		"an unassigned device":        {tn.devUnassigned, tn.custA},
+		"a device that doesn't exist": {tn.devGhost, tn.custA},
+	} {
+		if err := upsert(tc.device, tc.customer, "hash-intruder"); !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("%s: err=%v, want pgx.ErrNoRows", name, err)
+		}
+	}
+	if got := currentHash(tn.devA2); got != "hash-original" {
+		t.Fatalf("a refused rotation changed the secret to %q", got)
+	}
+
+	// The race, deterministically: a transfer holds the device row, the old customer's rotation
+	// queues behind it, the transfer commits — and the rotation must find the device is no longer
+	// its customer's.
+	tx, err := tn.env.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM devices WHERE device_name = $1 FOR UPDATE`, tn.devA2); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- upsert(tn.devA2, tn.custA, "hash-stale-rotation") }()
+	time.Sleep(500 * time.Millisecond)
+	if _, err := tx.Exec(ctx, `UPDATE devices SET customer_id = $1 WHERE device_name = $2`, tn.custB, tn.devA2); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Errorf("a rotation racing a transfer: err=%v, want pgx.ErrNoRows", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the rotation never returned")
+	}
+	if got := currentHash(tn.devA2); got != "hash-original" {
+		t.Errorf("the stale rotation overwrote the new owner's secret: %q", got)
+	}
+}

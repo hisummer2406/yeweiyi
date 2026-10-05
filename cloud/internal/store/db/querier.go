@@ -37,6 +37,13 @@ type Querier interface {
 	// against the new state yet filed under the old customer. Zero rows back means the user may no
 	// longer touch the device (or never could); the caller treats that as forbidden.
 	// The snapshot is the user's own customer, or for a platform admin (who has none) the device's.
+	//
+	// Deliberately NOT FOR SHARE, unlike the bind query: a transfer cleans up bindings, so a binding
+	// inserted around it has to be ordered against that cleanup — but a transfer never touches commands,
+	// so there is nothing to order against. Under READ COMMITTED this statement runs against one
+	// snapshot, i.e. the command logically happens before any transfer that commits after it started,
+	// and records the customer it was authorized under. What remains — the command being *sent* after
+	// the device changed hands — happens after this statement and no lock here could prevent it.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -82,17 +89,32 @@ type Querier interface {
 	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
 	ListAllDeviceNames(ctx context.Context) ([]string, error)
-	// device_name is optional: passing NULL lists across all devices. customer_id is optional too:
-	// NULL means no customer filter, which only a platform admin may ask for — every other caller's
-	// handler pins it to their own customer, so a device that changed hands never exposes the previous
-	// owner's history to the new one.
-	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
 	ListAuditLogForCommand(ctx context.Context, commandID pgtype.UUID) ([]AuditLog, error)
-	// customer_id NULL means no customer filter, which only a platform admin gets. Everyone else is
-	// pinned to their own customer's snapshot: a command stays with the customer it was issued under,
-	// so a device that changed hands never shows its previous owner's commands (operator, reason, args,
-	// results) to the new one.
-	ListControlCommandsForDevice(ctx context.Context, arg ListControlCommandsForDeviceParams) ([]ControlCommand, error)
+	// INTERNAL and test use only: no authorization. Anything that answers a user's request must use
+	// ListAuditLogVisibleToUser.
+	ListAuditLogUnscoped(ctx context.Context, arg ListAuditLogUnscopedParams) ([]AuditLog, error)
+	// What a user may read of the audit log, with the whole policy decided in the statement that reads
+	// it (see ListControlCommandsVisibleToUser for why):
+	//   * a disabled or unknown user reads nothing;
+	//   * naming a device requires access to it (user_may_access_device);
+	//   * a customer user must name a device;
+	//   * a platform admin sees every customer's rows, optionally narrowed by customer_id;
+	//   * everyone else is pinned to their own customer's rows, even when a device is named, so a device
+	//     that changed hands never shows its previous owner's history to the new one.
+	ListAuditLogVisibleToUser(ctx context.Context, arg ListAuditLogVisibleToUserParams) ([]AuditLog, error)
+	// INTERNAL and test use only: no authorization and no customer scoping. Anything that answers a
+	// user's request must use ListControlCommandsVisibleToUser.
+	ListControlCommandsForDeviceUnscoped(ctx context.Context, arg ListControlCommandsForDeviceUnscopedParams) ([]ControlCommand, error)
+	// What a user may read of a device's command history, decided in the same statement that reads it:
+	// the access rule (user_may_access_device) and the customer scope both come from the database state
+	// this statement sees. Checking access in one statement and loading the user's customer in another
+	// lets a user move between them — and then get history snapshotted under the customer they just
+	// joined for a device they can no longer reach.
+	//
+	// A platform admin sees every command for the device. Anyone else sees only commands filed under
+	// their own customer, so a device that changed hands never shows its previous owner's commands
+	// (operator, reason, arguments, results) to the new one.
+	ListControlCommandsVisibleToUser(ctx context.Context, arg ListControlCommandsVisibleToUserParams) ([]ControlCommand, error)
 	ListCustomers(ctx context.Context) ([]Customer, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list.
 	ListDevicesForUser(ctx context.Context, id int64) ([]Device, error)
@@ -153,7 +175,14 @@ type Querier interface {
 	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
 	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
-	UpsertDevicePairingSecret(ctx context.Context, arg UpsertDevicePairingSecretParams) error
+	//
+	// The device must still belong to the given customer, checked in this same statement with its row
+	// locked FOR SHARE. The handler checks ownership first and hashes the new secret (slow, on purpose)
+	// before writing; a transfer that lands in between must not let the old customer's request rotate
+	// the secret of a device that is now somebody else's — that would hand back a QR code the old
+	// customer cannot use and silently invalidate the new owner's. Zero rows back means ownership
+	// changed (or never held), and the handler answers 409.
+	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
 	// Only answers "is there a user_devices row". It is NOT an authorization check: it ignores the
 	// customer boundary and the role tiers. Every device-scoped handler must call UserMayAccessDevice.
 	UserDeviceBindingExists(ctx context.Context, arg UserDeviceBindingExistsParams) (bool, error)

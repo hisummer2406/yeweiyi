@@ -13,6 +13,13 @@
 -- against the new state yet filed under the old customer. Zero rows back means the user may no
 -- longer touch the device (or never could); the caller treats that as forbidden.
 -- The snapshot is the user's own customer, or for a platform admin (who has none) the device's.
+--
+-- Deliberately NOT FOR SHARE, unlike the bind query: a transfer cleans up bindings, so a binding
+-- inserted around it has to be ordered against that cleanup — but a transfer never touches commands,
+-- so there is nothing to order against. Under READ COMMITTED this statement runs against one
+-- snapshot, i.e. the command logically happens before any transfer that commits after it started,
+-- and records the customer it was authorized under. What remains — the command being *sent* after
+-- the device changed hands — happens after this statement and no lock here could prevent it.
 INSERT INTO control_commands (
     command_id, device_name, method, args,
     operator_id, operator, reason, issued_at, expires_at, customer_id
@@ -99,13 +106,29 @@ WHERE expires_at < now()
   AND status IN ('pending', 'sent', 'received', 'executing')
 RETURNING *;
 
--- name: ListControlCommandsForDevice :many
--- customer_id NULL means no customer filter, which only a platform admin gets. Everyone else is
--- pinned to their own customer's snapshot: a command stays with the customer it was issued under,
--- so a device that changed hands never shows its previous owner's commands (operator, reason, args,
--- results) to the new one.
+-- name: ListControlCommandsForDeviceUnscoped :many
+-- INTERNAL and test use only: no authorization and no customer scoping. Anything that answers a
+-- user's request must use ListControlCommandsVisibleToUser.
 SELECT * FROM control_commands
 WHERE device_name = sqlc.arg('device_name')
-  AND (sqlc.narg('customer_id')::BIGINT IS NULL OR customer_id = sqlc.narg('customer_id')::BIGINT)
 ORDER BY issued_at DESC
+LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
+
+-- name: ListControlCommandsVisibleToUser :many
+-- What a user may read of a device's command history, decided in the same statement that reads it:
+-- the access rule (user_may_access_device) and the customer scope both come from the database state
+-- this statement sees. Checking access in one statement and loading the user's customer in another
+-- lets a user move between them — and then get history snapshotted under the customer they just
+-- joined for a device they can no longer reach.
+--
+-- A platform admin sees every command for the device. Anyone else sees only commands filed under
+-- their own customer, so a device that changed hands never shows its previous owner's commands
+-- (operator, reason, arguments, results) to the new one.
+SELECT c.*
+FROM control_commands c
+JOIN users u ON u.id = sqlc.arg('user_id')
+WHERE c.device_name = sqlc.arg('device_name')
+  AND user_may_access_device(u.id, sqlc.arg('device_name'))
+  AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id)
+ORDER BY c.issued_at DESC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');

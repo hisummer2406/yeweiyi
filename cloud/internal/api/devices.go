@@ -314,10 +314,17 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		if err := deps.Queries.UpsertDevicePairingSecret(ctx, db.UpsertDevicePairingSecretParams{
+		// The ownership check above and this write are separated by the bcrypt above; the write
+		// checks ownership again, in the same statement, with the device row locked.
+		if _, err := deps.Queries.UpsertDevicePairingSecretForCustomer(ctx, db.UpsertDevicePairingSecretForCustomerParams{
 			DeviceName: device,
+			CustomerID: int8(req.CustomerID),
 			SecretHash: string(hash),
 		}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusConflict, gin.H{"error": "device already belongs to a different customer"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

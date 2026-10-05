@@ -392,7 +392,7 @@ func awaitStatus(t *testing.T, s *stack, commandID string, timeout time.Duration
 	deadline := time.Now().Add(timeout)
 	var last db.ControlCommand
 	for time.Now().Before(deadline) {
-		cmds, err := s.q.ListControlCommandsForDevice(context.Background(), db.ListControlCommandsForDeviceParams{
+		cmds, err := s.q.ListControlCommandsForDeviceUnscoped(context.Background(), db.ListControlCommandsForDeviceUnscopedParams{
 			DeviceName: s.device, Lim: 20, Off: 0,
 		})
 		if err != nil {
