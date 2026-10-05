@@ -42,7 +42,7 @@ type stockBody struct {
 	Unparsable    int              `json:"unparsable"`
 	LegacySkipped int              `json:"legacySkipped"`
 	Folded        int              `json:"folded"`
-	EarlierOrigin int              `json:"earlierOrigin"`
+	Truncated     bool             `json:"truncated"`
 	Error         string           `json:"error"`
 	Code          string           `json:"code"`
 	Device        string           `json:"device"`
@@ -662,10 +662,63 @@ func TestListOilInOut_CorrectionOutsideTheWindowIsStillResolved(t *testing.T) {
 		t.Errorf("window ending before the correction: deliveredVolumeL = %v, want the corrected 18420", d)
 	}
 
-	// Window B holds only the correction. The movement belongs to the earlier window, so it must
-	// not be listed a second time.
-	b := get(window(now.Add(-45*time.Hour), now.Add(-35*time.Hour)), func(b stockBody) bool { return b.EarlierOrigin == 1 })
+	// Window B holds only the correction (by report time). The movement closed in the earlier
+	// window, so it must not be listed a second time.
+	b := get(window(now.Add(-45*time.Hour), now.Add(-35*time.Hour)), func(stockBody) bool { return true })
 	if len(b.Rows) != 0 {
 		t.Errorf("window containing only the correction listed %d rows, want 0 (already counted in the earlier window): %v", len(b.Rows), b.Rows)
 	}
+}
+
+// TestListOilInOut_LimitCutsRowsNotRevisions pins that `limit` applies to movements, after the fold:
+// a correction sitting beyond the first `limit` raw points must still be applied to its original, and
+// a cut must be announced rather than silent.
+func TestListOilInOut_LimitCutsRowsNotRevisions(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now()
+	post := func(envelopeTS time.Time, e protocol.StockEvent) {
+		payload, err := json.Marshal(map[string]any{
+			"ts": envelopeTS.UnixMilli(), "values": map[string]any{protocol.KeyStockEvent: e},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		postDeviceTelemetry(t, token, payload)
+	}
+	mk := func(at time.Time, net float64) protocol.StockEvent {
+		return protocol.StockEvent{
+			EventID: fmt.Sprintf("in-1-%d", at.UnixMilli()), Tank: 1, Direction: protocol.StockIn,
+			BeginTimeMs: at.Add(-time.Hour).UnixMilli(), EndTimeMs: at.UnixMilli(),
+			NetVolumeL: net, TSMs: at.UnixMilli(),
+		}
+	}
+	first, second := mk(now.Add(-30*time.Hour), 1000), mk(now.Add(-29*time.Hour), 2000)
+	post(now.Add(-30*time.Hour), first)
+	post(now.Add(-29*time.Hour), second)
+	first.DuringDeliveryVolumeL = 500
+	post(now.Add(-1*time.Hour), first) // correction of the OLDER movement, generated last
+
+	path := "/api/oil-in-out?device=" + device + "&limit=1&beginTime=" +
+		now.Add(-48*time.Hour).UTC().Format(time.RFC3339) + "&endTime=" + now.Add(-10*time.Hour).UTC().Format(time.RFC3339)
+	// The three points become visible one by one, so poll until the whole expected state is there
+	// rather than asserting on the first response that happens to be truncated.
+	var last stockBody
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		last = decodeStock(t, rec.Body.Bytes())
+		// The default order is ascending by time, so the cut keeps the OLDER movement — and it must
+		// carry the correction that was generated after the newer one was read.
+		if last.Truncated && len(last.Rows) == 1 {
+			if d, _ := last.Rows[0]["deliveredVolumeL"].(float64); d == 1500.0 {
+				return
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("never reached truncated=true with the older movement corrected to 1500; last: %+v", last)
 }

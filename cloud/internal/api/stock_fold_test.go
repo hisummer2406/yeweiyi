@@ -31,16 +31,19 @@ func TestFoldByEventID(t *testing.T) {
 		}
 	})
 
-	t.Run("survivors stay sorted when a correction replaces an earlier slot", func(t *testing.T) {
-		// Ascending: a@100, b@150, a@200 must not come out as a@200, b@150.
-		got, _ := foldByEventID([]stockRow{row("a", 100, 0), row("b", 150, 0), row("a", 200, 420)}, true)
-		if ids(got) != "ba" || got[0].envTS != 150 || got[1].envTS != 200 {
-			t.Errorf("ascending order broken: %+v", got)
+	t.Run("survivors are ordered by the movement's own time, not by when the correction was sent", func(t *testing.T) {
+		at := func(id string, tsMs, env int64) stockRow {
+			return stockRow{ev: protocol.StockEvent{EventID: id, TSMs: tsMs}, envTS: env}
 		}
-		// Descending: a@200, b@150, a@100.
-		got, _ = foldByEventID([]stockRow{row("a", 200, 420), row("b", 150, 0), row("a", 100, 0)}, false)
-		if ids(got) != "ab" || got[0].envTS != 200 || got[1].envTS != 150 {
-			t.Errorf("descending order broken: %+v", got)
+		// a closed at 100 and was corrected at env 900; b closed at 150. Ascending must be a, b even
+		// though a's winning report is the newest thing in the list.
+		got, _ := foldByEventID([]stockRow{at("a", 100, 100), at("b", 150, 150), at("a", 100, 900)}, true)
+		if ids(got) != "ab" || got[0].envTS != 900 {
+			t.Errorf("ascending: %+v", got)
+		}
+		got, _ = foldByEventID([]stockRow{at("a", 100, 900), at("b", 150, 150), at("a", 100, 100)}, false)
+		if ids(got) != "ba" {
+			t.Errorf("descending: %+v", got)
 		}
 	})
 
@@ -59,21 +62,18 @@ func TestFoldByEventID(t *testing.T) {
 	})
 }
 
-func TestDropEarlierOrigins(t *testing.T) {
-	row := func(id string, env int64) stockRow {
+func TestFoldByEventID_CountsCopies(t *testing.T) {
+	r := func(id string, env int64) stockRow {
 		return stockRow{ev: protocol.StockEvent{EventID: id}, envTS: env}
 	}
-	rows := []stockRow{row("a", 300), row("b", 200), row("c", 100), row("", 50)}
-	back := []stockRow{row("a", 10), row("a", 20)}
-
-	kept, dropped := dropEarlierOrigins(rows, back)
-	if dropped != 1 {
-		t.Errorf("dropped = %d, want 1 movement (two earlier copies of one id count once)", dropped)
+	got, folded := foldByEventID([]stockRow{r("a", 1), r("a", 3), r("a", 2), r("b", 4)}, true)
+	if folded != 2 || len(got) != 2 {
+		t.Fatalf("folded=%d rows=%d, want 2 and 2", folded, len(got))
 	}
-	if len(kept) != 3 || kept[0].ev.EventID != "b" || kept[2].ev.EventID != "" {
-		t.Errorf("kept = %+v, want b, c and the id-less row", kept)
-	}
-	if kept, dropped = dropEarlierOrigins(rows, nil); len(kept) != 4 || dropped != 0 {
-		t.Errorf("no earlier copies must keep everything: %d kept, %d dropped", len(kept), dropped)
+	for _, g := range got {
+		want := map[string]int{"a": 3, "b": 1}[g.ev.EventID]
+		if g.copies != want {
+			t.Errorf("%s copies = %d, want %d", g.ev.EventID, g.copies, want)
+		}
 	}
 }
