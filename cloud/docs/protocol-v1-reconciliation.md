@@ -231,6 +231,11 @@ CommitWork:  id, workId, time, endTime, info
 返回空。出入库的数据其实已经到了 ThingsBoard，只是形状不可用且云端没接。这是删除旧 Alink 栈前**最后一个阻塞项**——删掉之后这两个端点能编译、能返回 200，但永远
 没有数据，这种"看着正常其实没数据"比编译错误难发现得多。
 
+> **2026-09-04 更新**：`/api/shifts` 已删除；`/api/oil-in-out` 不再返回 200 + 空数组——窗口内有
+> 任何一条解析不了的 `stockEvent` 就返回 `502` + `STOCK_EVENT_FORMAT_UNSUPPORTED`，并附上能解析
+> 的那部分记录。最终字段映射、设备端所需改动与仍待双方确认的四项，见
+> [`protocol-v1-stock-event.md`](protocol-v1-stock-event.md)。
+
 **需要产品决定，不是技术选型：**
 
 1. 出入库/交班是否属于单栈的启动范围？如果暂不需要，云端直接删掉这两个端点，旧栈即可整体删除。
@@ -243,6 +248,14 @@ CommitWork:  id, workId, time, endTime, info
 ---
 
 ## 建议的下一步
+
+> **2026-09-04 更新：本节已被 [`protocol-v1-open-items.md`](protocol-v1-open-items.md) 取代。**
+> 那份文档按两侧**当前代码**（云端 `26fb6b6` / Android `d0c3bce`）重新逐项核对，标注了每条的
+> 决定人，并新增了一条本文档没有记录的阻塞项：**设备侧没有 `cmdResult` 上行通道**，终态被发到
+> 已经关闭的 RPC 响应 topic，云端的命令因此永远停在 `received` 直到过期。本节以下内容保留作为
+> 当时的记录。第 2 点（双方共用同一批 fixture）已在云端落地：`fixtures/protocol/v1/MANIFEST.json`
+> 加 `verify-manifest.sh` 加 `internal/protocol/manifest_test.go`，Android 侧的接入步骤写在
+> open-items 文档 §C。
 
 1. ~~先冻结 A（扁平 vs 嵌套）~~ —— **A 已由实测定案（见上），采用扁平键。** 剩下的全是改名，
    可以批量执行。若设备侧对实测结论有异议，复现步骤在上面，欢迎自行验证。

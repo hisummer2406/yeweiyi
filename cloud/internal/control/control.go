@@ -225,8 +225,12 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	}
 
 	// ThingsBoard accepted the call and the device answered, so the command was definitely sent.
+	// This may match zero rows — see the ack guard below for why — in which case cmd is refreshed
+	// from the database rather than left as the pending copy created above.
 	if sent, err := s.q.MarkControlCommandSent(ctx, commandID); err == nil {
 		cmd = sent
+	} else {
+		cmd = s.refresh(ctx, cmd)
 	}
 
 	status := protocol.CmdStatusReceived
@@ -241,11 +245,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		ErrorReason: text(ack.Reason),
 	})
 	if err != nil {
-		// The guard rejected the transition (the sweep already expired it, say). The device's
-		// answer is still worth auditing even though the record will not move.
-		s.audit(ctx, req.Actor, "control.ack", req.DeviceName, commandID, "failed",
-			map[string]any{"status": status, "note": "state guard refused the transition"})
-		return cmd, nil
+		return s.ackGuardRefused(ctx, cmd, req, status), nil
 	}
 
 	outcome := "allowed"
@@ -256,6 +256,57 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		map[string]any{"status": status, "errorCode": ack.ErrorCode, "reason": ack.Reason, "duplicate": ack.Duplicate})
 
 	return acked, nil
+}
+
+// ackGuardRefused handles MarkControlCommandAcked matching zero rows: the row is no longer in a
+// state an ACK may move it out of.
+//
+// Two very different things land here and neither the response nor the audit trail may conflate
+// them. The rare one is the sweep having expired the command. The common one is the device's
+// cmdResult having already closed it: Issue() waits for ThingsBoard's synchronous RPC ACK, but the
+// result travels the independent telemetry WebSocket (internal/ingest), so a fast device routinely
+// reports "succeeded" before this bookkeeping runs. The guard refusing the move is the state
+// machine doing its job — invariant 3, a later result outranks an earlier ACK.
+//
+// What must not happen is what used to: returning the stale in-memory row, so the POST answers
+// "pending" about a command the database already knows succeeded and a client polling
+// GET .../commands one second later sees a different, better answer than the write it just made;
+// and auditing the ACK as outcome "failed", which fabricates a failure in the one record that is
+// supposed to say what actually happened. Nothing failed — the device accepted the command and
+// then finished it.
+func (s *Service) ackGuardRefused(ctx context.Context, cmd db.ControlCommand, req IssueRequest, ackStatus string) db.ControlCommand {
+	cmd = s.refresh(ctx, cmd)
+
+	outcome, note := "failed", "state guard refused the transition"
+	if resultAlreadyArrived(cmd.Status) {
+		outcome, note = "allowed", "result arrived before ack bookkeeping"
+	}
+	s.audit(ctx, req.Actor, "control.ack", req.DeviceName, cmd.CommandID, outcome,
+		map[string]any{"status": ackStatus, "storedStatus": cmd.Status, "note": note})
+	return cmd
+}
+
+// resultAlreadyArrived reports whether a status can only have been written by ApplyResult, i.e. by
+// the device reporting back. 'rejected' is excluded because the ACK path itself writes it, and
+// 'expired' because the sweep does.
+func resultAlreadyArrived(status string) bool {
+	switch status {
+	case protocol.CmdStatusExecuting, protocol.CmdStatusSucceeded, protocol.CmdStatusFailed:
+		return true
+	}
+	return false
+}
+
+// refresh re-reads a command row. Used on every path where a guarded UPDATE matched zero rows, so
+// that what the caller gets back is the state the database actually holds rather than whatever this
+// goroutine happened to be carrying. A failed read keeps the copy we have: a stale row beats no
+// row, and the caller can poll.
+func (s *Service) refresh(ctx context.Context, cmd db.ControlCommand) db.ControlCommand {
+	stored, err := s.q.GetControlCommand(ctx, cmd.CommandID)
+	if err != nil {
+		return cmd
+	}
+	return stored
 }
 
 // handleSendFailure decides what a failed hand-off means for the command record.
@@ -269,11 +320,16 @@ func (s *Service) handleSendFailure(ctx context.Context, cmd db.ControlCommand, 
 	if errors.Is(sendErr, tbclient.ErrDeviceOffline) {
 		// ThingsBoard took the request and tried to deliver it; the device never acknowledged.
 		// The row moves to "sent" and stays there until a result arrives or the sweep expires it.
+		// The guard can refuse here too, and for the same reason as in Issue(): a device that
+		// executed the command and reported its result over telemetry while the RPC call was still
+		// waiting for an ACK it never sent. Refresh so the caller is told the stored state.
 		if sent, err := s.q.MarkControlCommandSent(ctx, cmd.CommandID); err == nil {
 			cmd = sent
+		} else {
+			cmd = s.refresh(ctx, cmd)
 		}
 		s.audit(ctx, req.Actor, "control.send", req.DeviceName, cmd.CommandID, "failed",
-			map[string]any{"method": req.Method, "error": "device did not acknowledge"})
+			map[string]any{"method": req.Method, "error": "device did not acknowledge", "storedStatus": cmd.Status})
 		return cmd, nil
 	}
 

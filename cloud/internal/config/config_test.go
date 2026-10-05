@@ -241,3 +241,70 @@ func TestExampleConfigIsValid(t *testing.T) {
 		t.Error("config.example.yaml must ship with allowPhysicalCommands: false")
 	}
 }
+
+// TestStockLegacyFormatBefore covers the boundary added in review of PR #12. It is the setting that
+// decides whether an unreadable 出入库 record is reported as a closed historical hole or as a device
+// that is broken right now, so a value that is silently mis-parsed is worse than one that is
+// rejected: the mistake would surface as the endpoint apparently regressing, far from its cause.
+func TestStockLegacyFormatBefore(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+
+	t.Run("unset by default", func(t *testing.T) {
+		cfg, err := config.Load("")
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if cfg.Stock.LegacyFormatBefore.Set() {
+			t.Error("default must be unset: a deployment nobody told about a fleet upgrade must " +
+				"treat every unreadable record as current breakage")
+		}
+	})
+
+	t.Run("file value", func(t *testing.T) {
+		path := writeConfig(t, "stock:\n  legacyFormatBefore: \"2026-10-01T00:00:00+08:00\"\n")
+		cfg, err := config.Load(path)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		want := time.Date(2026, 10, 1, 0, 0, 0, 0, time.FixedZone("", 8*3600))
+		if !cfg.Stock.LegacyFormatBefore.Equal(want) {
+			t.Errorf("got %s, want %s", cfg.Stock.LegacyFormatBefore, want)
+		}
+	})
+
+	t.Run("env overrides file", func(t *testing.T) {
+		path := writeConfig(t, "stock:\n  legacyFormatBefore: \"2026-10-01T00:00:00+08:00\"\n")
+		t.Setenv("STOCK_LEGACY_FORMAT_BEFORE", "2026-11-05T12:00:00Z")
+		cfg, err := config.Load(path)
+		if err != nil {
+			t.Fatalf("Load: %v", err)
+		}
+		if !cfg.Stock.LegacyFormatBefore.Equal(time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)) {
+			t.Errorf("env did not override the file: got %s", cfg.Stock.LegacyFormatBefore)
+		}
+	})
+
+	t.Run("rejects a value without an offset", func(t *testing.T) {
+		// "2026-10-01T00:00:00" would have to be guessed at as UTC, which can move the boundary by
+		// up to a day — in the one value whose entire job is to be a boundary.
+		path := writeConfig(t, "stock:\n  legacyFormatBefore: \"2026-10-01T00:00:00\"\n")
+		if _, err := config.Load(path); err == nil {
+			t.Error("a timestamp without a timezone offset must be rejected, not assumed to be UTC")
+		}
+	})
+
+	t.Run("rejects a bare date", func(t *testing.T) {
+		path := writeConfig(t, "stock:\n  legacyFormatBefore: \"2026-10-01\"\n")
+		if _, err := config.Load(path); err == nil {
+			t.Error("a bare date must be rejected")
+		}
+	})
+
+	t.Run("rejects a malformed env value", func(t *testing.T) {
+		t.Setenv("STOCK_LEGACY_FORMAT_BEFORE", "yesterday")
+		if _, err := config.Load(""); err == nil {
+			t.Error("a malformed STOCK_LEGACY_FORMAT_BEFORE must be an error, not a silent zero — " +
+				"a typo'd cutoff that parses as unset turns every historical query back into a 502")
+		}
+	})
+}

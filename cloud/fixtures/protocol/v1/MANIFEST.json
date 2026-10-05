@@ -1,0 +1,103 @@
+{
+  "_comment": "设备协议 V1 共享 fixture 清单。云端与 Android 必须消费同一批字节；改动任一 fixture 都要同步改这里的 sha256，两侧构建才会一起变红。用法与校验脚本见 README.md。",
+  "protocol": "设备协议 V1",
+  "protocolVersion": 1,
+  "frozen": false,
+  "frozenNote": "尚未冻结。仍待双方负责人确认的条目见 docs/protocol-v1-open-items.md；在那份清单清空之前，不要往任一侧的协议实现里新增字段。",
+  "openItems": "docs/protocol-v1-open-items.md",
+  "enforcement": {
+    "crossRepoGate": false,
+    "_comment": "这批校验目前只在云端跑，因此还不是跨仓库门禁——它是云端的准备工作。Android 尚未引入本目录、没有 Gradle/CI 校验、其测试也还没消费这批字节，所以任一侧的改动并不会让两侧构建一起失败。接入步骤见 docs/protocol-v1-open-items.md §C。",
+    "cloud": "enforced: internal/protocol/manifest_test.go + verify-manifest.sh",
+    "android": "not wired yet: no fixture import, no Gradle/CI check, tests still consume the repo's own fixtures",
+    "androidVerifiedAt": ""
+  },
+  "source": "yeweiyi-cloud/fixtures/protocol/v1",
+  "updated": "2026-09-04",
+  "fixtures": [
+    {
+      "file": "telemetry_snapshot.json",
+      "sha256": "dd15d0c3d420e985acba90b54d8eaef43920a5d49a3e709e16cfca87cdeaead6",
+      "direction": "uplink",
+      "pins": "30 秒周期遥测快照，扁平罐键 tank{n}.*，单位写在键名里"
+    },
+    {
+      "file": "telemetry_snapshot_rest.json",
+      "sha256": "fbc51f133f6711232eaa3af04d40ea8ffe18ed9bf5d387c699d31084663f21c0",
+      "direction": "uplink",
+      "pins": "同一快照经 ThingsBoard REST 读回的形状——数值被字符串化，属性不会"
+    },
+    {
+      "file": "telemetry_snapshot_forward_compat.json",
+      "sha256": "35c817e45379faeb8e6db51d80b1c780d56ab8f7b35bc95a0e621458965ef996",
+      "direction": "uplink",
+      "pins": "读取方必须忽略未知键，而不是报错"
+    },
+    {
+      "file": "client_attributes.json",
+      "sha256": "8e3a55da3998f643d0ef42b7915abb1fcd05119a7fcaf29100f5c55a6310f0e5",
+      "direction": "uplink",
+      "pins": "客户端属性：只在配置变化时上报，不进遥测"
+    },
+    {
+      "file": "alarm_active.json",
+      "sha256": "a58493dac5b3420f38d08ee5167c00bdeda0d8d61f84b03ef2070d97588148ac",
+      "direction": "uplink",
+      "pins": "报警产生事件。键名与字段仍与 Android 侧不兼容——见 open items A-2"
+    },
+    {
+      "file": "alarm_cleared.json",
+      "sha256": "0cb8af925ef9de7ffd83a5986e3aa3dba14a81c87313119c2c6a57afdb243d8b",
+      "direction": "uplink",
+      "pins": "报警恢复事件，与产生事件按 alarmId 配对"
+    },
+    {
+      "file": "stock_event_in.json",
+      "sha256": "41e21f0663cecbb7b07710acaa9de6f8a71cd05e01e206102896f72a70866149",
+      "direction": "uplink",
+      "pins": "进油。netVolumeL 与 duringDeliveryVolumeL 的关系即边卸边卖的到货量"
+    },
+    {
+      "file": "stock_event_out.json",
+      "sha256": "cd9d98c5feef22182b8ff888824c79f2253942af0d02ecb21fabe91ca6277033",
+      "direction": "uplink",
+      "pins": "出油。netVolumeL 相对油罐为负，移动量为正"
+    },
+    {
+      "file": "cmd_result_succeeded.json",
+      "sha256": "3047e4097e0fb6ede488cd2a380278adeafc6a0c507b1798b59389314536529b",
+      "direction": "uplink",
+      "pins": "命令异步执行结果。Android 侧目前完全没有这条上行通道——见 open items A-1"
+    },
+    {
+      "file": "cmd_result_failed.json",
+      "sha256": "2d7eb7e4409931c879f00d00f7178156989927d18ac8f461cd33dfb38feca61d",
+      "direction": "uplink",
+      "pins": "失败结果携带 errorCode/reason"
+    },
+    {
+      "file": "rpc_request.json",
+      "sha256": "fd254fcaffe5aec8da03528b2bd2c516db990f4a3b1c35e4d2384c756ff8e489",
+      "direction": "downlink",
+      "pins": "RPC 信封嵌在 params 内，method 留给 ThingsBoard 审计"
+    },
+    {
+      "file": "rpc_ack_received.json",
+      "sha256": "dd68415e43e2361dc1ee707c7d9ebe551cbc669518ec65ab42f6e7651ca001af",
+      "direction": "uplink",
+      "pins": "ACK 只表示已受理，不表示已执行"
+    },
+    {
+      "file": "rpc_ack_rejected.json",
+      "sha256": "ad5776a4416980d8d2221353c3b623471da5f945735fb1ae35a61ac316741158",
+      "direction": "uplink",
+      "pins": "拒绝是终态，携带 errorCode"
+    },
+    {
+      "file": "rpc_ack_duplicate.json",
+      "sha256": "e9a75b72ed5cb0c984f797f801e9cff0d1e53e8a82530f7879d690d71c4a41cc",
+      "direction": "uplink",
+      "pins": "重复 commandId 回放上次终态并置 duplicate=true，不重复执行动作"
+    }
+  ]
+}

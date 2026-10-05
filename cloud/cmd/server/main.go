@@ -104,6 +104,8 @@ func main() {
 		TokenTTL:  cfg.Auth.TokenTTL.Std(),
 		TB:        tbClient,
 		Control:   controlSvc,
+
+		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
 	})
 
 	log.Printf("listening on %s", cfg.Server.ListenAddr)

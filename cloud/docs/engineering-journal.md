@@ -1882,6 +1882,294 @@ one more plain PR comment, a P2 in the sixth round's own fix.
    `platform_admin` for minting, still independent of ThingsBoard. `go test ./... -p 1 -count=1` and
    a full `cmd/smoke -api` run (12/12) both stayed green.
 
+**2026-09-04 PR #11 eighth review-response round** — PR #11 was merged as an integration branch
+while three of its own blocking items were still open (the merge decision is not revisited here).
+This round works those three, on `fix/pr11-blocking-items`, one commit each.
+
+1. **The ACK/cmdResult race was only half closed.** The seventh round put `pending` into
+   `MarkControlCommandFinished`'s guard so a result arriving before our own ACK bookkeeping is
+   applied instead of dropped. That fixed the row. It did not fix what `Issue()` does afterwards.
+
+   Once the result has landed, `MarkControlCommandSent` (guarded on `pending`) and
+   `MarkControlCommandAcked` (guarded on `pending`/`sent`) both correctly match zero rows — the
+   state machine refusing to let an earlier ACK outrank a later result, which is invariant 3 and is
+   right. Everything downstream of that refusal was wrong:
+
+   - `Issue()` returned the stale in-memory row, so `POST /api/devices/:device/commands` answered
+     `"status":"pending","terminal":false` for a command the database already held as `succeeded`.
+     A client polling `GET .../commands` a second later got a better answer than the write it had
+     just made. Reproduced, not reasoned about: the new test failed with exactly
+     `Issue() returned status "pending", want "succeeded"` before the fix.
+   - the ACK was audited as `outcome=failed` with `note: "state guard refused the transition"` —
+     a failure that never happened, written into the one record that exists to say what did. The
+     device accepted the command and then finished it. Nothing about that is a failure, and this is
+     the trail people reach for when arguing about whether a pump ran.
+
+   Fixed with `ackGuardRefused`: re-read the row (`refresh`, which every zero-row path now goes
+   through, including `handleSendFailure`'s offline branch, which had the same stale-row bug), then
+   audit `allowed` + `note: "result arrived before ack bookkeeping"` + `storedStatus` when the
+   stored status is one only `ApplyResult` can write (`executing`/`succeeded`/`failed`), and keep
+   `failed` + the old note for the genuinely-refused cases (`expired` by the sweep). The two are
+   distinguished by `resultAlreadyArrived`, not by guessing.
+
+   The regression test (`TestIssue_ResultBeforeAckReturnsTheStoredStateAndAuditsTruthfully`) reuses
+   the `fakeSender.onSend` seam the seventh round added: `Issue()` is blocked *inside* the
+   synchronous RPC call, so the result provably lands first every run rather than the test hoping
+   timing lines up. It asserts all three properties separately — stored row still `succeeded` (the
+   ACK did not overwrite it), returned row `succeeded` with `finished_at` set, and the audit row's
+   outcome and detail. Confirmed it catches the regression: it fails on all of (b) and (c) against
+   the pre-fix code, passes after, and `-count=5` is stable.
+
+2. **`/api/oil-in-out` answered 200 with an empty array for every device on current firmware.**
+   The endpoint skipped `stockEvent` points it could not parse so that one bad record would not
+   blank an operator's screen. That reasoning is fine for one bad record; it is wrong for the actual
+   situation, where *every* record is unparseable because the device publishes
+   `DetailInoutRecord.toString()` rather than JSON (zhongchengyeweiyi#39, still unchanged at
+   `d0c3bce`). What the endpoint then produces is a well-formed, confident, wrong answer: an empty
+   出入库 history, indistinguishable from "no oil moved" — and 出入库 records are what gets argued
+   over with suppliers. Same failure shape as ThingsBoard aggregating nested telemetry to a silent
+   `0.0` (reconciliation §A), and the same lesson: an undetectable wrong answer beats a loud failure
+   only from the code's point of view.
+
+   New contract: every point in the window parses (including zero points) → 200 and the array,
+   unchanged; any point does not → **502** plus `{error, code, device, unparsable, parsed, sample,
+   records}`. 502 because the caller did nothing wrong and this backend is fine — it is the upstream
+   payload that cannot be interpreted. `code` is the stable
+   `STOCK_EVENT_FORMAT_UNSUPPORTED` so a client can say 设备固件尚未升级 rather than showing a
+   generic error; `records` still carries whatever *did* parse, so a fleet mid-upgrade loses nothing
+   it could otherwise see; `sample` is the first offending raw value truncated on a rune boundary
+   (the payloads carry Chinese oil-type names, so a byte slice would emit invalid UTF-8).
+
+   Three regression tests, the pair the review asked for plus the mixed case. The
+   current-real-format one publishes `realDeviceStockEventValue`, transcribed field-for-field from
+   `DetailInoutRecord.java:235-251` — misspelt `beginHeith`, quoted local-time strings, and the fact
+   that `toString()` silently omits `oilType`, both water volumes, both weights, `saleVolume` and
+   `duringDelivery`, which is over half the record and includes the one field that makes
+   边卸边卖 reconciliation correct. The valid-format one publishes the **shared cross-repo fixture's
+   bytes verbatim** (`fixtures/protocol/v1/stock_event_in.json`, only `_comment` dropped and `ts`
+   re-stamped) instead of marshalling this repo's own structs, so a field this backend renamed on
+   its own would fail here rather than agreeing with itself. Verified they catch the regression:
+   with the 502 branch disabled, the first fails with `unparseable device records were served as a
+   successful empty list: 200 []` and the mixed one times out; both pass with it restored.
+
+   `docs/protocol-v1-stock-event.md` is the other half of this item — the device-side change stated
+   precisely enough to implement (a full `DetailInoutRecord` column → V1 field mapping, the two
+   columns deliberately left out and why) and four things that still need the Android owner's
+   sign-off rather than a unilateral decision here, including what to do with the unparseable
+   records already accumulating in ThingsBoard.
+
+3. **Cross-repo protocol: a re-audit against both repos' current code, and a checksum gate under
+   the shared fixtures.** The reconciliation document was written 2026-09-01 and its "next steps"
+   section had gone stale; both repositories have moved since. Re-checked every item against
+   yeweiyi-cloud `26fb6b6` and zhongchengyeweiyi `d0c3bce`, and wrote
+   `docs/protocol-v1-open-items.md` — the same material as a working list, with a decision owner on
+   every row, because the previous document's failure mode was that everything in it read as
+   "someone should" and nothing said who.
+
+   **The re-audit turned up one blocking item nobody had recorded**, and it is worse than the
+   renames that dominated the old list: **the device has no `cmdResult` uplink at all.** The cloud's
+   whole state machine rests on the ACK and the result being separate messages arriving over
+   separate channels (invariants 2 and 3); the result is supposed to come back as a `cmdResult`
+   telemetry event, which is what `internal/ingest` subscribes to and what
+   `cmd_result_succeeded.json` pins. `RpcDispatcher.dispatch()` instead publishes *both* the
+   `RECEIVED` ack (line 88) and the terminal result (line 104) to
+   `v1/devices/me/rpc/response/{mqttRequestId}`. ThingsBoard's two-way RPC completes on the first
+   response, so the second one is published into a closed request and the cloud never learns the
+   outcome — every command would sit at `received` until the sweep expired it, and the audit trail
+   would read "device accepted a pump start, then nothing", with the pump possibly running.
+
+   That last step is **written down as inferred, not verified**, and the document says so in those
+   words with a one-line experiment for settling it. This project has twice been burned by
+   research-derived conclusions (Aliyun's ACL model, and its purchase availability), and the
+   ThingsBoard behaviours that actually matter here were all found by running it and contradicting
+   expectations. Also found in the same pass: the device's ACK payload
+   (`ThingsBoardManager.java:205`) carries no `commandId` at all, only `status`/`errorCode`/
+   `message` — and `commandId` is the sole correlation key, since ThingsBoard's own request id
+   changes on every retry.
+
+   The other half is the mechanism. The old recommendation — "Android imports
+   `fixtures/protocol/v1/` by submodule or build-time copy" — is the right shape but does not
+   actually prevent a recurrence: both repos already believed they were writing to a shared
+   contract, each with a fixture comment saying the other's did not exist yet. What was missing is
+   anything that *checks*. Added `MANIFEST.json` (sha256, direction and a one-line "what this pins"
+   per fixture), `verify-manifest.sh` (POSIX sh + awk + sha256, no Go and no jq, so the Android
+   build can run the identical check — the Gradle snippet is in the open-items document), and
+   `internal/protocol/manifest_test.go`. Deliberately no auto-repair: editing a fixture forces an
+   edit to the manifest, and that friction is the feature — it makes a one-sided rename turn both
+   repositories red at the same moment.
+
+   The Go test also covers the failure mode a checksum alone misses: a fixture that is listed,
+   checksummed, copied into both repos and read by nobody, which would pass every check while
+   pinning nothing. It walks the repo for `_test.go` files (skipping `.git` and `.claude`, whose
+   worktrees hold copies of this repo and would let a fixture "prove" it is used by finding its own
+   name in a stale checkout) and fails on any fixture no test mentions.
+
+   Verified all four gates actually fire, by probe rather than by assertion: mutating a fixture
+   produced the drift failure on both the Go and shell sides; an unlisted extra file and a
+   manifest-listed-but-deleted file each produced their own message; and a listed, present,
+   unreferenced fixture failed the orphan test. `sh verify-manifest.sh` needed one fix found this
+   way — macOS `/bin/sh` is bash 3.2, which swallowed a following Chinese character into a variable
+   name (`$file，` → unbound variable), so interpolations next to CJK text use `${file}`.
+
+   **What is NOT done, and must not be done from here:** steps 1–3 of §C live in the Android repo.
+   CLAUDE.md's rule is that cross-repo protocol changes require the other owner's agreement, so the
+   document specifies them precisely enough to apply and stops there.
+
+**2026-09-04 PR #12 first review-response round** — the follow-up branch got one review comment
+with a P1 and a P2. Both are fair and both are about the same thing: a claim being stronger than the
+evidence behind it.
+
+4. **[P1] A cloud-only checksum is not a cross-repo gate.** Correct, and the PR body already said so
+   in one line — which the reviewer's response shows is not enough. A green
+   `go test ./internal/protocol/` is the thing people will read, and nothing in the code said "this
+   half does not do what its name implies". Fixed by making the claim itself testable rather than by
+   arguing: `MANIFEST.json` now carries an `enforcement` object (`crossRepoGate: false`, plus a
+   per-side statement of what actually runs), the fixtures README leads with a status banner, and
+   open-items §C is retitled "**这是云端的准备工作，目前还不是跨仓库门禁**" with a §C-1 checklist of
+   the five things still outstanding. `TestManifestDoesNotOverstateEnforcement` refuses
+   `crossRepoGate: true` unless `androidVerifiedAt` records the zhongchengyeweiyi commit where the
+   import and build-time check were confirmed — this repository cannot observe that build, so the
+   claim needs evidence rather than an assertion made from here. Verified the guard fires by
+   flipping the flag.
+
+   The same review restated that the real control loop still stalls at `received`. It does, and
+   CLAUDE.md now says so in its own unverified list rather than only in a protocol document.
+
+5. **A-1 is no longer inferred — it was measured.** The reviewer declined to accept the inference,
+   which is the right call and the same standard this file already sets. Settled it with a real
+   ThingsBoard: `TestTwoWayRPC_SecondDeviceResponseNeverReachesTheBackend` has a device answer one
+   two-way RPC twice on the same response topic — `received`, then `succeeded` 1.5s later, the
+   Android shape — while the backend watches both channels it actually reads.
+
+   ```
+   device published [received succeeded] on the RPC response topic;
+   the backend received only "received" and no cmdResult telemetry.
+   ```
+
+   So the inference held: `SendCommand` returns the first response only, and six seconds of
+   telemetry produced no `cmdResult`. Every command on current device firmware sits at `received`
+   until the sweep expires it. The test is kept rather than deleted, so a ThingsBoard upgrade that
+   changes this is caught here instead of in the field. It drives a raw paho client rather than
+   `internal/devicesim`: devicesim is this project's reference implementation and already does the
+   right thing, and teaching it to misbehave would put the wrong behaviour behind a flag someone
+   could later mistake for a supported mode.
+
+6. **[P2] Upgrading the firmware would not have made the 502 go away.** The sharpest point in the
+   review, and it invalidates the closing line of the previous round's stock.go comment ("this will
+   stop happening on its own once zhongchengyeweiyi#39 lands"). It would not: shipping the
+   device-side fix converts nothing already written. Every `DetailInoutRecord.toString()` string
+   already in ThingsBoard stays unreadable forever, so any query window reaching back past the
+   upgrade keeps answering 502 for the rest of the deployment's life. That trades an empty list that
+   lies for an endpoint that is permanently broken — not an improvement, just a different failure.
+
+   The two cases cannot be told apart from the payload: a pre-upgrade record and a device that never
+   upgraded produce byte-identical values. The only discriminator is *when* the record was written,
+   and only an operator knows when the fleet was upgraded. Hence `stock.legacyFormatBefore` /
+   `STOCK_LEGACY_FORMAT_BEFORE`, an RFC3339 instant:
+
+   - unparseable **before** it — a closed, known hole. Counted as `legacySkipped`, still 200,
+     because nothing is wrong now and no action follows.
+   - unparseable **at or after** it — a device that should have been upgraded and was not. Still
+     502, because someone has to go and look at it. This is why it is a boundary and not a blanket
+     amnesty.
+   - **unset** (the default) — the upgrade has not happened, so everything unreadable is current
+     breakage. Correct default: a deployment nobody has told about a fleet upgrade must not start
+     quietly writing records off. The 502's message names the setting, or the first person to hit
+     it has no way to learn it exists.
+
+   An offset is required on the value and a bare date is rejected, rather than assumed UTC — in a
+   setting whose entire job is to be a boundary, guessing the timezone can move it by a day. A
+   malformed env value fails startup instead of falling back to zero, because a typo'd cutoff that
+   parses as "unset" looks exactly like the endpoint regressing.
+
+   **Second breaking change to the response**, made deliberately: it is now an object on both paths
+   (`{records, parsed, unparsable, legacySkipped, …}`). The previous round kept a bare array on
+   success specifically to avoid breaking the shape; that no longer works, because an array cannot
+   carry `legacySkipped`, and a 200 that silently omits how many records it could not read is the
+   original empty-list mistake one layer up. Done now while the endpoint still has no shipped
+   client.
+
+   Five tests: the two long-term-coexistence cases the review asked for, one pinning that the
+   unconfigured default names the setting in its error, plus the three from the previous round
+   updated to the object shape. Verified both new ones catch their regression — ignoring the cutoff
+   makes the before-cutoff test fail with "this endpoint would 502 forever on historical windows",
+   and turning the cutoff into a blanket amnesty makes the after-cutoff test fail with "a device
+   still publishing the pre-V1 format after the upgrade cutoff was not reported as a fault". Six
+   config sub-tests cover parsing, precedence and each rejection. `deploy/README.md` gets an
+   operations section ("车队固件升级之后"), because this is a thing an operator must do at a moment
+   nothing in the software can detect for them.
+
+**2026-09-04 PR #12 second review-response round** — two more P1s, both about a claim resting on
+something unproven. Same failure mode as the first round, in two new places.
+
+7. **[P1] Was the cutoff comparing the right timestamp?** The reviewer's argument: `stock.go`
+   compares ThingsBoard's `pt.TS` against the cutoff, the device replays queued events after an
+   outage, so a record generated before the upgrade but replayed after it would be stamped late and
+   read as current breakage — the endpoint 502-ing exactly when it was meant to stop. The code
+   comment called `pt.TS` "the record's own timestamp" without having established that.
+
+   Went and checked the device source instead of arguing. `ThingsBoardManager.reportRawEvent`
+   (:168-176) stamps `ts = System.currentTimeMillis()` at *generation* time and enqueues the
+   already-serialized JSON; `PendingAlarmStore.drainAndSend` (:87-99) republishes that string
+   verbatim. Nothing on the path re-stamps, and ThingsBoard honours the envelope ts. So the premise
+   ("写入 ThingsBoard 时的时间会落在 cutoff 后") does not hold for this code path — but the
+   reviewer was right that it was unproven and that no test covered the replay path by name.
+
+   The existing test already published a backdated envelope ts at test time, which *is* what a queue
+   drain does, but nothing said so. Renamed it to
+   `TestListOilInOut_ReplayedPreUpgradeRecordIsClassifiedByItsOwnTimestamp` with the citations in
+   the comment, and verified it catches the regression by switching classification to ingest time —
+   it fails with "this endpoint would 502 forever on historical windows".
+
+   Added the case that maps the boundary of the design:
+   `TestListOilInOut_RecordWithoutAnEnvelopeTimestampCountsAsCurrent`. A payload published with no
+   `ts` gets ThingsBoard's arrival time, and the record then counts as current breakage (502). That
+   is the correct failure direction — a real fault is never written off as history — and it doubles
+   as the empirical contrast proving the other test is exercising the envelope ts rather than
+   coincidence. The dependency is now stated as a **protocol requirement** in
+   protocol-v1-stock-event.md §3 (stockEvent MUST carry an envelope ts; replay MUST preserve it)
+   rather than left as an incidental property of today's firmware.
+
+8. **[P1] "No shipped client" was an assertion, not a fact.** Also correct, and checking turned up
+   something better than a confirmation would have. yeweiyi-miniapp `ae06989` *does* have a client
+   for this endpoint, and it expects `{rows: [...]}` — its CLAUDE.md records that shape for
+   `/api/alarms`, `/api/oil-in-out`, `/api/shifts` and `/api/devices`, and
+   `pages/device-detail/device-detail.ts:98` reads `res.rows`.
+
+   Which inverts the finding. The bare array was **PR #11's** departure from the documented
+   cross-repo contract *and* from this repo's own house shape (`/api/devices` → `{rows}`, commands →
+   `{commands}`, audit → `{audit}`). So the response key is now `rows`, and this branch moves
+   *toward* the client contract rather than away from it.
+
+   The rows themselves remain incompatible — the mini-program still expects the retired Alink
+   columns (`begin_height`, `device_local_id`) — and so do `/api/alarms`' envelope, `/api/shifts`,
+   `/api/oil-in-out/correct` and `/api/oilcan/latest`, every one of them broken by PR #11 rather
+   than by this branch. All of it is now in protocol-v1-open-items.md §D as a table of who broke
+   what and when, plus the four things needing the mini-program owner's sign-off. **§D is explicitly
+   not a confirmation record** — that is not something this repo can sign on the other owner's
+   behalf, and the section says so.
+
+   Did not take the versioned-endpoint route the review offered as an alternative: the client cannot
+   consume a v1 endpoint anyway once the row fields are gone (they come from deleted tables and
+   cannot be rebuilt), so it would double the maintenance surface without producing one working
+   client. Said so in §D, and said that if the reviewer wants the sign-off before merging, that is
+   a reasonable place to hold.
+
+9. **§D's confirmation, given by rebuilding the client rather than by a note.** Same repo owner as
+   `yeweiyi-miniapp`, so "get the mini-program owner's sign-off" resolved to actually updating that
+   repo instead of waiting on a separate confirmation step. `yeweiyi-miniapp`
+   `rebuild/thingsboard-single-stack` (`a34afc4`, local repo, no remote) rewrites every page against
+   the current cloud API: pairing now sends `{deviceName, pairingToken}`; the realtime tab reads
+   `telemetry/latest` instead of the deleted `oilcan/latest`; 出入库 renders `rows` plus the
+   `unparsable`/`legacySkipped` counts even on the 502 path (`ApiError` there now carries the full
+   response body, not just the message, specifically so that shape isn't collapsed to a toast); the
+   交班/记录订正/oil-can-set screens are removed outright rather than left pointing at deleted
+   routes; a new "发送控制命令" screen replaces them for the one thing that does have a live
+   endpoint. `/api/alarms` was deliberately left as a bare array (§D item 2's "no" answer) — its
+   device-side telemetry key is still open (§A-4), and changing the REST envelope now would be
+   adding behavior to an unsettled protocol from the wrong end. `npm run typecheck` is the only
+   verification so far; neither WeChat DevTools nor a live `yeweiyi-cloud` has exercised any of it.
+
 ## Architecture (as of 2026-08-29 — **SUPERSEDED IN FULL**)
 
 > **Do not read this section as fact.** It describes the legacy Alink stack in the present tense,

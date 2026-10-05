@@ -58,6 +58,7 @@ ThingsBoard 相关包会争抢资源，完整套件请使用 `-p 1`。
 ## 目录
 
 ```text
+fixtures/protocol/v1/ 跨仓库共享 fixture + MANIFEST.json 校验和清单
 internal/protocol/    设备协议 V1 契约
 internal/tbclient/    唯一的 ThingsBoard REST/WebSocket 网关
 internal/devicesim/   设备侧参考实现
@@ -106,18 +107,35 @@ docs/                 当前规范与历史归档
 
 ## 仍未定案或未验证的事项
 
-- 协议 V1 尚未冻结。做协议工作前先读 `docs/protocol-v1-reconciliation.md`；当前 Android
-  实现的遥测字段形状仍不兼容。
+- 协议 V1 尚未冻结。做协议工作前先读 `docs/protocol-v1-open-items.md`（待确认清单，含决定人）
+  与 `docs/protocol-v1-reconciliation.md`（差异背景）。当前 Android 实现的遥测、报警与 ACK
+  载荷均不兼容。清单清空前不要往任一侧新增协议字段。
+- **真实设备上的控制闭环是断的，已实测。** 设备把终态发成第二条 RPC 响应，而 ThingsBoard 的双向
+  RPC 只把第一条交给调用方；云端因此永远收不到结果，命令停在 `received` 直到被清扫成 `expired`。
+  实测见 `internal/tbclient/rpc_response_channel_test.go`，待办见 open-items A-1。
+- 共享 fixture 的校验（`fixtures/protocol/v1/MANIFEST.json` + `verify-manifest.sh` +
+  `internal/protocol/manifest_test.go`）**只在云端跑，还不是跨仓库门禁**；Android 侧未接入，
+  见 open-items §C-1。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
 - 多租户尚未完成；当前授权模型仅为角色加 `user_devices` 绑定。
-- `/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动；真实设备记录会被跳过而非解析。
+- `/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动（zhongchengyeweiyi#39）。真实设备当前上报的
+  `DetailInoutRecord.toString()` 解析不了，此时接口返回 502 与 `STOCK_EVENT_FORMAT_UNSUPPORTED`，
+  不再以 200 + 空数组冒充成功；两条路径都返回 `{rows, parsed, unparsable, legacySkipped, …}`。
+  升级固件**不会**转换 ThingsBoard 里已有的旧记录，因此车队升级后必须设置
+  `stock.legacyFormatBefore`，否则回看历史的查询会永久 502。该分类依赖设备把生成时刻写进信封
+  `ts` 且补投原样保留——这是协议硬要求，见 `docs/protocol-v1-stock-event.md` §3 与 `deploy/README.md`。
+- **小程序与云端 REST 的契约自 PR #11 起全面不兼容**（行内字段、已删端点、`/api/alarms` 的信封
+  形状），尚未获小程序负责人确认。清单见 `docs/protocol-v1-open-items.md` §D。
 - OTA、生产 MQTT TLS、租户隔离与容量结论都必须在真实环境验证后才能宣称完成。
 
 ## 延伸阅读
 
 - `docs/protocol-v1.md`：协议契约与开放问题。
-- `docs/protocol-v1-reconciliation.md`：跨仓库兼容状态。
+- `docs/protocol-v1-open-items.md`：跨仓库待确认清单，按决定人分类。
+- `docs/protocol-v1-reconciliation.md`：跨仓库差异背景与实测结论。
+- `docs/protocol-v1-stock-event.md`：出入库最终字段映射与所需设备端改动。
+- `fixtures/protocol/v1/README.md`：共享 fixture 的使用与改动规则。
 - `docs/thingsboard-ce-baseline.md`：平台和部署基线。
 - `deploy/README.md`：离线部署、备份和恢复。
 - `docs/engineering-journal.md`：归档的设计理由与评审历史。

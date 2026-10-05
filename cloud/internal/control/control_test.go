@@ -642,3 +642,130 @@ func assertAudit(t *testing.T, f *fixture, action, outcome string) {
 	}
 	t.Errorf("no audit row for actor=%s action=%s outcome=%s", f.actor.Username, action, outcome)
 }
+
+// TestIssue_ResultBeforeAckReturnsTheStoredStateAndAuditsTruthfully is the regression test for the
+// second half of the ACK/cmdResult race. The first half (the result being dropped) was closed by
+// putting 'pending' into MarkControlCommandFinished's guard; this covers what Issue() does *after*
+// that result has already landed.
+//
+// Once the device's cmdResult has moved the row to a terminal state, both MarkControlCommandSent
+// (guarded on 'pending') and MarkControlCommandAcked (guarded on 'pending'/'sent') correctly match
+// zero rows. That is the state machine working. What was wrong was everything Issue() did next:
+// it returned the stale in-memory row, so `POST /api/devices/:device/commands` told the operator
+// "pending" about a command the database already knew had succeeded, and it wrote a
+// control.ack audit row with outcome "failed" — recording a failure that never happened, on the one
+// trail that is supposed to be the record of what actually occurred.
+func TestIssue_ResultBeforeAckReturnsTheStoredStateAndAuditsTruthfully(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
+	ctx := context.Background()
+
+	// Same deterministic seam as TestApplyResult_AppliesWhileStillPending: hold Issue() inside its
+	// synchronous RPC call so the result provably lands first, rather than racing on timing.
+	release := make(chan struct{})
+	sentCommandID := make(chan string, 1)
+	f.sender.onSend = func(env protocol.Envelope) {
+		sentCommandID <- env.CommandID
+		<-release
+	}
+
+	type issueResult struct {
+		cmd db.ControlCommand
+		err error
+	}
+	issueDone := make(chan issueResult, 1)
+	go func() {
+		cmd, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute))
+		issueDone <- issueResult{cmd, err}
+	}()
+
+	var commandID string
+	select {
+	case commandID = <-sentCommandID:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Issue() never reached SendCommand")
+	}
+
+	if _, applied, err := f.svc.ApplyResult(ctx, f.device, protocol.CmdResult{
+		CommandID: commandID,
+		Status:    protocol.CmdStatusSucceeded,
+		Detail:    json.RawMessage(`{"muted":true}`),
+		TSMs:      time.Now().UnixMilli(),
+	}); err != nil || !applied {
+		t.Fatalf("ApplyResult(applied=%v): %v", applied, err)
+	}
+
+	close(release)
+	var res issueResult
+	select {
+	case res = <-issueDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Issue() never returned after being released")
+	}
+	if res.err != nil {
+		t.Fatalf("Issue(): %v", res.err)
+	}
+
+	// (a) the ACK must not overwrite the result the device already reported.
+	if stored := getCommand(t, f, commandID); stored.Status != protocol.CmdStatusSucceeded {
+		t.Errorf("stored status = %q, want %q — the ACK bookkeeping overwrote the device's result",
+			stored.Status, protocol.CmdStatusSucceeded)
+	}
+
+	// (b) the row handed back to the HTTP layer must be the one in the database, not the stale
+	// pending copy Issue() happened to be holding. An operator polling GET .../commands would
+	// immediately see 'succeeded'; the POST answering 'pending' for the same command is simply wrong.
+	if res.cmd.Status != protocol.CmdStatusSucceeded {
+		t.Errorf("Issue() returned status %q, want %q — the response must reflect the stored row",
+			res.cmd.Status, protocol.CmdStatusSucceeded)
+	}
+	if !res.cmd.FinishedAt.Valid {
+		t.Error("Issue() returned a row with no finished_at, so it is not the stored terminal row")
+	}
+
+	// (c) the ACK audit must say what happened. The device accepted the command and reported its
+	// result early; nothing failed. A 'failed' outcome here is a fabricated failure in the audit
+	// trail, and it is the trail people reach for when arguing about whether a pump ran.
+	ack := findAudit(t, f, "control.ack", commandID)
+	if ack.Outcome == "failed" {
+		t.Errorf("control.ack audited as outcome=failed; detail=%s", ack.Detail)
+	}
+	var detail map[string]any
+	if len(ack.Detail) > 0 {
+		_ = json.Unmarshal(ack.Detail, &detail)
+	}
+	if got, _ := detail["storedStatus"].(string); got != protocol.CmdStatusSucceeded {
+		t.Errorf("control.ack detail storedStatus = %v, want %q; detail=%s",
+			detail["storedStatus"], protocol.CmdStatusSucceeded, ack.Detail)
+	}
+	if note, _ := detail["note"].(string); note != "result arrived before ack bookkeeping" {
+		t.Errorf("control.ack detail note = %v, want the result-arrived-first note; detail=%s",
+			detail["note"], ack.Detail)
+	}
+}
+
+// findAudit returns the single audit row for one action on one command, failing the test if there
+// is not exactly one. Unlike assertAudit it does not take the outcome as an input — the point of
+// the caller is to inspect the outcome that was actually written.
+func findAudit(t *testing.T, f *fixture, action, commandID string) db.AuditLog {
+	t.Helper()
+	rows, err := f.q.ListAuditLog(context.Background(), db.ListAuditLogParams{
+		DeviceName: pgtype.Text{String: f.device, Valid: true},
+		BeginTime:  pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
+		EndTime:    pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true},
+		Lim:        200,
+		Off:        0,
+	})
+	if err != nil {
+		t.Fatalf("list audit: %v", err)
+	}
+	var found []db.AuditLog
+	for _, r := range rows {
+		if r.Action == action && r.CommandID.Valid && uuidText(r.CommandID.Bytes) == commandID {
+			found = append(found, r)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("want exactly 1 %s audit row for command %s, got %d", action, commandID, len(found))
+	}
+	return found[0]
+}

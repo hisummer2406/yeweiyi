@@ -47,6 +47,39 @@ func (d *Duration) UnmarshalYAML(b []byte) error {
 	return nil
 }
 
+// Timestamp is an RFC3339 instant in the configuration file. Same reasoning as Duration: it is a
+// quoted string and nothing else, because the alternatives people reach for — a bare date, an epoch
+// number — each have a wrong-by-default interpretation (which timezone? seconds or millis?) and the
+// one setting that uses this decides whether historical data is reported as missing or as broken.
+type Timestamp struct{ time.Time }
+
+// UnmarshalYAML accepts an RFC3339 instant such as "2026-10-01T00:00:00+08:00". An offset is
+// required: a depot's "we upgraded on the 1st" is a local statement, and defaulting it to UTC would
+// silently move the boundary by up to a day in a value whose whole job is to be a boundary.
+func (t *Timestamp) UnmarshalYAML(b []byte) error {
+	var s string
+	if err := yaml.Unmarshal(b, &s); err != nil {
+		return fmt.Errorf("timestamp must be a quoted RFC3339 string like \"2026-10-01T00:00:00+08:00\": %w", err)
+	}
+	return t.parse(s)
+}
+
+func (t *Timestamp) parse(s string) error {
+	if strings.TrimSpace(s) == "" {
+		*t = Timestamp{}
+		return nil
+	}
+	parsed, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return fmt.Errorf("invalid timestamp %q (want RFC3339 with an offset, e.g. \"2026-10-01T00:00:00+08:00\"): %w", s, err)
+	}
+	*t = Timestamp{parsed}
+	return nil
+}
+
+// Set reports whether a value was configured at all.
+func (t Timestamp) Set() bool { return !t.IsZero() }
+
 // Config is the whole runtime configuration.
 type Config struct {
 	Server      Server      `yaml:"server"`
@@ -56,6 +89,7 @@ type Config struct {
 	ThingsBoard ThingsBoard `yaml:"thingsboard"`
 	Control     Control     `yaml:"control"`
 	Ingest      Ingest      `yaml:"ingest"`
+	Stock       Stock       `yaml:"stock"`
 }
 
 type Server struct {
@@ -110,6 +144,31 @@ type Ingest struct {
 	DeviceRefreshInterval Duration `yaml:"deviceRefreshInterval"`
 	// ResubscribeDelay is the wait before reopening a subscription that dropped.
 	ResubscribeDelay Duration `yaml:"resubscribeDelay"`
+}
+
+// Stock tunes the 出入库 (stock in/out) read-through endpoint.
+type Stock struct {
+	// LegacyFormatBefore is the instant at or after which every device on this deployment is
+	// expected to publish `stockEvent` as 设备协议 V1 JSON rather than the pre-V1
+	// DetailInoutRecord.toString() debug string (zhongchengyeweiyi#39).
+	//
+	// It exists because upgrading the firmware does NOT convert what is already in ThingsBoard.
+	// Records written before the upgrade stay unreadable forever, so without a boundary any query
+	// window reaching back far enough would answer 502 for the rest of the deployment's life —
+	// making the endpoint permanently broken rather than temporarily honest. Found in review of
+	// PR #12.
+	//
+	// With it set, /api/oil-in-out treats the two cases as what they actually are:
+	//
+	//	before the cutoff  a known, closed data hole — counted and reported as legacySkipped,
+	//	                   still HTTP 200, because nothing is wrong *now* and no action follows;
+	//	at or after it     a device that should have been upgraded and was not — HTTP 502, because
+	//	                   somebody needs to go and look at it.
+	//
+	// Unset (the default) means "the upgrade has not happened yet", and every unparseable record
+	// is treated as current breakage. That is the correct default: a deployment that has not been
+	// told the fleet was upgraded must not start quietly writing off unreadable records.
+	LegacyFormatBefore Timestamp `yaml:"legacyFormatBefore"`
 }
 
 // Defaults returns the configuration used when nothing is specified. Every default here is safe to
@@ -203,6 +262,16 @@ func (c *Config) applyEnv() error {
 	// anything else is an error rather than a silent false. A typo here ("ture", "yes") must not
 	// quietly leave the operator believing pumps are controllable when they are not — nor the
 	// reverse. Unset simply leaves whatever the file said.
+	// STOCK_LEGACY_FORMAT_BEFORE mirrors stock.legacyFormatBefore. A malformed value is an error
+	// rather than a silent zero: a typo'd cutoff that parses as "unset" would turn every historical
+	// query back into a 502, which looks like a regression in the endpoint rather than in the
+	// configuration.
+	if v, ok := os.LookupEnv("STOCK_LEGACY_FORMAT_BEFORE"); ok && v != "" {
+		if err := c.Stock.LegacyFormatBefore.parse(v); err != nil {
+			return fmt.Errorf("STOCK_LEGACY_FORMAT_BEFORE: %w", err)
+		}
+	}
+
 	if v, ok := os.LookupEnv("ALLOW_PHYSICAL_COMMANDS"); ok && v != "" {
 		switch strings.ToLower(v) {
 		case "true", "1":

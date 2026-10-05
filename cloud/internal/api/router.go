@@ -30,6 +30,12 @@ type Deps struct {
 	// panicking, which is what lets a developer work on the business endpoints alone.
 	TB      *tbclient.Client
 	Control *control.Service
+
+	// StockLegacyFormatBefore is the boundary between "historical records nobody can read any more"
+	// and "a device that is still publishing the pre-V1 format today". See config.Stock and
+	// stock.go; zero means the fleet upgrade has not happened, so every unreadable record is
+	// current breakage.
+	StockLegacyFormatBefore time.Time
 }
 
 func NewRouter(deps Deps) *gin.Engine {

@@ -37,7 +37,7 @@ func newAlarmEnv(t *testing.T) (*testEnv, *devicesim.Device, string) {
 
 // newStockEnv is newAlarmEnv plus the device's access token, which tests that publish raw telemetry
 // (rather than driving the simulator) need.
-func newStockEnv(t *testing.T) (*testEnv, *devicesim.Device, string, string) {
+func newStockEnv(t *testing.T, opts ...func(*api.Deps)) (*testEnv, *devicesim.Device, string, string) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -59,7 +59,12 @@ func newStockEnv(t *testing.T) (*testEnv, *devicesim.Device, string, string) {
 		t.Skipf("ThingsBoard login failed: %v", err)
 	}
 
-	env := newTestEnvWith(t, func(d *api.Deps) { d.TB = tb })
+	env := newTestEnvWith(t, func(d *api.Deps) {
+		d.TB = tb
+		for _, opt := range opts {
+			opt(d)
+		}
+	})
 
 	deviceName := fmt.Sprintf("api-alarm-%d", time.Now().UnixNano())
 	tbDev, err := tb.EnsureDevice(ctx, deviceName, tbclient.DefaultDeviceProfile)
