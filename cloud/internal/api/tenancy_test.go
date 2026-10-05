@@ -281,11 +281,12 @@ func deviceScopedRoutes(t *testing.T) map[string]routeCase {
 		return func(device, _ string) (string, []byte) { return "/api/devices/" + device + suffix, nil }
 	}
 	return map[string]routeCase{
-		"GET /api/alarms":                           {build: query("/api/alarms?device=")},
-		"GET /api/oil-in-out":                       {build: query("/api/oil-in-out?device=")},
-		"GET /api/audit":                            {build: query("/api/audit?device=")},
-		"GET /api/devices/:device/telemetry/latest": {build: path("/telemetry/latest")},
-		"GET /api/devices/:device/commands":         {build: path("/commands")},
+		"GET /api/alarms":                            {build: query("/api/alarms?device=")},
+		"GET /api/oil-in-out":                        {build: query("/api/oil-in-out?device=")},
+		"GET /api/audit":                             {build: query("/api/audit?device=")},
+		"GET /api/devices/:device/telemetry/latest":  {build: path("/telemetry/latest")},
+		"GET /api/devices/:device/telemetry/history": {build: path("/telemetry/history?tank=1&fields=oilLevelMm&interval=1h")},
+		"GET /api/devices/:device/commands":          {build: path("/commands")},
 		"POST /api/devices/:device/commands": {build: func(device, _ string) (string, []byte) {
 			return "/api/devices/" + device + "/commands", cmdBody
 		}},

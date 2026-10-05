@@ -154,6 +154,20 @@ type TimeseriesQuery struct {
 	// different sets, not different orders, so reversing an ascending page would silently answer
 	// "the most recent alarms" with the oldest ones.
 	Descending bool
+
+	// Agg and IntervalMs ask ThingsBoard to aggregate server-side: one point per IntervalMs bucket,
+	// reduced by Agg ("AVG", "MIN", "MAX", ...). Empty Agg means raw points.
+	//
+	// Behaviour measured against CE 4.2.1.1 (issue #24), not assumed, because it differs from the raw
+	// path in ways that matter to callers:
+	//   - Limit is ignored: the point count is (EndMs-StartMs)/IntervalMs, so the caller must bound
+	//     the range/interval ratio itself.
+	//   - Descending is ignored: aggregated results always come back ascending.
+	//   - Each point's TS is the bucket MIDPOINT (bucket start + IntervalMs/2), not its start.
+	//   - Buckets are anchored at StartMs, and a bucket with no samples is omitted rather than
+	//     returned empty.
+	Agg        string
+	IntervalMs int64
 }
 
 // Timeseries returns each key's history within the query's time range.
@@ -178,6 +192,10 @@ func (c *Client) Timeseries(ctx context.Context, deviceID string, q TimeseriesQu
 		// Without this ThingsBoard applies its own aggregation defaults to numeric series; we want
 		// the raw points as stored.
 		"useStrictDataTypes": {"false"},
+	}
+	if q.Agg != "" {
+		values.Set("agg", q.Agg)
+		values.Set("interval", strconv.FormatInt(q.IntervalMs, 10))
 	}
 	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/values/timeseries" + query(values)
 

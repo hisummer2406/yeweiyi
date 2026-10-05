@@ -68,6 +68,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		// ThingsBoard single stack (issue #10).
 		// Telemetry is read through to ThingsBoard on demand, never served from a local copy.
 		authorized.GET("/devices/:device/telemetry/latest", latestTelemetryHandler(deps))
+		authorized.GET("/devices/:device/telemetry/history", telemetryHistoryHandler(deps))
 		// Remote control. POST answers 202, never 200: the response reports only how far the
 		// command got synchronously; the outcome is read back through the GET.
 		authorized.POST("/devices/:device/commands", issueCommandHandler(deps))

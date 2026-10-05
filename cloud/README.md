@@ -91,6 +91,12 @@ go run ./cmd/tbdevicesim run -token <token> -tanks 2 -interval 10s -alarm-after 
   留一个永远返回空的端点比没有更糟）。`/api/oil-in-out` 依赖一个尚未合并的设备侧改动
   （[zhongchengyeweiyi#39](https://github.com/hisummer2406/zhongchengyeweiyi/issues/39)）：设备已在
   上报 `stockEvent`，但发的是 Java 调试字符串而非 JSON。
+- **历史趋势**（issue #24）：`GET /api/devices/:device/telemetry/history?tank=&fields=&interval=1m|5m|15m|1h&agg=avg|min|max&beginTime=&endTime=`。
+  聚合在 ThingsBoard 查询时完成，不落业务库。窗口 ≤ 7 天（等于遥测保留期），桶数 ≤ 700（ThingsBoard
+  `DATABASE_TS_MAX_INTERVALS` 默认值）：`1m` ≤ 11 小时 40 分，`5m` ≤ 58 小时，`15m`/`1h` 可覆盖 7 天。
+  `time` 为桶起点（ThingsBoard 返回的是中点，已换算）；无样本的桶**缺席**而不是 0；起止时间向外对齐到
+  桶边界。仅数值字段可聚合。实测（CE 4.2.1.1，本机，7 天 × 30 秒 × 9 个字段）：`1h` 94 ms / 1512 点 /
+  77 KB，`15m` 230 ms / 6048 点 / 259 KB。
 - **旧 Alink 栈已于 2026-09-02 全部删除**：`internal/mqtt`、`cmd/devicesim`、`internal/queue`、
   `internal/partitions`、mosquitto 服务，以及五张遗留表（migration `000011`，删除前确认均为空表）。
 - **离线部署基线已建立**（`deploy/`）：镜像按摘要固定、离线打包与导入、预检、备份/恢复、
