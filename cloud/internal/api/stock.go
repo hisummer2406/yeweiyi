@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -142,6 +141,11 @@ type stockListResponse struct {
 	// Truncated is true when more movements matched the window than `limit` allowed. Rows are
 	// ordered by `time` in the requested direction and cut from the far end.
 	Truncated bool `json:"truncated"`
+	// Partial is true when the scan for later corrections stopped at its safety cap. Every movement
+	// in the window is listed, but a correction generated far after it may not have been seen, so a
+	// figure could be stale. Only reachable for a device with tens of thousands of events after the
+	// requested window.
+	Partial bool `json:"partial"`
 
 	// Only on the 502 path.
 	Error  string `json:"error,omitempty"`
@@ -266,16 +270,32 @@ func selectWindow(rows []stockRow, beginMs, endMs int64, limit int) (listed []st
 // what is returned.
 const stockEnvelopeSkew = time.Hour
 
-// stockPageLimit and stockMaxPages bound the raw read. Stock events are a handful a day per device;
-// 10 × 5000 points is far beyond any real window, and exists so a misbehaving device cannot make one
-// request unbounded. Hitting it is reported as 400 ("narrow the window"), never as a silent cut.
+// stockPageLimit and stockMaxPages bound one request's raw read so a misbehaving device cannot make
+// it unbounded. 10 × 5000 is a safety bound, not a measured capacity figure; nothing here claims it is
+// enough for any particular deployment. What happens when it is reached is decided by scanOutcome:
+// it must never make an old window permanently unreadable.
 const (
 	stockPageLimit = 5000
 	stockMaxPages  = 10
 )
 
-// errStockWindowTooLarge means the raw read hit stockMaxPages.
-var errStockWindowTooLarge = errors.New("stock event window too large")
+// scanOutcome interprets a raw read that stopped at the page cap (complete == false).
+//
+//   - The cap was hit before the read even reached the end of the window: the window itself holds
+//     more points than one request will scan, so its contents are incomplete. Narrowing the window
+//     fixes that, and the caller is told to (tooLarge).
+//   - The cap was hit at or past the window's end: everything in the window was read, and only some
+//     later corrections may be unseen. Answer anyway and say so (partial) — refusing would make
+//     history older than ~50,000 events unreachable no matter how small the window asked for.
+func scanOutcome(points []tbclient.TSValue, complete bool, endMs int64) (partial, tooLarge bool) {
+	if complete {
+		return false, false
+	}
+	if len(points) == 0 || points[len(points)-1].TS < endMs {
+		return false, true
+	}
+	return true, false
+}
 
 // readStockPoints returns every stockEvent point with envelope ts in [fromMs, toMs), oldest first,
 // paging through ThingsBoard's per-call limit.
@@ -286,8 +306,7 @@ var errStockWindowTooLarge = errors.New("stock event window too large")
 // regardless of where the window ends, and regardless of how many unrelated points fall between a
 // report and its correction. There is deliberately no fixed look-ahead: any cutoff would be a
 // guess at how late an operator may confirm a delivery.
-func readStockPoints(ctx context.Context, tb *tbclient.Client, deviceID string, fromMs, toMs int64) ([]tbclient.TSValue, error) {
-	var all []tbclient.TSValue
+func readStockPoints(ctx context.Context, tb *tbclient.Client, deviceID string, fromMs, toMs int64) (points []tbclient.TSValue, complete bool, err error) {
 	for page := 0; page < stockMaxPages; page++ {
 		series, err := tb.Timeseries(ctx, deviceID, tbclient.TimeseriesQuery{
 			Keys:    []string{protocol.KeyStockEvent},
@@ -296,16 +315,16 @@ func readStockPoints(ctx context.Context, tb *tbclient.Client, deviceID string, 
 			Limit:   stockPageLimit,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		pts := series[protocol.KeyStockEvent]
-		all = append(all, pts...)
+		points = append(points, pts...)
 		if len(pts) < stockPageLimit {
-			return all, nil
+			return points, true, nil
 		}
 		fromMs = pts[len(pts)-1].TS + 1
 	}
-	return nil, errStockWindowTooLarge
+	return points, false, nil
 }
 
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {
@@ -337,16 +356,17 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		beginMs, endMs := p.begin.Time.UnixMilli(), p.end.Time.UnixMilli()
-		points, err := readStockPoints(ctx, deps.TB, dev.ID.ID,
+		points, complete, err := readStockPoints(ctx, deps.TB, dev.ID.ID,
 			beginMs-stockEnvelopeSkew.Milliseconds(), time.Now().Add(stockEnvelopeSkew).UnixMilli())
-		if errors.Is(err, errStockWindowTooLarge) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "too many stock events from beginTime to now; narrow beginTime",
-			})
-			return
-		}
 		if err != nil {
 			writeThingsBoardError(c, err, p.device)
+			return
+		}
+		partial, tooLarge := scanOutcome(points, complete, endMs)
+		if tooLarge {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "too many stock events inside the requested window; narrow beginTime/endTime",
+			})
 			return
 		}
 
@@ -422,6 +442,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			LegacySkipped: legacy,
 			Folded:        folded,
 			Truncated:     truncated,
+			Partial:       partial,
 		}
 
 		if unparsable > 0 {

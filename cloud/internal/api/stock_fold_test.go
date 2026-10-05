@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"yeweiyi-cloud/internal/protocol"
+	"yeweiyi-cloud/internal/tbclient"
 )
 
 func TestFoldByEventID(t *testing.T) {
@@ -93,5 +94,34 @@ func TestSelectWindow(t *testing.T) {
 	listed, folded, truncated = selectWindow(rows, 100, 900, 1)
 	if len(listed) != 1 || listed[0].ev.EventID != "a" || folded != 0 || !truncated {
 		t.Errorf("limit 1: listed=%v folded=%d truncated=%v, want [a]/0/true", listed, folded, truncated)
+	}
+}
+
+func TestScanOutcome(t *testing.T) {
+	at := func(ts ...int64) []tbclient.TSValue {
+		var out []tbclient.TSValue
+		for _, v := range ts {
+			out = append(out, tbclient.TSValue{TS: v})
+		}
+		return out
+	}
+	const end = 1000
+	cases := []struct {
+		name              string
+		points            []tbclient.TSValue
+		complete          bool
+		wantPartial, tooL bool
+	}{
+		{"complete read", at(10, 20), true, false, false},
+		{"cap hit inside the window: window itself incomplete", at(10, 999), false, false, true},
+		{"cap hit exactly at the end: window fully read, later corrections unseen", at(10, 1000), false, true, false},
+		{"cap hit beyond the end: old window stays readable", at(10, 5000), false, true, false},
+		{"cap hit with nothing read", nil, false, false, true},
+	}
+	for _, c := range cases {
+		partial, tooLarge := scanOutcome(c.points, c.complete, end)
+		if partial != c.wantPartial || tooLarge != c.tooL {
+			t.Errorf("%s: partial=%v tooLarge=%v, want %v/%v", c.name, partial, tooLarge, c.wantPartial, c.tooL)
+		}
 	}
 }
