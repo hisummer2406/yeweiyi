@@ -295,6 +295,26 @@ get<{ rows: OilInOut[] }>('/api/oil-in-out', { device, limit: 50, sort: false })
 **若复审认为在拿到确认之前不应合并本 PR，云端同意。** 本节的作用是把"需要谁确认什么"写清楚，
 而不是替代确认。
 
+### D-租户. 多租户阶段 1 带来的 REST 变更 —— **待小程序负责人确认（2026-10-05）**
+
+openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶段 1 改了以下云端行为。
+与 PR #11 不同，这次**尚未**有人对照小程序核对过。
+
+| 接口 | 变化 | 是否破坏 |
+|---|---|---|
+| `GET /api/devices` | `platform_admin` 返回**全部**设备（原：仅已绑定）；`customer_admin` 返回本客户全部设备（原：仅已绑定）。行字段不变，**刻意不暴露** `customer_id` | 语义变化 |
+| `POST /api/devices/bind` | 新增拒绝情形：设备属于其他客户或未分配，返回与"密钥错误"完全相同的 401 | 否（只多一种失败） |
+| `POST /api/devices/:device/pairing-secret`（仅 `platform_admin`，安装工具） | 请求体新增**必填** `{"customerId": N}`；设备已属于别的客户返回 409 | **是**：不带 body 的旧调用得 400 |
+| `GET /api/audit` | `customer_admin` 可不带 `device`；`platform_admin` 可选 `?customerId=` | 否（只放宽） |
+
+阶段 2 另外**新增**了一组路由，全是新路由，不影响现有页面，列在这里只为让负责人知道它们存在：
+`POST/GET /api/customers`、`PUT/DELETE /api/customers/:id`、`POST/GET /api/users`、
+`PUT /api/users/:id`（停用/启用/重置密码）、`PUT /api/users/:id/customer`、
+`PUT /api/devices/:device/customer`。被停用的用户登录得 401，已签发的 token 访问设备得 403。
+
+需要小程序负责人回答：是否有页面依赖"管理员只看到已绑定设备"；是否需要在设备行里拿到 `customer_id`
+（目前不给）。
+
 ---
 
 ## 建议的推进顺序

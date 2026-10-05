@@ -12,26 +12,32 @@ import (
 )
 
 const listAuditLog = `-- name: ListAuditLog :many
-SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail FROM audit_log
+SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail, customer_id FROM audit_log
 WHERE ($1::TEXT IS NULL OR device_name = $1::TEXT)
-  AND occurred_at >= $2
-  AND occurred_at <= $3
+  AND ($2::BIGINT IS NULL OR customer_id = $2::BIGINT)
+  AND occurred_at >= $3
+  AND occurred_at <= $4
 ORDER BY occurred_at DESC
-LIMIT $5 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListAuditLogParams struct {
 	DeviceName pgtype.Text        `json:"device_name"`
+	CustomerID pgtype.Int8        `json:"customer_id"`
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
 
-// device_name is optional: passing NULL lists across all devices, which is a platform-admin view.
+// device_name is optional: passing NULL lists across all devices. customer_id is optional too:
+// NULL means no customer filter, which only a platform admin may ask for — every other caller's
+// handler pins it to their own customer, so a device that changed hands never exposes the previous
+// owner's history to the new one.
 func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error) {
 	rows, err := q.db.Query(ctx, listAuditLog,
 		arg.DeviceName,
+		arg.CustomerID,
 		arg.BeginTime,
 		arg.EndTime,
 		arg.Off,
@@ -54,6 +60,7 @@ func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]A
 			&i.CommandID,
 			&i.Outcome,
 			&i.Detail,
+			&i.CustomerID,
 		); err != nil {
 			return nil, err
 		}
@@ -66,7 +73,7 @@ func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]A
 }
 
 const listAuditLogForCommand = `-- name: ListAuditLogForCommand :many
-SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail FROM audit_log
+SELECT id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail, customer_id FROM audit_log
 WHERE command_id = $1
 ORDER BY occurred_at ASC
 `
@@ -90,6 +97,7 @@ func (q *Queries) ListAuditLogForCommand(ctx context.Context, commandID pgtype.U
 			&i.CommandID,
 			&i.Outcome,
 			&i.Detail,
+			&i.CustomerID,
 		); err != nil {
 			return nil, err
 		}
@@ -103,9 +111,9 @@ func (q *Queries) ListAuditLogForCommand(ctx context.Context, commandID pgtype.U
 
 const writeAuditLog = `-- name: WriteAuditLog :one
 INSERT INTO audit_log (
-    actor_id, actor, action, device_name, command_id, outcome, detail
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail
+    actor_id, actor, action, device_name, command_id, outcome, detail, customer_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, occurred_at, actor_id, actor, action, device_name, command_id, outcome, detail, customer_id
 `
 
 type WriteAuditLogParams struct {
@@ -116,6 +124,7 @@ type WriteAuditLogParams struct {
 	CommandID  pgtype.UUID `json:"command_id"`
 	Outcome    string      `json:"outcome"`
 	Detail     []byte      `json:"detail"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
 }
 
 func (q *Queries) WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error) {
@@ -127,6 +136,7 @@ func (q *Queries) WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (A
 		arg.CommandID,
 		arg.Outcome,
 		arg.Detail,
+		arg.CustomerID,
 	)
 	var i AuditLog
 	err := row.Scan(
@@ -139,6 +149,7 @@ func (q *Queries) WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (A
 		&i.CommandID,
 		&i.Outcome,
 		&i.Detail,
+		&i.CustomerID,
 	)
 	return i, err
 }

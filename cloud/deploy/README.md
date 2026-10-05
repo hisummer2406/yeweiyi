@@ -61,23 +61,43 @@ JWT_SECRET=<强随机值> ./bin/server -config config.yaml &
 
 ### 首次业务账号初始化
 
-业务 API（Go 后台）与 ThingsBoard 是两套独立的身份体系。Go 后台的首次账号需要**首先创建**：
+业务 API（Go 后台）与 ThingsBoard 是两套独立的身份体系。Go 后台的首次账号需要**首先创建**。
+
+账号分属**客户**（租户）：数据库迁移会自动创建名为 `default` 的客户，并把升级前已有的用户和设备都
+归入它——**私有化单客户部署不需要任何额外配置**，把所有用户建在 `default` 下即可。平台管理员不属于
+任何客户（`customer_id` 必须为空），其余角色必须属于一个客户；数据库有 CHECK 约束强制这一点。
+
+**只有第一个平台管理员需要 SQL 引导**，其余客户、用户、设备分配都用 API（均需 `Authorization: Bearer`）：
 
 ```bash
-# 创建管理员账号（通过 SQL 直接写入业务库，因为还没有 API 可注册）
-export DATABASE_URL="postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"
+export PGPASSWORD=yeweiyi
+PSQL="docker run --rm -i --network host -e PGPASSWORD postgres:16 psql -h localhost -U yeweiyi -d yeweiyi"
 
-# 如果你有现成的创建用户工具，这里调用它；暂时没有官方工具，需手工或通过脚本执行 SQL：
-docker run --rm -it --network host \
-  -e PGPASSWORD=yeweiyi \
-  postgres:16 psql -h localhost -U yeweiyi -d yeweiyi \
-  -c "INSERT INTO users (username, password_hash) VALUES \
-      ('admin', crypt('change-me-immediately', gen_salt('bf'))) \
-      ON CONFLICT (username) DO NOTHING;"
-
-# 用户首次登录时会通过 JWT 获取 token，密码在 API 服务侧设置。
-# 详见 internal/store/db/migrations 中的 users 表定义。
+# 第一个平台管理员（不属于任何客户）——唯一需要手工 SQL 的一步
+$PSQL -c "INSERT INTO users (username, password_hash, role) VALUES \
+  ('admin', crypt('change-me-immediately', gen_salt('bf')), 'platform_admin') \
+  ON CONFLICT (username) DO NOTHING;"
 ```
+
+```bash
+# 之后用平台管理员登录，拿 token，再管理其余一切
+TOKEN=$(curl -s localhost:8080/api/login -d '{"username":"admin","password":"change-me-immediately"}' \
+  -H 'Content-Type: application/json' | jq -r .token)
+H=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json')
+
+curl "${H[@]}" localhost:8080/api/customers -d '{"name":"客户名称"}'                       # 新增客户（返回 id）
+curl "${H[@]}" localhost:8080/api/users -d '{"username":"site-admin","password":"至少8位的密码",
+  "role":"customer_admin","customerId":1}'                                                  # 客户管理员
+curl "${H[@]}" -X PUT localhost:8080/api/devices/DEVICE_NAME/customer -d '{"customerId":1}'  # 分配/转移设备
+curl "${H[@]}" -X PUT localhost:8080/api/users/2 -d '{"disabled":true}'                      # 停用用户（立即生效）
+curl "${H[@]}" -X PUT localhost:8080/api/users/2 -d '{"password":"新的至少8位密码"}'          # 重置密码
+```
+
+客户管理员只能在**本客户**内创建、停用 `customer_user`、重置其密码；创建 `customer_admin` 与其余管理
+操作需平台管理员。转移设备或用户会**同时清除它们的设备绑定**（旧客户下的绑定不能带到新客户）。
+设备需先归属客户，才能被该客户的用户绑定：安装人员以平台管理员调
+`POST /api/devices/:device/pairing-secret`，请求体带 `{"customerId": <客户 id>}`；设备已属于另一个
+客户时返回 409，不会被静默改归属（要转移请用上面的分配接口）。有历史记录的客户无法删除。
 
 **生产环境建议**：建立一个管理员初始化脚本或在配置管理工具（Ansible/Terraform）中自动化此步骤，
 不要每次装机都手工跑 SQL。

@@ -57,13 +57,12 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		// userMayAccessDevice, not a direct UserOwnsDevice call: this handler authenticates its own
-		// JWT independently of authMiddleware (a WebSocket handshake can't carry the usual
-		// middleware chain), so it needs the same platform-admin shortcut requireDeviceOwnership
-		// applies for every REST device endpoint — routed through one shared function so the two
-		// cannot drift apart again the way they already did once. See userMayAccessDevice's comment
-		// in devices.go.
-		owns, err := userMayAccessDevice(c.Request.Context(), deps, claims.UserID, claims.Role, device)
+		// This handler authenticates its own JWT outside authMiddleware (a WebSocket handshake can't
+		// carry the usual middleware chain), so it calls the shared rule directly rather than
+		// requireDeviceOwnership. Authorization is decided once, here, at handshake: the stream below
+		// only ever carries this one device's events, but a user whose access is revoked while
+		// connected keeps the stream until they disconnect. See userMayAccessDevice in devices.go.
+		owns, err := userMayAccessDevice(c.Request.Context(), deps, claims.UserID, device)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

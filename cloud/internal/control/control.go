@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"yeweiyi-cloud/internal/protocol"
@@ -55,11 +56,15 @@ var (
 	ErrPlatformUnavailable = errors.New("control: device platform unavailable")
 )
 
-// Actor is the authenticated user issuing a command.
+// Actor is who an action — and therefore its audit row — is attributed to.
 type Actor struct {
 	UserID   int64
 	Username string
 	Role     string
+	// CustomerID is the customer snapshot stored on the command and its audit rows. Issue fills it in
+	// for a user (the user's own customer, or for a platform admin the device's current customer);
+	// the device and system actors below carry their command's customer instead.
+	CustomerID pgtype.Int8
 }
 
 // Sender is the slice of tbclient.Client this package needs. Narrowing it to an interface keeps the
@@ -134,6 +139,13 @@ type IssueRequest struct {
 // not a Go error — the call worked, and the resulting row has status "rejected" with the device's
 // reason — because a refusal is information the operator must see, not a transport failure.
 func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlCommand, error) {
+	// Resolved first so even the earliest denial below is audited under a customer.
+	customerID, err := s.resolveCustomer(ctx, req.Actor.UserID, req.DeviceName)
+	if err != nil {
+		return db.ControlCommand{}, err
+	}
+	req.Actor.CustomerID = customerID
+
 	spec, known := protocol.Methods[req.Method]
 	if !known {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
@@ -198,6 +210,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: req.Actor.UserID != 0},
 		Operator:   req.Actor.Username,
 		Reason:     req.Reason,
+		CustomerID: req.Actor.CustomerID,
 		// Both timestamps come from this one clock reading — see CreateControlCommand's comment.
 		IssuedAt:  pgtype.Timestamptz{Time: issuedAt, Valid: true},
 		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
@@ -384,7 +397,7 @@ func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protoc
 		outcome = "failed"
 	}
 	// The actor on a result is the device, not a user — this row is the device reporting back.
-	s.audit(ctx, Actor{Username: "device:" + deviceName}, "control.result", deviceName, commandID, outcome,
+	s.audit(ctx, Actor{Username: "device:" + deviceName, CustomerID: updated.CustomerID}, "control.result", deviceName, commandID, outcome,
 		map[string]any{"status": status, "errorCode": res.ErrorCode, "reason": res.Reason})
 
 	return updated, true, nil
@@ -398,7 +411,7 @@ func (s *Service) ExpireStale(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	for _, cmd := range expired {
-		s.audit(ctx, Actor{Username: "system"}, "control.expire", cmd.DeviceName, cmd.CommandID, "failed",
+		s.audit(ctx, Actor{Username: "system", CustomerID: cmd.CustomerID}, "control.expire", cmd.DeviceName, cmd.CommandID, "failed",
 			map[string]any{"method": cmd.Method, "previousStatus": cmd.Status})
 	}
 	return len(expired), nil
@@ -444,21 +457,45 @@ func (s *Service) authorize(ctx context.Context, actor Actor, deviceName string,
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
 	}
 
-	// A platform admin is scoped to every device by definition; everyone else must be bound to it.
-	if actor.Role == RolePlatformAdmin {
-		return nil
-	}
-	owns, err := s.q.UserOwnsDevice(ctx, db.UserOwnsDeviceParams{
+	// The device-scope rule (platform admin: any; customer admin: own customer; customer user: own
+	// customer and bound) is the same SQL internal/api uses, decided from the database's current
+	// role and customer. The role above gates *which methods*, this gates *which devices*.
+	allowed, err := s.q.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{
 		UserID:     actor.UserID,
 		DeviceName: deviceName,
 	})
 	if err != nil {
 		return fmt.Errorf("check device authorization: %w", err)
 	}
-	if !owns {
+	if !allowed {
 		return fmt.Errorf("%w: device %q", ErrForbidden, deviceName)
 	}
 	return nil
+}
+
+// resolveCustomer picks the customer a command and its audit rows are filed under: the user's own,
+// or — for a platform admin, who belongs to none — the device's customer at this moment, so a
+// customer reviewing their audit trail sees what platform staff did to their devices. A device that
+// does not exist (an attempt against a made-up name) yields NULL. The device is only consulted for
+// users with no customer, which are the admins already trusted to see every device, so this adds no
+// existence signal for anyone else.
+func (s *Service) resolveCustomer(ctx context.Context, userID int64, deviceName string) (pgtype.Int8, error) {
+	user, err := s.q.GetUserByID(ctx, userID)
+	switch {
+	case err == nil && user.CustomerID.Valid:
+		return user.CustomerID, nil
+	case err != nil && !errors.Is(err, pgx.ErrNoRows):
+		return pgtype.Int8{}, fmt.Errorf("resolve actor customer: %w", err)
+	}
+
+	dev, err := s.q.GetDevice(ctx, deviceName)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return pgtype.Int8{}, nil
+		}
+		return pgtype.Int8{}, fmt.Errorf("resolve device customer: %w", err)
+	}
+	return dev.CustomerID, nil
 }
 
 func roleAllows(role string, need protocol.PermissionLevel) bool {
@@ -490,6 +527,7 @@ func (s *Service) audit(ctx context.Context, actor Actor, action, deviceName str
 		CommandID:  commandID,
 		Outcome:    outcome,
 		Detail:     encoded,
+		CustomerID: actor.CustomerID,
 	})
 }
 

@@ -7,8 +7,8 @@
 -- not. The envelope sent to the device carries the same issued_at, so device and cloud agree too.
 INSERT INTO control_commands (
     command_id, device_name, method, args,
-    operator_id, operator, reason, issued_at, expires_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    operator_id, operator, reason, issued_at, expires_at, customer_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: GetControlCommand :one

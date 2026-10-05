@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"yeweiyi-cloud/internal/control"
@@ -171,25 +172,56 @@ func listDeviceCommandsHandler(deps Deps) gin.HandlerFunc {
 
 // listAuditHandler is GET /api/audit.
 //
-// Scope rule: a platform admin may query across all devices; everyone else must name a device they
-// are bound to. There is no "all devices" listing for a non-admin, because the audit log spans
-// tenants and a shared listing would leak other customers' activity.
+// Scope, decided from the user's current role and customer in the database:
+//   - platform admin: everything, optionally narrowed by ?customerId= and/or ?device=;
+//   - customer admin: their own customer's audit trail, with or without ?device=;
+//   - customer user: must name a device they may access.
+//
+// Every non-platform caller is pinned to their own customer even when a device is named, so a
+// device that changed hands never shows its previous owner's history to the new one. There is no
+// unfiltered listing for anyone but a platform admin, because the audit log spans customers.
 func listAuditHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		role, _ := c.Get("role")
-		device := c.Query("device")
+		ctx := c.Request.Context()
+		user, err := deps.Queries.GetUserByID(ctx, c.MustGet("userID").(int64))
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if user.DisabledAt.Valid {
+			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+			return
+		}
 
+		device := c.Query("device")
 		var deviceFilter pgtype.Text
 		if device != "" {
 			if !requireDeviceOwnership(c, deps, device) {
 				return
 			}
 			deviceFilter = pgtype.Text{String: device, Valid: true}
-		} else if role != control.RolePlatformAdmin {
+		} else if user.Role == control.RoleCustomerUser {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error": "device query param is required unless you are a platform administrator",
+				"error": "device query param is required for your role",
 			})
 			return
+		}
+
+		customerFilter := user.CustomerID
+		if user.Role == control.RolePlatformAdmin {
+			customerFilter = pgtype.Int8{}
+			if raw := c.Query("customerId"); raw != "" {
+				id, perr := strconv.ParseInt(raw, 10, 64)
+				if perr != nil || id <= 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "customerId must be a positive integer"})
+					return
+				}
+				customerFilter = pgtype.Int8{Int64: id, Valid: true}
+			}
 		}
 
 		begin, end, ok := timeRange(c)
@@ -198,8 +230,9 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 		}
 		limit, offset := pageParams(c, 100)
 
-		rows, err := deps.Queries.ListAuditLog(c.Request.Context(), db.ListAuditLogParams{
+		rows, err := deps.Queries.ListAuditLog(ctx, db.ListAuditLogParams{
 			DeviceName: deviceFilter,
+			CustomerID: customerFilter,
 			BeginTime:  pgtype.Timestamptz{Time: begin, Valid: true},
 			EndTime:    pgtype.Timestamptz{Time: end, Valid: true},
 			Lim:        limit,

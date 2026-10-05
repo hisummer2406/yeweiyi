@@ -111,13 +111,17 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 
 	var userID int64
 	err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role) VALUES ($1, 'x', $2) RETURNING id`,
+		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, 'x', $2::text,
+			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE (SELECT id FROM customers WHERE name = 'default') END) RETURNING id`,
 		username, role).Scan(&userID)
 	if err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	if err := q.EnsureDevice(ctx, deviceName); err != nil {
 		t.Fatalf("seed device: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE devices SET customer_id = (SELECT id FROM customers WHERE name = 'default') WHERE device_name = $1`, deviceName); err != nil {
+		t.Fatalf("assign device to default customer: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
 		`INSERT INTO user_devices (user_id, device_name) VALUES ($1, $2)`, userID, deviceName); err != nil {

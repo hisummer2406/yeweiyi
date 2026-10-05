@@ -81,6 +81,10 @@ docs/                 当前规范与历史归档
 6. 必须先授权、后检查设备是否存在，避免设备名枚举。
 7. 设备配对密钥必须与 ThingsBoard/MQTT 设备凭据隔离。
 8. 仅使用 ThingsBoard CE 功能，且部署必须支持完全离线环境。
+9. 设备访问只经 `UserMayAccessDevice`（SQL）这一条规则：平台管理员任意设备；客户管理员本客户全部设备；
+   客户普通用户本客户内已绑定的设备。租户边界读数据库，不读 JWT；跨客户、不存在、未绑定、未分配对非平台
+   管理员必须返回完全相同的 403。新增含 `:device` 或 `device` 参数的路由，必须登记到
+   `internal/api/tenancy_test.go` 的 `deviceScopedRoutes`，否则测试失败。
 
 ## 变更规则
 
@@ -118,7 +122,13 @@ docs/                 当前规范与历史归档
   见 open-items §C-1。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
-- 多租户尚未完成；当前授权模型仅为角色加 `user_devices` 绑定。
+- 多租户**阶段 1（隔离）与阶段 2（管理 API）均已落地**：`customers` 表；非平台管理员用户恰好属于一个
+  客户，设备至多属于一个客户（`NULL` = 未分配）；租户只存在于 Go 业务库，不映射 ThingsBoard customer。
+  管理接口在 `internal/api/admin.go`（客户 CRUD、设备分配、用户创建/列出/停用/重置密码/迁移），谁能做什么
+  读数据库当前的角色、客户与 `users.disabled_at`，不读 JWT。**仍需 SQL 引导第一个平台管理员**（见
+  `deploy/README.md`）；客户没有“停用”，有历史记录的客户因外键 RESTRICT 无法删除。设计与决策见
+  `openspec/changes/implement-multitenant-support-with-customer-isolation/`。`GET /api/devices` 的语义变化、
+  `pairing-secret` 新增必填 `customerId` 与新增的管理路由尚未获小程序负责人确认，见 open-items §D。
 - `/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动（zhongchengyeweiyi#39）。真实设备当前上报的
   `DetailInoutRecord.toString()` 解析不了，此时接口返回 502 与 `STOCK_EVENT_FORMAT_UNSUPPORTED`，
   不再以 200 + 空数组冒充成功；两条路径都返回 `{rows, parsed, unparsable, legacySkipped, …}`。

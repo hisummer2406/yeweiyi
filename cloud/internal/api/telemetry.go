@@ -26,13 +26,15 @@ import (
 // latestTelemetryHandler is GET /api/devices/:device/telemetry/latest.
 func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if deps.TB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
-			return
-		}
-
+		// Authorization first, even before "is ThingsBoard configured": every device-scoped handler
+		// answers a caller who may not touch the device with the same 403 regardless of anything else
+		// about the deployment or the device.
 		device := c.Param("device")
 		if !requireDeviceOwnership(c, deps, device) {
+			return
+		}
+		if deps.TB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
 			return
 		}
 

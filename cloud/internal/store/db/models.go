@@ -70,6 +70,8 @@ type AuditLog struct {
 	CommandID  pgtype.UUID        `json:"command_id"`
 	Outcome    string             `json:"outcome"`
 	Detail     []byte             `json:"detail"`
+	// 记录产生时的客户快照：操作者所属客户；平台管理员/设备/系统触发的记录取对应命令或设备当时的客户；设备不存在则为 NULL。
+	CustomerID pgtype.Int8 `json:"customer_id"`
 }
 
 // 远程控制命令及其状态机（issue #1）。状态流转单向不可回退：pending→sent→received→executing→succeeded/failed，或 →rejected/→expired。MQTT/RPC 发送成功只代表消息发出，received 表示设备已接受，真正执行结果由设备异步上报的 cmdResult 决定。
@@ -95,6 +97,16 @@ type ControlCommand struct {
 	AckedAt    pgtype.Timestamptz `json:"acked_at"`
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	// 下发时的客户快照：操作者所属客户，平台管理员操作则取设备当时的客户。设备日后改归属不会改变它。
+	CustomerID pgtype.Int8 `json:"customer_id"`
+}
+
+// 客户（租户）。用户与设备各自至多属于一个客户；平台管理员不属于任何客户。
+type Customer struct {
+	ID int64 `json:"id"`
+	// 客户名称，全局唯一
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // 设备在线状态表，记录 thing/event/isOline 的最新状态（design doc §4.2）。
@@ -109,6 +121,8 @@ type Device struct {
 	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
 	// 该行最近一次更新时间。
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 设备所属客户；NULL=已登记未分配。访问判定见 db/queries/user_devices.sql 的 UserMayAccessDevice。
+	CustomerID pgtype.Int8 `json:"customer_id"`
 }
 
 // 设备配对密钥（哈希），与 ThingsBoard 设备凭据完全隔离，仅用于验证 /api/devices/bind 请求
@@ -179,6 +193,10 @@ type User struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	// 角色：platform_admin=平台管理员，customer_admin=客户管理员，customer_user=客户普通用户。控制命令的权限分级依据此列（见 internal/protocol 的 PermissionLevel）。
 	Role string `json:"role"`
+	// 用户所属客户。平台管理员为 NULL，其余角色必须非空（users_customer_role_check）。
+	CustomerID pgtype.Int8 `json:"customer_id"`
+	// 停用时间；NULL=启用。停用后无法登录，且已签发的 token 也无法访问任何设备（判定读库）。
+	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
 }
 
 // 用户-设备绑定关系（多对多），小程序端通过扫描设备物理二维码建立绑定（CLAUDE.md 2026-08-29 authorization pass）。

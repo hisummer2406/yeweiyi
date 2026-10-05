@@ -2170,6 +2170,55 @@ something unproven. Same failure mode as the first round, in two new places.
    adding behavior to an unsettled protocol from the wrong end. `npm run typecheck` is the only
    verification so far; neither WeChat DevTools nor a live `yeweiyi-cloud` has exercised any of it.
 
+### 2026-10-05 — 多租户阶段 1：租户只在 Go 库，访问判定读库不读 JWT
+
+当前规范见 `CLAUDE.md` 约束 9；设计、被否决的方案和剩余任务在
+`openspec/changes/implement-multitenant-support-with-customer-isolation/`。这里只记**为什么**：
+
+1. **不映射 ThingsBoard customer。** 后端是 ThingsBoard 唯一的客户端，设备也只连它，Go 已是必经之路；
+   再在 ThingsBoard 建 customer 就有两份"设备属于谁"，且需要为每个客户建 ThingsBoard 用户，违背"不建第二套
+   账号体系"。
+2. **租户边界不进 JWT。** 角色变更本来就要等 token 过期（24h）才生效；边界若同样走 token，被迁移的用户在
+   旧客户上还有最长 24h 访问权。判定改为一条 SQL（`UserMayAccessDevice`），同样一次数据库往返，即时生效。
+3. **历史记录快照客户，而不是 JOIN 设备。** 设备改归属后历史应留在当时的客户名下。快照取值：操作者的客户；
+   平台管理员（无客户）取设备当时的客户，否则客户永远看不到平台运维对自己设备做过什么——这一条是评审自己
+   的设计时才发现的，最初草稿取的是"操作者客户"，平台管理员的行会全是 NULL。
+4. **不做 RLS。** 它要求每个事务设置当前客户，而 pgx 连接池 + sqlc 的无状态查询、`ingest` 这类系统进程都没有
+   "当前客户"。防"忘记加过滤"改用路由遍历测试：路由表里每条路由必须归类为"设备范围（带跨客户拒绝用例）"
+   或"豁免（写明理由）"，新增路由漏登记会让测试失败。这个测试第一次运行就抓到
+   `telemetry/latest` 在 ThingsBoard 未配置时先返回 503、后授权的顺序问题，已修。
+5. **草稿里踩过的坑，留作记录。** 最初的设计给 `alarms`/`oil_in_out` 表加 `customer_id`，但这两张表在
+   迁移 000011 已删除；spec 放在 `specs/requirements.md` 而不是 `specs/<capability>/spec.md`，
+   `openspec status` 报"完成"但 `openspec validate --strict` 不过。两者都是没读代码/没跑校验就下笔的结果。
+6. **已知限制。** WebSocket 只在握手时授权；握手后被撤销权限的用户保留连接直到断开（既有行为，未扩大）。
+   生产代码里没有创建用户的路径，管理 API 属阶段 2。
+
+验证：迁移在 v12 种子数据上应用，回填与 CHECK 符合预期，up→down→up 往返 schema 一致。
+
+### 2026-10-05 — 多租户阶段 2：管理 API，停用读库，客户级审计不归属客户
+
+当前规范见 `CLAUDE.md` 与 `openspec/changes/implement-multitenant-support-with-customer-isolation/`。
+这里只记**为什么**：
+
+1. **停用必须读库。** 用户停用靠新列 `users.disabled_at`，访问判定、设备列表、绑定、登录、审计查询和所有管理
+   接口都读它。只在登录时检查的话，被停用的人手里的 token 还能用最长 24h；与阶段 1 "租户边界不进 JWT" 同一个理由。
+2. **客户级审计不归属任何客户。** 最初顺手把 `customer.create` 的审计记在新客户名下，写测试时才发现这样
+   新客户一出生就因历史外键 RESTRICT 删不掉。改为客户级操作客户为空，客户 id 放进 detail。代价：
+   用户/设备相关的管理审计仍归属客户，所以有过任何管理动作的客户同样删不掉——真正的出路是“停用客户”，
+   留作 Open Question，没有硬做。
+3. **转移设备/用户同事务清绑定。** 旧客户下建立的绑定不应带进新客户；读时的客户匹配本来就让残留绑定
+   不授予任何权限，但清掉它避免日后改规则时变成隐患。转移还在旧、新客户名下各记一条审计，两边的管理员都能看到。
+4. **他客户的用户与不存在的用户同样 404。** 与设备"授权先于存在性"同一个原则，应用到用户 id 上。
+   本客户内但角色不对（对等的 `customer_admin`）返回 403——同一客户内没有存在性可泄露。用户名全局唯一，
+   所以创建用户的 409 会让 `customer_admin` 得知某用户名在别处被占用，这是全局唯一的固有代价，接受并记录。
+5. **`default` 客户受保护。** 部署文档与引导 SQL 都按名称 `default` 引用它，重命名或删除会让它们静默失效。
+6. **测试里抓到的东西。** 路由遍历测试在我加完新路由、没登记之前就失败了——这正是它存在的目的；还有一个
+   断言写错（两次被拒的尝试，一个来自管理员、一个来自普通用户，都在客户 A，所以是 2 行不是 1 行）。
+
+验证：迁移 14 的 up→down→up 往返 schema 一致；全量 `go test ./... -p 1` 在真实 ThingsBoard、PostgreSQL、
+Redis 上 165 通过、0 失败、0 跳过。旧测试 `api-bind-*`、`api-pairing-timing-*`、`ctl-api-async` 仍会在库里留下
+设备/审计行（不是本变更引入，未处理）。
+
 ## Architecture (as of 2026-08-29 — **SUPERSEDED IN FULL**)
 
 > **Do not read this section as fact.** It describes the legacy Alink stack in the present tense,

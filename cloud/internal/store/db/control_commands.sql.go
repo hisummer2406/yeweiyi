@@ -14,9 +14,9 @@ import (
 const createControlCommand = `-- name: CreateControlCommand :one
 INSERT INTO control_commands (
     command_id, device_name, method, args,
-    operator_id, operator, reason, issued_at, expires_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
+    operator_id, operator, reason, issued_at, expires_at, customer_id
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
 `
 
 type CreateControlCommandParams struct {
@@ -29,6 +29,7 @@ type CreateControlCommandParams struct {
 	Reason     string             `json:"reason"`
 	IssuedAt   pgtype.Timestamptz `json:"issued_at"`
 	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	CustomerID pgtype.Int8        `json:"customer_id"`
 }
 
 // issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
@@ -48,6 +49,7 @@ func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCom
 		arg.Reason,
 		arg.IssuedAt,
 		arg.ExpiresAt,
+		arg.CustomerID,
 	)
 	var i ControlCommand
 	err := row.Scan(
@@ -68,6 +70,7 @@ func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCom
 		&i.AckedAt,
 		&i.FinishedAt,
 		&i.UpdatedAt,
+		&i.CustomerID,
 	)
 	return i, err
 }
@@ -77,7 +80,7 @@ UPDATE control_commands
 SET status = 'expired', finished_at = now(), updated_at = now()
 WHERE expires_at < now()
   AND status IN ('pending', 'sent', 'received', 'executing')
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
 `
 
 // The cloud-side half of the validity window: anything past its expiry that never reached a
@@ -110,6 +113,7 @@ func (q *Queries) ExpireStaleControlCommands(ctx context.Context) ([]ControlComm
 			&i.AckedAt,
 			&i.FinishedAt,
 			&i.UpdatedAt,
+			&i.CustomerID,
 		); err != nil {
 			return nil, err
 		}
@@ -122,7 +126,7 @@ func (q *Queries) ExpireStaleControlCommands(ctx context.Context) ([]ControlComm
 }
 
 const getControlCommand = `-- name: GetControlCommand :one
-SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at FROM control_commands WHERE command_id = $1
+SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id FROM control_commands WHERE command_id = $1
 `
 
 func (q *Queries) GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error) {
@@ -146,12 +150,13 @@ func (q *Queries) GetControlCommand(ctx context.Context, commandID pgtype.UUID) 
 		&i.AckedAt,
 		&i.FinishedAt,
 		&i.UpdatedAt,
+		&i.CustomerID,
 	)
 	return i, err
 }
 
 const listControlCommandsForDevice = `-- name: ListControlCommandsForDevice :many
-SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at FROM control_commands
+SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id FROM control_commands
 WHERE device_name = $1
 ORDER BY issued_at DESC
 LIMIT $2 OFFSET $3
@@ -190,6 +195,7 @@ func (q *Queries) ListControlCommandsForDevice(ctx context.Context, arg ListCont
 			&i.AckedAt,
 			&i.FinishedAt,
 			&i.UpdatedAt,
+			&i.CustomerID,
 		); err != nil {
 			return nil, err
 		}
@@ -211,7 +217,7 @@ SET status       = $2,
     updated_at   = now()
 WHERE command_id = $1
   AND status IN ('pending', 'sent')
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
 `
 
 type MarkControlCommandAckedParams struct {
@@ -249,6 +255,7 @@ func (q *Queries) MarkControlCommandAcked(ctx context.Context, arg MarkControlCo
 		&i.AckedAt,
 		&i.FinishedAt,
 		&i.UpdatedAt,
+		&i.CustomerID,
 	)
 	return i, err
 }
@@ -265,7 +272,7 @@ SET status        = $3,
 WHERE command_id = $1
   AND device_name = $2
   AND status IN ('pending', 'sent', 'received', 'executing')
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
 `
 
 type MarkControlCommandFinishedParams struct {
@@ -325,6 +332,7 @@ func (q *Queries) MarkControlCommandFinished(ctx context.Context, arg MarkContro
 		&i.AckedAt,
 		&i.FinishedAt,
 		&i.UpdatedAt,
+		&i.CustomerID,
 	)
 	return i, err
 }
@@ -334,7 +342,7 @@ const markControlCommandSent = `-- name: MarkControlCommandSent :one
 UPDATE control_commands
 SET status = 'sent', sent_at = now(), updated_at = now()
 WHERE command_id = $1 AND status = 'pending'
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
 `
 
 // Status transitions are all guarded by the *current* status rather than written unconditionally.
@@ -363,6 +371,7 @@ func (q *Queries) MarkControlCommandSent(ctx context.Context, commandID pgtype.U
 		&i.AckedAt,
 		&i.FinishedAt,
 		&i.UpdatedAt,
+		&i.CustomerID,
 	)
 	return i, err
 }

@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const ensureDevice = `-- name: EnsureDevice :exec
@@ -21,8 +23,32 @@ func (q *Queries) EnsureDevice(ctx context.Context, deviceName string) error {
 	return err
 }
 
+const ensureDeviceForCustomer = `-- name: EnsureDeviceForCustomer :one
+INSERT INTO devices (device_name, customer_id) VALUES ($1, $2)
+ON CONFLICT (device_name) DO UPDATE
+    SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)
+RETURNING customer_id
+`
+
+type EnsureDeviceForCustomerParams struct {
+	DeviceName string      `json:"device_name"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
+}
+
+// Provisioning-time registration (pairing-secret minting). Creates the device under the given
+// customer, or claims an existing *unassigned* one for it. A device that already belongs to a
+// different customer is left alone and its current customer_id is returned, so the caller can see
+// the mismatch and refuse: minting must never silently move a device between customers — that is
+// a reassignment, which also has to clear the old customer's user_devices bindings.
+func (q *Queries) EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceForCustomerParams) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, ensureDeviceForCustomer, arg.DeviceName, arg.CustomerID)
+	var customer_id pgtype.Int8
+	err := row.Scan(&customer_id)
+	return customer_id, err
+}
+
 const getDevice = `-- name: GetDevice :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at FROM devices WHERE device_name = $1
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id FROM devices WHERE device_name = $1
 `
 
 func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, error) {
@@ -34,6 +60,27 @@ func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, err
 		&i.LastOnlineAt,
 		&i.LastOfflineAt,
 		&i.UpdatedAt,
+		&i.CustomerID,
+	)
+	return i, err
+}
+
+const getDeviceForUpdate = `-- name: GetDeviceForUpdate :one
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id FROM devices WHERE device_name = $1 FOR UPDATE
+`
+
+// Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
+// both win.
+func (q *Queries) GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error) {
+	row := q.db.QueryRow(ctx, getDeviceForUpdate, deviceName)
+	var i Device
+	err := row.Scan(
+		&i.DeviceName,
+		&i.IsOnline,
+		&i.LastOnlineAt,
+		&i.LastOfflineAt,
+		&i.UpdatedAt,
+		&i.CustomerID,
 	)
 	return i, err
 }
@@ -89,6 +136,20 @@ func (q *Queries) ListOnlineDeviceNames(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setDeviceCustomer = `-- name: SetDeviceCustomer :exec
+UPDATE devices SET customer_id = $2, updated_at = now() WHERE device_name = $1
+`
+
+type SetDeviceCustomerParams struct {
+	DeviceName string      `json:"device_name"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
+}
+
+func (q *Queries) SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error {
+	_, err := q.db.Exec(ctx, setDeviceCustomer, arg.DeviceName, arg.CustomerID)
+	return err
 }
 
 const upsertDeviceOnlineStatus = `-- name: UpsertDeviceOnlineStatus :exec

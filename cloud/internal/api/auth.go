@@ -60,6 +60,12 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
 			return
 		}
+		// A disabled user gets the same answer as a wrong password, and only after the password was
+		// checked, so the response does not reveal which accounts exist or are disabled.
+		if user.DisabledAt.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+			return
+		}
 
 		claims := apiClaims{
 			UserID: user.ID,

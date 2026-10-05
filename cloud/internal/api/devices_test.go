@@ -93,7 +93,7 @@ func TestBindDevice_RejectsWrongPairingToken(t *testing.T) {
 		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if owns, err := env.queries.UserOwnsDevice(context.Background(), db.UserOwnsDeviceParams{
+	if owns, err := env.queries.UserDeviceBindingExists(context.Background(), db.UserDeviceBindingExistsParams{
 		UserID:     mustUserID(t, env),
 		DeviceName: deviceName,
 	}); err != nil {
@@ -240,7 +240,7 @@ func TestMintPairingSecret_RotatingReplacesThePreviousSecretButKeepsExistingBind
 	}
 
 	// ...but the binding made with it before rotation is untouched.
-	owns, err := env.queries.UserOwnsDevice(context.Background(), db.UserOwnsDeviceParams{UserID: mustUserID(t, env), DeviceName: deviceName})
+	owns, err := env.queries.UserDeviceBindingExists(context.Background(), db.UserDeviceBindingExistsParams{UserID: mustUserID(t, env), DeviceName: deviceName})
 	if err != nil {
 		t.Fatalf("check binding: %v", err)
 	}

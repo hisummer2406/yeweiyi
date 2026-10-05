@@ -1,0 +1,795 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/crypto/bcrypt"
+
+	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/store/db"
+)
+
+// Tenant administration: customers, users, and which customer a device belongs to
+// (openspec change implement-multitenant-support-with-customer-isolation, phase 2).
+//
+// Who is allowed is decided from the caller's *current* row in the database, never from the JWT
+// (design D3): a role, customer or disabled flag changed a minute ago must already apply.
+//
+// Every change writes an audit row, in the same transaction as the change where there is one, so a
+// reassignment cannot succeed without leaving a trace. Refusals are audited too.
+
+const (
+	maxNameLen     = 100
+	maxUsernameLen = 64
+	minPasswordLen = 8
+	// bcrypt silently ignores — and newer x/crypto rejects — anything past 72 bytes.
+	maxPasswordBytes = 72
+)
+
+// requireAdminActor loads the caller from the database. A caller who no longer exists or has been
+// disabled is refused with the same 403 as any other unauthorized request.
+func requireAdminActor(c *gin.Context, deps Deps) (db.User, bool) {
+	userID, ok := c.Get("userID")
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
+		return db.User{}, false
+	}
+	user, err := deps.Queries.GetUserByID(c.Request.Context(), userID.(int64))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+			return db.User{}, false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return db.User{}, false
+	}
+	if user.DisabledAt.Valid {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+		return db.User{}, false
+	}
+	return user, true
+}
+
+// auditAdmin records one administrative action. customer is the snapshot to file it under; pass an
+// invalid value for platform-level actions that belong to no customer.
+func auditAdmin(ctx context.Context, q *db.Queries, actor db.User, action, deviceName string, customer pgtype.Int8, outcome string, detail map[string]any) error {
+	_, err := q.WriteAuditLog(ctx, db.WriteAuditLogParams{
+		ActorID:    pgtype.Int8{Int64: actor.ID, Valid: true},
+		Actor:      actor.Username,
+		Action:     action,
+		DeviceName: pgtype.Text{String: deviceName, Valid: deviceName != ""},
+		Outcome:    outcome,
+		Detail:     mustJSON(detail),
+		CustomerID: customer,
+	})
+	return err
+}
+
+// refuse audits a denied administrative attempt under the caller's own customer and answers 403.
+func refuse(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any) {
+	if detail == nil {
+		detail = map[string]any{}
+	}
+	detail["reason"] = reason
+	// Best effort: the 403 must not turn into a 500 because the audit write failed.
+	_ = auditAdmin(c.Request.Context(), deps.Queries, actor, action, "", actor.CustomerID, "denied", detail)
+	c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+}
+
+func mustJSON(v map[string]any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		// Only reachable with an unmarshalable value, which every caller here avoids; an audit row
+		// without a detail is better than none.
+		return nil
+	}
+	return b
+}
+
+func isPgCode(err error, code string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == code
+}
+
+func int8(v int64) pgtype.Int8 { return pgtype.Int8{Int64: v, Valid: true} }
+
+func int8Ptr(v pgtype.Int8) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Int64
+}
+
+// withTx runs fn inside a transaction on deps.Pool, committing on nil and rolling back otherwise.
+func withTx(ctx context.Context, deps Deps, fn func(q *db.Queries) error) error {
+	if deps.Pool == nil {
+		return errors.New("administration needs a database pool")
+	}
+	tx, err := deps.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := fn(deps.Queries.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// --- customers ----------------------------------------------------------------------------------
+
+type customerResponse struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func toCustomerResponse(c db.Customer) customerResponse {
+	return customerResponse{ID: c.ID, Name: c.Name, CreatedAt: c.CreatedAt.Time}
+}
+
+type customerNameRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func validCustomerName(raw string) (string, bool) {
+	name := strings.TrimSpace(raw)
+	return name, name != "" && len([]rune(name)) <= maxNameLen
+}
+
+// Customer-level audit rows are filed under no customer: filing "customer.create" under the new
+// customer would make that customer undeletable the moment it exists (history rows reference it
+// with ON DELETE RESTRICT). The customer's id is in the detail instead.
+
+func createCustomerHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			refuse(c, deps, actor, "customer.create", "platform admin only", nil)
+			return
+		}
+		var req customerNameRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		name, ok := validCustomerName(req.Name)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 1-100 characters"})
+			return
+		}
+
+		var created db.Customer
+		err := withTx(c.Request.Context(), deps, func(q *db.Queries) error {
+			var err error
+			if created, err = q.CreateCustomer(c.Request.Context(), name); err != nil {
+				return err
+			}
+			return auditAdmin(c.Request.Context(), q, actor, "customer.create", "", pgtype.Int8{}, "allowed",
+				map[string]any{"customerId": created.ID, "name": created.Name})
+		})
+		if err != nil {
+			if isPgCode(err, "23505") {
+				c.JSON(http.StatusConflict, gin.H{"error": "a customer with this name already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusCreated, toCustomerResponse(created))
+	}
+}
+
+func listCustomersHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			refuse(c, deps, actor, "customer.list", "platform admin only", nil)
+			return
+		}
+		rows, err := deps.Queries.ListCustomers(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		out := make([]customerResponse, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, toCustomerResponse(r))
+		}
+		c.JSON(http.StatusOK, gin.H{"customers": out})
+	}
+}
+
+func parseIDParam(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id must be a positive integer"})
+		return 0, false
+	}
+	return id, true
+}
+
+func renameCustomerHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			refuse(c, deps, actor, "customer.rename", "platform admin only", nil)
+			return
+		}
+		id, ok := parseIDParam(c)
+		if !ok {
+			return
+		}
+		var req customerNameRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		name, ok := validCustomerName(req.Name)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 1-100 characters"})
+			return
+		}
+
+		ctx := c.Request.Context()
+		current, err := deps.Queries.GetCustomer(ctx, id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "customer not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if current.Name == "default" {
+			c.JSON(http.StatusConflict, gin.H{"error": "the default customer cannot be renamed"})
+			return
+		}
+
+		var renamed db.Customer
+		err = withTx(ctx, deps, func(q *db.Queries) error {
+			var err error
+			if renamed, err = q.RenameCustomer(ctx, db.RenameCustomerParams{ID: id, Name: name}); err != nil {
+				return err
+			}
+			return auditAdmin(ctx, q, actor, "customer.rename", "", pgtype.Int8{}, "allowed",
+				map[string]any{"customerId": id, "from": current.Name, "to": name})
+		})
+		if err != nil {
+			if isPgCode(err, "23505") {
+				c.JSON(http.StatusConflict, gin.H{"error": "a customer with this name already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, toCustomerResponse(renamed))
+	}
+}
+
+func deleteCustomerHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			refuse(c, deps, actor, "customer.delete", "platform admin only", nil)
+			return
+		}
+		id, ok := parseIDParam(c)
+		if !ok {
+			return
+		}
+
+		ctx := c.Request.Context()
+		current, err := deps.Queries.GetCustomer(ctx, id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "customer not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if current.Name == "default" {
+			c.JSON(http.StatusConflict, gin.H{"error": "the default customer cannot be deleted"})
+			return
+		}
+
+		err = withTx(ctx, deps, func(q *db.Queries) error {
+			if _, err := q.DeleteCustomer(ctx, id); err != nil {
+				return err
+			}
+			return auditAdmin(ctx, q, actor, "customer.delete", "", pgtype.Int8{}, "allowed",
+				map[string]any{"customerId": id, "name": current.Name})
+		})
+		if err != nil {
+			if isPgCode(err, "23503") {
+				c.JSON(http.StatusConflict, gin.H{"error": "the customer still has users, devices or history and cannot be deleted"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
+// --- users --------------------------------------------------------------------------------------
+
+// userResponse never carries the password hash.
+type userResponse struct {
+	ID         int64      `json:"id"`
+	Username   string     `json:"username"`
+	Role       string     `json:"role"`
+	CustomerID *int64     `json:"customerId"`
+	Disabled   bool       `json:"disabled"`
+	DisabledAt *time.Time `json:"disabledAt,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+}
+
+func toUserResponse(u db.User) userResponse {
+	r := userResponse{
+		ID: u.ID, Username: u.Username, Role: u.Role, CustomerID: int8Ptr(u.CustomerID),
+		Disabled: u.DisabledAt.Valid, CreatedAt: u.CreatedAt.Time,
+	}
+	if u.DisabledAt.Valid {
+		t := u.DisabledAt.Time
+		r.DisabledAt = &t
+	}
+	return r
+}
+
+func validRole(role string) bool {
+	switch role {
+	case control.RolePlatformAdmin, control.RoleCustomerAdmin, control.RoleCustomerUser:
+		return true
+	}
+	return false
+}
+
+func validPassword(p string) bool { return len(p) >= minPasswordLen && len(p) <= maxPasswordBytes }
+
+type createUserRequest struct {
+	Username   string `json:"username" binding:"required"`
+	Password   string `json:"password" binding:"required"`
+	Role       string `json:"role" binding:"required"`
+	CustomerID *int64 `json:"customerId"`
+}
+
+// createUserHandler: a platform admin creates any role; a customer admin creates only
+// customer_users, only in their own customer. Nobody creates a role above their own.
+func createUserHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role == control.RoleCustomerUser {
+			refuse(c, deps, actor, "user.create", "customer users cannot create users", nil)
+			return
+		}
+		var req createUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		username := strings.TrimSpace(req.Username)
+		switch {
+		case username == "" || len([]rune(username)) > maxUsernameLen:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "username must be 1-64 characters"})
+			return
+		case !validRole(req.Role):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "role must be platform_admin, customer_admin or customer_user"})
+			return
+		case !validPassword(req.Password):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "password must be 8-72 bytes"})
+			return
+		}
+
+		ctx := c.Request.Context()
+		var customer pgtype.Int8
+		switch actor.Role {
+		case control.RolePlatformAdmin:
+			if req.Role == control.RolePlatformAdmin {
+				if req.CustomerID != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "a platform admin belongs to no customer"})
+					return
+				}
+			} else {
+				if req.CustomerID == nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required for this role"})
+					return
+				}
+				if _, err := deps.Queries.GetCustomer(ctx, *req.CustomerID); err != nil {
+					if errors.Is(err, pgx.ErrNoRows) {
+						c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+						return
+					}
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+				customer = int8(*req.CustomerID)
+			}
+		case control.RoleCustomerAdmin:
+			if req.Role != control.RoleCustomerUser ||
+				(req.CustomerID != nil && !(actor.CustomerID.Valid && *req.CustomerID == actor.CustomerID.Int64)) {
+				refuse(c, deps, actor, "user.create", "a customer admin may only create customer users in their own customer",
+					map[string]any{"role": req.Role})
+				return
+			}
+			customer = actor.CustomerID
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		var created db.User
+		err = withTx(ctx, deps, func(q *db.Queries) error {
+			var err error
+			if created, err = q.CreateUser(ctx, db.CreateUserParams{
+				Username: username, PasswordHash: string(hash), Role: req.Role, CustomerID: customer,
+			}); err != nil {
+				return err
+			}
+			return auditAdmin(ctx, q, actor, "user.create", "", customer, "allowed",
+				map[string]any{"userId": created.ID, "username": created.Username, "role": created.Role})
+		})
+		if err != nil {
+			if isPgCode(err, "23505") {
+				c.JSON(http.StatusConflict, gin.H{"error": "username already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusCreated, toUserResponse(created))
+	}
+}
+
+// listUsersHandler: a platform admin sees everyone (optionally narrowed by ?customerId=); a
+// customer admin sees their own customer's users; a customer user sees none.
+func listUsersHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		var filter pgtype.Int8
+		switch actor.Role {
+		case control.RolePlatformAdmin:
+			if raw := c.Query("customerId"); raw != "" {
+				id, err := strconv.ParseInt(raw, 10, 64)
+				if err != nil || id <= 0 {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "customerId must be a positive integer"})
+					return
+				}
+				filter = int8(id)
+			}
+		case control.RoleCustomerAdmin:
+			filter = actor.CustomerID
+		default:
+			refuse(c, deps, actor, "user.list", "customer users cannot list users", nil)
+			return
+		}
+		rows, err := deps.Queries.ListUsers(c.Request.Context(), filter)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		out := make([]userResponse, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, toUserResponse(r))
+		}
+		c.JSON(http.StatusOK, gin.H{"users": out})
+	}
+}
+
+type updateUserRequest struct {
+	Disabled *bool   `json:"disabled"`
+	Password *string `json:"password"`
+}
+
+// updateUserHandler disables/enables a user and/or resets their password. A customer admin may only
+// touch customer users of their own customer; a user in another customer, or one that does not
+// exist, gets the same 404 so the endpoint is not a user-id oracle.
+func updateUserHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role == control.RoleCustomerUser {
+			refuse(c, deps, actor, "user.update", "customer users cannot manage users", nil)
+			return
+		}
+		id, ok := parseIDParam(c)
+		if !ok {
+			return
+		}
+		var req updateUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if req.Disabled == nil && req.Password == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to change: send disabled and/or password"})
+			return
+		}
+		if req.Password != nil && !validPassword(*req.Password) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "password must be 8-72 bytes"})
+			return
+		}
+
+		ctx := c.Request.Context()
+		target, err := deps.Queries.GetUserByID(ctx, id)
+		notFound := func() { c.JSON(http.StatusNotFound, gin.H{"error": "user not found"}) }
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				notFound()
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if actor.Role == control.RoleCustomerAdmin {
+			if !target.CustomerID.Valid || !actor.CustomerID.Valid || target.CustomerID.Int64 != actor.CustomerID.Int64 {
+				notFound()
+				return
+			}
+			if target.Role != control.RoleCustomerUser {
+				refuse(c, deps, actor, "user.update", "a customer admin may only manage customer users",
+					map[string]any{"userId": id})
+				return
+			}
+		}
+		if req.Disabled != nil && *req.Disabled && target.ID == actor.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "you cannot disable yourself"})
+			return
+		}
+
+		var hash []byte
+		if req.Password != nil {
+			if hash, err = bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+		}
+
+		// A platform admin has no customer of their own, so file the action under the target's.
+		snapshot := actor.CustomerID
+		if !snapshot.Valid {
+			snapshot = target.CustomerID
+		}
+
+		updated := target
+		err = withTx(ctx, deps, func(q *db.Queries) error {
+			if req.Disabled != nil {
+				var err error
+				if updated, err = q.SetUserDisabled(ctx, db.SetUserDisabledParams{ID: id, Disabled: *req.Disabled}); err != nil {
+					return err
+				}
+				action := "user.enable"
+				if *req.Disabled {
+					action = "user.disable"
+				}
+				if err := auditAdmin(ctx, q, actor, action, "", snapshot, "allowed",
+					map[string]any{"userId": id, "username": target.Username}); err != nil {
+					return err
+				}
+			}
+			if req.Password != nil {
+				if _, err := q.SetUserPassword(ctx, db.SetUserPasswordParams{ID: id, PasswordHash: string(hash)}); err != nil {
+					return err
+				}
+				// The new password is never written down — only that it was reset.
+				if err := auditAdmin(ctx, q, actor, "user.reset-password", "", snapshot, "allowed",
+					map[string]any{"userId": id, "username": target.Username}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, toUserResponse(updated))
+	}
+}
+
+type customerIDRequest struct {
+	CustomerID int64 `json:"customerId" binding:"required"`
+}
+
+// moveUserHandler moves a user to another customer and, in the same transaction, drops their device
+// bindings: bindings made under the old customer must not follow them.
+func moveUserHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			refuse(c, deps, actor, "user.move", "platform admin only", nil)
+			return
+		}
+		id, ok := parseIDParam(c)
+		if !ok {
+			return
+		}
+		var req customerIDRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required: " + err.Error()})
+			return
+		}
+
+		ctx := c.Request.Context()
+		target, err := deps.Queries.GetUserByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if target.Role == control.RolePlatformAdmin {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a platform admin belongs to no customer and cannot be moved"})
+			return
+		}
+		if _, err := deps.Queries.GetCustomer(ctx, req.CustomerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if target.CustomerID.Valid && target.CustomerID.Int64 == req.CustomerID {
+			c.JSON(http.StatusOK, toUserResponse(target))
+			return
+		}
+
+		var moved db.User
+		err = withTx(ctx, deps, func(q *db.Queries) error {
+			var err error
+			if moved, err = q.MoveUserToCustomer(ctx, db.MoveUserToCustomerParams{ID: id, CustomerID: int8(req.CustomerID)}); err != nil {
+				return err
+			}
+			cleared, err := q.DeleteBindingsForUser(ctx, id)
+			if err != nil {
+				return err
+			}
+			// Filed under both customers so each side's admin can see the user leave / arrive.
+			for _, side := range []struct {
+				customer  pgtype.Int8
+				direction string
+			}{{target.CustomerID, "out"}, {int8(req.CustomerID), "in"}} {
+				if err := auditAdmin(ctx, q, actor, "user.move", "", side.customer, "allowed", map[string]any{
+					"userId": id, "username": target.Username, "direction": side.direction,
+					"from": int8Ptr(target.CustomerID), "to": req.CustomerID, "bindingsCleared": cleared,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, toUserResponse(moved))
+	}
+}
+
+// --- device assignment --------------------------------------------------------------------------
+
+// assignDeviceHandler is PUT /api/devices/:device/customer: it assigns an unassigned device to a
+// customer, or moves a device between customers. A move drops every binding in the same
+// transaction — a technician bound under the old customer must not keep a seat on the new one's
+// device. History stays with the customer it was written under (design D4).
+func assignDeviceHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			refuse(c, deps, actor, "device.assign", "platform admin only", map[string]any{"device": c.Param("device")})
+			return
+		}
+		var req customerIDRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required: " + err.Error()})
+			return
+		}
+
+		device := c.Param("device")
+		ctx := c.Request.Context()
+		if _, err := deps.Queries.GetCustomer(ctx, req.CustomerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		var previous pgtype.Int8
+		var cleared int64
+		var unchanged, missing bool
+		err := withTx(ctx, deps, func(q *db.Queries) error {
+			dev, err := q.GetDeviceForUpdate(ctx, device)
+			if err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					missing = true
+					return nil
+				}
+				return err
+			}
+			previous = dev.CustomerID
+			if previous.Valid && previous.Int64 == req.CustomerID {
+				unchanged = true
+				return nil
+			}
+			if err := q.SetDeviceCustomer(ctx, db.SetDeviceCustomerParams{DeviceName: device, CustomerID: int8(req.CustomerID)}); err != nil {
+				return err
+			}
+			if cleared, err = q.DeleteBindingsForDevice(ctx, device); err != nil {
+				return err
+			}
+			sides := []struct {
+				customer  pgtype.Int8
+				direction string
+			}{{int8(req.CustomerID), "in"}}
+			if previous.Valid {
+				sides = append([]struct {
+					customer  pgtype.Int8
+					direction string
+				}{{previous, "out"}}, sides...)
+			}
+			for _, side := range sides {
+				if err := auditAdmin(ctx, q, actor, "device.assign", device, side.customer, "allowed", map[string]any{
+					"direction": side.direction, "from": int8Ptr(previous), "to": req.CustomerID, "bindingsCleared": cleared,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		switch {
+		case err != nil:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		case missing:
+			c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		default:
+			c.JSON(http.StatusOK, gin.H{
+				"deviceName": device, "customerId": req.CustomerID, "changed": !unchanged, "bindingsCleared": cleared,
+			})
+		}
+	}
+}

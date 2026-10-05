@@ -11,42 +11,40 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 )
 
-// userMayAccessDevice is the one authorization rule every device-scoped read or write in this
-// package enforces: a platform admin may touch any device (mirroring
-// internal/control.Service.authorize's identical rule for issuing a command); everyone else must be
-// bound to it via user_devices.
+// userMayAccessDevice is the one authorization rule every device-scoped read or write enforces —
+// REST handlers (via requireDeviceOwnership), the alarm WebSocket, and (through the same SQL)
+// internal/control. The rule itself lives in the UserMayAccessDevice query: platform admin → any
+// device; customer admin → every device of their customer; customer user → a bound device of their
+// customer.
 //
-// This is factored out of requireDeviceOwnership specifically so that a second, differently-shaped
-// caller — wsAlarmsHandler, which authenticates its own JWT independently of authMiddleware/gin
-// context because a WebSocket handshake cannot carry the usual middleware chain — cannot drift from
-// it again. That drift already happened once: round 3's review fixed the platform-admin shortcut
-// only in requireDeviceOwnership, which covers every REST device endpoint, but wsAlarmsHandler had
-// its own unconditional UserOwnsDevice call that nothing routed through the fix. The result was a
-// platform admin who could read a device's REST data and issue commands against it, yet be refused
-// a live alarm WebSocket for that same unbound device — found in review of PR #11 (round 4).
-func userMayAccessDevice(ctx context.Context, deps Deps, userID int64, role, deviceName string) (bool, error) {
-	if role == control.RolePlatformAdmin {
-		return true, nil
-	}
-	return deps.Queries.UserOwnsDevice(ctx, db.UserOwnsDeviceParams{UserID: userID, DeviceName: deviceName})
+// The decision reads the user's current role and customer from the database, not from the JWT, so
+// moving a user between customers takes effect immediately. It takes no role argument on purpose: a
+// caller that could pass its own role could also pass a stale one.
+//
+// It stays a single function because the callers have different shapes — wsAlarmsHandler
+// authenticates its own JWT outside the gin middleware chain — and the last time they each carried
+// their own copy of the rule they drifted apart (PR #11, review round 4).
+func userMayAccessDevice(ctx context.Context, deps Deps, userID int64, deviceName string) (bool, error) {
+	return deps.Queries.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{UserID: userID, DeviceName: deviceName})
 }
 
 // requireDeviceOwnership checks the authenticated user (from authMiddleware's JWT claims —
-// "userID"/"role" in gin's context) may access deviceName per userMayAccessDevice, writing the
-// response and returning false if not. Every REST handler that reads or writes one device's data
-// calls this immediately after it knows which device it's operating on, before touching that
-// device's rows. Deliberately checked *before* any "does this record/device even exist" check below
-// it in the same handler, so an unauthorized caller can't distinguish "not yours" from "doesn't
-// exist" — otherwise the ownership boundary would leak which device_name strings are real. (A
-// platform admin bypassing that check entirely does not weaken this property: it protects a caller
-// from enumerating *other people's* devices, and an admin is already trusted with visibility into
-// all of them.)
+// "userID" in gin's context) may access deviceName per userMayAccessDevice, writing the response
+// and returning false if not. Every REST handler that reads or writes one device's data calls this
+// immediately after it knows which device it's operating on, before touching that device's rows.
+// Deliberately checked *before* any "does this record/device even exist" check below it in the same
+// handler, so an unauthorized caller can't distinguish "not yours", "someone else's customer" and
+// "doesn't exist" — otherwise the ownership boundary would leak which device_name strings are real.
+// (A platform admin passing every check does not weaken this property: it protects a caller from
+// enumerating *other people's* devices, and an admin is already trusted with visibility into all of
+// them.)
 func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
 	userID, ok := c.Get("userID")
 	if !ok {
@@ -55,10 +53,8 @@ func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
 		return false
 	}
-	role, _ := c.Get("role")
-	roleStr, _ := role.(string)
 
-	owns, err := userMayAccessDevice(c.Request.Context(), deps, userID.(int64), roleStr, deviceName)
+	owns, err := userMayAccessDevice(c.Request.Context(), deps, userID.(int64), deviceName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return false
@@ -140,6 +136,20 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		userID := c.MustGet("userID").(int64)
+
+		// A valid pairing secret proves possession of the device, not that it is *this user's
+		// customer's* device. Check the customer boundary after the secret so the two failures are
+		// indistinguishable from outside: a QR code from another customer's device, an unassigned
+		// device and a wrong secret all get the identical 401 above.
+		may, err := deps.Queries.UserMayBindDevice(ctx, db.UserMayBindDeviceParams{UserID: userID, DeviceName: req.DeviceName})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !may {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
+			return
+		}
 
 		if err := deps.Queries.EnsureDevice(ctx, req.DeviceName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -238,9 +248,18 @@ func verifyPairingToken(ctx context.Context, deps Deps, deviceName, pairingToken
 // codebase (control.Service.authorize grants it every device unconditionally), so gating a
 // provisioning action to it is consistent, not a new trust boundary.
 //
-// Calls EnsureDevice (business DB) first so device_pairing_secrets' foreign key to devices always
-// holds — deviceName may not have a `devices` row yet if this runs before the device has ever
-// connected to anything.
+// The body must name the customer the device is being provisioned for ({"customerId": N}). That is
+// what makes the device bindable by that customer's users and nobody else's. Minting never moves a
+// device between customers: if the device already belongs to a different one, that is a
+// reassignment (which also has to clear the old customer's bindings) and is refused here with 409
+// rather than done silently. Re-minting for the *same* customer is the normal rotation.
+//
+// The device's `devices` row is created here if it does not exist yet, so device_pairing_secrets'
+// foreign key always holds — deviceName may not have a row before the device has ever connected.
+type mintPairingSecretRequest struct {
+	CustomerID int64 `json:"customerId" binding:"required"`
+}
+
 func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, _ := c.Get("role")
@@ -249,11 +268,34 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		var req mintPairingSecretRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required: " + err.Error()})
+			return
+		}
+
 		device := c.Param("device")
 		ctx := c.Request.Context()
 
-		if err := deps.Queries.EnsureDevice(ctx, device); err != nil {
+		if _, err := deps.Queries.GetCustomer(ctx, req.CustomerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		owner, err := deps.Queries.EnsureDeviceForCustomer(ctx, db.EnsureDeviceForCustomerParams{
+			DeviceName: device,
+			CustomerID: pgtype.Int8{Int64: req.CustomerID, Valid: true},
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !owner.Valid || owner.Int64 != req.CustomerID {
+			c.JSON(http.StatusConflict, gin.H{"error": "device already belongs to a different customer"})
 			return
 		}
 
@@ -300,9 +342,23 @@ func unbindDeviceHandler(deps Deps) gin.HandlerFunc {
 	}
 }
 
+// deviceResponse is one row of GET /api/devices. It is spelled out rather than serializing db.Device
+// so that adding a column to the table (customer_id, in migration 000013) cannot silently change the
+// REST contract the mini-program reads. The field names are exactly the ones db.Device used to emit;
+// whether customer_id should be exposed is a cross-repo decision, not an accident of sqlc.
+type deviceResponse struct {
+	DeviceName    string             `json:"device_name"`
+	IsOnline      bool               `json:"is_online"`
+	LastOnlineAt  pgtype.Timestamptz `json:"last_online_at"`
+	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 // listDevicesHandler lets a client discover which device names it's even allowed to query — every
 // other endpoint requires the caller to already know an exact device_name, which only works once
-// there's a way to find out what those are first.
+// there's a way to find out what those are first. The scope follows the same rule as
+// requireDeviceOwnership: a platform admin sees every device, a customer admin their customer's,
+// a customer user their bound devices within their customer.
 func listDevicesHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.MustGet("userID").(int64)
@@ -311,9 +367,16 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if rows == nil {
-			rows = []db.Device{}
+		out := make([]deviceResponse, 0, len(rows))
+		for _, r := range rows {
+			out = append(out, deviceResponse{
+				DeviceName:    r.DeviceName,
+				IsOnline:      r.IsOnline,
+				LastOnlineAt:  r.LastOnlineAt,
+				LastOfflineAt: r.LastOfflineAt,
+				UpdatedAt:     r.UpdatedAt,
+			})
 		}
-		c.JSON(http.StatusOK, gin.H{"rows": rows})
+		c.JSON(http.StatusOK, gin.H{"rows": out})
 	}
 }
