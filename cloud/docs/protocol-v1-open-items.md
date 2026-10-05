@@ -295,10 +295,10 @@ get<{ rows: OilInOut[] }>('/api/oil-in-out', { device, limit: 50, sort: false })
 **若复审认为在拿到确认之前不应合并本 PR，云端同意。** 本节的作用是把"需要谁确认什么"写清楚，
 而不是替代确认。
 
-### D-租户. 多租户阶段 1 带来的 REST 变更 —— **待小程序负责人确认（2026-10-05）**
+### D-租户. 多租户带来的 REST 变更 —— **已核对，无需改动（2026-10-06）**
 
-openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶段 1 改了以下云端行为。
-与 PR #11 不同，这次**尚未**有人对照小程序核对过。
+openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶段 1 改了以下云端行为（该变更已于
+2026-10-06 核对并归档）。
 
 | 接口 | 变化 | 是否破坏 |
 |---|---|---|
@@ -312,8 +312,18 @@ openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶�
 `PUT /api/users/:id`（停用/启用/重置密码）、`PUT /api/users/:id/customer`、
 `PUT /api/devices/:device/customer`。被停用的用户登录得 401，已签发的 token 访问设备得 403。
 
-需要小程序负责人回答：是否有页面依赖"管理员只看到已绑定设备"；是否需要在设备行里拿到 `customer_id`
-（目前不给）。
+**核对结论（2026-10-06）**。小程序与云端是同一个负责人，所以这里的"确认"就是对照两个客户端的代码，
+结果如下，三处都不需要改客户端：
+
+| 变化 | 核对对象 | 结论 |
+|---|---|---|
+| `GET /api/devices`：管理员现看到全部 / 本客户全部设备 | 小程序 `pages/devices/devices.ts` 读 `{rows: Device[]}`，用到 `device_name`、`is_online`、`last_online_at`、`last_offline_at` | 字段未变，兼容。变化只影响管理员，普通客户用户看不出区别 |
+| 设备行不暴露 `customer_id` | 两个仓库全文搜索 `customer_id` / `customerId` | 无人读取，保持不暴露 |
+| `pairing-secret` 必填 `customerId` | 小程序不调它（只调 `bind`）；`yeweiyi-admin` 的"配对密钥"页面目前只是只有标题的空壳 | 没有现存调用方会坏。实现该页面时请求体必须带 `{customerId}` |
+
+另有一件**与本次变更无关**、但同样会让小程序对不上云端的事：小程序 `main` 的扫码绑定只发
+`{ deviceName }`，没有 `pairingToken`，从 PR #11 起就被云端拒绝。修复已在远端分支
+`origin/rebuild/thingsboard-single-stack`（`a34afc4`，尚未合入 `main`），不属于本变更的范围，记在这里以免被遗忘。
 
 ---
 

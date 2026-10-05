@@ -2173,7 +2173,7 @@ something unproven. Same failure mode as the first round, in two new places.
 ### 2026-10-05 — 多租户阶段 1：租户只在 Go 库，访问判定读库不读 JWT
 
 当前规范见 `CLAUDE.md` 约束 9；设计、被否决的方案和剩余任务在
-`openspec/changes/implement-multitenant-support-with-customer-isolation/`。这里只记**为什么**：
+`openspec/changes/archive/2026-10-05-implement-multitenant-support-with-customer-isolation/`。这里只记**为什么**：
 
 1. **不映射 ThingsBoard customer。** 后端是 ThingsBoard 唯一的客户端，设备也只连它，Go 已是必经之路；
    再在 ThingsBoard 建 customer 就有两份"设备属于谁"，且需要为每个客户建 ThingsBoard 用户，违背"不建第二套
@@ -2197,7 +2197,7 @@ something unproven. Same failure mode as the first round, in two new places.
 
 ### 2026-10-05 — 多租户阶段 2：管理 API，停用读库，客户级审计不归属客户
 
-当前规范见 `CLAUDE.md` 与 `openspec/changes/implement-multitenant-support-with-customer-isolation/`。
+当前规范见 `CLAUDE.md` 与 `openspec/changes/archive/2026-10-05-implement-multitenant-support-with-customer-isolation/`。
 这里只记**为什么**：
 
 1. **停用必须读库。** 用户停用靠新列 `users.disabled_at`，访问判定、设备列表、绑定、登录、审计查询和所有管理

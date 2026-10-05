@@ -128,8 +128,9 @@ docs/                 当前规范与历史归档
   管理接口在 `internal/api/admin.go`（客户 CRUD、设备分配、用户创建/列出/停用/重置密码/迁移），谁能做什么
   读数据库当前的角色、客户与 `users.disabled_at`，不读 JWT。**仍需 SQL 引导第一个平台管理员**（见
   `deploy/README.md`）；客户没有“停用”，有历史记录的客户因外键 RESTRICT 无法删除。设计与决策见
-  `openspec/changes/implement-multitenant-support-with-customer-isolation/`。`GET /api/devices` 的语义变化、
-  `pairing-secret` 新增必填 `customerId` 与新增的管理路由尚未获小程序负责人确认，见 open-items §D。
+  `openspec/changes/archive/2026-10-05-implement-multitenant-support-with-customer-isolation/`。`GET /api/devices` 的语义变化、
+  `pairing-secret` 新增必填 `customerId` 已对照小程序与运维控制台的代码核对，无需改客户端（2026-10-06，见
+  open-items §D-租户）；实现运维控制台的"配对密钥"页面时请求体须带 `customerId`。
 - `/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动（zhongchengyeweiyi#39）。真实设备当前上报的
   `DetailInoutRecord.toString()` 解析不了，此时接口返回 502 与 `STOCK_EVENT_FORMAT_UNSUPPORTED`，
   不再以 200 + 空数组冒充成功；两条路径都返回 `{rows, parsed, unparsable, legacySkipped, …}`。
