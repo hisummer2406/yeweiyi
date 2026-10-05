@@ -94,6 +94,11 @@ type Config struct {
 
 type Server struct {
 	ListenAddr string `yaml:"listenAddr"`
+	// TLSCertFile and TLSKeyFile enable HTTPS. Both must be set for TLS to activate. Paths are
+	// relative to the working directory or can be absolute. Environment variables:
+	// LISTEN_ADDR, TLS_CERT_FILE, TLS_KEY_FILE.
+	TLSCertFile string `yaml:"tlsCertFile"`
+	TLSKeyFile  string `yaml:"tlsKeyFile"`
 }
 
 type Database struct {
@@ -229,6 +234,8 @@ func (c *Config) applyEnv() error {
 	}
 
 	str("LISTEN_ADDR", &c.Server.ListenAddr)
+	str("TLS_CERT_FILE", &c.Server.TLSCertFile)
+	str("TLS_KEY_FILE", &c.Server.TLSKeyFile)
 	str("DATABASE_URL", &c.Database.URL)
 	str("REDIS_ADDR", &c.Redis.Addr)
 	str("JWT_SECRET", &c.Auth.JWTSecret)
@@ -332,6 +339,11 @@ func (c *Config) Validate() error {
 
 	if c.ThingsBoard.BaseURL != "" && (c.ThingsBoard.Username == "" || c.ThingsBoard.Password == "") {
 		return errors.New("thingsboard.username and thingsboard.password are required when thingsboard.baseURL is set")
+	}
+
+	// TLS must be fully specified or not at all: if only one is set, it's a misconfiguration.
+	if (c.Server.TLSCertFile != "") != (c.Server.TLSKeyFile != "") {
+		return errors.New("server.tlsCertFile and server.tlsKeyFile must both be set or both be unset")
 	}
 	return nil
 }

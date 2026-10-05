@@ -108,8 +108,15 @@ func main() {
 		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
 	})
 
-	log.Printf("listening on %s", cfg.Server.ListenAddr)
-	if err := router.Run(cfg.Server.ListenAddr); err != nil {
-		log.Fatalf("server: %v", err)
+	if cfg.Server.TLSCertFile != "" && cfg.Server.TLSKeyFile != "" {
+		log.Printf("listening on %s (HTTPS)", cfg.Server.ListenAddr)
+		if err := router.RunTLS(cfg.Server.ListenAddr, cfg.Server.TLSCertFile, cfg.Server.TLSKeyFile); err != nil {
+			log.Fatalf("server: %v", err)
+		}
+	} else {
+		log.Printf("listening on %s", cfg.Server.ListenAddr)
+		if err := router.Run(cfg.Server.ListenAddr); err != nil {
+			log.Fatalf("server: %v", err)
+		}
 	}
 }

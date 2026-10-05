@@ -1,3 +1,6 @@
+-- Enable pgcrypto for password hashing (crypt, gen_salt).
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- Shared auth for PC-remote and mini-program clients (CLAUDE.md "Tech stack" / auth decision).
 CREATE TABLE users (
     id            BIGSERIAL PRIMARY KEY,
