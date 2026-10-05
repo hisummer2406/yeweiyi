@@ -33,7 +33,7 @@
 ## 4. 阶段 1：文档与跨仓库
 
 - [x] 4.1 更新 `CLAUDE.md`：移除“多租户尚未完成”，改写为当前授权模型；记录“租户只在 Go 库、不映射 ThingsBoard customer”
-- [ ] 4.2 向小程序负责人确认：`devices` 行是否暴露 `customer_id`、`platform_admin` 设备列表语义变化、`pairing-secret` 新增必填 `customerId`（文档已写入 `docs/protocol-v1-open-items.md` §D-租户；**等待负责人确认，未确认**）
+- [x] 4.2 小程序负责人（与云端同一人）确认 `devices` 行是否暴露 `customer_id`、`platform_admin` 设备列表语义变化、`pairing-secret` 新增必填 `customerId`：2026-10-06 对照 `yeweiyi-miniapp`（main 与 `origin/rebuild/thingsboard-single-stack`）和 `yeweiyi-admin` 的代码核对，三处均无需改动（依据见 `docs/protocol-v1-open-items.md` §D-租户）
 - [x] 4.3 `docs/engineering-journal.md` 追加带日期条目，链接到本变更
 - [x] 4.4 `deploy/README.md` 补充：升级自动创建 `default` 客户，私有化部署无需额外配置
 
