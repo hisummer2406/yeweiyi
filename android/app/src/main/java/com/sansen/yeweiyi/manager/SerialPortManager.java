@@ -395,6 +395,10 @@ public class SerialPortManager implements IParseDataListener {
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
                                             if (isRight) {
                                                 mOilCan.setErrorTimes(0);
+                                                // 通讯恢复 → 若此罐之前上报过"探头断线"报警，则上报其恢复（CLEARED）；没有则什么都不发。
+                                                // 第三个参数是恢复时的读数，探头断线没有读数，填 0（与失败计数无关）。
+                                                CloudAlarmReporter.getInstance().onRecovered(mOilCan.getOilCanPos(),
+                                                        OilMessage.PRO_ERR_CONN, 0);
 //                                        Log.i(TAG, "串口数据校验成功: "+mOilCan.getErrorTimes()+"==="+data);
                                                 if (MyApplication.alarmStates.containsKey(mOilCan.getOilCanPos()) && MyApplication.alarmStates.get(mOilCan.getOilCanPos()).getConnectError() == 1) {
                                                     MyApplication.alarmStates.get(mOilCan.getOilCanPos()).setConnectError(0);

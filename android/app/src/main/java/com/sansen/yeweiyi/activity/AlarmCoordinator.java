@@ -9,9 +9,7 @@ import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.AlarmManager;
 import com.sansen.yeweiyi.manager.AlarmManager.MessageListener;
-import com.sansen.yeweiyi.manager.SocketManager;
 import com.sansen.yeweiyi.manager.SoundLightManager;
-import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -49,11 +47,8 @@ public class AlarmCoordinator {
     // alarm_info 恒为 visibility="gone"、全仓库没有任何地方切回可见（西语翻译覆盖率核查时用户
     // 复核指出，之前判定"可达"是错的——只看到 setText() 被调用，没往上查父容器是不是隐藏的）。
     // 这个回调里 barMainAlram.setText(...) 写的所有文案（含下面 alarm_no）用户都看不到。
-    // [已更正-合并 ThingsBoard 分支] 原注释说 SocketManager.sendAlarm 这条路径是死的（BackService
-    // 从未启动、iBackService 恒为 null）——ThingsBoard 分支起已不成立：MyApplication.onCreate 主动
-    // 建 SocketManager 实例，BackService 随 App 启动，sendAlarm 真实把报警上报到 ThingsBoard。
-    // 但它传的是结构化 OilMessage JSON（见下方 sendAlarm 调用处），不是本地化文案，所以
-    // "alarm_no 不用优先翻"的结论不变。
+    // 报警上报云端不经过这个回调：由 CloudAlarmReporter 在 AlarmManager.addAlarmState 和
+    // AlarmDetection 的恢复分支直接上报（原来这里调 SocketManager.sendAlarm，已停用）。
     // [已更正-2026-09-23] 这里原来还写了一句"OilMessage.getState() 产出的全部 15 个字符串资源都
     // 不可达"——是错的，那句话只对"经本回调这条路径"成立，OilMessage 的文案还有另一条完全独立的
     // 消费路径（AlarmRepositoryImpl.saveAlarm → 报警记录页），7 个类型经那条路径是可达的，具体
@@ -85,14 +80,7 @@ public class AlarmCoordinator {
                 } else if (main.myApplication.getmOilcanDataManager().getData(state.getOilCanId()) != null) {
                     time = System.currentTimeMillis();
                     barMainAlram.setText(state.toString());
-                    // sendAlarm 传结构化 OilMessage JSON（不是展示用的本地化字符串），
-                    // 见 BackService.sendAlarms 和 ThingsBoardManager.reportAlarmEvent。
-                    SocketManager.getInstance(main).sendAlarm(GsonUtil.toJsonStr(state));
-
                 } else {
-                    // sendAlarm 传结构化 OilMessage JSON（不是展示用的本地化字符串），
-                    // 见 BackService.sendAlarms 和 ThingsBoardManager.reportAlarmEvent。
-                    SocketManager.getInstance(main).sendAlarm(GsonUtil.toJsonStr(state));
                     barMainAlram.setText(state.toString());
                 }
             }

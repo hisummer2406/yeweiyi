@@ -4,6 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.bean.NetOilCan;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,15 +76,35 @@ public final class TelemetrySnapshotBuilder {
         values.put(tankKey(index, "waterVolumeL"), tank.getWaterVolume());
         values.put(tankKey(index, "oilWeightKg"), tank.getOilWeight());
         values.put(tankKey(index, "nullVolumeL"), tank.getNullVolume());
-        values.put(tankKey(index, "oilRatioPct"), tank.getOilRadio());
-        values.put(tankKey(index, "waterRatioPct"), tank.getWaterRadio());
+        if (tank.getOilRatioPct() != null) {
+            values.put(tankKey(index, "oilRatioPct"), tank.getOilRatioPct());
+        }
+        // waterRatioPct 暂不上报（2026-10-04 用户决定）：真实模式下 OilCan.waterRatio 从未被计算，恒为 0。
+        // NORMAL/ALARM/FAULT，由 OilcanDataManager 从 CloudAlarmReporter 的 ACTIVE 集合填入，
+        // 跟云端报警事件同一个来源。没有填（null）时不发这个 key，不发一个编造的 "NORMAL"。
+        if (tank.getAlarmState() != null) {
+            values.put(tankKey(index, "alarmState"), tank.getAlarmState());
+        }
         values.put(tankKey(index, "probeConnected"), tank.isConnect());
-        // 有意不发 tank{N}.alarmState：NetOilCan.setAlarmState(String) 在整个代码库里
-        // 从未被真正调用过（唯一调用点在 OilcanDataManager 里是注释掉的），真实报警状态
-        // 在 AlarmDetection 一套布尔标志位状态机上（不同的 bean：OilCan，int 编码 0-5），
-        // 这次没有动它——见 CLAUDE.md 里报警恢复事件那条已知缺口，需要真机验证才能安全
-        // 重写。宁可不发这个 key（云端 ParseSnapshot 对缺失 key 留空字符串），也不要
-        // 发一个恒为 false 的 "NORMAL" 误导云端/小程序。
+    }
+
+    /**
+     * {@code tank{n}.oilRatioPct}：液位占罐高的百分比，0–100，保留一位小数。含义跟本机罐体图用的
+     * {@code OilCan.oilRatio}（{@code ZhongChengCompany} 里 {@code (int)(液位/罐高*100)}，超过 100 按 100）
+     * 一致，只是不截成整数；小数位跟液位一样向下截断（{@code ZhongChengCompany} 对液位也是 floor 到 0.1）。
+     *
+     * @return 罐高未配置（≤0）时返回 null，不上报——本机此时算出来的是除零后的无意义值。
+     * 液位是 NaN/无穷大时同样返回 null：BigDecimal.valueOf 会对它们抛异常，不拦住的话一个罐的
+     * 异常读数会让 getNetOilcans() 整个中断，所有罐的这一轮快照都发不出去。
+     */
+    public static Double heightRatioPct(double level, double maxHeight) {
+        if (maxHeight <= 0 || Double.isNaN(level) || Double.isInfinite(level)) {
+            return null;
+        }
+        // BigDecimal 而不是 Math.floor(level / maxHeight * 1000) / 10：后者会因浮点误差把 94.8 截成 94.7
+        double pct = BigDecimal.valueOf(level).multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(maxHeight), 1, RoundingMode.DOWN).doubleValue();
+        return Math.max(0.0, Math.min(100.0, pct));
     }
 
     private static String tankKey(int index, String field) {

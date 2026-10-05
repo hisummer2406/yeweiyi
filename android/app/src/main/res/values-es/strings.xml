@@ -244,6 +244,8 @@
     <string name="fyf_connect_error">Conexión de placa de válvula interrumpida</string>
     <string name="oilHeight_alarm">Tanque %1$d: alarma de nivel alto</string>
     <string name="oilHHeight_alarm">Tanque %1$d: alarma de nivel alto alto</string>
+    <!-- AI 翻译（2026-10-04），无设计稿来源，待设计稿文案出来后核对 -->
+    <string name="oil_connect_error">Tanque %1$d: error de conexión</string>
     <string name="oillow_alarm">Tanque %1$d: alarma de nivel bajo</string>
     <string name="oilllow_alarm">Tanque %1$d: alarma de nivel bajo bajo</string>
     <string name="waterheight_alarm">Tanque %1$d: alarma de agua alta</string>

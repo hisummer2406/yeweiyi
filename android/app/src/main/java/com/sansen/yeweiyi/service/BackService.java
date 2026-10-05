@@ -6,10 +6,8 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
 
-import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.listener.NetListener;
 import com.sansen.yeweiyi.manager.ThingsBoardManager;
-import com.sansen.yeweiyi.utils.GsonUtil;
 
 /**
  * 设备与 ThingsBoard CE 的接入入口：AIDL 服务外壳不变（{@link IBackService}，
@@ -17,7 +15,7 @@ import com.sansen.yeweiyi.utils.GsonUtil;
  * 阿里云 Alink 风格 MQTT 换成 {@link ThingsBoardManager} 那一整套 ThingsBoard 原生
  * telemetry/attributes/RPC 逻辑。见 issue #37。
  * <p>
- * 不再维护的旧能力，见 {@link ThingsBoardManager} 类注释：报警恢复事件源、
+ * 报警上报不经过这里（见 {@code CloudAlarmReporter}）。不再维护的旧能力：
  * 卸油/报警/交班/侧漏等历史记录的 MQTT 拉取。
  */
 public class BackService extends Service {
@@ -54,19 +52,13 @@ public class BackService extends Service {
     };
 
     /**
-     * @param msgInfo {@code MainActivity.initAlarm()} 传入的、经
-     *                {@link GsonUtil#toJsonStr} 序列化的 {@link OilMessage} JSON。
-     *                只覆盖"报警产生"——现有调用点没有区分产生/恢复，见
-     *                {@link ThingsBoardManager#reportAlarmEvent} 的说明。
+     * 已停用：报警上报改由 {@code CloudAlarmReporter} 在本地报警产生/恢复处直接调用
+     * {@link ThingsBoardManager#reportAlarmTransition}，不再经过 AIDL。AIDL 接口方法保留，
+     * 只是不再上报，避免同一次报警经新旧两条路径重复发送。
      */
     private boolean sendAlarms(String msgInfo) {
-        OilMessage message = GsonUtil.parseJsonWithGson(msgInfo, OilMessage.class);
-        if (message == null) {
-            Log.e(TAG, "sendAlarms: 无法解析 OilMessage JSON: " + msgInfo);
-            return false;
-        }
-        thingsBoardManager.reportAlarmEvent(message, false);
-        return true;
+        Log.w(TAG, "sendAlarms 已停用，报警由 CloudAlarmReporter 上报，忽略: " + msgInfo);
+        return false;
     }
 
     private boolean sendUnloadOils(String msgInfo) {

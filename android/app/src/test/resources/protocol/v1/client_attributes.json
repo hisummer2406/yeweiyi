@@ -1,0 +1,16 @@
+{
+  "_comment": "Published by the device to v1/devices/me/attributes on connect and whenever any of these change. current_fw_* are ThingsBoard's own reserved OTA keys, not names this protocol chose.",
+  "protocolVersion": 1,
+  "deviceModel": "SANSEN-YWY-4T",
+  "hardwareVersion": "2.1",
+  "tankCount": 2,
+  "localControlMode": false,
+  "tank1.probeAddress": "01",
+  "tank1.probeType": "磁致伸缩",
+  "tank1.capacityL": 30000.0,
+  "tank2.probeAddress": "02",
+  "tank2.probeType": "磁致伸缩",
+  "tank2.capacityL": 30000.0,
+  "current_fw_title": "yeweiyi-android",
+  "current_fw_version": "1.4.2"
+}

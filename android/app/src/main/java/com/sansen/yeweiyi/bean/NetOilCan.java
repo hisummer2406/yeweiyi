@@ -121,6 +121,20 @@ public class NetOilCan implements Serializable {
         this.oilRadio = oilRadio;
     }
 
+    /**
+     * 液位占罐高的百分比（0–100，一位小数），遥测 {@code tank{n}.oilRatioPct} 用。跟本机罐体图
+     * 同一含义（{@code OilCan.oilRatio} = 液位÷罐高×100），只是不截成整数。null = 罐高未配置，不上报。
+     */
+    private Double oilRatioPct;
+
+    public Double getOilRatioPct() {
+        return oilRatioPct;
+    }
+
+    public void setOilRatioPct(Double oilRatioPct) {
+        this.oilRatioPct = oilRatioPct;
+    }
+
     public int getWaterRadio() {
         return waterRadio;
     }

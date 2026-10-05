@@ -13,6 +13,7 @@ import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.db.OilExploration;
 import com.sansen.yeweiyi.logic.Const;
+import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
 import com.sansen.yeweiyi.repository.OilTankRepository;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
@@ -106,6 +107,17 @@ public class OilcanDataManager {
         setProbeData(newTestOilCanData, "test");
         mOilCanData = newOilCanData;
         testOilCanData = newTestOilCanData;
+        Runnable listener = configChangedListener;
+        if (listener != null) {
+            listener.run();
+        }
+    }
+
+    /** 罐配置重新加载（{@link #refresh()}）后回调，ThingsBoardManager 用它重发客户端属性。 */
+    private volatile Runnable configChangedListener;
+
+    public void setConfigChangedListener(Runnable listener) {
+        this.configChangedListener = listener;
     }
 
     /**
@@ -434,15 +446,17 @@ public class OilcanDataManager {
             netOilcan.setOilVolume(oilCan.getOilVolume());
             netOilcan.setWaterVolume(oilCan.getWaterVolume());
             netOilcan.setTemp(oilCan.getTemper());
-            netOilcan.setOilRadio(oilCan.getOilRatio());
-            netOilcan.setWaterRadio(oilCan.getWaterRatio());
+            // 遥测 oilRatioPct：跟本机罐体图同一含义（液位÷罐高），保留一位小数。
+            // waterRatioPct 暂不上报：真实模式下 waterRatio 从未被计算过（只有演示模式赋值），恒为 0。
+            netOilcan.setOilRatioPct(TelemetrySnapshotBuilder.heightRatioPct(oilCan.getOilLevel(), oilCan.getMaxHeight()));
             // surPlus 是剩余可加油体积（maxVolume - oilLitre - waterLitre，单位 L）；
             // canAddOilWeight 是 surPlus * density，单位 kg，不是体积——之前这里把
             // canAddOilWeight 塞进 nullVolume，导致 ThingsBoardManager 按 nullVolumeL 发出去
             // 的其实是密度不为 1 时被压缩/放大过的重量，不是体积（PR #38 Codex 审核）。
             netOilcan.setNullVolume(oilCan.getSurPlus());
             netOilcan.setAddress(oilCan.getProbeAdr());
-//            netOilcan.setAlarmState(oilCan.getAlarmStr());
+            // NORMAL/ALARM/FAULT，跟云端报警事件同一个来源（CloudAlarmReporter 记录的 ACTIVE 集合）
+            netOilcan.setAlarmState(CloudAlarmReporter.getInstance().alarmState(oilCan.getOilCanPos()));
             netOilcan.setProbeAddress(oilCan.getProbeAdr());
             netOilcan.setOilWeight(oilCan.getOilWeight());
             netOilcan.setOilColor(oilCan.getOilColor());

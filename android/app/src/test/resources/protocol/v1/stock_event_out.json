@@ -1,5 +1,5 @@
 {
-  "_comment": "一次出油（发油）。netVolumeL 为负——出库时罐内体积减少，符号约定为'罐的净变化'而非'搬走的量'，这样 IN/OUT 两个方向可以用同一个字段而不需要读方按 direction 再翻一次符号。duringDeliveryVolumeL 省略：出油本身就是发出，不存在'期间另外发出'。与 yeweiyi-cloud fixtures/protocol/v1/stock_event_out.json 字节同步——那边是权威来源，改这里必须先改那边。",
+  "_comment": "一次出油（发油）。netVolumeL 为负——出库时罐内体积减少，符号约定为'罐的净变化'而非'搬走的量'，这样 IN/OUT 两个方向可以用同一个字段而不需要读方按 direction 再翻一次符号。duringDeliveryVolumeL 省略：出油本身就是发出，不存在'期间另外发出'。",
   "ts": 1756731600000,
   "values": {
     "stockEvent": {

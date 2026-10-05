@@ -47,11 +47,20 @@ public class AlarmDetection {
     }
 
 
+    /**
+     * 云端报警上报：下面各个"条件不再成立"的 else 分支里调 {@link CloudAlarmReporter#onRecovered}，
+     * 跟本地标志位复位是同一个判断条件；没有对应的 ACTIVE 时是空操作。本地判断、声光、继电器
+     * 行为不受影响。产生在 {@link AlarmManager#addAlarmState} 里上报。
+     */
     public void beginDection(final OilCan oilCan) {
         if (oilCan != null) {
+            CloudAlarmReporter cloud = CloudAlarmReporter.getInstance();
+            int pos = oilCan.getOilCanPos();
             if (oilCan.getHighLevelAlarm() != 0 && oilCan.getOilLevel() > (oilCan.getHighLevelAlarm())) {
                 oilHeightDection(oilCan);
             } else {
+                cloud.onRecovered(pos, OilMessage.HEIGHT_OIL_ALARM, oilCan.getOilLevel());
+                cloud.onRecovered(pos, OilMessage.HHEIGHT_OIL_ALARM, oilCan.getOilLevel());
                 if (!Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {//如果当前的所有油罐为非报警
                     Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]=true;
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
@@ -64,6 +73,8 @@ public class AlarmDetection {
                 oilLowDection(oilCan);
 
             } else {
+                cloud.onRecovered(pos, OilMessage.LOW_OIL_ALARM, oilCan.getOilLevel());
+                cloud.onRecovered(pos, OilMessage.LLOW_OIL_ALARM, oilCan.getOilLevel());
 
                 if (!Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]) {
                     Log.e("TAG", "打开报警oilLowDection======"+"----------"+oilCan.getOilLevel()+"----"+oilCan.getOilCanPos());
@@ -82,6 +93,7 @@ public class AlarmDetection {
                     waterHeightDection(oilCan);
                 }
             } else {
+                cloud.onRecovered(pos, OilMessage.HEIGHT_WATER, oilCan.getWaterLevel());
                 if (!Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]) {
                     Log.e("关闭警报灯", "警报灯03");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
@@ -96,6 +108,7 @@ public class AlarmDetection {
                 }
 
             } else {
+                cloud.onRecovered(pos, OilMessage.HEIGHT_TEMPER, oilCan.getTemper());
                 if (!Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]) {
                     Log.e("关闭警报灯", "警报灯04");
                     Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]=true;
@@ -148,6 +161,9 @@ public class AlarmDetection {
             }
 
         } else {
+            // 液位 ≤ 高高阈值（或高高未启用）：高高液位条件不再成立
+            CloudAlarmReporter.getInstance().onRecovered(oilCan.getOilCanPos(), OilMessage.HHEIGHT_OIL_ALARM,
+                    oilCan.getOilLevel());
             Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]=true;
             SoundLightManager.getInstance().FYF(oilCan.getOilCanPos(), false);
             if ( Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {
@@ -248,6 +264,9 @@ public class AlarmDetection {
                     }
                 }
             } else {
+                // 液位 ≥ 低低阈值（或低低未启用）：低低液位条件不再成立
+                CloudAlarmReporter.getInstance().onRecovered(oilCan.getOilCanPos(), OilMessage.LLOW_OIL_ALARM,
+                        oilCan.getOilLevel());
                 Singleton.getInstance().isLLLowAlarm[oilCan.getOilCanPos()]=true;
                 SoundLightManager.getInstance().FYFL(oilCan.getOilCanPos(), false);
                 if (Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]) {

@@ -54,7 +54,8 @@ public final class ReconnectBackoff {
      * 推进到下一次（翻倍，封顶）——抖动只作用于返回值，不影响上限序列本身的推进，
      * 否则一次很小的随机值会让后续退避提前封顶或提前重置。
      */
-    public long nextDelayMillis() {
+    /** synchronized：重连线程（连接失败）和 MQTT 回调线程（意外断线）都会调用。 */
+    public synchronized long nextDelayMillis() {
         long upperBound = currentDelayMillis;
         long next = (long) (currentDelayMillis * multiplier);
         currentDelayMillis = Math.min(next, maxDelayMillis);
@@ -62,7 +63,7 @@ public final class ReconnectBackoff {
     }
 
     /** 连接成功后调用，退避序列回到初始值。 */
-    public void reset() {
+    public synchronized void reset() {
         currentDelayMillis = initialDelayMillis;
     }
 }

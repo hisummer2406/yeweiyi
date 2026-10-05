@@ -2,13 +2,16 @@ package com.sansen.yeweiyi.manager;
 
 import android.content.Context;
 import android.util.Log;
+import android.util.SparseArray;
 
 import com.google.gson.Gson;
 import com.sansen.yeweiyi.config.ApiConfig;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.NetOilCan;
-import com.sansen.yeweiyi.bean.OilMessage;
+import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.logic.thingsboard.ActiveAlarmTracker;
 import com.sansen.yeweiyi.logic.thingsboard.AlarmEventBuilder;
+import com.sansen.yeweiyi.logic.thingsboard.ClientAttributesBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
@@ -21,6 +24,7 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcDispatcher;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcMethodRegistry;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcResultStatus;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
@@ -31,6 +35,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -73,7 +78,15 @@ public final class ThingsBoardManager {
     private final ProcessedCommandStore commandStore;
     private final RpcDispatcher rpcDispatcher;
     private final ReconnectBackoff reconnectBackoff;
-    private final AtomicBoolean reconnectScheduled = new AtomicBoolean(false);
+    /**
+     * 连接尝试的唯一排队入口（{@link #scheduleConnectAttempt}/{@link #reconnectNow}）的状态：
+     * 同一时间最多排一个。每次排队分配一个新的代号，{@link #attemptConnect(long)} 发现代号已经不是最新的
+     * 就直接返回——这样被 {@link #reconnectNow} 取代的旧任务即使已经在执行器队列里，也不会再派生出
+     * 第二条重连链（代码审核 M2：之前 reconnectNow 绕过排队检查，每次网络抖动都多出一条链）。
+     */
+    private final Object connectLock = new Object();
+    private ScheduledFuture<?> pendingConnect;
+    private long connectGeneration;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "tb-reconnect");
@@ -91,7 +104,7 @@ public final class ThingsBoardManager {
         return t;
     });
     /**
-     * {@link #reportAlarmEvent}/{@link #reportRawEvent} 之前直接在调用方线程上跑，最终会走到
+     * {@link #reportAlarmTransition}/{@link #reportRawEvent} 之前直接在调用方线程上跑，最终会走到
      * {@link ThingsBoardMqttConnection#publish} 里同步阻塞的 {@code MqttClient.publish()}——
      * 这两个方法目前所有调用路径都从 UI 线程的保存按钮点击事件发起（{@code InOilFragment}/
      * {@code BuLuFragment}，经 {@code SocketManager} 同进程直连 {@code BackService}），
@@ -124,7 +137,9 @@ public final class ThingsBoardManager {
                 ApiConfig.THINGSBOARD_USE_TLS, new ThingsBoardCaStore(context),
                 this::onRpcRequest, new SharedAttributesListener(), this::onConnectionLost);
 
-        this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context), MAX_PENDING_ALARMS);
+        // 队列满时先成对丢报警（"产生"连同它的"恢复"），"恢复"从不单独丢；保住出入库和命令结果
+        this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context), MAX_PENDING_ALARMS,
+                AlarmEventBuilder.EVICTION_POLICY);
         this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context),
                 COMMAND_RETENTION_MILLIS);
         this.reconnectBackoff = new ReconnectBackoff(RECONNECT_INITIAL_DELAY_MILLIS, RECONNECT_MAX_DELAY_MILLIS, 2.0);
@@ -158,6 +173,11 @@ public final class ThingsBoardManager {
             Log.w(TAG, "重启恢复：" + recovered + " 条未完成命令按 FAILED 处理");
         }
         telemetryScheduler.start();
+        // 罐配置变更（保存罐设置、RPC 改阈值等都会 refresh）后：清理已删除/停用罐的报警，并立即重发
+        // 客户端属性，不等下次重连
+        OilcanDataManager.getInstance(MyApplication.getInstance()).setConfigChangedListener(this::onTankConfigReloaded);
+        // 启动时也清理一次：App 没运行期间罐可能已经被删除或停用
+        CloudAlarmReporter.getInstance().onTanksReloaded(currentEnabledTankIds());
         scheduleConnectAttempt(0);
     }
 
@@ -165,17 +185,36 @@ public final class ThingsBoardManager {
         if (!started.compareAndSet(true, false)) {
             return;
         }
+        OilcanDataManager.getInstance(MyApplication.getInstance()).setConfigChangedListener(null);
         telemetryScheduler.stop();
-        connection.disconnect();
+        synchronized (connectLock) {
+            if (pendingConnect != null) {
+                pendingConnect.cancel(false);
+                pendingConnect = null;
+            }
+            connectGeneration++;
+        }
+        // 挪到重连线程上断开：stop() 由 BackService.onDestroy 在主线程调用，而 disconnect() 跟 connect()
+        // 共用一把锁，后台正在持锁连接时（最长 10 秒超时）会卡住主线程（代码审核 H8）
+        reconnectExecutor.execute(connection::disconnect);
     }
 
     public boolean isConnected() {
         return connection.isConnected();
     }
 
-    /** 供 {@code BackService.onReloadMqtt}/网络变化回调触发一次立即重连，不等退避到期。 */
+    /**
+     * 供 {@code BackService} 网络变化回调、配网保存后触发一次立即重连，不等退避到期。已经排着的那次
+     * （可能还要等几十秒）被取消并取代，不会多出一条重连链。
+     */
     public void reconnectNow() {
-        reconnectExecutor.execute(() -> attemptConnect());
+        synchronized (connectLock) {
+            if (pendingConnect != null) {
+                pendingConnect.cancel(false);
+            }
+            long generation = ++connectGeneration;
+            pendingConnect = reconnectExecutor.schedule(() -> attemptConnect(generation), 0, TimeUnit.MILLISECONDS);
+        }
     }
 
     private static String buildBrokerUri(String host, int port) {
@@ -189,14 +228,22 @@ public final class ThingsBoardManager {
      * {@code SharePreManager.getIpBean()} 默认分支，从未真正可配置）。
      * <p>
      * 调用方已经把新的凭据写进 {@link #credentialStore}（{@code DeviceCredentials} 下次
-     * {@link #attemptConnect()} 会自动重新 {@code load()}），这里只需要处理 broker 地址——
+     * {@link #attemptConnect(long)} 会自动重新 {@code load()}），这里只需要处理 broker 地址——
      * 它被 {@link ThingsBoardMqttConnection} 缓存在字段里，不会自己重新读
      * {@code SharePreManager}。主动断开旧连接（哪怕旧地址还连着），保证新地址/新凭据立即生效，
      * 而不是等到下一次意外断线才用上——凭据变更后应该主动重新认证，不能让设备继续用旧 session
      * "假装"已配网（同一条人工审核意见）。
      */
     public void applyUpdatedConnectionSettings(String host, int port) {
-        connection.updateBrokerUri(buildBrokerUri(host, port));
+        String brokerUri = buildBrokerUri(host, port);
+        // 全部挪到重连线程上执行，调用方（配网页的保存按钮，UI 线程）立即返回：disconnect() 跟 connect()
+        // 共用一把锁，现场通常正是"连不上"才来改地址，这时后台多半正在持锁重连（最长 10 秒超时），
+        // 直接在 UI 线程上 disconnect 会卡住界面甚至 ANR（代码审核 H8）。
+        reconnectExecutor.execute(() -> applyUpdatedConnectionSettingsOnReconnectThread(brokerUri));
+    }
+
+    private void applyUpdatedConnectionSettingsOnReconnectThread(String brokerUri) {
+        connection.updateBrokerUri(brokerUri);
         connection.disconnect();
         reconnectBackoff.reset();
         if (started.get()) {
@@ -207,38 +254,31 @@ public final class ThingsBoardManager {
     // ---- 报警立即上报 ----
 
     /**
-     * @param recovered false=报警产生，true=报警恢复。
-     *                  <p>目前唯一的调用方（{@code BackService.sendAlarms}）只在
-     *                  报警产生时触发，还没有一条真正的"恢复"事件源——见本类顶部说明和
-     *                  issue #36 的已知缺口：恢复检测需要改 {@code AlarmDetection} 现有的
-     *                  报警状态机，这次没有动它。
-     *                  <p>实际发布挪到 {@link #outboundEventExecutor} 上异步执行，本方法立刻
-     *                  返回——见该字段上的注释（PR #38 Codex 第四轮审核 P1）。时间戳在提交任务
-     *                  之前、还在调用方线程上就取好并传给后台任务，不在任务真正执行时才取——
-     *                  报警事件不像 stockEvent 那样自带一份可以在发布时用来纠正的独立时间戳，
-     *                  前面排队的发布（比如一次卡住的 QoS 1 publish）攒起来的延迟会直接算到
-     *                  这条报警的 {@code ts}/{@code alarm.tsMs} 上，把它在时序历史里错位
-     *                  （PR #38 Codex 第五轮审核 P2）。
+     * 报警产生/恢复的上报出口，唯一调用方是 {@link CloudAlarmReporter}（它决定什么时候算产生、
+     * 什么时候算恢复，并保证 ACTIVE/CLEARED 成对、alarmId 按次生成）。
+     * <p>
+     * 实际发布挪到 {@link #outboundEventExecutor} 上异步执行，本方法立刻返回——见该字段上的
+     * 注释（PR #38 Codex 第四轮审核 P1）。时间戳用 {@code transition.tsMs}，是在调用方线程上
+     * 状态变化发生那一刻取的，不在任务真正执行时才取——前面排队的发布（比如一次卡住的 QoS 1
+     * publish）攒起来的延迟不能算到这条报警的 {@code ts}/{@code alarm.tsMs} 上
+     * （PR #38 Codex 第五轮审核 P2）。
      */
-    public void reportAlarmEvent(OilMessage message, boolean recovered) {
-        long now = System.currentTimeMillis();
-        outboundEventExecutor.execute(() -> doReportAlarmEvent(message, recovered, now));
+    public void reportAlarmTransition(ActiveAlarmTracker.Transition transition) {
+        outboundEventExecutor.execute(() -> doReportAlarmTransition(transition));
     }
 
-    private void doReportAlarmEvent(OilMessage message, boolean recovered, long now) {
-        Map<String, Object> event = AlarmEventBuilder.build(message, recovered, message.toString(), now);
+    private void doReportAlarmTransition(ActiveAlarmTracker.Transition transition) {
+        ActiveAlarmTracker.Entry entry = transition.entry;
+        long now = transition.tsMs;
+        Map<String, Object> event = AlarmEventBuilder.build(entry.type, entry.tank, entry.alarmId,
+                transition.recovered, entry.text, transition.value, now);
         if (event == null) {
-            // message.getType() 不在云端封闭报警类型集合里（出入库/低温/网络断线等）——
-            // 这个通道本来就不是给它们用的，不发不是丢事件，见 AlarmEventBuilder 类注释。
-            Log.d(TAG, "reportAlarmEvent: type=" + message.getType() + " 没有对应的云端报警类型，跳过上报");
+            // ActiveAlarmTracker 只接收可上报类型，这里正常不会走到。
+            Log.w(TAG, "reportAlarmTransition: type=" + entry.type + " 没有对应的云端报警类型，跳过上报");
             return;
         }
         Map<String, Object> payload = AlarmEventBuilder.wrapAsTelemetry(event, now);
-        String json = gson.toJson(payload);
-
-        if (!connection.publishTelemetry(json)) {
-            pendingAlarmStore.enqueue(json);
-        }
+        publishEventInOrder(gson.toJson(payload));
     }
 
     /**
@@ -250,7 +290,7 @@ public final class ThingsBoardManager {
      * 之前这里直接透传 {@code DetailInoutRecord.toString()} 调试字符串，云端完全解析不了）。
      * 这里把它解析回 {@link com.google.gson.JsonElement} 再塞进 telemetry 的 {@code values}，
      * 使 {@code values.stockEvent} 在最终 payload 里是一个结构化对象（跟 fixture 形状一致），
-     * 而不是一层双重转义的字符串——对齐 {@link AlarmEventBuilder}/{@code reportAlarmEvent}
+     * 而不是一层双重转义的字符串——对齐 {@link AlarmEventBuilder}/{@link #reportAlarmTransition}
      * 已经在用的"直接嵌对象"做法。解析失败（理论上不会发生，调用方现在只传合法 JSON）时
      * 退化为按字符串塞入，不丢事件，只是云端那一侧仍旧解析不了。
      * <p>
@@ -278,9 +318,21 @@ public final class ThingsBoardManager {
         }
         values.put(telemetryKey, value);
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, tsMillis);
-        String json = gson.toJson(payload);
-        if (!connection.publishTelemetry(json)) {
-            pendingAlarmStore.enqueue(json);
+        publishEventInOrder(gson.toJson(payload));
+    }
+
+    /**
+     * 即时事件（报警/出入库/命令结果）的统一发送出口，保证按产生顺序到达云端：补发队列里还有更早的
+     * 事件没发出去时，新事件排到队尾、按序补发，不抢在前面实时发出。否则断网恢复后、补发还没完成时，
+     * 一条"恢复"可能比队列里它自己的"产生"先到，云端那条报警就永远停在 ACTIVE。
+     */
+    private void publishEventInOrder(String json) {
+        if (pendingAlarmStore.size() == 0 && connection.publishTelemetry(json)) {
+            return;
+        }
+        pendingAlarmStore.enqueue(json);
+        if (connection.isConnected()) {
+            drainPendingAlarms();
         }
     }
 
@@ -289,22 +341,49 @@ public final class ThingsBoardManager {
     }
 
     /**
-     * 罐体标定表（zhongchengyeweiyi#42 待办1）——不进 30 秒快照，也不走补投队列：
-     * 这是静态配置，不是"必须送达的事件"，下次连上（下次重连/重启）自然会带着最新值
-     * 重发一次，断线期间丢一次没有实际影响。目前唯一的触发点是连接建立成功之后，
-     * 跟"标定表被改" 这个动作本身没有绑定——{@code CreateOilTableFragment} 保存新标定表
-     * 时不会立即推送，要等下一次重连才会带上新值。设备一旦部署通常长期在线，这意味着
-     * 现场改标定表后云端可能要等到下次重启才能看到——已知的滞后，不是本次要解决的范围
-     * （标定本来就是安装阶段一次性动作，重启一次拿到最新值可以接受）。
+     * 客户端属性：协议 §5.1 的设备配置（{@link ClientAttributesBuilder}）+ 罐体标定表
+     * （{@link TankCalibrationAttributeBuilder}，zhongchengyeweiyi#42 待办1），合成一条发出。
+     * <p>
+     * 不进 30 秒快照，也不走补投队列：这是静态配置，不是"必须送达的事件"，断线时这次没发出去，
+     * 下次连上会带着最新值重发。触发点两个：连接建立成功之后；罐配置重新加载
+     * （{@code OilcanDataManager.refresh()}，保存罐设置、RPC 改阈值都会触发）之后。
+     * 标定表的保存不一定走 refresh，改了标定表可能要等下次重连才更新——标定是安装阶段的一次性
+     * 动作，这个滞后可以接受。
      */
-    private void publishTankCalibrationAttributes() {
+    private void publishClientAttributes() {
+        Map<String, Object> attributes = new java.util.LinkedHashMap<>(
+                ClientAttributesBuilder.build(currentTankAttributes()));
         List<com.sansen.yeweiyi.db.OilCanSet> oilCanSets = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
         List<com.sansen.yeweiyi.db.OilCanTable> tables = OilTankRepositoryImpl.getInstance().findAllOilCanTable();
-        Map<String, Object> attributes = TankCalibrationAttributeBuilder.build(oilCanSets, tables);
-        if (attributes.isEmpty()) {
-            return;
-        }
+        attributes.putAll(TankCalibrationAttributeBuilder.build(oilCanSets, tables));
         connection.publishAttributes(gson.toJson(attributes));
+    }
+
+    private void onTankConfigReloaded() {
+        CloudAlarmReporter.getInstance().onTanksReloaded(currentEnabledTankIds());
+        outboundEventExecutor.execute(this::publishClientAttributes);
+    }
+
+    /** OilcanDataManager 里当前加载的罐号——它只加载启用的罐（setProbeData 按 enable==1 过滤）。 */
+    private java.util.Set<Integer> currentEnabledTankIds() {
+        SparseArray<OilCan> oilCans = OilcanDataManager.getInstance(MyApplication.getInstance()).getData();
+        java.util.Set<Integer> tanks = new java.util.HashSet<>();
+        for (int i = 0; i < oilCans.size(); i++) {
+            tanks.add(oilCans.keyAt(i));
+        }
+        return tanks;
+    }
+
+    /** 跟遥测快照同一个数据来源：OilcanDataManager 里当前加载的各罐。 */
+    private List<ClientAttributesBuilder.Tank> currentTankAttributes() {
+        SparseArray<OilCan> oilCans = OilcanDataManager.getInstance(MyApplication.getInstance()).getData();
+        List<ClientAttributesBuilder.Tank> tanks = new java.util.ArrayList<>();
+        for (int i = 0; i < oilCans.size(); i++) {
+            OilCan oilCan = oilCans.valueAt(i);
+            tanks.add(new ClientAttributesBuilder.Tank(oilCan.getOilCanPos(), oilCan.getProbeAdr(),
+                    oilCan.getProbeType(), oilCan.getMaxVolume()));
+        }
+        return tanks;
     }
 
     // ---- 共享属性（服务端→设备下发，issue #39/#40 P1-4）----
@@ -387,19 +466,7 @@ public final class ThingsBoardManager {
      */
     private void publishRpcAck(String mqttRequestId, String commandId, RpcResultStatus status,
                                 RpcErrorCode errorCode, String message, boolean duplicate, long tsMillis) {
-        Map<String, Object> ack = new java.util.LinkedHashMap<>();
-        ack.put("commandId", commandId);
-        ack.put("status", status.wireValue());
-        if (errorCode != RpcErrorCode.NONE) {
-            ack.put("errorCode", errorCode.name());
-        }
-        if (message != null && !message.isEmpty()) {
-            ack.put("reason", message);
-        }
-        if (duplicate) {
-            ack.put("duplicate", true);
-        }
-        ack.put("tsMs", tsMillis);
+        Map<String, Object> ack = RpcWirePayloads.ack(commandId, status, errorCode, message, duplicate, tsMillis);
         connection.publishRpcAck(mqttRequestId, gson.toJson(ack));
     }
 
@@ -410,34 +477,19 @@ public final class ThingsBoardManager {
      */
     private void publishRpcResult(String commandId, RpcResultStatus status, RpcErrorCode errorCode, String message,
                                    Map<String, Object> data, long tsMillis) {
-        Map<String, Object> cmdResult = new java.util.LinkedHashMap<>();
-        cmdResult.put("commandId", commandId);
-        cmdResult.put("status", status.wireValue());
-        if (errorCode != RpcErrorCode.NONE) {
-            cmdResult.put("errorCode", errorCode.name());
-        }
-        if (message != null && !message.isEmpty()) {
-            cmdResult.put("reason", message);
-        }
-        if (data != null && !data.isEmpty()) {
-            cmdResult.put("detail", data);
-        }
-        cmdResult.put("tsMs", tsMillis);
+        Map<String, Object> cmdResult = RpcWirePayloads.cmdResult(commandId, status, errorCode, message, data, tsMillis);
 
         Map<String, Object> values = new java.util.LinkedHashMap<>();
         values.put("cmdResult", cmdResult);
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, tsMillis);
-        String json = gson.toJson(payload);
-        if (!connection.publishTelemetry(json)) {
-            pendingAlarmStore.enqueue(json);
-        }
+        publishEventInOrder(gson.toJson(payload));
     }
 
     // ---- 连接与退避重连 ----
 
     /**
      * 连接建立后意外断线：{@link ThingsBoardMqttConnection.InternalCallback#connectionLost}
-     * 只负责记日志和释放旧客户端，重连调度收口到这里——跟 {@link #attemptConnect()} 失败分支
+     * 只负责记日志和释放旧客户端，重连调度收口到这里——跟 {@link #attemptConnect(long)} 失败分支
      * 走同一条退避路径，避免两处各自维护重连节奏。
      */
     private void onConnectionLost(Throwable cause) {
@@ -448,16 +500,25 @@ public final class ThingsBoardManager {
     }
 
     private void scheduleConnectAttempt(long delayMillis) {
-        if (!reconnectScheduled.compareAndSet(false, true)) {
-            // 已有一次重连在排队（比如 attemptConnect 失败分支和 connectionLost 前后脚触发），
-            // 不重复排队，避免短时间内堆出多个连接尝试。
-            return;
+        synchronized (connectLock) {
+            if (pendingConnect != null) {
+                // 已有一次重连在排队（比如 attemptConnect 失败分支和 connectionLost 前后脚触发），
+                // 不重复排队，避免短时间内堆出多个连接尝试。
+                return;
+            }
+            long generation = ++connectGeneration;
+            pendingConnect = reconnectExecutor.schedule(() -> attemptConnect(generation), delayMillis,
+                    TimeUnit.MILLISECONDS);
         }
-        reconnectExecutor.schedule(this::attemptConnect, delayMillis, TimeUnit.MILLISECONDS);
     }
 
-    private void attemptConnect() {
-        reconnectScheduled.set(false);
+    private void attemptConnect(long generation) {
+        synchronized (connectLock) {
+            if (generation != connectGeneration) {
+                return; // 已被更新的一次排队取代（reconnectNow/stop），不再执行，也不再派生重试
+            }
+            pendingConnect = null;
+        }
         if (!started.get()) {
             return;
         }
@@ -466,7 +527,7 @@ public final class ThingsBoardManager {
         if (ok) {
             reconnectBackoff.reset();
             drainPendingAlarms();
-            publishTankCalibrationAttributes();
+            publishClientAttributes();
             requestSharedAttributes();
         } else {
             scheduleConnectAttempt(reconnectBackoff.nextDelayMillis());

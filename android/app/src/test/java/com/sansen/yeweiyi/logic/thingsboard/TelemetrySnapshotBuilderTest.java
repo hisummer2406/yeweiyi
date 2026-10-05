@@ -1,7 +1,5 @@
 package com.sansen.yeweiyi.logic.thingsboard;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.bean.NetOilCan;
 
@@ -13,10 +11,9 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 
 public class TelemetrySnapshotBuilderTest {
-
-    private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     private static NetOilCan fixtureTank() {
         NetOilCan tank = new NetOilCan();
@@ -29,22 +26,47 @@ public class TelemetrySnapshotBuilderTest {
         tank.setWaterVolume(10.0);
         tank.setOilWeight(4200.0);
         tank.setNullVolume(300.0);
-        tank.setOilRadio(80);
-        tank.setWaterRadio(1);
+        tank.setOilRatioPct(80.0);
         tank.setConnect(true);
         tank.setProbeAddress("01"); // 有意保留：验证 probeAddress 不出现在 telemetry 里
         return tank;
     }
 
-    @Test
-    public void matchesFixturePayloadShape() {
-        List<NetOilCan> tanks = Collections.singletonList(fixtureTank());
-        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 7L);
-        Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, 1735689600000L);
+    // 报文整体形状跟共享 fixture 的逐 key 比对在 ProtocolV1ContractTest，这里不重复。
 
-        JsonObject actual = GSON.toJsonTree(payload).getAsJsonObject();
-        JsonObject expected = FixtureLoader.loadObject("telemetry_snapshot.json");
-        assertEquals(expected, actual);
+    @Test
+    public void heightRatioPctKeepsOneDecimalWithoutFloatDrift() {
+        assertEquals(Double.valueOf(94.8), TelemetrySnapshotBuilder.heightRatioPct(948, 1000));
+        assertEquals("跟液位一样向下截断，不四舍五入", Double.valueOf(33.3), TelemetrySnapshotBuilder.heightRatioPct(1, 3));
+        assertEquals(Double.valueOf(20.1), TelemetrySnapshotBuilder.heightRatioPct(402.0, 2000));
+    }
+
+    @Test
+    public void heightRatioPctClampsLikeTheLocalTankDrawing() {
+        assertEquals("超过罐高按 100，跟本机 OilCan.oilRatio 一致", Double.valueOf(100.0),
+                TelemetrySnapshotBuilder.heightRatioPct(2100, 2000));
+        assertEquals(Double.valueOf(0.0), TelemetrySnapshotBuilder.heightRatioPct(-5, 2000));
+    }
+
+    @Test
+    public void heightRatioPctIsNullWhenTankHeightNotConfigured() {
+        assertNull(TelemetrySnapshotBuilder.heightRatioPct(1000, 0));
+    }
+
+    /** 异常读数不能抛异常，否则整轮快照（所有罐）都发不出去。 */
+    @Test
+    public void heightRatioPctIsNullForNonFiniteLevel() {
+        assertNull(TelemetrySnapshotBuilder.heightRatioPct(Double.NaN, 2000));
+        assertNull(TelemetrySnapshotBuilder.heightRatioPct(Double.POSITIVE_INFINITY, 2000));
+    }
+
+    @Test
+    public void waterRatioPctIsNotReported() {
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(
+                Collections.singletonList(fixtureTank()), 1735689600000L, 1L);
+
+        assertEquals(80.0, values.get("tank1.oilRatioPct"));
+        assertFalse("真实模式下 waterRatio 从未被计算，暂不上报", values.containsKey("tank1.waterRatioPct"));
     }
 
     @Test
@@ -72,12 +94,22 @@ public class TelemetrySnapshotBuilderTest {
     }
 
     @Test
-    public void doesNotEmitAlarmStateOrProbeAddress() {
+    public void omitsAlarmStateWhenNotFilledAndNeverEmitsProbeAddress() {
         List<NetOilCan> tanks = Collections.singletonList(fixtureTank());
         Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, 1735689600000L, 1L);
 
-        assertFalse(values.containsKey("tank1.alarmState"));
+        assertFalse("没有填 alarmState 时不能编造一个 NORMAL", values.containsKey("tank1.alarmState"));
         assertFalse(values.containsKey("tank1.probeAddress"));
+    }
+
+    @Test
+    public void emitsAlarmStateWhenFilled() {
+        NetOilCan tank = fixtureTank();
+        tank.setAlarmState("ALARM");
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(
+                Collections.singletonList(tank), 1735689600000L, 1L);
+
+        assertEquals("ALARM", values.get("tank1.alarmState"));
     }
 
     // ---- PR #38 Codex 第四轮审核 P2：立即上报事件要用自身时间戳，不能用发送时刻 ----

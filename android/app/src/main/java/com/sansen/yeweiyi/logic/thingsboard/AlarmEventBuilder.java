@@ -1,5 +1,8 @@
 package com.sansen.yeweiyi.logic.thingsboard;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sansen.yeweiyi.bean.OilMessage;
 
 import java.util.LinkedHashMap;
@@ -9,7 +12,7 @@ import java.util.Map;
  * 报警产生/恢复事件的立即上报 payload：不进 30 秒快照队列，走独立 telemetry key
  * （{@code alarm}），一产生/一恢复就单独发一条，不等下一次 30 秒周期。
  * <p>
- * 纯 Java，无 Android 依赖，可在 JVM 单测里直接构造 {@link OilMessage} 校验字段。
+ * 纯 Java，无 Android 依赖，可在 JVM 单测里直接校验字段。类型码沿用 {@link OilMessage} 的常量。
  * <p>
  * 字段形状对齐 {@code yeweiyi-cloud} 侧 {@code internal/protocol.AlarmEvent}（issue #39）：
  * telemetry key 从 {@code alarmEvent} 改成 {@code alarm}（云端按这个固定 key 名找报警，
@@ -77,49 +80,52 @@ public final class AlarmEventBuilder {
     }
 
     /**
-     * 报警产生和恢复用同一个 alarmId（按 云端类型+油罐ID 派生，确定性、无需额外状态），
-     * 云端据此把两条事件关联成一次完整的报警生命周期。
-     *
-     * @return 无法映射到云端类型时返回 null（调用方必须处理，见 {@link #build}）。
+     * {@code OilMessage} 类型码能否上报到云端。出入库、低温、网络/继电器故障、探头勘探等
+     * 在云端封闭类型集合里没有对应的家，返回 false，调用方据此跳过，不能猜一个近似类型。
      */
-    public static String defaultAlarmId(OilMessage message) {
-        Mapping mapping = TYPE_MAPPING.get(message.getType());
-        if (mapping == null) {
-            return null;
-        }
-        return mapping.type + "-" + message.getOilCanId();
+    public static boolean isReportable(int oilMessageType) {
+        return TYPE_MAPPING.containsKey(oilMessageType);
     }
 
     /**
-     * @param text 人类可读文案，调用方负责生成（比如 {@code OilMessage.toString()}）——这个类
-     *             本身必须保持无 Android 依赖，而 {@code OilMessage.toString()} 经
-     *             {@code getState()} 最终会调 {@code SystemUtils.getRsStr()} →
-     *             {@code MyApplication.getInstance().getResources()}，是硬 Android 依赖，
-     *             不能放进这个纯 Java 类，否则这个包"无 Android 依赖、可 JVM 单测"的前提
-     *             就破了。注意这个文案会跟随设备当前 UI 语言（中/英切换），不保证永远是
-     *             中文，尽管云端字段注释写的是"human-readable Chinese text"。
-     * @return 无法映射到云端封闭类型集合的 {@code OilMessage}（出入库、低温、网络/继电器
-     * 故障、探头勘探等）返回 null——调用方（{@code ThingsBoardManager.reportAlarmEvent}）
-     * 必须据此跳过发送，不能猜一个近似类型糊弄过去。
+     * 协议 §4.1：alarmId 区分"每一次"报警，同一次的 ACTIVE 与 CLEARED 共用；仅靠 (tank, type)
+     * 不够——断网补传时两次重叠的同类报警会配错。所以带上产生时刻：{@code 类型-罐号-产生时 tsMs}。
+     *
+     * @return 不可上报的类型返回 null。
      */
-    public static Map<String, Object> build(OilMessage message, boolean recovered, String text, long deviceTimeMs) {
-        Mapping mapping = TYPE_MAPPING.get(message.getType());
+    public static String alarmIdFor(int oilMessageType, int tank, long raisedAtMs) {
+        Mapping mapping = TYPE_MAPPING.get(oilMessageType);
         if (mapping == null) {
             return null;
         }
-        return build(message, mapping, recovered, text, deviceTimeMs);
+        return mapping.type + "-" + tank + "-" + raisedAtMs;
     }
 
-    private static Map<String, Object> build(OilMessage message, Mapping mapping, boolean recovered, String text,
-                                               long deviceTimeMs) {
+    /**
+     * @param alarmId 由 {@link #alarmIdFor} 在报警产生时生成，恢复时传同一个值。
+     * @param text    人类可读文案，调用方负责生成（比如 {@code OilMessage.toString()}）——这个类
+     *                本身必须保持无 Android 依赖，而 {@code OilMessage.toString()} 经
+     *                {@code getState()} 最终会调 {@code SystemUtils.getRsStr()} →
+     *                {@code MyApplication.getInstance().getResources()}，是硬 Android 依赖，
+     *                不能放进这个纯 Java 类，否则这个包"无 Android 依赖、可 JVM 单测"的前提
+     *                就破了。注意这个文案会跟随设备当前 UI 语言（中/英切换），不保证永远是
+     *                中文，尽管云端字段注释写的是"human-readable Chinese text"。
+     * @return 不可上报的类型（见 {@link #isReportable}）返回 null。
+     */
+    public static Map<String, Object> build(int oilMessageType, int tank, String alarmId, boolean recovered,
+                                            String text, double value, long deviceTimeMs) {
+        Mapping mapping = TYPE_MAPPING.get(oilMessageType);
+        if (mapping == null) {
+            return null;
+        }
         Map<String, Object> event = new LinkedHashMap<>();
-        event.put("alarmId", defaultAlarmId(message));
+        event.put("alarmId", alarmId);
         event.put("status", recovered ? STATUS_CLEARED : STATUS_ACTIVE);
         event.put("type", mapping.type);
         event.put("severity", mapping.severity);
-        event.put("tank", message.getOilCanId());
+        event.put("tank", tank);
         event.put("text", text);
-        event.put("value", message.getValue());
+        event.put("value", value);
         event.put("tsMs", deviceTimeMs);
         return event;
     }
@@ -127,7 +133,51 @@ public final class AlarmEventBuilder {
     /** ThingsBoard telemetry 上行 payload：{@code {"ts":..., "values": {"alarm": {...}}}}。 */
     public static Map<String, Object> wrapAsTelemetry(Map<String, Object> alarmEvent, long tsMillis) {
         Map<String, Object> values = new LinkedHashMap<>();
-        values.put("alarm", alarmEvent);
+        values.put(TELEMETRY_KEY, alarmEvent);
         return TelemetrySnapshotBuilder.wrapWithTimestamp(values, tsMillis);
     }
+
+    /**
+     * 补发队列的淘汰策略：只有报警"产生"（ACTIVE）是低优先级，按 alarmId 分组——队列满时丢掉最旧的
+     * 一条"产生"，连同它后面同一 alarmId 的"恢复"一起丢。"恢复"是受保护事件，兜底淘汰时也跳过：它的
+     * "产生"可能已经送达，丢掉"恢复"会让云端那条报警永远停在 ACTIVE。出入库和命令结果不是报警。
+     * 解析失败按非报警处理（宁可多留不误删）。
+     */
+    public static final PendingAlarmStore.EvictionPolicy EVICTION_POLICY = new PendingAlarmStore.EvictionPolicy() {
+        @Override
+        public boolean isLowPriority(String serializedEvent) {
+            JsonObject alarm = alarmOf(serializedEvent);
+            return alarm != null && alarm.has("status") && STATUS_ACTIVE.equals(alarm.get("status").getAsString());
+        }
+
+        @Override
+        public String groupKey(String serializedEvent) {
+            JsonObject alarm = alarmOf(serializedEvent);
+            return alarm != null && alarm.has("alarmId") ? alarm.get("alarmId").getAsString() : null;
+        }
+
+        /** "恢复"事件受保护：兜底淘汰也跳过（代码审核 M3）。 */
+        @Override
+        public boolean isProtected(String serializedEvent) {
+            JsonObject alarm = alarmOf(serializedEvent);
+            return alarm != null && alarm.has("status") && STATUS_CLEARED.equals(alarm.get("status").getAsString());
+        }
+    };
+
+    /** 取出 {@code values.alarm} 对象；不是报警事件或解析失败返回 null。 */
+    private static JsonObject alarmOf(String serializedPayload) {
+        try {
+            JsonObject root = new JsonParser().parse(serializedPayload).getAsJsonObject();
+            JsonElement values = root.get("values");
+            if (values == null || !values.isJsonObject()) {
+                return null;
+            }
+            JsonElement alarm = values.getAsJsonObject().get(TELEMETRY_KEY);
+            return alarm != null && alarm.isJsonObject() ? alarm.getAsJsonObject() : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static final String TELEMETRY_KEY = "alarm";
 }

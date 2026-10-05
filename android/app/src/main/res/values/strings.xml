@@ -11,6 +11,7 @@
     <!--报警信息（%1$d 为罐号占位符，语序/措辞由各语言资源自己决定，代码不再按语言拼字符串）-->
     <string name="oilHeight_alarm">%1$d 号储罐 高液位报警</string>
     <string name="oilHHeight_alarm">%1$d 号储罐 高高液位报警</string>
+    <string name="oil_connect_error">%1$d 号储罐连接失败</string>
     <string name="oillow_alarm">%1$d 号储罐 低液位报警</string>
     <string name="oilllow_alarm">%1$d 号储罐 低低液位报警</string>
     <string name="waterheight_alarm">%1$d 号储罐 高水位报警</string>

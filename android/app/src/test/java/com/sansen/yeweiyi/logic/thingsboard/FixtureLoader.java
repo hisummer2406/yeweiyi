@@ -10,17 +10,22 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 测试专用：从 {@code src/test/resources/thingsboard/} 读取跨仓库契约 fixture。
- * 这些 fixture 目前是 Android 侧单方面定义的（见各 fixture 文件里的 _comment），
- * 一旦 yeweiyi-cloud#7 协议冻结、双方对齐，就把这里换成共享 fixture 目录。
+ * 测试专用 fixture 读取。两个目录：
+ * <ul>
+ *   <li>{@code src/test/resources/protocol/v1/}：yeweiyi-cloud 的共享 fixture 原样副本，
+ *       跨仓库契约以这里为准（{@link #loadProtocolV1}，见该目录 README.md）；</li>
+ *   <li>{@code src/test/resources/thingsboard/}：Android 侧自己的样例和 TLS 证书
+ *       （{@link #loadText}/{@link #openStream}）。</li>
+ * </ul>
  */
 public final class FixtureLoader {
 
     private FixtureLoader() {
     }
 
-    public static JsonObject loadObject(String resourceName) {
-        String text = loadText(resourceName);
+    /** 读取 yeweiyi-cloud 共享 fixture，去掉 {@code _comment}。 */
+    public static JsonObject loadProtocolV1(String resourceName) {
+        String text = readResource("/protocol/v1/" + resourceName);
         JsonElement element = new JsonParser().parse(text);
         JsonObject obj = element.getAsJsonObject();
         obj.remove("_comment");
@@ -37,7 +42,11 @@ public final class FixtureLoader {
     }
 
     public static String loadText(String resourceName) {
-        try (InputStream in = FixtureLoader.class.getResourceAsStream("/thingsboard/" + resourceName)) {
+        return readResource("/thingsboard/" + resourceName);
+    }
+
+    private static String readResource(String resourceName) {
+        try (InputStream in = FixtureLoader.class.getResourceAsStream(resourceName)) {
             if (in == null) {
                 throw new IllegalStateException("找不到 fixture: " + resourceName);
             }

@@ -16,8 +16,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 对照 {@code yeweiyi-cloud} 的共享 fixture（{@code stock_event_in.json}/{@code stock_event_out.json}，
- * 字节同步，见这两个文件顶部的 {@code _comment}）——不是 Android 单方面定义的样例。
+ * 对照 {@code yeweiyi-cloud} 的共享 fixture（{@code src/test/resources/protocol/v1/} 下的
+ * {@code stock_event_in.json}/{@code stock_event_out.json}，原样副本）——不是 Android 单方面定义的样例。
  * <p>
  * {@link StockEventMapper#build} 把 {@code DetailInoutRecord.beginTime}/{@code endTime}
  * （{@code yyyy-MM-dd HH:mm} 本地时间字符串，无时区）反解成 epoch 毫秒，结果依赖 JVM 默认
@@ -91,7 +91,7 @@ public class StockEventMapperTest {
         Map<String, Object> payload = StockEventMapper.wrapAsTelemetry(event, (Long) event.get("tsMs"));
 
         JsonObject actual = GSON.toJsonTree(payload).getAsJsonObject();
-        JsonObject expected = FixtureLoader.loadObject("stock_event_in.json");
+        JsonObject expected = FixtureLoader.loadProtocolV1("stock_event_in.json");
         assertEquals(expected, actual);
     }
 
@@ -102,7 +102,7 @@ public class StockEventMapperTest {
         Map<String, Object> payload = StockEventMapper.wrapAsTelemetry(event, (Long) event.get("tsMs"));
 
         JsonObject actual = GSON.toJsonTree(payload).getAsJsonObject();
-        JsonObject expected = FixtureLoader.loadObject("stock_event_out.json");
+        JsonObject expected = FixtureLoader.loadProtocolV1("stock_event_out.json");
         assertEquals(expected, actual);
     }
 

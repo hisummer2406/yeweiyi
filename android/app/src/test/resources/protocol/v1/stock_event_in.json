@@ -1,5 +1,5 @@
 {
-  "_comment": "一次进油（收油）。注意 netVolumeL 与 duringDeliveryVolumeL 的关系：油罐净增 18000L，但卸油期间加油机仍发出了 420L，所以实际到货量是 18420L。油库边进边卖时，只看罐的净变化会把到货量算少。与 yeweiyi-cloud fixtures/protocol/v1/stock_event_in.json 字节同步——那边是权威来源，改这里必须先改那边。",
+  "_comment": "一次进油（收油）。注意 netVolumeL 与 duringDeliveryVolumeL 的关系：油罐净增 18000L，但卸油期间加油机仍发出了 420L，所以实际到货量是 18420L。油库边进边卖时，只看罐的净变化会把到货量算少。",
   "ts": 1756717200000,
   "values": {
     "stockEvent": {

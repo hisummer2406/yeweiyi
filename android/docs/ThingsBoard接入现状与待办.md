@@ -1,10 +1,14 @@
 # ThingsBoard 接入：Android 业务逻辑详解与现状
 
-**Android 依据代码**：分支 `feature/thingsboard-device-protocol`，commit `a7b48e4`（2026-09-19），**未合并**，对应 PR #38。
-**云端依据代码**：`yeweiyi-cloud` `main@5ff243b`（仅作接口参照，不展开)。
+**Android 依据代码**：分支 `feature/thingsboard-device-protocol`，commit `be435b1`（2026-10-04，已合入 `main@2a2e0ee`）**加上工作区尚未提交的 V1 改动**（V1-T1～T4、T6，见 `docs/ThingsBoard两版迭代执行方案.md`），**未合并到 main**，对应 PR #38。
+**云端依据代码**：`yeweiyi-cloud` `main@26fb6b6`（协议代码与 `5ff243b` 相同；仅作接口参照，不展开)。
 **协议规范**：`yeweiyi-cloud/docs/protocol-v1.md`（草案，尚未正式冻结）。
 
-> 第四版。云端部分压缩成一张速查表（方法/参数/topic/一句话作用），重点全部放在 **Android 这边每一条业务逻辑实际怎么跑、代码在哪、做到什么程度**。
+> 第六版。云端部分压缩成一张速查表（方法/参数/topic/一句话作用），重点全部放在 **Android 这边每一条业务逻辑实际怎么跑、代码在哪、做到什么程度**。
+>
+> 第六版变更（2026-10-04，V1 数据上报迭代）：§3.1 开始发 `alarmState`、`oilRatioPct` 改为一位小数、`waterRatioPct` 停发；§3.2 报警恢复已接通，上报时机跟本地报警逻辑完全一致；§3.3 `source` 结论为不需要；§3.5 客户端属性补齐有数据来源的部分；离线队列满时成对丢弃报警（"恢复"从不单独丢）；即时事件按产生顺序到达；删除/停用罐的报警自动恢复；契约测试改用云端共享样例。（含 2026-10-05 review 修复，见执行方案 §3.11）§5/§6/§7 同步更新。
+>
+> 第五版变更（2026-10-04）：§3.7 配网已有现场手动录入入口（`9225274`）。
 
 ---
 
@@ -40,7 +44,7 @@ Android 设备 --MQTT/TLS-->  ThingsBoard CE  --REST + WebSocket-->  Go 后端  
 | `POST /api/devices/unbind` | deviceName | 业务库 | 解绑 |
 | `POST /api/devices/:device/pairing-secret` | device(path)，仅 platform_admin | 业务库 | 铸造一次性配对密钥（给二维码用） |
 
-**没有端点读 client attribute**——Android 已经在发标定表，云端没有任何接口把它转发出来，这是云端一侧唯一值得记的缺口，后面不再展开。
+**没有端点读 client attribute**——Android 已经在发设备属性和标定表（§3.5），云端没有任何接口把它转发出来，这是云端一侧值得记的缺口，后面不再展开。另外 `/api/oil-in-out` 的返回里没有起止水位/水体积（协议结构里有、Android 也在发），属于云端的取舍。
 
 ---
 
@@ -59,43 +63,66 @@ TelemetryScheduler（独立线程，scheduleWithFixedDelay 30s）
       → connection.publishTelemetry(json)                     // 断线直接丢弃，不补投
 ```
 
-**每罐字段**（`TelemetrySnapshotBuilder.putTankFields`）：`oilType`/`oilLevelMm`/`waterLevelMm`/`tempC`/`oilVolumeL`/`waterVolumeL`/`oilWeightKg`/`nullVolumeL`/`oilRatioPct`/`waterRatioPct`/`probeConnected`，外加设备级 `tankCount`（取最大罐号，不是罐数）、`snapshotSeq`（单调递增，丢帧检测用）。
+**每罐字段**（`TelemetrySnapshotBuilder.putTankFields`）：`oilType`/`oilLevelMm`/`waterLevelMm`/`tempC`/`oilVolumeL`/`waterVolumeL`/`oilWeightKg`/`nullVolumeL`/`oilRatioPct`/`alarmState`/`probeConnected`，外加设备级 `tankCount`（取最大罐号，不是罐数）、`snapshotSeq`（单调递增，丢帧检测用）。
 
 **业务规则**：
 - 断线期间**直接丢弃当次快照**，不进补投队列——因为快照是"当前状态"，补发一条 30 秒前的旧值没有意义，等下一个周期自然会发最新的。
 - 周期可以被云端下发的 `reportIntervalSec` 共享属性运行期覆盖（见 3.6），不需要重启设备。
-- **不发 `tank{n}.alarmState`**：底层字段 `NetOilCan.setAlarmState()` 全代码库从未被真正调用过，宁可不发这个 key，也不能发一个恒定的假状态糊弄云端。
+- **`alarmState`**（NORMAL/ALARM/FAULT）：跟报警事件同一个来源（`CloudAlarmReporter` 记录的当前报警集合，见 3.2）。探头断线报警在 → `FAULT`，其它报警在 → `ALARM`，否则 `NORMAL`。
+- **`oilRatioPct`**：沿用本机含义——液位 ÷ 罐高 × 100（本机 `OilCan.oilRatio` 只用来画罐体图，界面不显示百分比数字），上报时保留一位小数、向下截断、超过 100 按 100，罐高未配置时不发。
+- **`waterRatioPct` 不发**：真实模式下 `OilCan.waterRatio` 从未被计算（只有演示模式赋值），恒为 0。
 
-**现状**：✅ 完整实现，字段跟云端逐个核对一致。**唯一的业务缺口**是数据源本身的精度限制（`oilRatioPct` 等字段的小数精度、单位是否真的对应探针寄存器量纲——这两条不是代码问题，是硬件事实待确认，见第 4 节）。
+**各字段数据质量（2026-10-04 核对）**：
+
+| 字段 | 情况 |
+|---|---|
+| 液位、水位 | 探针读数截到 0.1 mm 再加修正值，跟屏幕一致 |
+| 温度 | 只有整数位（`ZhongChengCompany.java:215` 的 `Math.floor`），已登记、暂缓修 |
+| 油体积、油重量 | 按油面高度查标定表得到的**总液体体积（含底部的水）**，重量 = 它 × 密度，跟屏幕一致；含义需告知云端 |
+| 空容量 | 容量 − 上面的总体积 |
+| 水位 `waterLevelMm` | 按本机逻辑上报：中盛协议解析出真实水位；标准 Modbus、4-20mA 两个解析器不写水位，上报的是 `OilCan` 里的值（通常为 0），跟屏幕一致 |
+| **水体积 `waterVolumeL`** | ⚠️ 真实模式下**恒为 0**（三个探针解析器都不计算，只有演示模式赋值）。本地在用（罐卡片可选显示项、出入库记录、VR350 对外协议、通讯录制），按"本地在用就照常上报"的规则**继续上报**（2026-10-04 用户确认）；恒为 0 是本地问题，不在 MQTT 范围内改 |
+| `probeConnected` | 失败 1 次即 `false`，而探头断线报警要连续失败 20 次，两者不一致（已登记） |
+
+**现状**：✅ 字段跟云端共享样例逐 key 核对（`ProtocolV1ContractTest`），已知差异只剩 `waterRatioPct` 不发。
 
 ---
 
-### 3.2 报警上报——业务逻辑完整但只覆盖"产生"这一半
+### 3.2 报警上报——产生和恢复都已接通，时机跟本地报警逻辑完全一致
 
-**业务场景**：油位/水位/温度异常时要立刻通知云端，不等 30 秒周期。
+**业务场景**：油位/水位/温度异常、探头断线时要立刻通知云端，不等 30 秒周期；恢复时也要通知。
 
-**完整链路（从阈值判断到上报)**：
+**完整链路**：
 ```
-AlarmDetection.oilHeightDection()/oilLowDection()/waterHeightDection()/tempHeightDection()
-    // 每次探头轮询后，拿实时读数跟 OilCanSet 里配置的四档阈值比较
-    → 阈值命中，构造 OilMessage(type, oilCanId, value=当前读数)
-    → AlarmManager.addAlarmState(oilMessage)
-        → AlarmCoordinator 的 MessageListener 回调（UI 层，MainActivity.initData() 里注册）
-            → 更新首页告警条文案
-            → SocketManager.getInstance(main).sendAlarm(GsonUtil.toJsonStr(state))   // 结构化 JSON，不是展示字符串
-    → BackService.sendAlarms(msgInfo)
-        → ThingsBoardManager.reportAlarmEvent(message, recovered=false)   // 硬编码 false
-            → AlarmEventBuilder.build(...) 把 OilMessage 15 种类型码里的 7 种映射成云端封闭类型
-            → 映射不到的类型（出入库/低温/网络故障/探头勘探等）直接跳过，不上报
-            → 走 PendingAlarmStore 补投队列（断线会补发，跟遥测快照不同）
+产生：AlarmDetection 6 种报警 / SerialPortManager 探头断线
+        → AlarmManager.addAlarmState(oilMessage)       // 本地所有报警都经过这里（原有）
+            → CloudAlarmReporter.onRaised(oilMessage)   // 新增的一行
+恢复：AlarmDetection 里"条件不再成立"的 else 分支（跟本地标志位复位同一个判断）
+      SerialPortManager 通讯恢复（失败计数清零）处
+            → CloudAlarmReporter.onRecovered(罐号, 类型, 当前读数)
+CloudAlarmReporter
+    → ActiveAlarmTracker（纯 Java）：去重、按次生成 alarmId、持久化当前报警集合、汇总 alarmState
+    → ThingsBoardManager.reportAlarmTransition(...)
+        → AlarmEventBuilder.build(...)：OilMessage 类型码里的 7 种映射成云端封闭类型，其余跳过
+        → ThingsBoardManager.publishEventInOrder：队列里还有更早的事件时排队尾按序补发，断线时进补投队列
+CloudAlarmReporter.onTanksReloaded（启动时 + 罐配置重新加载后）
+    → 已删除/停用罐的 ACTIVE 报警全部上报恢复并清除
 ```
 
-**业务规则**（这是真正的业务逻辑，不是协议格式问题）：
-- **报警产生要发,报警恢复现在完全不发**——`recovered` 参数全代码库只有一处调用，恒为 `false`。`AlarmDetection.java` 里其实已经有"液位从超阈值变回正常"这个业务判断（`else` 分支里 `SoundLightAlarm[]`/`isLowAlarms[]` 这两个布尔数组做的边沿检测），但它现在**只用来关本地声光报警硬件**，没有被拿去调用 `alarmManager.addAlarmState(...)` 构造一条恢复事件。这意味着云端报警历史里，每条报警产生后永远显示"未恢复"，即使现场液位早就正常了。
-- **`value` 字段现在是真实读数**（2026-09-17 修复前恒为 0，见第 4 节的历史修复记录），云端能看到触发报警那一刻的具体液位/水位/温度值。
-- `severity`（CRITICAL/MAJOR）的判断规则是这轮改动自己定的——双阈值报警（高高/低低）判 CRITICAL，单阈值/水位/温度/探头断线判 MAJOR，没有跟产品/云端正式确认过。
+**业务规则**：
+- **上报时机跟本地完全一致，不另做阈值判断**（用户 2026-10-04 确认）。本地什么时候报，云端就什么时候收到 ACTIVE；本地判定条件不再成立，云端就收到 CLEARED。本地判断、声光、继电器逻辑没有改动。
+- **只对发过 ACTIVE 的发 CLEARED**；同一罐同一类型已经 ACTIVE 时不重复发（探头断线每次轮询都会经过 `addAlarmState`，靠这一条去重）。
+- **高液位和高高液位可以同时 ACTIVE**，降下来各自恢复，跟本地一样；不加防抖。
+- **`alarmId` = `类型-罐号-产生时 tsMs`**，每次报警换一个，CLEARED 复用。当前报警集合写在 `filesDir/thingsboard_active_alarms.json`，App 重启后读数恢复时仍能补发 CLEARED。
+- **`text`** 用本地 `OilMessage.toString()`（跟随界面语言），CLEARED 复用 ACTIVE 时的文案。探头断线文案 `oil_connect_error` 曾被当作不可达删除，已恢复（中/英/泰取自 git 历史，西语为 AI 翻译待核对）。
+- **`value`** 是真实读数：产生时是触发时的读数，恢复时是条件不再成立那一刻的读数；探头断线没有读数，填 0。
+- `severity`（CRITICAL/MAJOR）：双阈值报警（高高/低低）判 CRITICAL，其余判 MAJOR，没有跟产品/云端正式确认过。
+- **演示模式不上报**（`TEST_DATA` 打开时）。
+- 旧路径 `AlarmCoordinator → SocketManager.sendAlarm → BackService.sendAlarms` 已停用，避免重复上报。
 
-**现状**：⚠️ 传输链路、幂等、离线补投都做完了；**业务上"报警恢复"这个功能完全没有**，需要重新设计 `AlarmDetection` 的状态机对接方式，且涉及真机验证（issue #34）。
+**本地报警逻辑的已知缺陷会原样体现在云端**（登记在执行方案 §3.10，以后单独修）：开机时读数已在报警区域不会触发报警；低低液位复位设错了标志位；高高液位没有声光；探头断线判定两处不一致。
+
+**现状**：✅ 代码完成，有 JVM 单测（`ActiveAlarmTrackerTest`、契约测试）；⚠️ 未经真机验证。
 
 ---
 
@@ -130,9 +157,11 @@ private boolean sendUnloadOils(String msgInfo) {
 }
 ```
 
-**业务字段**：`tank`/`direction`(IN/OUT)/`oilType`/`begin*`/`end*`（液位、体积、水位、水量、重量、温度)/`netVolumeL`（罐子净变化,出库为负)/`duringDeliveryVolumeL`（卸油期间加油机仍发出的量,只有人工核对过才带这个字段)/`source`(AUTO/MANUAL)/`tsMs`。
+**业务字段**：`tank`/`direction`(IN/OUT)/`oilType`/`begin*`/`end*`（液位、体积、水位、水量、重量、温度)/`netVolumeL`（罐子净变化,出库为负)/`duringDeliveryVolumeL`（卸油期间加油机仍发出的量,只有人工核对过才带这个字段)/`tsMs`。
 
-**现状**：✅ 两条业务路径都已接入，字段结构跟云端对齐。
+**`source` 字段——结论：不需要**（2026-10-04 用户确认）。云端用 `direction` 区分进油/出油，并据此计算实际到货/发出量 `deliveredVolumeL`；`source`（`AUTO` 自动检测 / `MANUAL` 人工补录）是另一个维度，云端协议没有这个字段、前端也不区分，不推动云端添加。Android 现状不改：补录事件目前仍带 `"source":"MANUAL"`，云端解析时直接忽略，无影响。
+
+**现状**：✅ 两条业务路径都已接入，字段结构跟云端共享样例逐 key 一致。待真机核实快照取值疑点（见 3.3.1 末尾）。
 
 #### 3.3.1 `beginTcVolume`/`endTcVolume` 真实语义——已确认：不是"温度补偿体积"，是"空液量"
 
@@ -326,15 +355,21 @@ public void dispatch(String mqttRequestId, String payload) {
 
 ---
 
-### 3.5 Client Attribute——目前唯一的业务内容是标定表
+### 3.5 Client Attribute——设备配置 + 标定表
 
 **业务场景**：把设备的静态配置（不是实时数据）同步给云端，方便远程查看/核对装机参数。
 
-**当前实现**（`TankCalibrationAttributeBuilder`）：把每个启用罐位的"高度→体积"标定表发上去，连接成功后发一次。**业务上这是新增能力**——之前安卓端只在本地持久化这张表（`CreateOilTableFragment` 生成），云端和小程序完全没有数据源可查；现在发了，但云端还没有接口把它转发出去（见第 2 节）。
+**当前实现**（一条 attributes 消息，两部分合并）：
+- `ClientAttributesBuilder`（协议 §5.1）：`protocolVersion`（恒为 1）、`tankCount`（最大罐号，跟快照同一语义）、每罐 `probeAddress`（`OilCan.getProbeAdr()`）、`probeType`、`capacityL`（罐设置最大容量）。
+- `TankCalibrationAttributeBuilder`：每个启用罐的"高度→体积"标定表（`tank{n}.calibrationHeightMm`/`calibrationVolumeL`）。之前只在本地持久化，现在发了，但云端没有接口转发（见第 2 节）。
 
-**触发时机的业务含义**：只在"连接成功后"触发一次，跟"标定表被修改"这个业务动作本身没有绑定——现场改完标定表，要等设备下次重连/重启，云端才能看到新值。装机场景下这个滞后可以接受（标定本来就是一次性动作）。
+**`probeType`**：上报通讯协议名，字符串跟串口设置页一致：`ZHONGCHENG`（中盛探针协议）/`MODBUS`（标准 Modbus 协议）/`4-20MA`（4-20mA），不是云端样例里的"磁致伸缩"（测量原理），取值待跟云端约定。来源是 `OilCan.getProbeType()`——它**不读 `probeType` 字段，而是返回 `Singleton.ChuanKou2`**，即"高级设置 → 串口设置 → 串口 2"的选择：0 = 中盛探针协议（`ZhongChengCompany`）、1 = 标准 Modbus 协议（`LDCompany`）、2 = 4-20mA（`LD2Company`）。这是**整机一个设置**，同一台设备所有罐的 `probeType` 相同。（2026-10-04 更正：此前误以为 `setProbeType()` 无调用方即"恒为 0"。）
 
-**现状**：⚠️ 已发，云端未接。协议文档要求的另外 7 个身份/配置类属性（`deviceModel`/`hardwareVersion`/`tankCount`/`localControlMode`/`probeAddress`/`probeType`/`capacityL`）都还没做——其中 `probeAddress`/`probeType`/`capacityL` 有现成数据源，是纯粹的搬运工作；`deviceModel`/`hardwareVersion` 没有任何数据源，需要先有人定义这两个值该是什么。
+**不发的**：`deviceModel`/`hardwareVersion`（没人定义过取值；候选来源有 `Build.MODEL` = `rk3562_t`、厂商接口 `XzjhSystemManager.xzjhGetSerialNo()`/`xzjhGetDeviceKernelInfo()`）、`localControlMode`（设备上没有这个状态）。不编造值。
+
+**触发时机**：连接成功后；以及罐配置重新加载（`OilcanDataManager.refresh()`，保存罐设置、RPC 改阈值都会触发）之后，经 `setConfigChangedListener` 回调立即重发。标定表的保存不一定走 `refresh()`，改了标定表可能要等下次重连——装机阶段的一次性动作，可以接受。
+
+**现状**：✅ 已发，云端未接。跟共享样例逐 key 比对，已知差异：上面三个不发的字段、`probeType` 取值。
 
 ---
 
@@ -356,17 +391,27 @@ public void dispatch(String mqttRequestId, String payload) {
 
 ---
 
-### 3.7 配对联网——业务上最大的缺口
+### 3.7 配对联网——设备联网已有手动入口，用户绑定仍缺
 
-**业务场景**：一台新设备从出厂到现场能正常工作，中间需要两件事都完成：设备本身要能连上 ThingsBoard；用户要能在小程序里看到/管理这台设备。**这两件事是独立的业务流程，Android 端现在都没有对应的用户可操作界面。**
+**业务场景**：一台新设备从出厂到现场能正常工作，中间需要两件事都完成：设备本身要能连上 ThingsBoard；用户要能在小程序里看到/管理这台设备。这两件事是独立的业务流程。
 
-- **设备联网**：`ThingsBoardCredentialStore.save()`（把 ThingsBoard access token 写进本地存储的唯一入口）全代码库零调用点。没有任何配网界面、没有扫码获取 token 的流程。新设备开机后，`DeviceCredentials.isValid()` 永远是 `false`，MQTT 连接**从不会真正尝试建立**。
-- **broker 地址**同样没有配置界面，硬编码兜底到一个旧 IP（`39.98.62.79:1883`，看着像 Alink 时代遗留的测试服务器，不是 ThingsBoard 的真实地址）。
-- **用户绑定设备**（云端二维码配对那套业务流程，见第 2 节 `pairing-secret`/`bind`）：Android 端没有任何扫码页面或配对密钥输入界面。
+- **设备联网——✅ 已有现场手动录入入口**（`9225274`）：高级设置 → 云平台设置（`fragment/ThingsBoardSetFragment`），装机人员手动填 broker 地址、端口、`deviceId`、`accessToken`。保存时：
+  ```
+  ThingsBoardSetFragment.save()
+      → SharePreManager.saveIpBean(host, port)                     // broker 地址
+      → ThingsBoardCredentialStore.save(DeviceCredentials)          // 凭据
+      → ThingsBoardManager.applyUpdatedConnectionSettings(host, port)  // 立即断线重连，不等下次意外断线
+  ```
+  - `accessToken` 用 Android Keystore AES/GCM 密钥加密后落盘（API 23 以下回退明文并记警告日志，这台硬件不是那个版本）；`deviceId` 只是 MQTT client ID，保持明文。
+  - **入口暂时只在中文界面显示**（`SetSeniorFragment` 里用 `LanguageUtil.isChinese()` 判断）——这个页面的文案目前写死中文、没有多语言版本。英文/西语界面的设备要先切到中文配好凭据，再切回去（配置存在设备本地，切语言不丢）。
+  - 从没保存过时，`SharePreManager.getIpBean()` 仍然兜底到旧 IP `39.98.62.79:1883`（Alink 时代遗留），凭据也为空，所以**新设备不进这个页面配置就连不上**——这是预期行为，不是缺陷。
+  - 方案取的是下面 3.7.1 表格里的**方案 B（设置界面手动填）**；token 手抄易错、装机人员要能访问云端后台这两个缺点仍然成立。
+- **用户绑定设备**（云端二维码配对那套业务流程，见第 2 节 `pairing-secret`/`bind`）：❌ Android 端仍然没有任何扫码页面或配对密钥输入界面。
+- **云端铸造设备身份**：❌ 仍然只有开发者命令行工具能做（见 3.7.1 第一步），装机人员手里的 `deviceId`/`accessToken` 目前得靠开发者在 ThingsBoard 控制台或命令行工具里建好设备再交给他们。
 
-**这三个缺口的业务后果**：即使前面 3.1-3.6 的所有业务逻辑代码都是对的，**现在这套代码在现场装一台新设备,连 MQTT 连接都建立不起来**——这是比任何一条具体业务逻辑都更优先的缺口。
+#### 3.7.1 `DeviceCredentials` 应该怎么拿到——设计建议（需要产品/安全确认）
 
-#### 3.7.1 `DeviceCredentials` 应该怎么拿到——设计建议（不是已实现方案，需要产品/安全确认）
+> 第五版注：下表方案 B 已作为过渡方案实现（见上文）。本节其余内容保留，作为将来换成方案 A 等更顺手的配网方式时的参考。
 
 先说清楚现在为什么拿不到，再说应该怎么拿。
 
@@ -385,7 +430,7 @@ public void dispatch(String mqttRequestId, String payload) {
 
 **倾向 A**，因为工作量最小（复用现有本地服务器基础设施）、不依赖不存在的硬件（摄像头）。但**本地端点的认证方式是一个真实的安全决策，不是实现细节**——用什么身份证明"这次调用真的是装机人员、不是同一 WiFi 下的另一台设备"，需要产品/安全负责人拍板，我这里只列选项不替他们定。
 
-**第三步（不管哪个方案都要遵守的安全原则，抄自线 B 已经踩过的坑）**：这个凭据必须跟"用户绑定设备"的配对密钥（线 B）保持独立，不能合并成一套——线 B 的历史正是"曾经把 ThingsBoard token 当配对凭据用，被否掉"的真实案例，线 A 的设计不能重蹈覆辙。另外，`SharePrefUtil` 目前明文存储 `TB_DEVICE_ID`/`TB_ACCESS_TOKEN`，如果这次一并做配网界面，值得同时评估要不要换成 Android Keystore 加密存储。
+**第三步（不管哪个方案都要遵守的安全原则，抄自线 B 已经踩过的坑）**：这个凭据必须跟"用户绑定设备"的配对密钥（线 B）保持独立，不能合并成一套——线 B 的历史正是"曾经把 ThingsBoard token 当配对凭据用，被否掉"的真实案例，线 A 的设计不能重蹈覆辙。（`TB_ACCESS_TOKEN` 明文存储的问题已在 `9225274` 改为 Android Keystore 加密存储。）
 
 ---
 
@@ -395,7 +440,7 @@ public void dispatch(String mqttRequestId, String payload) {
 
 | # | Topic | 方向 | 何时用 | Payload 形状（示例） | Android 代码 | 云端怎么消费 |
 |---|---|---|---|---|---|---|
-| 1 | `v1/devices/me/telemetry` | 设备→云,发布 | 30s 快照 + 报警/出入库/命令结果三类即时事件，共用这一个 topic，靠 `values` 里的 key 名区分 | `{"ts":1735689600000,"values":{"tank1.oilLevelMm":1234.5,...}}` / `{"ts":...,"values":{"alarm":{...}}}` / `{"ts":...,"values":{"stockEvent":{...}}}` / `{"ts":...,"values":{"cmdResult":{...}}}` | `ThingsBoardManager.buildAndPublishSnapshot`（快照）/ `reportAlarmEvent`（报警）/ `reportRawEvent`（出入库）/ `publishRpcResult`（命令结果） | ThingsBoard 存成 timeseries；Go 端 `tbclient.SubscribeTelemetry`（WS）实时收，`internal/ingest.HandleUpdate` 按 key 名分流：`alarm`/`cmdResult` 单独处理，其余（`tank{n}.*`/`tankCount`/`snapshotSeq`/`stockEvent`）routine key 不落业务库，只在被 REST 查询时读 |
+| 1 | `v1/devices/me/telemetry` | 设备→云,发布 | 30s 快照 + 报警/出入库/命令结果三类即时事件，共用这一个 topic，靠 `values` 里的 key 名区分 | `{"ts":1735689600000,"values":{"tank1.oilLevelMm":1234.5,...}}` / `{"ts":...,"values":{"alarm":{...}}}` / `{"ts":...,"values":{"stockEvent":{...}}}` / `{"ts":...,"values":{"cmdResult":{...}}}` | `ThingsBoardManager.buildAndPublishSnapshot`（快照）/ `reportAlarmTransition`（报警产生/恢复）/ `reportRawEvent`（出入库）/ `publishRpcResult`（命令结果） | ThingsBoard 存成 timeseries；Go 端 `tbclient.SubscribeTelemetry`（WS）实时收，`internal/ingest.HandleUpdate` 按 key 名分流：`alarm`/`cmdResult` 单独处理，其余（`tank{n}.*`/`tankCount`/`snapshotSeq`/`stockEvent`）routine key 不落业务库，只在被 REST 查询时读 |
 | 2 | `v1/devices/me/attributes` | **双向**：设备发布 client attribute；设备也订阅这个 topic 收共享属性推送 | 发布标定表：`{"tank1.calibrationHeightMm":[100,200,...],"tank1.calibrationVolumeL":[50,120,...]}`；收到共享属性变化推送：`{"reportIntervalSec":60}` | 发布：`ThingsBoardMqttConnection.publishAttributes`（调用方 `TankCalibrationAttributeBuilder`）；订阅收：`AttributesListener.onSharedAttributesPush` → `SharedAttributesParser.parsePushedReportIntervalMillis` | client attribute 云端目前**没有任何接口读**（第 2 节已提过）；共享属性目前只能靠 ThingsBoard 控制台手工改，云端 Go 代码没有下发它的业务入口 |
 | 3 | `v1/devices/me/attributes/request/{requestId}` | 设备→云,发布 | 每次连接成功后主动问一次"现在的共享属性值是多少"——只订阅 #2 收不到连接前已经设置好的值 | `{"sharedKeys":"reportIntervalSec"}` | `ThingsBoardManager.requestSharedAttributes` → `connection.publishAttributesRequest` | ThingsBoard 内置处理，不经过本项目 Go 代码 |
 | 4 | `v1/devices/me/attributes/response/{requestId}` | 云→设备,设备订阅（通配符 `+`） | 对 #3 请求的应答 | `{"shared":{"reportIntervalSec":60},"client":{...}}` | `AttributesListener.onAttributesResponse` → `SharedAttributesParser.parseResponseReportIntervalMillis` | 同上 |
@@ -410,19 +455,23 @@ public void dispatch(String mqttRequestId, String payload) {
 
 | 分类 | 具体内容 |
 |---|---|
-| **卡配网界面（比真机验证更优先）** | 设备凭据写入界面、broker 地址配置界面、用户扫码绑定界面 |
-| **卡真机（issue #34）** | `pump.*`/`valve.*`/`alarm.mute`/`alarm.clear`/`device.reboot` 真实业务逻辑、报警恢复事件源接入 `AlarmDetection` |
+| **卡配网界面** | 用户扫码绑定界面、云端给真实设备铸造 ThingsBoard 身份的接口（见 3.7）；云平台设置页多语言文案（目前只在中文界面开放）。设备凭据写入/broker 地址配置已有手动入口（`ThingsBoardSetFragment`） |
+| **待决定** | `probeType` 跟云端的取值约定（Android 已按设置页命名）、`deviceModel`/`hardwareVersion` 取值定义（见 3.5）；"油体积含水"的含义需告知云端 |
+| **本地问题，只记录不在 MQTT 范围内改** | 水体积 `waterVolume` 真实模式下恒为 0（三个解析器都不计算），影响罐卡片"水体积"显示项、出入库记录起止水体积、VR350 对外协议、MQTT 上报——按"本地在用就照常上报"的规则，MQTT 继续上报（见 3.1） |
+| **V1 剩余（真机）** | 搭 ThingsBoard 环境做真机验收（执行方案 V1-T7）：报警产生/恢复、`alarmState`、断网补发、出入库快照取值疑点 |
+| **卡真机（issue #34）** | `pump.*`/`valve.*`/`alarm.mute`/`alarm.clear`/`device.reboot` 真实业务逻辑（V2） |
 | **卡产品/跨仓库决策** | `alarmThresholds` 共享属性字段形状（真机截图已给出完整候选字段，来自可达的 `OilCanSetFragment` 活屏幕，但要不要全收进去需要产品确认）、`config.setTank` 参数形状（同一张活屏幕，13+ 字段候选）、`config.setProbe` 参数形状（**证据不足**：对应的"探针设置"界面 `ProbeSetFragment` 在代码库里根本不存在，只能找到两个候选字段）、`localControlMode`/单位精度等协议文档 §12 老问题 |
 | **✅ 已确认，可以直接写进协议（但注意消费端现状）** | `beginTcVolume`/`endTcVolume` = "空液量"（剩余可加注体积）——赋值路径（`InOilManager`）是活的，但 `getBeginTcVolume()`/`getEndTcVolume()` 这两个 getter 现在全代码库零调用，本地不显示、`StockEventMapper` 也刻意不发送，是"设备算得出、存得下，但没人读"的只写字段；`duringDeliveryVolumeL` 符号方向 = 罐净变化 + 期间同时卖出量。均见 3.3.1/3.3.2 |
 | **✅ 已确认为废弃功能并清理（不是 bug，不需要修）** | 产生 `duringDeliveryVolumeL` 的"边卸边卖"人工核对对话框（`InOilFragment.onClick`）从未被任何手势触发过——`InOutAdapter.onBindViewHolder` 给列表行装的点击监听器本身就是空实现，长按走的是另一条删除确认框。已确认是废弃功能，这次已把 `InOilFragment.onClick` 里的死代码清空（保留空方法体满足接口签名），`duringDeliveryVolumeL` 因此不会出现在真实 stockEvent 里，见 3.3.2 |
-| **纯技术缺口，可直接做** | `probeAddress`/`probeType`/`capacityL`/`tankCount`/`protocolVersion` 作为 client attribute 补发（数据源已存在，真机截图确认"储罐容量"字段就是 `capacityL` 的现成来源） |
+| **review 遗留（低，暂不修）** | 探头断线通讯恢复前后可能来回跳、演示模式期间开始的真实报警退出后不上报、恢复事件沿用产生文案、补发队列淘汰时重复解析 JSON、轮询时多次读演示模式设置、三份文件持久化代码重复、打开混淆后 Gson 持久化类会出错——详见执行方案 §3.11 |
+| **✅ 已结论为不需要** | 出入库 `source` 字段（云端用 `direction` 区分进出，不需要区分自动/补录，见 3.3） |
 | **完全没开始** | OTA 客户端、交班上行通道（产品已决定不做） |
 
 ---
 
 ## 6. 测试现状
 
-`logic/thingsboard/` 包 116 个测试，全模块 197 个测试，0 失败。**零真机验证**——没连过真实 ThingsBoard broker，没连过真实探针/继电器硬件；第 3.7 节的配网缺口意味着，即使现在有真机，这套代码也没有路径能装上去连通。
+全模块 270 个 JVM 测试，0 失败（2026-10-05，V1 工作区改动及 review 修复之后）。其中 `ProtocolV1ContractTest` 用云端 `fixtures/protocol/v1/` 的原样副本（`app/src/test/resources/protocol/v1/`，同步方法见该目录 README）对遥测、报警、设备属性、RPC ACK/命令结果做逐 key 比对，已知差异各用一个 `knownGap_*` 测试固定。**零真机验证**——没连过真实 ThingsBoard broker，没连过真实探针/继电器硬件。配网入口（3.7）补上之后，真机已经有路径可以填凭据连上 broker，下一步就是真机联调；配网页、凭据加密、broker 重连都依赖 Android Context，不在 JVM 测试范围内，只经过编译验证。
 
 ---
 
@@ -431,19 +480,26 @@ public void dispatch(String mqttRequestId, String payload) {
 ```
 logic/thingsboard/
   TelemetrySnapshotBuilder.java / AlarmEventBuilder.java / StockEventMapper.java   三条即时/周期业务事件的 payload 构造
-  TankCalibrationAttributeBuilder.java / SharedAttributesParser.java              属性双向
-  ThingsBoardTopics.java / ReconnectBackoff.java / PendingAlarmStore.java / BrokerTls.java   连接层基础设施
-  DeviceCredentials.java / DeviceCredentialStore.java                            凭据值对象（save() 无调用点）
-  rpc/  RpcRequestEnvelope / RpcDispatcher / ProcessedCommandStore / handler/SetAlarmThresholdHandler(真实现) / handler/HighRiskActionHandler(6个恒拒绝)
+  ActiveAlarmTracker.java                                                        当前报警集合：去重、按次 alarmId、alarmState 汇总
+  ClientAttributesBuilder.java / TankCalibrationAttributeBuilder.java / SharedAttributesParser.java   属性双向
+  ThingsBoardTopics.java / ReconnectBackoff.java / PendingAlarmStore.java / BrokerTls.java   连接层基础设施（补发队列满时成对丢弃报警，"恢复"不单独丢）
+  DeviceCredentials.java / DeviceCredentialStore.java                            凭据值对象 / 存取接口
+  rpc/  RpcRequestEnvelope / RpcDispatcher / RpcWirePayloads(ACK/cmdResult 报文) / ProcessedCommandStore / handler/SetAlarmThresholdHandler(真实现) / handler/HighRiskActionHandler(7个恒拒绝)
 
 manager/
   ThingsBoardManager.java          总装，业务事件的统一入口
   ThingsBoardMqttConnection.java   Paho 封装 + topic 路由
-  ThingsBoardCredentialStore.java  凭据存取实现（无生产调用点）
-  AlarmDetection.java              报警产生/恢复的真正判断逻辑
+  ThingsBoardCredentialStore.java  凭据存取实现（accessToken Keystore 加密；调用方 ThingsBoardSetFragment）
+  CloudAlarmReporter.java          本地报警 → 云端报警的胶水层（产生/恢复）
+  ActiveAlarmFilePersistence.java  当前报警集合落盘
+  AlarmDetection.java              本地报警判断（未改动逻辑，只在恢复分支加了上报调用）
+  AlarmManager.java                addAlarmState：报警产生的上报点
   InOilManager.java                出入库事件产生
 
-sharepre/manager/SharePreManager.java   broker 地址来源（硬编码兜底，无配置界面）
-activity/AlarmCoordinator.java          报警 UI + 上报触发点
-service/BackService.java                AIDL 外壳
+fragment/ThingsBoardSetFragment.java   云平台设置页（broker 地址/端口/deviceId/accessToken 现场录入，仅中文界面显示）
+fragment/SetSeniorFragment.java        高级设置，云平台设置入口所在页
+sharepre/manager/SharePreManager.java   broker 地址存取（未配置时兜底旧 IP 39.98.62.79:1883）
+activity/AlarmCoordinator.java          报警 UI（不再负责上报）
+service/BackService.java                AIDL 外壳（sendAlarm 已停用）
+app/src/test/resources/protocol/v1/     云端共享 fixture 副本 + 同步说明
 ```
