@@ -55,7 +55,7 @@
 - **THEN** 登录成功
 
 ### Requirement: 用户停用与密码重置
-`platform_admin` SHALL 能停用/启用任意用户并重置其密码；`customer_admin` SHALL 只能对本客户的 `customer_user` 这样做。停用 MUST 立即生效：被停用用户无法登录，且已签发未过期的 token 也不能访问任何设备或管理接口。任何用户 MUST NOT 能停用自己，以免把自己锁在外面。对他客户用户的操作 MUST 返回与“用户不存在”一致的 404；对本客户内非 `customer_user` 的操作返回 403。重置后的新密码 MUST NOT 写入审计。
+`platform_admin` SHALL 能停用/启用任意用户并重置其密码；`customer_admin` SHALL 只能对本客户的 `customer_user` 这样做。停用 MUST 立即生效：被停用用户无法登录，且已签发未过期的 token 在**每一个**受保护接口上都被拒绝（由认证中间件读库统一强制，包括不涉及设备访问判定的接口，如解除绑定）。已删除用户的 token 同样被拒绝。任何用户 MUST NOT 能停用自己，以免把自己锁在外面。对他客户用户的操作 MUST 返回与“用户不存在”一致的 404；对本客户内非 `customer_user` 的操作返回 403。重置后的新密码 MUST NOT 写入审计。
 
 #### Scenario: 停用立即生效
 - **GIVEN** 用户持有停用前签发的 token

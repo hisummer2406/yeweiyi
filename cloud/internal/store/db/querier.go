@@ -114,6 +114,18 @@ type Querier interface {
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
 	RenameCustomer(ctx context.Context, arg RenameCustomerParams) (Customer, error)
+	// The same rule as UserMayAccessDevice, plus the customer a command or audit row should be filed
+	// under, read in ONE statement so both come from the same database state. Two separate reads let a
+	// concurrent transfer land between them: a user moved from A to B could be authorized against B's
+	// device while the command was still filed under A, showing its operator, reason and arguments to
+	// the wrong customer.
+	//
+	// The caller picks the snapshot: the user's own customer, or — for a platform admin, who has none —
+	// the device's customer right now (NULL when the device does not exist). No row at all means the
+	// user does not exist.
+	// internal/api/tenancy_test.go checks this agrees with UserMayAccessDevice for every role/device
+	// combination, because the rule is written out in both places.
+	ResolveDeviceAccess(ctx context.Context, arg ResolveDeviceAccessParams) (ResolveDeviceAccessRow, error)
 	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)

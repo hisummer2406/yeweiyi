@@ -85,12 +85,17 @@ TOKEN=$(curl -s localhost:8080/api/login -d '{"username":"admin","password":"cha
   -H 'Content-Type: application/json' | jq -r .token)
 H=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json')
 
-curl "${H[@]}" localhost:8080/api/customers -d '{"name":"客户名称"}'                       # 新增客户（返回 id）
-curl "${H[@]}" localhost:8080/api/users -d '{"username":"site-admin","password":"至少8位的密码",
-  "role":"customer_admin","customerId":1}'                                                  # 客户管理员
-curl "${H[@]}" -X PUT localhost:8080/api/devices/DEVICE_NAME/customer -d '{"customerId":1}'  # 分配/转移设备
-curl "${H[@]}" -X PUT localhost:8080/api/users/2 -d '{"disabled":true}'                      # 停用用户（立即生效）
-curl "${H[@]}" -X PUT localhost:8080/api/users/2 -d '{"password":"新的至少8位密码"}'          # 重置密码
+# 新增客户，记下返回的 id。注意 default 客户占用了 id 1，新客户不会是 1——不要硬编码
+CID=$(curl -s "${H[@]}" localhost:8080/api/customers -d '{"name":"客户名称"}' | jq -r .id)
+
+# 客户管理员（创建时需要指定客户）
+USER_ID=$(curl -s "${H[@]}" localhost:8080/api/users \
+  -d "{\"username\":\"site-admin\",\"password\":\"至少8位的密码\",\"role\":\"customer_admin\",\"customerId\":$CID}" \
+  | jq -r .id)
+
+curl "${H[@]}" -X PUT localhost:8080/api/devices/DEVICE_NAME/customer -d "{\"customerId\":$CID}"   # 分配/转移设备
+curl "${H[@]}" -X PUT localhost:8080/api/users/$USER_ID -d '{"disabled":true}'                      # 停用用户（立即生效）
+curl "${H[@]}" -X PUT localhost:8080/api/users/$USER_ID -d '{"password":"新的至少8位密码"}'          # 重置密码
 ```
 
 客户管理员只能在**本客户**内创建、停用 `customer_user`、重置其密码；创建 `customer_admin` 与其余管理

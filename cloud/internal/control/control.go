@@ -139,8 +139,11 @@ type IssueRequest struct {
 // not a Go error — the call worked, and the resulting row has status "rejected" with the device's
 // reason — because a refusal is information the operator must see, not a transport failure.
 func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlCommand, error) {
-	// Resolved first so even the earliest denial below is audited under a customer.
-	customerID, err := s.resolveCustomer(ctx, req.Actor.UserID, req.DeviceName)
+	// Decided first, and in one statement: the answer to "may this user touch this device" and the
+	// customer everything below is filed under must come from the same database state, so a transfer
+	// that lands mid-command cannot authorize against one customer and record under another. Doing
+	// it up front also means even the earliest denial below is audited under a customer.
+	allowed, customerID, err := s.resolveAccess(ctx, req.Actor.UserID, req.DeviceName)
 	if err != nil {
 		return db.ControlCommand{}, err
 	}
@@ -171,7 +174,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	// get the same answer whether the device is someone else's real device or does not exist at
 	// all, or the error codes become a device-name oracle. This mirrors the ordering already
 	// established in internal/api/devices.go.
-	if err := s.authorize(ctx, req.Actor, req.DeviceName, spec); err != nil {
+	if err := s.authorize(req.Actor, req.DeviceName, spec, allowed); err != nil {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
 		return db.ControlCommand{}, err
@@ -445,8 +448,10 @@ func (s *Service) RunExpirySweep(ctx context.Context, every time.Duration, logf 
 	}
 }
 
-// authorize applies both the device-scope check and the role/method check.
-func (s *Service) authorize(ctx context.Context, actor Actor, deviceName string, spec protocol.MethodSpec) error {
+// authorize applies the interlock gate, the role/method check and the device-scope decision that
+// resolveAccess already made. Its checks run in this order so a caller who may not touch the device
+// still gets the same answer however the other checks would have gone.
+func (s *Service) authorize(actor Actor, deviceName string, spec protocol.MethodSpec, allowedOnDevice bool) error {
 	// The interlock gate is checked first and applies to every role, platform admins included.
 	// It is a statement about the *hardware* being unverified, not about who is trusted.
 	if spec.Physical && !s.cfg.AllowPhysicalCommands {
@@ -458,44 +463,13 @@ func (s *Service) authorize(ctx context.Context, actor Actor, deviceName string,
 	}
 
 	// The device-scope rule (platform admin: any; customer admin: own customer; customer user: own
-	// customer and bound) is the same SQL internal/api uses, decided from the database's current
-	// role and customer. The role above gates *which methods*, this gates *which devices*.
-	allowed, err := s.q.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{
-		UserID:     actor.UserID,
-		DeviceName: deviceName,
-	})
-	if err != nil {
-		return fmt.Errorf("check device authorization: %w", err)
-	}
-	if !allowed {
+	// customer and bound) is the same one internal/api uses, decided from the database's current
+	// role, customer and disabled flag. The role above gates *which methods*, this gates *which
+	// devices*.
+	if !allowedOnDevice {
 		return fmt.Errorf("%w: device %q", ErrForbidden, deviceName)
 	}
 	return nil
-}
-
-// resolveCustomer picks the customer a command and its audit rows are filed under: the user's own,
-// or — for a platform admin, who belongs to none — the device's customer at this moment, so a
-// customer reviewing their audit trail sees what platform staff did to their devices. A device that
-// does not exist (an attempt against a made-up name) yields NULL. The device is only consulted for
-// users with no customer, which are the admins already trusted to see every device, so this adds no
-// existence signal for anyone else.
-func (s *Service) resolveCustomer(ctx context.Context, userID int64, deviceName string) (pgtype.Int8, error) {
-	user, err := s.q.GetUserByID(ctx, userID)
-	switch {
-	case err == nil && user.CustomerID.Valid:
-		return user.CustomerID, nil
-	case err != nil && !errors.Is(err, pgx.ErrNoRows):
-		return pgtype.Int8{}, fmt.Errorf("resolve actor customer: %w", err)
-	}
-
-	dev, err := s.q.GetDevice(ctx, deviceName)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return pgtype.Int8{}, nil
-		}
-		return pgtype.Int8{}, fmt.Errorf("resolve device customer: %w", err)
-	}
-	return dev.CustomerID, nil
 }
 
 func roleAllows(role string, need protocol.PermissionLevel) bool {
@@ -507,6 +481,26 @@ func roleAllows(role string, need protocol.PermissionLevel) bool {
 	default:
 		return false
 	}
+}
+
+// resolveAccess answers, from one database state, whether the user may touch the device and which
+// customer the command and its audit rows are filed under: the user's own, or — for a platform
+// admin, who belongs to none — the device's customer at this moment, so a customer reviewing their
+// audit trail sees what platform staff did to their devices. A device that does not exist yields
+// NULL. A user that no longer exists is simply not allowed.
+func (s *Service) resolveAccess(ctx context.Context, userID int64, deviceName string) (bool, pgtype.Int8, error) {
+	row, err := s.q.ResolveDeviceAccess(ctx, db.ResolveDeviceAccessParams{UserID: userID, DeviceName: deviceName})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, pgtype.Int8{}, nil
+		}
+		return false, pgtype.Int8{}, fmt.Errorf("resolve device access: %w", err)
+	}
+	customer := row.UserCustomerID
+	if !customer.Valid {
+		customer = row.DeviceCustomerID
+	}
+	return row.Allowed, customer, nil
 }
 
 // audit writes one audit row. Audit failures are deliberately swallowed rather than propagated: an

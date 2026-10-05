@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const bindUserDevice = `-- name: BindUserDevice :exec
@@ -97,6 +99,62 @@ func (q *Queries) ListDevicesForUser(ctx context.Context, id int64) ([]Device, e
 		return nil, err
 	}
 	return items, nil
+}
+
+const resolveDeviceAccess = `-- name: ResolveDeviceAccess :one
+SELECT
+    COALESCE(
+        u.disabled_at IS NULL
+        AND (
+            u.role = 'platform_admin'
+            OR (
+                d.device_name IS NOT NULL
+                AND d.customer_id = u.customer_id
+                AND (
+                    u.role = 'customer_admin'
+                    OR EXISTS (
+                        SELECT 1 FROM user_devices ud
+                        WHERE ud.user_id = u.id AND ud.device_name = d.device_name
+                    )
+                )
+            )
+        ),
+        false
+    )::bool AS allowed,
+    u.customer_id AS user_customer_id,
+    d.customer_id AS device_customer_id
+FROM users u
+LEFT JOIN devices d ON d.device_name = $1
+WHERE u.id = $2
+`
+
+type ResolveDeviceAccessParams struct {
+	DeviceName string `json:"device_name"`
+	UserID     int64  `json:"user_id"`
+}
+
+type ResolveDeviceAccessRow struct {
+	Allowed          bool        `json:"allowed"`
+	UserCustomerID   pgtype.Int8 `json:"user_customer_id"`
+	DeviceCustomerID pgtype.Int8 `json:"device_customer_id"`
+}
+
+// The same rule as UserMayAccessDevice, plus the customer a command or audit row should be filed
+// under, read in ONE statement so both come from the same database state. Two separate reads let a
+// concurrent transfer land between them: a user moved from A to B could be authorized against B's
+// device while the command was still filed under A, showing its operator, reason and arguments to
+// the wrong customer.
+//
+// The caller picks the snapshot: the user's own customer, or — for a platform admin, who has none —
+// the device's customer right now (NULL when the device does not exist). No row at all means the
+// user does not exist.
+// internal/api/tenancy_test.go checks this agrees with UserMayAccessDevice for every role/device
+// combination, because the rule is written out in both places.
+func (q *Queries) ResolveDeviceAccess(ctx context.Context, arg ResolveDeviceAccessParams) (ResolveDeviceAccessRow, error) {
+	row := q.db.QueryRow(ctx, resolveDeviceAccess, arg.DeviceName, arg.UserID)
+	var i ResolveDeviceAccessRow
+	err := row.Scan(&i.Allowed, &i.UserCustomerID, &i.DeviceCustomerID)
+	return i, err
 }
 
 const unbindUserDevice = `-- name: UnbindUserDevice :exec

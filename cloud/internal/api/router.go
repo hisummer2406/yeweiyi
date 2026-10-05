@@ -49,7 +49,7 @@ func NewRouter(deps Deps) *gin.Engine {
 	r.GET("/ws/alarms", wsAlarmsHandler(deps))
 
 	authorized := r.Group("/api")
-	authorized.Use(authMiddleware(deps.JWTSecret))
+	authorized.Use(authMiddleware(deps))
 	{
 		// /api/alarms (alarms.go) and /api/oil-in-out (stock.go) read from ThingsBoard, not from
 		// the business database. Two routes were removed rather than migrated:

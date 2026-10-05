@@ -86,7 +86,12 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 	}
 }
 
-func authMiddleware(secret []byte) gin.HandlerFunc {
+// authMiddleware checks the bearer token and then the user's *current* row: a user who has been
+// deleted or disabled is refused on every protected route, whatever their still-unexpired token says.
+// Doing it here, once, rather than in each handler is deliberate — "disabled takes effect
+// immediately" has to hold for routes that are added later too, and a per-handler check is exactly
+// the kind of thing that gets forgotten (unbind was).
+func authMiddleware(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		header := c.GetHeader("Authorization")
 		raw, ok := strings.CutPrefix(header, "Bearer ")
@@ -97,10 +102,24 @@ func authMiddleware(secret []byte) gin.HandlerFunc {
 
 		claims := &apiClaims{}
 		token, err := jwt.ParseWithClaims(raw, claims, func(t *jwt.Token) (interface{}, error) {
-			return secret, nil
+			return deps.JWTSecret, nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			return
+		}
+
+		user, err := deps.Queries.GetUserByID(c.Request.Context(), claims.UserID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if user.DisabledAt.Valid {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
 			return
 		}
 

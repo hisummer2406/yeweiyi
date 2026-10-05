@@ -17,6 +17,7 @@ import (
 
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/protocol"
+	"yeweiyi-cloud/internal/store/db"
 )
 
 // tenancy is a two-customer world used by every test in this file:
@@ -731,5 +732,134 @@ func TestTenancy_MintUsesTheCurrentDatabaseRole(t *testing.T) {
 	tn.env.pool.QueryRow(ctx, `SELECT customer_id FROM devices WHERE device_name = $1`, tn.devUnassigned).Scan(&owner)
 	if owner != nil {
 		t.Errorf("the refused mint still assigned the unassigned device to customer %d", *owner)
+	}
+}
+
+// TestTenancy_DisabledOrDeletedUserIsRefusedEverywhere: the check lives in the auth middleware, so a
+// disabled or deleted user is refused on every protected route — including ones, like unbind, that
+// never ask the device-access question.
+func TestTenancy_DisabledOrDeletedUserIsRefusedEverywhere(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	token, id := tn.env.userIn(control.RoleCustomerUser, tn.custA)
+	tn.bind(t, id, tn.devA1)
+
+	unbind := func() int {
+		return tn.send(t, "POST", "/api/devices/unbind", token, map[string]string{"deviceName": tn.devA1}).Code
+	}
+	bound := func() int {
+		var n int
+		tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM user_devices WHERE user_id = $1`, id).Scan(&n)
+		return n
+	}
+
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []struct{ method, path string }{
+		{"GET", "/api/devices"},
+		{"GET", "/api/devices/" + tn.devA1 + "/commands"},
+		{"GET", "/api/audit?device=" + tn.devA1},
+		{"GET", "/api/users"},
+	} {
+		if rec := tn.send(t, route.method, route.path, token, nil); rec.Code != http.StatusForbidden {
+			t.Errorf("disabled user on %s %s: got %d, want 403", route.method, route.path, rec.Code)
+		}
+	}
+	if code := unbind(); code != http.StatusForbidden {
+		t.Errorf("a disabled user unbinding: got %d, want 403", code)
+	}
+	if bound() != 1 {
+		t.Error("a disabled user's refused unbind still deleted the binding")
+	}
+
+	// Re-enabled, the same token works again, and unbind really does delete.
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = NULL WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if code := unbind(); code != http.StatusOK || bound() != 0 {
+		t.Errorf("re-enabled unbind: %d, bindings=%d (want 200 and 0)", code, bound())
+	}
+
+	// A deleted user's token is refused too.
+	if _, err := tn.env.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if rec := tn.send(t, "GET", "/api/devices", token, nil); rec.Code != http.StatusForbidden {
+		t.Errorf("a deleted user's token: got %d, want 403", rec.Code)
+	}
+}
+
+// TestTenancy_ResolveDeviceAccessAgreesWithUserMayAccessDevice: the access rule is written out twice
+// in SQL — once for REST/WebSocket, once combined with the customer snapshot for control commands —
+// so nothing but this test stops them drifting apart. It also pins the snapshot each combination gets.
+func TestTenancy_ResolveDeviceAccessAgreesWithUserMayAccessDevice(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := tn.env.queries
+
+	_, disabledID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
+		t.Fatal(err)
+	}
+
+	users := map[string]int64{
+		"platform": tn.platformID, "adminA": tn.adminAID, "adminB": tn.adminBID,
+		"userA": tn.userAID, "userB": tn.userBID, "disabled": disabledID, "nobody": 999999999,
+	}
+	devices := []string{tn.devA1, tn.devA2, tn.devB1, tn.devUnassigned, tn.devGhost}
+
+	for name, id := range users {
+		for _, d := range devices {
+			want, err := q.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{UserID: id, DeviceName: d})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := q.ResolveDeviceAccess(ctx, db.ResolveDeviceAccessParams{UserID: id, DeviceName: d})
+			if name == "nobody" {
+				if err == nil || want {
+					t.Errorf("nonexistent user on %s: want no row and not allowed, got row=%+v allowed=%v err=%v", d, got, want, err)
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatalf("%s on %s: %v", name, d, err)
+			}
+			if got.Allowed != want {
+				t.Errorf("%s on %s: ResolveDeviceAccess=%v but UserMayAccessDevice=%v", name, d, got.Allowed, want)
+			}
+		}
+	}
+
+	// The snapshot: a user's own customer, or for a platform admin the device's customer.
+	snapshot := func(user int64, device string) *int64 {
+		row, err := q.ResolveDeviceAccess(ctx, db.ResolveDeviceAccessParams{UserID: user, DeviceName: device})
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := row.UserCustomerID
+		if !c.Valid {
+			c = row.DeviceCustomerID
+		}
+		if !c.Valid {
+			return nil
+		}
+		return &c.Int64
+	}
+	for name, tc := range map[string]struct {
+		user   int64
+		device string
+		want   *int64
+	}{
+		"customer admin on their device":             {tn.adminAID, tn.devA1, ptr(tn.custA)},
+		"attacker in B on A's device":                {tn.adminBID, tn.devA1, ptr(tn.custB)},
+		"platform admin on A's device":               {tn.platformID, tn.devA1, ptr(tn.custA)},
+		"platform admin on an unassigned device":     {tn.platformID, tn.devUnassigned, nil},
+		"platform admin on a device that is a ghost": {tn.platformID, tn.devGhost, nil},
+	} {
+		got := snapshot(tc.user, tc.device)
+		if (got == nil) != (tc.want == nil) || (got != nil && *got != *tc.want) {
+			t.Errorf("%s: snapshot = %v, want %v", name, got, tc.want)
+		}
 	}
 }

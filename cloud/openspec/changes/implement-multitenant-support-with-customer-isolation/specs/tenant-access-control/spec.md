@@ -68,6 +68,13 @@
 - **WHEN** B 的管理员列出 D 的命令
 - **THEN** 结果不含 A 的命令；B 自己随后下发的命令可见；平台管理员两者都能看到
 
+### Requirement: 命令的授权与客户快照来自同一数据库状态
+控制命令的设备访问判定与其客户快照 SHALL 在同一条 SQL 中得出，使并发的用户或设备转移不可能出现“按新客户授权、却记在旧客户名下”。两处写出的访问规则（`UserMayAccessDevice` 与 `ResolveDeviceAccess`）MUST 由测试保证对所有角色与设备组合一致。
+
+#### Scenario: 两条规则一致
+- **WHEN** 对每个用户（含已停用与不存在的）与每台设备（含未分配与不存在的）同时求两条规则
+- **THEN** 允许与否完全一致，且快照取用户自己的客户，平台管理员则取设备的客户
+
 ### Requirement: 铸造配对密钥读数据库角色
 `POST /api/devices/:device/pairing-secret` SHALL 按调用者在数据库中的当前角色与停用状态授权，而不是 JWT 里的角色。已停用或已降级的平台管理员持旧 token MUST 被拒绝，且 MUST NOT 创建或认领设备。
 
