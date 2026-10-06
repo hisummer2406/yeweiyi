@@ -479,3 +479,58 @@ func TestOnlineStatus_FollowsThingsBoardActive(t *testing.T) {
 		t.Error("device no longer exists in ThingsBoard but is still marked online")
 	}
 }
+
+// TestCommandReconcile_RecoversAResultTheLiveSubscriptionNeverSaw is the compensation for a lost
+// result. The ingester is deliberately not subscribed, so the device's cmdResult reaches
+// ThingsBoard and nobody here hears it — the same outcome as a dropped socket, a batch that
+// coalesced it away, or a database that was down while it was applied. Without the reconcile pass
+// the command would sit at 'received' until the sweep expired it, and the audit trail would say the
+// outcome was unknown when ThingsBoard held the answer all along.
+func TestCommandReconcile_RecoversAResultTheLiveSubscriptionNeverSaw(t *testing.T) {
+	s := newStack(t, control.Config{})
+	ctx := context.Background()
+
+	cmd, err := s.ctl.Issue(ctx, control.IssueRequest{
+		DeviceName: s.device,
+		Method:     protocol.MethodAlarmMute,
+		Args:       json.RawMessage(`{"tank":1}`),
+		Reason:     "回读补偿验证",
+		Actor:      s.actor,
+	})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusReceived {
+		t.Fatalf("after ACK status = %q, want %q", cmd.Status, protocol.CmdStatusReceived)
+	}
+	commandID := uuidText(cmd.CommandID.Bytes)
+
+	// The device reports its outcome shortly after the ACK; give ThingsBoard a moment to hold it.
+	deadline := time.Now().Add(25 * time.Second)
+	recorded := 0
+	for recorded == 0 && time.Now().Before(deadline) {
+		time.Sleep(500 * time.Millisecond)
+		recorded = s.ing.ReconcileCommands(ctx)
+	}
+	if recorded == 0 {
+		t.Fatal("the reconcile pass never found the device's result in ThingsBoard")
+	}
+
+	final := awaitStatus(t, s, commandID, 5*time.Second, protocol.CmdStatusSucceeded)
+	if !final.FinishedAt.Valid {
+		t.Error("a terminal command must have finished_at set")
+	}
+
+	// Nothing is open any more, and repeating the pass must change nothing.
+	if again := s.ing.ReconcileCommands(ctx); again != 0 {
+		t.Errorf("a second pass recorded %d more result(s); the guard should make it a no-op", again)
+	}
+	var results int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM audit_log WHERE command_id = $1 AND action = 'control.result'`, cmd.CommandID).Scan(&results); err != nil {
+		t.Fatalf("count result audits: %v", err)
+	}
+	if results != 1 {
+		t.Errorf("control.result audited %d times, want exactly 1", results)
+	}
+}

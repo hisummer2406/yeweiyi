@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -54,6 +55,11 @@ var (
 	// ErrPlatformUnavailable means ThingsBoard could not be reached, so the command was never
 	// handed over. The command row stays pending and will expire.
 	ErrPlatformUnavailable = errors.New("control: device platform unavailable")
+	// ErrAuditUnavailable means the audit row recording who asked for a command could not be
+	// written, so the command was not sent. A command that reaches a device without a record of
+	// who asked for it cannot be reconstructed afterwards; refusing is the safe side, and the
+	// operator can simply try again.
+	ErrAuditUnavailable = errors.New("control: audit trail unavailable, command not sent")
 )
 
 // Actor is who an action — and therefore its audit row — is attributed to.
@@ -94,6 +100,11 @@ type Config struct {
 	// forgetting to configure anything — a flag that defaults to "allowed" would mean a fresh
 	// deployment ships able to start pumps.
 	AllowPhysicalCommands bool
+
+	// Logf receives what must not go unnoticed: audit rows that could not be written, and database
+	// errors while applying a device's result. Defaults to log.Printf; never silent, because the
+	// whole point of this record is that someone can see when it is incomplete.
+	Logf func(format string, args ...any)
 }
 
 // DefaultCommandTTL mirrors the 60s used in the protocol fixtures. The real number is a product
@@ -118,6 +129,9 @@ func New(q *db.Queries, sender Sender, cfg Config) *Service {
 	}
 	if cfg.AckTimeout <= 0 {
 		cfg.AckTimeout = DefaultAckTimeout
+	}
+	if cfg.Logf == nil {
+		cfg.Logf = log.Printf
 	}
 	return &Service{q: q, tb: sender, cfg: cfg}
 }
@@ -242,8 +256,15 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	// the command row itself carries, which was decided in the same statement that authorized it.
 	req.Actor.CustomerID = cmd.CustomerID
 
-	s.audit(ctx, req.Actor, "control.issue", req.DeviceName, commandID, "allowed",
-		map[string]any{"method": req.Method, "reason": req.Reason, "args": json.RawMessage(args)})
+	// The record of who asked for this, and why, is written *before* the command leaves for the
+	// device, and the command does not leave if it cannot be written. Everything audited after this
+	// point describes something that already happened and cannot be undone by failing; this row is
+	// the only one that can still stop a command from going out unrecorded. The command row stays
+	// 'pending' and the expiry sweep closes it, so nothing is left half-open.
+	if err := s.auditRequired(ctx, req.Actor, "control.issue", req.DeviceName, commandID, "allowed",
+		map[string]any{"method": req.Method, "reason": req.Reason, "args": json.RawMessage(args)}); err != nil {
+		return cmd, fmt.Errorf("%w: %v", ErrAuditUnavailable, err)
+	}
 
 	env := protocol.Envelope{
 		CommandID:       uuidString(commandID),
@@ -409,10 +430,18 @@ func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protoc
 		ResultDetail: res.Detail,
 	})
 	if err != nil {
-		// No such command, its status guard refused the move because it is already terminal, or
-		// deviceName didn't match the command's owner (a device reporting a foreign commandId).
-		// All three are normal or actively adversarial; none should abort ingestion.
-		return db.ControlCommand{}, false, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			// No such command, its status guard refused the move because it is already terminal, or
+			// deviceName didn't match the command's owner (a device reporting a foreign commandId).
+			// All three are normal or actively adversarial; none should abort ingestion.
+			return db.ControlCommand{}, false, nil
+		}
+		// Anything else is the database failing, not the guard refusing: the result was valid and is
+		// still unapplied. Reporting it as "did not apply" used to drop it silently, leaving a
+		// command that really ran to be swept into 'expired'. The caller must see this and retry —
+		// internal/ingest re-reads open commands' results from ThingsBoard until the window closes.
+		s.cfg.Logf("control: apply cmdResult for command %s on %s: database error, result NOT recorded: %v", res.CommandID, deviceName, err)
+		return db.ControlCommand{}, false, fmt.Errorf("apply cmdResult %s: %w", res.CommandID, err)
 	}
 
 	outcome := "succeeded"
@@ -515,17 +544,29 @@ func (s *Service) resolveAccess(ctx context.Context, userID int64, deviceName st
 	return row.Allowed, customer, nil
 }
 
-// audit writes one audit row. Audit failures are deliberately swallowed rather than propagated: an
-// audit write that fails must not, for example, turn a successfully-executed command into an error
-// the operator sees as a failure. They are still surfaced through the returned command's absence
-// of an audit row, which the audit-listing endpoint makes visible.
+// audit writes one audit row that describes something already decided or already done. A failure
+// here must not change the answer — it must not, for example, turn a command that really executed
+// into an error the operator reads as a failure, or turn a refusal into an approval — but it must
+// not be silent either: it is logged with the whole row, so the log is a fallback record and an
+// alert on the "AUDIT WRITE FAILED" line finds every gap. The one audit write that is allowed to
+// stop something is auditRequired.
 func (s *Service) audit(ctx context.Context, actor Actor, action, deviceName string, commandID pgtype.UUID, outcome string, detail map[string]any) {
+	_ = s.writeAudit(ctx, actor, action, deviceName, commandID, outcome, detail)
+}
+
+// auditRequired is audit for the row that must exist before an irreversible step. The failure is
+// still logged, and also returned so the caller can refuse to proceed.
+func (s *Service) auditRequired(ctx context.Context, actor Actor, action, deviceName string, commandID pgtype.UUID, outcome string, detail map[string]any) error {
+	return s.writeAudit(ctx, actor, action, deviceName, commandID, outcome, detail)
+}
+
+func (s *Service) writeAudit(ctx context.Context, actor Actor, action, deviceName string, commandID pgtype.UUID, outcome string, detail map[string]any) error {
 	var encoded []byte
 	if detail != nil {
 		encoded, _ = json.Marshal(detail)
 	}
 
-	_, _ = s.q.WriteAuditLog(ctx, db.WriteAuditLogParams{
+	_, err := s.q.WriteAuditLog(ctx, db.WriteAuditLogParams{
 		ActorID:    pgtype.Int8{Int64: actor.UserID, Valid: actor.UserID != 0},
 		Actor:      actor.Username,
 		Action:     action,
@@ -535,6 +576,13 @@ func (s *Service) audit(ctx context.Context, actor Actor, action, deviceName str
 		Detail:     encoded,
 		CustomerID: actor.CustomerID,
 	})
+	if err != nil {
+		// Everything needed to rebuild the row goes into the line: if the database is what failed,
+		// this is the only copy there will be.
+		s.cfg.Logf("control: AUDIT WRITE FAILED action=%s outcome=%s actor=%q device=%q command=%s detail=%s: %v",
+			action, outcome, actor.Username, deviceName, uuidString(commandID), encoded, err)
+	}
+	return err
 }
 
 func text(s string) pgtype.Text {

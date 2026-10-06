@@ -57,6 +57,9 @@ type Config struct {
 	// flag. Defaults to 30s. It cannot make detection faster than ThingsBoard's own inactivity
 	// timeout, only shorten the extra delay on top of it.
 	OnlineStatusInterval time.Duration
+	// CommandReconcileInterval is how often open commands' results are re-read from ThingsBoard
+	// (see commands.go). Defaults to 10s; it needs to be well inside the command validity window.
+	CommandReconcileInterval time.Duration
 
 	Logf func(format string, args ...any)
 }
@@ -86,6 +89,9 @@ func New(cfg Config) *Ingester {
 	if cfg.OnlineStatusInterval <= 0 {
 		cfg.OnlineStatusInterval = 30 * time.Second
 	}
+	if cfg.CommandReconcileInterval <= 0 {
+		cfg.CommandReconcileInterval = defaultCommandReconcileInterval
+	}
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
@@ -95,6 +101,7 @@ func New(cfg Config) *Ingester {
 // Run keeps subscriptions in sync with the device list until ctx ends.
 func (i *Ingester) Run(ctx context.Context) {
 	go i.onlineLoop(ctx)
+	go i.commandReconcileLoop(ctx)
 	i.sync(ctx)
 
 	ticker := time.NewTicker(i.cfg.DeviceRefreshInterval)
@@ -240,7 +247,9 @@ func (i *Ingester) handleCmdResult(ctx context.Context, deviceName string, raw a
 
 	cmd, applied, err := i.cfg.Control.ApplyResult(ctx, deviceName, res)
 	if err != nil {
-		i.cfg.Logf("ingest: %s: apply cmdResult %s: %v", deviceName, res.CommandID, err)
+		// A database failure, not "unknown command": the result is valid and unrecorded. It is not
+		// lost — commandReconcileLoop reads it back from ThingsBoard until the command's window closes.
+		i.cfg.Logf("ingest: %s: apply cmdResult %s: %v (will be retried from ThingsBoard history)", deviceName, res.CommandID, err)
 		return
 	}
 	if !applied {
