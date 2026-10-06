@@ -880,10 +880,17 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 
 		// devices.customer_assigned_at is stamped at the UPDATE inside this transaction but only
 		// takes effect at COMMIT; the history endpoint hides one bucket after the stamp to cover that
-		// gap (telemetryHistoryHandler). The allowance is only sound if the transaction cannot outlast
-		// it, so bound the whole transaction, row-lock wait included. If the deadline hits during
-		// COMMIT the outcome is reported as an error although the commit may have gone through; the
-		// caller can read the device back.
+		// gap (telemetryHistoryHandler). The allowance assumes the transaction finishes within
+		// assignTxTimeout, so cap the whole transaction, row-lock wait included.
+		//
+		// Known limit: this is a CLIENT-side deadline. It cannot bound a COMMIT that stalls inside
+		// PostgreSQL (slow storage, synchronous replication): the server may commit after the
+		// deadline, and then up to one bucket of telemetry from the old customer's last moments can
+		// become readable by the new one. PostgreSQL 16 has no server-side transaction_timeout (17+),
+		// and closing it fully would mean locking the device row across every history read. Accepted:
+		// it needs a database that is already failing, and exposes one aggregated bucket. If the
+		// deadline hits during COMMIT the caller gets an error although the commit may have gone
+		// through; read the device back.
 		ctx, cancel := context.WithTimeout(ctx, assignTxTimeout)
 		defer cancel()
 
