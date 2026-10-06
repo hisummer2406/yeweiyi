@@ -51,7 +51,9 @@ export function request<T>(options: RequestOptions): Promise<T> {
           resolve(res.data as T);
           return;
         }
-        if (status === 401) {
+        // Not for /api/login: there a 401 is just "wrong username or password", and bouncing to the
+        // login page would reload it and wipe what the user typed instead of showing the message.
+        if (status === 401 && needAuth) {
           clearToken();
           wx.reLaunch({ url: '/pages/login/login' });
         }

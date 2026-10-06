@@ -22,16 +22,32 @@ export function summarizeOilInOut(
 ): { rows: OilInOutRow[]; note: string } {
   const rows = direction ? res.rows.filter((r) => r.direction === direction) : res.rows;
 
+  // Each condition below means the list is not known to be whole; collect them all rather than
+  // letting the first one hide the others. Fields are optional-chained because an older cloud
+  // build does not send the newer ones.
+  const notes: string[] = [];
   const unparsable = res.unparsable ?? 0;
-  const legacySkipped = res.legacySkipped ?? 0;
-  let note = '';
   if (unparsable > 0) {
     // With a direction filter the device-wide "parsed" count would not match the list, so omit it.
-    note = direction
-      ? `有 ${unparsable} 条记录暂时无法解析（设备固件版本较旧），下面的列表可能不完整`
-      : `有 ${unparsable} 条记录暂时无法解析（设备固件版本较旧），本页仅展示可读取的 ${res.parsed} 条`;
-  } else if (legacySkipped > 0) {
-    note = `另有 ${legacySkipped} 条历史记录因设备固件升级前的旧格式而无法展示`;
+    notes.push(
+      direction
+        ? `有 ${unparsable} 条记录暂时无法解析（设备固件版本较旧），下面的列表可能不完整`
+        : `有 ${unparsable} 条记录暂时无法解析（设备固件版本较旧），本页仅展示可读取的 ${res.parsed} 条`,
+    );
   }
-  return { rows, note };
+  const legacySkipped = res.legacySkipped ?? 0;
+  if (legacySkipped > 0) {
+    notes.push(`另有 ${legacySkipped} 条历史记录因设备固件升级前的旧格式而无法展示`);
+  }
+  if (res.partial) {
+    notes.push('设备历史记录仍在同步中，列表可能不完整');
+  }
+  if (res.truncated) {
+    notes.push('符合条件的记录超过单页上限，仅显示最新的一部分');
+  }
+  const invalidSource = res.invalidSource ?? 0;
+  if (invalidSource > 0) {
+    notes.push(`有 ${invalidSource} 条记录的来源标记不合规，已略过`);
+  }
+  return { rows, note: notes.join('；') };
 }

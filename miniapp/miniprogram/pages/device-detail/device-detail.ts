@@ -82,6 +82,7 @@ Page({
   },
 
   socket: null as AlarmSocket | null,
+  commandsPollTimer: null as ReturnType<typeof setTimeout> | null,
   // Set from the `direction` query param when arriving from the 我的记录 page's 出库/入库 entries
   // (device-detail itself only has one combined 出入库记录 tab; those two rows are the same tab
   // pre-filtered by direction).
@@ -114,13 +115,19 @@ Page({
     }
   },
 
+  onHide() {
+    this.stopCommandsPoll();
+  },
+
   onUnload() {
+    this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
   },
 
   onSwitchTab(e: WechatMiniprogram.BaseEvent) {
     const tab = e.currentTarget.dataset.tab as TabKey;
+    this.stopCommandsPoll();
     this.setData({ activeTab: tab });
     this.loadTabIfNeeded(tab);
   },
@@ -222,9 +229,32 @@ Page({
     )
       .then((res) => {
         this.setData({ commands: res.commands.map(toCommandView), commandsLoaded: true });
+        this.scheduleCommandsPoll(res.commands);
       })
       .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
       .finally(() => this.setData({ loading: false }));
+  },
+
+  // An ACK is not success: a command stays non-terminal until the device reports its real outcome,
+  // so keep re-reading while the user is looking at the list. Branches on the server's `terminal`
+  // flag, never on a status list. Stops on tab switch / hide / unload, and on the first failed
+  // reload (the .catch in loadCommands does not reschedule), so a dead network is not polled forever.
+  scheduleCommandsPoll(commands: ControlCommand[]) {
+    this.stopCommandsPoll();
+    if (this.data.activeTab !== 'commands' || commands.every((c) => c.terminal)) {
+      return;
+    }
+    this.commandsPollTimer = setTimeout(() => {
+      this.commandsPollTimer = null;
+      this.loadCommands();
+    }, 3000);
+  },
+
+  stopCommandsPoll() {
+    if (this.commandsPollTimer) {
+      clearTimeout(this.commandsPollTimer);
+      this.commandsPollTimer = null;
+    }
   },
 
   onIssueCommand() {

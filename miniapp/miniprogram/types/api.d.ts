@@ -89,6 +89,8 @@ export interface OilInOutRow {
   tank: number;
   direction: 'IN' | 'OUT';
   oilType?: string;
+  // "AUTO" (device-detected) or "MANUAL" (operator backfill); always present on the wire.
+  source: 'AUTO' | 'MANUAL';
   beginTime: string;
   endTime: string;
   beginLevelMm: number;
@@ -118,6 +120,12 @@ export interface OilInOutListResponse {
   parsed: number;
   unparsable: number;
   legacySkipped: number;
+  // Each of these means "this list is not known to be whole" (yeweiyi-cloud internal/api/stock.go,
+  // stockListResponse); none of them is a 502. Surface them, do not swallow them.
+  invalidSource: number; // parsed but off-protocol `source`; left out of rows
+  folded: number; // superseded re-reports of an eventId already listed; explains a short count only
+  truncated: boolean; // more matched the window than `limit` allowed
+  partial: boolean; // the device's initial history takeover has not finished
   error?: string;
   code?: string; // "STOCK_EVENT_FORMAT_UNSUPPORTED" today; match on this, not on `error`'s text
   device?: string;
