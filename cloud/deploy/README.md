@@ -131,7 +131,12 @@ ThingsBoard 还自带若干演示设备（`Test Device A1`、`Thermostat T1` 等
 **选项 A：Docker Compose 方式（推荐 Docker 部署）**
 
 在前面 `up -d` 命令中已启用了容器重启策略（`docker-compose.yml` 中 `restart: unless-stopped`），
-确保容器异常退出时自动恢复。若需要手动管理启停：
+确保容器异常退出时自动恢复。
+
+生产部署时业务 API 也作为容器运行：`docker-compose.prod.yml` 里的 `api` 服务使用 GHCR 镜像，
+`migrate` 服务在它启动前执行数据库迁移。`.env.prod` 里需要 `API_IMAGE`（固定到具体 tag）、
+`JWT_SECRET`、`TB_PASSWORD` 等，完整清单见该文件开头注释。采用这种方式时，不要再同时用下面的
+选项 B 启动 systemd 服务，否则两个后台会抢 8080 端口。若需要手动管理启停：
 
 ```bash
 # 启动所有服务
@@ -576,6 +581,9 @@ docker compose down -v
 | ThingsBoard 起不来 | `docker logs yeweiyi-thingsboard`。首启装 schema 需 2–4 分钟，期间 `starting` 属正常；若长期 `unhealthy` 而服务其实可访问，先怀疑健康检查本身（本镜像无 curl，只有 wget） |
 | 设备连不上 MQTT | 确认 access token 正确（token 放 MQTT **username**，password 留空）；`docker logs` 看是否被拒 |
 | 业务 API 返回 503 | ThingsBoard 不可达。`curl http://localhost:8081/login` 自查；503 表示平台故障而非请求有误 |
+| 控制命令返回 503，提示"审计不可用，命令未发送" | 业务库写不进审计表。**没有任何命令被发给设备**（命令行停在 `pending`，由清扫置为 `expired`），查业务库（磁盘、连接数、锁）后重试即可 |
+| 日志出现 `control: AUDIT WRITE FAILED` | 一条审计记录没能写入业务库。该行日志带有完整内容（操作人、设备、命令、结果、详情），**这是唯一的一份**，请保存。命令本身的状态不受影响（已发出的命令不会因此回滚）。**必须对这个字符串配置日志告警** |
+| 日志出现 `result NOT recorded` | 设备上报的命令结果没能写进业务库（数据库故障）。后台每 10 秒会从 ThingsBoard 回读未结束命令的结果并重试，命令有效期（默认 60 秒）内数据库恢复即可补上；超过有效期仍写不进，命令会被置为 `expired`，**此时设备可能已经执行**，以设备现场状态为准 |
 | 控制命令返回 409 | 物理动作总闸关闭。这是**默认且正确**的状态，设备端联锁验证完成前不要打开 |
 | 遥测查得到但趋势图为空 | 检查设备是否发的是扁平键；嵌套 JSON 的聚合会**静默返回 0**，见 `docs/protocol-v1-reconciliation.md` §A |
 | 冒烟测试卡在“遥测读回” | ThingsBoard 异步落盘，冒烟测试已内置 30 秒重试；若持续失败查其磁盘是否写满 |
