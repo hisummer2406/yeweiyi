@@ -74,12 +74,11 @@ type historyPoint struct {
 func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		device := c.Param("device")
-		// Taken BEFORE the authorization query so it can only be earlier than the decision. See the
-		// cap on endMs below.
-		authAt := time.Now()
 		// Authorization before parameter validation, so an unauthorized caller gets the same 403
 		// whatever they put in the query string.
-		if !requireDeviceOwnership(c, deps, device) {
+		// authAt is the DATABASE clock at the decision (see the cap on endMs below).
+		authAt, ok := requireDeviceOwnershipAt(c, deps, device)
+		if !ok {
 			return
 		}
 		bad := func(msg string) { c.JSON(http.StatusBadRequest, gin.H{"error": msg}) }
@@ -192,9 +191,9 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// between, the caller was authorized as the OLD owner but would read the NEW owner's cutoff,
 		// and a window reaching past the authorization instant would return the new owner's data.
 		// Capping the window at that instant closes it: a reassignment after authAt has a cutoff
-		// (rounded up to a bucket) at or beyond the capped end, so the window comes out empty. The
-		// DB stamps the cutoff and this process stamps authAt, so clock skew between them narrows
-		// but does not remove the guarantee.
+		// (rounded up to a bucket) at or beyond the capped end, so the window comes out empty. Both
+		// the cutoff and authAt are stamped by the database clock, so API-host clock skew cannot
+		// defeat this.
 		if capMs := ceilTo(authAt.UnixMilli(), step); endMs > capMs {
 			endMs = capMs
 		}

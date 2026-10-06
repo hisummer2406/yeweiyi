@@ -59,6 +59,16 @@ SELECT EXISTS (
 -- disabled, matches nothing.
 SELECT user_may_access_device(sqlc.arg('user_id'), sqlc.arg('device_name'))::bool AS allowed;
 
+-- name: AuthorizeDeviceAccess :one
+-- The access decision (same function) plus the DATABASE clock at that moment. Callers that clip a
+-- window of ThingsBoard data by devices.customer_assigned_at must cap it at decided_at, not at the
+-- API host's clock: both values are then stamped by one clock, so skew between the API host and
+-- PostgreSQL cannot defeat the cap. (clock_timestamp is read in the same statement as the decision,
+-- so the gap between them is the statement's own execution time.)
+SELECT
+    user_may_access_device(sqlc.arg('user_id'), sqlc.arg('device_name'))::bool AS allowed,
+    clock_timestamp()::timestamptz AS decided_at;
+
 -- name: ResolveDeviceAccess :one
 -- The access decision (via the same function) plus the pieces the caller needs to pick the customer
 -- a command or audit row is filed under, read in ONE statement so they come from one database

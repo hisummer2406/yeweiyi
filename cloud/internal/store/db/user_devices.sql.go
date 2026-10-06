@@ -11,6 +11,34 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const authorizeDeviceAccess = `-- name: AuthorizeDeviceAccess :one
+SELECT
+    user_may_access_device($1, $2)::bool AS allowed,
+    clock_timestamp()::timestamptz AS decided_at
+`
+
+type AuthorizeDeviceAccessParams struct {
+	UserID     int64  `json:"user_id"`
+	DeviceName string `json:"device_name"`
+}
+
+type AuthorizeDeviceAccessRow struct {
+	Allowed   bool               `json:"allowed"`
+	DecidedAt pgtype.Timestamptz `json:"decided_at"`
+}
+
+// The access decision (same function) plus the DATABASE clock at that moment. Callers that clip a
+// window of ThingsBoard data by devices.customer_assigned_at must cap it at decided_at, not at the
+// API host's clock: both values are then stamped by one clock, so skew between the API host and
+// PostgreSQL cannot defeat the cap. (clock_timestamp is read in the same statement as the decision,
+// so the gap between them is the statement's own execution time.)
+func (q *Queries) AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error) {
+	row := q.db.QueryRow(ctx, authorizeDeviceAccess, arg.UserID, arg.DeviceName)
+	var i AuthorizeDeviceAccessRow
+	err := row.Scan(&i.Allowed, &i.DecidedAt)
+	return i, err
+}
+
 const bindUserDeviceIfAllowed = `-- name: BindUserDeviceIfAllowed :one
 WITH u AS (
     SELECT users.id, users.role, users.customer_id

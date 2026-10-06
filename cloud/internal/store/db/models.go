@@ -123,7 +123,7 @@ type Device struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	// 设备所属客户；NULL=已登记未分配。访问判定见 db/queries/user_devices.sql 的 UserMayAccessDevice。
 	CustomerID pgtype.Int8 `json:"customer_id"`
-	// 设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前已分配的设备为 NULL（归属时刻未知，不裁剪）；未分配时也为 NULL。
+	// 设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前转移过的设备（有 direction=out 的 device.assign 审计）回填为迁移时刻；从未改过归属的为 NULL（没有前任客户，无需裁剪）；未分配时也为 NULL。
 	CustomerAssignedAt pgtype.Timestamptz `json:"customer_assigned_at"`
 }
 

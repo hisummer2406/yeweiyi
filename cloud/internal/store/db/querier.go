@@ -11,6 +11,12 @@ import (
 )
 
 type Querier interface {
+	// The access decision (same function) plus the DATABASE clock at that moment. Callers that clip a
+	// window of ThingsBoard data by devices.customer_assigned_at must cap it at decided_at, not at the
+	// API host's clock: both values are then stamped by one clock, so skew between the API host and
+	// PostgreSQL cannot defeat the cap. (clock_timestamp is read in the same statement as the decision,
+	// so the gap between them is the statement's own execution time.)
+	AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error)
 	// Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
 	// FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
 	// can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that
