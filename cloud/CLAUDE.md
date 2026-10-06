@@ -114,7 +114,9 @@ docs/                 当前规范与历史归档
 
 - 协议 V1 尚未冻结。做协议工作前先读 `docs/protocol-v1-open-items.md`（待确认清单，含决定人）
   与 `docs/protocol-v1-reconciliation.md`（差异背景）。当前 Android 实现的遥测、报警与 ACK
-  载荷均不兼容。清单清空前不要往任一侧新增协议字段。
+  载荷均不兼容。清单清空前，云端不要**自行发起**新增协议字段。例外：设备端负责人已在跨仓库 issue 中提出、云端只做
+  消费的**可选、向后兼容**字段（如 #14 标定属性、#15 `source`），可先落地，但必须在 PR 里写明
+  "Refs 而非 Closes"，并在 open-items 登记待设备端同步的 fixture；字段名、单位、形状仍以设备端确认为准。
 - **真实设备上的控制闭环是断的，已实测。** 设备把终态发成第二条 RPC 响应，而 ThingsBoard 的双向
   RPC 只把第一条交给调用方；云端因此永远收不到结果，命令停在 `received` 直到被清扫成 `expired`。
   实测见 `internal/tbclient/rpc_response_channel_test.go`，待办见 open-items A-1。
