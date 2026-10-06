@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"yeweiyi-cloud/internal/api"
+	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/rollup"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
@@ -59,8 +60,35 @@ func hourlyQuery(begin, end time.Time, interval, agg string) url.Values {
 func (e *rollupEnv) seedCompleteHours(t *testing.T) time.Time {
 	t.Helper()
 	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
-	seedHistory(t, e.token, base)
+	samples := seedHistory(t, e.token, base)
 	postDeviceTelemetry(t, e.token, []byte(fmt.Sprintf(`{"ts":%d,"values":{"tankCount":1}}`, base.UnixMilli())))
+	// HTTP acceptance precedes asynchronous telemetry persistence. Two visible buckets can
+	// still contain only the first batches, so wait for every seeded sample before comparing.
+	dev, err := e.tb.GetDeviceByName(context.Background(), e.device)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := protocol.TankKey(1, protocol.KeyOilLevelMm)
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		points, err := e.tb.Timeseries(context.Background(), dev.ID.ID, tbclient.TimeseriesQuery{
+			Keys: []string{key}, StartMs: base.UnixMilli(), EndMs: base.Add(2 * time.Hour).UnixMilli(), Limit: len(samples) + 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		latest, err := e.tb.LatestTimeseries(context.Background(), dev.ID.ID, []string{protocol.KeyTankCount})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(points[key]) == len(samples) && latest[protocol.KeyTankCount].Value == "1" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("seed not persisted: %d/%d samples, tankCount=%v", len(points[key]), len(samples), latest)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	return base
 }
 
