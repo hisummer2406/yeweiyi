@@ -1,34 +1,73 @@
-<view wx:if="{{!loading && devices.length === 0}}" class="center-page">
+<view wx:if="{{!devicesLoaded}}" class="empty">加载中…</view>
+
+<!-- 还没有任何已绑定设备：首次使用的空状态 -->
+<view wx:elif="{{groups.length === 0 && !listError}}" class="center-page">
   <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
   <view class="brand-title">还没有绑定设备</view>
   <view class="brand-subtitle">设备上贴有二维码和设备编号，扫码即可绑定</view>
   <button class="btn-primary center-card" bindtap="onScanBind">扫码绑定设备</button>
 </view>
 
-<view class="container" wx:else>
-  <view class="row" style="margin-bottom:20rpx;">
-    <text class="section-title" style="margin:0;">我的设备</text>
-    <view class="list-row-icon" style="margin-right:0;background-color:#05507c;" bindtap="onMoreActions">
-      <image src="/assets/icons/add.png" mode="aspectFit" style="width:28rpx;height:28rpx;" />
+<view wx:elif="{{groups.length === 0 && listError}}" class="empty">
+  <view>{{listError}}</view>
+  <button class="btn-primary" size="mini" bindtap="loadHome" style="margin-top:24rpx;">重试</button>
+</view>
+
+<view wx:else>
+  <!-- 对应设计稿「首页-卧罐01」顶部：品牌栏 + 油站行。云端目前没有油站（见 openspec/changes/home-by-station），
+       所以这里没有下拉，左侧只写"我的设备"；不要用客户名或本地写死的油站名冒充油站。 -->
+  <view class="home-header">
+    <view class="home-brand">
+      <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+      <text class="home-brand-title">智能液位管理系统</text>
+    </view>
+    <view class="home-station">
+      <text class="home-station-name">我的设备</text>
+      <view class="home-plus" bindtap="onMoreActions">
+        <image src="/assets/icons/add.png" mode="aspectFit" style="width:36rpx;height:36rpx;" />
+      </view>
     </view>
   </view>
 
-  <view class="card" wx:if="{{devices.length > 0}}" style="padding:0 24rpx;">
-    <view
-      wx:for="{{devices}}"
-      wx:key="device_name"
-      class="list-row"
-      bindtap="onTapDevice"
-      data-device="{{item.device_name}}"
-    >
-      <image class="tank-illustration" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
-      <view class="list-row-body">
-        <text>{{item.device_name}}</text>
-        <!-- 在线/离线状态刻意不展示：云端单栈改造后没有任何代码在更新 is_online 列，
-             这里显示它只会是一个永远不变的错误答案，见 types/api.d.ts 的说明。 -->
-        <view class="muted" style="margin-top:4rpx;">最近上线 {{item.last_online_at || '--'}}</view>
+  <view class="home-list">
+    <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
+      <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
+      <view class="group-head" wx:if="{{showSingleDeviceHeader || g.ts}}">
+        <text class="group-name" wx:if="{{showSingleDeviceHeader}}">{{g.deviceName}}</text>
+        <text class="muted tabular-nums" wx:if="{{g.ts}}">上报时间 {{g.ts}}</text>
       </view>
-      <image class="list-row-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+
+      <view wx:if="{{g.state === 'loading'}}" class="group-note">加载中…</view>
+      <view wx:elif="{{g.state === 'never'}}" class="group-note">该设备还没有上报过数据</view>
+      <view wx:elif="{{g.state === 'error'}}" class="group-note">
+        <view class="text-danger">{{g.error}}</view>
+        <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">重试</button>
+      </view>
+
+      <!-- 罐形状来自设备配置（设备端 gunType），云端尚未透出，见 yeweiyi-cloud#45；在此之前一律卧罐图 -->
+      <view
+        wx:for="{{g.tanks}}"
+        wx:for-item="t"
+        wx:key="index"
+        class="tank-row"
+        data-device="{{g.deviceName}}"
+        bindtap="onTapTank"
+      >
+        <image class="home-tank-img" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
+        <view class="tank-info">
+          <view class="tank-tag-row">
+            <text class="tank-tag">{{t.index}}号 {{t.oilType || '--'}}</text>
+            <text class="badge badge-failed" wx:if="{{t.alarmState === 'ALARM'}}">{{t.alarmStateLabel}}</text>
+            <text class="badge badge-offline" wx:elif="{{t.alarmState === 'FAULT'}}">{{t.alarmStateLabel}}</text>
+          </view>
+          <view class="stat-row"><text class="stat-row-label">液位</text><text class="stat-row-value">{{t.oilLevelMm}}</text><text class="stat-row-unit">毫米</text></view>
+          <view class="stat-row"><text class="stat-row-label">容积</text><text class="stat-row-value">{{t.oilVolumeL}}</text><text class="stat-row-unit">升</text></view>
+          <view class="stat-row"><text class="stat-row-label">水高</text><text class="stat-row-value">{{t.waterLevelMm}}</text><text class="stat-row-unit">毫米</text></view>
+          <view class="stat-row"><text class="stat-row-label">温度</text><text class="stat-row-value">{{t.tempC}}</text><text class="stat-row-unit">℃</text></view>
+          <view class="stat-row"><text class="stat-row-label">质量</text><text class="stat-row-value">{{t.oilWeightKg}}</text><text class="stat-row-unit">千克</text></view>
+          <view class="text-danger muted" wx:if="{{!t.probeConnected}}">探针未连接</view>
+        </view>
+      </view>
     </view>
   </view>
 </view>

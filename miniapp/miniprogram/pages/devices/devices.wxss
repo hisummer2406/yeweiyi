@@ -1,3 +1,111 @@
+page {
+  background-color: #ecf0f8;
+}
+
 .btn-primary {
   margin-bottom: 24rpx;
+}
+
+/* 头部：对应设计稿「首页-卧罐01」的蓝色渐变头。原生导航栏保留（顶部状态栏区域由微信接管），
+   所以这里只做品牌栏 + 油站行；与设计稿的差异见 openspec/changes/home-by-station/tasks.md 3.8。 */
+.home-header {
+  padding: 8rpx 30rpx 28rpx;
+  background: linear-gradient(180deg, #05507c 0%, #003d66 100%);
+  color: #ffffff;
+}
+
+.home-brand {
+  display: flex;
+  align-items: center;
+  padding: 12rpx 0 20rpx;
+}
+
+.home-brand-mark {
+  width: 64rpx;
+  height: 64rpx;
+  margin-right: 16rpx;
+}
+
+.home-brand-title {
+  font-size: 36rpx;
+  letter-spacing: 2rpx;
+}
+
+.home-station {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.home-station-name {
+  font-size: 44rpx;
+  font-weight: 500;
+}
+
+.home-plus {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-list {
+  padding-bottom: 24rpx;
+}
+
+.group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 20rpx 30rpx 8rpx;
+}
+
+.group-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #131313;
+}
+
+.group-note {
+  padding: 40rpx 30rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: #8697a4;
+}
+
+.tank-row {
+  display: flex;
+  align-items: flex-start;
+  margin: 0 30rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #d3d9e6;
+}
+
+.home-tank-img {
+  width: 300rpx;
+  height: 220rpx;
+  flex-shrink: 0;
+}
+
+.tank-info {
+  flex: 1;
+  min-width: 0;
+  padding-left: 16rpx;
+}
+
+.tank-tag-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+/* 「1号 甲醇」深蓝标签 */
+.tank-tag {
+  background-color: #05507c;
+  color: #ffffff;
+  font-size: 26rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 6rpx;
+  margin-right: 12rpx;
 }

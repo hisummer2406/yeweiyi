@@ -1,0 +1,9 @@
+<view class="add-page">
+  <view class="add-title">设备添加</view>
+  <view class="add-subtitle">设备上贴有二维码和设备编号，扫码即可添加</view>
+  <view class="add-card">
+    <view class="add-card-title">扫码添加</view>
+    <view class="add-card-desc">扫描设备上的二维码，自动获取设备编号</view>
+    <button class="btn-primary" bindtap="onScan">扫一扫</button>
+  </view>
+</view>

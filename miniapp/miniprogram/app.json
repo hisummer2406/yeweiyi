@@ -5,6 +5,7 @@
     "pages/records/records",
     "pages/more/more",
     "pages/device-detail/device-detail",
+    "pages/device-add/device-add",
     "pages/issue-command/issue-command",
     "pages/profile/profile",
     "pages/tank-config/tank-config",
@@ -12,8 +13,7 @@
     "pages/tank-shape/tank-shape",
     "pages/record-settings/record-settings",
     "pages/report-settings/report-settings",
-    "pages/backfill/backfill",
-    "pages/org/org"
+    "pages/backfill/backfill"
   ],
   "window": {
     "navigationBarBackgroundColor": "#05507c",
