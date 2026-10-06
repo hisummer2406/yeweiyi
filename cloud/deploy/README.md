@@ -10,15 +10,17 @@
 
 | 组件 | 镜像 | 端口（宿主机 → 容器） | 用途 |
 |---|---|---|---|
-| ThingsBoard CE | `thingsboard/tb-postgres:4.2.1.1` | `8081 → 9090` | 控制台 / REST / WebSocket |
+| ThingsBoard CE | `thingsboard/tb-postgres:4.2.1.1` | `127.0.0.1:8081 → 9090` | 控制台 / REST / WebSocket |
 | | | `8883` | 设备 MQTT over TLS（生产用） |
 | | | `1884 → 1883` | 设备 MQTT 明文（启用 TLS 后仅绑环回） |
-| 业务 PostgreSQL | `postgres:16` | `5432` | 命令、审计、用户、设备绑定 |
-| Redis | `redis:7` | `6379` | 报警实时扇出 |
+| 业务 PostgreSQL | `postgres:16` | `127.0.0.1:5432` | 命令、审计、用户、设备绑定 |
+| Redis | `redis:7` | `127.0.0.1:6379` | 报警实时扇出 |
 | Go 后台 | 本仓库构建 | `8080` | 业务 REST / WebSocket |
 
 **对外只需开放 8080（业务 API）与 1884/8883（设备接入）。** 8081 是 ThingsBoard 控制台，
-仅供运维调试，不应暴露给终端用户；5432 与 6379 不应离开本机。
+仅供运维调试，不应暴露给终端用户；5432 与 6379 不应离开本机。**这三个端口在 Compose 里默认只绑
+`127.0.0.1`**，不依赖任何叠加文件；要从别的机器访问，用 SSH 隧道（`ssh -L 8081:localhost:8081 <主机>`），
+不要改成 `0.0.0.0`。启用 TLS 后明文 1884 同样收回到环回（见下）。
 
 启用 TLS 后设备走 `8883`，明文 `1884` 收回到环回地址（仅本机联调可用）。见下节。
 
@@ -129,7 +131,12 @@ ThingsBoard 还自带若干演示设备（`Test Device A1`、`Thermostat T1` 等
 **选项 A：Docker Compose 方式（推荐 Docker 部署）**
 
 在前面 `up -d` 命令中已启用了容器重启策略（`docker-compose.yml` 中 `restart: unless-stopped`），
-确保容器异常退出时自动恢复。若需要手动管理启停：
+确保容器异常退出时自动恢复。
+
+生产部署时业务 API 也作为容器运行：`docker-compose.prod.yml` 里的 `api` 服务使用 GHCR 镜像，
+`migrate` 服务在它启动前执行数据库迁移。`.env.prod` 里需要 `API_IMAGE`（固定到具体 tag）、
+`JWT_SECRET`、`TB_PASSWORD` 等，完整清单见该文件开头注释。采用这种方式时，不要再同时用下面的
+选项 B 启动 systemd 服务，否则两个后台会抢 8080 端口。若需要手动管理启停：
 
 ```bash
 # 启动所有服务
@@ -190,6 +197,7 @@ JWT_SECRET=your-strong-secret-here
 TB_PASSWORD=tenant-password-here
 DATABASE_URL=postgres://yeweiyi:strongpass@localhost:5432/yeweiyi?sslmode=disable
 REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=<与 .env.prod 里的 REDIS_PASSWORD 相同；开发环境的 Redis 无密码，可不设>
 ```
 
 3. **启用和启动**
@@ -224,6 +232,50 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 ```
+
+---
+
+## 生产部署：凭据、端口隔离与验收
+
+标准安装（上文）用的是开发默认凭据（`yeweiyi:yeweiyi`、Redis 无密码）。**生产必须叠加
+`docker-compose.prod.yml`**，它把两个密码设为必填，缺任何一个都会在 `up` 时直接报错，而不是悄悄用弱默认值起来：
+
+```bash
+# .env.prod 不要提交到 git，也不要把密码写在命令行里
+cat > .env.prod <<'ENVEOF'
+POSTGRES_PASSWORD=<强随机值>
+REDIS_PASSWORD=<强随机值>
+ENVEOF
+chmod 600 .env.prod
+
+docker compose --env-file .env.prod \
+  -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.thingsboard.yml -f docker-compose.thingsboard-tls.yml up -d
+```
+
+后台进程要用同样的值：`DATABASE_URL` 里的密码，以及环境变量 `REDIS_PASSWORD`（写进 systemd 的
+`EnvironmentFile`，见上文“服务托管”）。Redis 密码走环境变量传进容器，`docker inspect` 的启动参数里看不到。
+
+> **`POSTGRES_PASSWORD` 只在数据卷第一次初始化时生效。** 已有数据卷的机器改 `.env.prod` 不会改库里账号的
+> 密码，会变成“compose 是新密码、库里是旧密码”。已有卷要改，先 `ALTER USER yeweiyi PASSWORD '新密码';`，
+> 再改 `.env.prod` 和 `DATABASE_URL`。Redis 没有这个问题：密码在每次启动时读取。
+
+### 端口隔离必须在目标机器上实测
+
+不要用文件里的注释证明隔离：Compose 对 `ports` 是**追加**合并，叠加文件很容易悄悄撤销或重复。上线前：
+
+```bash
+# 1. 合并后的最终配置里，5432 / 6379 / 8081 / 1884 都只能绑 127.0.0.1，只剩 8883 对外
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.thingsboard.yml -f docker-compose.thingsboard-tls.yml config | grep -B1 -A3 'published:'
+
+# 2. 在**另一台机器**上探测：前四个必须不可达（连接被拒或超时），8883 和业务 API 端口要通
+for p in 5432 6379 8081 1884; do nc -zv -w 3 <目标主机> $p; done
+nc -zv -w 3 <目标主机> 8883
+```
+
+Compose 容器已配置 `restart: unless-stopped`，Docker 服务随开机启动即可恢复。业务 API 不在 Compose 里，
+用 systemd 托管（见上文）。
 
 ---
 
@@ -503,7 +555,8 @@ docker compose down -v
 
 按 `images.txt` 拉取镜像并**逐个校验摘要**后导出；摘要不符即中止 —— tag 可以被重新推送指向
 不同内容，摘要不符意味着打进包里的东西和清单声称的不是同一个。同时静态编译
-`server`/`smoke`/`tbdevicesim` 三个 Linux 二进制，内网侧不需要 Go 工具链。
+`server`/`smoke`/`tbdevicesim`/`tbconfig`/`loadtest`/`backfill` 六个 Linux 二进制（`backfill` 用于
+开启 TTL 前的回补），内网侧不需要 Go 工具链。
 
 把 tar 包与脚本末尾打印的 SHA256 **分开传递**（例如摘要走纸质或电话），内网侧用
 `offline-load.sh` 校验后导入。
@@ -528,6 +581,9 @@ docker compose down -v
 | ThingsBoard 起不来 | `docker logs yeweiyi-thingsboard`。首启装 schema 需 2–4 分钟，期间 `starting` 属正常；若长期 `unhealthy` 而服务其实可访问，先怀疑健康检查本身（本镜像无 curl，只有 wget） |
 | 设备连不上 MQTT | 确认 access token 正确（token 放 MQTT **username**，password 留空）；`docker logs` 看是否被拒 |
 | 业务 API 返回 503 | ThingsBoard 不可达。`curl http://localhost:8081/login` 自查；503 表示平台故障而非请求有误 |
+| 控制命令返回 503，提示"审计不可用，命令未发送" | 业务库写不进审计表。**没有任何命令被发给设备**（命令行停在 `pending`，由清扫置为 `expired`），查业务库（磁盘、连接数、锁）后重试即可 |
+| 日志出现 `control: AUDIT WRITE FAILED` | 一条审计记录没能写入业务库。该行日志带有完整内容（操作人、设备、命令、结果、详情），**这是唯一的一份**，请保存。命令本身的状态不受影响（已发出的命令不会因此回滚）。**必须对这个字符串配置日志告警** |
+| 日志出现 `result NOT recorded` | 设备上报的命令结果没能写进业务库（数据库故障）。后台每 10 秒会从 ThingsBoard 回读未结束命令的结果并重试，命令有效期（默认 60 秒）内数据库恢复即可补上；超过有效期仍写不进，命令会被置为 `expired`，**此时设备可能已经执行**，以设备现场状态为准 |
 | 控制命令返回 409 | 物理动作总闸关闭。这是**默认且正确**的状态，设备端联锁验证完成前不要打开 |
 | 遥测查得到但趋势图为空 | 检查设备是否发的是扁平键；嵌套 JSON 的聚合会**静默返回 0**，见 `docs/protocol-v1-reconciliation.md` §A |
 | 冒烟测试卡在“遥测读回” | ThingsBoard 异步落盘，冒烟测试已内置 30 秒重试；若持续失败查其磁盘是否写满 |

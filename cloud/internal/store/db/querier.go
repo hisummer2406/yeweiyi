@@ -137,6 +137,12 @@ type Querier interface {
 	ListCustomers(ctx context.Context) ([]Customer, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list.
 	ListDevicesForUser(ctx context.Context, id int64) ([]Device, error)
+	// INTERNAL: no authorization and no customer scoping — only ingest's command reconcile may call it.
+	// One row per device that still has a command a result could close, with the oldest such command's
+	// issue time, so the caller reads each device's telemetry history once from there. 'expired' is
+	// excluded because it is terminal (MarkControlCommandFinished refuses to rewrite it), and a command
+	// already past its window can no longer be repaired.
+	ListDevicesWithOpenControlCommandsUnscoped(ctx context.Context) ([]ListDevicesWithOpenControlCommandsUnscopedRow, error)
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)

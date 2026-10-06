@@ -132,3 +132,15 @@ WHERE c.device_name = sqlc.arg('device_name')
   AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id)
 ORDER BY c.issued_at DESC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
+
+-- name: ListDevicesWithOpenControlCommandsUnscoped :many
+-- INTERNAL: no authorization and no customer scoping — only ingest's command reconcile may call it.
+-- One row per device that still has a command a result could close, with the oldest such command's
+-- issue time, so the caller reads each device's telemetry history once from there. 'expired' is
+-- excluded because it is terminal (MarkControlCommandFinished refuses to rewrite it), and a command
+-- already past its window can no longer be repaired.
+SELECT device_name, MIN(issued_at)::timestamptz AS earliest_issued_at
+FROM control_commands
+WHERE status IN ('pending', 'sent', 'received', 'executing')
+  AND expires_at > now()
+GROUP BY device_name;

@@ -108,6 +108,10 @@ type Database struct {
 
 type Redis struct {
 	Addr string `yaml:"addr"`
+	// Password is Redis's requirepass. Empty means no AUTH, which is what the development
+	// compose file runs. Prefer the REDIS_PASSWORD environment variable over this file, for the
+	// same reason as the JWT secret and the database URL.
+	Password string `yaml:"password"`
 }
 
 type Auth struct {
@@ -275,6 +279,7 @@ func (c *Config) applyEnv() error {
 	str("TLS_KEY_FILE", &c.Server.TLSKeyFile)
 	str("DATABASE_URL", &c.Database.URL)
 	str("REDIS_ADDR", &c.Redis.Addr)
+	str("REDIS_PASSWORD", &c.Redis.Password)
 	str("JWT_SECRET", &c.Auth.JWTSecret)
 	str("TB_BASE_URL", &c.ThingsBoard.BaseURL)
 	str("TB_USERNAME", &c.ThingsBoard.Username)

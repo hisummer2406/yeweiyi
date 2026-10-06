@@ -41,6 +41,10 @@ type Deps struct {
 	// telemetry/history reads ThingsBoard for what is newer and the hourly summaries for what is
 	// older. Zero means the 7-day default.
 	TelemetryRetention time.Duration
+
+	// WSRevalidateInterval is how often an open /ws/alarms connection re-checks that its user may
+	// still see the device. Zero means defaultWSRevalidateInterval. Tests shorten it.
+	WSRevalidateInterval time.Duration
 }
 
 func NewRouter(deps Deps) *gin.Engine {

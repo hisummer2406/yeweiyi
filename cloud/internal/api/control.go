@@ -133,6 +133,9 @@ func writeControlError(c *gin.Context, err error) {
 		})
 	case errors.Is(err, control.ErrUnknownMethod), errors.Is(err, control.ErrReasonRequired):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, control.ErrAuditUnavailable):
+		// 503 for the same reason: nothing was sent, and trying again is the right response.
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the audit trail is unavailable, so the command was not sent; try again"})
 	case errors.Is(err, control.ErrPlatformUnavailable):
 		// 503, and explicitly not 500: this says "the device platform is down, retry later",
 		// which is the degradation behaviour issue #10 asks to be well-defined.

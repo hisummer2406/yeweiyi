@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"yeweiyi-cloud/internal/api"
 	"yeweiyi-cloud/internal/control"
 )
 
@@ -128,4 +129,175 @@ func publishUntilReceived(t *testing.T, conn *websocket.Conn, env *testEnv, fano
 		t.Fatalf("expected the published alarm to arrive: %v", err)
 	}
 	return msg
+}
+
+// ---------------------------------------------------------------------------------------------
+// Access is re-checked while the connection is open. Before this, authorization was decided once at
+// the handshake, so a user disabled, unbound, or moved to another customer kept receiving a
+// device's alarms until they chose to disconnect — and across a device transfer that is the
+// previous customer reading the next customer's alarms.
+
+// readUntilClosed reads until the server ends the connection or the budget runs out, returning every
+// text message that arrived. closed is false only when the budget ran out with the connection still
+// open. gorilla caches the first read error, so this is the one place a test may read in a loop.
+func readUntilClosed(conn *websocket.Conn, budget time.Duration) (msgs []string, closed bool) {
+	deadline := time.Now().Add(budget)
+	for {
+		conn.SetReadDeadline(deadline)
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			if ne, ok := err.(interface{ Timeout() bool }); ok && ne.Timeout() {
+				return msgs, false
+			}
+			return msgs, true
+		}
+		msgs = append(msgs, string(msg))
+	}
+}
+
+func alarmFanout(t *testing.T, device, id string) []byte {
+	t.Helper()
+	b, err := json.Marshal(map[string]any{"deviceName": device, "alarmId": id})
+	if err != nil {
+		t.Fatalf("marshal fanout: %v", err)
+	}
+	return b
+}
+
+// connectedAndDelivering opens the socket for device and proves the fan-out reaches it, so a later
+// "nothing arrived" means the server withheld it rather than that the subscription never worked.
+func connectedAndDelivering(t *testing.T, env *testEnv, device string) *websocket.Conn {
+	t.Helper()
+	conn, resp, err := dialAlarmsWS(t, env, device)
+	if err != nil {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		t.Fatalf("dial (HTTP %d): %v", status, err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	publishUntilReceived(t, conn, env, alarmFanout(t, device, "before-revoke"))
+	return conn
+}
+
+// requireRevoked checks the three things a revocation must do: the alarm raised afterwards is not
+// delivered, the connection is closed, and the closing is prompt.
+func requireRevoked(t *testing.T, env *testEnv, conn *websocket.Conn, device string) {
+	t.Helper()
+	// Publish a few times: the first may land in the gap before the server notices, and the point is
+	// that none of them gets through.
+	for i := 0; i < 3; i++ {
+		if err := env.rdb.Publish(context.Background(), "alarms:live", alarmFanout(t, device, "after-revoke")).Err(); err != nil {
+			t.Fatalf("publish: %v", err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	msgs, closed := readUntilClosed(conn, 5*time.Second)
+	for _, m := range msgs {
+		if strings.Contains(m, "after-revoke") {
+			t.Fatalf("an alarm raised after access was revoked was still delivered: %s", m)
+		}
+	}
+	if !closed {
+		t.Fatal("connection stayed open after access was revoked")
+	}
+}
+
+func TestWSAlarms_DisablingTheUserClosesTheStream(t *testing.T) {
+	env := newTestEnv(t)
+	device := "ws-revoke-disable"
+	env.ownDevice(device)
+	conn := connectedAndDelivering(t, env, device)
+
+	if _, err := env.pool.Exec(context.Background(),
+		`UPDATE users SET disabled_at = now() WHERE username = $1`, env.username); err != nil {
+		t.Fatalf("disable user: %v", err)
+	}
+	requireRevoked(t, env, conn, device)
+}
+
+func TestWSAlarms_UnbindingTheDeviceClosesTheStream(t *testing.T) {
+	env := newTestEnv(t)
+	device := "ws-revoke-unbind"
+	env.ownDevice(device)
+	conn := connectedAndDelivering(t, env, device)
+
+	if _, err := env.pool.Exec(context.Background(),
+		`DELETE FROM user_devices WHERE device_name = $1`, device); err != nil {
+		t.Fatalf("unbind: %v", err)
+	}
+	requireRevoked(t, env, conn, device)
+}
+
+// The case the tenant boundary exists for: the device is handed to another customer while a user of
+// the old one is still listening.
+func TestWSAlarms_TransferringTheDeviceToAnotherCustomerClosesTheStream(t *testing.T) {
+	env := newTestEnv(t)
+	device := "ws-revoke-transfer"
+	// Created before the device: cleanup runs in reverse, and the device (which ends up owned by this
+	// customer) has to be deleted first.
+	other := env.newCustomer("transfer-target")
+	env.ownDevice(device)
+	conn := connectedAndDelivering(t, env, device)
+
+	if _, err := env.pool.Exec(context.Background(),
+		`UPDATE devices SET customer_id = $1 WHERE device_name = $2`, other, device); err != nil {
+		t.Fatalf("transfer device: %v", err)
+	}
+	requireRevoked(t, env, conn, device)
+}
+
+// With no alarm arriving at all, the periodic re-check is what ends the stream.
+func TestWSAlarms_RevokedUserIsDisconnectedEvenWithoutNewAlarms(t *testing.T) {
+	env := newTestEnvWith(t, func(d *api.Deps) { d.WSRevalidateInterval = 200 * time.Millisecond })
+	device := "ws-revoke-idle"
+	env.ownDevice(device)
+	conn := connectedAndDelivering(t, env, device)
+
+	if _, err := env.pool.Exec(context.Background(),
+		`UPDATE users SET disabled_at = now() WHERE username = $1`, env.username); err != nil {
+		t.Fatalf("disable user: %v", err)
+	}
+	if _, closed := readUntilClosed(conn, 5*time.Second); !closed {
+		t.Fatal("an idle connection of a disabled user was never closed")
+	}
+}
+
+// A token is only good until it expires; a stream must not outlive it.
+func TestWSAlarms_ConnectionEndsWhenTheTokenExpires(t *testing.T) {
+	env := newTestEnvWith(t, func(d *api.Deps) {
+		d.TokenTTL = 2 * time.Second
+		d.WSRevalidateInterval = time.Hour // so only the expiry can be what closes it
+	})
+	device := "ws-token-expiry"
+	env.ownDevice(device)
+
+	conn, _, err := dialAlarmsWS(t, env, device)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	start := time.Now()
+	if _, closed := readUntilClosed(conn, 6*time.Second); !closed {
+		t.Fatal("connection outlived its token")
+	}
+	if elapsed := time.Since(start); elapsed < time.Second {
+		t.Errorf("closed after %s, well before the token's 2s lifetime was up", elapsed)
+	}
+}
+
+// The other side of all of the above: re-checking must not cut off someone who is still entitled.
+func TestWSAlarms_AuthorizedUserKeepsReceivingAcrossRevalidation(t *testing.T) {
+	env := newTestEnvWith(t, func(d *api.Deps) { d.WSRevalidateInterval = 100 * time.Millisecond })
+	device := "ws-still-allowed"
+	env.ownDevice(device)
+	conn := connectedAndDelivering(t, env, device)
+
+	time.Sleep(time.Second) // many revalidation rounds
+	msg := publishUntilReceived(t, conn, env, alarmFanout(t, device, "later"))
+	if !strings.Contains(string(msg), "later") {
+		t.Errorf("got %s", msg)
+	}
 }

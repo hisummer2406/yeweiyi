@@ -300,6 +300,44 @@ func (q *Queries) ListControlCommandsVisibleToUser(ctx context.Context, arg List
 	return items, nil
 }
 
+const listDevicesWithOpenControlCommandsUnscoped = `-- name: ListDevicesWithOpenControlCommandsUnscoped :many
+SELECT device_name, MIN(issued_at)::timestamptz AS earliest_issued_at
+FROM control_commands
+WHERE status IN ('pending', 'sent', 'received', 'executing')
+  AND expires_at > now()
+GROUP BY device_name
+`
+
+type ListDevicesWithOpenControlCommandsUnscopedRow struct {
+	DeviceName       string             `json:"device_name"`
+	EarliestIssuedAt pgtype.Timestamptz `json:"earliest_issued_at"`
+}
+
+// INTERNAL: no authorization and no customer scoping — only ingest's command reconcile may call it.
+// One row per device that still has a command a result could close, with the oldest such command's
+// issue time, so the caller reads each device's telemetry history once from there. 'expired' is
+// excluded because it is terminal (MarkControlCommandFinished refuses to rewrite it), and a command
+// already past its window can no longer be repaired.
+func (q *Queries) ListDevicesWithOpenControlCommandsUnscoped(ctx context.Context) ([]ListDevicesWithOpenControlCommandsUnscopedRow, error) {
+	rows, err := q.db.Query(ctx, listDevicesWithOpenControlCommandsUnscoped)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDevicesWithOpenControlCommandsUnscopedRow
+	for rows.Next() {
+		var i ListDevicesWithOpenControlCommandsUnscopedRow
+		if err := rows.Scan(&i.DeviceName, &i.EarliestIssuedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markControlCommandAcked = `-- name: MarkControlCommandAcked :one
 UPDATE control_commands
 SET status       = $2,
