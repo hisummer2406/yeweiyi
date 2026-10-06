@@ -157,6 +157,12 @@ func (i *Ingester) backfillByID(ctx context.Context, deviceName, deviceID string
 	if err != nil {
 		return res, fmt.Errorf("backfill %s alarm: %w", deviceName, err)
 	}
+	// Only a pass that started at 0 and read both kinds to the end proves the history is here.
+	if fromMs == 0 {
+		if err := i.cfg.Queries.MarkRecordBackfill(ctx, deviceName); err != nil {
+			return res, fmt.Errorf("backfill %s: mark complete: %w", deviceName, err)
+		}
+	}
 	return res, nil
 }
 
@@ -214,14 +220,15 @@ func (i *Ingester) reconcileOnce(ctx context.Context, deviceName, deviceID strin
 		return
 	}
 	from := time.Now().Add(-i.cfg.RecordReconcileLookback).UnixMilli()
-	// A device the business database has never held a record for is taken over from the beginning:
-	// whatever ThingsBoard still has is, by definition, not stored here yet.
-	has, err := i.cfg.Queries.DeviceHasBusinessRecords(ctx, deviceName)
+	// A device whose first full backfill has not completed is taken over from the beginning. The
+	// marker, not "the device already has records", decides: a live record can land before the first
+	// pass, and one kind can have history while the other has none.
+	done, err := i.cfg.Queries.HasRecordBackfill(ctx, deviceName)
 	if err != nil {
-		i.cfg.Logf("ingest: %s: check stored records: %v", deviceName, err)
+		i.cfg.Logf("ingest: %s: check backfill marker: %v", deviceName, err)
 		return
 	}
-	if !has {
+	if !done {
 		from = 0
 	}
 	res, err := i.backfillByID(ctx, deviceName, deviceID, from)

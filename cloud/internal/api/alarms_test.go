@@ -106,7 +106,7 @@ func newStockEnv(t *testing.T, opts ...func(*api.Deps)) (*testEnv, *devicesim.De
 	t.Cleanup(stopIngest)
 	t.Cleanup(func() {
 		// Records are kept forever in production; the test device is not.
-		for _, table := range []string{"stock_events", "alarm_events", "record_rejects"} {
+		for _, table := range []string{"stock_events", "alarm_events", "record_rejects", "record_backfills"} {
 			env.pool.Exec(context.Background(), `DELETE FROM `+table+` WHERE device_name = $1`, deviceName)
 		}
 	})

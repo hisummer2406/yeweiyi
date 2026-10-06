@@ -72,8 +72,10 @@ type AlarmEvent struct {
 	// 该条的 ThingsBoard 信封 ts（毫秒）。
 	EnvTs int64 `json:"env_ts"`
 	// 原始 JSON，保真保存。
-	Payload   []byte             `json:"payload"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	Payload []byte `json:"payload"`
+	// 首次写入这条记录时设备所属的客户（devices.customer_id，NULL = 未分配），语义同 stock_events.customer_id。
+	CustomerID pgtype.Int8        `json:"customer_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 // 审计日志，长期保留，不随遥测清理。记录控制命令的下发、拒绝与最终结果，以及越权访问尝试。device_name/command_id 刻意不做外键——被拒绝的越权尝试所指向的设备可能根本不存在，而那正是最值得记录的一类事件。
@@ -153,6 +155,12 @@ type DevicePairingSecret struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// 设备的出入库与报警已从 ThingsBoard 全量回补完成的标记。没有标记的设备，定时回读会做全量回补而不是只读回看窗口。
+type RecordBackfill struct {
+	DeviceName  string             `json:"device_name"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
 // 无法解析的出入库/报警原文（如固件升级前的 DetailInoutRecord.toString()、source 取值非法的记录）。(kind, device_name, env_ts, 原文哈希) 唯一，回补重放幂等。
 type RecordReject struct {
 	ID         int64  `json:"id"`
@@ -230,9 +238,11 @@ type StockEvent struct {
 	// 收到过的全部不同信封 ts（毫秒，去重）。基数减一即被折叠掉的重复报告数；重放同一份报告不会增加它。
 	ReportTs []int64 `json:"report_ts"`
 	// 胜出那一份报告的原始 JSON，保真保存，接口据此还原字段，设备端后续新增的可选字段不会丢。
-	Payload   []byte             `json:"payload"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	Payload []byte `json:"payload"`
+	// 首次写入这条记录时设备所属的客户（devices.customer_id，NULL = 未分配）。设备转移后接口只返回与设备当前客户一致的记录，不依赖设备自报的时间戳来划分归属；重放与修正版不改它。不设外键，客户记录的删除不应牵连业务记录。
+	CustomerID pgtype.Int8        `json:"customer_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 // 共享账号表，PC 远程端与小程序共用同一套账号/JWT 体系（CLAUDE.md "Tech stack"）。

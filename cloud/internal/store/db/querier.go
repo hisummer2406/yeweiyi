@@ -66,8 +66,6 @@ type Querier interface {
 	// Refused by the foreign keys (ON DELETE RESTRICT) while any user, device, command or audit row still
 	// references the customer; the handler turns that into 409. `default` is protected as above.
 	DeleteCustomer(ctx context.Context, id int64) (int64, error)
-	// 该设备在业务库里还一条出入库/报警/无法解析记录都没有：首次接管，需要从 ThingsBoard 全量回补。
-	DeviceHasBusinessRecords(ctx context.Context, deviceName string) (bool, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
@@ -98,6 +96,7 @@ type Querier interface {
 	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
 	// again, so a concurrent move or disable cannot slip in between the first check and the write.
 	GetUserForUpdate(ctx context.Context, id int64) (User, error)
+	HasRecordBackfill(ctx context.Context, deviceName string) (bool, error)
 	// 同一份重放不改变已有行。
 	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
 	InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error
@@ -175,6 +174,7 @@ type Querier interface {
 	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	MarkRecordBackfill(ctx context.Context, deviceName string) error
 	// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
@@ -209,6 +209,7 @@ type Querier interface {
 	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
 	// 出入库与报警的业务库副本（迁移 000017，issue #29）。写入全部幂等：回补与实时摄取并发、补投重复、
 	// 乱序到达都收敛到同一结果。
+	// customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
 	// 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error

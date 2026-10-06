@@ -228,3 +228,66 @@ func TestRecords_TransferHidesThePreviousOwnersRecords(t *testing.T) {
 		t.Errorf("alarm from before the transfer is still visible: %v", got)
 	}
 }
+
+// TestRecords_OwnershipIsStampedAtIngestNotInferredFromDeviceClock: a record the previous owner's
+// device made — stamped with a time that passes the assignment cut-off, as a fast device clock would —
+// must stay hidden from the new owner. Ownership is the customer recorded when the row was first
+// written, so the timestamp the device reports cannot move a record across the tenant boundary.
+func TestRecords_OwnershipIsStampedAtIngestNotInferredFromDeviceClock(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now()
+	postDeviceTelemetry(t, token, stockEnvelope(now.Add(-10*time.Minute).UnixMilli(), "old-owner", now.Add(-10*time.Minute).UnixMilli(), 1000))
+	waitStockRows(t, env, device, 1)
+
+	ctx := context.Background()
+	var newCustomer int64
+	if err := env.pool.QueryRow(ctx, `INSERT INTO customers (name) VALUES ($1) RETURNING id`, "own-"+device).Scan(&newCustomer); err != nil {
+		t.Fatalf("create customer: %v", err)
+	}
+	t.Cleanup(func() {
+		env.pool.Exec(ctx, `UPDATE devices SET customer_id = `+defaultCustomerSQL+` WHERE device_name = $1`, device)
+		env.pool.Exec(ctx, `DELETE FROM customers WHERE id = $1`, newCustomer)
+	})
+	if _, err := env.pool.Exec(ctx, `UPDATE devices SET customer_id = $2 WHERE device_name = $1`, device, newCustomer); err != nil {
+		t.Fatalf("transfer: %v", err)
+	}
+	// Pretend the transfer was long ago, so the time cut-off alone would let the old record through.
+	if _, err := env.pool.Exec(ctx, `UPDATE devices SET customer_assigned_at = $2 WHERE device_name = $1`, device, now.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("backdate assignment: %v", err)
+	}
+
+	env.setRole("platform_admin")
+	if b := decodeStock(t, env.authed("GET", stockPath(device), nil).Body.Bytes()); len(b.Rows) != 0 {
+		t.Fatalf("new owner sees the previous owner's record: %v", b.Rows)
+	}
+
+	postDeviceTelemetry(t, token, stockEnvelope(now.Add(-5*time.Minute).UnixMilli(), "new-owner", now.Add(-5*time.Minute).UnixMilli(), 2000))
+	if b := waitStockRows(t, env, device, 1); b.Rows[0]["eventId"] != "new-owner" {
+		t.Errorf("new owner sees %v, want only new-owner", b.Rows)
+	}
+}
+
+// TestRecords_FullBackfillMarkerIsWrittenOnlyByAFullPass: "the device already has records" does not
+// mean its history was taken over, so only a from=0 pass leaves the marker that lets the periodic
+// reconcile shrink to its lookback window.
+func TestRecords_FullBackfillMarkerIsWrittenOnlyByAFullPass(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+	ctx := context.Background()
+
+	if _, err := env.pool.Exec(ctx, `DELETE FROM record_backfills WHERE device_name = $1`, device); err != nil {
+		t.Fatalf("clear marker: %v", err)
+	}
+	if _, err := env.ing.BackfillDevice(ctx, device, time.Now().UnixMilli()); err != nil {
+		t.Fatalf("partial backfill: %v", err)
+	}
+	if done, err := env.queries.HasRecordBackfill(ctx, device); err != nil || done {
+		t.Fatalf("a partial pass left the marker (done=%v err=%v)", done, err)
+	}
+	if _, err := env.ing.BackfillDevice(ctx, device, 0); err != nil {
+		t.Fatalf("full backfill: %v", err)
+	}
+	if done, err := env.queries.HasRecordBackfill(ctx, device); err != nil || !done {
+		t.Fatalf("a full pass left no marker (done=%v err=%v)", done, err)
+	}
+}

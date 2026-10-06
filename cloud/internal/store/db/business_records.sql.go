@@ -11,25 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deviceHasBusinessRecords = `-- name: DeviceHasBusinessRecords :one
-SELECT (EXISTS (SELECT 1 FROM stock_events s WHERE s.device_name = $1::TEXT)
-     OR EXISTS (SELECT 1 FROM alarm_events a WHERE a.device_name = $1::TEXT)
-     OR EXISTS (SELECT 1 FROM record_rejects r WHERE r.device_name = $1::TEXT))::BOOLEAN AS has_records
+const hasRecordBackfill = `-- name: HasRecordBackfill :one
+SELECT EXISTS (SELECT 1 FROM record_backfills WHERE device_name = $1)::BOOLEAN AS done
 `
 
-// 该设备在业务库里还一条出入库/报警/无法解析记录都没有：首次接管，需要从 ThingsBoard 全量回补。
-func (q *Queries) DeviceHasBusinessRecords(ctx context.Context, deviceName string) (bool, error) {
-	row := q.db.QueryRow(ctx, deviceHasBusinessRecords, deviceName)
-	var has_records bool
-	err := row.Scan(&has_records)
-	return has_records, err
+func (q *Queries) HasRecordBackfill(ctx context.Context, deviceName string) (bool, error) {
+	row := q.db.QueryRow(ctx, hasRecordBackfill, deviceName)
+	var done bool
+	err := row.Scan(&done)
+	return done, err
 }
 
 const insertAlarmEvent = `-- name: InsertAlarmEvent :exec
-INSERT INTO alarm_events (device_name, alarm_id, status, synthetic_id, occurred_at, env_ts, payload)
+INSERT INTO alarm_events (device_name, alarm_id, status, synthetic_id, occurred_at, env_ts, payload, customer_id)
 VALUES (
     $1, $2, $3, $4,
-    to_timestamp($5::BIGINT / 1000.0), $6, $7
+    to_timestamp($5::BIGINT / 1000.0), $6, $7,
+    (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
 )
 ON CONFLICT (device_name, alarm_id, status) DO NOTHING
 `
@@ -85,9 +83,10 @@ func (q *Queries) InsertRecordReject(ctx context.Context, arg InsertRecordReject
 
 const listAlarmEventsAsc = `-- name: ListAlarmEventsAsc :many
 SELECT payload, synthetic_id, occurred_at
-FROM alarm_events
-WHERE device_name = $1
+FROM alarm_events a
+WHERE a.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
+  AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
 ORDER BY occurred_at ASC, alarm_id ASC, status ASC
 LIMIT $5 OFFSET $4
 `
@@ -134,9 +133,10 @@ func (q *Queries) ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAsc
 
 const listAlarmEventsDesc = `-- name: ListAlarmEventsDesc :many
 SELECT payload, synthetic_id, occurred_at
-FROM alarm_events
-WHERE device_name = $1
+FROM alarm_events a
+WHERE a.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
+  AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
 ORDER BY occurred_at DESC, alarm_id DESC, status DESC
 LIMIT $5 OFFSET $4
 `
@@ -183,9 +183,10 @@ func (q *Queries) ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDe
 
 const listStockEventsAsc = `-- name: ListStockEventsAsc :many
 SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
-FROM stock_events
-WHERE device_name = $1
+FROM stock_events s
+WHERE s.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
+  AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
 ORDER BY occurred_at ASC, event_id ASC
 LIMIT $5 OFFSET $4
 `
@@ -239,9 +240,10 @@ func (q *Queries) ListStockEventsAsc(ctx context.Context, arg ListStockEventsAsc
 
 const listStockEventsDesc = `-- name: ListStockEventsDesc :many
 SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
-FROM stock_events
-WHERE device_name = $1
+FROM stock_events s
+WHERE s.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
+  AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
 ORDER BY occurred_at DESC, event_id DESC
 LIMIT $5 OFFSET $4
 `
@@ -290,6 +292,15 @@ func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDe
 		return nil, err
 	}
 	return items, nil
+}
+
+const markRecordBackfill = `-- name: MarkRecordBackfill :exec
+INSERT INTO record_backfills (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING
+`
+
+func (q *Queries) MarkRecordBackfill(ctx context.Context, deviceName string) error {
+	_, err := q.db.Exec(ctx, markRecordBackfill, deviceName)
+	return err
 }
 
 const summarizeStockRejects = `-- name: SummarizeStockRejects :one
@@ -344,11 +355,12 @@ func (q *Queries) SummarizeStockRejects(ctx context.Context, arg SummarizeStockR
 
 const upsertStockEvent = `-- name: UpsertStockEvent :exec
 
-INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload)
+INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload, customer_id)
 VALUES (
     $1, $2, $3,
     to_timestamp($4::BIGINT / 1000.0), $5,
-    ARRAY[$5::BIGINT], $6
+    ARRAY[$5::BIGINT], $6,
+    (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
 )
 ON CONFLICT (device_name, event_id) DO UPDATE SET
     synthetic_id = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.synthetic_id ELSE stock_events.synthetic_id END,
@@ -372,6 +384,7 @@ type UpsertStockEventParams struct {
 
 // 出入库与报警的业务库副本（迁移 000017，issue #29）。写入全部幂等：回补与实时摄取并发、补投重复、
 // 乱序到达都收敛到同一结果。
+// customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
 // 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 // 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 func (q *Queries) UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error {
