@@ -35,7 +35,7 @@
     },
     {
       "file": "client_attributes.json",
-      "sha256": "8e3a55da3998f643d0ef42b7915abb1fcd05119a7fcaf29100f5c55a6310f0e5",
+      "sha256": "34d977e5351af3a06fd03367ec3aed99c36fef74ca6d052022850dc0feb25b9f",
       "direction": "uplink",
       "pins": "客户端属性：只在配置变化时上报，不进遥测"
     },

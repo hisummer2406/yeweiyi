@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -312,6 +315,55 @@ func TestUplink_ClientAttributesReachBackend(t *testing.T) {
 		// ThingsBoard APIs behaving differently is exactly the kind of thing that bites later.
 		if _, ok := attrs[protocol.AttrLocalControlMode].(bool); !ok {
 			return fmt.Errorf("localControlMode came back as %T, want bool", attrs[protocol.AttrLocalControlMode])
+		}
+		return nil
+	})
+}
+
+// TestUplink_CalibrationArraysSurviveThingsBoard publishes the shared client_attributes.json fixture
+// (hand-written device JSON, including tank1's calibration arrays) the way a device would and reads it
+// back through Client.Attributes into ParseTankCalibration. The parser assumes array-valued attributes
+// keep their shape through ThingsBoard; the scalar-only test above cannot show that.
+func TestUplink_CalibrationArraysSurviveThingsBoard(t *testing.T) {
+	c := newTestClient(t)
+	dev, token := provisionDevice(t, c)
+
+	raw, err := os.ReadFile(filepath.Join("..", "..", "fixtures", "protocol", "v1", "client_attributes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	delete(doc, "_comment")
+	body, _ := json.Marshal(doc)
+	resp, err := http.Post(tbBaseURL()+"/api/v1/"+token+"/attributes", "application/json", strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatalf("publish attributes: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		t.Fatalf("publish attributes: HTTP %d", resp.StatusCode)
+	}
+
+	eventually(t, settleTimeout, "calibration arrays to read back", func() error {
+		attrs, err := c.Attributes(context.Background(), dev.ID.ID, tbclient.ScopeClient, nil)
+		if err != nil {
+			return err
+		}
+		got, ok, err := protocol.ParseTankCalibration(attrs, 1)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.New("tank1 calibration not present yet")
+		}
+		if len(got.HeightMm) != 3 || got.HeightMm[2] != 1000 || got.VolumeL[2] != 28450.2 {
+			return fmt.Errorf("calibration mangled in transit: %+v", got)
+		}
+		if _, ok, err := protocol.ParseTankCalibration(attrs, 2); err != nil || ok {
+			return fmt.Errorf("tank2 has no calibration; got ok=%v err=%v", ok, err)
 		}
 		return nil
 	})

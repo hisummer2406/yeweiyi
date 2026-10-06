@@ -2,6 +2,7 @@ package protocol_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -390,6 +391,10 @@ func TestClientAttributes_FixtureUsesDeclaredKeys(t *testing.T) {
 		declared[protocol.TankKey(i, protocol.AttrProbeType)] = true
 		declared[protocol.TankKey(i, protocol.AttrCapacityL)] = true
 	}
+	// Only tank1 has calibration attributes in the fixture — see its _comment for why that's
+	// deliberate rather than an oversight.
+	declared[protocol.TankKey(1, protocol.AttrCalibrationHeightMm)] = true
+	declared[protocol.TankKey(1, protocol.AttrCalibrationVolumeL)] = true
 
 	for k := range attrs {
 		if strings.HasPrefix(k, "_") {
@@ -401,6 +406,137 @@ func TestClientAttributes_FixtureUsesDeclaredKeys(t *testing.T) {
 	}
 	if v, _ := attrs[protocol.AttrProtocolVersion].(float64); int(v) != protocol.Version {
 		t.Errorf("fixture protocolVersion = %v, want %d", attrs[protocol.AttrProtocolVersion], protocol.Version)
+	}
+}
+
+// TestParseTankCalibration_FixtureRoundTrips covers both cases the client_attributes.json fixture
+// deliberately carries: tank1 has a calibration curve, tank2 does not.
+func TestParseTankCalibration_FixtureRoundTrips(t *testing.T) {
+	var attrs map[string]any
+	if err := json.Unmarshal(readFixture(t, "client_attributes.json"), &attrs); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	got, ok, err := protocol.ParseTankCalibration(attrs, 1)
+	if err != nil {
+		t.Fatalf("ParseTankCalibration(tank 1): %v", err)
+	}
+	if !ok {
+		t.Fatal("tank 1 should have a calibration curve in the fixture")
+	}
+	wantHeights := []float64{0, 500, 1000}
+	wantVolumes := []float64{0.0, 14225.1, 28450.2}
+	if !reflect.DeepEqual(got.HeightMm, wantHeights) || !reflect.DeepEqual(got.VolumeL, wantVolumes) {
+		t.Errorf("tank 1 calibration = %+v, want heights=%v volumes=%v", got, wantHeights, wantVolumes)
+	}
+
+	_, ok, err = protocol.ParseTankCalibration(attrs, 2)
+	if err != nil {
+		t.Fatalf("ParseTankCalibration(tank 2): %v", err)
+	}
+	if ok {
+		t.Error("tank 2 has no calibration attributes in the fixture; ok should be false, not an error")
+	}
+}
+
+// TestParseTankCalibration_ToleratesStringifiedArray covers the ThingsBoard REST/WebSocket read-back
+// shape — see convert.go's doc comment on why every value in this package tolerates a JSON-encoded
+// string in place of the native type.
+func TestParseTankCalibration_ToleratesStringifiedArray(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): "[0,500,1000]",
+		protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  "[0.0,14225.1,28450.2]",
+	}
+	got, ok, err := protocol.ParseTankCalibration(attrs, 1)
+	if err != nil {
+		t.Fatalf("ParseTankCalibration: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+	if !reflect.DeepEqual(got.HeightMm, []float64{0, 500, 1000}) {
+		t.Errorf("HeightMm = %v", got.HeightMm)
+	}
+}
+
+// TestParseTankCalibration_RejectsMismatchedLength pins that a height/volume length mismatch is a
+// parse error, not a silently truncated or zero-padded curve — a calibration curve with mismatched
+// pairs is corrupt data, not a shape a caller should have to defend against downstream.
+func TestParseTankCalibration_RejectsMismatchedLength(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): []any{0.0, 500.0, 1000.0},
+		protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  []any{0.0, 14225.1},
+	}
+	if _, _, err := protocol.ParseTankCalibration(attrs, 1); err == nil {
+		t.Error("expected a length-mismatch error, got nil")
+	}
+}
+
+// TestParseTankCalibration_RejectsPartialPublish pins that publishing only one of the two paired
+// attributes is an error, not a curve silently treated as absent — that would hide a real bug on the
+// device side (or a ThingsBoard attribute write that partially failed) as "not configured yet".
+func TestParseTankCalibration_RejectsPartialPublish(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): []any{0.0, 500.0},
+	}
+	if _, _, err := protocol.ParseTankCalibration(attrs, 1); err == nil {
+		t.Error("expected an error for a height-only publish, got nil")
+	}
+}
+
+func TestParseTankCalibration_RejectsMalformedCurves(t *testing.T) {
+	cases := map[string]struct{ h, v []any }{
+		"descending heights": {[]any{0.0, 500.0, 400.0}, []any{0.0, 1.0, 2.0}},
+		"repeated height":    {[]any{0.0, 500.0, 500.0}, []any{0.0, 1.0, 2.0}},
+		"decreasing volume":  {[]any{0.0, 500.0, 1000.0}, []any{0.0, 9.0, 5.0}},
+		"negative volume":    {[]any{0.0, 500.0}, []any{-1.0, 5.0}},
+		"empty":              {[]any{}, []any{}},
+		"single point":       {[]any{500.0}, []any{100.0}},
+		// null 元素不能被当成 0：否则 [0,null,500] 会静默变成合法曲线。
+		"null height element": {[]any{0.0, nil, 500.0}, []any{0.0, 1.0, 2.0}},
+		"null volume element": {[]any{0.0, 250.0, 500.0}, []any{0.0, nil, 2.0}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			attrs := map[string]any{
+				protocol.TankKey(1, protocol.AttrCalibrationHeightMm): c.h,
+				protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  c.v,
+			}
+			if _, ok, err := protocol.ParseTankCalibration(attrs, 1); err == nil || ok {
+				t.Errorf("ok=%v err=%v, want a rejection", ok, err)
+			}
+		})
+	}
+}
+
+func TestParseTankCalibration_NullAttributesAreAbsent(t *testing.T) {
+	attrs := map[string]any{
+		protocol.TankKey(1, protocol.AttrCalibrationHeightMm): nil,
+		protocol.TankKey(1, protocol.AttrCalibrationVolumeL):  nil,
+	}
+	if _, ok, err := protocol.ParseTankCalibration(attrs, 1); ok || err != nil {
+		t.Errorf("ok=%v err=%v, want absent without error", ok, err)
+	}
+}
+
+func TestParseStockEvent_Source(t *testing.T) {
+	// Omitted means AUTO; AUTO and MANUAL spelled out are accepted.
+	for _, raw := range []string{
+		`{"eventId":"in-1-1","direction":"IN"}`,
+		`{"eventId":"in-1-1","direction":"IN","source":"AUTO"}`,
+		`{"eventId":"in-1-1","direction":"IN","source":"MANUAL"}`,
+	} {
+		if _, err := protocol.ParseStockEvent(raw); err != nil {
+			t.Errorf("%s rejected: %v", raw, err)
+		}
+	}
+	// Present-but-wrong must not be read as omission (and so as machine-measured AUTO).
+	for _, src := range []string{`"manual"`, `"OTHER"`, `""`, `null`, `1`} {
+		raw := `{"eventId":"in-1-1","direction":"IN","source":` + src + `}`
+		_, err := protocol.ParseStockEvent(raw)
+		if !errors.Is(err, protocol.ErrInvalidSource) {
+			t.Errorf("source %s: err = %v, want ErrInvalidSource", src, err)
+		}
 	}
 }
 

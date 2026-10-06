@@ -41,6 +41,7 @@ type stockBody struct {
 	Parsed        int              `json:"parsed"`
 	Unparsable    int              `json:"unparsable"`
 	LegacySkipped int              `json:"legacySkipped"`
+	InvalidSource int              `json:"invalidSource"`
 	Folded        int              `json:"folded"`
 	Truncated     bool             `json:"truncated"`
 	Partial       bool             `json:"partial"`
@@ -120,12 +121,53 @@ func TestListOilInOut_ReadsThroughToThingsBoard(t *testing.T) {
 	if n, _ := r["netVolumeL"].(float64); n != 18000.0 {
 		t.Errorf("netVolumeL = %v, want 18000", r["netVolumeL"])
 	}
+	// The device omits `source` entirely for automatic detection (see protocol.StockEvent.Source);
+	// the API must not surface that as a missing field, so a client never has to treat "absent" as a
+	// third state alongside AUTO/MANUAL.
+	if r["source"] != protocol.SourceAuto {
+		t.Errorf("source = %v, want %q (normalised from the omitted wire field)", r["source"], protocol.SourceAuto)
+	}
 
 	if _, err := time.Parse(time.RFC3339, fmt.Sprint(r["beginTime"])); err != nil {
 		t.Errorf("beginTime = %v, not RFC3339: %v", r["beginTime"], err)
 	}
 
 	assertNoLegacyTelemetryTables(t, env)
+}
+
+// TestListOilInOut_SurfacesManualSource covers BuLuFragment's backfill path (zhongchengyeweiyi#42
+// 待办2): the device sets source=MANUAL on the wire, and the API must pass it through unchanged
+// rather than normalising it away like the omitted/AUTO case above.
+func TestListOilInOut_SurfacesManualSource(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now().UnixMilli()
+	// Hand-written wire JSON, not MarshalTelemetry: otherwise a wrong `source` tag or representation
+	// would change producer and parser in lockstep and this test would still pass.
+	eventID := fmt.Sprintf("in-1-%d", now)
+	postDeviceTelemetry(t, token, []byte(fmt.Sprintf(
+		`{"ts":%d,"values":{"stockEvent":{"eventId":%q,"tank":1,"direction":"IN",`+
+			`"beginTimeMs":%d,"endTimeMs":%d,"netVolumeL":1000.0,"source":"MANUAL","tsMs":%d}}}`,
+		now, eventID, now-3_600_000, now, now)))
+	sent := protocol.StockEvent{EventID: eventID}
+
+	path := "/api/oil-in-out?device=" + device + "&beginTime=2020-01-01T00:00:00Z&endTime=2030-01-01T00:00:00Z"
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		got := fetchStock(t, env, path)
+		for _, r := range got {
+			if r["eventId"] != sent.EventID {
+				continue
+			}
+			if r["source"] != protocol.SourceManual {
+				t.Errorf("source = %v, want %q", r["source"], protocol.SourceManual)
+			}
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatal("the manually-backfilled stock event never appeared through /api/oil-in-out")
 }
 
 // TestListOilInOut_OutboundDeliveredVolumeIsPositive pins the sign handling: netVolumeL is
@@ -325,6 +367,40 @@ func TestListOilInOut_MixedWindowKeepsTheParsedRecords(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}
 	t.Fatal("a window holding one unreadable and one valid record never produced the degraded response")
+}
+
+// TestListOilInOut_InvalidSourceCostsOneRecordNotTheWindow pins that a record with a bad `source`
+// (hand-written wire JSON) is dropped and counted while its neighbours are still served with 200 —
+// one off-protocol tag must not make every other movement in the window unreadable.
+func TestListOilInOut_InvalidSourceCostsOneRecordNotTheWindow(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now().UnixMilli()
+	postDeviceTelemetry(t, token, []byte(fmt.Sprintf(
+		`{"ts":%d,"values":{"stockEvent":{"eventId":"bad-%d","tank":1,"direction":"IN",`+
+			`"beginTimeMs":%d,"endTimeMs":%d,"netVolumeL":1.0,"source":"manual","tsMs":%d}}}`,
+		now-2000, now, now-3_600_000, now-2000, now-2000)))
+	postDeviceTelemetry(t, token, stockFixturePayload(t, "stock_event_in.json", now))
+
+	path := "/api/oil-in-out?device=" + device + stockWindow
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code == http.StatusOK {
+			body := decodeStock(t, rec.Body.Bytes())
+			if body.Parsed == 1 && body.InvalidSource == 1 {
+				if body.Unparsable != 0 || body.Rows[0]["eventId"] != "in-1-1756713600000" {
+					t.Fatalf("unexpected body: %s", rec.Body.String())
+				}
+				return
+			}
+		} else if rec.Code != http.StatusBadGateway {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatal("the window never degraded to 200 with invalidSource=1 and the valid record served")
 }
 
 // stockFixturePayload returns one cross-repo fixture's bytes as a device telemetry payload, with

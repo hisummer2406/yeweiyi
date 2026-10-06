@@ -1,5 +1,5 @@
 {
-  "_comment": "Published by the device to v1/devices/me/attributes on connect and whenever any of these change. current_fw_* are ThingsBoard's own reserved OTA keys, not names this protocol chose.",
+  "_comment": "Published by the device to v1/devices/me/attributes on connect and whenever any of these change. current_fw_* are ThingsBoard's own reserved OTA keys, not names this protocol chose. tank1.calibration* is new/unconfirmed (zhongchengyeweiyi#42 待办1, yeweiyi-cloud#14) — tank2 deliberately omits it to also exercise the 'no calibration attribute yet' case ParseTankCalibration must handle.",
   "protocolVersion": 1,
   "deviceModel": "SANSEN-YWY-4T",
   "hardwareVersion": "2.1",
@@ -8,6 +8,8 @@
   "tank1.probeAddress": "01",
   "tank1.probeType": "磁致伸缩",
   "tank1.capacityL": 30000.0,
+  "tank1.calibrationHeightMm": [0, 500, 1000],
+  "tank1.calibrationVolumeL": [0.0, 14225.1, 28450.2],
   "tank2.probeAddress": "02",
   "tank2.probeType": "磁致伸缩",
   "tank2.capacityL": 30000.0,

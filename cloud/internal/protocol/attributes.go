@@ -24,6 +24,17 @@ const (
 	AttrProbeAddress = "probeAddress" // string, 探针地址
 	AttrProbeType    = "probeType"    // string, 探针类型
 	AttrCapacityL    = "capacityL"    // double, 油罐公称容积, litres
+
+	// AttrCalibrationHeightMm/AttrCalibrationVolumeL are the device's persisted height→volume
+	// calibration curve (paired arrays, same length, ascending by height) — see ParseTankCalibration
+	// in calibration.go for the parser and doc comment on what this is and isn't.
+	//
+	// **Not yet a confirmed/frozen part of V1** — zhongchengyeweiyi#42 待办1 /
+	// hisummer2406/yeweiyi-cloud#14. Declared here so the shape can be parsed and tested ahead of
+	// that decision, matching the pattern already used for stockEvent's omitempty `source` field
+	// (see stock.go).
+	AttrCalibrationHeightMm = "calibrationHeightMm" // []float64 (mm)
+	AttrCalibrationVolumeL  = "calibrationVolumeL"  // []float64 (L), same length/order as the height array
 )
 
 // Shared attributes — cloud-owned, pushed down to the device by ThingsBoard. The device subscribes
