@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "未格式化的文件:"; echo "$out"; exit 1; fi
+      - run: go build ./...
+      - run: go vet ./...
+      - name: 协议契约测试（无容器依赖）
+        run: go test ./internal/protocol/
+
+  sqlc-and-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: yeweiyi
+          POSTGRES_PASSWORD: yeweiyi
+          POSTGRES_DB: yeweiyi
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U yeweiyi"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DB_URL: postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 安装 sqlc 与 migrate
+        run: |
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+          go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+      - name: sqlc 输出必须与提交一致
+        run: |
+          sqlc generate
+          git diff --exit-code -- internal/store/db
+      - name: 迁移 up / down / up 往返
+        run: |
+          migrate -database "$DB_URL" -path db/migrations up
+          migrate -database "$DB_URL" -path db/migrations down -all
+          migrate -database "$DB_URL" -path db/migrations up
