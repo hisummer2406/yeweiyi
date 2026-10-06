@@ -272,6 +272,31 @@ func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
 	}
 }
 
+// The bucket in progress is never returned: the window ends at the last bucket boundary before the
+// authorization instant, so a reassignment during the request cannot expose the new owner's samples
+// that share a bucket with the old owner's.
+func TestTelemetryHistory_ExcludesTheBucketInProgress(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+	// The fixture device was assigned just now, which would turn the answer into the empty-window
+	// branch; this test is about the cap, not the assignment clip.
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device); err != nil {
+		t.Fatal(err)
+	}
+	q := url.Values{
+		"tank": {"1"}, "fields": {protocol.KeyOilLevelMm}, "interval": {"1h"},
+		"beginTime": {time.Now().UTC().Add(-3 * time.Hour).Format(time.RFC3339)},
+		"endTime":   {time.Now().UTC().Add(time.Hour).Format(time.RFC3339)}, // future end is accepted
+	}
+	before := time.Now().UTC()
+	got := fetchHistory(t, env, device, q, http.StatusOK)
+	after := time.Now().UTC()
+	// The request instant lies between before and after; the cap is the hour boundary at or below it.
+	if !got.EndTime.Equal(before.Truncate(time.Hour)) && !got.EndTime.Equal(after.Truncate(time.Hour)) {
+		t.Errorf("endTime = %v, want the hour boundary at or below the request instant (%v)", got.EndTime, before.Truncate(time.Hour))
+	}
+}
+
 // A reassignment that lands after the request was authorized has a cutoff in the future relative to
 // the authorization instant; a window reaching past that instant must come back empty rather than
 // carry the new owner's data to the previous owner.

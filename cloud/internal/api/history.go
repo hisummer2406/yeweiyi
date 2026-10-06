@@ -187,14 +187,17 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 				startMs = from
 			}
 		}
-		// The ownership decision and this cutoff are separate reads. If the device is reassigned in
-		// between, the caller was authorized as the OLD owner but would read the NEW owner's cutoff,
-		// and a window reaching past the authorization instant would return the new owner's data.
-		// Capping the window at that instant closes it: a reassignment after authAt has a cutoff
-		// (rounded up to a bucket) at or beyond the capped end, so the window comes out empty. Both
-		// the cutoff and authAt are stamped by the database clock, so API-host clock skew cannot
-		// defeat this.
-		if capMs := ceilTo(authAt.UnixMilli(), step); endMs > capMs {
+		// The ownership decision, the cutoff above and the ThingsBoard read below are separate steps.
+		// If the device is reassigned between them, this caller was authorized as the OLD owner yet
+		// could read data the NEW owner produced. Cap the window at the last bucket that ended
+		// before the authorization instant: everything in it was produced before that instant, hence
+		// before any later reassignment, so no timing of the reassignment can leak. Rounding UP
+		// instead would leave the rest of the current bucket queryable, and the new owner's samples
+		// in it would be aggregated into the former owner's answer. The cost is that the bucket in
+		// progress is not returned (up to one interval of the most recent data); the live value is
+		// served by the telemetry endpoint. Both authAt and the cutoff are stamped by the database
+		// clock, so API-host clock skew cannot defeat this.
+		if capMs := floorTo(authAt.UnixMilli(), step); endMs > capMs {
 			endMs = capMs
 		}
 		if startMs >= endMs {
