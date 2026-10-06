@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -18,6 +20,27 @@ var wsUpgrader = websocket.Upgrader{
 	// of that adds no real protection — and mini-program/PC clients aren't browser same-origin
 	// callers anyway.
 	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+const (
+	// defaultWSRevalidateInterval bounds how long a revoked user can keep an idle connection open.
+	// A revoked user is cut off at the next alarm regardless; this only matters when none arrives.
+	defaultWSRevalidateInterval = 30 * time.Second
+	// wsAccessCheckTimeout caps one database check. A check that cannot finish counts as a failed
+	// check: the connection closes and the client reconnects, rather than the stream staying open
+	// on an answer nobody got.
+	wsAccessCheckTimeout = 5 * time.Second
+	// wsWriteTimeout stops one stalled client from holding the loop that also does revalidation.
+	wsWriteTimeout = 10 * time.Second
+	// wsReadLimit is generous for what a client may legitimately send here (control frames only).
+	wsReadLimit = 512
+)
+
+func (d Deps) wsRevalidateInterval() time.Duration {
+	if d.WSRevalidateInterval > 0 {
+		return d.WSRevalidateInterval
+	}
+	return defaultWSRevalidateInterval
 }
 
 // wsAuthToken mirrors authMiddleware's bearer-header check but also accepts a `token` query param:
@@ -59,9 +82,10 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 
 		// This handler authenticates its own JWT outside authMiddleware (a WebSocket handshake can't
 		// carry the usual middleware chain), so it calls the shared rule directly rather than
-		// requireDeviceOwnership. Authorization is decided once, here, at handshake: the stream below
-		// only ever carries this one device's events, but a user whose access is revoked while
-		// connected keeps the stream until they disconnect. See userMayAccessDevice in devices.go.
+		// requireDeviceOwnership. The rule is applied here at the handshake and again while the
+		// connection is open (see the loop below): access is read from the database, never from the
+		// token, so a user disabled, unbound or moved to another customer loses the stream too.
+		// See userMayAccessDevice in devices.go.
 		owns, err := userMayAccessDevice(c.Request.Context(), deps, claims.UserID, device)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -78,9 +102,43 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		defer conn.Close()
+		conn.SetReadLimit(wsReadLimit)
 
 		sub := deps.Redis.Subscribe(c.Request.Context(), "alarms:live")
 		defer sub.Close()
+
+		// closeWith tells the client why before hanging up, so it can tell "log in again" from a
+		// network drop. Best effort: the connection is going away either way.
+		closeWith := func(reason string) {
+			_ = conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, reason),
+				time.Now().Add(time.Second))
+		}
+
+		// stillAllowed re-asks the same question as the handshake. Anything but a clear yes —
+		// including a database error — answers no: failing open here would hand an alarm to someone
+		// who may no longer be entitled to it.
+		stillAllowed := func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), wsAccessCheckTimeout)
+			defer cancel()
+			ok, err := userMayAccessDevice(ctx, deps, claims.UserID, device)
+			if err != nil {
+				log.Printf("ws: access re-check for user %d on %q failed, closing: %v", claims.UserID, device, err)
+				return false
+			}
+			return ok
+		}
+
+		// The token's lifetime bounds the connection: authMiddleware refuses an expired token on
+		// every REST call, and a stream that outlived it would be a way around that.
+		var expired <-chan time.Time
+		if claims.ExpiresAt != nil {
+			timer := time.NewTimer(time.Until(claims.ExpiresAt.Time))
+			defer timer.Stop()
+			expired = timer.C
+		}
+		revalidate := time.NewTicker(deps.wsRevalidateInterval())
+		defer revalidate.Stop()
 
 		// gorilla requires ReadMessage to be pumped so close/ping control frames are handled; this
 		// connection is otherwise send-only, so the read loop's only job is to notice disconnect.
@@ -99,6 +157,14 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			select {
 			case <-clientGone:
 				return
+			case <-expired:
+				closeWith("token expired")
+				return
+			case <-revalidate.C:
+				if !stillAllowed() {
+					closeWith("access revoked")
+					return
+				}
 			case msg, ok := <-ch:
 				if !ok {
 					return
@@ -112,6 +178,13 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 				if fanout.DeviceName != device {
 					continue
 				}
+				// Checked per message, not just on the timer: the alarm that arrives right after a
+				// revocation must not be the one that gets through.
+				if !stillAllowed() {
+					closeWith("access revoked")
+					return
+				}
+				conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
 				if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload)); err != nil {
 					return
 				}
