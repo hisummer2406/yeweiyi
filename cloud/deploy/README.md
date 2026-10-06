@@ -334,6 +334,36 @@ Postgres、Redis 和 Go 后台。
 
 ---
 
+## 遥测保留（ThingsBoard 原始遥测 TTL）
+
+`docker-compose.thingsboard.yml` 通过 `SQL_TTL_TS_TS_KEY_VALUE_TTL` 设置 ThingsBoard 原始遥测的保留期
+（`TS_RETENTION_SECONDS`）。ThingsBoard 自身默认是 0，即永不过期。
+
+> **本项目默认 0（不清理），在 #29、#30 完成前不要开启。** 产品要求业务系统保留全部出入库、报警记录和
+> 小时级汇总（ThingsBoard 里的数据可以删），而这三类数据目前只存在 ThingsBoard：出入库与报警是以遥测
+> 形式进来的（`stockEvent`、`alarm`），汇总是查询时现算的。开启 TTL 会把它们永久删除，设备端又长期保留
+> 这些记录，云端就会与设备端不一致。落库与回补（#29：出入库、报警；#30：小时汇总）完成并验证后，再把
+> `TS_RETENTION_SECONDS` 设为 `604800`（7 天）。
+
+2026-10-06 在 CE 4.2.1.1 上实测（issue #23）：写入 40/9/8/6 天前和现在的点，开启 7 天后 8 天及更早的被
+删，6 天前的保留；客户端属性不受影响。清理按行进行，不是整月分区，尽管分区粒度是 MONTHS。
+
+- 清理每天跑一次（`SQL_TTL_TS_EXECUTION_INTERVAL`，可用 `TS_CLEANUP_INTERVAL_MS` 覆盖，毫秒），所以过期
+  数据最多多留约一天。
+- 业务库里的命令、审计、报警处置不在 ThingsBoard，不受此 TTL 影响；它们没有自动清理，属长期保留。
+- **限制：每个 key 的“最新值”（`ts_kv_latest`）不随 TTL 清除。** 历史查询对已过期的 key 返回空，但
+  “最新值”查询仍返回那个旧点。设备不再上报的 key（例如减少了罐数）会一直显示最后一个值。
+  **`LatestSnapshot` 也受影响：** 它以 `tankCount` 的时间戳为锚点回查历史点，设备停报超过保留期后该点
+  已被删，结果为空，`/telemetry/latest` 返回 404（“尚未上报”），尽管平台仍留有最新值。待修复，见 #28；
+  直接按 key 取最新值的调用方需自行判断时间戳。
+- 开启后，`telemetry/history` 对早于保留期的窗口会返回 200 加空序列，与“没有数据”无法区分，由 #30 解决
+  （超出 7 天读小时汇总，不可用的粒度返回 400）。
+- ThingsBoard 自带的审计日志 TTL（`SQL_TTL_AUDIT_LOGS_SECS`）默认也是 0，会缓慢增长；本项目的
+  审计在业务库，这份是平台自己的，容量规划时留意，未在此处调整。
+- 验证方法：在测试环境用 `TS_RETENTION_SECONDS=604800 TS_CLEANUP_INTERVAL_MS=60000`，向测试设备 POST 带
+  历史 `ts` 的遥测，用 `docker compose ... up -d` **重建**容器（`restart` 不会应用环境变量改动），等一两
+  分钟再查询；日志里有 `Total telemetry removed stats by TTL`。验证后去掉这两个变量并再次重建。
+
 ## 数据卷与删除行为
 
 | 卷 | 内容 | 删掉会怎样 |
