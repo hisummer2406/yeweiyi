@@ -78,9 +78,21 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: 经 SSH 预载已验证 API 镜像
+        run: |
+          set -o pipefail
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${RELEASE_SHA:0:7}"
+          expected="$(docker image inspect "$DEPLOY_IMAGE" --format '{{.Id}}')"
+          [[ "$expected" =~ ^sha256:[a-f0-9]{64}$ ]]
+          # ECS 跨境下载大层缓慢；Runner 已按 digest 拉取，通过 SSH 预热缓存。
+          # 远端仍 pull 原 digest，镜像身份与版本门禁不变。
+          docker save "$image" | gzip | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" 'gzip -dc | sudo -n docker load'
+          actual="$("${SSH[@]}" "$TARGET_USER@$TARGET_HOST" "sudo -n docker image inspect '$image' --format '{{.Id}}'")"
+          [[ "$actual" == "$expected" ]] || { echo '远端预载镜像标识不一致'; exit 1; }
       - name: 同步同一提交的部署文件
         run: |
-          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
           tar -czf - docker-compose.yml docker-compose.prod.yml docker-compose.thingsboard.yml \
             docker-compose.thingsboard-tls.yml db/migrations deploy/remote-deploy.sh deploy/profiles/small.yml \
             | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" "test -f '$DEPLOY_DIR/.env.prod' && tar -xzf - -C '$DEPLOY_DIR'"
@@ -89,7 +101,7 @@ jobs:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USER: ${{ github.actor }}
         run: |
-          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes)
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
           TARGET="$TARGET_USER@$TARGET_HOST"
           AUTH_DIR="$DEPLOY_DIR/.docker-ci"
           trap '"${SSH[@]}" "$TARGET" "sudo -n rm -rf -- '\''$AUTH_DIR'\''" || true' EXIT

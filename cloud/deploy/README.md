@@ -668,3 +668,7 @@ stock:
 限时健康请求。迁移、启动、健康检查失败返回失败并尝试恢复旧 API。回滚不执行数据库 down，schema 必须
 向后兼容；备份、首装、业务验收、ThingsBoard/TLS 检查独立进行。脚本使用 Linux flock 防止并发发布。
 回滚路径的无容器回归：`python3 deploy/test-remote-deploy.py`。
+
+发布时 Runner 会先按已验证的 digest 拉取 API 镜像，再经 SSH 传输镜像以预热 ECS 缓存，
+核对两端镜像 ID 后，远端仍拉取原 digest。这样不依赖 ECS 跨境下载大镜像层的速度，
+也不改变不可变版本门禁。SSH 配置连接超时与 30 秒保活，避免长操作无输出时空闲连接被中间网络断开。
