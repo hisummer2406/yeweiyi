@@ -1,12 +1,12 @@
 import { ApiError, get } from '../../utils/request';
 import { AlarmSocket } from '../../utils/ws';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
+import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import {
   ALARM_SEVERITY_LABELS,
   ALARM_STATUS_LABELS,
   ALARM_TYPE_LABELS,
   STOCK_DIRECTION_LABELS,
-  TANK_ALARM_STATE_LABELS,
   controlMethodLabel,
   label,
 } from '../../utils/labels';
@@ -18,7 +18,6 @@ import type {
   ListCommandsResponse,
   OilInOutListResponse,
   OilInOutRow,
-  Tank,
 } from '../../types/api';
 
 type TabKey = 'snapshot' | 'alarms' | 'oilInOut' | 'commands';
@@ -34,7 +33,6 @@ const TABS: { key: TabKey; label: string }[] = [
 // item interpolation can't call a function, so the label has to already be a plain field on the
 // row by the time it reaches data.
 type AlarmView = Alarm & { typeLabel: string; severityLabel: string; statusLabel: string };
-type TankView = Tank & { alarmStateLabel: string };
 type OilInOutView = OilInOutRow & { directionLabel: string };
 type CommandView = ControlCommand & { methodLabel: string };
 
@@ -156,14 +154,10 @@ Page({
       `/api/devices/${encodeURIComponent(this.data.device)}/telemetry/latest`,
     )
       .then((res) => {
-        const tanks: TankView[] = res.tanks.map((t) => ({
-          ...t,
-          alarmStateLabel: label(TANK_ALARM_STATE_LABELS, t.alarmState),
-        }));
-        this.setData({ snapshotTs: res.ts, tanks, snapshotLoaded: true });
+        this.setData({ snapshotTs: res.ts, tanks: toTankViews(res), snapshotLoaded: true });
       })
       .catch((err: ApiError) => {
-        if (err.status === 404) {
+        if (isNeverReported(err)) {
           // Authorized and provisioned, but has never reported — a real state, not an error.
           this.setData({ tanks: [], snapshotTs: '', snapshotLoaded: true });
         } else {
