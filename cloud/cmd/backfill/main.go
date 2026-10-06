@@ -6,7 +6,12 @@
 // Idempotent and safe to run while the server is up or to repeat: rows converge on the same state
 // however the live subscription and this interleave. It never deletes anything.
 //
-//	go run ./cmd/backfill [-config config.yaml] [-device NAME] [-from RFC3339]
+// With -telemetry it instead (re)computes the hourly telemetry summaries (issue #30) from ThingsBoard's
+// raw data, from -from (default: 8 days ago) up to the last completed hour. Run it once on the
+// existing raw data before enabling the TTL; it is idempotent and never overwrites a complete hour
+// with a more ragged one.
+//
+//	go run ./cmd/backfill [-config config.yaml] [-device NAME] [-from RFC3339] [-telemetry]
 package main
 
 import (
@@ -20,6 +25,7 @@ import (
 
 	"yeweiyi-cloud/internal/config"
 	"yeweiyi-cloud/internal/ingest"
+	"yeweiyi-cloud/internal/rollup"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
 )
@@ -28,6 +34,7 @@ func main() {
 	configPath := flag.String("config", "", "path to config.yaml (see config.example.yaml)")
 	only := flag.String("device", "", "backfill just this deviceName (default: every device in the business database)")
 	from := flag.String("from", "", "only read points at or after this RFC3339 instant (default: from the beginning)")
+	telemetry := flag.Bool("telemetry", false, "compute hourly telemetry summaries instead of 出入库/报警 records")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
@@ -65,6 +72,11 @@ func main() {
 		log.Fatalf("thingsboard login: %v", err)
 	}
 
+	if *telemetry {
+		runTelemetry(ctx, queries, tb, *only, fromMs)
+		return
+	}
+
 	ing := ingest.New(ingest.Config{TB: tb, Queries: queries, Logf: log.Printf})
 
 	names := []string{*only}
@@ -90,6 +102,35 @@ func main() {
 			continue
 		}
 		log.Printf("%s: read %d stockEvent and %d alarm points", name, res.StockPoints, res.AlarmPoints)
+	}
+	log.Printf("done: %d device(s), %d not in ThingsBoard, %d failed", len(names), absent, failed)
+	if failed > 0 {
+		log.Fatal("some devices failed; do not enable the ThingsBoard TTL until a rerun is clean")
+	}
+}
+
+func runTelemetry(ctx context.Context, queries *db.Queries, tb *tbclient.Client, only string, fromMs int64) {
+	job := rollup.New(rollup.Config{TB: tb, Queries: queries, Logf: log.Printf})
+	names := []string{only}
+	if only == "" {
+		var err error
+		if names, err = queries.ListAllDeviceNames(ctx); err != nil {
+			log.Fatalf("list devices: %v", err)
+		}
+	}
+	failed, absent := 0, 0
+	for _, name := range names {
+		res, err := job.RollupDevice(ctx, name, fromMs, 0)
+		switch {
+		case errors.Is(err, tbclient.ErrNotFound):
+			absent++
+			log.Printf("%s: not in ThingsBoard, skipped", name)
+		case err != nil:
+			failed++
+			log.Printf("%s: FAILED: %v", name, err)
+		default:
+			log.Printf("%s: %d rows over %d hours", name, res.Rows, res.Hours)
+		}
 	}
 	log.Printf("done: %d device(s), %d not in ThingsBoard, %d failed", len(names), absent, failed)
 	if failed > 0 {

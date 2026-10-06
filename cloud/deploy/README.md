@@ -411,8 +411,9 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 `TS_RETENTION_SECONDS` 必须保持 `0`，直到下面几步做完（CLAUDE.md 约束 5）。TTL 一开，ThingsBoard
 里更早的出入库与报警就永久消失，业务库里没有的就再也找不回来。
 
-1. 服务已运行一段时间。业务库里还一条记录都没有的设备，首次订阅时会自动从头全量回补；已经有记录的
-   设备只自动回补最近 `ingest.recordReconcileLookback`（默认 8 天）。
+1. 服务已运行一段时间。尚无"全量回补完成标记"（`record_backfills`）的设备，订阅后会自动从头全量
+   回补；有标记之后只回读最近 `ingest.recordReconcileLookback`（默认 8 天）。没有标记期间，
+   `/api/oil-in-out` 返回 `partial:true`，`/api/alarms` 带响应头 `X-Records-Partial: true`。
 2. 对全部设备显式再跑一次全量回补（幂等，可与服务同时运行，可重复；从不删除任何东西）：
 
    ```bash
@@ -423,7 +424,30 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
    有任何设备 `FAILED` 时进程以非零退出——此时不要开 TTL，排查后重跑直到干净。
 3. 核对：对每台设备，比较 ThingsBoard 里的点数与业务库行数（`stock_events` 行数 + 其 `report_ts`
    基数之和 − 行数 = 被折叠的重复报告数；`record_rejects` 单独计数）。
-4. #30（小时汇总）也落地后才可开启 TTL。
+4. 回补小时汇总（issue #30）：对现有原始遥测一次性全量补算（幂等，可重复；已有的完整小时不会被残缺值覆盖）：
+
+   ```bash
+   go run ./cmd/backfill -config config.yaml -telemetry                       # 默认从 ThingsBoard 里最早的原始点起
+   go run ./cmd/backfill -config config.yaml -telemetry -from 2026-09-01T00:00:00+08:00
+   ```
+
+   不带 `-from` 时按设备探测 ThingsBoard 中最早的原始点，不论 TTL 关闭期间攒了多久都会补全；`-from` 仅用于
+   只补某一段。服务运行时汇总任务每小时自动补算已结束的小时（首次对没有汇总的设备同样从最早的原始点起），并总是从"已汇总的最后一小时"起算，所以服务
+   停机再久也不留洞——前提是在原始数据过期**之前**恢复。核对：`SELECT device_name, max(hour_start)
+   FROM telemetry_hourly GROUP BY 1` 应当接近当前整点。
+5. 把 `telemetry.retention`（环境变量 `TELEMETRY_RETENTION`）设成与 `TS_RETENTION_SECONDS` 相同的值。
+   趋势接口据此决定从哪里起读汇总表；早于它的窗口只支持 `interval=1h`，其余粒度返回 400 并写明最早
+   可查时刻。
+
+以上几步做完才可开启 TTL。
+
+### 小时汇总的容量预估（**纸面估算，未实测**）
+
+每行 = (设备, 罐, 字段, 小时) 一个数值汇总，表见迁移 000018。每年 8760 小时，按 100 台 × 4 罐 × 9 个字段：
+100 × 4 × 9 × 8760 ≈ **3150 万行/年**。按含主键索引每行约 150 字节估算，约 **4.7 GB/年**；罐数或设备数
+翻倍则按比例翻倍。写入速率只有每小时 3600 行，不是瓶颈；成本在存储与备份体积。需要压缩时，优先
+减少汇总的字段（`protocol.AggregatableTankFields`），其次按年分区。真实数字应在有负载的环境里
+`SELECT pg_total_relation_size('telemetry_hourly')` 后回填到这里。
 
 ### 备份验证与演练
 

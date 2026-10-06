@@ -38,6 +38,16 @@ const (
 	KeyProbeConnected = "probeConnected" // bool, 探针通信状态
 )
 
+// AggregatableTankFields are the numeric per-tank fields that can be averaged, minimised and maximised:
+// what /api/devices/:device/telemetry/history serves and what the hourly rollup stores (issue #30).
+// oilType and alarmState are strings and probeConnected a bool — aggregating them is meaningless, and
+// ThingsBoard returns nothing or garbage for them rather than an error.
+var AggregatableTankFields = []string{
+	KeyOilLevelMm, KeyWaterLevelMm, KeyTempC,
+	KeyOilVolumeL, KeyWaterVolumeL, KeyOilWeightKg, KeyNullVolumeL,
+	KeyOilRatioPct, KeyWaterRatioPct,
+}
+
 // Device-level telemetry keys (not per tank).
 const (
 	KeySnapshotSeq = "snapshotSeq" // int64, increments by 1 per snapshot since device boot

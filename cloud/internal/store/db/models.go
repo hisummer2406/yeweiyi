@@ -247,6 +247,25 @@ type StockEvent struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 罐内数值型遥测的小时级汇总，由 internal/rollup 以 ThingsBoard 的聚合结果幂等写入，只含已结束的整点小时。无样本的小时没有行（离线不是 0）。业务库是长期来源，非必要不删除。原始 30 秒数据不入业务库。
+type TelemetryHourly struct {
+	// 设备名，与 devices.device_name 对应但不设外键。
+	DeviceName string `json:"device_name"`
+	// 罐号，1 起。
+	Tank int32 `json:"tank"`
+	// 字段名（protocol.AggregatableTankFields），不含 tankN. 前缀。
+	Field string `json:"field"`
+	// 整点小时起点（UTC，与 ThingsBoard 以 startTs 对齐的桶一致）。
+	HourStart pgtype.Timestamptz `json:"hour_start"`
+	AvgValue  float64            `json:"avg_value"`
+	MinValue  float64            `json:"min_value"`
+	MaxValue  float64            `json:"max_value"`
+	// 该小时内的原始样本数。重算只会在样本数不少于已存值时覆盖：原始数据被 TTL 部分删除后重算得到的是残缺值，不能顶掉完整的汇总。
+	Samples int32 `json:"samples"`
+	// 最近一次写入时刻。
+	ComputedAt pgtype.Timestamptz `json:"computed_at"`
+}
+
 // 共享账号表，PC 远程端与小程序共用同一套账号/JWT 体系（CLAUDE.md "Tech stack"）。
 type User struct {
 	// 云端自增主键。
