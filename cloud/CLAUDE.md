@@ -16,7 +16,7 @@
 
 这是安卓液位仪的云端后端。设备仅通过 ThingsBoard CE 接入；Go 服务提供业务
 REST/WebSocket、远程控制状态机、审计和用户—设备授权。PostgreSQL 保存业务数据，
-ThingsBoard 保存遥测数据。
+ThingsBoard 保存连续遥测数据，并作为设备数据的传输通道与短期缓冲。
 
 ```text
 Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis <-> 客户端
@@ -77,7 +77,11 @@ docs/                 当前规范与历史归档
 2. 未收到 ACK 的命令状态是 `sent`，不是 `failed`；设备可能已开始执行。
 3. ACK 不代表执行成功；只有异步 `cmdResult` 能确定最终结果。
 4. 命令状态流转必须由 SQL 守卫，不能改成只在 Go 中校验。
-5. 不得把遥测复制到业务数据库；ThingsBoard 是遥测唯一事实来源。
+5. 连续遥测（液位、温度等 30 秒快照）不得复制到业务数据库，ThingsBoard 是其唯一事实来源，原始数据只保留
+   7 天；业务库只可存其**小时级汇总**（#30）。出入库（`stockEvent`）与报警（`alarm`）是业务记录，**业务库是
+   长期事实来源**，须永久保存、非必要不删除（#29）：设备端本地长期保留这些记录，云端必须与之一致，ThingsBoard
+   里的副本可以删。在 #29、#30 落地并验证前，ThingsBoard 的遥测 TTL 必须保持关闭
+   （`TS_RETENTION_SECONDS=0`），否则这些数据会被永久删除。
 6. 必须先授权、后检查设备是否存在，避免设备名枚举。
 7. 设备配对密钥必须与 ThingsBoard/MQTT 设备凭据隔离。
 8. 仅使用 ThingsBoard CE 功能，且部署必须支持完全离线环境。
