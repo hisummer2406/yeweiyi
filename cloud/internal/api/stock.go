@@ -413,6 +413,10 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 				}
 				// Valid JSON with a bad `source` is neither a legacy debug string nor a format
 				// failure: drop and count this one record instead of failing the window.
+				// Counted by the envelope ts (pt.TS), not the event's own tsMs — the payload is
+				// not decoded on this path — so for a correction or backfill reported at a
+				// different time than the movement the count may land in a neighbouring window.
+				// Accepted: it is a diagnostic counter only and never changes rows or status.
 				if errors.Is(err, protocol.ErrInvalidSource) {
 					invalidSource++
 					continue
