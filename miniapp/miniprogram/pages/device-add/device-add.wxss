@@ -1,38 +1,64 @@
+/* 数值取自设计稿「设备添加-001」PNG 的像素实测。设计稿顶部白条里是公司字标，这里用原生导航栏，
+   标题暂用文字"中成电气"代替（缺白底字标切图）；设计稿的“扫一扫”按钮左侧有扫码图标，素材里没有，暂缺。
+   设计稿副标题还提到“手动输入添加”：配对需要 pairingToken，手动输入设备编号不够，这里不提供，文案已去掉。 */
+page {
+  background-color: #edf0f7;
+}
+
 .add-page {
-  min-height: 100vh;
-  box-sizing: border-box;
-  padding: 56rpx 44rpx;
-  background-color: #ecf0f8;
+  padding: 50rpx 44rpx 0;
 }
 
 .add-title {
-  font-size: 40rpx;
-  font-weight: 600;
+  font-size: 34rpx;
+  line-height: 48rpx;
   text-align: center;
   color: #131313;
 }
 
 .add-subtitle {
-  margin: 16rpx 0 56rpx;
+  margin: 13rpx 0 0;
   font-size: 26rpx;
+  line-height: 36rpx;
   text-align: center;
-  color: #8697a4;
+  color: #8b98a9;
 }
 
 .add-card {
+  box-sizing: border-box;
+  margin-top: 57rpx;
+  height: 293rpx;
+  padding: 42rpx 48rpx 0 54rpx;
   background-color: #ffffff;
   border-radius: 24rpx;
-  padding: 48rpx;
 }
 
 .add-card-title {
-  font-size: 32rpx;
-  font-weight: 600;
+  font-size: 28rpx;
+  line-height: 40rpx;
   color: #131313;
 }
 
 .add-card-desc {
-  margin: 12rpx 0 32rpx;
-  font-size: 26rpx;
-  color: #8697a4;
+  margin-top: 16rpx;
+  font-size: 25rpx;
+  line-height: 36rpx;
+  color: #8b98a9;
+}
+
+button.add-scan {
+  margin: 28rpx 0 0 -6rpx;
+  width: 569rpx;
+  height: 90rpx;
+  line-height: 90rpx;
+  padding: 0;
+  background: #0066a2;
+  color: #ffffff;
+  font-size: 30rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0, 102, 162, 0.28);
+}
+
+button.add-scan::after {
+  border: none;
 }

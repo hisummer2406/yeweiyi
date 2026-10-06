@@ -370,3 +370,38 @@ button.btn-danger-mini::after {
   display: block;
   margin: 0 auto 12rpx;
 }
+
+/* 菜单列表：「我的记录」「设置」。数值取自设计稿「首页-我的记录04」「首页-设置05」PNG 的像素实测
+   （设计稿里它们是半屏弹层，这里按"保留独立页面"处理，只对齐行内的尺寸与颜色）：
+   行距约 118；图标 64×64 的 2x 切图按 32 显示，字形左缘 x=52；文字 x=101，28rpx #131313；
+   箭头 32 显示，字形右缘距屏幕右 51；行与行之间没有分隔线。 */
+.menu-list {
+  background-color: #ffffff;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  height: 118rpx;
+  padding: 0 42rpx 0 50rpx;
+}
+
+.menu-icon {
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 19rpx;
+  flex-shrink: 0;
+}
+
+.menu-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
+  color: #131313;
+}
+
+.menu-chevron {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+}

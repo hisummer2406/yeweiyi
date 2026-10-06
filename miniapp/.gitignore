@@ -6,3 +6,6 @@ project.private.config.json
 
 # 设计源文件体积大（当前一份 136MB），不适合进 git 历史；协作者从设计交付渠道拿，不从仓库拿
 docs/*.psd
+
+# WeChat DevTools 把 .ts 就地编译成同名 .js，是产物不是源码
+miniprogram/**/*.js

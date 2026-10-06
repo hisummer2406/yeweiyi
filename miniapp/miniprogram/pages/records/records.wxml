@@ -1,23 +1,15 @@
-<view class="container">
-  <view class="card muted">
-    对应设计稿「首页-我的记录04」画板。报警/出库/入库记录读的是真实设备数据（先选设备再跳转）；
-    交班记录、库存记录设备协议里没有对应的上行数据，云端也没有接口，见 docs/miniprogram-design-gaps.md。
-  </view>
-
-  <view class="card" style="padding:0 24rpx;">
-    <view
-      wx:for="{{items}}"
-      wx:key="title"
-      class="list-row"
-      bindtap="onItemTap"
-      data-index="{{index}}"
-    >
-      <image class="list-row-icon-plain" src="/assets/icons/{{item.icon}}.png" mode="aspectFit" />
-      <view class="list-row-body">
-        <text>{{item.title}}</text>
-        <view class="muted" wx:if="{{item.reason}}" style="margin-top:4rpx;">{{item.reason}}</view>
-      </view>
-      <image class="list-row-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
-    </view>
+<!-- 设计稿「首页-我的记录04」。交班记录、库存记录没有云端数据，点了会说明原因（见 records.ts）；
+     原因不写在行内，避免把开发备注展示给用户。 -->
+<view class="menu-list">
+  <view
+    wx:for="{{items}}"
+    wx:key="title"
+    class="menu-row"
+    bindtap="onItemTap"
+    data-index="{{index}}"
+  >
+    <image class="menu-icon" src="/assets/icons/{{item.icon}}.png" mode="aspectFit" />
+    <text class="menu-title">{{item.title}}</text>
+    <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
 </view>
