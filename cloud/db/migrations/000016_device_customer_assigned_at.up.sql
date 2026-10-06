@@ -3,7 +3,20 @@
 ALTER TABLE devices ADD COLUMN customer_assigned_at TIMESTAMPTZ;
 
 COMMENT ON COLUMN devices.customer_assigned_at IS
-    '设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前已分配的设备为 NULL（归属时刻未知，不裁剪）；未分配时也为 NULL。';
+    '设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前改过归属的设备按最近一条 device.assign 审计回填；从未改过归属的为 NULL（没有前任客户，无需裁剪）；未分配时也为 NULL。';
+
+-- 回填：设备改过归属的唯一记录是管理接口写的 device.assign 审计，取最近一条放行的。没有审计的
+-- 已分配设备要么从未改过归属（迁移 000013 把全部设备分给 default 客户），要么是绕过接口直接改库
+-- 的，后者无从得知，留 NULL。审计的 occurred_at 是事务开始时间，可能略早于实际转移，偏差仅限等锁时长。
+UPDATE devices d
+SET customer_assigned_at = a.at
+FROM (
+    SELECT device_name, max(occurred_at) AS at
+    FROM audit_log
+    WHERE action = 'device.assign' AND outcome = 'allowed'
+    GROUP BY device_name
+) a
+WHERE a.device_name = d.device_name AND d.customer_id IS NOT NULL;
 
 -- 取 clock_timestamp() 而不是 now()：now() 是事务开始时间，而改归属的事务会先在 GetDeviceForUpdate
 -- 上等行锁，等待期间旧客户产生的遥测不能算到新客户名下。

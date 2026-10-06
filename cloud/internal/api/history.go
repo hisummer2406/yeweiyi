@@ -160,6 +160,14 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		}
 		ctx := c.Request.Context()
 
+		// Resolve the ThingsBoard device first: a device missing there must be a 404 whatever window
+		// was asked for, not a 200 with no data just because the window predates the assignment.
+		dev, err := deps.TB.GetDeviceByName(ctx, device)
+		if err != nil {
+			writeThingsBoardError(c, err, device)
+			return
+		}
+
 		// ThingsBoard telemetry carries no customer, so after a device moves to another customer the
 		// new one would otherwise read the previous customer's curves. Clip to the moment the device
 		// joined its current customer (devices.customer_assigned_at, maintained by a trigger). It
@@ -185,12 +193,6 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 				series[f] = []historyPoint{}
 			}
 			writeHistory(c, device, tank, aggName, reqStartMs, endMs, series)
-			return
-		}
-
-		dev, err := deps.TB.GetDeviceByName(ctx, device)
-		if err != nil {
-			writeThingsBoardError(c, err, device)
 			return
 		}
 
