@@ -48,7 +48,7 @@ func (q *Queries) EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceF
 }
 
 const getDevice = `-- name: GetDevice :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id FROM devices WHERE device_name = $1
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at FROM devices WHERE device_name = $1
 `
 
 func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, error) {
@@ -61,12 +61,13 @@ func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, err
 		&i.LastOfflineAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.CustomerAssignedAt,
 	)
 	return i, err
 }
 
 const getDeviceForUpdate = `-- name: GetDeviceForUpdate :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id FROM devices WHERE device_name = $1 FOR UPDATE
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at FROM devices WHERE device_name = $1 FOR UPDATE
 `
 
 // Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
@@ -81,6 +82,7 @@ func (q *Queries) GetDeviceForUpdate(ctx context.Context, deviceName string) (De
 		&i.LastOfflineAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.CustomerAssignedAt,
 	)
 	return i, err
 }

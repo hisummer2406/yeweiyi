@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -46,24 +47,34 @@ func userMayAccessDevice(ctx context.Context, deps Deps, userID int64, deviceNam
 // enumerating *other people's* devices, and an admin is already trusted with visibility into all of
 // them.)
 func requireDeviceOwnership(c *gin.Context, deps Deps, deviceName string) bool {
+	_, ok := requireDeviceOwnershipAt(c, deps, deviceName)
+	return ok
+}
+
+// requireDeviceOwnershipAt is requireDeviceOwnership that also returns the database clock at the
+// moment of the decision, for handlers that must bound what they read to "while this caller was
+// allowed to see the device" (see telemetryHistoryHandler). The rule is still user_may_access_device.
+func requireDeviceOwnershipAt(c *gin.Context, deps Deps, deviceName string) (time.Time, bool) {
 	userID, ok := c.Get("userID")
 	if !ok {
 		// authMiddleware always sets this before a handler runs; ok=false means a handler was wired
 		// up without it, which is a wiring bug, not a client error.
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
-		return false
+		return time.Time{}, false
 	}
 
-	owns, err := userMayAccessDevice(c.Request.Context(), deps, userID.(int64), deviceName)
+	res, err := deps.Queries.AuthorizeDeviceAccess(c.Request.Context(), db.AuthorizeDeviceAccessParams{
+		UserID: userID.(int64), DeviceName: deviceName,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return false
+		return time.Time{}, false
 	}
-	if !owns {
+	if !res.Allowed {
 		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for this device"})
-		return false
+		return time.Time{}, false
 	}
-	return true
+	return res.DecidedAt.Time, true
 }
 
 type deviceNameRequest struct {

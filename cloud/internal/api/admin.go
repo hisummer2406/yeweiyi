@@ -843,6 +843,10 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 
 // --- device assignment --------------------------------------------------------------------------
 
+// assignTxTimeout bounds a device reassignment transaction. It must stay below the smallest bucket
+// the history endpoint offers (1 minute); history_internal_test.go enforces that.
+const assignTxTimeout = 30 * time.Second
+
 // assignDeviceHandler is PUT /api/devices/:device/customer: it assigns an unassigned device to a
 // customer, or moves a device between customers. A move drops every binding in the same
 // transaction — a technician bound under the old customer must not keep a seat on the new one's
@@ -873,6 +877,22 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+
+		// devices.customer_assigned_at is stamped at the UPDATE inside this transaction but only
+		// takes effect at COMMIT; the history endpoint hides one bucket after the stamp to cover that
+		// gap (telemetryHistoryHandler). The allowance assumes the transaction finishes within
+		// assignTxTimeout, so cap the whole transaction, row-lock wait included.
+		//
+		// Known limit: this is a CLIENT-side deadline. It cannot bound a COMMIT that stalls inside
+		// PostgreSQL (slow storage, synchronous replication): the server may commit after the
+		// deadline, and then up to one bucket of telemetry from the old customer's last moments can
+		// become readable by the new one. PostgreSQL 16 has no server-side transaction_timeout (17+),
+		// and closing it fully would mean locking the device row across every history read. Accepted:
+		// it needs a database that is already failing, and exposes one aggregated bucket. If the
+		// deadline hits during COMMIT the caller gets an error although the commit may have gone
+		// through; read the device back.
+		ctx, cancel := context.WithTimeout(ctx, assignTxTimeout)
+		defer cancel()
 
 		var previous pgtype.Int8
 		var cleared int64
