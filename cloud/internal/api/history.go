@@ -74,6 +74,9 @@ type historyPoint struct {
 func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		device := c.Param("device")
+		// Taken BEFORE the authorization query so it can only be earlier than the decision. See the
+		// cap on endMs below.
+		authAt := time.Now()
 		// Authorization before parameter validation, so an unauthorized caller gets the same 403
 		// whatever they put in the query string.
 		if !requireDeviceOwnership(c, deps, device) {
@@ -146,8 +149,8 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// the caller gets at least what they asked for.
 		step := interval.Milliseconds()
 		startMs := floorTo(begin.UnixMilli(), step)
-		reqStartMs := startMs
 		endMs := ceilTo(end.UnixMilli(), step)
+		reqStartMs, reqEndMs := startMs, endMs
 		if (endMs-startMs)/step > historyMaxBuckets {
 			bad("too many buckets (" + strconv.FormatInt((endMs-startMs)/step, 10) + " > " +
 				strconv.Itoa(historyMaxBuckets) + "); use a larger interval or a shorter window")
@@ -185,14 +188,24 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 				startMs = from
 			}
 		}
+		// The ownership decision and this cutoff are separate reads. If the device is reassigned in
+		// between, the caller was authorized as the OLD owner but would read the NEW owner's cutoff,
+		// and a window reaching past the authorization instant would return the new owner's data.
+		// Capping the window at that instant closes it: a reassignment after authAt has a cutoff
+		// (rounded up to a bucket) at or beyond the capped end, so the window comes out empty. The
+		// DB stamps the cutoff and this process stamps authAt, so clock skew between them narrows
+		// but does not remove the guarantee.
+		if capMs := ceilTo(authAt.UnixMilli(), step); endMs > capMs {
+			endMs = capMs
+		}
 		if startMs >= endMs {
 			// The whole window predates the assignment: nothing this caller may see. Echo the
-			// requested aligned window, not the clipped start, so beginTime never exceeds endTime.
+			// requested aligned window, not the clipped one, so beginTime never exceeds endTime.
 			series := make(map[string][]historyPoint, len(fields))
 			for _, f := range fields {
 				series[f] = []historyPoint{}
 			}
-			writeHistory(c, device, tank, aggName, reqStartMs, endMs, series)
+			writeHistory(c, device, tank, aggName, reqStartMs, reqEndMs, series)
 			return
 		}
 

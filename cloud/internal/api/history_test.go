@@ -272,6 +272,36 @@ func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
 	}
 }
 
+// A reassignment that lands after the request was authorized has a cutoff in the future relative to
+// the authorization instant; a window reaching past that instant must come back empty rather than
+// carry the new owner's data to the previous owner.
+func TestTelemetryHistory_WindowIsCappedAtAuthorizationInstant(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
+	seedHistory(t, token, base)
+	field := protocol.KeyOilLevelMm
+	// Simulates a reassignment just after authorization.
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = now() + interval '1 second' WHERE device_name = $1", device); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = env.pool.Exec(context.Background(), "UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device)
+	})
+	q := url.Values{
+		"tank": {"1"}, "fields": {field}, "interval": {"1m"},
+		"beginTime": {base.Format(time.RFC3339)},
+		"endTime":   {time.Now().UTC().Add(30 * time.Minute).Format(time.RFC3339)}, // future end is accepted
+	}
+	got := fetchHistory(t, env, device, q, http.StatusOK)
+	if n := len(got.Series[field]); n != 0 {
+		t.Errorf("returned %d points although the cutoff is later than the authorization instant", n)
+	}
+	if got.BeginTime.After(got.EndTime) {
+		t.Errorf("empty response window is inverted: [%v, %v]", got.BeginTime, got.EndTime)
+	}
+}
+
 // The assignment time must be taken when the UPDATE runs, not at transaction start: reassignment
 // first waits on the device row lock, and telemetry produced meanwhile belongs to the old customer.
 func TestDeviceAssignedAt_IsNotTransactionStart(t *testing.T) {
