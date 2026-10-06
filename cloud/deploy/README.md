@@ -10,15 +10,17 @@
 
 | 组件 | 镜像 | 端口（宿主机 → 容器） | 用途 |
 |---|---|---|---|
-| ThingsBoard CE | `thingsboard/tb-postgres:4.2.1.1` | `8081 → 9090` | 控制台 / REST / WebSocket |
+| ThingsBoard CE | `thingsboard/tb-postgres:4.2.1.1` | `127.0.0.1:8081 → 9090` | 控制台 / REST / WebSocket |
 | | | `8883` | 设备 MQTT over TLS（生产用） |
 | | | `1884 → 1883` | 设备 MQTT 明文（启用 TLS 后仅绑环回） |
-| 业务 PostgreSQL | `postgres:16` | `5432` | 命令、审计、用户、设备绑定 |
-| Redis | `redis:7` | `6379` | 报警实时扇出 |
+| 业务 PostgreSQL | `postgres:16` | `127.0.0.1:5432` | 命令、审计、用户、设备绑定 |
+| Redis | `redis:7` | `127.0.0.1:6379` | 报警实时扇出 |
 | Go 后台 | 本仓库构建 | `8080` | 业务 REST / WebSocket |
 
 **对外只需开放 8080（业务 API）与 1884/8883（设备接入）。** 8081 是 ThingsBoard 控制台，
-仅供运维调试，不应暴露给终端用户；5432 与 6379 不应离开本机。
+仅供运维调试，不应暴露给终端用户；5432 与 6379 不应离开本机。**这三个端口在 Compose 里默认只绑
+`127.0.0.1`**，不依赖任何叠加文件；要从别的机器访问，用 SSH 隧道（`ssh -L 8081:localhost:8081 <主机>`），
+不要改成 `0.0.0.0`。启用 TLS 后明文 1884 同样收回到环回（见下）。
 
 启用 TLS 后设备走 `8883`，明文 `1884` 收回到环回地址（仅本机联调可用）。见下节。
 
@@ -190,6 +192,7 @@ JWT_SECRET=your-strong-secret-here
 TB_PASSWORD=tenant-password-here
 DATABASE_URL=postgres://yeweiyi:strongpass@localhost:5432/yeweiyi?sslmode=disable
 REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=<与 .env.prod 里的 REDIS_PASSWORD 相同；开发环境的 Redis 无密码，可不设>
 ```
 
 3. **启用和启动**
@@ -224,6 +227,50 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 ```
+
+---
+
+## 生产部署：凭据、端口隔离与验收
+
+标准安装（上文）用的是开发默认凭据（`yeweiyi:yeweiyi`、Redis 无密码）。**生产必须叠加
+`docker-compose.prod.yml`**，它把两个密码设为必填，缺任何一个都会在 `up` 时直接报错，而不是悄悄用弱默认值起来：
+
+```bash
+# .env.prod 不要提交到 git，也不要把密码写在命令行里
+cat > .env.prod <<'ENVEOF'
+POSTGRES_PASSWORD=<强随机值>
+REDIS_PASSWORD=<强随机值>
+ENVEOF
+chmod 600 .env.prod
+
+docker compose --env-file .env.prod \
+  -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.thingsboard.yml -f docker-compose.thingsboard-tls.yml up -d
+```
+
+后台进程要用同样的值：`DATABASE_URL` 里的密码，以及环境变量 `REDIS_PASSWORD`（写进 systemd 的
+`EnvironmentFile`，见上文“服务托管”）。Redis 密码走环境变量传进容器，`docker inspect` 的启动参数里看不到。
+
+> **`POSTGRES_PASSWORD` 只在数据卷第一次初始化时生效。** 已有数据卷的机器改 `.env.prod` 不会改库里账号的
+> 密码，会变成“compose 是新密码、库里是旧密码”。已有卷要改，先 `ALTER USER yeweiyi PASSWORD '新密码';`，
+> 再改 `.env.prod` 和 `DATABASE_URL`。Redis 没有这个问题：密码在每次启动时读取。
+
+### 端口隔离必须在目标机器上实测
+
+不要用文件里的注释证明隔离：Compose 对 `ports` 是**追加**合并，叠加文件很容易悄悄撤销或重复。上线前：
+
+```bash
+# 1. 合并后的最终配置里，5432 / 6379 / 8081 / 1884 都只能绑 127.0.0.1，只剩 8883 对外
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.thingsboard.yml -f docker-compose.thingsboard-tls.yml config | grep -B1 -A3 'published:'
+
+# 2. 在**另一台机器**上探测：前四个必须不可达（连接被拒或超时），8883 和业务 API 端口要通
+for p in 5432 6379 8081 1884; do nc -zv -w 3 <目标主机> $p; done
+nc -zv -w 3 <目标主机> 8883
+```
+
+Compose 容器已配置 `restart: unless-stopped`，Docker 服务随开机启动即可恢复。业务 API 不在 Compose 里，
+用 systemd 托管（见上文）。
 
 ---
 
@@ -503,7 +550,8 @@ docker compose down -v
 
 按 `images.txt` 拉取镜像并**逐个校验摘要**后导出；摘要不符即中止 —— tag 可以被重新推送指向
 不同内容，摘要不符意味着打进包里的东西和清单声称的不是同一个。同时静态编译
-`server`/`smoke`/`tbdevicesim` 三个 Linux 二进制，内网侧不需要 Go 工具链。
+`server`/`smoke`/`tbdevicesim`/`tbconfig`/`loadtest`/`backfill` 六个 Linux 二进制（`backfill` 用于
+开启 TTL 前的回补），内网侧不需要 Go 工具链。
 
 把 tar 包与脚本末尾打印的 SHA256 **分开传递**（例如摘要走纸质或电话），内网侧用
 `offline-load.sh` 校验后导入。

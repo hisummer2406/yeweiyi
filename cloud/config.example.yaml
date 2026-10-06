@@ -35,6 +35,9 @@ database:
 redis:
   # 默认 localhost:6379
   addr: "localhost:6379"
+  # Redis 的 requirepass。开发用的 compose 不设密码，留空即可；生产必须设置，且与 compose 里
+  # 的 REDIS_PASSWORD 一致。**建议只用环境变量 REDIS_PASSWORD 传入**，不要写进本文件。
+  # password: ""
 
 auth:
   # ⚠️ 必填，且**建议只用环境变量 JWT_SECRET 传入**，不要写进本文件——
@@ -133,6 +136,7 @@ stock:
 #   LISTEN_ADDR                      server.listenAddr
 #   DATABASE_URL                     database.url
 #   REDIS_ADDR                       redis.addr
+#   REDIS_PASSWORD                   redis.password
 #   JWT_SECRET                       auth.jwtSecret
 #   TOKEN_TTL                        auth.tokenTTL
 #   TB_BASE_URL / TB_USERNAME / TB_PASSWORD   thingsboard.*

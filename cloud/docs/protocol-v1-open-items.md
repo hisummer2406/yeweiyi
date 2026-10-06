@@ -355,7 +355,7 @@ openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶�
 
 | 变化 | 核对对象 | 结论 |
 |---|---|---|
-| `GET /api/devices`：管理员现看到全部 / 本客户全部设备 | 小程序 `pages/devices/devices.ts` 读 `{rows: Device[]}`，用到 `device_name`、`is_online`、`last_online_at`、`last_offline_at` | 字段名未变，兼容。变化只影响管理员，普通客户用户看不出区别。**但字段曾长期无人写入**（旧写入逻辑随 Alink 栈删除），2026-10-06 起改由 `internal/ingest` 按 ThingsBoard 的 `active` 标志定时同步；语义变为"不活动超时内有过活动"，设备掉线后要等该超时（默认 10 分钟）才显示离线，小程序若需要更及时的离线提示须另议 |
+| `GET /api/devices`：管理员现看到全部 / 本客户全部设备 | 小程序 `pages/devices/devices.ts` 读 `{rows: Device[]}`，用到 `device_name`、`is_online`、`last_online_at`、`last_offline_at` | 字段名未变，兼容。变化只影响管理员，普通客户用户看不出区别。**但字段曾长期无人写入**（旧写入逻辑随 Alink 栈删除），2026-10-06 起改由 `internal/ingest` 按 ThingsBoard 的 `active` 标志定时同步；语义变为"不活动超时内有过活动"，设备掉线后要等该超时（默认 10 分钟）才显示离线，小程序（`bbaaef0`）**刻意不显示 `is_online`**（它知道该列无人维护，见其 `types/api.d.ts`），只显示 `last_online_at`；现在该列有真实值，是否启用在线状态展示由小程序负责人决定，且要接受上述离线延迟 |
 | 设备行不暴露 `customer_id` | 两个仓库全文搜索 `customer_id` / `customerId` | 无人读取，保持不暴露 |
 | `pairing-secret` 必填 `customerId` | 小程序不调它（只调 `bind`）；`yeweiyi-admin` 的"配对密钥"页面目前只是只有标题的空壳 | 没有现存调用方会坏。实现该页面时请求体必须带 `{customerId}` |
 

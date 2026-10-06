@@ -320,3 +320,36 @@ func TestLoad_RejectsRetentionShorterThanOneRollupCycle(t *testing.T) {
 		t.Fatalf("retention == interval must be rejected naming telemetry.retention, got %v", err)
 	}
 }
+
+// A production Redis runs with requirepass (docker-compose.prod.yml makes it mandatory), so the
+// password has to reach the client from both the file and the environment, and a development setup
+// that configures nothing must still connect without one.
+func TestLoad_RedisPassword(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Redis.Password != "" {
+		t.Errorf("default redis password = %q, want empty (development Redis has none)", cfg.Redis.Password)
+	}
+
+	path := writeConfig(t, "redis:\n  password: from-file\n")
+	cfg, err = config.Load(path)
+	if err != nil {
+		t.Fatalf("Load file: %v", err)
+	}
+	if cfg.Redis.Password != "from-file" {
+		t.Errorf("file redis password = %q", cfg.Redis.Password)
+	}
+
+	t.Setenv("REDIS_PASSWORD", "from-env")
+	cfg, err = config.Load(path)
+	if err != nil {
+		t.Fatalf("Load env: %v", err)
+	}
+	if cfg.Redis.Password != "from-env" {
+		t.Errorf("env should override the file: got %q", cfg.Redis.Password)
+	}
+}

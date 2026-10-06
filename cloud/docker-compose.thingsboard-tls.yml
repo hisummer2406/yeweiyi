@@ -19,7 +19,8 @@ services:
       - "127.0.0.1:1884:1883"
       # 设备 MQTT over TLS。
       - "8883:8883"
-      - "8081:9090"
+      # 控制台仍只绑环回。这里必须重复写：!override 会整体替换基础文件的 ports，漏写就等于撤销。
+      - "127.0.0.1:8081:9090"
     environment:
       MQTT_SSL_ENABLED: "true"
       MQTT_SSL_BIND_PORT: "8883"
