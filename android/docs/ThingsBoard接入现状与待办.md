@@ -8,6 +8,8 @@
 >
 > 第六版变更（2026-10-04，V1 数据上报迭代）：§3.1 开始发 `alarmState`、`oilRatioPct` 改为一位小数、`waterRatioPct` 停发；§3.2 报警恢复已接通，上报时机跟本地报警逻辑完全一致；§3.3 `source` 结论为不需要；§3.5 客户端属性补齐有数据来源的部分；离线队列满时成对丢弃报警（"恢复"从不单独丢）；即时事件按产生顺序到达；删除/停用罐的报警自动恢复；契约测试改用云端共享样例。（含 2026-10-05 review 修复，见执行方案 §3.11）§5/§6/§7 同步更新。
 >
+> 第六版补充（2026-10-06）：即时事件外层 `ts` 去重，避免在 ThingsBoard 里互相覆盖（§3.2、§3.3）。
+>
 > 第五版变更（2026-10-04）：§3.7 配网已有现场手动录入入口（`9225274`）。
 
 ---
@@ -113,6 +115,7 @@ CloudAlarmReporter.onTanksReloaded（启动时 + 罐配置重新加载后）
 - **上报时机跟本地完全一致，不另做阈值判断**（用户 2026-10-04 确认）。本地什么时候报，云端就什么时候收到 ACTIVE；本地判定条件不再成立，云端就收到 CLEARED。本地判断、声光、继电器逻辑没有改动。
 - **只对发过 ACTIVE 的发 CLEARED**；同一罐同一类型已经 ACTIVE 时不重复发（探头断线每次轮询都会经过 `addAlarmState`，靠这一条去重）。
 - **高液位和高高液位可以同时 ACTIVE**，降下来各自恢复，跟本地一样；不加防抖。
+- **外层 `ts` 不重复**：批量恢复的报警原来取同一时刻，在 ThingsBoard 里互相覆盖；现由 `UniqueTimestampAllocator` 依次加 1 毫秒（跟出入库共用）。
 - **`alarmId` = `类型-罐号-产生时 tsMs`**，每次报警换一个，CLEARED 复用。当前报警集合写在 `filesDir/thingsboard_active_alarms.json`，App 重启后读数恢复时仍能补发 CLEARED。
 - **`text`** 用本地 `OilMessage.toString()`（跟随界面语言），CLEARED 复用 ACTIVE 时的文案。探头断线文案 `oil_connect_error` 曾被当作不可达删除，已恢复（中/英/泰取自 git 历史，西语为 AI 翻译待核对）。
 - **`value`** 是真实读数：产生时是触发时的读数，恢复时是条件不再成立那一刻的读数；探头断线没有读数，填 0。
@@ -135,7 +138,7 @@ CloudAlarmReporter.onTanksReloaded（启动时 + 罐配置重新加载后）
 InOilManager.handleEvent(event)
     → 取 pendingRecords 里的初始快照（如果服务重启导致丢失，用"现在"顶替真正的开始时间——已知的
        eventId 不稳定风险，见 StockEventMapper.defaultEventId 的类注释）
-    → 组装 DetailInoutRecord
+    → 组装 DetailInoutRecord（起止时间到秒）
     → StockEventMapper.build(detailInoutRecord, isIn)   // source 字段不带，默认 AUTO
     → SocketManager.sendUnloadOil(GsonUtil.toJsonStr(...))
 ```
@@ -158,6 +161,11 @@ private boolean sendUnloadOils(String msgInfo) {
 ```
 
 **业务字段**：`tank`/`direction`(IN/OUT)/`oilType`/`begin*`/`end*`（液位、体积、水位、水量、重量、温度)/`netVolumeL`（罐子净变化,出库为负)/`duringDeliveryVolumeL`（卸油期间加油机仍发出的量,只有人工核对过才带这个字段)/`tsMs`。
+
+**时间与去重**：
+- 外层 `ts` = 事件生成时刻，经 `UniqueTimestampAllocator` 去重。原来取只到分钟的 `tsMs`，同一分钟结束的两笔在 ThingsBoard 里互相覆盖。
+- 自动检测的起止时间精确到秒（`DateUtils.getYYYMMddHHmmssWithSeconds()`），`eventId` 不再因同一分钟开始而相同；人工补录仍只到分钟。
+- Android 不会用同一 `eventId` 重发修正版，待回复云端 B-9。
 
 **`source` 字段——结论：不需要**（2026-10-04 用户确认）。云端用 `direction` 区分进油/出油，并据此计算实际到货/发出量 `deliveredVolumeL`；`source`（`AUTO` 自动检测 / `MANUAL` 人工补录）是另一个维度，云端协议没有这个字段、前端也不区分，不推动云端添加。Android 现状不改：补录事件目前仍带 `"source":"MANUAL"`，云端解析时直接忽略，无影响。
 
@@ -471,7 +479,7 @@ public void dispatch(String mqttRequestId, String payload) {
 
 ## 6. 测试现状
 
-全模块 270 个 JVM 测试，0 失败（2026-10-05，V1 工作区改动及 review 修复之后）。其中 `ProtocolV1ContractTest` 用云端 `fixtures/protocol/v1/` 的原样副本（`app/src/test/resources/protocol/v1/`，同步方法见该目录 README）对遥测、报警、设备属性、RPC ACK/命令结果做逐 key 比对，已知差异各用一个 `knownGap_*` 测试固定。**零真机验证**——没连过真实 ThingsBoard broker，没连过真实探针/继电器硬件。配网入口（3.7）补上之后，真机已经有路径可以填凭据连上 broker，下一步就是真机联调；配网页、凭据加密、broker 重连都依赖 Android Context，不在 JVM 测试范围内，只经过编译验证。
+全模块 273 个 JVM 测试，0 失败（2026-10-06）。其中 `ProtocolV1ContractTest` 用云端 `fixtures/protocol/v1/` 的原样副本（`app/src/test/resources/protocol/v1/`，同步方法见该目录 README）对遥测、报警、设备属性、RPC ACK/命令结果做逐 key 比对，已知差异各用一个 `knownGap_*` 测试固定。**零真机验证**——没连过真实 ThingsBoard broker，没连过真实探针/继电器硬件。配网入口（3.7）补上之后，真机已经有路径可以填凭据连上 broker，下一步就是真机联调；配网页、凭据加密、broker 重连都依赖 Android Context，不在 JVM 测试范围内，只经过编译验证。
 
 ---
 
@@ -483,6 +491,7 @@ logic/thingsboard/
   ActiveAlarmTracker.java                                                        当前报警集合：去重、按次 alarmId、alarmState 汇总
   ClientAttributesBuilder.java / TankCalibrationAttributeBuilder.java / SharedAttributesParser.java   属性双向
   ThingsBoardTopics.java / ReconnectBackoff.java / PendingAlarmStore.java / BrokerTls.java   连接层基础设施（补发队列满时成对丢弃报警，"恢复"不单独丢）
+  UniqueTimestampAllocator.java                                                  即时事件外层 ts 去重
   DeviceCredentials.java / DeviceCredentialStore.java                            凭据值对象 / 存取接口
   rpc/  RpcRequestEnvelope / RpcDispatcher / RpcWirePayloads(ACK/cmdResult 报文) / ProcessedCommandStore / handler/SetAlarmThresholdHandler(真实现) / handler/HighRiskActionHandler(7个恒拒绝)
 

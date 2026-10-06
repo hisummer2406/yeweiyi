@@ -1,7 +1,5 @@
 package com.sansen.yeweiyi.logic.thingsboard;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.bean.NetOilCan;
 
 import java.math.BigDecimal;
@@ -117,28 +115,5 @@ public final class TelemetrySnapshotBuilder {
         payload.put("ts", tsMillis);
         payload.put("values", values);
         return payload;
-    }
-
-    /**
-     * 供"立即上报"类事件（比如出入库 stockEvent）在包一层 {@link #wrapWithTimestamp} 之前，
-     * 优先用事件自身携带的 {@code tsMs} 字段作为外层 {@code ts}，而不是发送/落盘的当下时刻——
-     * ThingsBoard 按外层 {@code ts} 给时序数据定位置，同一个 eventId 核对后补发如果外层 ts
-     * 用的是发送时刻，会在时序库里落成新的一个点，而不是覆盖事件本来发生那个点
-     * （PR #38 Codex 第四轮审核 P2）。
-     *
-     * @param parsedValue  已经反序列化的事件 payload；不是 JSON 对象，或者取不到
-     *                     {@code tsMs}/不是数字，都视为"没有可用的事件时间戳"。
-     * @param fallbackMillis 取不到事件自身时间戳时使用的兜底值（调用方通常传"现在"）。
-     */
-    public static long resolveEventTimestamp(JsonElement parsedValue, long fallbackMillis) {
-        if (parsedValue == null || !parsedValue.isJsonObject()) {
-            return fallbackMillis;
-        }
-        JsonObject object = parsedValue.getAsJsonObject();
-        JsonElement tsMs = object.get("tsMs");
-        if (tsMs == null || !tsMs.isJsonPrimitive() || !tsMs.getAsJsonPrimitive().isNumber()) {
-            return fallbackMillis;
-        }
-        return tsMs.getAsLong();
     }
 }

@@ -20,7 +20,7 @@ import static org.junit.Assert.assertTrue;
  * {@code stock_event_in.json}/{@code stock_event_out.json}，原样副本）——不是 Android 单方面定义的样例。
  * <p>
  * {@link StockEventMapper#build} 把 {@code DetailInoutRecord.beginTime}/{@code endTime}
- * （{@code yyyy-MM-dd HH:mm} 本地时间字符串，无时区）反解成 epoch 毫秒，结果依赖 JVM 默认
+ * （{@code yyyy-MM-dd HH:mm[:ss]} 本地时间字符串，无时区）反解成 epoch 毫秒，结果依赖 JVM 默认
  * 时区——固定为 {@code Asia/Shanghai}（这批硬件终端的实际部署时区），避免测试结果随运行
  * 机器的系统时区漂移。
  */
@@ -126,6 +126,30 @@ public class StockEventMapperTest {
         String b = StockEventMapper.defaultEventId(inRecord(), true, 1756713600000L);
         assertEquals(a, b);
         assertEquals("in-1-1756713600000", a);
+    }
+
+    @Test
+    public void secondPrecisionTimesAreKept() {
+        DetailInoutRecord record = inRecord();
+        record.setBeginTime("2025-09-01 16:00:12");
+        record.setEndTime("2025-09-01 17:00:34");
+        Map<String, Object> event = StockEventMapper.build(record, true);
+
+        assertEquals("in-1-1756713612000", event.get("eventId"));
+        assertEquals(1756713612000L, event.get("beginTimeMs"));
+        assertEquals(1756717234000L, event.get("endTimeMs"));
+        assertEquals(1756717234000L, event.get("tsMs"));
+    }
+
+    @Test
+    public void sameTankSameMinuteGetsDistinctEventIdsWithSecondPrecision() {
+        DetailInoutRecord first = inRecord();
+        first.setBeginTime("2025-09-01 16:00:01");
+        DetailInoutRecord second = inRecord();
+        second.setBeginTime("2025-09-01 16:00:40");
+        assertFalse("同一罐同一分钟内开始的两笔，eventId 不能相同，否则云端会把两笔合并成一笔",
+                StockEventMapper.build(first, true).get("eventId")
+                        .equals(StockEventMapper.build(second, true).get("eventId")));
     }
 
     @Test

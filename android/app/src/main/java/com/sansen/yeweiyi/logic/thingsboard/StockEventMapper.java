@@ -4,7 +4,6 @@ import com.sansen.yeweiyi.db.DetailInoutRecord;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -25,11 +24,10 @@ import java.util.Map;
  *       这个数必然是 0。0 与"从未核对过"在协议里无法区分（{@code omitempty} 语义，云端 Go 结构体
  *       同样区分不了），这是双方都接受的已知限制，不是这次改动引入的新问题；</li>
  *   <li>{@code beginTimeMs}/{@code endTimeMs} 由 {@link DetailInoutRecord#getBeginTime()}/
- *       {@link DetailInoutRecord#getEndTime()} 反解得来——这两列本身只精确到分钟
- *       （{@code DateUtils.getYYYMMddHHmmss()} 实际格式是 {@code yyyy-MM-dd HH:mm}，
- *       尽管方法名和注释都写着到秒），所以协议里的这两个字段目前也只有分钟精度。这是
- *       {@code DetailInoutRecord} 已有的数据精度上限，不是本类引入的精度损失；要拿到秒级
- *       精度需要单独修 {@code DateUtils}/给 {@code DetailInoutRecord} 加新列，不在本次范围内。</li>
+ *       {@link DetailInoutRecord#getEndTime()} 反解得来。自动检测（{@code InOilManager}）写的是
+ *       {@code yyyy-MM-dd HH:mm:ss}，精确到秒——只到分钟时，同一罐同一方向同一分钟内开始的两笔
+ *       {@code eventId} 相同，会被云端按 {@code eventId} 合并成一笔；人工补录（{@code BuLuFragment}）
+ *       只有操作员填的 {@code yyyy-MM-dd HH:mm}。两种格式都接受。</li>
  * </ul>
  * <p>
  * <b>{@code source} 字段是新增的、尚未跨仓库确认的协议扩展</b>（zhongchengyeweiyi#42 待办2）：
@@ -49,9 +47,10 @@ public final class StockEventMapper {
     public static final String SOURCE_AUTO = "AUTO";
     public static final String SOURCE_MANUAL = "MANUAL";
 
-    // 与 DetailInoutRecord.beginTime/endTime 的实际写入格式一致——DateUtils.getYYYMMddHHmmss()，
-    // 尽管方法名暗示到秒，真实 pattern 是 "yyyy-MM-dd HH:mm"（见该方法实现，:ss 版本被注释掉了）。
-    private static final String DEVICE_TIME_PATTERN = "yyyy-MM-dd HH:mm";
+    // DetailInoutRecord.beginTime/endTime 的两种写入格式：自动检测到秒（DateUtils.getYYYMMddHHmmssWithSeconds()），
+    // 人工补录到分钟。必须先试到秒的：按分钟格式解析带秒的字符串不会报错，只会把秒丢掉。
+    private static final String DEVICE_TIME_PATTERN_SECONDS = "yyyy-MM-dd HH:mm:ss";
+    private static final String DEVICE_TIME_PATTERN_MINUTES = "yyyy-MM-dd HH:mm";
 
     private StockEventMapper() {
     }
@@ -103,7 +102,9 @@ public final class StockEventMapper {
 
     /**
      * 建议式 eventId：{@code "{in|out}-{罐号}-{beginTimeMs}"}——文档要求"补投重发保持不变"，
-     * 只要 {@code beginTime} 不变这个值就是确定性的。<b>已知缺口</b>：{@code InOilManager}
+     * 只要 {@code beginTime} 不变这个值就是确定性的；补投发送的是已经序列化好的报文，不会重新计算。
+     * 人工补录只到分钟，同一罐同一方向同一分钟补录两次会得到相同的 eventId（云端当作同一笔的重发）。
+     * <b>已知缺口</b>：{@code InOilManager}
      * 里有一条防御性兜底分支（服务重启导致快照丢失时）会用"现在"顶替真正的 beginTime，
      * 这种情况下 eventId 会和"如果没重启"本该算出的值不一样——跨掉电重启的稳定性没有
      * 完全解决，见 zhongchengyeweiyi#42 待办3 的待确认项之一。
@@ -125,8 +126,12 @@ public final class StockEventMapper {
             return 0L;
         }
         try {
-            Date parsed = new SimpleDateFormat(DEVICE_TIME_PATTERN).parse(deviceTime);
-            return parsed.getTime();
+            return new SimpleDateFormat(DEVICE_TIME_PATTERN_SECONDS).parse(deviceTime).getTime();
+        } catch (ParseException e) {
+            // 人工补录的分钟格式，往下试
+        }
+        try {
+            return new SimpleDateFormat(DEVICE_TIME_PATTERN_MINUTES).parse(deviceTime).getTime();
         } catch (ParseException e) {
             return 0L;
         }

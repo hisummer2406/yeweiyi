@@ -19,6 +19,7 @@ import com.sansen.yeweiyi.logic.thingsboard.SharedAttributesParser;
 import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
+import com.sansen.yeweiyi.logic.thingsboard.UniqueTimestampAllocator;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.ProcessedCommandStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcDispatcher;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
@@ -119,6 +120,11 @@ public final class ThingsBoardManager {
         return t;
     });
     private final Gson gson = new Gson();
+    /**
+     * 即时事件（报警、出入库）的外层 ts 不能重复：ThingsBoard 时序库里"设备 + key + ts"相同的点
+     * 后写覆盖先写。只在 {@link #outboundEventExecutor} 上调用。
+     */
+    private final UniqueTimestampAllocator eventTsAllocator = new UniqueTimestampAllocator();
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
     /**
@@ -269,7 +275,10 @@ public final class ThingsBoardManager {
 
     private void doReportAlarmTransition(ActiveAlarmTracker.Transition transition) {
         ActiveAlarmTracker.Entry entry = transition.entry;
-        long now = transition.tsMs;
+        // 删罐/停用罐时一次恢复多条报警，它们的 tsMs 是同一个时刻；外层 ts 相同、key 都是 alarm，
+        // 在 ThingsBoard 时序库里会互相覆盖，云端报警历史只剩一条恢复。这里保证互不相同，
+        // alarm.tsMs 跟外层 ts 保持一致（共享 fixture 里两者相等）。
+        long now = eventTsAllocator.allocate(transition.tsMs);
         Map<String, Object> event = AlarmEventBuilder.build(entry.type, entry.tank, entry.alarmId,
                 transition.recovered, entry.text, transition.value, now);
         if (event == null) {
@@ -296,26 +305,28 @@ public final class ThingsBoardManager {
      * <p>
      * 实际发布挪到 {@link #outboundEventExecutor} 上异步执行，本方法立刻返回
      * （PR #38 Codex 第四轮审核 P1）。
+     * <p>
+     * 外层 {@code ts} 是事件生成的时刻（在调用方线程上取，不算排队延迟），并经
+     * {@link #eventTsAllocator} 保证互不相同。不能用事件自带的 {@code tsMs}：它来自
+     * {@code DetailInoutRecord} 的时间字符串，只精确到分钟，两个罐在同一分钟内结束出入库时
+     * 外层 ts 相同，ThingsBoard 时序库里后一笔会覆盖前一笔，云端只能看到一笔。事件发生的时刻
+     * 仍然在 {@code tsMs} 里，云端按它归入查询窗口；补投时发送的是已经序列化好的报文，
+     * 外层 ts 原样保留。
      */
     public void reportRawEvent(String telemetryKey, String rawValue) {
-        outboundEventExecutor.execute(() -> doReportRawEvent(telemetryKey, rawValue));
+        long generatedAt = System.currentTimeMillis();
+        outboundEventExecutor.execute(() -> doReportRawEvent(telemetryKey, rawValue, generatedAt));
     }
 
-    private void doReportRawEvent(String telemetryKey, String rawValue) {
-        long now = System.currentTimeMillis();
+    private void doReportRawEvent(String telemetryKey, String rawValue, long generatedAt) {
         Map<String, Object> values = new java.util.LinkedHashMap<>();
         Object value;
-        long tsMillis = now;
         try {
-            com.google.gson.JsonElement parsed = new com.google.gson.JsonParser().parse(rawValue);
-            value = parsed;
-            // 事件自带的时间戳（stockEvent.tsMs）优先于"现在"——一次核对后的补发/覆盖如果外层
-            // ts 用发送时刻，会在 ThingsBoard 时序库里落成新的一个点，而不是覆盖原来那个点
-            // （PR #38 Codex 第四轮审核 P2）。
-            tsMillis = TelemetrySnapshotBuilder.resolveEventTimestamp(parsed, now);
+            value = new com.google.gson.JsonParser().parse(rawValue);
         } catch (com.google.gson.JsonSyntaxException e) {
             value = rawValue;
         }
+        long tsMillis = eventTsAllocator.allocate(generatedAt);
         values.put(telemetryKey, value);
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, tsMillis);
         publishEventInOrder(gson.toJson(payload));

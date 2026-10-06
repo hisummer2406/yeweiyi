@@ -268,6 +268,17 @@ V1-T1 按"跟现有本地逻辑一致"上报，以下缺陷会原样体现在云
 | 10 | 文件持久化代码重复三份 | `ActiveAlarmFilePersistence`、`PendingAlarmFilePersistence`、`ProcessedCommandFilePersistence` 几乎逐行相同，可抽成通用类 |
 | 11 | 以后打开混淆会出问题 | 现在 `minifyEnabled false`；混淆规则只保留了 `db`/`bean`/`web.handler`，打开混淆后 `logic.thingsboard` 里靠 Gson 读写文件的类（`ActiveAlarmTracker.Entry`、命令去重记录）会出错 |
 
+### 3.12 外层 ts 重复导致覆盖（2026-10-06，已修复）
+
+ThingsBoard 里"设备 + key + ts"相同的点会互相覆盖，云端从时序库读数据。
+
+| # | 问题 | 修复 |
+|---|---|---|
+| 12 | 出入库外层 ts 只到分钟，同一分钟结束的两笔只剩一笔 | 外层 ts 改为生成时刻并去重（`UniqueTimestampAllocator`）；起止时间改为到秒 |
+| 13 | 批量恢复的报警 ts 相同，只剩一条 | 同上，共用一个分配器 |
+
+未经真机验证。
+
 ## 4. V2：指令下发
 
 ### 4.0 先回答：协议版本不匹配返回什么错误码
@@ -393,6 +404,7 @@ Android 目前返回 `PROTOCOL_VERSION_UNSUPPORTED`。实际影响很小：云�
 | 12 | 共享属性 `alarmThresholds` 是否删除（§4.7） | 云端 | V2-T7 |
 | 13 | 泵阀通道映射、联锁规则、现场手动模式（§4.8） | 产品 + 现场 | V2b |
 | 14 | 云端协议文档的过时内容：§4.2 "Android 发的是 toString()"、§12.5 `TcVolume` 含义（已确认是"空容量"） | 云端 | 文档 |
+| 15 | 回复云端 B-9：Android 不会用同一 `eventId` 重发；外层 ts 是生成时刻，不等于 `tsMs` | 云端 | `/api/oil-in-out` |
 
 第 1、2 项有建议值，不用等确认就可以开工；其余项目开工前要有结论。
 

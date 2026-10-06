@@ -105,7 +105,7 @@ public class InOilManager {
         record.setBeginWater(oilCan.getWaterLevel());
         record.setBeginTcVolume(oilCan.getSurPlus());
         record.setBeginTemp(oilCan.getTemper());
-        record.setBeginTime(DateUtils.getYYYMMddHHmmss());
+        record.setBeginTime(DateUtils.getYYYMMddHHmmssWithSeconds());
         record.setBeginOilWeight(oilCan.getOilWeight());
         record.setBeginWaterVolume(oilCan.getWaterVolume());
         pendingRecords.put(tankId, record);
@@ -143,7 +143,7 @@ public class InOilManager {
             detailInoutRecord.setOilcanId(event.getTankId());
             detailInoutRecord.setBeginHeith(event.getStartHeight());
             detailInoutRecord.setBeginVolume(beginVolume);
-            detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmss());
+            detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmssWithSeconds());
         }
         detailInoutRecord.setOilType(Const.getOilType(oilCan.getOilType()));
         detailInoutRecord.setEndHeight(event.getEndHeight());
@@ -153,7 +153,7 @@ public class InOilManager {
         detailInoutRecord.setEndTcVolume(oilCan.getSurPlus());
         detailInoutRecord.setEndOilWeight(oilCan.getOilWeight());
         detailInoutRecord.setEndTemp(oilCan.getTemper());
-        detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmss());
+        detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmssWithSeconds());
         detailInoutRecord.setSaleVolume(endVolume - beginVolume);
 
         String time = DateUtils.getYYYMMddHHmmss();
