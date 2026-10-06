@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -139,6 +140,11 @@ type stockListResponse struct {
 	// the history rather than a fault. Reported rather than hidden, because the operator
 	// reconciling this window still needs to know the numbers are incomplete.
 	LegacySkipped int `json:"legacySkipped"`
+	// InvalidSource counts in-window records that parsed but carry a `source` other than
+	// AUTO/MANUAL. They are left out of rows rather than failing the window: one off-protocol tag
+	// should not hide every other movement. Not a 502, but reported so the list is not mistaken for
+	// complete.
+	InvalidSource int `json:"invalidSource"`
 	// Folded counts superseded re-reports of an eventId already in the list (see foldByEventID).
 	// Not a fault; reported so a row count that differs from the raw telemetry count is explicable.
 	Folded int `json:"folded"`
@@ -386,7 +392,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		rows := make([]stockRow, 0, len(points))
-		unparsable, legacy := 0, 0
+		unparsable, legacy, invalidSource := 0, 0, 0
 		sample := ""
 		for _, pt := range points {
 			ev, err := protocol.ParseStockEvent(pt.Value)
@@ -403,6 +409,12 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 					if cutoffMs == 0 || pt.TS >= cutoffMs {
 						partial = true
 					}
+					continue
+				}
+				// Valid JSON with a bad `source` is neither a legacy debug string nor a format
+				// failure: drop and count this one record instead of failing the window.
+				if errors.Is(err, protocol.ErrInvalidSource) {
+					invalidSource++
 					continue
 				}
 				// pt.TS classifies it, and nothing else can: the payload of a pre-upgrade record
@@ -459,6 +471,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			Parsed:        len(out),
 			Unparsable:    unparsable,
 			LegacySkipped: legacy,
+			InvalidSource: invalidSource,
 			Folded:        folded,
 			Truncated:     truncated,
 			Partial:       partial,

@@ -2,8 +2,14 @@ package protocol
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
+
+// ErrInvalidSource marks a stockEvent whose `source` is present but not AUTO or MANUAL. Distinct
+// from a generic parse failure so a caller can tell "the JSON is fine, one tag is off" from "this is
+// not a stockEvent at all" — the former should cost one record, not a whole query window.
+var ErrInvalidSource = errors.New("invalid stockEvent source")
 
 // KeyStockEvent carries one completed 出入库 (stock in/out) record — a delivery into a tank or a
 // bulk withdrawal from it.
@@ -104,17 +110,29 @@ func (e StockEvent) MarshalTelemetry() ([]byte, error) {
 // ParseStockEvent reads a stock event out of a telemetry value, tolerating the same shapes as the
 // other event parsers (a decoded map off MQTT, a JSON string off ThingsBoard's REST/WebSocket).
 func ParseStockEvent(raw any) (StockEvent, error) {
+	// `source` is validated on the raw payload first, for two reasons. Only an *omitted* field means
+	// AUTO, and `"source":""` / `"source":null` both decode to the zero string, so presence cannot be
+	// read off the struct. And a non-string value (e.g. a number) would otherwise surface as a generic
+	// decode error instead of ErrInvalidSource.
+	//
+	// Rejected rather than passed through: an unknown source would reach API consumers as a third
+	// state they have no way to interpret, and "AUTO" is not a safe fallback — it would present an
+	// unrecognised record as machine-measured.
+	var probe struct {
+		Source json.RawMessage `json:"source"`
+	}
+	if err := decodeJSONValue(raw, &probe); err != nil {
+		return StockEvent{}, fmt.Errorf("%s: %w", KeyStockEvent, err)
+	}
+	if probe.Source != nil {
+		var src string
+		if err := json.Unmarshal(probe.Source, &src); err != nil || (src != SourceAuto && src != SourceManual) {
+			return StockEvent{}, fmt.Errorf("%s: %w: %s (want %q or %q)", KeyStockEvent, ErrInvalidSource, probe.Source, SourceAuto, SourceManual)
+		}
+	}
 	var e StockEvent
 	if err := decodeJSONValue(raw, &e); err != nil {
 		return StockEvent{}, fmt.Errorf("%s: %w", KeyStockEvent, err)
-	}
-	// Rejected rather than passed through: an unknown source would otherwise reach API consumers as
-	// a third state they have no way to interpret, and "AUTO" is not a safe fallback — it would
-	// present an unrecognised record as machine-measured.
-	switch e.Source {
-	case "", SourceAuto, SourceManual:
-	default:
-		return StockEvent{}, fmt.Errorf("%s: unknown source %q (want %q or %q)", KeyStockEvent, e.Source, SourceAuto, SourceManual)
 	}
 	return e, nil
 }

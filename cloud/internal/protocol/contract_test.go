@@ -2,6 +2,7 @@ package protocol_test
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -519,14 +520,23 @@ func TestParseTankCalibration_NullAttributesAreAbsent(t *testing.T) {
 }
 
 func TestParseStockEvent_Source(t *testing.T) {
-	for _, src := range []string{"", "AUTO", "MANUAL"} {
-		raw := `{"eventId":"in-1-1","direction":"IN","source":"` + src + `"}`
+	// Omitted means AUTO; AUTO and MANUAL spelled out are accepted.
+	for _, raw := range []string{
+		`{"eventId":"in-1-1","direction":"IN"}`,
+		`{"eventId":"in-1-1","direction":"IN","source":"AUTO"}`,
+		`{"eventId":"in-1-1","direction":"IN","source":"MANUAL"}`,
+	} {
 		if _, err := protocol.ParseStockEvent(raw); err != nil {
-			t.Errorf("source %q rejected: %v", src, err)
+			t.Errorf("%s rejected: %v", raw, err)
 		}
 	}
-	if _, err := protocol.ParseStockEvent(`{"eventId":"in-1-1","direction":"IN","source":"manual"}`); err == nil {
-		t.Error("lower-case/unknown source accepted; want a parse error")
+	// Present-but-wrong must not be read as omission (and so as machine-measured AUTO).
+	for _, src := range []string{`"manual"`, `"OTHER"`, `""`, `null`, `1`} {
+		raw := `{"eventId":"in-1-1","direction":"IN","source":` + src + `}`
+		_, err := protocol.ParseStockEvent(raw)
+		if !errors.Is(err, protocol.ErrInvalidSource) {
+			t.Errorf("source %s: err = %v, want ErrInvalidSource", src, err)
+		}
 	}
 }
 

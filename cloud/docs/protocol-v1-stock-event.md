@@ -208,7 +208,8 @@ stock:
 ### `source`：自动检测与人工补录（issue #15，未冻结）
 
 可选字段，取值 `AUTO`（缺省，设备不上报）或 `MANUAL`（`BuLuFragment` 补录）。云端 `/api/oil-in-out`
-对外始终带 `source`，缺省读成 `AUTO`；**其他取值按无法解析处理**（计入 `unparsable`，返回 502），
+对外始终带 `source`，仅**字段缺省**读成 `AUTO`；显式的 `""`、`null`、非字符串或 AUTO/MANUAL 以外的取值
+一律视为无效，该条记录被丢弃并计入响应的 `invalidSource`（不计入 `unparsable`，窗口其余记录照常返回 200），
 不会静默当作 `AUTO`。
 
 `MANUAL` 事件发生在断电/故障期间，没有实时探头快照：`begin/endLevelMm`、`begin/endTempC`、
