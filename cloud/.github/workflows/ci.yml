@@ -79,6 +79,8 @@ jobs:
             echo "bash -n $f"
             bash -n "$f"
           done
+      - name: 发布脚本失败回滚回归
+        run: python3 deploy/test-remote-deploy.py
       - name: Compose 可解析、缺密码会报错、危险端口只绑环回
         run: ./deploy/check-compose.sh
 

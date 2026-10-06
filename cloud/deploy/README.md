@@ -644,16 +644,27 @@ stock:
   2 倍余量，1,000/10,000 台仍是推导值。压测工具 `loadtest` 已随包分发，可在真实硬件上复跑。
 - **`preflight.sh` 只在 macOS 与 Linux 上试过**，未在国产化操作系统上验证。
 
-## 持续部署（测试/预发机）
+## 持续部署（生产）
 
-`.github/workflows/deploy.yml` 手动触发（Actions → Deploy → Run workflow，填 `image_tag`），经 SSH 把
-GHCR 上已构建的镜像部署到服务器：同步 Compose 文件与迁移 → 服务器上执行 `deploy/remote-deploy.sh`
-（改 `.env.prod` 的 `API_IMAGE`、拉取、`up -d`、轮询 `/healthz`，失败则回滚到上一个镜像）。
-不接受 `latest`。**迁移不会随回滚撤销**，所以迁移必须向后兼容上一个版本。
+生产 API 只监听宿主机 127.0.0.1:8080，由 HTTPS 反向代理对外提供服务。参考
+`deploy/nginx-api.conf.example`，先配置 ACME 验证和可信证书，再启用 HTTPS。设备 MQTT 使用独立的
+8883/TLS；ThingsBoard 原始遥测 TTL 保持 0，物理命令保持关闭，直到对应验收完成。
 
-一次性准备：
-1. 仓库 Settings → Environments 新建 `staging`（可加审批人），在其中设置 secrets：
-   `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PATH`（服务器上的部署目录）、`DEPLOY_SSH_KEY`（专用部署私钥）、
-   `DEPLOY_KNOWN_HOSTS`（`ssh-keyscan <host>` 在可信网络下取得的主机公钥行，不要让 CI 现场去扫）。
-2. 服务器上：`docker login ghcr.io`（令牌只需 `read:packages`），并在部署目录手工放好 `.env.prod`
-   （POSTGRES_PASSWORD、REDIS_PASSWORD、JWT_SECRET、TB_PASSWORD 等，密钥不经过 CI）。
+`.github/workflows/deploy.yml` 仅允许从 main 手动运行，输入完整 40 位 `release_sha`。
+工作流校验该提交属于 main，且同一提交最近的 main/push CI 和 Image 均成功；然后 checkout 该提交，
+固定镜像到 digest 并同步对应迁移。当前私有仓库计划不支持分支保护，因此不依赖尚未配置的 Environment
+审批或保护规则；不要为了部署公开仓库。
+
+仓库 Settings → Secrets and variables → Actions 配置 Repository Secrets：
+`DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PORT`（默认 22）、`DEPLOY_PATH`、`DEPLOY_SSH_KEY`、
+`DEPLOY_KNOWN_HOSTS`。SSH 主机公钥需从已核实的 SSH 连接登记。部署用户需要已有免密码 sudo 权限，
+脚本通过 sudo 调用 Docker，无需把用户加入 docker 组。CI 用专用密钥，勿复用运维个人密钥。
+
+首次安装需在服务器准备 `.env.prod`（权限 600）、MQTT 证书、PG/Redis/ThingsBoard 基础服务以及业务管理员。
+密钥只留服务器，`.env.prod` 不经过 CI。GHCR 包需要赋予此仓库 GitHub Actions 读取权限；工作流用本次
+`GITHUB_TOKEN` 临时登录服务器的 `.docker-ci`，结束后清理，无需在服务器长期保存个人 PAT。
+
+`remote-deploy.sh` 拉取失败不改变旧环境；每次发布显式执行迁移，然后切换 API，并同时检查运行镜像标识和
+限时健康请求。迁移、启动、健康检查失败返回失败并尝试恢复旧 API。回滚不执行数据库 down，schema 必须
+向后兼容；备份、首装、业务验收、ThingsBoard/TLS 检查独立进行。脚本使用 Linux flock 防止并发发布。
+回滚路径的无容器回归：`python3 deploy/test-remote-deploy.py`。

@@ -63,7 +63,7 @@ services:
     # distroless 镜像没有 shell 与 wget，容器内放不了 healthcheck；探活用外部请求 GET /healthz。
     ports:
       # 业务 API 对外端口。要加 HTTPS 就改成前置反向代理，并把这里收回到 127.0.0.1。
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       DATABASE_URL: postgres://yeweiyi:${POSTGRES_PASSWORD}@postgres:5432/yeweiyi?sslmode=disable
       REDIS_ADDR: redis:6379
@@ -73,6 +73,7 @@ services:
       TB_BASE_URL: http://thingsboard:9090
       TB_USERNAME: ${TB_USERNAME:-tenant@thingsboard.org}
       TB_PASSWORD: ${TB_PASSWORD:?生产部署必须设置 TB_PASSWORD}
+      ALLOW_PHYSICAL_COMMANDS: "false"
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -68,6 +68,6 @@ guard_ports() {  # $1=组合名  $2...=要检查的端口
 }
 guard_ports DEV  5432 6379 8081
 guard_ports TLS  5432 6379 8081 1884
-guard_ports PROD 5432 6379 8081 1884
+guard_ports PROD 5432 6379 8081 1884 8080
 
 exit "$fail"
