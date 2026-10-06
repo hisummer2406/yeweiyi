@@ -1,0 +1,10 @@
+.git
+.claude
+.github
+dist
+backups
+deploy
+docs
+openspec
+config.yaml
+*.md
