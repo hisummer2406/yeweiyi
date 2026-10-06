@@ -197,6 +197,19 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 			endMs = capMs
 		}
 
+		// Resolve the ThingsBoard device first: a device missing there must be a 404 whatever window
+		// was asked for — one that predates the assignment or the raw retention included — not a 200
+		// with no data. (The device record outlives its telemetry; only the points expire.)
+		if deps.TB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
+			return
+		}
+		dev, err := deps.TB.GetDeviceByName(ctx, device)
+		if err != nil {
+			writeThingsBoardError(c, err, device)
+			return
+		}
+
 		series := make(map[string][]historyPoint, len(fields))
 		for _, f := range fields {
 			series[f] = []historyPoint{}
@@ -249,16 +262,6 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 
 		// Newer part: ThingsBoard.
 		if rawStart := max(startMs, rawFromMs); rawStart < endMs {
-			if deps.TB == nil {
-				c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
-				return
-			}
-			// A device missing in ThingsBoard is a 404, not a 200 with an empty series.
-			dev, err := deps.TB.GetDeviceByName(ctx, device)
-			if err != nil {
-				writeThingsBoardError(c, err, device)
-				return
-			}
 			keys := make([]string, len(fields))
 			for i, f := range fields {
 				keys[i] = protocol.TankKey(tank, f)

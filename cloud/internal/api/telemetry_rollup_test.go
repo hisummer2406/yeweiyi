@@ -119,12 +119,16 @@ func TestRollup_MatchesDirectAggregationAndSurvivesTTL(t *testing.T) {
 		}
 	}
 
-	// The TTL: ThingsBoard loses the raw data (here, the device). Hourly still answers.
+	// The TTL: ThingsBoard loses the raw data but keeps the device. Simulated by deleting the device
+	// and registering it again empty. Hourly still answers.
 	dev, err := e.tb.GetDeviceByName(context.Background(), e.device)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := e.tb.DeleteDevice(context.Background(), dev.ID.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.tb.CreateDevice(context.Background(), e.device, dev.Type, ""); err != nil {
 		t.Fatal(err)
 	}
 	after := fetchHistory(t, e.testEnv, e.device, hourlyQuery(base, end, "1h", "avg"), http.StatusOK)
@@ -266,5 +270,57 @@ func TestRollup_HistoryIsClippedToTheCurrentCustomer(t *testing.T) {
 		if g := fmt.Sprint(seriesOf(got)); g != "[6 5]" {
 			t.Errorf("%s sees %s, want [6 5] (hours before H-6h belong to the previous owner)", role, g)
 		}
+	}
+}
+
+// TestRollup_HistoryOfADeviceMissingInThingsBoardIs404ForAnyWindow: a device that is in the business
+// database but not in ThingsBoard answers 404 even when the window is served entirely from rollups
+// or predates the assignment, so the answer does not depend on which window was asked for.
+func TestRollup_HistoryOfADeviceMissingInThingsBoardIs404ForAnyWindow(t *testing.T) {
+	e := newRollupEnv(t)
+	ctx := context.Background()
+	const ghost = "rollup-ghost-device"
+	t.Cleanup(func() { e.pool.Exec(ctx, `DELETE FROM devices WHERE device_name = $1`, ghost) })
+	if _, err := e.pool.Exec(ctx, `INSERT INTO devices (device_name, customer_id) VALUES ($1, `+defaultCustomerSQL+`)`, ghost); err != nil {
+		t.Fatal(err)
+	}
+	e.setRole("platform_admin")
+	e.withRetention(24 * time.Hour)
+
+	old := time.Now().UTC().Truncate(time.Hour).Add(-10 * 24 * time.Hour)
+	q := hourlyQuery(old, old.Add(2*time.Hour), "1h", "avg")
+	q.Set("device", ghost)
+	if rec := e.authed("GET", "/api/telemetry/history?"+q.Encode(), nil); rec.Code != http.StatusNotFound {
+		t.Errorf("window older than retention: status %d, want 404 (%s)", rec.Code, rec.Body.String())
+	}
+}
+
+// TestRollup_FirstPassReachesBeyondAnyFixedLookbackAndKeepsRemovedTanks: with the TTL off the raw data
+// can be arbitrarily old, and the unit may once have had more tanks than it reports now. A first pass
+// must summarise both, or the TTL would delete them unsummarised.
+func TestRollup_FirstPassReachesBeyondAnyFixedLookbackAndKeepsRemovedTanks(t *testing.T) {
+	e := newRollupEnv(t)
+	ctx := context.Background()
+	e.seedCompleteHours(t) // current tankCount is 1
+
+	old := time.Now().UTC().Truncate(time.Hour).Add(-20 * 24 * time.Hour).Add(10 * time.Minute)
+	postDeviceTelemetry(t, e.token, []byte(fmt.Sprintf(
+		`{"ts":%d,"values":{"tankCount":2,"tank2.oilLevelMm":321}}`, old.UnixMilli())))
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if _, err := e.job.RollupDevice(ctx, e.device, 0, 0); err != nil {
+			t.Fatal(err)
+		}
+		var n int
+		e.pool.QueryRow(ctx, `SELECT count(*) FROM telemetry_hourly WHERE device_name=$1 AND tank=2 AND hour_start=$2`,
+			e.device, old.Truncate(time.Hour)).Scan(&n)
+		if n > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the 20-day-old reading of the removed tank 2 was not summarised")
+		}
+		time.Sleep(300 * time.Millisecond)
 	}
 }

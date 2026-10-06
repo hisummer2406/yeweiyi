@@ -364,6 +364,15 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// A pass only summarises completed hours, and the oldest raw point it may still need is up to one
+	// interval plus one hour old by the time it runs. With less retention than that, ThingsBoard has
+	// already deleted the start of an hour before it is summarised, and the stored row is ragged.
+	if c.Telemetry.Retention < c.Telemetry.RollupInterval+Duration(time.Hour) {
+		return fmt.Errorf("telemetry.retention (%s) must be at least telemetry.rollupInterval (%s) plus one hour, "+
+			"otherwise raw telemetry expires before the hourly rollup has summarised it",
+			c.Telemetry.Retention, c.Telemetry.RollupInterval)
+	}
+
 	// A command whose acknowledgement window outlives its own validity can only ever be answered
 	// after it has already expired.
 	if c.Control.AckTimeout >= c.Control.CommandTTL {

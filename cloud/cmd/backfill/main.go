@@ -111,9 +111,6 @@ func main() {
 
 func runTelemetry(ctx context.Context, queries *db.Queries, tb *tbclient.Client, only string, fromMs int64) {
 	job := rollup.New(rollup.Config{TB: tb, Queries: queries, Logf: log.Printf})
-	if fromMs == 0 {
-		fromMs = time.Now().Add(-8 * 24 * time.Hour).UnixMilli()
-	}
 	names := []string{only}
 	if only == "" {
 		var err error

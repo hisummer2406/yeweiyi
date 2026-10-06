@@ -308,3 +308,15 @@ func TestStockLegacyFormatBefore(t *testing.T) {
 		}
 	})
 }
+
+// TestLoad_RejectsRetentionShorterThanOneRollupCycle: the rollup only writes completed hours, so
+// retention must outlast the interval plus an hour or raw data expires before it is summarised.
+func TestLoad_RejectsRetentionShorterThanOneRollupCycle(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	path := writeConfig(t, "telemetry:\n  retention: 2h\n  rollupInterval: 2h\n")
+
+	_, err := config.Load(path)
+	if err == nil || !strings.Contains(err.Error(), "telemetry.retention") {
+		t.Fatalf("retention == interval must be rejected naming telemetry.retention, got %v", err)
+	}
+}
