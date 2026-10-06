@@ -96,12 +96,31 @@ func TestTelemetryHistory_AggregatesAgainstRealThingsBoard(t *testing.T) {
 		return q
 	}
 
-	// Data is eventually visible through ThingsBoard's read path; wait for the last bucket.
+	wantAvg := func(i int) float64 {
+		lo, hi := float64(i*60), float64(i*60+60)
+		var sum, n float64
+		for m, v := range samples {
+			if m >= lo && m < hi {
+				sum += v
+				n++
+			}
+		}
+		return sum / n
+	}
+
+	// Data is eventually visible through ThingsBoard's read path. Wait until both buckets hold
+	// *all* their samples, not merely until both buckets exist: a bucket appears as soon as its
+	// first sample is readable, so on a slow machine a half-written hour would be read and
+	// compared against the full set.
 	var got historyBody
-	deadline := time.Now().Add(20 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		got = fetchHistory(t, env, device, query("1h", ""), http.StatusOK)
-		if len(got.Series[field]) == 2 || time.Now().After(deadline) {
+		pts := got.Series[field]
+		if len(pts) == 2 && math.Abs(pts[0].Value-wantAvg(0)) < 1e-9 && math.Abs(pts[1].Value-wantAvg(1)) < 1e-9 {
+			break
+		}
+		if time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(300 * time.Millisecond)
@@ -119,15 +138,7 @@ func TestTelemetryHistory_AggregatesAgainstRealThingsBoard(t *testing.T) {
 		t.Errorf("bucket times = %v, %v; want %v, %v", pts[0].Time, pts[1].Time, base, base.Add(time.Hour))
 	}
 	for i, p := range pts {
-		lo, hi := float64(i*60), float64(i*60+60)
-		var sum, n float64
-		for m, v := range samples {
-			if m >= lo && m < hi {
-				sum += v
-				n++
-			}
-		}
-		if want := sum / n; math.Abs(p.Value-want) > 1e-9 {
+		if want := wantAvg(i); math.Abs(p.Value-want) > 1e-9 {
 			t.Errorf("hour %d avg = %v, want %v computed from the seeded samples", i, p.Value, want)
 		}
 	}

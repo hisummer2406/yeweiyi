@@ -81,3 +81,53 @@ jobs:
           done
       - name: Compose 可解析、缺密码会报错、危险端口只绑环回
         run: ./deploy/check-compose.sh
+
+  # 集成测试：真实 PostgreSQL / Redis / ThingsBoard CE。这些测试在基础设施缺失时会自行 Skip，
+  # 而 Skip 在 CI 里等于“没测”却显示绿色，所以这里把任何 SKIP 都当成失败。
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: 安装 migrate（固定版本，与 sqlc-and-migrations 作业一致）
+        run: go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
+      - name: 启动 PostgreSQL / Redis / ThingsBoard
+        run: docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml up -d postgres redis thingsboard
+      - name: 等待就绪（ThingsBoard 首次启动要装 schema，2–4 分钟）
+        run: |
+          for i in $(seq 1 90); do
+            # 不能只探 /login 页面，也不能只看 curl 退出码：ThingsBoard 初始化到一半时，登录接口会
+            # 302 重定向到 /login（curl -f 只把 >=400 当失败，302 会被当成成功）。要求 200 且返回 token。
+            body="$(curl -s -m 5 -X POST http://localhost:8081/api/auth/login \
+                 -H 'Content-Type: application/json' \
+                 -d '{"username":"tenant@thingsboard.org","password":"tenant"}' || true)"
+            if printf '%s' "$body" | grep -q '"token"'; then
+              echo "ThingsBoard 就绪（${i}）"; exit 0
+            fi
+            sleep 5
+          done
+          echo "ThingsBoard 未在 450 秒内就绪" >&2
+          docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml logs --tail 80 thingsboard
+          exit 1
+      - name: 业务库迁移与 ThingsBoard 设备配置
+        run: |
+          migrate -database "$DATABASE_URL" -path db/migrations up
+          go run ./cmd/tbconfig apply
+      - name: 全量测试（串行）
+        run: |
+          set -o pipefail
+          go test ./... -p 1 -v 2>&1 | tee test.log
+      - name: 不允许有 Skip
+        run: |
+          if grep -E '^\s*--- SKIP' test.log; then
+            echo "存在被跳过的测试：基础设施没有真正跑起来，或有测试被悄悄禁用。" >&2
+            exit 1
+          fi
+      - name: 失败时输出 ThingsBoard 日志
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml logs --tail 120 thingsboard
