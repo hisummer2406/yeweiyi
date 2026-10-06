@@ -177,9 +177,11 @@ func TestTelemetryHistory_RejectsBadParameters(t *testing.T) {
 			q.Set("beginTime", "2026-01-02T00:00:00Z")
 			q.Set("endTime", "2026-01-01T00:00:00Z")
 		},
-		"window beyond 7 days": func(q url.Values) {
+		// Raw data is gone beyond the retention, so a sub-hour interval cannot be answered there.
+		"minute interval beyond the retention": func(q url.Values) {
+			q.Set("interval", "5m")
 			q.Set("beginTime", "2026-01-01T00:00:00Z")
-			q.Set("endTime", "2026-01-09T00:00:00Z")
+			q.Set("endTime", "2026-01-01T06:00:00Z")
 		},
 		"too many buckets": func(q url.Values) {
 			q.Set("interval", "1m")

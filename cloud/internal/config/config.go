@@ -90,6 +90,7 @@ type Config struct {
 	Control     Control     `yaml:"control"`
 	Ingest      Ingest      `yaml:"ingest"`
 	Stock       Stock       `yaml:"stock"`
+	Telemetry   Telemetry   `yaml:"telemetry"`
 }
 
 type Server struct {
@@ -157,6 +158,23 @@ type Ingest struct {
 	RecordReconcileLookback Duration `yaml:"recordReconcileLookback"`
 }
 
+// Telemetry covers continuous telemetry: how long ThingsBoard keeps it raw, and the hourly summaries
+// the business database keeps for good (issue #30).
+type Telemetry struct {
+	// Retention is how long ThingsBoard keeps raw 30-second telemetry — it must equal the
+	// deployment's TS_RETENTION_SECONDS (docs: deploy/README.md). /api/devices/:device/telemetry/history
+	// reads ThingsBoard for the part of a window newer than this and the hourly summaries for the
+	// rest, and refuses sub-hour intervals for the older part. Set it to the real retention even while
+	// the TTL is still off: it only decides where the API stops trusting raw data. Environment
+	// variable: TELEMETRY_RETENTION.
+	Retention Duration `yaml:"retention"`
+	// RollupInterval is how often the hourly rollup job runs. Environment: TELEMETRY_ROLLUP_INTERVAL.
+	RollupInterval Duration `yaml:"rollupInterval"`
+	// RollupRecompute is how far back every pass re-reads to pick up late replays from devices that
+	// were offline. Environment: TELEMETRY_ROLLUP_RECOMPUTE.
+	RollupRecompute Duration `yaml:"rollupRecompute"`
+}
+
 // Stock tunes the 出入库 (stock in/out) read-through endpoint.
 type Stock struct {
 	// LegacyFormatBefore is the instant at or after which every device on this deployment is
@@ -202,6 +220,11 @@ func Defaults() Config {
 
 			RecordReconcileInterval: Duration(10 * time.Minute),
 			RecordReconcileLookback: Duration(8 * 24 * time.Hour),
+		},
+		Telemetry: Telemetry{
+			Retention:       Duration(7 * 24 * time.Hour),
+			RollupInterval:  Duration(time.Hour),
+			RollupRecompute: Duration(48 * time.Hour),
 		},
 	}
 }
@@ -264,6 +287,9 @@ func (c *Config) applyEnv() error {
 		{"INGEST_RESUBSCRIBE_DELAY", &c.Ingest.ResubscribeDelay},
 		{"INGEST_RECORD_RECONCILE_INTERVAL", &c.Ingest.RecordReconcileInterval},
 		{"INGEST_RECORD_RECONCILE_LOOKBACK", &c.Ingest.RecordReconcileLookback},
+		{"TELEMETRY_RETENTION", &c.Telemetry.Retention},
+		{"TELEMETRY_ROLLUP_INTERVAL", &c.Telemetry.RollupInterval},
+		{"TELEMETRY_ROLLUP_RECOMPUTE", &c.Telemetry.RollupRecompute},
 	} {
 		v := os.Getenv(d.env)
 		if v == "" {
@@ -329,6 +355,9 @@ func (c *Config) Validate() error {
 		{"ingest.resubscribeDelay", c.Ingest.ResubscribeDelay},
 		{"ingest.recordReconcileInterval", c.Ingest.RecordReconcileInterval},
 		{"ingest.recordReconcileLookback", c.Ingest.RecordReconcileLookback},
+		{"telemetry.retention", c.Telemetry.Retention},
+		{"telemetry.rollupInterval", c.Telemetry.RollupInterval},
+		{"telemetry.rollupRecompute", c.Telemetry.RollupRecompute},
 	} {
 		if d.v <= 0 {
 			return fmt.Errorf("%s must be positive, got %s", d.name, d.v)

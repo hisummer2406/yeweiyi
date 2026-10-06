@@ -100,6 +100,8 @@ type Querier interface {
 	// 同一份重放不改变已有行。
 	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
 	InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error
+	// 该设备已汇总到的最后一个小时（毫秒）；从未汇总过返回 0。
+	LatestTelemetryHourStart(ctx context.Context, deviceName string) (int64, error)
 	ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAscParams) ([]ListAlarmEventsAscRow, error)
 	ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDescParams) ([]ListAlarmEventsDescRow, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
@@ -141,6 +143,8 @@ type Querier interface {
 	// 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
 	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
 	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
+	// [begin, end) 内每个字段的小时汇总，按时间升序。
+	ListTelemetryHourly(ctx context.Context, arg ListTelemetryHourlyParams) ([]ListTelemetryHourlyRow, error)
 	// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
 	// everyone else to their own customer.
 	ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User, error)
@@ -175,6 +179,8 @@ type Querier interface {
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	MarkRecordBackfill(ctx context.Context, deviceName string) error
+	// 该设备已汇总过的最大罐号；没有汇总返回 0。
+	MaxTelemetryHourlyTank(ctx context.Context, deviceName string) (int32, error)
 	// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
@@ -213,6 +219,9 @@ type Querier interface {
 	// 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
+	// 小时级汇总（迁移 000018，issue #30）。
+	// 幂等；只在样本数不少于已存值时覆盖（迟到的补投会增加样本，TTL 会减少样本，后者不能顶掉完整值）。
+	UpsertTelemetryHourly(ctx context.Context, arg UpsertTelemetryHourlyParams) error
 	// Only answers "is there a user_devices row". It is NOT an authorization check: it ignores the
 	// customer boundary and the role tiers. Every device-scoped handler must call UserMayAccessDevice.
 	UserDeviceBindingExists(ctx context.Context, arg UserDeviceBindingExistsParams) (bool, error)

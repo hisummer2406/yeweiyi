@@ -81,6 +81,17 @@ control:
   # 打开它不会绕过任何权限检查，只是让这些方法不再被整体拒绝。
   allowPhysicalCommands: false
 
+telemetry:
+  # ThingsBoard 保留原始 30 秒遥测多久，必须与部署的 TS_RETENTION_SECONDS 一致（issue #30）。
+  # 趋势接口对比它新的部分读 ThingsBoard，更早的部分读业务库的小时汇总，且更早部分不支持小于 1h 的粒度。
+  # TTL 尚未开启时也请填真实目标值：它只决定接口从哪里起不再信任原始数据。默认 "168h"（7 天）。
+  retention: "168h"
+  # 小时汇总任务的运行频率。默认 "1h"。
+  rollupInterval: "1h"
+  # 每次运行往回重算多久，用来吸收离线设备迟到的补投。默认 "48h"。
+  # 服务停机更久也不会留洞：每次运行至少从"已汇总的最后一小时之后"开始。
+  rollupRecompute: "48h"
+
 ingest:
   # 重新读取设备列表的频率，用于给新绑定的设备建立遥测订阅。默认 "30s"。
   # 调小 = 新设备更快开始被采集，代价是更频繁的数据库查询。
@@ -129,6 +140,9 @@ stock:
 #   INGEST_RESUBSCRIBE_DELAY         ingest.resubscribeDelay
 #   INGEST_RECORD_RECONCILE_INTERVAL ingest.recordReconcileInterval
 #   INGEST_RECORD_RECONCILE_LOOKBACK ingest.recordReconcileLookback
+#   TELEMETRY_RETENTION              telemetry.retention
+#   TELEMETRY_ROLLUP_INTERVAL        telemetry.rollupInterval
+#   TELEMETRY_ROLLUP_RECOMPUTE       telemetry.rollupRecompute
 #   STOCK_LEGACY_FORMAT_BEFORE       stock.legacyFormatBefore
 #
 # 未在此列出的项只能通过配置文件设置。

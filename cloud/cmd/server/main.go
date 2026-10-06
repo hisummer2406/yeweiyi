@@ -12,6 +12,7 @@ import (
 	"yeweiyi-cloud/internal/config"
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/ingest"
+	"yeweiyi-cloud/internal/rollup"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
 )
@@ -86,6 +87,15 @@ func main() {
 		})
 		go ingester.Run(ctx)
 
+		// Keeps the hourly telemetry summaries the business database holds for good (issue #30).
+		go rollup.New(rollup.Config{
+			TB:        tbClient,
+			Queries:   queries,
+			Interval:  cfg.Telemetry.RollupInterval.Std(),
+			Recompute: cfg.Telemetry.RollupRecompute.Std(),
+			Logf:      log.Printf,
+		}).Run(ctx)
+
 		// Closes out commands that passed their validity window without reaching a terminal state.
 		go controlSvc.RunExpirySweep(ctx, cfg.Control.ExpirySweepInterval.Std(), log.Printf)
 
@@ -110,6 +120,7 @@ func main() {
 		Control:   controlSvc,
 
 		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
+		TelemetryRetention:      cfg.Telemetry.Retention.Std(),
 	})
 
 	if cfg.Server.TLSCertFile != "" && cfg.Server.TLSKeyFile != "" {

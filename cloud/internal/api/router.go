@@ -36,6 +36,11 @@ type Deps struct {
 	// stock.go; zero means the fleet upgrade has not happened, so every unreadable record is
 	// current breakage.
 	StockLegacyFormatBefore time.Time
+
+	// TelemetryRetention is how long ThingsBoard keeps raw telemetry (config telemetry.retention).
+	// telemetry/history reads ThingsBoard for what is newer and the hourly summaries for what is
+	// older. Zero means the 7-day default.
+	TelemetryRetention time.Duration
 }
 
 func NewRouter(deps Deps) *gin.Engine {
