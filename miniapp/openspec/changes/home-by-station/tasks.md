@@ -39,4 +39,4 @@
 
 - [ ] 6.1 `npm run typecheck` 通过
 - [ ] 6.2 在 WeChat DevTools 连本地 yeweiyi-cloud 走一遍：登录、绑定、首页罐卡片、点进详情、下拉刷新；如实记录哪些没有验证
-- [ ] 6.3 更新 CLAUDE.md 的页面清单、tabBar 描述与"首页"一节，使其与实际一致
+- [x] 6.3 更新 CLAUDE.md 的页面清单、tabBar 描述与"首页"一节，使其与实际一致

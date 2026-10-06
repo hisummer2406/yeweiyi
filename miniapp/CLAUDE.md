@@ -18,6 +18,18 @@ None of this has been run inside WeChat DevTools or against a live `yeweiyi-clou
 typecheck` is clean, that's the extent of verification so far. Treat every screen as a first pass to
 replace, not a finished design.
 
+**Update 2026-10-07.** The screens were then restructured to follow the mini-program design draft
+(28 artboards, 750 wide; source PSD lives outside the repo and is gitignored — exported PNGs were
+compared on 2026-10-07, the 员工管理 artboard was not exported). Requirements and design decisions
+for new work now live in `openspec/` (see "Spec workflow" below), not in this file. Two things
+about the design draft are easy to get wrong:
+
+- It has **no** device-detail, command-issuing, or login screens — those exist because the cloud
+  needs them, and are a design gap to hand back to the designer, not a layout to preserve.
+- Several of its screens assume cloud capabilities that do not exist (see "Static design-draft
+  pages" below). Do not wire those up by guessing; the open questions are filed as
+  `yeweiyi-cloud#43 #44 #45` and `zhongchengyeweiyi#43`.
+
 ## What this project is
 
 The WeChat mini-program (微信小程序) frontend for **需求B（PC 端 / 小程序远程数据监控）** of
@@ -192,9 +204,49 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   unmapped value falls back to itself rather than rendering blank.
 - `types/api.d.ts` — hand-copied from `yeweiyi-cloud`'s handler/protocol structs. Re-diff before
   trusting it if time has passed.
-- `pages/` — `login` → `devices` (tabBar) → `device-detail` (in-page tabs: 实时数据/报警记录/
-  出入库记录/控制命令, plus the live-alarm banner from `AlarmSocket`) → `issue-command` (submits one
-  control command, raw-JSON args) → `profile` (tabBar: account, role, logout).
+- `utils/telemetry.ts` — telemetry snapshot → tank view-model and the "never reported" (404) test,
+  shared by the home page and `device-detail`. Pure, no `wx`.
+- `utils/bind.ts` — `wx.scanCode` → `POST /api/devices/bind`, shared by the home empty state and
+  `device-add`.
+- `utils/oilInOut.ts` — runtime guard for the `/api/oil-in-out` envelope and the "list is not
+  complete" notes (unparsable / legacySkipped / partial / truncated / invalidSource). Pure.
+- `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).
+- `pages/` — three tabBar tabs plus pushed pages:
+  - **首页 `devices`** (tabBar) — tank cards grouped by device: `GET /api/devices`, then one
+    `telemetry/latest` per device in parallel, each device succeeding/failing independently. No
+    station dropdown yet — the cloud has no station entity, so the header says "我的设备" rather than
+    faking one. "+" menu: 添加设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
+    in the back office with a password; there is no registration or invite in the mini-program.
+    Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
+    device, `yeweiyi-cloud#45`).
+  - **我的记录 `records`** (tabBar) — entry list; 报警/出库/入库 pick a device then open
+    `device-detail` on that tab; 交班/库存 have no cloud data and say so.
+  - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
+  - `login`, `device-add` (扫一扫), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
+    控制命令, plus the live-alarm banner from `AlarmSocket`; polls the command list every 3s while
+    any command is non-terminal), `issue-command` (one control command, raw-JSON args).
+
+## Static design-draft pages (not wired to the cloud — on purpose)
+
+`tank-config`, `tank-shape`, `calibration`, `backfill`, `record-settings`, `report-settings` are
+laid out from the design draft and say "暂未开放 / 云端没有对应接口" when saved. Do not make them
+send requests until the cloud side exists:
+
+- `config.setTank` / `config.setProbe` / `config.setAlarmThresholds` have method names but no
+  argument schema (`yeweiyi-cloud/docs/miniprogram-design-gaps.md` §1).
+- Calibration push, tank-table push, record clearing, report export, stock backfill, shift and
+  stock records have no cloud method or endpoint at all (same document §2).
+- Device configuration is meant to be **station-administrator only**, and the cloud has no such
+  role (`yeweiyi-cloud#44`). Do not stand in `customer_admin` for it.
+- `calibration` saves to the phone's own storage only; nothing it stores affects any display.
+
+## Spec workflow
+
+Requirements for new work live in `openspec/` (initialised 2026-10-07, schema `spec-driven`, zh-CN).
+`openspec/config.yaml` carries the project context and rules that every proposal must follow
+(the cloud owns the contract, specs do not copy cloud fields, the do-not-build list). Active change:
+`openspec/changes/home-by-station/` (home page by station, with its dependency on the cloud and the
+filed issues in `cloud-issues.md`). Use `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.
 
 ## What's explicitly NOT this project's problem
 

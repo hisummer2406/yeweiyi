@@ -45,10 +45,16 @@ miniprogram/
   types/api.d.ts             # 与 yeweiyi-cloud 手动对齐的响应类型
   pages/
     login/                    # 登录
-    devices/                  # 设备列表（tabBar）、扫码绑定
-    device-detail/             # 实时数据 / 报警记录 / 出入库记录 / 控制命令 四个内页 tab
-    issue-command/             # 发送一条控制命令
-    profile/                   # 账号信息、退出登录（tabBar）
+    devices/                  # 首页（tabBar）：按设备分组的罐卡片
+    records/                  # 我的记录（tabBar）：报警/出库/入库入口
+    more/                     # 设置（tabBar）：设置类页面入口、账号
+    device-add/               # 设备添加（扫码绑定）
+    device-detail/            # 实时数据 / 报警记录 / 出入库记录 / 控制命令 四个内页 tab
+    issue-command/            # 发送一条控制命令
+    profile/                  # 账号信息、退出登录
+    tank-config/ tank-shape/ calibration/ backfill/ record-settings/ report-settings/
+                              # 按设计稿做的静态页面，未接后端（云端没有对应接口，见 CLAUDE.md）
+openspec/                     # 需求与设计（OpenSpec），进行中的变更见 openspec/changes/
 ```
 
 ## 本地开发
@@ -68,10 +74,13 @@ DevTools「详情 → 本地设置」勾选「不校验合法域名…」，否�
 ## 现状
 
 - **代码已按 `yeweiyi-cloud` 当前的 ThingsBoard 单栈 API 重建完成**（2026-09-04），`npm run
-  typecheck` 通过。旧版（对着已删除的 Alink API 写的）已整体替换，细节见
-  `CLAUDE.md` 顶部的说明与 git 历史。
-- **尚未在 WeChat DevTools 或真实 `yeweiyi-cloud` 前实际跑过**——这是下一步，先于任何进一步开发。
+  typecheck` 通过。
+- 2026-10-07 起页面按小程序设计稿重排：首页改为按设备分组的罐卡片；需求与设计记录在
+  `openspec/`。云端缺油站实体、油站管理员权限、罐形状透出，对应 issue：
+  `yeweiyi-cloud#43 #44 #45`、`zhongchengyeweiyi#43`。
+- **尚未在 WeChat DevTools 或真实 `yeweiyi-cloud` 前实际跑过**，视觉也还没有与设计稿逐页对照。
 - 设备配对二维码的内容格式（`utils/pairing.ts`）是本仓库自行选定的占位实现，还没有跟设计物理
   标签的一方确认过。
-- 出入库/交班记录订正、油罐与探针配置下发，云端都还没有可用的接口设计，本仓库因此也没有对应
-  界面——不在这里替后端发明一个。
+- 设置类页面（储罐设置、罐表、校准、补录、记录/报表设置）只有界面，没有接后端；出入库/交班记录
+  订正、油罐与探针配置下发，云端都还没有可用的接口设计——不在这里替后端发明一个。
+- 账号只在后台创建并配置密码，小程序内不做注册与邀请。
