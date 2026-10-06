@@ -1,0 +1,64 @@
+name: Deploy
+
+# 手动触发：选一个已经构建好的镜像 tag，经 SSH 部署到测试/预发机。
+# 不自动部署：设备端联调与灰度流程还没定，没有人工确认就上线风险太高。
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "镜像 tag，如 sha-1234567 或 v1.0.0（不接受 latest）"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # 在仓库 Settings → Environments 里建 staging，可加审批人；下列 secrets 放在该环境下。
+    environment: staging
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}:${{ inputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 校验 tag
+        env:
+          TAG: ${{ inputs.image_tag }}
+        run: |
+          # 经 env 传入而不是直接插进脚本，避免 tag 里带 shell 元字符被执行。
+          case "$TAG" in
+            latest|"") echo "必须固定到具体 tag"; exit 1 ;;
+          esac
+          if ! printf '%s' "$TAG" | grep -Eq '^[A-Za-z0-9._-]+$'; then echo "tag 含非法字符"; exit 1; fi
+      - name: Compose 文件可解析
+        run: bash deploy/check-compose.sh
+      - name: 配置 SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          # 用预先登记的主机公钥，而不是 ssh-keyscan：后者每次都信任当时碰到的任何主机。
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: 同步部署文件
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          DIR: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          SSH="ssh -i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes"
+          tar -czf - docker-compose.yml docker-compose.prod.yml docker-compose.thingsboard.yml \
+            docker-compose.thingsboard-tls.yml db/migrations deploy/remote-deploy.sh \
+            | $SSH "$TARGET" "mkdir -p '$DIR' && tar -xzf - -C '$DIR'"
+      - name: 部署
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          DIR: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i "$HOME/.ssh/id_deploy" -o StrictHostKeyChecking=yes "$TARGET" \
+            "MIGRATIONS_DIR='$DIR/db/migrations' bash '$DIR/deploy/remote-deploy.sh' '$DIR' '$IMAGE'"

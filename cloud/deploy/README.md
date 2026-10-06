@@ -643,3 +643,17 @@ stock:
   [`../docs/capacity-test.md`](../docs/capacity-test.md)——小型私有化档（≤100 台）由此得到验证且有
   2 倍余量，1,000/10,000 台仍是推导值。压测工具 `loadtest` 已随包分发，可在真实硬件上复跑。
 - **`preflight.sh` 只在 macOS 与 Linux 上试过**，未在国产化操作系统上验证。
+
+## 持续部署（测试/预发机）
+
+`.github/workflows/deploy.yml` 手动触发（Actions → Deploy → Run workflow，填 `image_tag`），经 SSH 把
+GHCR 上已构建的镜像部署到服务器：同步 Compose 文件与迁移 → 服务器上执行 `deploy/remote-deploy.sh`
+（改 `.env.prod` 的 `API_IMAGE`、拉取、`up -d`、轮询 `/healthz`，失败则回滚到上一个镜像）。
+不接受 `latest`。**迁移不会随回滚撤销**，所以迁移必须向后兼容上一个版本。
+
+一次性准备：
+1. 仓库 Settings → Environments 新建 `staging`（可加审批人），在其中设置 secrets：
+   `DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PATH`（服务器上的部署目录）、`DEPLOY_SSH_KEY`（专用部署私钥）、
+   `DEPLOY_KNOWN_HOSTS`（`ssh-keyscan <host>` 在可信网络下取得的主机公钥行，不要让 CI 现场去扫）。
+2. 服务器上：`docker login ghcr.io`（令牌只需 `read:packages`），并在部署目录手工放好 `.env.prod`
+   （POSTGRES_PASSWORD、REDIS_PASSWORD、JWT_SECRET、TB_PASSWORD 等，密钥不经过 CI）。
