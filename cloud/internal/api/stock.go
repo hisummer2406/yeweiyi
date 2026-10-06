@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -133,6 +135,17 @@ type stockListResponse struct {
 	// the history rather than a fault. Reported rather than hidden, because the operator
 	// reconciling this window still needs to know the numbers are incomplete.
 	LegacySkipped int `json:"legacySkipped"`
+	// Folded counts superseded re-reports of an eventId already in the list (see foldByEventID).
+	// Not a fault; reported so a row count that differs from the raw telemetry count is explicable.
+	Folded int `json:"folded"`
+	// Truncated is true when more movements matched the window than `limit` allowed. Rows are
+	// ordered by `time` in the requested direction and cut from the far end.
+	Truncated bool `json:"truncated"`
+	// Partial is true when the scan for later corrections stopped at its safety cap, or when a
+	// record after the window could not be read (it may have been a correction). Every movement
+	// in the window is listed, but a correction generated far after it may not have been seen, so a
+	// figure could be stale.
+	Partial bool `json:"partial"`
 
 	// Only on the 502 path.
 	Error  string `json:"error,omitempty"`
@@ -174,6 +187,146 @@ func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
 	}
 }
 
+// stockRow is a parsed event plus the ThingsBoard envelope timestamp it arrived under.
+type stockRow struct {
+	ev protocol.StockEvent
+	// envTS is the telemetry envelope ts: when the device *generated* this report, preserved verbatim
+	// across offline replay (docs/protocol-v1-stock-event.md §3 makes that a hard requirement, and the
+	// legacy-cutoff logic below already depends on it). It orders revisions of one movement, rather
+	// than the payload's tsMs, because tsMs is the record-close time the API exposes as `time` and
+	// redefining it as a revision counter would be a one-sided change to the cross-repo contract.
+	envTS int64
+	// copies is how many reports of this eventId were read (1 when never re-sent).
+	copies int
+}
+
+// foldByEventID collapses re-reports of one movement into a single event. The device re-sends a
+// stockEvent under the same eventId when the operator later fills in duringDeliveryVolumeL, so the
+// raw telemetry holds two points for one delivery; listing both double-counts it against the
+// supplier. The copy with the greatest envelope ts wins (the correction is generated after the
+// original); on a tie the earlier-listed one stays, so the result is deterministic. Events with an
+// empty eventId are never folded: there is nothing to say they are the same movement.
+//
+// The survivors are then re-sorted by the movement's own close time (tsMs, the `time` the API
+// exposes) in the requested direction, so a corrected movement stays where it happened rather than
+// jumping to the end of the list because its correction was generated late. Replacing a copy in place
+// would otherwise leave it in the original's slot, out of order relative to events between the two.
+// The sort is stable, so equal times keep the order they were read in.
+func foldByEventID(rows []stockRow, asc bool) (out []stockRow, folded int) {
+	idx := make(map[string]int, len(rows))
+	out = make([]stockRow, 0, len(rows))
+	for _, r := range rows {
+		r.copies = 1
+		if r.ev.EventID == "" {
+			out = append(out, r)
+			continue
+		}
+		i, seen := idx[r.ev.EventID]
+		if !seen {
+			idx[r.ev.EventID] = len(out)
+			out = append(out, r)
+			continue
+		}
+		folded++
+		copies := out[i].copies + 1
+		if r.envTS > out[i].envTS {
+			out[i] = r
+		}
+		out[i].copies = copies
+	}
+	sort.SliceStable(out, func(a, b int) bool {
+		if asc {
+			return out[a].ev.TSMs < out[b].ev.TSMs
+		}
+		return out[a].ev.TSMs > out[b].ev.TSMs
+	})
+	return out, folded
+}
+
+// selectWindow keeps the folded movements whose close time lies in [beginMs, endMs), cuts them to
+// limit, and counts the duplicate reports folded into the movements that remain. The count is taken
+// after the cut so it describes the listed rows only, as the response documents; counting before it
+// would report folds hidden behind the limit.
+func selectWindow(rows []stockRow, beginMs, endMs int64, limit int) (listed []stockRow, folded int, truncated bool) {
+	for _, r := range rows {
+		if r.ev.TSMs >= beginMs && r.ev.TSMs < endMs {
+			listed = append(listed, r)
+		}
+	}
+	if len(listed) > limit {
+		listed, truncated = listed[:limit], true
+	}
+	for _, r := range listed {
+		folded += r.copies - 1
+	}
+	return listed, folded, truncated
+}
+
+// stockEnvelopeSkew widens the lower bound of the raw read. A movement is listed by its own close
+// time (tsMs), but ThingsBoard selects points by envelope ts, which the device stamps when it
+// generates the report; the two are the same instant in the normal case and may differ by device
+// clock slack. Reading a little before `begin` keeps a movement closing right at the boundary from
+// being missed on that account. Rows are re-filtered by tsMs afterwards, so the slack never widens
+// what is returned.
+const stockEnvelopeSkew = time.Hour
+
+// stockPageLimit and stockMaxPages bound one request's raw read so a misbehaving device cannot make
+// it unbounded. 10 × 5000 is a safety bound, not a measured capacity figure; nothing here claims it is
+// enough for any particular deployment. What happens when it is reached is decided by scanOutcome:
+// it must never make an old window permanently unreadable.
+const (
+	stockPageLimit = 5000
+	stockMaxPages  = 10
+)
+
+// scanOutcome interprets a raw read that stopped at the page cap (complete == false).
+//
+//   - The cap was hit before the read even reached the end of the window: the window itself holds
+//     more points than one request will scan, so its contents are incomplete. Narrowing the window
+//     fixes that, and the caller is told to (tooLarge).
+//   - The cap was hit at or past the window's end: everything in the window was read, and only some
+//     later corrections may be unseen. Answer anyway and say so (partial) — refusing would make
+//     history older than ~50,000 events unreachable no matter how small the window asked for.
+func scanOutcome(points []tbclient.TSValue, complete bool, endMs int64) (partial, tooLarge bool) {
+	if complete {
+		return false, false
+	}
+	if len(points) == 0 || points[len(points)-1].TS < endMs {
+		return false, true
+	}
+	return true, false
+}
+
+// readStockPoints returns every stockEvent point with envelope ts in [fromMs, toMs), oldest first,
+// paging through ThingsBoard's per-call limit.
+//
+// A movement is listed in the window containing its close time, but its later corrections are
+// generated — and stamped — after that, possibly past the window's end. Reading from `begin` to now,
+// rather than to `end`, is what lets the fold see the latest revision of every movement in the window
+// regardless of where the window ends, and regardless of how many unrelated points fall between a
+// report and its correction. There is deliberately no fixed look-ahead: any cutoff would be a
+// guess at how late an operator may confirm a delivery.
+func readStockPoints(ctx context.Context, tb *tbclient.Client, deviceID string, fromMs, toMs int64) (points []tbclient.TSValue, complete bool, err error) {
+	for page := 0; page < stockMaxPages; page++ {
+		series, err := tb.Timeseries(ctx, deviceID, tbclient.TimeseriesQuery{
+			Keys:    []string{protocol.KeyStockEvent},
+			StartMs: fromMs,
+			EndMs:   toMs,
+			Limit:   stockPageLimit,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+		pts := series[protocol.KeyStockEvent]
+		points = append(points, pts...)
+		if len(pts) < stockPageLimit {
+			return points, true, nil
+		}
+		fromMs = pts[len(pts)-1].TS + 1
+	}
+	return points, false, nil
+}
+
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p, ok := parseListParams(c)
@@ -202,15 +355,18 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		series, err := deps.TB.Timeseries(ctx, dev.ID.ID, tbclient.TimeseriesQuery{
-			Keys:       []string{protocol.KeyStockEvent},
-			StartMs:    p.begin.Time.UnixMilli(),
-			EndMs:      p.end.Time.UnixMilli(),
-			Limit:      int(p.limit),
-			Descending: !p.asc,
-		})
+		beginMs, endMs := p.begin.Time.UnixMilli(), p.end.Time.UnixMilli()
+		points, complete, err := readStockPoints(ctx, deps.TB, dev.ID.ID,
+			beginMs-stockEnvelopeSkew.Milliseconds(), time.Now().Add(stockEnvelopeSkew).UnixMilli())
 		if err != nil {
 			writeThingsBoardError(c, err, p.device)
+			return
+		}
+		partial, tooLarge := scanOutcome(points, complete, endMs)
+		if tooLarge {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "too many stock events inside the requested window; narrow beginTime/endTime",
+			})
 			return
 		}
 
@@ -219,13 +375,26 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			cutoffMs = deps.StockLegacyFormatBefore.UnixMilli()
 		}
 
-		points := series[protocol.KeyStockEvent]
-		out := make([]stockEventResponse, 0, len(points))
+		rows := make([]stockRow, 0, len(points))
 		unparsable, legacy := 0, 0
 		sample := ""
 		for _, pt := range points {
 			ev, err := protocol.ParseStockEvent(pt.Value)
 			if err != nil {
+				// The raw read reaches past the window to find corrections; an unreadable record
+				// there is not this window's to report.
+				if pt.TS < beginMs {
+					continue
+				}
+				// After the window it may be a correction of an in-window movement whose eventId
+				// cannot be read, so the listed row could be stale: say so rather than present the
+				// original as complete. Pre-upgrade records are a closed hole, not a suspect.
+				if pt.TS >= endMs {
+					if cutoffMs == 0 || pt.TS >= cutoffMs {
+						partial = true
+					}
+					continue
+				}
 				// pt.TS classifies it, and nothing else can: the payload of a pre-upgrade record
 				// and of a device that never upgraded are byte-identical.
 				//
@@ -263,7 +432,16 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			if ev.TSMs == 0 {
 				ev.TSMs = pt.TS
 			}
-			out = append(out, toStockEventResponse(ev))
+			rows = append(rows, stockRow{ev: ev, envTS: pt.TS})
+		}
+		// Fold first, then keep the movements whose close time (the `time` the API exposes) lies in the
+		// window: the latest revision of a movement is chosen across everything read, and membership
+		// is decided once, by the event's own time, so one delivery is listed in exactly one window.
+		rows, _ = foldByEventID(rows, p.asc)
+		listed, folded, truncated := selectWindow(rows, beginMs, endMs, int(p.limit))
+		out := make([]stockEventResponse, 0, len(listed))
+		for _, r := range listed {
+			out = append(out, toStockEventResponse(r.ev))
 		}
 
 		body := stockListResponse{
@@ -271,6 +449,9 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			Parsed:        len(out),
 			Unparsable:    unparsable,
 			LegacySkipped: legacy,
+			Folded:        folded,
+			Truncated:     truncated,
+			Partial:       partial,
 		}
 
 		if unparsable > 0 {

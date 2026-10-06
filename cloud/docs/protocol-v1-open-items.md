@@ -172,6 +172,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 | B-6 | `deviceTime` / `connectionState` 是否删除 | 建议都删：两个时间源必然有一天对不上；设备自报"我在线"没有信息量，离线时它正好发不出来 |
 | B-7 | 交班（`CommitWork`）是否纳入本期 | 两侧都没有上行通道。云端 `/api/shifts` 已删除，不是遗漏 |
 | B-8 | ThingsBoard 里已堆积的不可解析出入库记录如何处理 | 见 `protocol-v1-stock-event.md` §4.4 |
+| B-9 | `stockEvent` 补录后用同一 `eventId` 重发：重发的信封 `ts` 是否一定更晚、`eventId` 是否一定不变；是否需要显式 `revision` 字段 | 云端目前按信封 `ts` 折叠（issue #13，`protocol-v1-stock-event.md` "同一 `eventId` 可上报多次"），**暂行、未经 Android 确认**。决定人：Android 负责人 |
 
 ---
 

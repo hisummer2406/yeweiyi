@@ -41,6 +41,9 @@ type stockBody struct {
 	Parsed        int              `json:"parsed"`
 	Unparsable    int              `json:"unparsable"`
 	LegacySkipped int              `json:"legacySkipped"`
+	Folded        int              `json:"folded"`
+	Truncated     bool             `json:"truncated"`
+	Partial       bool             `json:"partial"`
 	Error         string           `json:"error"`
 	Code          string           `json:"code"`
 	Device        string           `json:"device"`
@@ -541,4 +544,223 @@ func TestListOilInOut_RecordWithoutAnEnvelopeTimestampCountsAsCurrent(t *testing
 			"on, an unreadable record must not be written off as history",
 			body.Unparsable, body.LegacySkipped)
 	}
+}
+
+// TestListOilInOut_ResentEventIsFoldedToTheLatest pins issue #13: the device re-sends a stockEvent
+// under the same eventId once the operator fills in duringDeliveryVolumeL. Both telemetry points
+// exist in ThingsBoard, but the delivery must be listed once, with the corrected figure.
+//
+// Both reports carry the SAME payload tsMs (the record-close time) and differ only in the envelope
+// ts, so this fails if the fold ever starts keying on tsMs — which is not a revision counter.
+func TestListOilInOut_ResentEventIsFoldedToTheLatest(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now().UnixMilli()
+	ev := protocol.StockEvent{
+		EventID:      fmt.Sprintf("in-1-%d", now),
+		Tank:         1,
+		Direction:    protocol.StockIn,
+		BeginTimeMs:  now - 3_600_000,
+		EndTimeMs:    now - 60_000,
+		BeginVolumeL: 6030.0,
+		EndVolumeL:   24030.0,
+		NetVolumeL:   18000.0,
+		TSMs:         now - 60_000,
+	}
+	post := func(envelopeTS int64, e protocol.StockEvent) {
+		payload, err := json.Marshal(map[string]any{
+			"ts": envelopeTS, "values": map[string]any{protocol.KeyStockEvent: e},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		postDeviceTelemetry(t, token, payload)
+	}
+	post(now-2000, ev)
+	ev.DuringDeliveryVolumeL = 420.0
+	post(now, ev)
+
+	path := "/api/oil-in-out?device=" + device + stockWindow
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		b := decodeStock(t, rec.Body.Bytes())
+		if b.Folded == 1 {
+			if len(b.Rows) != 1 {
+				t.Fatalf("rows = %d, want 1 after folding: %v", len(b.Rows), b.Rows)
+			}
+			if d, _ := b.Rows[0]["deliveredVolumeL"].(float64); d != 18420.0 {
+				t.Errorf("deliveredVolumeL = %v, want 18420 from the corrected re-send", d)
+			}
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatal("the re-sent event was never folded into one row")
+}
+
+// TestListOilInOut_CorrectionOutsideTheWindowIsStillResolved pins the boundary case: ThingsBoard
+// selects points by envelope ts, so a window that ends between a report and its later correction
+// would list the stale original, and the next window would list the corrected row again — one
+// delivery counted twice across a window boundary.
+func TestListOilInOut_CorrectionOutsideTheWindowIsStillResolved(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now()
+	original := now.Add(-50 * time.Hour)
+	correction := now.Add(-40 * time.Hour)
+	ev := protocol.StockEvent{
+		EventID:      fmt.Sprintf("in-1-%d", original.UnixMilli()),
+		Tank:         1,
+		Direction:    protocol.StockIn,
+		BeginTimeMs:  original.Add(-time.Hour).UnixMilli(),
+		EndTimeMs:    original.UnixMilli(),
+		BeginVolumeL: 6030.0,
+		EndVolumeL:   24030.0,
+		NetVolumeL:   18000.0,
+		TSMs:         original.UnixMilli(),
+	}
+	post := func(envelopeTS time.Time, e protocol.StockEvent) {
+		payload, err := json.Marshal(map[string]any{
+			"ts": envelopeTS.UnixMilli(), "values": map[string]any{protocol.KeyStockEvent: e},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		postDeviceTelemetry(t, token, payload)
+	}
+	post(original, ev)
+	ev.DuringDeliveryVolumeL = 420.0
+	post(correction, ev)
+
+	window := func(from, to time.Time) string {
+		return "/api/oil-in-out?device=" + device + "&beginTime=" + from.UTC().Format(time.RFC3339) +
+			"&endTime=" + to.UTC().Format(time.RFC3339)
+	}
+	get := func(path string, want func(stockBody) bool) stockBody {
+		var b stockBody
+		deadline := time.Now().Add(20 * time.Second)
+		for time.Now().Before(deadline) {
+			rec := env.authed("GET", path, nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+			}
+			if b = decodeStock(t, rec.Body.Bytes()); want(b) {
+				return b
+			}
+			time.Sleep(300 * time.Millisecond)
+		}
+		t.Fatalf("GET %s: never reached the expected state; last body %+v", path, b)
+		return b
+	}
+
+	// Window A holds only the original (50h ago); the correction (40h ago) lies after its end.
+	a := get(window(now.Add(-72*time.Hour), now.Add(-48*time.Hour)), func(b stockBody) bool { return len(b.Rows) == 1 && b.Folded == 1 })
+	if d, _ := a.Rows[0]["deliveredVolumeL"].(float64); d != 18420.0 {
+		t.Errorf("window ending before the correction: deliveredVolumeL = %v, want the corrected 18420", d)
+	}
+
+	// Window B holds only the correction (by report time). The movement closed in the earlier
+	// window, so it must not be listed a second time.
+	b := get(window(now.Add(-45*time.Hour), now.Add(-35*time.Hour)), func(stockBody) bool { return true })
+	if len(b.Rows) != 0 {
+		t.Errorf("window containing only the correction listed %d rows, want 0 (already counted in the earlier window): %v", len(b.Rows), b.Rows)
+	}
+}
+
+// TestListOilInOut_LimitCutsRowsNotRevisions pins that `limit` applies to movements, after the fold:
+// a correction sitting beyond the first `limit` raw points must still be applied to its original, and
+// a cut must be announced rather than silent.
+func TestListOilInOut_LimitCutsRowsNotRevisions(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now()
+	post := func(envelopeTS time.Time, e protocol.StockEvent) {
+		payload, err := json.Marshal(map[string]any{
+			"ts": envelopeTS.UnixMilli(), "values": map[string]any{protocol.KeyStockEvent: e},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		postDeviceTelemetry(t, token, payload)
+	}
+	mk := func(at time.Time, net float64) protocol.StockEvent {
+		return protocol.StockEvent{
+			EventID: fmt.Sprintf("in-1-%d", at.UnixMilli()), Tank: 1, Direction: protocol.StockIn,
+			BeginTimeMs: at.Add(-time.Hour).UnixMilli(), EndTimeMs: at.UnixMilli(),
+			NetVolumeL: net, TSMs: at.UnixMilli(),
+		}
+	}
+	first, second := mk(now.Add(-30*time.Hour), 1000), mk(now.Add(-29*time.Hour), 2000)
+	post(now.Add(-30*time.Hour), first)
+	post(now.Add(-29*time.Hour), second)
+	first.DuringDeliveryVolumeL = 500
+	post(now.Add(-1*time.Hour), first) // correction of the OLDER movement, generated last
+
+	path := "/api/oil-in-out?device=" + device + "&limit=1&beginTime=" +
+		now.Add(-48*time.Hour).UTC().Format(time.RFC3339) + "&endTime=" + now.Add(-10*time.Hour).UTC().Format(time.RFC3339)
+	// The three points become visible one by one, so poll until the whole expected state is there
+	// rather than asserting on the first response that happens to be truncated.
+	var last stockBody
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		last = decodeStock(t, rec.Body.Bytes())
+		// The default order is ascending by time, so the cut keeps the OLDER movement — and it must
+		// carry the correction that was generated after the newer one was read.
+		if last.Truncated && len(last.Rows) == 1 {
+			if d, _ := last.Rows[0]["deliveredVolumeL"].(float64); d == 1500.0 {
+				return
+			}
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("never reached truncated=true with the older movement corrected to 1500; last: %+v", last)
+}
+
+// TestListOilInOut_UnreadableRecordAfterTheWindowMarksItPartial pins that a malformed record after
+// the window (possibly a correction whose eventId cannot be read) neither fails the window nor
+// passes silently: the original is listed, flagged partial.
+func TestListOilInOut_UnreadableRecordAfterTheWindowMarksItPartial(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now()
+	original := now.Add(-50 * time.Hour)
+	publishStock(t, token, protocol.StockEvent{
+		EventID:      fmt.Sprintf("in-1-%d", original.UnixMilli()),
+		Tank:         1,
+		Direction:    protocol.StockIn,
+		BeginTimeMs:  original.Add(-time.Hour).UnixMilli(),
+		EndTimeMs:    original.UnixMilli(),
+		BeginVolumeL: 6030.0,
+		EndVolumeL:   24030.0,
+		NetVolumeL:   18000.0,
+		TSMs:         original.UnixMilli(),
+	})
+	postRawStockEvent(t, token, now.Add(-40*time.Hour).UnixMilli(), `{"eventId":`)
+
+	path := "/api/oil-in-out?device=" + device + "&beginTime=" + now.Add(-72*time.Hour).UTC().Format(time.RFC3339) +
+		"&endTime=" + now.Add(-48*time.Hour).UTC().Format(time.RFC3339)
+	var b stockBody
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		if b = decodeStock(t, rec.Body.Bytes()); len(b.Rows) == 1 && b.Partial {
+			if b.Unparsable != 0 {
+				t.Errorf("unparsable = %d, want 0 (outside the window)", b.Unparsable)
+			}
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("never saw 1 row with partial=true; last body %+v", b)
 }
