@@ -140,6 +140,25 @@ func (q *Queries) ListOnlineDeviceNames(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const markDevicesOfflineExcept = `-- name: MarkDevicesOfflineExcept :execrows
+UPDATE devices
+SET is_online = false,
+    last_offline_at = now(),
+    updated_at = now()
+WHERE is_online
+  AND NOT (device_name = ANY($1::text[]))
+`
+
+// ThingsBoard 里已经不存在的设备（被删除）不会再出现在列表里，只靠 SyncDeviceOnlineStatus 它们会
+// 永远停在在线。传入本轮在 ThingsBoard 看到的全部设备名，其余仍标记在线的一律置为离线。
+func (q *Queries) MarkDevicesOfflineExcept(ctx context.Context, seenNames []string) (int64, error) {
+	result, err := q.db.Exec(ctx, markDevicesOfflineExcept, seenNames)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const setDeviceCustomer = `-- name: SetDeviceCustomer :exec
 UPDATE devices SET customer_id = $2, updated_at = now() WHERE device_name = $1
 `
@@ -154,28 +173,31 @@ func (q *Queries) SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerPa
 	return err
 }
 
-const upsertDeviceOnlineStatus = `-- name: UpsertDeviceOnlineStatus :exec
-INSERT INTO devices (device_name, is_online, last_online_at, last_offline_at, updated_at)
-VALUES (
-    $1,
-    $2,
-    CASE WHEN $2::bool THEN now() ELSE NULL END,
-    CASE WHEN $2::bool THEN NULL ELSE now() END,
-    now()
-)
-ON CONFLICT (device_name) DO UPDATE SET
-    is_online = EXCLUDED.is_online,
-    last_online_at = COALESCE(EXCLUDED.last_online_at, devices.last_online_at),
-    last_offline_at = COALESCE(EXCLUDED.last_offline_at, devices.last_offline_at),
+const syncDeviceOnlineStatus = `-- name: SyncDeviceOnlineStatus :execrows
+UPDATE devices d
+SET is_online = s.active,
+    last_online_at  = CASE WHEN s.active THEN now() ELSE d.last_online_at END,
+    last_offline_at = CASE WHEN s.active THEN d.last_offline_at ELSE now() END,
     updated_at = now()
+FROM (
+    SELECT unnest($1::text[]) AS device_name,
+           unnest($2::bool[])      AS active
+) s
+WHERE d.device_name = s.device_name
+  AND d.is_online IS DISTINCT FROM s.active
 `
 
-type UpsertDeviceOnlineStatusParams struct {
-	DeviceName string `json:"device_name"`
-	IsOnline   bool   `json:"is_online"`
+type SyncDeviceOnlineStatusParams struct {
+	DeviceNames []string `json:"device_names"`
+	Actives     []bool   `json:"actives"`
 }
 
-func (q *Queries) UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error {
-	_, err := q.db.Exec(ctx, upsertDeviceOnlineStatus, arg.DeviceName, arg.IsOnline)
-	return err
+// 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
+// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
+func (q *Queries) SyncDeviceOnlineStatus(ctx context.Context, arg SyncDeviceOnlineStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, syncDeviceOnlineStatus, arg.DeviceNames, arg.Actives)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

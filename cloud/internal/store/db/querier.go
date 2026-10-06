@@ -178,6 +178,9 @@ type Querier interface {
 	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	// ThingsBoard 里已经不存在的设备（被删除）不会再出现在列表里，只靠 SyncDeviceOnlineStatus 它们会
+	// 永远停在在线。传入本轮在 ThingsBoard 看到的全部设备名，其余仍标记在线的一律置为离线。
+	MarkDevicesOfflineExcept(ctx context.Context, seenNames []string) (int64, error)
 	MarkRecordBackfill(ctx context.Context, deviceName string) error
 	// 该设备已汇总过的最大罐号；没有汇总返回 0。
 	MaxTelemetryHourlyTank(ctx context.Context, deviceName string) (int32, error)
@@ -201,8 +204,10 @@ type Querier interface {
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
 	SummarizeStockRejects(ctx context.Context, arg SummarizeStockRejectsParams) (SummarizeStockRejectsRow, error)
+	// 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
+	// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
+	SyncDeviceOnlineStatus(ctx context.Context, arg SyncDeviceOnlineStatusParams) (int64, error)
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
-	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
 	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
 	//

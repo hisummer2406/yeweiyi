@@ -415,3 +415,67 @@ func awaitStatus(t *testing.T, s *stack, commandID string, timeout time.Duration
 func uuidText(b [16]byte) string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
+
+// TestOnlineStatus_FollowsThingsBoardActive covers the field /api/devices serves as is_online. The
+// old writer died with the Alink stack, so for a while nothing set it and every device read offline.
+// The device is genuinely connected (newStack connects it), so ThingsBoard reports it active.
+func TestOnlineStatus_FollowsThingsBoardActive(t *testing.T) {
+	s := newStack(t, control.Config{})
+	ctx := context.Background()
+
+	online := func() (bool, bool) {
+		var on bool
+		var lastOn, lastOff *time.Time
+		if err := s.pool.QueryRow(ctx,
+			`SELECT is_online, last_online_at, last_offline_at FROM devices WHERE device_name = $1`, s.device).
+			Scan(&on, &lastOn, &lastOff); err != nil {
+			t.Fatalf("read device: %v", err)
+		}
+		return on, lastOn != nil && lastOff == nil
+	}
+
+	if on, _ := online(); on {
+		t.Fatal("a freshly seeded device must start offline")
+	}
+
+	// ThingsBoard flips `active` shortly after the device connects, not at the instant of connect.
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		s.ing.SyncOnlineForTest(ctx)
+		if on, _ := online(); on || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	on, stamped := online()
+	if !on {
+		t.Fatal("device is connected to ThingsBoard but is_online stayed false")
+	}
+	if !stamped {
+		t.Error("going online should set last_online_at and leave last_offline_at empty")
+	}
+
+	// Syncing again with nothing changed must not move the timestamps.
+	var before time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT last_online_at FROM devices WHERE device_name = $1`, s.device).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	s.ing.SyncOnlineForTest(ctx)
+	var after time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT last_online_at FROM devices WHERE device_name = $1`, s.device).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if !after.Equal(before) {
+		t.Errorf("last_online_at moved from %v to %v although nothing changed", before, after)
+	}
+
+	// A device deleted from ThingsBoard drops out of the listing and must not stay online forever.
+	if err := s.tb.DeleteDevice(ctx, s.tbDevID); err != nil {
+		t.Fatalf("delete device in ThingsBoard: %v", err)
+	}
+	s.ing.SyncOnlineForTest(ctx)
+	if on, _ := online(); on {
+		t.Error("device no longer exists in ThingsBoard but is still marked online")
+	}
+}

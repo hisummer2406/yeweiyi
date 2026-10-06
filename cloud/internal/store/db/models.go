@@ -132,11 +132,11 @@ type Customer struct {
 type Device struct {
 	// 设备名（阿里云 IoT deviceName），主键，MQTT topic 中的设备标识。
 	DeviceName string `json:"device_name"`
-	// 当前是否在线，由 isOline 事件（含遗嘱消息）更新。
+	// 当前是否在线，取自 ThingsBoard 的设备 active 标志，由 internal/ingest 定时同步。active 表示“不活动超时内有过活动”，设备掉线后要等超时（ThingsBoard 默认 10 分钟）才变为离线。
 	IsOnline bool `json:"is_online"`
-	// 最近一次上线时间。
+	// 最近一次观察到由离线变为在线的时刻，精度为同步间隔。
 	LastOnlineAt pgtype.Timestamptz `json:"last_online_at"`
-	// 最近一次离线时间。
+	// 最近一次观察到由在线变为离线的时刻，精度为同步间隔，且晚于设备真实掉线一个不活动超时。
 	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
 	// 该行最近一次更新时间。
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
@@ -255,7 +255,7 @@ type TelemetryHourly struct {
 	Tank int32 `json:"tank"`
 	// 字段名（protocol.AggregatableTankFields），不含 tankN. 前缀。
 	Field string `json:"field"`
-	// 整点小时起点（UTC，与 ThingsBoard 以 startTs 对齐的桶一致）。
+	// 整点小时起点（TIMESTAMPTZ，对齐到 UTC 整点；与 ThingsBoard 以 startTs 对齐的桶一致）。
 	HourStart pgtype.Timestamptz `json:"hour_start"`
 	AvgValue  float64            `json:"avg_value"`
 	MinValue  float64            `json:"min_value"`

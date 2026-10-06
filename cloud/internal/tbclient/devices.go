@@ -134,3 +134,44 @@ func (c *Client) GetDeviceCredentials(ctx context.Context, deviceID string) (Dev
 func (c *Client) DeleteDevice(ctx context.Context, deviceID string) error {
 	return c.do(ctx, http.MethodDelete, "/api/device/"+url.PathEscape(deviceID), nil, nil)
 }
+
+// deviceInfoPageSize is how many devices one deviceInfos page asks for. ThingsBoard caps page size
+// itself; this stays well under that while keeping a 10,000-device fleet to a handful of requests.
+const deviceInfoPageSize = 1000
+
+// DeviceActivity returns every tenant device's ThingsBoard `active` flag, keyed by device name.
+//
+// This is what the platform means by "online", and it is cheaper than asking per device: one
+// deviceInfos page answers a thousand devices. `active` is true while the device has shown activity
+// (a connect, telemetry, an attribute update) within the device profile's inactivity timeout, and
+// it only turns false once that timeout passes — so it lags a real disconnect by up to the timeout
+// (ThingsBoard's default is 10 minutes). Measured on 4.2.1.1: a device killed mid-stream was still
+// reported active a minute later.
+//
+// The result is all-or-nothing: an error on any page returns no map, so a caller never mistakes a
+// partial listing for the whole fleet and marks the missing devices offline.
+func (c *Client) DeviceActivity(ctx context.Context) (map[string]bool, error) {
+	out := map[string]bool{}
+	for page := 0; ; page++ {
+		q := url.Values{
+			"pageSize": {fmt.Sprint(deviceInfoPageSize)},
+			"page":     {fmt.Sprint(page)},
+		}
+		var resp struct {
+			Data []struct {
+				Name   string `json:"name"`
+				Active bool   `json:"active"`
+			} `json:"data"`
+			HasNext bool `json:"hasNext"`
+		}
+		if err := c.do(ctx, http.MethodGet, "/api/tenant/deviceInfos"+query(q), nil, &resp); err != nil {
+			return nil, fmt.Errorf("list device infos (page %d): %w", page, err)
+		}
+		for _, d := range resp.Data {
+			out[d.Name] = d.Active
+		}
+		if !resp.HasNext {
+			return out, nil
+		}
+	}
+}

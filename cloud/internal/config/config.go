@@ -156,6 +156,10 @@ type Ingest struct {
 	// RecordReconcileLookback is how far back each pass reads. It must cover the longest a device
 	// may stay offline before replaying its queue; it need not exceed ThingsBoard's retention.
 	RecordReconcileLookback Duration `yaml:"recordReconcileLookback"`
+	// OnlineStatusInterval is how often devices.is_online is re-synced from ThingsBoard's `active`
+	// flag. It only adds to ThingsBoard's own inactivity timeout (default 10 minutes), which is what
+	// really decides how late an offline device is noticed.
+	OnlineStatusInterval Duration `yaml:"onlineStatusInterval"`
 }
 
 // Telemetry covers continuous telemetry: how long ThingsBoard keeps it raw, and the hourly summaries
@@ -220,6 +224,7 @@ func Defaults() Config {
 
 			RecordReconcileInterval: Duration(10 * time.Minute),
 			RecordReconcileLookback: Duration(8 * 24 * time.Hour),
+			OnlineStatusInterval:    Duration(30 * time.Second),
 		},
 		Telemetry: Telemetry{
 			Retention:       Duration(7 * 24 * time.Hour),
@@ -287,6 +292,7 @@ func (c *Config) applyEnv() error {
 		{"INGEST_RESUBSCRIBE_DELAY", &c.Ingest.ResubscribeDelay},
 		{"INGEST_RECORD_RECONCILE_INTERVAL", &c.Ingest.RecordReconcileInterval},
 		{"INGEST_RECORD_RECONCILE_LOOKBACK", &c.Ingest.RecordReconcileLookback},
+		{"INGEST_ONLINE_STATUS_INTERVAL", &c.Ingest.OnlineStatusInterval},
 		{"TELEMETRY_RETENTION", &c.Telemetry.Retention},
 		{"TELEMETRY_ROLLUP_INTERVAL", &c.Telemetry.RollupInterval},
 		{"TELEMETRY_ROLLUP_RECOMPUTE", &c.Telemetry.RollupRecompute},
@@ -355,6 +361,7 @@ func (c *Config) Validate() error {
 		{"ingest.resubscribeDelay", c.Ingest.ResubscribeDelay},
 		{"ingest.recordReconcileInterval", c.Ingest.RecordReconcileInterval},
 		{"ingest.recordReconcileLookback", c.Ingest.RecordReconcileLookback},
+		{"ingest.onlineStatusInterval", c.Ingest.OnlineStatusInterval},
 		{"telemetry.retention", c.Telemetry.Retention},
 		{"telemetry.rollupInterval", c.Telemetry.RollupInterval},
 		{"telemetry.rollupRecompute", c.Telemetry.RollupRecompute},

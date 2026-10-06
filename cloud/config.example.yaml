@@ -106,6 +106,10 @@ ingest:
   # 业务库里一条记录都没有的设备（首次接管）会自动从头全量回补，不受此限制；
   # 已有记录的设备要补更早的历史，用 `go run ./cmd/backfill`。
   recordReconcileLookback: "192h"
+  # 设备在线状态（devices.is_online，小程序设备页用）从 ThingsBoard 的设备 active 标志定时同步。默认 "30s"。
+  # active 表示"不活动超时内有过活动"，设备掉线后要等 ThingsBoard 的不活动超时（默认 10 分钟，可在
+  # 设备配置文件里改）才变为离线；这里只决定在那之上再多等多久，调小不能让离线判定比超时更快。
+  onlineStatusInterval: "30s"
 
 stock:
   # 出入库记录的"设备固件已升级"时间点，RFC3339 且必须带时区偏移。默认不设置。
@@ -140,6 +144,7 @@ stock:
 #   INGEST_RESUBSCRIBE_DELAY         ingest.resubscribeDelay
 #   INGEST_RECORD_RECONCILE_INTERVAL ingest.recordReconcileInterval
 #   INGEST_RECORD_RECONCILE_LOOKBACK ingest.recordReconcileLookback
+#   INGEST_ONLINE_STATUS_INTERVAL    ingest.onlineStatusInterval
 #   TELEMETRY_RETENTION              telemetry.retention
 #   TELEMETRY_ROLLUP_INTERVAL        telemetry.rollupInterval
 #   TELEMETRY_ROLLUP_RECOMPUTE       telemetry.rollupRecompute

@@ -53,6 +53,10 @@ type Config struct {
 	// as far as the longest a device can sit offline before replaying, and should not exceed
 	// ThingsBoard's own retention. Defaults to 8 days (one day more than the 7-day telemetry TTL).
 	RecordReconcileLookback time.Duration
+	// OnlineStatusInterval is how often devices.is_online is re-synced from ThingsBoard's `active`
+	// flag. Defaults to 30s. It cannot make detection faster than ThingsBoard's own inactivity
+	// timeout, only shorten the extra delay on top of it.
+	OnlineStatusInterval time.Duration
 
 	Logf func(format string, args ...any)
 }
@@ -79,6 +83,9 @@ func New(cfg Config) *Ingester {
 	if cfg.RecordReconcileLookback <= 0 {
 		cfg.RecordReconcileLookback = 8 * 24 * time.Hour
 	}
+	if cfg.OnlineStatusInterval <= 0 {
+		cfg.OnlineStatusInterval = 30 * time.Second
+	}
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
@@ -87,6 +94,7 @@ func New(cfg Config) *Ingester {
 
 // Run keeps subscriptions in sync with the device list until ctx ends.
 func (i *Ingester) Run(ctx context.Context) {
+	go i.onlineLoop(ctx)
 	i.sync(ctx)
 
 	ticker := time.NewTicker(i.cfg.DeviceRefreshInterval)

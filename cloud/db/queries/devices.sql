@@ -4,20 +4,30 @@
 -- — handlers call this first so the FK insert doesn't fail.
 INSERT INTO devices (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING;
 
--- name: UpsertDeviceOnlineStatus :exec
-INSERT INTO devices (device_name, is_online, last_online_at, last_offline_at, updated_at)
-VALUES (
-    sqlc.arg(device_name),
-    sqlc.arg(is_online),
-    CASE WHEN sqlc.arg(is_online)::bool THEN now() ELSE NULL END,
-    CASE WHEN sqlc.arg(is_online)::bool THEN NULL ELSE now() END,
-    now()
-)
-ON CONFLICT (device_name) DO UPDATE SET
-    is_online = EXCLUDED.is_online,
-    last_online_at = COALESCE(EXCLUDED.last_online_at, devices.last_online_at),
-    last_offline_at = COALESCE(EXCLUDED.last_offline_at, devices.last_offline_at),
-    updated_at = now();
+-- name: SyncDeviceOnlineStatus :execrows
+-- 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
+-- 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
+UPDATE devices d
+SET is_online = s.active,
+    last_online_at  = CASE WHEN s.active THEN now() ELSE d.last_online_at END,
+    last_offline_at = CASE WHEN s.active THEN d.last_offline_at ELSE now() END,
+    updated_at = now()
+FROM (
+    SELECT unnest(sqlc.arg(device_names)::text[]) AS device_name,
+           unnest(sqlc.arg(actives)::bool[])      AS active
+) s
+WHERE d.device_name = s.device_name
+  AND d.is_online IS DISTINCT FROM s.active;
+
+-- name: MarkDevicesOfflineExcept :execrows
+-- ThingsBoard 里已经不存在的设备（被删除）不会再出现在列表里，只靠 SyncDeviceOnlineStatus 它们会
+-- 永远停在在线。传入本轮在 ThingsBoard 看到的全部设备名，其余仍标记在线的一律置为离线。
+UPDATE devices
+SET is_online = false,
+    last_offline_at = now(),
+    updated_at = now()
+WHERE is_online
+  AND NOT (device_name = ANY(sqlc.arg(seen_names)::text[]));
 
 -- name: GetDevice :one
 SELECT * FROM devices WHERE device_name = $1;

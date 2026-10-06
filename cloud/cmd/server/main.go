@@ -83,6 +83,7 @@ func main() {
 
 			RecordReconcileInterval: cfg.Ingest.RecordReconcileInterval.Std(),
 			RecordReconcileLookback: cfg.Ingest.RecordReconcileLookback.Std(),
+			OnlineStatusInterval:    cfg.Ingest.OnlineStatusInterval.Std(),
 			Logf:                    log.Printf,
 		})
 		go ingester.Run(ctx)
