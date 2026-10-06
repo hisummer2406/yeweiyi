@@ -49,10 +49,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: 安装 sqlc 与 migrate
+      # 版本固定：@latest 会让某天 sqlc 一升级，没人改过任何代码 CI 就变红（或悄悄生成不同的输出）。
+      # sqlc 与本地生成输出的版本一致；migrate 与 deploy/images.txt、docker-compose.prod.yml 里的镜像一致。
+      # 要升级就改这里，并在同一个提交里重新生成 internal/store/db。
+      - name: 安装 sqlc 与 migrate（固定版本）
         run: |
-          go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-          go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+          go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
       - name: sqlc 输出必须与提交一致
         run: |
           sqlc generate
@@ -62,3 +65,19 @@ jobs:
           migrate -database "$DB_URL" -path db/migrations up
           migrate -database "$DB_URL" -path db/migrations down -all
           migrate -database "$DB_URL" -path db/migrations up
+
+  # 部署文件：生产 Compose 曾经根本解析不了，端口隔离也曾被叠加文件悄悄撤销。
+  # 这里不启动任何容器，只检查配置本身。
+  deploy-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose version
+      - name: 部署脚本语法
+        run: |
+          for f in deploy/*.sh; do
+            echo "bash -n $f"
+            bash -n "$f"
+          done
+      - name: Compose 可解析、缺密码会报错、危险端口只绑环回
+        run: ./deploy/check-compose.sh

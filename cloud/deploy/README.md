@@ -34,6 +34,11 @@ tar -xzf yeweiyi-offline-<版本>.tar.gz && cd yeweiyi-offline-<版本>
 ./preflight.sh          # 端口、内存、磁盘、Docker 版本；只读不改
 ./offline-load.sh       # 校验 SHA256SUMS 后导入镜像，全程不联网
 
+# 业务 API 镜像随包导入，tag 记在包内 api-image.env。用容器方式部署时，把它并入 .env.prod，
+# 并让 migrate 服务读到包内的迁移目录（离线包里叫 migrations，不是 db/migrations）：
+cat api-image.env >> .env.prod
+echo 'MIGRATIONS_DIR=./migrations' >> .env.prod
+
 # 选一档规格（见 profiles/）
 docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
                -f profiles/small.yml up -d
@@ -261,6 +266,10 @@ docker compose --env-file .env.prod \
 > 再改 `.env.prod` 和 `DATABASE_URL`。Redis 没有这个问题：密码在每次启动时读取。
 
 ### 端口隔离必须在目标机器上实测
+
+仓库里有一个自动检查：`./deploy/check-compose.sh`（需要 docker compose 与 jq，CI 每次都跑）。它校验各种
+Compose 组合能解析、生产叠加缺任何必填凭据会报错、5432/6379/8081/1884 只绑 `127.0.0.1`。**它只检查配置
+文件，不能代替下面在目标机器上的实测**——宿主机防火墙、云厂商安全组、别的 Compose 项目都不在它的视野里。
 
 不要用文件里的注释证明隔离：Compose 对 `ports` 是**追加**合并，叠加文件很容易悄悄撤销或重复。上线前：
 
@@ -553,7 +562,8 @@ docker compose down -v
 ./deploy/offline-bundle.sh          # 产出 dist/yeweiyi-offline-<版本>.tar.gz
 ```
 
-按 `images.txt` 拉取镜像并**逐个校验摘要**后导出；摘要不符即中止 —— tag 可以被重新推送指向
+打包时必须设置 `API_IMAGE=ghcr.io/…:<具体 tag>`（不接受 latest；GHCR 包默认私有，需先 `docker login ghcr.io`），
+脚本拉取后把实际摘要写进**包内**的 `images.txt`。其余镜像按 `images.txt` 拉取并**逐个校验摘要**后导出；摘要不符即中止 —— tag 可以被重新推送指向
 不同内容，摘要不符意味着打进包里的东西和清单声称的不是同一个。同时静态编译
 `server`/`smoke`/`tbdevicesim`/`tbconfig`/`loadtest`/`backfill` 六个 Linux 二进制（`backfill` 用于
 开启 TTL 前的回补），内网侧不需要 Go 工具链。
