@@ -141,16 +141,14 @@ func TestListOilInOut_SurfacesManualSource(t *testing.T) {
 	env, _, device, token := newStockEnv(t)
 
 	now := time.Now().UnixMilli()
-	sent := publishStock(t, token, protocol.StockEvent{
-		EventID:     fmt.Sprintf("in-1-%d", now),
-		Tank:        1,
-		Direction:   protocol.StockIn,
-		BeginTimeMs: now - 3_600_000,
-		EndTimeMs:   now,
-		NetVolumeL:  1000.0,
-		Source:      protocol.SourceManual,
-		TSMs:        now,
-	})
+	// Hand-written wire JSON, not MarshalTelemetry: otherwise a wrong `source` tag or representation
+	// would change producer and parser in lockstep and this test would still pass.
+	eventID := fmt.Sprintf("in-1-%d", now)
+	postDeviceTelemetry(t, token, []byte(fmt.Sprintf(
+		`{"ts":%d,"values":{"stockEvent":{"eventId":%q,"tank":1,"direction":"IN",`+
+			`"beginTimeMs":%d,"endTimeMs":%d,"netVolumeL":1000.0,"source":"MANUAL","tsMs":%d}}}`,
+		now, eventID, now-3_600_000, now, now)))
+	sent := protocol.StockEvent{EventID: eventID}
 
 	path := "/api/oil-in-out?device=" + device + "&beginTime=2020-01-01T00:00:00Z&endTime=2030-01-01T00:00:00Z"
 

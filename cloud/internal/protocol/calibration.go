@@ -76,10 +76,11 @@ func ParseTankCalibration(attrs map[string]any, tankIndex int) (TankCalibration,
 // validateCalibrationCurve rejects a curve a lookup could not interpolate over: every value must be
 // finite and non-negative, heights strictly ascending (the device builds a 1cm-step table, so a
 // repeat or reversal is corruption), and volume non-decreasing (a taller liquid column never holds
-// less oil). An empty pair is rejected too — a published-but-empty table is a device bug.
+// less oil). Fewer than two points is rejected too — an empty or one-entry table cannot be
+// interpolated and is a device bug (or a partial publish), not a usable curve.
 func validateCalibrationCurve(heights, volumes []float64) error {
-	if len(heights) == 0 {
-		return fmt.Errorf("calibration curve is empty")
+	if len(heights) < 2 {
+		return fmt.Errorf("calibration curve has %d point(s), need at least 2 to interpolate", len(heights))
 	}
 	for i := range heights {
 		for _, v := range []float64{heights[i], volumes[i]} {

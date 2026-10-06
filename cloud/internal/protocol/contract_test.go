@@ -490,6 +490,7 @@ func TestParseTankCalibration_RejectsMalformedCurves(t *testing.T) {
 		"decreasing volume":  {[]any{0.0, 500.0, 1000.0}, []any{0.0, 9.0, 5.0}},
 		"negative volume":    {[]any{0.0, 500.0}, []any{-1.0, 5.0}},
 		"empty":              {[]any{}, []any{}},
+		"single point":       {[]any{500.0}, []any{100.0}},
 		// null 元素不能被当成 0：否则 [0,null,500] 会静默变成合法曲线。
 		"null height element": {[]any{0.0, nil, 500.0}, []any{0.0, 1.0, 2.0}},
 		"null volume element": {[]any{0.0, 250.0, 500.0}, []any{0.0, nil, 2.0}},
