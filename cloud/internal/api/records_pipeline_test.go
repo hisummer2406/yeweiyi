@@ -280,6 +280,15 @@ func TestRecords_FullBackfillMarkerIsWrittenOnlyByAFullPass(t *testing.T) {
 	env, _, device, _ := newStockEnv(t)
 	ctx := context.Background()
 
+	// newStockEnv started the live ingest, whose own initial full pass writes this marker in the
+	// background. If we delete the marker while that pass is still running it writes it back after
+	// our DELETE and the "partial pass left the marker" check below fails — which only shows on a
+	// slow machine. Let that pass finish first, so what we observe afterwards is only our own calls.
+	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
+		if done, err := env.queries.HasRecordBackfill(ctx, device); err == nil && done {
+			break
+		}
+	}
 	if _, err := env.pool.Exec(ctx, `DELETE FROM record_backfills WHERE device_name = $1`, device); err != nil {
 		t.Fatalf("clear marker: %v", err)
 	}
