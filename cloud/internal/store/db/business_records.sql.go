@@ -57,8 +57,9 @@ func (q *Queries) InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventPara
 }
 
 const insertRecordReject = `-- name: InsertRecordReject :exec
-INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw, customer_id)
+VALUES ($1, $2, $3, $4, $5,
+        (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT))
 ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING
 `
 
@@ -314,10 +315,12 @@ SELECT
               WHERE r.kind = 'stock' AND r.device_name = $2 AND r.reason = 'unparsable'
                 AND r.env_ts >= $3 AND r.env_ts < $4
                 AND NOT ($1::BIGINT > 0 AND r.env_ts < $1::BIGINT)
+                AND r.customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
               ORDER BY r.env_ts ASC, r.id ASC LIMIT 1), '')::TEXT AS sample
 FROM record_rejects
 WHERE kind = 'stock' AND device_name = $2
   AND env_ts >= $3 AND env_ts < $4
+  AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
 `
 
 type SummarizeStockRejectsParams struct {

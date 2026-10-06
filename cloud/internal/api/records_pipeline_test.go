@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"yeweiyi-cloud/internal/api"
+	"yeweiyi-cloud/internal/ingest"
 	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/tbclient"
 )
@@ -246,6 +248,9 @@ func TestRecords_OwnershipIsStampedAtIngestNotInferredFromDeviceClock(t *testing
 		t.Fatalf("create customer: %v", err)
 	}
 	t.Cleanup(func() {
+		for _, table := range []string{"stock_events", "alarm_events", "record_rejects"} {
+			env.pool.Exec(ctx, `DELETE FROM `+table+` WHERE device_name = $1`, device)
+		}
 		env.pool.Exec(ctx, `UPDATE devices SET customer_id = `+defaultCustomerSQL+` WHERE device_name = $1`, device)
 		env.pool.Exec(ctx, `DELETE FROM customers WHERE id = $1`, newCustomer)
 	})
@@ -289,5 +294,78 @@ func TestRecords_FullBackfillMarkerIsWrittenOnlyByAFullPass(t *testing.T) {
 	}
 	if done, err := env.queries.HasRecordBackfill(ctx, device); err != nil || !done {
 		t.Fatalf("a full pass left no marker (done=%v err=%v)", done, err)
+	}
+}
+
+// TestRecords_PartialUntilInitialBackfillCompletes: without the completion marker the stored history
+// may be only what arrived live, so oil-in-out says partial and alarms carry X-Records-Partial.
+func TestRecords_PartialUntilInitialBackfillCompletes(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+	ctx := context.Background()
+	alarmsPath := "/api/alarms?device=" + device + "&beginTime=2020-01-01T00:00:00Z&endTime=2030-01-01T00:00:00Z"
+
+	// The env's ingester finishes its first full pass on its own; wait for the marker.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if done, _ := env.queries.HasRecordBackfill(ctx, device); done {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("initial backfill never completed")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if b := decodeStock(t, env.authed("GET", stockPath(device), nil).Body.Bytes()); b.Partial {
+		t.Error("partial after the backfill completed")
+	}
+	if h := env.authed("GET", alarmsPath, nil).Header().Get("X-Records-Partial"); h != "" {
+		t.Errorf("X-Records-Partial=%q after the backfill completed", h)
+	}
+
+	if _, err := env.pool.Exec(ctx, `DELETE FROM record_backfills WHERE device_name = $1`, device); err != nil {
+		t.Fatalf("clear marker: %v", err)
+	}
+	if b := decodeStock(t, env.authed("GET", stockPath(device), nil).Body.Bytes()); !b.Partial {
+		t.Error("not partial while the initial backfill is pending")
+	}
+	if h := env.authed("GET", alarmsPath, nil).Header().Get("X-Records-Partial"); h != "true" {
+		t.Errorf("X-Records-Partial=%q while the backfill is pending, want true", h)
+	}
+}
+
+// TestRecords_RejectsFollowTheirOwnersToo: an unreadable record the previous owner's device made must
+// not surface as the new owner's sample or count, whatever timestamp it carries.
+func TestRecords_RejectsFollowTheirOwnersToo(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	if err := ingest.SaveStockEvent(ctx, env.queries, device, now.Add(-time.Minute).UnixMilli(), "not json: old owner secret"); err != nil {
+		t.Fatalf("save reject: %v", err)
+	}
+	var newCustomer int64
+	if err := env.pool.QueryRow(ctx, `INSERT INTO customers (name) VALUES ($1) RETURNING id`, "rej-"+device).Scan(&newCustomer); err != nil {
+		t.Fatalf("create customer: %v", err)
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"stock_events", "alarm_events", "record_rejects"} {
+			env.pool.Exec(ctx, `DELETE FROM `+table+` WHERE device_name = $1`, device)
+		}
+		env.pool.Exec(ctx, `UPDATE devices SET customer_id = `+defaultCustomerSQL+` WHERE device_name = $1`, device)
+		env.pool.Exec(ctx, `DELETE FROM customers WHERE id = $1`, newCustomer)
+	})
+	env.setRole("platform_admin")
+	if rec := env.authed("GET", stockPath(device), nil); rec.Code != http.StatusBadGateway {
+		t.Fatalf("before the transfer: status %d, want 502 for the unreadable record", rec.Code)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE devices SET customer_id = $2 WHERE device_name = $1`, device, newCustomer); err != nil {
+		t.Fatalf("transfer: %v", err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE devices SET customer_assigned_at = $2 WHERE device_name = $1`, device, now.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("backdate assignment: %v", err)
+	}
+	rec := env.authed("GET", stockPath(device), nil)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "old owner secret") {
+		t.Errorf("new owner: status %d body %s; the previous owner's reject leaked", rec.Code, rec.Body.String())
 	}
 }

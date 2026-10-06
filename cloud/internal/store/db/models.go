@@ -171,6 +171,8 @@ type RecordReject struct {
 	// unparsable = 不是 V1 JSON；invalid_source = JSON 合法但 source 不是 AUTO/MANUAL。
 	Reason string `json:"reason"`
 	Raw    string `json:"raw"`
+	// 首次写入时设备所属的客户，语义同 stock_events.customer_id；原文可能是上一任客户的数据，接口按它隔离 sample 与计数。
+	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 原文 md5，仅用于唯一约束（原文可能很长）。
 	RawHash   string             `json:"raw_hash"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -239,7 +241,7 @@ type StockEvent struct {
 	ReportTs []int64 `json:"report_ts"`
 	// 胜出那一份报告的原始 JSON，保真保存，接口据此还原字段，设备端后续新增的可选字段不会丢。
 	Payload []byte `json:"payload"`
-	// 首次写入这条记录时设备所属的客户（devices.customer_id，NULL = 未分配）。设备转移后接口只返回与设备当前客户一致的记录，不依赖设备自报的时间戳来划分归属；重放与修正版不改它。不设外键，客户记录的删除不应牵连业务记录。
+	// 首次写入这条记录时设备所属的客户（devices.customer_id，NULL = 未分配）。设备转移后接口只返回与设备当前客户一致的记录，不依赖设备自报的时间戳来划分归属；重放与修正版不改它。外键 RESTRICT：有业务记录的客户不能删除，否则记录归属无法再解析。
 	CustomerID pgtype.Int8        `json:"customer_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`

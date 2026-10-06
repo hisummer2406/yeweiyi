@@ -33,8 +33,9 @@ VALUES (
 ON CONFLICT (device_name, alarm_id, status) DO NOTHING;
 
 -- name: InsertRecordReject :exec
-INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw, customer_id)
+VALUES (sqlc.arg('kind'), sqlc.arg('device_name'), sqlc.arg('env_ts'), sqlc.arg('reason'), sqlc.arg('raw'),
+        (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT))
 ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING;
 
 -- name: ListStockEventsAsc :many
@@ -69,10 +70,12 @@ SELECT
               WHERE r.kind = 'stock' AND r.device_name = sqlc.arg('device_name') AND r.reason = 'unparsable'
                 AND r.env_ts >= sqlc.arg('begin_ms') AND r.env_ts < sqlc.arg('end_ms')
                 AND NOT (sqlc.arg('cutoff_ms')::BIGINT > 0 AND r.env_ts < sqlc.arg('cutoff_ms')::BIGINT)
+                AND r.customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
               ORDER BY r.env_ts ASC, r.id ASC LIMIT 1), '')::TEXT AS sample
 FROM record_rejects
 WHERE kind = 'stock' AND device_name = sqlc.arg('device_name')
-  AND env_ts >= sqlc.arg('begin_ms') AND env_ts < sqlc.arg('end_ms');
+  AND env_ts >= sqlc.arg('begin_ms') AND env_ts < sqlc.arg('end_ms')
+  AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT);
 
 -- name: ListAlarmEventsAsc :many
 SELECT payload, synthetic_id, occurred_at

@@ -30,9 +30,9 @@ import (
 //     corrected re-report under the same eventId replaces the original (folding is done at write
 //     time, see db/queries/business_records.sql UpsertStockEvent).
 //
-// What went away: `partial` is always false and `offset` is accepted. Both existed only because
-// ThingsBoard pages by time window and a correction could sit beyond a scan cap; neither applies to a
-// table. `folded` still reports how many re-reports were superseded.
+// What changed: `offset` is accepted, and `partial` no longer means "a ThingsBoard scan cap hid a
+// correction" (a table has no such cap) but "the initial backfill has not completed". `folded` still
+// reports how many re-reports were superseded.
 //
 // **Why an unreadable record is a 502, deliberately.** The original behaviour was to skip unparseable
 // points and serve 200 with whatever was left. For a device on the pre-V1 firmware that means 200 and
@@ -128,9 +128,10 @@ type stockListResponse struct {
 	// Truncated is true when more movements matched the window than `limit` allowed. Rows are
 	// ordered by `time` in the requested direction and cut from the far end.
 	Truncated bool `json:"truncated"`
-	// Partial is always false. It existed for the ThingsBoard read-through, where a scan cap could
-	// leave a later correction unseen; a table has no such cap. Kept so the response shape does not
-	// change for clients that read it.
+	// Partial is true while the device's initial takeover from ThingsBoard has not completed
+	// (record_backfills): the stored history may then be only what arrived live. It is a different
+	// cause from the old ThingsBoard scan cap, but the same meaning for the reader — "this list is
+	// not known to be whole".
 	Partial bool `json:"partial"`
 
 	// Only on the 502 path.
@@ -267,7 +268,13 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		backfilled, err := recordsBackfilled(c, deps, p.device)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		body := stockListResponse{
+			Partial:       !backfilled,
 			Rows:          out,
 			Parsed:        len(out),
 			Unparsable:    int(summary.Unparsable),

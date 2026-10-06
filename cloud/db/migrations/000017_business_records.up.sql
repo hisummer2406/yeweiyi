@@ -12,7 +12,7 @@ CREATE TABLE stock_events (
     env_ts       BIGINT      NOT NULL,
     report_ts    BIGINT[]    NOT NULL,
     payload      JSONB       NOT NULL,
-    customer_id  BIGINT,
+    customer_id  BIGINT      REFERENCES customers (id) ON DELETE RESTRICT,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (device_name, event_id)
@@ -28,7 +28,7 @@ COMMENT ON COLUMN stock_events.occurred_at  IS '记录关闭时刻（载荷 tsMs
 COMMENT ON COLUMN stock_events.env_ts       IS '胜出那一份报告的 ThingsBoard 信封 ts（毫秒）：设备生成该报文的时刻，补投原样保留。';
 COMMENT ON COLUMN stock_events.report_ts    IS '收到过的全部不同信封 ts（毫秒，去重）。基数减一即被折叠掉的重复报告数；重放同一份报告不会增加它。';
 COMMENT ON COLUMN stock_events.payload      IS '胜出那一份报告的原始 JSON，保真保存，接口据此还原字段，设备端后续新增的可选字段不会丢。';
-COMMENT ON COLUMN stock_events.customer_id  IS '首次写入这条记录时设备所属的客户（devices.customer_id，NULL = 未分配）。设备转移后接口只返回与设备当前客户一致的记录，不依赖设备自报的时间戳来划分归属；重放与修正版不改它。不设外键，客户记录的删除不应牵连业务记录。';
+COMMENT ON COLUMN stock_events.customer_id  IS '首次写入这条记录时设备所属的客户（devices.customer_id，NULL = 未分配）。设备转移后接口只返回与设备当前客户一致的记录，不依赖设备自报的时间戳来划分归属；重放与修正版不改它。外键 RESTRICT：有业务记录的客户不能删除，否则记录归属无法再解析。';
 
 CREATE TABLE alarm_events (
     device_name  TEXT        NOT NULL,
@@ -38,7 +38,7 @@ CREATE TABLE alarm_events (
     occurred_at  TIMESTAMPTZ NOT NULL,
     env_ts       BIGINT      NOT NULL,
     payload      JSONB       NOT NULL,
-    customer_id  BIGINT,
+    customer_id  BIGINT      REFERENCES customers (id) ON DELETE RESTRICT,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (device_name, alarm_id, status)
 );
@@ -62,6 +62,7 @@ CREATE TABLE record_rejects (
     env_ts      BIGINT      NOT NULL,
     reason      TEXT        NOT NULL CHECK (reason IN ('unparsable', 'invalid_source')),
     raw         TEXT        NOT NULL,
+    customer_id BIGINT      REFERENCES customers (id) ON DELETE RESTRICT,
     raw_hash    TEXT        NOT NULL GENERATED ALWAYS AS (md5(raw)) STORED,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (kind, device_name, env_ts, raw_hash)
@@ -72,6 +73,7 @@ COMMENT ON TABLE record_rejects IS
     '无法解析的出入库/报警原文（如固件升级前的 DetailInoutRecord.toString()、source 取值非法的记录）。(kind, device_name, env_ts, 原文哈希) 唯一，回补重放幂等。';
 COMMENT ON COLUMN record_rejects.reason   IS 'unparsable = 不是 V1 JSON；invalid_source = JSON 合法但 source 不是 AUTO/MANUAL。';
 COMMENT ON COLUMN record_rejects.env_ts   IS '信封 ts（毫秒）。接口用它与 stock.legacyFormatBefore 比较，区分已封口的旧格式记录与当下故障。';
+COMMENT ON COLUMN record_rejects.customer_id IS '首次写入时设备所属的客户，语义同 stock_events.customer_id；原文可能是上一任客户的数据，接口按它隔离 sample 与计数。';
 COMMENT ON COLUMN record_rejects.raw_hash IS '原文 md5，仅用于唯一约束（原文可能很长）。';
 
 -- 首次接管的完成标记。"设备已有记录"不能代表"历史已回补"：实时记录可能先于首次回补到达，或只有一种记录有历史。

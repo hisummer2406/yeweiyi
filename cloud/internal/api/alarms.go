@@ -105,6 +105,15 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 			})
 		}
 
+		// The body is a bare array, so there is no field to carry this; a header does.
+		backfilled, err := recordsBackfilled(c, deps, p.device)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !backfilled {
+			c.Header("X-Records-Partial", "true")
+		}
 		c.JSON(http.StatusOK, out)
 	}
 }

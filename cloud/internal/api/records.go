@@ -55,3 +55,10 @@ func recordWindow(c *gin.Context, deps Deps, p listParams) (begin, end pgtype.Ti
 	}
 	return pgtype.Timestamptz{Time: b.UTC(), Valid: true}, pgtype.Timestamptz{Time: e.UTC(), Valid: true}, true
 }
+
+// recordsBackfilled reports whether the device's initial takeover from ThingsBoard has completed
+// (record_backfills). Until it has, the stored history may be only what arrived live, and a reader
+// must not be told it is whole.
+func recordsBackfilled(c *gin.Context, deps Deps, device string) (bool, error) {
+	return deps.Queries.HasRecordBackfill(c.Request.Context(), device)
+}
