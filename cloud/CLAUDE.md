@@ -63,7 +63,7 @@ internal/protocol/    设备协议 V1 契约
 internal/tbclient/    唯一的 ThingsBoard REST/WebSocket 网关
 internal/devicesim/   设备侧参考实现
 internal/control/     控制状态机、授权、审计
-internal/ingest/      ThingsBoard 遥测订阅
+internal/ingest/      ThingsBoard 遥测订阅；出入库/报警落业务库与回补（records.go）
 internal/api/         REST/WebSocket API
 internal/store/db/    sqlc 输出，禁止手改
 db/migrations/        golang-migrate 输入
@@ -80,8 +80,10 @@ docs/                 当前规范与历史归档
 5. 连续遥测（液位、温度等 30 秒快照）不得复制到业务数据库，ThingsBoard 是其唯一事实来源，原始数据只保留
    7 天；业务库只可存其**小时级汇总**（#30）。出入库（`stockEvent`）与报警（`alarm`）是业务记录，**业务库是
    长期事实来源**，须永久保存、非必要不删除（#29）：设备端本地长期保留这些记录，云端必须与之一致，ThingsBoard
-   里的副本可以删。在 #29、#30 落地并验证前，ThingsBoard 的遥测 TTL 必须保持关闭
-   （`TS_RETENTION_SECONDS=0`），否则这些数据会被永久删除。
+   里的副本可以删。出入库与报警的落库（#29）已实现：`internal/ingest` 实时订阅 + 定时回读写入
+   `stock_events` / `alarm_events`（无法解析的原文进 `record_rejects`），写入全部幂等；`/api/oil-in-out`、
+   `/api/alarms` 读业务库。但 ThingsBoard 的遥测 TTL 仍必须保持关闭（`TS_RETENTION_SECONDS=0`），直到
+   目标部署上跑完一次 `go run ./cmd/backfill` 且核对无误，并且 #30（小时汇总）落地——否则这些数据会被永久删除。
 6. 必须先授权、后检查设备是否存在，避免设备名枚举。
 7. 设备配对密钥必须与 ThingsBoard/MQTT 设备凭据隔离。
 8. 仅使用 ThingsBoard CE 功能，且部署必须支持完全离线环境。
@@ -137,7 +139,8 @@ docs/                 当前规范与历史归档
   `openspec/changes/archive/2026-10-05-implement-multitenant-support-with-customer-isolation/`。`GET /api/devices` 的语义变化、
   `pairing-secret` 新增必填 `customerId` 已对照小程序与运维控制台的代码核对，无需改客户端（2026-10-06，见
   open-items §D-租户）；实现运维控制台的"配对密钥"页面时请求体须带 `customerId`。
-- `/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动（zhongchengyeweiyi#39）。真实设备当前上报的
+- `/api/oil-in-out` 与 `/api/alarms` 读业务库（#29）。`/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动
+  （zhongchengyeweiyi#39）。真实设备当前上报的
   `DetailInoutRecord.toString()` 解析不了，此时接口返回 502 与 `STOCK_EVENT_FORMAT_UNSUPPORTED`，
   不再以 200 + 空数组冒充成功；两条路径都返回 `{rows, parsed, unparsable, legacySkipped, …}`。
   升级固件**不会**转换 ThingsBoard 里已有的旧记录，因此车队升级后必须设置

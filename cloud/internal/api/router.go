@@ -51,8 +51,9 @@ func NewRouter(deps Deps) *gin.Engine {
 	authorized := r.Group("/api")
 	authorized.Use(authMiddleware(deps))
 	{
-		// /api/alarms (alarms.go) and /api/oil-in-out (stock.go) read from ThingsBoard, not from
-		// the business database. Two routes were removed rather than migrated:
+		// /api/alarms (alarms.go) and /api/oil-in-out (stock.go) read the business database
+		// (alarm_events / stock_events, written by internal/ingest). Two routes were removed
+		// rather than migrated:
 		// /api/oilcan/latest (replaced by /api/devices/:device/telemetry/latest below) and
 		// /api/shifts (设备协议 V1 has no 交班 uplink on either side, so it could only return
 		// an empty list — see docs/protocol-v1-reconciliation.md).

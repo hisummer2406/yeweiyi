@@ -1,11 +1,7 @@
 package api
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -13,76 +9,57 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"yeweiyi-cloud/internal/protocol"
-	"yeweiyi-cloud/internal/tbclient"
+	"yeweiyi-cloud/internal/store/db"
 )
 
-// GET /api/oil-in-out — 出入库 (stock in/out) history, read through to ThingsBoard.
+// GET /api/oil-in-out — 出入库 (stock in/out) history, served from the business database.
 //
-// Same pattern and same reasoning as /api/alarms: the device publishes each completed movement as a
-// `stockEvent` telemetry key the moment the record closes, ThingsBoard stores it, and this reads it
-// back on request. Nothing is copied into the business database, which would recreate the duplicate
-// store issue #10 forbids.
+// **Source of truth.** Stock movements are business records: the device keeps them locally and never
+// deletes them on its own, so the cloud must hold them just as long (CLAUDE.md constraint 5, issue
+// #29). internal/ingest writes each `stockEvent` it sees — live, and by periodic and one-off
+// backfill from ThingsBoard — into `stock_events`, and this reads it back from there. ThingsBoard is
+// transport and short-term buffer only; deleting its copy (TTL, manual cleanup) changes nothing here.
+// This endpoint used to read through to ThingsBoard, which is why a 7-day TTL could not be enabled.
 //
-// **Breaking change from the legacy endpoint.** The old one served rows from the `oil_in_out` table
-// that only the retired Alink ingestion ever wrote, with the device's original Java field names
-// (`beginHeigth`/`endHeigth`/`beginVolum`). Those are gone along with the payloads they came from.
+// What survived the move, unchanged, because the mini-program contract must not move again:
 //
-// **Depends on a device-side change that is not merged yet** (zhongchengyeweiyi#39): the device
-// already publishes `stockEvent` on every movement, but currently as `DetailInoutRecord.toString()`
-// — a Java debug string, not JSON. Until that becomes `gson.toJson(...)` with the field names in
-// docs/protocol-v1-stock-event.md, real devices produce values this endpoint cannot parse.
+//   - the response is always an object `{rows, parsed, unparsable, legacySkipped, …}`;
+//   - a record that cannot be read is counted, never silently dropped, and past
+//     `stock.legacyFormatBefore` it makes the response a 502 (details below);
+//   - a movement is listed in the window containing its close time (`tsMs`), exactly once, and a
+//     corrected re-report under the same eventId replaces the original (folding is done at write
+//     time, see db/queries/business_records.sql UpsertStockEvent).
 //
-// **What happens then is a 502, deliberately.** The original behaviour was to skip unparseable
-// points and serve 200 with whatever was left. For a device on the current firmware that means 200
-// and `[]` — an empty stock-movement history, which is a well-formed, confident, *wrong* answer to
-// "what oil moved through this tank?". Nothing in that response separates "no deliveries this week"
-// from "every delivery this week is sitting in ThingsBoard in a format this deployment cannot
-// read", and 出入库 records are precisely what gets argued over with suppliers. It is also the exact
-// failure shape this project has already been bitten by once — ThingsBoard silently aggregating
-// nested telemetry to 0.0 instead of erroring (docs/protocol-v1-reconciliation.md §A) — where the
-// lesson recorded at the time was that a wrong answer nobody can detect is worse than a loud one.
+// What changed: `offset` is accepted, and `partial` no longer means "a ThingsBoard scan cap hid a
+// correction" (a table has no such cap) but "the initial backfill has not completed". `folded` still
+// reports how many re-reports were superseded.
 //
-// **But a flat "unparseable ⇒ 502" is only correct until the fleet is upgraded, and then it is
-// permanently wrong.** Shipping the device-side fix converts nothing: the records already written
-// to ThingsBoard stay debug strings forever, so any window reaching back past the upgrade would
-// answer 502 for the rest of this deployment's life. That turns a temporary honest failure into a
-// permanently broken endpoint, which is not an improvement on the empty list. Found in review of
-// PR #12.
+// **Why an unreadable record is a 502, deliberately.** The original behaviour was to skip unparseable
+// points and serve 200 with whatever was left. For a device on the pre-V1 firmware that means 200 and
+// `[]` — an empty stock-movement history, which is a well-formed, confident, *wrong* answer to "what
+// oil moved through this tank?". 出入库 records are precisely what gets argued over with suppliers.
+// So an unreadable record past the cutoff is a 502 (Bad Gateway: the caller did nothing wrong and
+// this backend works; the upstream device's payload cannot be interpreted). `code` is stable so a
+// client can say 设备固件尚未升级 instead of a generic error.
 //
-// So the boundary is configurable, and it is the only thing that can distinguish the two cases,
-// because the payloads themselves are identical: `stock.legacyFormatBefore`
-// (Deps.StockLegacyFormatBefore) is the instant from which every device here is expected to publish
-// V1 JSON.
+// A flat "unparseable ⇒ 502" is only right until the fleet is upgraded: the device-side fix converts
+// nothing already stored, so any window reaching back past the upgrade would answer 502 forever.
+// `stock.legacyFormatBefore` is the instant from which every device is expected to publish V1 JSON;
+// the payloads of the two cases are byte-identical, so only time can tell them apart:
 //
-//	unparseable, before the cutoff   a known, closed data hole. Counted as `legacySkipped`, still
-//	                                 200 — nothing is wrong now and no action follows from it.
-//	unparseable, at or after it      a device that should have been upgraded and was not. 502 —
-//	                                 somebody has to go and look at it.
+//	unparseable, before the cutoff   a closed data hole. Counted as `legacySkipped`, still 200.
+//	unparseable, at or after it      a device that was not upgraded. 502 — somebody has to look.
 //
-// Unset (the default) means "the upgrade has not happened", so every unreadable record counts as
-// current breakage. That is the right default: a deployment nobody has told about a fleet upgrade
-// must not start quietly writing off records.
+// Unset means "the upgrade has not happened": every unreadable record counts as current breakage.
+// The classification uses the envelope ts the device stamped when it generated the record, which
+// replay preserves (docs/protocol-v1-stock-event.md §3). The unreadable originals themselves are
+// kept in `record_rejects`, so a later decision to back-fill them needs no ThingsBoard.
 //
-// 502 rather than 500 or a 4xx: the caller did nothing wrong and this backend is working. It is the
-// upstream — the device, via ThingsBoard — whose payload cannot be interpreted, which is what Bad
-// Gateway means. `code` is stable and machine-checkable so a client can say 设备固件尚未升级
-// instead of rendering a generic error.
-//
-// **The response is always an object with a `rows` array**, on both paths, and the key name is not
-// arbitrary. Two independent reasons, neither of which is "it looked nicer":
-//
-//   - a bare array cannot carry `legacySkipped`, and a 200 that silently omits how many records it
-//     could not read is the same mistake as the empty list, one layer up;
-//   - `{"rows": [...]}` is what the mini-program already expects here
-//     (yeweiyi-miniapp `miniprogram/pages/device-detail/device-detail.ts:98`, and its CLAUDE.md
-//     records the same for /api/alarms, /api/oil-in-out and /api/devices), and it is this repo's own
-//     house shape for list endpoints — /api/devices returns `{rows}`, commands `{commands}`, audit
-//     `{audit}`. The bare array PR #11 introduced here was the departure; this returns to it.
-//
-// So the shape change is toward the documented cross-repo contract rather than away from it. The
-// *rows themselves* remain incompatible with that client for reasons that predate this branch — the
-// mini-program still expects the retired Alink columns (`begin_height`, `device_local_id`) — and
-// resolving that needs the mini-program owner. See docs/protocol-v1-open-items.md §D.
+// **The response is always an object with a `rows` array**, on both paths: a bare array cannot carry
+// `legacySkipped`, and `{"rows": [...]}` is what the mini-program already expects here
+// (yeweiyi-miniapp `miniprogram/pages/device-detail/device-detail.ts:98`) and this repo's house shape
+// for list endpoints. The *rows themselves* remain incompatible with that client for reasons that
+// predate this change — see docs/protocol-v1-open-items.md §D.
 
 // StockEventFormatUnsupported is the stable `code` on the degraded response. Clients should match on
 // this rather than on the message, which is prose and will be translated.
@@ -151,10 +128,10 @@ type stockListResponse struct {
 	// Truncated is true when more movements matched the window than `limit` allowed. Rows are
 	// ordered by `time` in the requested direction and cut from the far end.
 	Truncated bool `json:"truncated"`
-	// Partial is true when the scan for later corrections stopped at its safety cap, or when a
-	// record after the window could not be read (it may have been a correction). Every movement
-	// in the window is listed, but a correction generated far after it may not have been seen, so a
-	// figure could be stale.
+	// Partial is true while the device's initial takeover from ThingsBoard has not completed
+	// (record_backfills): the stored history may then be only what arrived live. It is a different
+	// cause from the old ThingsBoard scan cap, but the same meaning for the reader — "this list is
+	// not known to be whole".
 	Partial bool `json:"partial"`
 
 	// Only on the 502 path.
@@ -203,144 +180,25 @@ func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
 	}
 }
 
-// stockRow is a parsed event plus the ThingsBoard envelope timestamp it arrived under.
-type stockRow struct {
-	ev protocol.StockEvent
-	// envTS is the telemetry envelope ts: when the device *generated* this report, preserved verbatim
-	// across offline replay (docs/protocol-v1-stock-event.md §3 makes that a hard requirement, and the
-	// legacy-cutoff logic below already depends on it). It orders revisions of one movement, rather
-	// than the payload's tsMs, because tsMs is the record-close time the API exposes as `time` and
-	// redefining it as a revision counter would be a one-sided change to the cross-repo contract.
-	envTS int64
-	// copies is how many reports of this eventId were read (1 when never re-sent).
-	copies int
-}
-
-// foldByEventID collapses re-reports of one movement into a single event. The device re-sends a
-// stockEvent under the same eventId when the operator later fills in duringDeliveryVolumeL, so the
-// raw telemetry holds two points for one delivery; listing both double-counts it against the
-// supplier. The copy with the greatest envelope ts wins (the correction is generated after the
-// original); on a tie the earlier-listed one stays, so the result is deterministic. Events with an
-// empty eventId are never folded: there is nothing to say they are the same movement.
-//
-// The survivors are then re-sorted by the movement's own close time (tsMs, the `time` the API
-// exposes) in the requested direction, so a corrected movement stays where it happened rather than
-// jumping to the end of the list because its correction was generated late. Replacing a copy in place
-// would otherwise leave it in the original's slot, out of order relative to events between the two.
-// The sort is stable, so equal times keep the order they were read in.
-func foldByEventID(rows []stockRow, asc bool) (out []stockRow, folded int) {
-	idx := make(map[string]int, len(rows))
-	out = make([]stockRow, 0, len(rows))
-	for _, r := range rows {
-		r.copies = 1
-		if r.ev.EventID == "" {
-			out = append(out, r)
-			continue
-		}
-		i, seen := idx[r.ev.EventID]
-		if !seen {
-			idx[r.ev.EventID] = len(out)
-			out = append(out, r)
-			continue
-		}
-		folded++
-		copies := out[i].copies + 1
-		if r.envTS > out[i].envTS {
-			out[i] = r
-		}
-		out[i].copies = copies
+// stockResponseFrom rebuilds the API row from the stored report. The payload is the device's own
+// JSON kept verbatim, so it is parsed again here rather than copied into columns that would have to
+// follow every future protocol field.
+func stockResponseFrom(payload []byte, synthetic bool, occurred time.Time) (stockEventResponse, bool) {
+	ev, err := protocol.ParseStockEvent(payload)
+	if err != nil {
+		// Written only after a successful parse, so this means the parser got stricter since. Leave
+		// the row out of the list rather than fail the window, and let the caller count it.
+		return stockEventResponse{}, false
 	}
-	sort.SliceStable(out, func(a, b int) bool {
-		if asc {
-			return out[a].ev.TSMs < out[b].ev.TSMs
-		}
-		return out[a].ev.TSMs > out[b].ev.TSMs
-	})
-	return out, folded
-}
-
-// selectWindow keeps the folded movements whose close time lies in [beginMs, endMs), cuts them to
-// limit, and counts the duplicate reports folded into the movements that remain. The count is taken
-// after the cut so it describes the listed rows only, as the response documents; counting before it
-// would report folds hidden behind the limit.
-func selectWindow(rows []stockRow, beginMs, endMs int64, limit int) (listed []stockRow, folded int, truncated bool) {
-	for _, r := range rows {
-		if r.ev.TSMs >= beginMs && r.ev.TSMs < endMs {
-			listed = append(listed, r)
-		}
+	if ev.TSMs == 0 {
+		ev.TSMs = occurred.UnixMilli()
 	}
-	if len(listed) > limit {
-		listed, truncated = listed[:limit], true
+	if synthetic {
+		// The id was minted by the cloud to keep a replay idempotent; it is not the device's and
+		// must not be presented as one.
+		ev.EventID = ""
 	}
-	for _, r := range listed {
-		folded += r.copies - 1
-	}
-	return listed, folded, truncated
-}
-
-// stockEnvelopeSkew widens the lower bound of the raw read. A movement is listed by its own close
-// time (tsMs), but ThingsBoard selects points by envelope ts, which the device stamps when it
-// generates the report; the two are the same instant in the normal case and may differ by device
-// clock slack. Reading a little before `begin` keeps a movement closing right at the boundary from
-// being missed on that account. Rows are re-filtered by tsMs afterwards, so the slack never widens
-// what is returned.
-const stockEnvelopeSkew = time.Hour
-
-// stockPageLimit and stockMaxPages bound one request's raw read so a misbehaving device cannot make
-// it unbounded. 10 × 5000 is a safety bound, not a measured capacity figure; nothing here claims it is
-// enough for any particular deployment. What happens when it is reached is decided by scanOutcome:
-// it must never make an old window permanently unreadable.
-const (
-	stockPageLimit = 5000
-	stockMaxPages  = 10
-)
-
-// scanOutcome interprets a raw read that stopped at the page cap (complete == false).
-//
-//   - The cap was hit before the read even reached the end of the window: the window itself holds
-//     more points than one request will scan, so its contents are incomplete. Narrowing the window
-//     fixes that, and the caller is told to (tooLarge).
-//   - The cap was hit at or past the window's end: everything in the window was read, and only some
-//     later corrections may be unseen. Answer anyway and say so (partial) — refusing would make
-//     history older than ~50,000 events unreachable no matter how small the window asked for.
-func scanOutcome(points []tbclient.TSValue, complete bool, endMs int64) (partial, tooLarge bool) {
-	if complete {
-		return false, false
-	}
-	if len(points) == 0 || points[len(points)-1].TS < endMs {
-		return false, true
-	}
-	return true, false
-}
-
-// readStockPoints returns every stockEvent point with envelope ts in [fromMs, toMs), oldest first,
-// paging through ThingsBoard's per-call limit.
-//
-// A movement is listed in the window containing its close time, but its later corrections are
-// generated — and stamped — after that, possibly past the window's end. Reading from `begin` to now,
-// rather than to `end`, is what lets the fold see the latest revision of every movement in the window
-// regardless of where the window ends, and regardless of how many unrelated points fall between a
-// report and its correction. There is deliberately no fixed look-ahead: any cutoff would be a
-// guess at how late an operator may confirm a delivery.
-func readStockPoints(ctx context.Context, tb *tbclient.Client, deviceID string, fromMs, toMs int64) (points []tbclient.TSValue, complete bool, err error) {
-	for page := 0; page < stockMaxPages; page++ {
-		series, err := tb.Timeseries(ctx, deviceID, tbclient.TimeseriesQuery{
-			Keys:    []string{protocol.KeyStockEvent},
-			StartMs: fromMs,
-			EndMs:   toMs,
-			Limit:   stockPageLimit,
-		})
-		if err != nil {
-			return nil, false, err
-		}
-		pts := series[protocol.KeyStockEvent]
-		points = append(points, pts...)
-		if len(pts) < stockPageLimit {
-			return points, true, nil
-		}
-		fromMs = pts[len(pts)-1].TS + 1
-	}
-	return points, false, nil
+	return toStockEventResponse(ev), true
 }
 
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {
@@ -349,140 +207,85 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		if !requireDeviceOwnership(c, deps, p.device) {
+		begin, end, ok := recordWindow(c, deps, p)
+		if !ok {
 			return
 		}
-		if deps.TB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
-			return
-		}
-		// Same limitation as /api/alarms: ThingsBoard pages by time window, not row offset.
-		if p.offset > 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "offset is not supported; page by narrowing beginTime/endTime instead",
-			})
-			return
-		}
-
 		ctx := c.Request.Context()
-		dev, err := deps.TB.GetDeviceByName(ctx, p.device)
-		if err != nil {
-			writeThingsBoardError(c, err, p.device)
-			return
-		}
-
-		beginMs, endMs := p.begin.Time.UnixMilli(), p.end.Time.UnixMilli()
-		points, complete, err := readStockPoints(ctx, deps.TB, dev.ID.ID,
-			beginMs-stockEnvelopeSkew.Milliseconds(), time.Now().Add(stockEnvelopeSkew).UnixMilli())
-		if err != nil {
-			writeThingsBoardError(c, err, p.device)
-			return
-		}
-		partial, tooLarge := scanOutcome(points, complete, endMs)
-		if tooLarge {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "too many stock events inside the requested window; narrow beginTime/endTime",
-			})
-			return
-		}
 
 		cutoffMs := int64(0)
 		if !deps.StockLegacyFormatBefore.IsZero() {
 			cutoffMs = deps.StockLegacyFormatBefore.UnixMilli()
 		}
 
-		rows := make([]stockRow, 0, len(points))
-		unparsable, legacy, invalidSource := 0, 0, 0
-		sample := ""
-		for _, pt := range points {
-			ev, err := protocol.ParseStockEvent(pt.Value)
+		args := db.ListStockEventsAscParams{
+			DeviceName: p.device, BeginTime: begin, EndTime: end,
+			Lim: p.limit + 1, Off: p.offset,
+		}
+		var stored []stockRowData
+		if p.asc {
+			rows, err := deps.Queries.ListStockEventsAsc(ctx, args)
 			if err != nil {
-				// The raw read reaches past the window to find corrections; an unreadable record
-				// there is not this window's to report.
-				if pt.TS < beginMs {
-					continue
-				}
-				// After the window it may be a correction of an in-window movement whose eventId
-				// cannot be read, so the listed row could be stale: say so rather than present the
-				// original as complete. Pre-upgrade records are a closed hole, not a suspect.
-				if pt.TS >= endMs {
-					if cutoffMs == 0 || pt.TS >= cutoffMs {
-						partial = true
-					}
-					continue
-				}
-				// Valid JSON with a bad `source` is neither a legacy debug string nor a format
-				// failure: drop and count this one record instead of failing the window.
-				// Counted by the envelope ts (pt.TS), not the event's own tsMs — the payload is
-				// not decoded on this path — so for a correction or backfill reported at a
-				// different time than the movement the count may land in a neighbouring window.
-				// Accepted: it is a diagnostic counter only and never changes rows or status.
-				if errors.Is(err, protocol.ErrInvalidSource) {
-					invalidSource++
-					continue
-				}
-				// pt.TS classifies it, and nothing else can: the payload of a pre-upgrade record
-				// and of a device that never upgraded are byte-identical.
-				//
-				// This is only sound because pt.TS is when the device *generated* the record, not
-				// when ThingsBoard received it — which matters precisely for the case that breaks
-				// a naive version of this: a record created before the fleet upgrade but replayed
-				// after it, from the device's offline queue. Verified on the device side rather
-				// than assumed: ThingsBoardManager.reportRawEvent (:168-176) stamps
-				// `ts = System.currentTimeMillis()` at generation time and enqueues the already
-				// serialized JSON, and PendingAlarmStore.drainAndSend (:87-99) republishes that
-				// string verbatim with no re-stamping. ThingsBoard honours the envelope ts, so a
-				// record replayed days late still lands at its original instant — pinned by
-				// TestListOilInOut_ReplayedPreUpgradeRecordIsClassifiedByItsOwnTimestamp.
-				//
-				// The dependency is therefore a protocol requirement, not an implementation
-				// detail: a stockEvent MUST carry an envelope ts and replay MUST preserve it. A
-				// device that published without one would have ThingsBoard stamp arrival time,
-				// and every replayed record would read as current breakage
-				// (TestListOilInOut_RecordWithoutAnEnvelopeTimestampCountsAsCurrent pins that
-				// degradation so it is a known boundary rather than a surprise). Stated for the
-				// Android side in docs/protocol-v1-stock-event.md §3.
-				if cutoffMs > 0 && pt.TS < cutoffMs {
-					legacy++
-					continue
-				}
-				// Counted, not dropped. The first offender is kept as the sample because one
-				// example is enough to identify the format, and echoing every one of them would
-				// make the error response the largest thing on the wire.
-				unparsable++
-				if sample == "" {
-					sample = truncateRunes(rawValueString(pt.Value), unparsableSampleRunes)
-				}
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			for _, r := range rows {
+				stored = append(stored, stockRowData{r.Payload, r.SyntheticID, r.OccurredAt.Time, int(r.ReportCount)})
+			}
+		} else {
+			rows, err := deps.Queries.ListStockEventsDesc(ctx, db.ListStockEventsDescParams(args))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			for _, r := range rows {
+				stored = append(stored, stockRowData{r.Payload, r.SyntheticID, r.OccurredAt.Time, int(r.ReportCount)})
+			}
+		}
+
+		truncated := len(stored) > int(p.limit)
+		if truncated {
+			stored = stored[:p.limit]
+		}
+		out := make([]stockEventResponse, 0, len(stored))
+		folded := 0
+		for _, r := range stored {
+			resp, ok := stockResponseFrom(r.payload, r.synthetic, r.occurred)
+			if !ok {
 				continue
 			}
-			if ev.TSMs == 0 {
-				ev.TSMs = pt.TS
-			}
-			rows = append(rows, stockRow{ev: ev, envTS: pt.TS})
-		}
-		// Fold first, then keep the movements whose close time (the `time` the API exposes) lies in the
-		// window: the latest revision of a movement is chosen across everything read, and membership
-		// is decided once, by the event's own time, so one delivery is listed in exactly one window.
-		rows, _ = foldByEventID(rows, p.asc)
-		listed, folded, truncated := selectWindow(rows, beginMs, endMs, int(p.limit))
-		out := make([]stockEventResponse, 0, len(listed))
-		for _, r := range listed {
-			out = append(out, toStockEventResponse(r.ev))
+			out = append(out, resp)
+			folded += r.reports - 1
 		}
 
+		// Unreadable records are classified by the envelope ts they arrived under, not by the window
+		// of the movements above: the payload is not decodable, so there is no close time to use.
+		summary, err := deps.Queries.SummarizeStockRejects(ctx, db.SummarizeStockRejectsParams{
+			DeviceName: p.device, BeginMs: begin.Time.UnixMilli(), EndMs: end.Time.UnixMilli(), CutoffMs: cutoffMs,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		backfilled, err := recordsBackfilled(c, deps, p.device)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 		body := stockListResponse{
+			Partial:       !backfilled,
 			Rows:          out,
 			Parsed:        len(out),
-			Unparsable:    unparsable,
-			LegacySkipped: legacy,
-			InvalidSource: invalidSource,
+			Unparsable:    int(summary.Unparsable),
+			LegacySkipped: int(summary.Legacy),
+			InvalidSource: int(summary.InvalidSource),
 			Folded:        folded,
 			Truncated:     truncated,
-			Partial:       partial,
 		}
 
-		if unparsable > 0 {
-			body.Error = "该设备上报的出入库记录中有 " + strconv.Itoa(unparsable) +
+		if body.Unparsable > 0 {
+			body.Error = "该设备上报的出入库记录中有 " + strconv.Itoa(body.Unparsable) +
 				" 条无法解析：设备固件仍以 DetailInoutRecord.toString() 上报，" +
 				"而非 设备协议 V1 定义的 JSON（zhongchengyeweiyi#39）。" +
 				"已解析的记录一并返回，但本时间窗内的出入库历史并不完整。"
@@ -492,7 +295,9 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			}
 			body.Code = StockEventFormatUnsupported
 			body.Device = p.device
-			body.Sample = sample
+			// One example is enough to identify the format; echoing every one would make the error
+			// response the largest thing on the wire.
+			body.Sample = truncateRunes(summary.Sample, unparsableSampleRunes)
 			if cutoffMs > 0 {
 				body.LegacyCutoff = deps.StockLegacyFormatBefore.UTC().Format(time.RFC3339)
 			}
@@ -507,14 +312,12 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 	}
 }
 
-// rawValueString renders a telemetry value for the diagnostic sample. ThingsBoard hands back
-// stringified telemetry, so the overwhelmingly common case is already a string; anything else is
-// formatted rather than dropped, because "the value was not even a string" is itself the diagnosis.
-func rawValueString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
-	}
-	return fmt.Sprint(v)
+// stockRowData is one stored report, shaped identically for both sort directions.
+type stockRowData struct {
+	payload   []byte
+	synthetic bool
+	occurred  time.Time
+	reports   int
 }
 
 // truncateRunes cuts on a rune boundary, not a byte one: the device's payloads carry Chinese oil

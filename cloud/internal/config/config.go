@@ -149,6 +149,12 @@ type Ingest struct {
 	DeviceRefreshInterval Duration `yaml:"deviceRefreshInterval"`
 	// ResubscribeDelay is the wait before reopening a subscription that dropped.
 	ResubscribeDelay Duration `yaml:"resubscribeDelay"`
+	// RecordReconcileInterval is how often each device's recent 出入库/报警 points are re-read from
+	// ThingsBoard to fill what the live subscription missed (issue #29).
+	RecordReconcileInterval Duration `yaml:"recordReconcileInterval"`
+	// RecordReconcileLookback is how far back each pass reads. It must cover the longest a device
+	// may stay offline before replaying its queue; it need not exceed ThingsBoard's retention.
+	RecordReconcileLookback Duration `yaml:"recordReconcileLookback"`
 }
 
 // Stock tunes the 出入库 (stock in/out) read-through endpoint.
@@ -193,6 +199,9 @@ func Defaults() Config {
 		Ingest: Ingest{
 			DeviceRefreshInterval: Duration(30 * time.Second),
 			ResubscribeDelay:      Duration(5 * time.Second),
+
+			RecordReconcileInterval: Duration(10 * time.Minute),
+			RecordReconcileLookback: Duration(8 * 24 * time.Hour),
 		},
 	}
 }
@@ -253,6 +262,8 @@ func (c *Config) applyEnv() error {
 		{"COMMAND_EXPIRY_SWEEP_INTERVAL", &c.Control.ExpirySweepInterval},
 		{"INGEST_DEVICE_REFRESH_INTERVAL", &c.Ingest.DeviceRefreshInterval},
 		{"INGEST_RESUBSCRIBE_DELAY", &c.Ingest.ResubscribeDelay},
+		{"INGEST_RECORD_RECONCILE_INTERVAL", &c.Ingest.RecordReconcileInterval},
+		{"INGEST_RECORD_RECONCILE_LOOKBACK", &c.Ingest.RecordReconcileLookback},
 	} {
 		v := os.Getenv(d.env)
 		if v == "" {
@@ -316,6 +327,8 @@ func (c *Config) Validate() error {
 		{"control.expirySweepInterval", c.Control.ExpirySweepInterval},
 		{"ingest.deviceRefreshInterval", c.Ingest.DeviceRefreshInterval},
 		{"ingest.resubscribeDelay", c.Ingest.ResubscribeDelay},
+		{"ingest.recordReconcileInterval", c.Ingest.RecordReconcileInterval},
+		{"ingest.recordReconcileLookback", c.Ingest.RecordReconcileLookback},
 	} {
 		if d.v <= 0 {
 			return fmt.Errorf("%s must be positive, got %s", d.name, d.v)

@@ -96,6 +96,12 @@ type Querier interface {
 	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
 	// again, so a concurrent move or disable cannot slip in between the first check and the write.
 	GetUserForUpdate(ctx context.Context, id int64) (User, error)
+	HasRecordBackfill(ctx context.Context, deviceName string) (bool, error)
+	// 同一份重放不改变已有行。
+	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
+	InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error
+	ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAscParams) ([]ListAlarmEventsAscRow, error)
+	ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDescParams) ([]ListAlarmEventsDescRow, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
 	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
@@ -132,6 +138,9 @@ type Querier interface {
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
+	// 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
+	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
+	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
 	// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
 	// everyone else to their own customer.
 	ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User, error)
@@ -165,6 +174,7 @@ type Querier interface {
 	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	MarkRecordBackfill(ctx context.Context, deviceName string) error
 	// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
@@ -182,6 +192,9 @@ type Querier interface {
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
+	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
+	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
+	SummarizeStockRejects(ctx context.Context, arg SummarizeStockRejectsParams) (SummarizeStockRejectsRow, error)
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	UpsertDeviceOnlineStatus(ctx context.Context, arg UpsertDeviceOnlineStatusParams) error
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
@@ -194,6 +207,12 @@ type Querier interface {
 	// customer cannot use and silently invalidate the new owner's. Zero rows back means ownership
 	// changed (or never held), and the handler answers 409.
 	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
+	// 出入库与报警的业务库副本（迁移 000017，issue #29）。写入全部幂等：回补与实时摄取并发、补投重复、
+	// 乱序到达都收敛到同一结果。
+	// customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
+	// 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
+	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
+	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
 	// Only answers "is there a user_devices row". It is NOT an authorization check: it ignores the
 	// customer boundary and the role tiers. Every device-scoped handler must call UserMayAccessDevice.
 	UserDeviceBindingExists(ctx context.Context, arg UserDeviceBindingExistsParams) (bool, error)

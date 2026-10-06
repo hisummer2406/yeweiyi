@@ -1,16 +1,16 @@
 // Package ingest consumes device data from ThingsBoard and routes it into the business layer.
 //
-// The most important thing this package does is what it does NOT do: **it does not persist
-// telemetry.** The 30-second tank snapshots stay in ThingsBoard and are read back from there on
-// demand (internal/tbclient). Copying them into the business PostgreSQL would create a second
-// time-series store — exactly the duplication GitHub issue #10 forbids, and the reason the old
-// design's `alarms`/`oil_in_out` partitioned tables are up for removal.
+// What it does NOT do: **it does not persist continuous telemetry.** The 30-second tank snapshots
+// stay in ThingsBoard and are read back from there on demand (internal/tbclient). Copying them into
+// the business PostgreSQL would create a second time-series store — the duplication GitHub issue #10
+// forbids. (Hourly aggregates of them are a separate, planned feature: issue #30.)
 //
-// What crosses the boundary into the business database is only:
+// What crosses the boundary into the business database:
 //
 //   - command results, which close the control state machine (internal/control);
-//   - alarms, fanned out live to operators — and even then the alarm itself is ThingsBoard's
-//     record; the business database stores only how it was handled, once somebody acts on it.
+//   - stock events (出入库) and alarms — business records whose long-term source of truth is the
+//     business database, not ThingsBoard (CLAUDE.md constraint 5, issue #29). See records.go;
+//   - alarms are additionally fanned out live to operators.
 //
 // Everything else is observed and dropped on purpose.
 package ingest
@@ -46,6 +46,13 @@ type Config struct {
 	DeviceRefreshInterval time.Duration
 	// ResubscribeDelay is how long to wait before reopening a subscription that dropped.
 	ResubscribeDelay time.Duration
+	// RecordReconcileInterval is how often each device's recent stockEvent/alarm points are re-read
+	// from ThingsBoard to fill what the live subscription missed. Defaults to 10m.
+	RecordReconcileInterval time.Duration
+	// RecordReconcileLookback is how far back each reconcile pass reads. It must reach back at least
+	// as far as the longest a device can sit offline before replaying, and should not exceed
+	// ThingsBoard's own retention. Defaults to 8 days (one day more than the 7-day telemetry TTL).
+	RecordReconcileLookback time.Duration
 
 	Logf func(format string, args ...any)
 }
@@ -65,6 +72,12 @@ func New(cfg Config) *Ingester {
 	}
 	if cfg.ResubscribeDelay <= 0 {
 		cfg.ResubscribeDelay = 5 * time.Second
+	}
+	if cfg.RecordReconcileInterval <= 0 {
+		cfg.RecordReconcileInterval = 10 * time.Minute
+	}
+	if cfg.RecordReconcileLookback <= 0 {
+		cfg.RecordReconcileLookback = 8 * 24 * time.Hour
 	}
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
@@ -166,6 +179,12 @@ func (i *Ingester) subscribeOnce(ctx context.Context, deviceName string) error {
 
 	i.cfg.Logf("ingest: subscribed to %s", deviceName)
 
+	// Subscribe first, then reconcile: records that land between the two are caught by one or the
+	// other, and the idempotent writes make catching them twice harmless.
+	rctx, stopReconcile := context.WithCancel(ctx)
+	defer stopReconcile()
+	go i.reconcileLoop(rctx, deviceName, dev.ID.ID)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -186,12 +205,18 @@ func (i *Ingester) subscribeOnce(ctx context.Context, deviceName string) error {
 //
 // Note what is absent: there is no branch that writes tank readings anywhere. Snapshot keys arrive
 // here on every 30-second cycle and are intentionally ignored — see the package comment.
+//
+// A batch carries only the newest point per key, so a burst of events can reach here as one. That is
+// why the live path is not the only path: reconcileLoop re-reads what it may have skipped.
 func (i *Ingester) HandleUpdate(ctx context.Context, deviceName string, u tbclient.TelemetryUpdate) {
+	if raw, ok := u.Values[protocol.KeyStockEvent]; ok {
+		i.handleStockEvent(ctx, deviceName, u.EnvTS(protocol.KeyStockEvent), raw)
+	}
 	if raw, ok := u.Values[protocol.KeyCmdResult]; ok {
 		i.handleCmdResult(ctx, deviceName, raw)
 	}
 	if raw, ok := u.Values[protocol.KeyAlarm]; ok {
-		i.handleAlarm(ctx, deviceName, raw)
+		i.handleAlarm(ctx, deviceName, u.EnvTS(protocol.KeyAlarm), raw)
 	}
 }
 
@@ -219,14 +244,37 @@ func (i *Ingester) handleCmdResult(ctx context.Context, deviceName string, raw a
 	i.cfg.Logf("ingest: %s: command %s -> %s", deviceName, res.CommandID, cmd.Status)
 }
 
-// handleAlarm fans an alarm out to connected operators. It deliberately does not insert an alarm
-// row: ThingsBoard is the system of record for the alarm itself, and the business database stores
-// only handling state, written when an operator actually acts on it.
-func (i *Ingester) handleAlarm(ctx context.Context, deviceName string, raw any) {
-	ev, err := protocol.ParseAlarmEvent(raw)
-	if err != nil {
-		i.cfg.Logf("ingest: %s: bad alarm: %v", deviceName, err)
+func (i *Ingester) handleStockEvent(ctx context.Context, deviceName string, envTS int64, raw any) {
+	if i.cfg.Queries == nil {
 		return
+	}
+	if err := SaveStockEvent(ctx, i.cfg.Queries, deviceName, envTS, raw); err != nil {
+		// Not fatal: reconcileLoop re-reads this point from ThingsBoard on its next pass.
+		i.cfg.Logf("ingest: %s: save stockEvent: %v", deviceName, err)
+	}
+}
+
+// handleAlarm stores an alarm and fans it out to connected operators. The write comes first and its
+// failure does not stop the fan-out: a live notification is worth more than a clean log line, and
+// reconcileLoop retries the write.
+func (i *Ingester) handleAlarm(ctx context.Context, deviceName string, envTS int64, raw any) {
+	var ev protocol.AlarmEvent
+	if i.cfg.Queries != nil {
+		saved, ok, err := SaveAlarmEvent(ctx, i.cfg.Queries, deviceName, envTS, raw)
+		if err != nil {
+			i.cfg.Logf("ingest: %s: save alarm: %v", deviceName, err)
+		}
+		if !ok {
+			i.cfg.Logf("ingest: %s: bad alarm kept in record_rejects", deviceName)
+			return
+		}
+		ev = saved
+	} else {
+		var err error
+		if ev, err = protocol.ParseAlarmEvent(raw); err != nil {
+			i.cfg.Logf("ingest: %s: bad alarm: %v", deviceName, err)
+			return
+		}
 	}
 	if i.cfg.Redis == nil {
 		return

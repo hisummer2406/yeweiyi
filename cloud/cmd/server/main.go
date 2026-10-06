@@ -70,7 +70,8 @@ func main() {
 			AllowPhysicalCommands: cfg.Control.AllowPhysicalCommands,
 		})
 
-		// Drives cmdResult back into the command state machine and fans alarms out to /ws/alarms.
+		// Drives cmdResult back into the command state machine, stores 出入库/报警 records in the business
+		// database (issue #29) and fans alarms out to /ws/alarms.
 		ingester := ingest.New(ingest.Config{
 			TB:                    tbClient,
 			Control:               controlSvc,
@@ -78,7 +79,10 @@ func main() {
 			Queries:               queries,
 			DeviceRefreshInterval: cfg.Ingest.DeviceRefreshInterval.Std(),
 			ResubscribeDelay:      cfg.Ingest.ResubscribeDelay.Std(),
-			Logf:                  log.Printf,
+
+			RecordReconcileInterval: cfg.Ingest.RecordReconcileInterval.Std(),
+			RecordReconcileLookback: cfg.Ingest.RecordReconcileLookback.Std(),
+			Logf:                    log.Printf,
 		})
 		go ingester.Run(ctx)
 

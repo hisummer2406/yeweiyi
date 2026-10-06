@@ -17,11 +17,23 @@ import (
 //
 // Values holds the newest point per key in the batch, in the same string-valued shape the REST API
 // uses, so it feeds protocol.ParseSnapshot / protocol.ParseAlarmEvent unchanged. TS is the newest
-// timestamp in the batch.
+// timestamp in the batch; KeyTS is each key's own point timestamp (the envelope ts the device
+// stamped), which consumers that persist a key's value need — TS alone belongs to whichever key in
+// the batch happened to be newest.
 type TelemetryUpdate struct {
 	SubscriptionID int
 	TS             int64
 	Values         map[string]any
+	KeyTS          map[string]int64
+}
+
+// EnvTS is key's own point timestamp, falling back to the batch's newest when the update carries no
+// per-key timestamps (a hand-built one in a test).
+func (u TelemetryUpdate) EnvTS(key string) int64 {
+	if ts, ok := u.KeyTS[key]; ok && ts > 0 {
+		return ts
+	}
+	return u.TS
 }
 
 // TelemetryStream is a live subscription to one device's telemetry. This is the push path that
@@ -172,9 +184,9 @@ func (c *Client) SubscribeTelemetry(ctx context.Context, deviceID string, keys [
 				continue
 			}
 
-			ts, values := flattenWSData(u.Data)
+			ts, values, keyTS := flattenWSData(u.Data)
 			select {
-			case updates <- TelemetryUpdate{SubscriptionID: u.SubscriptionID, TS: ts, Values: values}:
+			case updates <- TelemetryUpdate{SubscriptionID: u.SubscriptionID, TS: ts, Values: values, KeyTS: keyTS}:
 			case <-ctx.Done():
 				return
 			}
@@ -185,9 +197,10 @@ func (c *Client) SubscribeTelemetry(ctx context.Context, deviceID string, keys [
 }
 
 // flattenWSData reduces ThingsBoard's {key: [[ts, value], ...]} to the newest point per key.
-func flattenWSData(data map[string][][2]any) (int64, map[string]any) {
+func flattenWSData(data map[string][][2]any) (int64, map[string]any, map[string]int64) {
 	var newest int64
 	values := make(map[string]any, len(data))
+	keyTSs := make(map[string]int64, len(data))
 	for key, points := range data {
 		var keyTS int64
 		for _, p := range points {
@@ -199,11 +212,12 @@ func flattenWSData(data map[string][][2]any) (int64, map[string]any) {
 				keyTS, values[key] = ts, p[1]
 			}
 		}
+		keyTSs[key] = keyTS
 		if keyTS > newest {
 			newest = keyTS
 		}
 	}
-	return newest, values
+	return newest, values, keyTSs
 }
 
 func toMillis(v any) (int64, error) {

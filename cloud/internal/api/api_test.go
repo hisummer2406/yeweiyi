@@ -21,6 +21,7 @@ import (
 
 	"yeweiyi-cloud/internal/api"
 	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/ingest"
 	"yeweiyi-cloud/internal/store/db"
 )
 
@@ -51,6 +52,9 @@ type testEnv struct {
 	queries  *db.Queries
 	username string
 	token    string
+	// ing is set by newStockEnv: the live ingester feeding the business records the record
+	// endpoints read.
+	ing *ingest.Ingester
 }
 
 const testUserPasswordHash = "$2a$10$meNXe5U2v9ec5cW0fIv2teBFiwN88qoxXndhnk.WZd.h/MimCSZ5u" // bcrypt("e2e-test-pass")

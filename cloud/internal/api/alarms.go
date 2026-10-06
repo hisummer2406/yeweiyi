@@ -7,25 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"yeweiyi-cloud/internal/protocol"
-	"yeweiyi-cloud/internal/tbclient"
+	"yeweiyi-cloud/internal/store/db"
 )
 
-// GET /api/alarms, reading from ThingsBoard rather than from the business database.
+// GET /api/alarms — alarm history, served from the business database.
 //
-// Alarm history used to be served from the `alarms` table, which only the legacy MQTT ingestion
-// ever wrote to. Under the single stack the device publishes each alarm transition as a JSON-valued
-// `alarm` telemetry key (see internal/protocol/events.go), ThingsBoard stores it, and this endpoint
-// reads it back on request — the same read-through pattern as the telemetry endpoint, and the same
-// reason: storing a second copy here would recreate the duplicate time-series store issue #10
-// forbids.
+// Alarms are business records: the device keeps them locally and the cloud must hold them as long
+// (CLAUDE.md constraint 5, issue #29). internal/ingest writes every `alarm` it sees into
+// `alarm_events` — live, and by periodic and one-off backfill from ThingsBoard — and this reads it
+// back. ThingsBoard is transport and short-term buffer; deleting its copy changes nothing here. The
+// endpoint used to read through to ThingsBoard, which is why its telemetry TTL could not be enabled.
 //
-// **Deliberately not using ThingsBoard's native Alarm entities.** ThingsBoard can turn a telemetry
-// value into a first-class Alarm object (with acknowledge/clear state it manages itself) via a rule
-// chain, which would be a better home for operator acknowledgement than anything built here. That
-// rule chain is not configured yet, so alarms currently exist only as telemetry events. When it is,
-// this handler should move to /api/alarm/DEVICE/{id} — the endpoint contract below is deliberately
-// shaped like an alarm record rather than like a telemetry point so that swap does not change the
-// response.
+// One row per transition, as before: an ACTIVE and its later CLEARED report are two rows sharing an
+// `alarmId` (the response is shaped like an alarm record, not a telemetry point, so folding them is a
+// later, client-visible decision — see the open question on issue #29). Replays are idempotent.
+//
+// **Deliberately not using ThingsBoard's native Alarm entities.** That needs a rule chain that is not
+// configured, and would put the long-term record back in ThingsBoard.
 //
 // **Breaking change from the legacy endpoint**, and unavoidable: the response no longer carries the
 // device's old Java field names (`guanhao`/`jiezhi`/`info`). Those came from the Alink payloads,
@@ -48,55 +46,52 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		if !requireDeviceOwnership(c, deps, p.device) {
-			return
-		}
-		if deps.TB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
+		begin, end, ok := recordWindow(c, deps, p)
+		if !ok {
 			return
 		}
 
+		type stored struct {
+			payload   []byte
+			synthetic bool
+			occurred  time.Time
+		}
+		var rows []stored
 		ctx := c.Request.Context()
-		dev, err := deps.TB.GetDeviceByName(ctx, p.device)
-		if err != nil {
-			writeThingsBoardError(c, err, p.device)
-			return
+		args := db.ListAlarmEventsAscParams{
+			DeviceName: p.device, BeginTime: begin, EndTime: end, Lim: p.limit, Off: p.offset,
 		}
-
-		// offset has no equivalent in ThingsBoard's timeseries API, which pages by time window
-		// rather than by row offset. Rather than silently ignoring it — which would hand a
-		// paginating client the same first page forever — say so.
-		if p.offset > 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "offset is not supported for alarms; page by narrowing beginTime/endTime instead",
-			})
-			return
-		}
-
-		series, err := deps.TB.Timeseries(ctx, dev.ID.ID, tbclient.TimeseriesQuery{
-			Keys:       []string{protocol.KeyAlarm},
-			StartMs:    p.begin.Time.UnixMilli(),
-			EndMs:      p.end.Time.UnixMilli(),
-			Limit:      int(p.limit),
-			Descending: !p.asc,
-		})
-		if err != nil {
-			writeThingsBoardError(c, err, p.device)
-			return
-		}
-
-		points := series[protocol.KeyAlarm]
-		out := make([]alarmResponse, 0, len(points))
-		for _, pt := range points {
-			ev, err := protocol.ParseAlarmEvent(pt.Value)
+		if p.asc {
+			res, err := deps.Queries.ListAlarmEventsAsc(ctx, args)
 			if err != nil {
-				// One malformed record must not fail the whole listing — a device on a newer
-				// protocol, or a hand-written test point, should not blank an operator's screen.
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			for _, r := range res {
+				rows = append(rows, stored{r.Payload, r.SyntheticID, r.OccurredAt.Time})
+			}
+		} else {
+			res, err := deps.Queries.ListAlarmEventsDesc(ctx, db.ListAlarmEventsDescParams(args))
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			for _, r := range res {
+				rows = append(rows, stored{r.Payload, r.SyntheticID, r.OccurredAt.Time})
+			}
+		}
+
+		out := make([]alarmResponse, 0, len(rows))
+		for _, r := range rows {
+			ev, err := protocol.ParseAlarmEvent(r.payload)
+			if err != nil {
+				// Written only after a successful parse, so this means the parser got stricter since.
+				// One record must not blank an operator's screen.
 				continue
 			}
-			ts := ev.TSMs
-			if ts == 0 {
-				ts = pt.TS
+			if r.synthetic {
+				// Minted by the cloud to keep replays idempotent; not the device's id.
+				ev.AlarmID = ""
 			}
 			out = append(out, alarmResponse{
 				AlarmID:  ev.AlarmID,
@@ -106,10 +101,19 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 				Status:   ev.Status,
 				Text:     ev.Text,
 				Value:    ev.Value,
-				Time:     time.UnixMilli(ts).UTC(),
+				Time:     r.occurred.UTC(),
 			})
 		}
 
+		// The body is a bare array, so there is no field to carry this; a header does.
+		backfilled, err := recordsBackfilled(c, deps, p.device)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !backfilled {
+			c.Header("X-Records-Partial", "true")
+		}
 		c.JSON(http.StatusOK, out)
 	}
 }
