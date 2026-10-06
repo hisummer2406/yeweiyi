@@ -1,6 +1,8 @@
 # 设备协议 V1：最终待确认清单
 
-**状态：未冻结。** 2026-09-04 逐项对照两侧当前代码重新核对，取代
+**状态：未冻结。** 2026-10-06 复核设备端（见下方"2026-10-06 复核"）：A-1 至 A-6 在设备端
+`feature/thingsboard-device-protocol`（PR #38，未合并）上已对齐，**待合并与真机联调**。2026-09-04
+逐项对照两侧当前代码重新核对，取代
 [`protocol-v1-reconciliation.md`](protocol-v1-reconciliation.md) 中"建议的下一步"一节的时效性
 内容（那份文档仍是差异的完整背景，本文档是**待办清单**）。
 
@@ -17,11 +19,37 @@
 本文档也**不代表云端单方面的定稿**：下面每一条都标了决定人，云端能自己决定的只有标着
 "云端"的那几条。
 
+## 2026-10-06 复核：设备端 PR #38
+
+核对基准：zhongchengyeweiyi `origin/feature/thingsboard-device-protocol`@`d2a44ac`（领先其 `main` 27 个
+提交）。设备端 `main`@`2a2e0ee` **没有任何 ThingsBoard 代码**，下列对齐都只存在于未合并的 PR #38。
+
+| 项 | 复核结果 | 依据 |
+|---|---|---|
+| A-1 | 代码已改：终态走 `cmdResult` 遥测，RPC 只发一条响应；**未经真机验证** | `RpcDispatcher`、`RpcWirePayloads`、`RpcResultPublisher`（复用补投队列） |
+| A-2 | 代码已改：ACK 含 `commandId`、小写状态、`duplicate`、`tsMs` | `rpc_ack_*.json` 与云端逐字节一致 |
+| A-3 | 代码已改为扁平键 | `telemetry_snapshot*.json` 一致 |
+| A-4 | 代码已改：键 `alarm`，`alarmId` 含产生时刻，恢复复用同一 `alarmId` | `alarm_*.json` 一致 |
+| A-5 | 基本对齐：`protocolVersion` 整数 1；10 个方法中 8 个已注册；`LOCAL_MODE_LOCKED` 已有 | `config.setTank`/`config.setProbe` 未实现（B-2） |
+| A-6 | 代码已改为结构化 JSON | `stock_event_*.json` 一致 |
+
+仍未完成，且云端不得因此宣称兼容：
+
+- PR #38 未合并；设备端自述"零真机验证"（273 个 JVM 测试，没连过真实 ThingsBoard 与硬件）。
+- 物理命令（`pump.*`、`valve.*`、`device.reboot`）在设备端只有占位，等真机（设备端 #34）。
+- 设备端称云端没有"为真实设备创建 ThingsBoard 身份"的接口，装机拿不到凭据（**云端待核实**）。
+- 设备端 fixture 副本拷贝自 `26fb6b6`，缺 #14 标定属性；设备端实际会发 `tank{N}.calibrationHeightMm`/
+  `calibrationVolumeL`，该属性目前无契约测试覆盖。
+- 设备端文档称 `source` "云端没有这个字段、不需要"，与事实不符：云端 `internal/protocol/stock.go` 已解析
+  `source`（#15）。设备端补录仍发 `MANUAL`，云端可消费，仅文档过时，需设备端更正。
+- A-7：设备端确认恢复事件复用产生事件的 `alarmId`；补投后是否可能先收到 `CLEARED` 仍未答复。
+- B-9：设备端称不会用同一 `eventId` 重发修正版，但"待回复云端"，尚无正式答复。
+
 ---
 
 ## A. 阻塞项：按今天的两份代码，链路走不通
 
-### A-1 设备没有 `cmdResult` 上行通道，命令永远到不了终态 ⛔（已实测确认）
+### A-1 设备没有 `cmdResult` 上行通道，命令永远到不了终态 ⛔（旧实现已实测；PR #38 已改，待真机验证）
 
 **这是本次核对新发现的一条，先前的对账文档没有记。** 它比 A-2 的字段改名严重，因为它不是
 "解析不出来"，而是"整条反馈通道不存在"。**2026-09-04 已用真实 ThingsBoard 实测确认**（见下）。
@@ -72,7 +100,7 @@ ThingsBoard 的双向 RPC 在收到**第一条**响应时就把该 requestId 的
 
 **决定人：** Android 负责人（形状已由云端 fixture 定义，本条不是取舍，是缺失）。
 
-### A-2 ACK 载荷缺 `commandId`，云端无法关联 ⛔
+### A-2 ACK 载荷缺 `commandId`，云端无法关联（PR #38 已对齐，待合并）
 
 设备发的 ACK（`ThingsBoardManager.java:205-211`）：
 
@@ -98,7 +126,7 @@ ThingsBoard 的双向 RPC 在收到**第一条**响应时就把该 requestId 的
 
 **决定人：** 双方（2–4 是命名取舍，1、5 是缺失）。
 
-### A-3 遥测结构：扁平键 vs 嵌套数组 ⛔
+### A-3 遥测结构：扁平键 vs 嵌套数组（PR #38 已对齐，待合并）
 
 云端 `tank1.oilLevelMm` 扁平键；设备 `tanks: [{id, oilLevel, …}]` + 单独的 `units` 对象
 （`app/src/test/resources/thingsboard/telemetry_snapshot.json`，本次核对时仍是原样）。
@@ -110,7 +138,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 
 **决定人：** Android 负责人执行迁移；结论本身已有证据支持。
 
-### A-4 报警事件：键名与全部字段都不一致 ⛔
+### A-4 报警事件：键名与全部字段都不一致（PR #38 已对齐，待合并）
 
 | 语义 | 云端 | 设备 |
 |---|---|---|
@@ -132,7 +160,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 
 **决定人：** 双方。
 
-### A-5 RPC 请求信封：字段名与方法命名
+### A-5 RPC 请求信封：字段名与方法命名（PR #38 基本对齐，待合并）
 
 | 语义 | 云端 | 设备 | 建议 |
 |---|---|---|---|
@@ -158,7 +186,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 所以没有顺手做。需要设备端确认：同一次报警的 `ACTIVE`/`CLEARED` 是否保证共用 `alarmId`、补投后是否
 可能先收到 `CLEARED`（落库对顺序不敏感，但合并展示会）。
 
-### A-6 出入库 `stockEvent`
+### A-6 出入库 `stockEvent`（PR #38 已改结构化 JSON，待合并）
 
 设备仍以 `DetailInoutRecord.toString()` 上报（Java 调试字符串）。完整的字段映射、所需的设备端
 改动、以及仍待确认的四点，见 [`protocol-v1-stock-event.md`](protocol-v1-stock-event.md)。
@@ -237,7 +265,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 | 步骤 | 状态 |
 |---|---|
 | 云端清单 + 校验脚本 + 契约测试 | ✅ 已完成 |
-| Android 引入共享 fixture（替换现有四份自定义 fixture） | ⬜ 未开始 |
+| Android 引入共享 fixture（替换现有四份自定义 fixture） | 🟡 PR #38 已放入原样副本并由 `ProtocolV1ContractTest` 读取；副本落后于 #14（缺标定属性），无 `MANIFEST.json` |
 | Android 构建期挂 `verify-manifest.sh` | ⬜ 未开始 |
 | Android 的 builder 测试改为断言"产出字节 == fixture" | ⬜ 未开始 |
 | 两侧接上 CI，使校验真正成为门禁（本仓库目前无 CI） | ⬜ 未开始 |

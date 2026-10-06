@@ -123,15 +123,19 @@ docs/                 当前规范与历史归档
 ## 仍未定案或未验证的事项
 
 - 协议 V1 尚未冻结。做协议工作前先读 `docs/protocol-v1-open-items.md`（待确认清单，含决定人）
-  与 `docs/protocol-v1-reconciliation.md`（差异背景）。当前 Android 实现的遥测、报警与 ACK
-  载荷均不兼容。清单清空前，云端不要**自行发起**新增协议字段。例外：设备端负责人已在跨仓库 issue 中提出、云端只做
+  与 `docs/protocol-v1-reconciliation.md`（差异背景）。Android `main` 上**没有**任何 ThingsBoard 代码；
+  协议实现在设备端 `feature/thingsboard-device-protocol`（zhongchengyeweiyi PR #38，**未合并、零真机验证**），
+  该分支的遥测、报警、ACK、`cmdResult`、`stockEvent` 已对照共享 fixture 对齐（2026-10-06 复核，见
+  open-items §A），但合并与真机联调前仍不得视为兼容。清单清空前，云端不要**自行发起**新增协议字段。例外：设备端负责人已在跨仓库 issue 中提出、云端只做
   消费的**可选、向后兼容**字段（如 #14 标定属性、#15 `source`），可先落地，但必须在 PR 里写明
   "Refs 而非 Closes"，并在 open-items 登记待设备端同步的 fixture；字段名、单位、形状仍以设备端确认为准。
-- **真实设备上的控制闭环是断的，已实测。** 设备把终态发成第二条 RPC 响应，而 ThingsBoard 的双向
-  RPC 只把第一条交给调用方；云端因此永远收不到结果，命令停在 `received` 直到被清扫成 `expired`。
-  实测见 `internal/tbclient/rpc_response_channel_test.go`，待办见 open-items A-1。
+- **真实设备上的控制闭环：旧实现是断的（已实测），新实现待真机验证。** 旧设备把终态发成第二条 RPC
+  响应，而 ThingsBoard 的双向 RPC 只把第一条交给调用方，云端永远收不到结果，命令停在 `received` 直到
+  被清扫成 `expired`。实测见 `internal/tbclient/rpc_response_channel_test.go`（保留，防平台升级改变行为）。
+  设备端 PR #38 已改为终态走 `cmdResult` 遥测，只发一条 RPC 响应；**合并并在真实 ThingsBoard 上跑通前，
+  不得宣称闭环已通**，见 open-items A-1。
 - 共享 fixture 的校验（`fixtures/protocol/v1/MANIFEST.json` + `verify-manifest.sh` +
-  `internal/protocol/manifest_test.go`）**只在云端跑，还不是跨仓库门禁**；Android 侧未接入，
+  `internal/protocol/manifest_test.go`）**只在云端跑，还不是跨仓库门禁**；Android 侧只有一份原样副本（`ProtocolV1ContractTest` 读它，无校验和清单、无构建期校验、副本落后于 #14），
   见 open-items §C-1。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
