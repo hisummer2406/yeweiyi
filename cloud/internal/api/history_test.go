@@ -229,7 +229,8 @@ func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
 		"endTime":   {base.Add(2 * time.Hour).Format(time.RFC3339)},
 	}
 
-	// Assigned mid-bucket at +61m: the straddling 60–65m bucket mixes owners, so the window starts at +65m.
+	// Assigned mid-bucket at +61m: the straddling 60–65m bucket mixes owners, and one more bucket is
+	// held back for the gap between the UPDATE and the commit, so the window starts at +70m.
 	assigned := base.Add(61 * time.Minute)
 	if _, err := env.pool.Exec(context.Background(),
 		"UPDATE devices SET customer_assigned_at = $2 WHERE device_name = $1", device, assigned); err != nil {
@@ -239,7 +240,7 @@ func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
 		_, _ = env.pool.Exec(context.Background(), "UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device)
 	})
 
-	wantBegin := base.Add(65 * time.Minute)
+	wantBegin := base.Add(70 * time.Minute)
 	var got historyBody
 	deadline := time.Now().Add(20 * time.Second)
 	for {
@@ -250,7 +251,7 @@ func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}
 	if !got.BeginTime.Equal(wantBegin) {
-		t.Errorf("beginTime = %v, want %v (assignment rounded up to a bucket)", got.BeginTime, wantBegin)
+		t.Errorf("beginTime = %v, want %v (assignment rounded up to a bucket, plus one)", got.BeginTime, wantBegin)
 	}
 	if len(got.Series[field]) == 0 {
 		t.Fatal("no points after the assignment time")

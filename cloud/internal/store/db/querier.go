@@ -11,11 +11,16 @@ import (
 )
 
 type Querier interface {
-	// The access decision (same function) plus the DATABASE clock at that moment. Callers that clip a
-	// window of ThingsBoard data by devices.customer_assigned_at must cap it at decided_at, not at the
-	// API host's clock: both values are then stamped by one clock, so skew between the API host and
-	// PostgreSQL cannot defeat the cap. (clock_timestamp is read in the same statement as the decision,
-	// so the gap between them is the statement's own execution time.)
+	// The access decision (same function) plus the DATABASE clock for the moment of that decision.
+	// Callers that clip a window of ThingsBoard data by devices.customer_assigned_at must cap it at
+	// decided_at, not at the API host's clock: both values are then stamped by one clock, so skew
+	// between the API host and PostgreSQL cannot defeat the cap.
+	//
+	// statement_timestamp(), not clock_timestamp(): the decision reads the statement's MVCC snapshot,
+	// which is taken after the statement starts. A transfer committing in between is invisible to the
+	// decision (old owner still allowed), and clock_timestamp() could then land after that commit.
+	// The statement start is guaranteed not to be later than the snapshot, so the cap is never later
+	// than what the decision saw.
 	AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error)
 	// Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
 	// FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer

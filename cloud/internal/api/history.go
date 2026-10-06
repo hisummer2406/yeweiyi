@@ -174,7 +174,8 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// new one would otherwise read the previous customer's curves. Clip to the moment the device
 		// joined its current customer (devices.customer_assigned_at, maintained by a trigger). It
 		// applies to platform admins too, so the answer for a given device does not depend on who asks.
-		// Rounded UP to a bucket boundary: a bucket straddling the move would mix both owners' data.
+		// Rounded UP to a bucket boundary (plus one bucket, below): a bucket straddling the move would mix
+		// both owners' data.
 		// A device provisioned straight in ThingsBoard (tbdevicesim provision) has no business row;
 		// a platform admin may still query it, and there is no assignment to clip to.
 		row, err := deps.Queries.GetDevice(ctx, device)
@@ -183,7 +184,12 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if err == nil && row.CustomerAssignedAt.Valid {
-			if from := ceilTo(row.CustomerAssignedAt.Time.UnixMilli(), step); from > startMs {
+			// +step: customer_assigned_at is stamped at the UPDATE, but the transfer only becomes
+			// visible at COMMIT, after the bindings are cleared and the audit rows written. Without
+			// the extra bucket, the first bucket the new owner may read could hold samples taken while
+			// the old owner was still authorized. It holds unless that transaction outlasts one bucket
+			// (>= 1 minute); the price is one more bucket of history hidden from the new owner.
+			if from := ceilTo(row.CustomerAssignedAt.Time.UnixMilli(), step) + step; from > startMs {
 				startMs = from
 			}
 		}
