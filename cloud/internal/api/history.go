@@ -187,6 +187,14 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 				startMs = from
 			}
 		}
+		// ThingsBoard keeps raw telemetry for historyMaxWindow; anything older is already deleted and
+		// would read as "the device sent nothing". Start no earlier than the retention edge, rounded
+		// up so a partly expired bucket (whose average would be over the surviving samples only) is
+		// not returned. The response's beginTime shows the start actually used, like the assignment
+		// clip above.
+		if from := ceilTo(authAt.Add(-historyMaxWindow).UnixMilli(), step); from > startMs {
+			startMs = from
+		}
 		// The ownership decision, the cutoff above and the ThingsBoard read below are separate steps.
 		// If the device is reassigned between them, this caller was authorized as the OLD owner yet
 		// could read data the NEW owner produced. Cap the window at the last bucket that ended
