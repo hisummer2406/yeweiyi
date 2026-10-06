@@ -16,8 +16,8 @@ jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -45,8 +45,8 @@ jobs:
     env:
       DB_URL: postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       # 版本固定：@latest 会让某天 sqlc 一升级，没人改过任何代码 CI 就变红（或悄悄生成不同的输出）。
@@ -71,7 +71,7 @@ jobs:
   deploy-files:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker compose version
       - name: 部署脚本语法
         run: |

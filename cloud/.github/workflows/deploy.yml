@@ -25,7 +25,7 @@ jobs:
     env:
       IMAGE: ghcr.io/${{ github.repository }}:${{ inputs.image_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 校验 tag
         env:
           TAG: ${{ inputs.image_tag }}
