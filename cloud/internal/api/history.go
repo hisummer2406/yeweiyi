@@ -1,6 +1,7 @@
 package api
 
 import (
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -155,6 +156,31 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		ctx := c.Request.Context()
+
+		// ThingsBoard telemetry carries no customer, so after a device moves to another customer the
+		// new one would otherwise read the previous customer's curves. Clip to the moment the device
+		// joined its current customer (devices.customer_assigned_at, maintained by a trigger). It
+		// applies to platform admins too, so the answer for a given device does not depend on who asks.
+		// Rounded UP to a bucket boundary: a bucket straddling the move would mix both owners' data.
+		row, err := deps.Queries.GetDevice(ctx, device)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if row.CustomerAssignedAt.Valid {
+			if from := ceilTo(row.CustomerAssignedAt.Time.UnixMilli(), step); from > startMs {
+				startMs = from
+			}
+		}
+		if startMs >= endMs {
+			// The whole window predates the assignment: nothing this caller may see.
+			series := make(map[string][]historyPoint, len(fields))
+			for _, f := range fields {
+				series[f] = []historyPoint{}
+			}
+			writeHistory(c, device, tank, aggName, startMs, endMs, series)
+			return
+		}
 		dev, err := deps.TB.GetDeviceByName(ctx, device)
 		if err != nil {
 			writeThingsBoardError(c, err, device)
@@ -177,9 +203,9 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		for i, f := range fields {
 			points := make([]historyPoint, 0, len(raw[keys[i]]))
 			for _, p := range raw[keys[i]] {
-				v, err := strconv.ParseFloat(p.Value, 64)
-				if err != nil {
-					continue // a non-numeric value cannot be charted; skipping beats a 500 for the whole window
+				v, ok := chartableValue(p.Value)
+				if !ok {
+					continue // an uncharted value: skipping beats a 500 for the whole window
 				}
 				points = append(points, historyPoint{Time: time.UnixMilli(p.TS - step/2).UTC(), Value: v})
 			}
@@ -189,16 +215,31 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 			series[f] = points
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"device":    device,
-			"tank":      tank,
-			"interval":  c.Query("interval"),
-			"agg":       aggName,
-			"beginTime": time.UnixMilli(startMs).UTC(),
-			"endTime":   time.UnixMilli(endMs).UTC(),
-			"series":    series,
-		})
+		writeHistory(c, device, tank, aggName, startMs, endMs, series)
 	}
+}
+
+func writeHistory(c *gin.Context, device string, tank int, aggName string, startMs, endMs int64, series map[string][]historyPoint) {
+	c.JSON(http.StatusOK, gin.H{
+		"device":    device,
+		"tank":      tank,
+		"interval":  c.Query("interval"),
+		"agg":       aggName,
+		"beginTime": time.UnixMilli(startMs).UTC(),
+		"endTime":   time.UnixMilli(endMs).UTC(),
+		"series":    series,
+	})
+}
+
+// chartableValue parses a ThingsBoard value for charting. ParseFloat accepts "NaN"/"Inf", which
+// encoding/json cannot marshal: the 200 would already be written and the body truncated, so they
+// are rejected along with non-numeric strings.
+func chartableValue(s string) (float64, bool) {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, false
+	}
+	return v, true
 }
 
 func floorTo(ms, step int64) int64 { return ms - ((ms%step)+step)%step }

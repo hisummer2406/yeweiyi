@@ -20,3 +20,16 @@ func TestBucketAlignment(t *testing.T) {
 		}
 	}
 }
+
+func TestChartableValue(t *testing.T) {
+	for _, in := range []string{"NaN", "nan", "Inf", "+Inf", "-Inf", "Infinity", "", "abc"} {
+		if v, ok := chartableValue(in); ok {
+			t.Errorf("chartableValue(%q) = %v, true; want rejected", in, v)
+		}
+	}
+	for in, want := range map[string]float64{"0": 0, "-1.5": -1.5, "1e3": 1000} {
+		if v, ok := chartableValue(in); !ok || v != want {
+			t.Errorf("chartableValue(%q) = %v, %v; want %v, true", in, v, ok, want)
+		}
+	}
+}

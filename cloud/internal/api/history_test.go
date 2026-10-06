@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -71,6 +72,12 @@ func fetchHistory(t *testing.T, env *testEnv, device string, q url.Values, want 
 
 func TestTelemetryHistory_AggregatesAgainstRealThingsBoard(t *testing.T) {
 	env, _, device, token := newStockEnv(t)
+	// The fixture device was assigned to its customer just now, which would clip away the
+	// backdated samples seeded below; this test is about aggregation, not the assignment clip.
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device); err != nil {
+		t.Fatal(err)
+	}
 
 	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
 	samples := seedHistory(t, token, base)
@@ -206,4 +213,58 @@ func TestTelemetryHistory_BucketCeilingMatchesThingsBoard(t *testing.T) {
 	}
 	fetchHistory(t, env, device, q(700), http.StatusOK)
 	fetchHistory(t, env, device, q(701), http.StatusBadRequest)
+}
+
+// A device moved to another customer must not expose the previous customer's history: ThingsBoard
+// telemetry carries no customer, so the query is clipped at devices.customer_assigned_at.
+func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
+	seedHistory(t, token, base)
+	field := protocol.KeyOilLevelMm
+	q := url.Values{
+		"tank": {"1"}, "fields": {field}, "interval": {"5m"},
+		"beginTime": {base.Format(time.RFC3339)},
+		"endTime":   {base.Add(2 * time.Hour).Format(time.RFC3339)},
+	}
+
+	// Assigned mid-bucket at +61m: the straddling 60–65m bucket mixes owners, so the window starts at +65m.
+	assigned := base.Add(61 * time.Minute)
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = $2 WHERE device_name = $1", device, assigned); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = env.pool.Exec(context.Background(), "UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device)
+	})
+
+	wantBegin := base.Add(65 * time.Minute)
+	var got historyBody
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		got = fetchHistory(t, env, device, q, http.StatusOK)
+		if len(got.Series[field]) > 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if !got.BeginTime.Equal(wantBegin) {
+		t.Errorf("beginTime = %v, want %v (assignment rounded up to a bucket)", got.BeginTime, wantBegin)
+	}
+	if len(got.Series[field]) == 0 {
+		t.Fatal("no points after the assignment time")
+	}
+	for _, p := range got.Series[field] {
+		if p.Time.Before(wantBegin) {
+			t.Errorf("point at %v predates the assignment (%v)", p.Time, assigned)
+		}
+	}
+
+	// A window entirely before the assignment is empty, not an error and not the old data.
+	q.Set("endTime", base.Add(30*time.Minute).Format(time.RFC3339))
+	got = fetchHistory(t, env, device, q, http.StatusOK)
+	if n := len(got.Series[field]); n != 0 {
+		t.Errorf("window before assignment returned %d points, want 0", n)
+	}
 }
