@@ -180,3 +180,7 @@ Each of these is pinned by an assertion in `CRCheckTest`/`DataUtilsTest`, so cha
 Release builds are signed via `app/build.gradle`'s `signingConfigs.release`, wired up 2026-08-16. The keystore file itself (`app/keystore/release.jks`) is untracked (`.gitignore`) and generated locally with `tools/generate-release-keystore.sh`; its store/key passwords and alias go through the same `local.properties`-injection channel as the other secrets (`sansen.releaseStorePassword`, `sansen.releaseKeyAlias`, `sansen.releaseKeyPassword` — see `local.properties.template`). If any of the three properties or the keystore file itself is missing, `assembleRelease` still succeeds (unsigned APK, same as before this existed) but logs a `[配置缺失]` warning — it does not hard-fail, matching the project's existing secret-handling convention.
 
 Treat `release.jks` as the app's permanent production identity once generated: Android requires the *same* signing key for in-place upgrades of a given `applicationId`, so losing the file or its passwords means already-deployed devices can only be wiped and reinstalled, never upgraded. Back the keystore and passwords up somewhere outside this checkout (the generation script prints this reminder too).
+
+## Docs and code comments
+
+Follow the `doc-comment-standards` skill (`.claude/skills/doc-comment-standards/SKILL.md`) whenever writing or editing docs, writing code comments, or changing code that existing comments/docs describe.
