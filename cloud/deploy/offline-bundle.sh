@@ -48,6 +48,27 @@ while read -r image digest; do
   fi
 done < "$HERE/images.txt"
 
+# 1b) 业务 API 镜像：每次发布的摘要都不同，不能像第三方镜像那样把摘要写死在 images.txt。
+# 改为打包时指定 API_IMAGE（必须是具体 tag，如 ghcr.io/hisummer2406/yeweiyi-cloud:sha-1234567），
+# 拉取后取实际摘要，写入**包内**的 images.txt 副本——仓库里的 images.txt 不变。
+# GHCR 的包默认私有，打包机需先 `docker login ghcr.io`（令牌要有 read:packages）。
+API_IMAGE="${API_IMAGE:-}"
+if [[ -z "$API_IMAGE" ]]; then
+  echo "!!! 未设置 API_IMAGE，例如：API_IMAGE=ghcr.io/hisummer2406/yeweiyi-cloud:sha-1234567 $0" >&2
+  exit 1
+fi
+if [[ "$API_IMAGE" == *:latest || "$API_IMAGE" != *:* ]]; then
+  echo "!!! API_IMAGE 必须固定到具体 tag，不能用 latest 或省略 tag：$API_IMAGE" >&2
+  exit 1
+fi
+echo "==> 拉取业务 API 镜像 $API_IMAGE"
+docker pull -q "$API_IMAGE" >/dev/null || { echo "!!! 拉取失败（是否已 docker login ghcr.io？）：$API_IMAGE" >&2; exit 1; }
+API_DIGEST="$(docker image inspect "$API_IMAGE" --format '{{index .RepoDigests 0}}' | sed 's/.*@//')"
+if [[ -z "$API_DIGEST" ]]; then
+  echo "!!! 取不到 $API_IMAGE 的摘要（不是从仓库拉取的镜像？）" >&2; exit 1
+fi
+echo "    摘要 $API_DIGEST"
+
 echo "==> 导出镜像（约 1.2 GB，需几分钟）"
 # 不用 mapfile：它是 bash 4+ 的内建命令，而 macOS 自带的是 bash 3.2。打包机很可能就是
 # 开发者的 Mac，脚本必须在那里也能跑。
@@ -56,6 +77,7 @@ while read -r image _; do
   [[ -z "${image:-}" || "$image" == \#* ]] && continue
   IMAGES="$IMAGES $image"
 done < "$HERE/images.txt"
+IMAGES="$IMAGES $API_IMAGE"
 docker save $IMAGES | gzip -1 > "$STAGE/images/images.tar.gz"
 
 # 2) 二进制：静态编译，内网机器无需 Go 工具链
@@ -83,6 +105,9 @@ rm -rf "$STAGE/deploy/tb-config/current"
 cp "$HERE/images.txt" "$HERE/offline-load.sh" "$HERE/preflight.sh" \
    "$HERE/backup.sh" "$HERE/restore.sh" "$HERE/gen-certs.sh" "$HERE/README.md" "$STAGE/"
 cp "$HERE/LICENSE-thingsboard.txt" "$STAGE/"
+# 把业务 API 镜像连同摘要追加到包内清单，offline-load.sh 据此核对导入结果。
+echo "$API_IMAGE $API_DIGEST" >> "$STAGE/images.txt"
+echo "API_IMAGE=$API_IMAGE" > "$STAGE/api-image.env"
 chmod +x "$STAGE"/*.sh
 
 # 4) 校验清单：内网侧据此确认包在传输中未被截断或篡改
