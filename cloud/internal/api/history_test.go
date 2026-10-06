@@ -267,4 +267,39 @@ func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
 	if n := len(got.Series[field]); n != 0 {
 		t.Errorf("window before assignment returned %d points, want 0", n)
 	}
+	if got.BeginTime.After(got.EndTime) {
+		t.Errorf("empty response window is inverted: [%v, %v]", got.BeginTime, got.EndTime)
+	}
+}
+
+// The assignment time must be taken when the UPDATE runs, not at transaction start: reassignment
+// first waits on the device row lock, and telemetry produced meanwhile belongs to the old customer.
+func TestDeviceAssignedAt_IsNotTransactionStart(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	const dev = "assigned-at-clock-test"
+	t.Cleanup(func() { _, _ = env.pool.Exec(ctx, "DELETE FROM devices WHERE device_name = $1", dev) })
+	if _, err := env.pool.Exec(ctx, "INSERT INTO devices (device_name) VALUES ($1)", dev); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := env.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var txStart time.Time
+	if err := tx.QueryRow(ctx, "SELECT now()").Scan(&txStart); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_sleep(1.2)"); err != nil {
+		t.Fatal(err)
+	}
+	var assigned time.Time
+	if err := tx.QueryRow(ctx, `UPDATE devices SET customer_id = (SELECT min(id) FROM customers)
+		WHERE device_name = $1 RETURNING customer_assigned_at`, dev).Scan(&assigned); err != nil {
+		t.Fatal(err)
+	}
+	if got := assigned.Sub(txStart); got < time.Second {
+		t.Errorf("customer_assigned_at is only %v after transaction start; it looks like now(), not clock_timestamp()", got)
+	}
 }

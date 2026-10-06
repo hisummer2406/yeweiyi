@@ -5,6 +5,8 @@ ALTER TABLE devices ADD COLUMN customer_assigned_at TIMESTAMPTZ;
 COMMENT ON COLUMN devices.customer_assigned_at IS
     '设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前已分配的设备为 NULL（归属时刻未知，不裁剪）；未分配时也为 NULL。';
 
+-- 取 clock_timestamp() 而不是 now()：now() 是事务开始时间，而改归属的事务会先在 GetDeviceForUpdate
+-- 上等行锁，等待期间旧客户产生的遥测不能算到新客户名下。
 -- 用触发器而不是在各条 SQL 里写：EnsureDeviceForCustomer、SetDeviceCustomer 以及将来任何
 -- 修改 customer_id 的路径都不会漏。
 CREATE FUNCTION devices_touch_customer_assigned_at() RETURNS trigger
@@ -12,10 +14,10 @@ LANGUAGE plpgsql AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         IF NEW.customer_id IS NOT NULL THEN
-            NEW.customer_assigned_at := now();
+            NEW.customer_assigned_at := clock_timestamp();
         END IF;
     ELSIF NEW.customer_id IS DISTINCT FROM OLD.customer_id THEN
-        NEW.customer_assigned_at := CASE WHEN NEW.customer_id IS NULL THEN NULL ELSE now() END;
+        NEW.customer_assigned_at := CASE WHEN NEW.customer_id IS NULL THEN NULL ELSE clock_timestamp() END;
     END IF;
     RETURN NEW;
 END;

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"math"
 	"net/http"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/tbclient"
@@ -144,6 +146,7 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// the caller gets at least what they asked for.
 		step := interval.Milliseconds()
 		startMs := floorTo(begin.UnixMilli(), step)
+		reqStartMs := startMs
 		endMs := ceilTo(end.UnixMilli(), step)
 		if (endMs-startMs)/step > historyMaxBuckets {
 			bad("too many buckets (" + strconv.FormatInt((endMs-startMs)/step, 10) + " > " +
@@ -162,25 +165,29 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// joined its current customer (devices.customer_assigned_at, maintained by a trigger). It
 		// applies to platform admins too, so the answer for a given device does not depend on who asks.
 		// Rounded UP to a bucket boundary: a bucket straddling the move would mix both owners' data.
+		// A device provisioned straight in ThingsBoard (tbdevicesim provision) has no business row;
+		// a platform admin may still query it, and there is no assignment to clip to.
 		row, err := deps.Queries.GetDevice(ctx, device)
-		if err != nil {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if row.CustomerAssignedAt.Valid {
+		if err == nil && row.CustomerAssignedAt.Valid {
 			if from := ceilTo(row.CustomerAssignedAt.Time.UnixMilli(), step); from > startMs {
 				startMs = from
 			}
 		}
 		if startMs >= endMs {
-			// The whole window predates the assignment: nothing this caller may see.
+			// The whole window predates the assignment: nothing this caller may see. Echo the
+			// requested aligned window, not the clipped start, so beginTime never exceeds endTime.
 			series := make(map[string][]historyPoint, len(fields))
 			for _, f := range fields {
 				series[f] = []historyPoint{}
 			}
-			writeHistory(c, device, tank, aggName, startMs, endMs, series)
+			writeHistory(c, device, tank, aggName, reqStartMs, endMs, series)
 			return
 		}
+
 		dev, err := deps.TB.GetDeviceByName(ctx, device)
 		if err != nil {
 			writeThingsBoardError(c, err, device)
