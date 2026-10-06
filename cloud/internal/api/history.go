@@ -187,19 +187,12 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 			// +step: customer_assigned_at is stamped at the UPDATE, but the transfer only becomes
 			// visible at COMMIT, after the bindings are cleared and the audit rows written. Without
 			// the extra bucket, the first bucket the new owner may read could hold samples taken while
-			// the old owner was still authorized. It holds unless that transaction outlasts one bucket
-			// (>= 1 minute); the price is one more bucket of history hidden from the new owner.
+			// the old owner was still authorized. assignDeviceHandler bounds that transaction to
+			// assignTxTimeout, which is below the smallest bucket, so the allowance is sound; the price
+			// is one more bucket of history hidden from the new owner.
 			if from := ceilTo(row.CustomerAssignedAt.Time.UnixMilli(), step) + step; from > startMs {
 				startMs = from
 			}
-		}
-		// ThingsBoard keeps raw telemetry for historyMaxWindow; anything older is already deleted and
-		// would read as "the device sent nothing". Start no earlier than the retention edge, rounded
-		// up so a partly expired bucket (whose average would be over the surviving samples only) is
-		// not returned. The response's beginTime shows the start actually used, like the assignment
-		// clip above.
-		if from := ceilTo(authAt.Add(-historyMaxWindow).UnixMilli(), step); from > startMs {
-			startMs = from
 		}
 		// The ownership decision, the cutoff above and the ThingsBoard read below are separate steps.
 		// If the device is reassigned between them, this caller was authorized as the OLD owner yet

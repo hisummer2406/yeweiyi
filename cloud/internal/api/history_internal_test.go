@@ -33,3 +33,13 @@ func TestChartableValue(t *testing.T) {
 		}
 	}
 }
+
+// The one-bucket allowance after a reassignment (telemetryHistoryHandler) is only sound while the
+// reassignment transaction cannot outlast the smallest bucket.
+func TestAssignTxTimeoutIsBelowSmallestBucket(t *testing.T) {
+	for name, d := range historyIntervals {
+		if assignTxTimeout >= d {
+			t.Errorf("assignTxTimeout %v >= interval %s (%v): the post-reassignment allowance is no longer sound", assignTxTimeout, name, d)
+		}
+	}
+}

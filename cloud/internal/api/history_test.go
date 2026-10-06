@@ -298,35 +298,6 @@ func TestTelemetryHistory_ExcludesTheBucketInProgress(t *testing.T) {
 	}
 }
 
-// Data older than the retention window is already gone; the response must say where it really
-// starts instead of presenting the missing days as "no samples".
-func TestTelemetryHistory_StartsNoEarlierThanRetention(t *testing.T) {
-	env, _, device, _ := newStockEnv(t)
-	if _, err := env.pool.Exec(context.Background(),
-		"UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device); err != nil {
-		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	q := url.Values{
-		"tank": {"1"}, "fields": {protocol.KeyOilLevelMm}, "interval": {"1h"},
-		"beginTime": {now.Add(-8 * 24 * time.Hour).Format(time.RFC3339)}, // 1 day older than kept
-		"endTime":   {now.Add(-36 * time.Hour).Format(time.RFC3339)},
-	}
-	got := fetchHistory(t, env, device, q, http.StatusOK)
-	lo := now.Add(-7 * 24 * time.Hour).Truncate(time.Hour).Add(time.Hour)
-	if !got.BeginTime.Equal(lo) && !got.BeginTime.Equal(lo.Add(time.Hour)) {
-		t.Errorf("beginTime = %v, want the retention edge %v (rounded up to the hour)", got.BeginTime, lo)
-	}
-
-	// Entirely expired: empty and well-formed, not an error.
-	q.Set("beginTime", now.Add(-20*24*time.Hour).Format(time.RFC3339))
-	q.Set("endTime", now.Add(-19*24*time.Hour).Format(time.RFC3339))
-	got = fetchHistory(t, env, device, q, http.StatusOK)
-	if n := len(got.Series[protocol.KeyOilLevelMm]); n != 0 || got.BeginTime.After(got.EndTime) {
-		t.Errorf("expired window: %d points, window [%v, %v]", n, got.BeginTime, got.EndTime)
-	}
-}
-
 // A reassignment that lands after the request was authorized has a cutoff in the future relative to
 // the authorization instant; a window reaching past that instant must come back empty rather than
 // carry the new owner's data to the previous owner.
