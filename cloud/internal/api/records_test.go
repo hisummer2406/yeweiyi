@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -14,17 +15,16 @@ func TestListAlarms_RequiresDevice(t *testing.T) {
 	}
 }
 
-// The "returns real alarms" case moved to alarms_test.go: /api/alarms now reads from ThingsBoard,
-// so it needs a real device publishing a real alarm rather than a seeded database row.
-
-func TestListAlarms_ReturnsUnavailableWhenThingsBoardNotConfigured(t *testing.T) {
+// The record endpoints read the business database, not ThingsBoard: with no ThingsBoard configured
+// they still answer, and a device with no records is an empty answer rather than an outage.
+func TestListAlarms_NoThingsBoardNeeded(t *testing.T) {
 	env := newTestEnv(t) // no TB wired
 	const deviceName = "api-test-alarms-no-tb"
 	env.ownDevice(deviceName)
 
 	rec := env.authed("GET", "/api/alarms?device="+deviceName, nil)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK || strings.TrimSpace(rec.Body.String()) != "[]" {
+		t.Fatalf("expected 200 [], got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -48,9 +48,6 @@ func TestListAlarms_Unauthenticated(t *testing.T) {
 	}
 }
 
-// The DB-backed oil-in-out test moved to stock_test.go: /api/oil-in-out now reads from
-// ThingsBoard, so a seeded row proves nothing — nothing reads that table any more.
-
 func TestListOilInOut_RequiresDevice(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -59,14 +56,18 @@ func TestListOilInOut_RequiresDevice(t *testing.T) {
 	}
 }
 
-func TestListOilInOut_ReturnsUnavailableWhenThingsBoardNotConfigured(t *testing.T) {
+func TestListOilInOut_NoThingsBoardNeeded(t *testing.T) {
 	env := newTestEnv(t)
 	const deviceName = "api-test-oilinout-no-tb"
 	env.ownDevice(deviceName)
 
 	rec := env.authed("GET", "/api/oil-in-out?device="+deviceName, nil)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := decodeStock(t, rec.Body.Bytes())
+	if body.Rows == nil || len(body.Rows) != 0 || body.Unparsable != 0 {
+		t.Fatalf("expected an empty rows array and no unparsable records, got %+v", body)
 	}
 }
 

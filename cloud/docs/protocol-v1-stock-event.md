@@ -3,6 +3,15 @@
 **状态：云端已实现并锁定字段名；设备端改动待 Android 负责人确认后实施。**
 2026-09-04 整理，作为 PR #11 阻塞项之二的收口文档。
 
+> **2026-10-06 更新（issue #29）：`/api/oil-in-out` 不再读穿 ThingsBoard，改读业务库 `stock_events`。**
+> 本文下面凡写"读取 / 扫描 ThingsBoard"处，描述的是**落库前**的实现，其结论仍成立但机制变了：
+> 折叠发生在**写入**时（同一 `(设备, eventId)` 信封 `ts` 最大者胜，见迁移 000017 与
+> `UpsertStockEvent`），所以"读到当前时刻 / 5000×10 点扫描上限 / `partial`"这套机制已不存在
+> （`partial` 恒为 `false`，仅为保持响应形状）；读不出来的原文进 `record_rejects`，`unparsable` /
+> `legacySkipped` / `invalidSource` 的分类规则与 502 契约**不变**，仍按信封 `ts` 与
+> `stock.legacyFormatBefore` 比较。`offset` 现在可用。设备转移后，记录窗口按
+> `devices.customer_assigned_at` 裁剪，与 `telemetry/history` 一致。
+
 本文只谈出入库这一个遥测键。整体协议冻结状态见
 [`protocol-v1-reconciliation.md`](protocol-v1-reconciliation.md) 与
 [`protocol-v1-open-items.md`](protocol-v1-open-items.md)。

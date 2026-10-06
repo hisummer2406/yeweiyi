@@ -59,6 +59,23 @@ func (ns NullRiverJobState) Value() (driver.Value, error) {
 	return string(ns.RiverJobState), nil
 }
 
+// 报警状态变迁（设备协议 V1 alarm）。产生（ACTIVE）与恢复（CLEARED）各占一行，沿用 /api/alarms 既有的逐条语义，以 (device_name, alarm_id, status) 为键幂等写入；同一份重放不改变已有行。业务库是长期事实来源，非必要不删除。
+type AlarmEvent struct {
+	DeviceName string `json:"device_name"`
+	// 设备生成的报警 ID，ACTIVE 与 CLEARED 共用；设备未提供时云端合成（synthetic_id=true）。
+	AlarmID string `json:"alarm_id"`
+	Status  string `json:"status"`
+	// alarm_id 是云端合成的，接口对外返回空 alarmId。
+	SyntheticID bool `json:"synthetic_id"`
+	// 设备检测到的时刻（载荷 tsMs；缺省时取信封 ts）。
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	// 该条的 ThingsBoard 信封 ts（毫秒）。
+	EnvTs int64 `json:"env_ts"`
+	// 原始 JSON，保真保存。
+	Payload   []byte             `json:"payload"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // 审计日志，长期保留，不随遥测清理。记录控制命令的下发、拒绝与最终结果，以及越权访问尝试。device_name/command_id 刻意不做外键——被拒绝的越权尝试所指向的设备可能根本不存在，而那正是最值得记录的一类事件。
 type AuditLog struct {
 	ID         int64              `json:"id"`
@@ -136,6 +153,21 @@ type DevicePairingSecret struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// 无法解析的出入库/报警原文（如固件升级前的 DetailInoutRecord.toString()、source 取值非法的记录）。(kind, device_name, env_ts, 原文哈希) 唯一，回补重放幂等。
+type RecordReject struct {
+	ID         int64  `json:"id"`
+	Kind       string `json:"kind"`
+	DeviceName string `json:"device_name"`
+	// 信封 ts（毫秒）。接口用它与 stock.legacyFormatBefore 比较，区分已封口的旧格式记录与当下故障。
+	EnvTs int64 `json:"env_ts"`
+	// unparsable = 不是 V1 JSON；invalid_source = JSON 合法但 source 不是 AUTO/MANUAL。
+	Reason string `json:"reason"`
+	Raw    string `json:"raw"`
+	// 原文 md5，仅用于唯一约束（原文可能很长）。
+	RawHash   string             `json:"raw_hash"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // river 队列库自带的 schema（作业表），由 riverqueue/river 管理，非本项目业务表，不要手工改结构。
 type RiverJob struct {
 	ID           int64              `json:"id"`
@@ -180,6 +212,26 @@ type RiverQueue struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	Metadata  []byte             `json:"metadata"`
 	PausedAt  pgtype.Timestamptz `json:"paused_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 出入库记录（设备协议 V1 stockEvent）。一笔移库一行，以 (device_name, event_id) 为键，幂等写入；设备用同一 eventId 重发修正版时，信封 ts 最大的一份胜出（docs/protocol-v1-stock-event.md）。业务库是长期事实来源，非必要不删除。
+type StockEvent struct {
+	// 设备名，与 devices.device_name 对应但不设外键，设备删除后记录仍保留。
+	DeviceName string `json:"device_name"`
+	// 设备生成的事件 ID。设备未提供时由云端按 信封ts+载荷哈希 合成（synthetic_id=true），保证回补重放幂等。
+	EventID string `json:"event_id"`
+	// event_id 是云端合成的（载荷里没有 eventId）。此类记录不参与按 eventId 折叠，接口对外返回空 eventId。
+	SyntheticID bool `json:"synthetic_id"`
+	// 记录关闭时刻（载荷 tsMs；缺省时取信封 ts），接口按它列窗口、排序并做归属裁剪。
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	// 胜出那一份报告的 ThingsBoard 信封 ts（毫秒）：设备生成该报文的时刻，补投原样保留。
+	EnvTs int64 `json:"env_ts"`
+	// 收到过的全部不同信封 ts（毫秒，去重）。基数减一即被折叠掉的重复报告数；重放同一份报告不会增加它。
+	ReportTs []int64 `json:"report_ts"`
+	// 胜出那一份报告的原始 JSON，保真保存，接口据此还原字段，设备端后续新增的可选字段不会丢。
+	Payload   []byte             `json:"payload"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 

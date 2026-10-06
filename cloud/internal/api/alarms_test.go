@@ -13,13 +13,14 @@ import (
 
 	"yeweiyi-cloud/internal/api"
 	"yeweiyi-cloud/internal/devicesim"
+	"yeweiyi-cloud/internal/ingest"
 	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/tbclient"
 )
 
-// /api/alarms now reads through to ThingsBoard, so testing it honestly needs a real device
-// publishing a real alarm — a seeded database row would prove nothing, since nothing reads that
-// table any more.
+// /api/alarms is served from the business database, which only ingest writes, so testing it honestly
+// needs a real device publishing a real alarm through ThingsBoard and the ingester — a seeded row would
+// skip the pipeline the endpoint depends on.
 
 func tbEnvOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -79,6 +80,36 @@ func newStockEnv(t *testing.T, opts ...func(*api.Deps)) (*testEnv, *devicesim.De
 	}
 
 	env.ownDevice(deviceName)
+	// ownDevice stamps customer_assigned_at = now, and the record endpoints hide anything older than
+	// that (plus the transfer allowance) from the current owner. These tests publish records "now" and
+	// in the past on a device that was just created, so clear the stamp; the clipping itself has its
+	// own tests (TestRecords_*Transfer*) that set it deliberately. The UPDATE names no customer_id, so
+	// the maintenance trigger does not fire.
+	if _, err := env.pool.Exec(ctx, `UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1`, deviceName); err != nil {
+		t.Fatalf("clear customer_assigned_at: %v", err)
+	}
+
+	// The business database is where these endpoints read from (issue #29), so the full pipeline is
+	// under test: device -> ThingsBoard -> ingest -> business database -> API. A short reconcile
+	// interval and a very long lookback stand in for the production 10m / 8d, so records published
+	// with old timestamps (replay tests) are still picked up promptly.
+	ingCtx, stopIngest := context.WithCancel(ctx)
+	ing := ingest.New(ingest.Config{
+		TB: tb, Queries: env.queries,
+		RecordReconcileInterval: 500 * time.Millisecond,
+		RecordReconcileLookback: 100 * 365 * 24 * time.Hour,
+		ResubscribeDelay:        time.Second,
+		Logf:                    t.Logf,
+	})
+	ing.StartDevice(ingCtx, deviceName)
+	env.ing = ing
+	t.Cleanup(stopIngest)
+	t.Cleanup(func() {
+		// Records are kept forever in production; the test device is not.
+		for _, table := range []string{"stock_events", "alarm_events", "record_rejects"} {
+			env.pool.Exec(context.Background(), `DELETE FROM `+table+` WHERE device_name = $1`, deviceName)
+		}
+	})
 
 	sim := devicesim.New(devicesim.Config{
 		BrokerURL:        tbEnvOr("TB_MQTT_URL", "tcp://localhost:1884"),
@@ -126,8 +157,8 @@ func fetchAlarms(t *testing.T, env *testEnv, path string) []map[string]any {
 	return out
 }
 
-// TestListAlarms_ReadsThroughToThingsBoard is the replacement for the old seeded-row test.
-func TestListAlarms_ReadsThroughToThingsBoard(t *testing.T) {
+// TestListAlarms_ServedFromBusinessDatabase is the replacement for the old seeded-row test.
+func TestListAlarms_ServedFromBusinessDatabase(t *testing.T) {
 	env, sim, device := newAlarmEnv(t)
 
 	active, err := sim.RaiseAlarm(1, protocol.AlarmHighHighLevel, protocol.SeverityCritical, "1号罐高高液位报警", 1980.4)
@@ -218,19 +249,40 @@ func TestListAlarms_SortReturnsTheNewestWhenLimited(t *testing.T) {
 	}
 }
 
-// TestListAlarms_RejectsOffset: ThingsBoard pages by time window, not row offset. Silently ignoring
-// offset would hand a paginating client the same page forever.
-func TestListAlarms_RejectsOffset(t *testing.T) {
-	env, _, device := newAlarmEnv(t)
+// TestListAlarms_OffsetPages: the table pages by row offset, so a paginating client advances through
+// the history instead of seeing the first page forever (ThingsBoard could only page by time window,
+// and this endpoint used to answer 400 for offset because of it).
+func TestListAlarms_OffsetPages(t *testing.T) {
+	env, sim, device := newAlarmEnv(t)
 
-	rec := env.authed("GET", "/api/alarms?device="+device+"&offset=10", nil)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for offset, got %d: %s", rec.Code, rec.Body.String())
+	var ids []string
+	for i := 0; i < 3; i++ {
+		a, err := sim.RaiseAlarm(1, protocol.AlarmHighLevel, protocol.SeverityMajor, fmt.Sprintf("报警%d", i), 1500+float64(i))
+		if err != nil {
+			t.Fatalf("RaiseAlarm: %v", err)
+		}
+		ids = append(ids, a.AlarmID)
+		time.Sleep(5 * time.Millisecond) // distinct occurrence times, so the order is not a tie-break
+	}
+	base := "/api/alarms?device=" + device + "&beginTime=2020-01-01T00:00:00Z&endTime=2030-01-01T00:00:00Z&sort=true"
+
+	deadline := time.Now().Add(20 * time.Second)
+	for len(fetchAlarms(t, env, base)) < 3 {
+		if time.Now().After(deadline) {
+			t.Fatal("the three alarms never all appeared")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	page := fetchAlarms(t, env, base+"&limit=1&offset=1")
+	if len(page) != 1 || page[0]["alarmId"] != ids[1] {
+		t.Fatalf("offset=1&limit=1 = %v, want the second-oldest alarm %s", page, ids[1])
+	}
+	if past := fetchAlarms(t, env, base+"&offset=3"); len(past) != 0 {
+		t.Fatalf("offset past the end returned %v, want []", past)
 	}
 }
 
-// TestListAlarms_EmptyForDeviceThatNeverAlarmed: an empty list, not a 404 — the device is fine, it
-// simply has no alarms.
 func TestListAlarms_EmptyForDeviceThatNeverAlarmed(t *testing.T) {
 	env, _, device := newAlarmEnv(t)
 

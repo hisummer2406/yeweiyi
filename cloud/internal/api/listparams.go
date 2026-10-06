@@ -15,7 +15,7 @@ const (
 )
 
 // listParams is the shared query shape for the device history endpoints — /api/alarms (alarms.go)
-// and /api/oil-in-out (stock.go), both of which now read through to ThingsBoard. "History for one
+// and /api/oil-in-out (stock.go), both served from the business database (issue #29). "History for one
 // device, filtered by time range, paginated."
 //
 // /api/shifts (交班) used to share it too. That endpoint was removed rather than migrated: 设备协议 V1

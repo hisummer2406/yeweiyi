@@ -367,8 +367,33 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 
 备份是**逻辑转储**，不含容器卷本身，也不含 WAL 与日志 —— 这些不需要备份。
 
+**业务库里的出入库与报警是长期事实来源**（issue #29）：`stock_events`、`alarm_events`、`record_rejects`
+三张表（迁移 000017）都在 `business.sql.gz` 里，且**只在这里有永久副本**——ThingsBoard 里的同类记录
+可以被 TTL 或人工清理删掉。因此备份业务库不是可选项；ThingsBoard 备份只对在途遥测与设备凭据有意义。
+恢复后这三张表随业务库一起回来，无需再回补；若恢复的是比较旧的业务库备份，重启服务后每台设备会按
+`ingest.recordReconcileLookback` 自动从 ThingsBoard 补回备份之后的记录，更早的缺口见下节。
+
 建议每日一次并异地留存；`manifest.txt` 记录了 ThingsBoard 镜像版本与业务库 schema 版本，
 恢复时据此判断目标环境是否匹配。
+
+### 启用 ThingsBoard 遥测 TTL 之前：回补出入库与报警
+
+`TS_RETENTION_SECONDS` 必须保持 `0`，直到下面几步做完（CLAUDE.md 约束 5）。TTL 一开，ThingsBoard
+里更早的出入库与报警就永久消失，业务库里没有的就再也找不回来。
+
+1. 服务已运行一段时间。业务库里还一条记录都没有的设备，首次订阅时会自动从头全量回补；已经有记录的
+   设备只自动回补最近 `ingest.recordReconcileLookback`（默认 8 天）。
+2. 对全部设备显式再跑一次全量回补（幂等，可与服务同时运行，可重复；从不删除任何东西）：
+
+   ```bash
+   go run ./cmd/backfill -config config.yaml          # 全部设备
+   go run ./cmd/backfill -config config.yaml -device DEVICE_NAME -from 2026-09-01T00:00:00+08:00
+   ```
+
+   有任何设备 `FAILED` 时进程以非零退出——此时不要开 TTL，排查后重跑直到干净。
+3. 核对：对每台设备，比较 ThingsBoard 里的点数与业务库行数（`stock_events` 行数 + 其 `report_ts`
+   基数之和 − 行数 = 被折叠的重复报告数；`record_rejects` 单独计数）。
+4. #30（小时汇总）也落地后才可开启 TTL。
 
 ### 备份验证与演练
 
