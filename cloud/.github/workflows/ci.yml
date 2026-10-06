@@ -101,7 +101,13 @@ jobs:
       - name: 等待就绪（ThingsBoard 首次启动要装 schema，2–4 分钟）
         run: |
           for i in $(seq 1 90); do
-            if curl -sf http://localhost:8081/login >/dev/null; then echo "ThingsBoard 就绪（${i}）"; exit 0; fi
+            # 不能只探 /login 页面：ThingsBoard 初始化到一半时它就会返回 200（甚至重定向循环），
+            # 但 REST 登录还不可用。以真正的登录接口成功为准。
+            if curl -sf -X POST http://localhost:8081/api/auth/login \
+                 -H 'Content-Type: application/json' \
+                 -d '{"username":"tenant@thingsboard.org","password":"tenant"}' >/dev/null; then
+              echo "ThingsBoard 就绪（${i}）"; exit 0
+            fi
             sleep 5
           done
           echo "ThingsBoard 未在 450 秒内就绪" >&2
