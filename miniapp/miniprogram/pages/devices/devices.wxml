@@ -16,7 +16,7 @@
 <view wx:else>
   <!-- 对应设计稿「首页-卧罐01」顶部：品牌栏 + 油站行。云端目前没有油站（见 openspec/changes/home-by-station），
        所以这里没有下拉，左侧只写"我的设备"；不要用客户名或本地写死的油站名冒充油站。 -->
-  <view class="home-header">
+  <view class="home-header" style="padding-top:{{statusBarRpx}}rpx;">
     <view class="home-brand">
       <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
       <text class="home-brand-title">智能液位管理系统</text>
@@ -24,7 +24,7 @@
     <view class="home-station">
       <text class="home-station-name">我的设备</text>
       <view class="home-plus" bindtap="onMoreActions">
-        <image src="/assets/icons/add.png" mode="aspectFit" style="width:36rpx;height:36rpx;" />
+        <image src="/assets/icons/add.png" mode="aspectFit" style="width:42rpx;height:42rpx;" />
       </view>
     </view>
   </view>
@@ -53,18 +53,18 @@
         data-device="{{g.deviceName}}"
         bindtap="onTapTank"
       >
-        <image class="home-tank-img" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
+        <image class="home-tank-img" src="/assets/illustrations/tank-horizontal-home.png" mode="aspectFit" />
         <view class="tank-info">
           <view class="tank-tag-row">
             <text class="tank-tag">{{t.index}}号 {{t.oilType || '--'}}</text>
             <text class="badge badge-failed" wx:if="{{t.alarmState === 'ALARM'}}">{{t.alarmStateLabel}}</text>
             <text class="badge badge-offline" wx:elif="{{t.alarmState === 'FAULT'}}">{{t.alarmStateLabel}}</text>
           </view>
-          <view class="stat-row"><text class="stat-row-label">液位</text><text class="stat-row-value">{{t.oilLevelMm}}</text><text class="stat-row-unit">毫米</text></view>
-          <view class="stat-row"><text class="stat-row-label">容积</text><text class="stat-row-value">{{t.oilVolumeL}}</text><text class="stat-row-unit">升</text></view>
-          <view class="stat-row"><text class="stat-row-label">水高</text><text class="stat-row-value">{{t.waterLevelMm}}</text><text class="stat-row-unit">毫米</text></view>
-          <view class="stat-row"><text class="stat-row-label">温度</text><text class="stat-row-value">{{t.tempC}}</text><text class="stat-row-unit">℃</text></view>
-          <view class="stat-row"><text class="stat-row-label">质量</text><text class="stat-row-value">{{t.oilWeightKg}}</text><text class="stat-row-unit">千克</text></view>
+          <view class="hs-row"><text class="hs-label">液位</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">毫米</text></view>
+          <view class="hs-row"><text class="hs-label">容积</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">升</text></view>
+          <view class="hs-row"><text class="hs-label">水高</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">毫米</text></view>
+          <view class="hs-row"><text class="hs-label">温度</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
+          <view class="hs-row"><text class="hs-label">质量</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">千克</text></view>
           <view class="text-danger muted" wx:if="{{!t.probeConnected}}">探针未连接</view>
         </view>
       </view>

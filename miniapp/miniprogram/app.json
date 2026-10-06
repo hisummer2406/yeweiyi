@@ -16,14 +16,14 @@
     "pages/backfill/backfill"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#05507c",
+    "navigationBarBackgroundColor": "#ffffff",
     "navigationBarTitleText": "液位仪远程监控",
-    "navigationBarTextStyle": "white",
-    "backgroundColor": "#f2f2f2"
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#edf0f7"
   },
   "tabBar": {
-    "color": "#8697a4",
-    "selectedColor": "#05507c",
+    "color": "#131313",
+    "selectedColor": "#066daa",
     "backgroundColor": "#ffffff",
     "list": [
       {

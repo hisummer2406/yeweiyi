@@ -1,4 +1,6 @@
 {
-  "navigationBarTitleText": "液位仪远程监控",
+  "navigationStyle": "custom",
+  "navigationBarTextStyle": "white",
+  "backgroundTextStyle": "dark",
   "enablePullDownRefresh": true
 }

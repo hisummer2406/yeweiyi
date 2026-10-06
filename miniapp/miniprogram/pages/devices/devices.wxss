@@ -1,50 +1,53 @@
+/* 数值取自设计稿「首页-卧罐01」PNG（750 宽，1px = 1rpx）的像素实测，不是目测：
+   头部渐变 #05629B → #004873；分隔线 #C5C9D0；标签 156×32 #03355E；读数 22rpx，行高 40rpx，
+   标签/数值 #131313，单位 #505050；单台罐行高 293rpx。差异见 openspec/changes/home-by-station/tasks.md 3.8。 */
 page {
-  background-color: #ecf0f8;
+  background-color: #edf0f7;
 }
 
 .btn-primary {
   margin-bottom: 24rpx;
 }
 
-/* 头部：对应设计稿「首页-卧罐01」的蓝色渐变头。原生导航栏保留（顶部状态栏区域由微信接管），
-   所以这里只做品牌栏 + 油站行；与设计稿的差异见 openspec/changes/home-by-station/tasks.md 3.8。 */
+/* 头部：自定义导航栏，渐变一直铺到状态栏下面（padding-top 由 TS 按状态栏高度写入） */
 .home-header {
-  padding: 8rpx 30rpx 28rpx;
-  background: linear-gradient(180deg, #05507c 0%, #003d66 100%);
+  padding: 0 30rpx 30rpx;
+  background: linear-gradient(180deg, #05629b 0%, #004873 100%);
   color: #ffffff;
 }
 
 .home-brand {
   display: flex;
   align-items: center;
-  padding: 12rpx 0 20rpx;
+  height: 56rpx;
+  margin-top: 17rpx;
 }
 
 .home-brand-mark {
-  width: 64rpx;
-  height: 64rpx;
-  margin-right: 16rpx;
+  width: 56rpx;
+  height: 56rpx;
+  margin-right: 24rpx;
 }
 
 .home-brand-title {
   font-size: 36rpx;
-  letter-spacing: 2rpx;
 }
 
 .home-station {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  height: 48rpx;
+  margin-top: 55rpx;
 }
 
 .home-station-name {
-  font-size: 44rpx;
-  font-weight: 500;
+  font-size: 36rpx;
 }
 
 .home-plus {
-  width: 64rpx;
-  height: 64rpx;
+  width: 42rpx;
+  height: 42rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -54,15 +57,16 @@ page {
   padding-bottom: 24rpx;
 }
 
+/* 设计稿没有"上报时间"这一行；它必须显示（快照不是实时流），所以做得尽量小 */
 .group-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 20rpx 30rpx 8rpx;
+  padding: 16rpx 30rpx 0;
 }
 
 .group-name {
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: #131313;
 }
@@ -74,38 +78,75 @@ page {
   color: #8697a4;
 }
 
+/* 一行 = 293rpx：30 + 标签 32 + 11 + 5×40 + 20，含底部 1rpx 分隔线 */
 .tank-row {
   display: flex;
   align-items: flex-start;
+  box-sizing: border-box;
+  height: 293rpx;
   margin: 0 30rpx;
-  padding: 24rpx 0;
-  border-bottom: 1rpx solid #d3d9e6;
+  border-bottom: 1rpx solid #c5c9d0;
 }
 
 .home-tank-img {
-  width: 300rpx;
-  height: 220rpx;
+  width: 240rpx;
+  height: 176rpx;
   flex-shrink: 0;
+  margin: 87rpx 0 0 50rpx;
 }
 
 .tank-info {
   flex: 1;
   min-width: 0;
-  padding-left: 16rpx;
+  margin-left: 64rpx;
+  padding-top: 30rpx;
 }
 
 .tank-tag-row {
   display: flex;
   align-items: center;
-  margin-bottom: 8rpx;
+  height: 32rpx;
+  margin-bottom: 11rpx;
 }
 
 /* 「1号 甲醇」深蓝标签 */
 .tank-tag {
-  background-color: #05507c;
+  box-sizing: border-box;
+  min-width: 156rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  padding: 0 5rpx;
+  background-color: #03355e;
   color: #ffffff;
-  font-size: 26rpx;
-  padding: 4rpx 14rpx;
-  border-radius: 6rpx;
-  margin-right: 12rpx;
+  font-size: 22rpx;
+  border-radius: 4rpx;
+}
+
+.tank-tag-row .badge {
+  margin-left: 12rpx;
+}
+
+.hs-row {
+  display: flex;
+  align-items: center;
+  height: 40rpx;
+  font-size: 22rpx;
+  color: #131313;
+}
+
+.hs-label {
+  width: 59rpx;
+  flex-shrink: 0;
+}
+
+.hs-value {
+  width: 131rpx;
+  flex-shrink: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hs-unit {
+  font-size: 20rpx;
+  color: #505050;
 }

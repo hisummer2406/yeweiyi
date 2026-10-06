@@ -32,11 +32,23 @@ Page({
     devicesLoaded: false,
     listError: '',
     showSingleDeviceHeader: false,
+    // The header is drawn under the status bar (navigationStyle: custom), so it needs the status
+    // bar's height in rpx. Falls back to the design draft's 88rpx if the API is unavailable.
+    statusBarRpx: 88,
   },
 
   // Bumped on every reload; a telemetry response from an older reload is dropped instead of
   // overwriting a newer one (pull-to-refresh while a slow request is still out).
   loadSeq: 0,
+
+  onLoad() {
+    try {
+      const info = wx.getWindowInfo();
+      this.setData({ statusBarRpx: Math.round((info.statusBarHeight * 750) / info.windowWidth) });
+    } catch {
+      // keep the default
+    }
+  },
 
   onShow() {
     if (!getToken()) {
