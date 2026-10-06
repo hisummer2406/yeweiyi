@@ -141,10 +141,10 @@ type stockListResponse struct {
 	// Truncated is true when more movements matched the window than `limit` allowed. Rows are
 	// ordered by `time` in the requested direction and cut from the far end.
 	Truncated bool `json:"truncated"`
-	// Partial is true when the scan for later corrections stopped at its safety cap. Every movement
+	// Partial is true when the scan for later corrections stopped at its safety cap, or when a
+	// record after the window could not be read (it may have been a correction). Every movement
 	// in the window is listed, but a correction generated far after it may not have been seen, so a
-	// figure could be stale. Only reachable for a device with tens of thousands of events after the
-	// requested window.
+	// figure could be stale.
 	Partial bool `json:"partial"`
 
 	// Only on the 502 path.
@@ -383,7 +383,16 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			if err != nil {
 				// The raw read reaches past the window to find corrections; an unreadable record
 				// there is not this window's to report.
-				if pt.TS < beginMs || pt.TS >= endMs {
+				if pt.TS < beginMs {
+					continue
+				}
+				// After the window it may be a correction of an in-window movement whose eventId
+				// cannot be read, so the listed row could be stale: say so rather than present the
+				// original as complete. Pre-upgrade records are a closed hole, not a suspect.
+				if pt.TS >= endMs {
+					if cutoffMs == 0 || pt.TS >= cutoffMs {
+						partial = true
+					}
 					continue
 				}
 				// pt.TS classifies it, and nothing else can: the payload of a pre-upgrade record

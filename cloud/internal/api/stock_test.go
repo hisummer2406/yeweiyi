@@ -43,6 +43,7 @@ type stockBody struct {
 	LegacySkipped int              `json:"legacySkipped"`
 	Folded        int              `json:"folded"`
 	Truncated     bool             `json:"truncated"`
+	Partial       bool             `json:"partial"`
 	Error         string           `json:"error"`
 	Code          string           `json:"code"`
 	Device        string           `json:"device"`
@@ -721,4 +722,45 @@ func TestListOilInOut_LimitCutsRowsNotRevisions(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 	}
 	t.Fatalf("never reached truncated=true with the older movement corrected to 1500; last: %+v", last)
+}
+
+// TestListOilInOut_UnreadableRecordAfterTheWindowMarksItPartial pins that a malformed record after
+// the window (possibly a correction whose eventId cannot be read) neither fails the window nor
+// passes silently: the original is listed, flagged partial.
+func TestListOilInOut_UnreadableRecordAfterTheWindowMarksItPartial(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	now := time.Now()
+	original := now.Add(-50 * time.Hour)
+	publishStock(t, token, protocol.StockEvent{
+		EventID:      fmt.Sprintf("in-1-%d", original.UnixMilli()),
+		Tank:         1,
+		Direction:    protocol.StockIn,
+		BeginTimeMs:  original.Add(-time.Hour).UnixMilli(),
+		EndTimeMs:    original.UnixMilli(),
+		BeginVolumeL: 6030.0,
+		EndVolumeL:   24030.0,
+		NetVolumeL:   18000.0,
+		TSMs:         original.UnixMilli(),
+	})
+	postRawStockEvent(t, token, now.Add(-40*time.Hour).UnixMilli(), `{"eventId":`)
+
+	path := "/api/oil-in-out?device=" + device + "&beginTime=" + now.Add(-72*time.Hour).UTC().Format(time.RFC3339) +
+		"&endTime=" + now.Add(-48*time.Hour).UTC().Format(time.RFC3339)
+	var b stockBody
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		rec := env.authed("GET", path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
+		}
+		if b = decodeStock(t, rec.Body.Bytes()); len(b.Rows) == 1 && b.Partial {
+			if b.Unparsable != 0 {
+				t.Errorf("unparsable = %d, want 0 (outside the window)", b.Unparsable)
+			}
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("never saw 1 row with partial=true; last body %+v", b)
 }
