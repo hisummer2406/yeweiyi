@@ -1,4 +1,5 @@
 import { login } from '../../utils/auth';
+import { ApiError } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 
 Page({
@@ -24,7 +25,8 @@ Page({
   },
 
   onSubmit() {
-    const { username, password } = this.data;
+    const username = this.data.username.trim();
+    const { password } = this.data;
     if (!username || !password) {
       this.setData({ errorMsg: '请输入账号和密码' });
       return;
@@ -35,7 +37,10 @@ Page({
         wx.switchTab({ url: '/pages/devices/devices' });
       })
       .catch((err: Error) => {
-        this.setData({ errorMsg: err.message });
+        // 400 here is the cloud's request-binding failure (a Go validator string), not something a
+        // user can act on; every other message is a human string from the cloud and is shown as is.
+        const msg = err instanceof ApiError && err.status === 400 ? '请输入账号和密码' : err.message;
+        this.setData({ errorMsg: msg });
       })
       .finally(() => {
         this.setData({ loading: false });
