@@ -2,7 +2,15 @@ import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndBind } from '../../utils/bind';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
-import type { Device, LatestTelemetryResponse } from '../../types/api';
+import { usernameFromToken } from '../../utils/auth';
+import { getRememberedStation, rememberStation } from '../../utils/stationPref';
+import {
+  buildStationOptions,
+  devicesOfStation,
+  pickStation,
+  type StationOption,
+} from '../../utils/stations';
+import type { Device, LatestTelemetryResponse, Station } from '../../types/api';
 
 // One device's slice of the home page. `state` is per device on purpose: one device failing (or
 // never having reported) must not blank the others.
@@ -31,6 +39,14 @@ Page({
     // state does not flash while /api/devices is in flight.
     devicesLoaded: false,
     listError: '',
+    // Station dropdown. hasStations is false when the cloud has no stations for this user, in which
+    // case the home page is the flat list it was before stations existed.
+    hasStations: false,
+    stationName: '',
+    stationKey: '',
+    // All devices this user can see, regardless of the selected station. Distinguishes "no devices at
+    // all" (first-run empty state: go scan) from "the selected station has none".
+    deviceTotal: 0,
     showSingleDeviceHeader: false,
     // The header is drawn under the status bar (navigationStyle: custom), so it needs the status
     // bar's height in rpx. Falls back to the design draft's 88rpx if the API is unavailable.
@@ -40,6 +56,9 @@ Page({
   // Bumped on every reload; a telemetry response from an older reload is dropped instead of
   // overwriting a newer one (pull-to-refresh while a slow request is still out).
   loadSeq: 0,
+  allDevices: [] as Device[],
+  allStations: [] as Station[],
+  stationOptions: [] as StationOption[],
 
   onLoad() {
     try {
@@ -62,27 +81,69 @@ Page({
     this.loadHome().finally(() => wx.stopPullDownRefresh());
   },
 
-  // GET /api/devices answers only the devices this user has bound (yeweiyi-cloud CLAUDE.md), then
-  // one GET .../telemetry/latest per device, in parallel — there is no batch endpoint.
+  // GET /api/devices answers the devices this user may see, GET /api/stations the stations they sit
+  // in (yeweiyi-cloud#53). Stations are an enhancement: an older cloud answers 404, and any failure
+  // here just means "no dropdown" — it must never break the home page. Then one telemetry request per
+  // device of the SELECTED station, in parallel — there is no batch endpoint.
   loadHome(): Promise<unknown> {
     const seq = ++this.loadSeq;
-    return get<{ rows: Device[] }>('/api/devices')
-      .then((res) => {
+    return Promise.all([
+      get<{ rows: Device[] }>('/api/devices'),
+      get<{ rows: Station[] }>('/api/stations').catch(() => ({ rows: [] as Station[] })),
+    ])
+      .then(([devRes, stRes]) => {
         if (seq !== this.loadSeq) return;
-        const groups = res.rows.map((d) => emptyGroup(d.device_name));
-        this.setData({
-          groups,
-          devicesLoaded: true,
-          listError: '',
-          showSingleDeviceHeader: groups.length > 1,
-        });
-        return Promise.all(groups.map((g) => this.loadDevice(g.deviceName, seq)));
+        this.allDevices = devRes.rows;
+        this.allStations = stRes.rows;
+        this.stationOptions = buildStationOptions(stRes.rows, devRes.rows);
+        return this.showStation(seq, getRememberedStation(this.currentUsername()));
       })
       .catch((err: Error) => {
         if (seq !== this.loadSeq) return;
         this.setData({ devicesLoaded: true, listError: err.message });
         wx.showToast({ title: err.message, icon: 'none' });
       });
+  },
+
+  currentUsername(): string {
+    return usernameFromToken(getToken());
+  },
+
+  // Show one station's devices (or every device when there is no dropdown) and load their telemetry.
+  showStation(seq: number, preferredKey?: string): Promise<unknown> {
+    const options = this.stationOptions as StationOption[];
+    const current = pickStation(options, preferredKey);
+    const visible = current ? devicesOfStation(this.allDevices, this.allStations, current.key) : this.allDevices;
+    const groups = visible.map((d: Device) => emptyGroup(d.device_name));
+    this.setData({
+      groups,
+      devicesLoaded: true,
+      listError: '',
+      showSingleDeviceHeader: groups.length > 1,
+      hasStations: options.length > 0,
+      stationName: current ? current.name : '',
+      stationKey: current ? current.key : '',
+      deviceTotal: this.allDevices.length,
+    });
+    return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
+  },
+
+  onPickStation() {
+    wx.navigateTo({
+      url: '/pages/station-select/station-select',
+      events: {
+        selected: (key: string) => this.onStationSelected(key),
+      },
+      success: (res) => {
+        res.eventChannel.emit('init', { options: this.stationOptions, current: this.data.stationKey });
+      },
+    });
+  },
+
+  onStationSelected(key: string) {
+    rememberStation(this.currentUsername(), key);
+    const seq = ++this.loadSeq;
+    this.showStation(seq, key);
   },
 
   loadDevice(deviceName: string, seq: number): Promise<void> {
