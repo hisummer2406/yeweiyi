@@ -24,6 +24,8 @@
 #   REDIS_PASSWORD=...         Redis 密码
 #   JWT_SECRET=...             至少 32 字符的强随机值
 #   TB_PASSWORD=...            ThingsBoard 租户管理员密码（TB_USERNAME 默认 tenant@thingsboard.org）
+#   TOKEN_TTL=24h              可选：登录令牌有效期
+#   TOKEN_MAX_SESSION_AGE=720h 可选：滑动续期的绝对上限，到点必须重新输入密码；不得小于 TOKEN_TTL
 #
 # ⚠️ POSTGRES_PASSWORD 只在**数据卷第一次初始化**时生效。已有数据卷的机器改这个值不会改库里账号
 # 的密码，会造成“compose 里是新密码、库里还是旧密码”。已有卷要改密码，先在库里执行
@@ -69,6 +71,9 @@ services:
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?生产部署必须设置 REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?生产部署必须设置 JWT_SECRET}
+      # 登录令牌有效期与滑动续期的绝对上限（自上次输入密码起）；maxSessionAge 不得小于 tokenTTL。
+      TOKEN_TTL: ${TOKEN_TTL:-24h}
+      TOKEN_MAX_SESSION_AGE: ${TOKEN_MAX_SESSION_AGE:-720h}
       # 容器内用服务名和 ThingsBoard 的容器端口 9090，不是宿主上的 8081。
       TB_BASE_URL: http://thingsboard:9090
       TB_USERNAME: ${TB_USERNAME:-tenant@thingsboard.org}

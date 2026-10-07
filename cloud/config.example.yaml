@@ -48,6 +48,11 @@ auth:
   # 令牌只证明"你是谁"：角色、所属客户、是否被停用每次请求都读数据库，所以这些变更立即生效，
   # 不必等令牌过期。缩短这个值只影响用户多久需要重新登录。
   tokenTTL: "24h"
+  # 滑动续期：令牌剩余有效期不足 tokenTTL 的一半时，受保护接口的响应会带 `X-Renewed-Token`，
+  # 客户端换用即可，用户不必每天重新登录。已停用/已删除的用户拿不到新令牌，已过期的令牌不续期。
+  # maxSessionAge 是自上次输入密码起的绝对上限：到点后无论怎么续期都必须重新登录。默认 "720h"（30 天），
+  # 不得小于 tokenTTL。
+  maxSessionAge: "720h"
 
 thingsboard:
   # 留空 = 不启用 ThingsBoard：服务照常启动，但设备与控制相关端点返回 503 并说明原因。
@@ -139,6 +144,7 @@ stock:
 #   REDIS_PASSWORD                   redis.password
 #   JWT_SECRET                       auth.jwtSecret
 #   TOKEN_TTL                        auth.tokenTTL
+#   TOKEN_MAX_SESSION_AGE            auth.maxSessionAge
 #   TB_BASE_URL / TB_USERNAME / TB_PASSWORD   thingsboard.*
 #   COMMAND_TTL                      control.commandTTL
 #   COMMAND_ACK_TIMEOUT              control.ackTimeout

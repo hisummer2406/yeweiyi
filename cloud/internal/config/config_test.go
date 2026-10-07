@@ -353,3 +353,39 @@ func TestLoad_RedisPassword(t *testing.T) {
 		t.Errorf("env should override the file: got %q", cfg.Redis.Password)
 	}
 }
+
+func TestLoad_MaxSessionAge(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Auth.MaxSessionAge.Std() != 30*24*time.Hour {
+		t.Errorf("default maxSessionAge = %s, want 720h", cfg.Auth.MaxSessionAge)
+	}
+
+	t.Setenv("TOKEN_MAX_SESSION_AGE", "168h")
+	cfg, err = config.Load("")
+	if err != nil {
+		t.Fatalf("Load with env: %v", err)
+	}
+	if cfg.Auth.MaxSessionAge.Std() != 168*time.Hour {
+		t.Errorf("env should set maxSessionAge, got %s", cfg.Auth.MaxSessionAge)
+	}
+}
+
+// A session cap shorter than one token's lifetime would make every token expire early and renewal
+// pointless; reject it rather than silently running a configuration nobody meant.
+func TestValidate_MaxSessionAgeMustCoverTokenTTL(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	path := writeConfig(t, "auth:\n  tokenTTL: \"24h\"\n  maxSessionAge: \"12h\"\n")
+
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("maxSessionAge < tokenTTL must be rejected")
+	}
+	if !strings.Contains(err.Error(), "maxSessionAge") {
+		t.Errorf("error should name the key, got: %v", err)
+	}
+}

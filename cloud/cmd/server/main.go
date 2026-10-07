@@ -112,13 +112,14 @@ func main() {
 	}
 
 	router := api.NewRouter(api.Deps{
-		Queries:   queries,
-		Redis:     rdb,
-		Pool:      pool,
-		JWTSecret: []byte(cfg.Auth.JWTSecret),
-		TokenTTL:  cfg.Auth.TokenTTL.Std(),
-		TB:        tbClient,
-		Control:   controlSvc,
+		Queries:       queries,
+		Redis:         rdb,
+		Pool:          pool,
+		JWTSecret:     []byte(cfg.Auth.JWTSecret),
+		TokenTTL:      cfg.Auth.TokenTTL.Std(),
+		MaxSessionAge: cfg.Auth.MaxSessionAge.Std(),
+		TB:            tbClient,
+		Control:       controlSvc,
 
 		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
 		TelemetryRetention:      cfg.Telemetry.Retention.Std(),

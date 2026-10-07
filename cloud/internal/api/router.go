@@ -25,6 +25,10 @@ type Deps struct {
 	// TokenTTL is how long an issued JWT stays valid. Zero means defaultTokenTTL.
 	TokenTTL time.Duration
 
+	// MaxSessionAge caps how long sliding renewal can keep a login alive, counted from the password
+	// login (the token's authAt). Zero means defaultMaxSessionAge.
+	MaxSessionAge time.Duration
+
 	// TB and Control belong to the ThingsBoard single stack. Both are optional so the server can
 	// still boot without ThingsBoard configured — the routes that need them answer 503 rather than
 	// panicking, which is what lets a developer work on the business endpoints alone.
@@ -100,6 +104,14 @@ func NewRouter(deps Deps) *gin.Engine {
 	}
 
 	return r
+}
+
+// maxSessionAge resolves the sliding-renewal cap, falling back to the default.
+func (d Deps) maxSessionAge() time.Duration {
+	if d.MaxSessionAge > 0 {
+		return d.MaxSessionAge
+	}
+	return defaultMaxSessionAge
 }
 
 // tokenTTL resolves the configured token lifetime, falling back to the default.

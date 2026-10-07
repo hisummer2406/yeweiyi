@@ -119,6 +119,9 @@ type Auth struct {
 	// variable rather than the file, so it does not end up in a config backup or a git history.
 	JWTSecret string   `yaml:"jwtSecret"`
 	TokenTTL  Duration `yaml:"tokenTTL"`
+	// MaxSessionAge bounds sliding renewal: however often a client renews, it must type its
+	// password again this long after the last password login.
+	MaxSessionAge Duration `yaml:"maxSessionAge"`
 }
 
 type ThingsBoard struct {
@@ -215,7 +218,7 @@ func Defaults() Config {
 		Server:   Server{ListenAddr: ":8080"},
 		Database: Database{URL: "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"},
 		Redis:    Redis{Addr: "localhost:6379"},
-		Auth:     Auth{TokenTTL: Duration(24 * time.Hour)},
+		Auth:     Auth{TokenTTL: Duration(24 * time.Hour), MaxSessionAge: Duration(30 * 24 * time.Hour)},
 		Control: Control{
 			CommandTTL:            Duration(60 * time.Second),
 			AckTimeout:            Duration(10 * time.Second),
@@ -290,6 +293,7 @@ func (c *Config) applyEnv() error {
 		dst *Duration
 	}{
 		{"TOKEN_TTL", &c.Auth.TokenTTL},
+		{"TOKEN_MAX_SESSION_AGE", &c.Auth.MaxSessionAge},
 		{"COMMAND_TTL", &c.Control.CommandTTL},
 		{"COMMAND_ACK_TIMEOUT", &c.Control.AckTimeout},
 		{"COMMAND_EXPIRY_SWEEP_INTERVAL", &c.Control.ExpirySweepInterval},
@@ -359,6 +363,7 @@ func (c *Config) Validate() error {
 		v    Duration
 	}{
 		{"auth.tokenTTL", c.Auth.TokenTTL},
+		{"auth.maxSessionAge", c.Auth.MaxSessionAge},
 		{"control.commandTTL", c.Control.CommandTTL},
 		{"control.ackTimeout", c.Control.AckTimeout},
 		{"control.expirySweepInterval", c.Control.ExpirySweepInterval},
@@ -374,6 +379,12 @@ func (c *Config) Validate() error {
 		if d.v <= 0 {
 			return fmt.Errorf("%s must be positive, got %s", d.name, d.v)
 		}
+	}
+
+	if c.Auth.MaxSessionAge < c.Auth.TokenTTL {
+		return fmt.Errorf("auth.maxSessionAge (%s) must be at least auth.tokenTTL (%s), "+
+			"otherwise every token would be cut short and renewal could never extend a session",
+			c.Auth.MaxSessionAge, c.Auth.TokenTTL)
 	}
 
 	// A pass only summarises completed hours, and the oldest raw point it may still need is up to one
