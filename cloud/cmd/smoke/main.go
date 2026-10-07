@@ -75,7 +75,9 @@ func run() int {
 	caFile := flag.String("cacert", envOr("TB_MQTT_CACERT", ""), "PEM CA file verifying the broker certificate; required for ssl://")
 	apiURL := flag.String("api", os.Getenv("API_BASE_URL"), "Go backend base URL; when set, read-back and control are exercised through its REST API rather than ThingsBoard directly")
 	dbURL := flag.String("db", envOr("DATABASE_URL", "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"), "business PostgreSQL DSN, used only to create/remove this run's own throwaway login user (requires -api)")
-	timeout := flag.Duration("timeout", 90*time.Second, "overall time budget")
+	// 90s for the checks themselves plus the fixed 31s customer-assignment protection window
+	// waited out before the alarm step (recordWindow), which must not eat the checks' budget.
+	timeout := flag.Duration("timeout", 125*time.Second, "overall time budget")
 	verbose := flag.Bool("v", false, "log each step's detail")
 	flag.Parse()
 
@@ -202,6 +204,22 @@ func run() int {
 		}) {
 			return r.report()
 		}
+	}
+
+	// recordWindow hides the first 30 seconds after customer assignment to protect the
+	// previous customer's records. Emit the test alarm only after that window, rather
+	// than timing out on an event the API is deliberately forbidden to return.
+	if api != nil && !r.step("等待设备归属保护窗口结束", func() (string, error) {
+		timer := time.NewTimer(31 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-timer.C:
+			return "", nil
+		}
+	}) {
+		return r.report()
 	}
 
 	var sim *devicesim.Device
