@@ -1,3 +1,4 @@
+import { roundFields } from './format';
 import { TANK_ALARM_STATE_LABELS, label } from './labels';
 import type { LatestTelemetryResponse, Tank } from '../types/api';
 
@@ -7,9 +8,21 @@ export type TankView = Tank & { alarmStateLabel: string };
 
 // Shared by the home page and device-detail so the two cannot disagree about how a snapshot is
 // turned into rows. Pure (no `wx`), which is also what makes it checkable in plain Node.
+const TANK_NUMBER_FIELDS = [
+  'oilLevelMm',
+  'waterLevelMm',
+  'tempC',
+  'oilVolumeL',
+  'waterVolumeL',
+  'oilWeightKg',
+  'nullVolumeL',
+  'oilRatioPct',
+  'waterRatioPct',
+] as const;
+
 export function toTankViews(res: LatestTelemetryResponse): TankView[] {
   return (res.tanks || []).map((t) => ({
-    ...t,
+    ...roundFields(t, TANK_NUMBER_FIELDS),
     alarmStateLabel: label(TANK_ALARM_STATE_LABELS, t.alarmState),
   }));
 }
