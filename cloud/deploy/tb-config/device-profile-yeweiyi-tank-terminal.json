@@ -8,20 +8,25 @@
     "导致设备开通失败——只是拿到的是一个 ThingsBoard 出厂默认值的模板，而不是这里定义的这个。",
     "这也意味着 apply 是幂等的补齐操作，不是启动前置条件。",
     "",
-    "provisionType 为 DISABLED：设备凭据由后台以租户管理员身份通过 REST 签发（见 internal/tbclient），",
-    "不使用 ThingsBoard 的设备自注册流程——自注册需要把一个共享密钥预置到所有设备里，",
-    "那与本项目一机一密的前提相悖。"
+    "provisionType 为 CHECK_PRE_PROVISIONED_DEVICES（issue #46）：设备只手输一次编号，由 ThingsBoard",
+    "Provisioning 换取 access token；只允许名单内（出货时 CSV 预注册）且尚未注册的编号领取，",
+    "不能凭空造设备。曾经是 DISABLED（理由：自注册要把共享密钥预置到所有设备，与一机一密相悖）；",
+    "现在接受该风险：key/secret 在 APK 里可被逆向，但持有者只能领名单内未注册的编号。",
+    "不要改成 ALLOW_CREATE_NEW_DEVICES。",
+    "",
+    "provisionDeviceKey / provisionDeviceSecret 是安装态，不进仓库：tbconfig apply 首次启用时随机生成并",
+    "只打印一次，之后更新会保留（ThingsBoard 对缺省值是清空而不是保留，已实测 4.2.1.1）。"
   ],
   "name": "yeweiyi-tank-terminal",
   "description": "安卓液位仪终端（设备协议 V1）",
   "type": "DEFAULT",
   "transportType": "DEFAULT",
-  "provisionType": "DISABLED",
+  "provisionType": "CHECK_PRE_PROVISIONED_DEVICES",
   "default": false,
   "profileData": {
     "configuration": { "type": "DEFAULT" },
     "transportConfiguration": { "type": "DEFAULT" },
-    "provisionConfiguration": { "type": "DISABLED", "provisionDeviceSecret": null },
+    "provisionConfiguration": { "type": "CHECK_PRE_PROVISIONED_DEVICES", "provisionDeviceSecret": null },
     "alarms": null
   }
 }

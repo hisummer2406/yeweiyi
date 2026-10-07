@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base32"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -142,13 +144,22 @@ func apply(ctx context.Context, c *tbclient.Client, dir string) error {
 			// the tenant default is an installation-level choice, and silently moving it would change
 			// how every *other* device gets provisioned.
 			spec["default"] = cur["default"]
+			// Same reasoning for the provisioning key/secret: the repo cannot carry them (they must
+			// not be committed), and ThingsBoard treats an absent value on update as "clear it" —
+			// measured on 4.2.1.1, not regenerated. Without this, every apply would silently disable
+			// device self-registration.
+			carryProvisioning(spec, cur)
 		}
+		generated := ensureProvisioningCredentials(spec)
 
 		var saved map[string]any
 		if err := c.PostJSON(ctx, "/api/deviceProfile", spec, &saved); err != nil {
 			return fmt.Errorf("%s %s：%w", verb, name, err)
 		}
 		fmt.Printf("    ✓ %s %s\n", verb, name)
+		if generated {
+			announceProvisioning(spec)
+		}
 	}
 
 	fmt.Println()
@@ -177,6 +188,7 @@ func export(ctx context.Context, c *tbclient.Client, out string) error {
 		for _, k := range instanceFields {
 			delete(p, k)
 		}
+		redactProvisioning(p)
 		if err := writeJSON(filepath.Join(out, "device-profile-"+safe(name)+".json"), p); err != nil {
 			return err
 		}
@@ -244,4 +256,90 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// provisioningEnabled reports whether the profile lets devices register themselves.
+func provisioningEnabled(spec map[string]any) bool {
+	t, _ := spec["provisionType"].(string)
+	return t != "" && t != "DISABLED"
+}
+
+// provisionConfig returns profileData.provisionConfiguration, creating the maps on the way.
+func provisionConfig(spec map[string]any) map[string]any {
+	pd, _ := spec["profileData"].(map[string]any)
+	if pd == nil {
+		pd = map[string]any{}
+		spec["profileData"] = pd
+	}
+	pc, _ := pd["provisionConfiguration"].(map[string]any)
+	if pc == nil {
+		pc = map[string]any{}
+		pd["provisionConfiguration"] = pc
+	}
+	return pc
+}
+
+// redactProvisioning removes the fleet-wide provisioning key/secret from an exported profile. They
+// are installation state (see carryProvisioning), and export files are world-readable snapshots that
+// get copied into diagnostics. Unlike provisionConfig it never creates missing maps.
+func redactProvisioning(p map[string]any) {
+	delete(p, "provisionDeviceKey")
+	pd, _ := p["profileData"].(map[string]any)
+	pc, _ := pd["provisionConfiguration"].(map[string]any)
+	delete(pc, "provisionDeviceSecret")
+}
+
+// carryProvisioning copies the installation's key/secret into spec when spec does not set its own.
+func carryProvisioning(spec, cur map[string]any) {
+	if v, _ := cur["provisionDeviceKey"].(string); v != "" {
+		if k, _ := spec["provisionDeviceKey"].(string); k == "" {
+			spec["provisionDeviceKey"] = v
+		}
+	}
+	curPD, _ := cur["profileData"].(map[string]any)
+	curPC, _ := curPD["provisionConfiguration"].(map[string]any)
+	if v, _ := curPC["provisionDeviceSecret"].(string); v != "" {
+		pc := provisionConfig(spec)
+		if k, _ := pc["provisionDeviceSecret"].(string); k == "" {
+			pc["provisionDeviceSecret"] = v
+		}
+	}
+}
+
+// ensureProvisioningCredentials fills in a random key/secret when provisioning is on and either is
+// missing, and reports whether it generated anything. The pair is installation state handed to the
+// Android build out of band; it is never read from or written to the repo.
+func ensureProvisioningCredentials(spec map[string]any) bool {
+	if !provisioningEnabled(spec) {
+		return false
+	}
+	changed := false
+	if k, _ := spec["provisionDeviceKey"].(string); k == "" {
+		spec["provisionDeviceKey"] = randomCredential()
+		changed = true
+	}
+	pc := provisionConfig(spec)
+	if k, _ := pc["provisionDeviceSecret"].(string); k == "" {
+		pc["provisionDeviceSecret"] = randomCredential()
+		changed = true
+	}
+	return changed
+}
+
+func randomCredential() string {
+	b := make([]byte, 15)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // crypto/rand failing means the machine cannot produce credentials safely
+	}
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b))
+}
+
+// announceProvisioning prints the generated pair exactly once, and only after the save succeeded;
+// printing earlier would leave the operator holding a pair that ThingsBoard never stored.
+func announceProvisioning(spec map[string]any) {
+	fmt.Println()
+	fmt.Println("已生成设备自注册凭据（只显示这一次；重复 apply 会保留，不会再生成）：")
+	fmt.Printf("    PROVISION_DEVICE_KEY=%v\n", spec["provisionDeviceKey"])
+	fmt.Printf("    PROVISION_DEVICE_SECRET=%v\n", provisionConfig(spec)["provisionDeviceSecret"])
+	fmt.Println("    写入 Android 构建的 local.properties，不要提交到仓库。")
 }
