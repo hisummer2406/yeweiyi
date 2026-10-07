@@ -4,6 +4,7 @@
 - B 油站管理员权限 → hisummer2406/yeweiyi-cloud#44
 - C 罐形状透出（云端侧）→ hisummer2406/yeweiyi-cloud#45
 - C 罐形状发布（设备端）→ hisummer2406/zhongchengyeweiyi#43
+- 2026-10-07 补充：A 的待决问题已有答案，写在 yeweiyi-cloud#43 的评论里；后台对应 hisummer2406/yeweiyi-admin#6
 
 以下为提交时的草稿原文，之后的讨论以 GitHub 上的 issue 为准。
 
