@@ -11,9 +11,8 @@ vi.mock('@umijs/max', () => ({
 }));
 vi.mock('antd', () => ({ message: { error: messageError } }));
 
-const { attachAuth, handleRequestError, errorConfig } = await import(
-  './requestErrorConfig'
-);
+const { attachAuth, handleRequestError, handleUnauthorized, errorConfig } =
+  await import('./requestErrorConfig');
 const { setToken, getToken, clearToken } = await import('@/utils/auth');
 
 describe('attachAuth', () => {
@@ -54,13 +53,29 @@ describe('handleRequestError', () => {
     );
   });
 
-  it('403 shows the backend error and keeps the token', () => {
+  it('403 "not authorized" (account deleted or disabled) clears the token and redirects', () => {
     setToken('tok');
     handleRequestError(
       { response: { status: 403, data: { error: 'not authorized' } } },
       {},
     );
-    expect(messageError).toHaveBeenCalledWith('not authorized');
+    expect(getToken()).toBeUndefined();
+    expect(replace).toHaveBeenCalled();
+    expect(messageError).not.toHaveBeenCalled();
+  });
+
+  it('other 403s show the backend error and keep the token', () => {
+    setToken('tok');
+    handleRequestError(
+      {
+        response: {
+          status: 403,
+          data: { error: 'not authorized for this device' },
+        },
+      },
+      {},
+    );
+    expect(messageError).toHaveBeenCalledWith('not authorized for this device');
     expect(getToken()).toBe('tok');
     expect(replace).not.toHaveBeenCalled();
   });
@@ -69,6 +84,23 @@ describe('handleRequestError', () => {
     const err = { response: { status: 401, data: {} } };
     expect(() => handleRequestError(err, { skipErrorHandler: true })).toThrow();
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('skipErrorHandler bypasses the 401 handling, so callers must forward it via handleUnauthorized', () => {
+    setToken('tok');
+    expect(() =>
+      handleRequestError(
+        { response: { status: 401, data: {} } },
+        { skipErrorHandler: true },
+      ),
+    ).toThrow();
+    expect(getToken()).toBe('tok');
+
+    handleUnauthorized();
+    expect(getToken()).toBeUndefined();
+    expect(replace).toHaveBeenCalledWith(
+      `/user/login?redirect=${encodeURIComponent('/console/devices?x=1')}`,
+    );
   });
 
   it('has no errorThrower, so envelope-less 200 responses are not failures', () => {

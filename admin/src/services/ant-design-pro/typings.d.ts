@@ -31,3 +31,31 @@ declare namespace API {
     error?: string;
   };
 }
+
+  type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';
+
+  /** telemetry/latest 的一个罐；tankShape 缺失表示未知 */
+  type Tank = {
+    index: number;
+    oilType: string;
+    oilLevelMm: number;
+    waterLevelMm: number;
+    tempC: number;
+    oilVolumeL: number;
+    waterVolumeL: number;
+    oilWeightKg: number;
+    nullVolumeL: number;
+    oilRatioPct: number;
+    waterRatioPct: number;
+    alarmState: TankAlarmState | string;
+    probeConnected: boolean;
+    tankShape?: string;
+  };
+
+  /** GET /api/devices/:device/telemetry/latest 成功响应 */
+  type LatestTelemetry = {
+    deviceName: string;
+    ts: string;
+    snapshotSeq: number;
+    tanks: Tank[];
+  };
