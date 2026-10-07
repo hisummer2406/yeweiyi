@@ -29,8 +29,8 @@ context: |
     新增或改名页面时需检查两端是否一致。
 
   # 必须遵守的行为约束（来自云端协议，不是本端可自行决定的）
-  - 除 /api/login 外都需要 Bearer JWT；401 清 token 并回登录页，403 不清（设备归属检查，未绑定与不存在同一响应）。
-  - 不展示设备的 is_online（云端已不再更新，永久过期）。
+  - 除 /api/login 外都需要 Bearer JWT；401 清 token 并回登录页；403 只有响应体恰好是 `not authorized`（用户被删或停用）才清 token 回登录页，`not authorized for this device`（设备归属检查，未绑定与不存在同一响应）不清。
+  - 不展示设备的 is_online。云端每 30 秒按 ThingsBoard 的 active 标志同步它（internal/ingest/online.go），但设备掉线后要等 ThingsBoard 的不活动超时（默认 10 分钟）才变，所以会滞后；是否展示是产品决定，目前不展示。
   - /api/alarms 返回裸数组；/api/oil-in-out 返回 {rows, parsed, unparsable, legacySkipped, ...} 信封，
     且 200 与 502 同一信封。出入库页必须显示 unparsable/legacySkipped，不得把不完整列表当完整列表展示。
   - 控制命令：POST 返回 202；ACK 不等于成功，只有 terminal 为 true 才算结束，以服务端 terminal 标志为准，

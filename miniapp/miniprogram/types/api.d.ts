@@ -21,11 +21,12 @@ export interface LoginResponse {
 export interface Device {
   device_name: string;
   // is_online is part of the wire response but is deliberately NOT surfaced anywhere in this app's
-  // UI. Nothing in the ThingsBoard single-stack backend updates this column any more — it was
-  // written by a legacy MQTT `isOline` handler that internal/mqtt's deletion took with it — so it
-  // is permanently whatever it was last left at (false, on a fresh row). Displaying it would show a
-  // confident, wrong answer. Real connectivity lives in ThingsBoard; nothing on the cloud side
-  // reads it through to REST yet (yeweiyi-cloud CLAUDE.md "Not verified").
+  // UI. It is not dead: yeweiyi-cloud internal/ingest/online.go re-syncs it every 30s from
+  // ThingsBoard's `active` flag. But `active` only turns false after ThingsBoard's inactivity timeout
+  // (default 10 minutes), so a device that just dropped keeps reading online for that long, and
+  // last_online_at / last_offline_at have the same granularity. Showing it would mean showing
+  // "online" for a device that is already gone; if a status badge is ever wanted, label it with that
+  // lag or take connectivity from the telemetry timestamp instead.
   is_online: boolean;
   last_online_at: string | null;
   last_offline_at: string | null;

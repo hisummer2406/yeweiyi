@@ -83,12 +83,17 @@ assumes a `device` string typed/pasted by the user will work without binding fir
   file to change if the real label ends up encoding something else. `POST /api/devices/unbind` —
   `{deviceName}`. `GET /api/devices` → `{rows: [Device...]}` — call this to populate the device list;
   there is no other way to discover which `device_name`s a user may even query. **`is_online` on
-  each row is permanently stale** (nothing in the ThingsBoard single-stack backend updates it any
-  more) — do not display it; see `types/api.d.ts`'s note on `Device`.
+  each row is real but lags** — `yeweiyi-cloud` `internal/ingest/online.go` re-syncs it every 30s
+  from ThingsBoard's `active` flag, which only flips to inactive after ThingsBoard's inactivity
+  timeout (default 10 minutes), so a device that just dropped still reads online for that long. This
+  app does **not display it** (product decision, `openspec/config.yaml`); the reason is the lag, not
+  that it is dead. See `types/api.d.ts`'s note on `Device`.
 - **Read-only history**, `GET /api/alarms` and `GET /api/oil-in-out` — share one query-param shape:
   `device` (required) + `beginTime`/`endTime` (RFC3339, optional, default last 24h) + `limit`/`offset`
-  (paginate, default 50/max 500 — `offset` is a 400, both endpoints page by time window, not row
-  offset) + `sort` (`true`=ascending, default `false`≈newest first passed explicitly by this app).
+  (paginate, default 50/max 500 — `offset` is a plain non-negative row offset: both endpoints are
+  served from the cloud's business database now (yeweiyi-cloud#29), not read through from
+  ThingsBoard, which is why an `offset` used to be a 400. This app does not page yet: it asks for the
+  first `limit: 50` records only) + `sort` (`true`=ascending, default `false`≈newest first passed explicitly by this app).
   **The two endpoints do not share a response envelope**: `/api/alarms` answers a **bare array**,
   `/api/oil-in-out` answers `{rows, parsed, unparsable, legacySkipped, error?, code?, sample?,
   legacyCutoff?}` on **both** its 200 and its 502 path. That inconsistency is real, tracked
