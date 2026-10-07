@@ -11,6 +11,7 @@
     "pages/tank-config/tank-config",
     "pages/calibration/calibration",
     "pages/tank-shape/tank-shape",
+    "pages/tank-shape-edit/tank-shape-edit",
     "pages/record-settings/record-settings",
     "pages/report-settings/report-settings",
     "pages/backfill/backfill"

@@ -303,19 +303,6 @@ button.btn-secondary::after {
   min-width: 0;
 }
 
-/* 设置项开关行：标签 + switch，用于"记录设置/报表设置"这类静态预览页 */
-.switch-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24rpx 8rpx;
-  border-bottom: 1rpx solid #ededed;
-}
-
-.switch-row:last-child {
-  border-bottom: none;
-}
-
 .section-title {
   font-size: 26rpx;
   color: #606060;
@@ -325,50 +312,6 @@ button.btn-secondary::after {
 
 .section-title:first-child {
   margin-top: 0;
-}
-
-button.btn-danger-mini {
-  background-color: #fbe7e7;
-  color: #b23b3b;
-  border-radius: 999rpx;
-  font-size: 22rpx;
-  line-height: 2;
-  padding: 0 24rpx;
-}
-
-button.btn-danger-mini::after {
-  border: none;
-}
-
-/* 罐体形状选择卡片：对应设计稿"罐表设置"的卧罐/立罐/长方体选择 */
-.shape-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16rpx;
-}
-
-.shape-card {
-  background-color: #f7f8fa;
-  border: 2rpx solid transparent;
-  border-radius: 16rpx;
-  padding: 32rpx 0;
-  text-align: center;
-  font-size: 26rpx;
-  color: #606060;
-}
-
-.shape-card-active {
-  border-color: #05507c;
-  color: #05507c;
-  font-weight: 600;
-  background-color: #e4f1fb;
-}
-
-.shape-glyph {
-  width: 72rpx;
-  height: 72rpx;
-  display: block;
-  margin: 0 auto 12rpx;
 }
 
 /* 菜单列表：「我的记录」「设置」。数值取自设计稿「首页-我的记录04」「首页-设置05」PNG 的像素实测
@@ -507,4 +450,44 @@ button.pill::after {
 
 .pill-indigo {
   background-color: #3b68e9;
+}
+
+/* 开关与开关行：「记录设置」「报表设置」共用。数值取自设计稿「报表设置22」PNG：
+   开关 92×46，开 #0066A2 / 关 #C3C9D4，白色滑块；一行 120，标签 x=56、开关右缘距卡片右 39。 */
+.sw {
+  position: relative;
+  top: 4rpx; /* 设计稿里开关比标签行心低约 4 */
+  width: 94rpx;
+  height: 47rpx;
+  border-radius: 24rpx;
+  background-color: #c3c9d4;
+  flex-shrink: 0;
+}
+
+.sw-on {
+  background-color: #0066a2;
+}
+
+.sw-knob {
+  position: absolute;
+  top: 4rpx;
+  left: 4rpx;
+  width: 39rpx;
+  height: 39rpx;
+  border-radius: 50%;
+  background-color: #ffffff;
+}
+
+.sw-on .sw-knob {
+  left: 51rpx;
+}
+
+.sr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 120rpx;
+  padding: 0 38rpx 0 36rpx;
+  font-size: 28rpx;
+  color: #131313;
 }

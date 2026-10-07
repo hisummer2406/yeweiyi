@@ -23,8 +23,8 @@
 }
 
 .gp-title {
-  height: 64rpx;
-  line-height: 64rpx;
+  height: 62rpx;
+  line-height: 62rpx;
   text-align: center;
   font-size: 34rpx;
   color: #131313;
@@ -35,6 +35,10 @@
   display: flex;
   flex-wrap: wrap;
   padding: 42rpx 23rpx 22rpx;
+}
+
+.gp-title + .gp-grid {
+  padding-bottom: 27rpx;
 }
 
 .gp-item {

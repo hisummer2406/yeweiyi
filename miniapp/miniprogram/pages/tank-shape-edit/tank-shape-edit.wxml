@@ -1,0 +1,21 @@
+<!-- 设计稿「罐表设置-卧罐16 / 立罐17 / 长方体18 / 长方体选择罐号19」。
+     协议里没有\"生成并下发罐表\"的方法：生成罐表只走到选罐号，随后说明暂不支持；
+     \"保存到手机\"是真实的本机保存；\"保存到控制器\"同样说明暂不支持。
+     示意图是从设计稿裁出的整条图（自带 H/L/R 标注），不是页面上叠的文字。 -->
+<view class="te-page">
+  <image class="te-diagram" src="/assets/illustrations/tankshape-{{shape}}.png" mode="aspectFit" />
+
+  <view class="te-field" wx:for="{{dims}}" wx:key="key">
+    <text class="te-field-label">{{item.key}}</text>
+    <input class="te-field-input" type="digit" placeholder="0" placeholder-class="te-ph" value="{{item.value}}" data-key="{{item.key}}" bindinput="onDimInput" />
+    <text class="te-field-unit">毫米</text>
+  </view>
+
+  <view class="te-buttons">
+    <button class="te-btn te-btn-main" bindtap="onGenerate">生成罐表</button>
+    <button class="te-btn te-btn-lite" bindtap="onSaveLocal">保存到手机</button>
+    <button class="te-btn te-btn-deep" bindtap="onSaveDevice">保存到控制器</button>
+  </view>
+</view>
+
+<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="罐号选择" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />

@@ -1,0 +1,90 @@
+/* 数值取自设计稿「罐表设置-卧罐16」PNG：示意图占 190–760；输入框 628×100、#F5F6F8、行距 140、首个顶在 819；
+   字母标签 36rpx、x=105，值 x=258，单位 x=302；三个按钮 198×65、间距 27，顶在 1273（立罐页也在同一位置）。
+   差异：输入框比设计稿的占位 0 宽（够 5 位数），单位因此比设计稿靠右约 36。 */
+page {
+  background-color: #ffffff;
+}
+
+.te-page {
+  position: relative;
+  min-height: 100vh;
+  padding-top: 9rpx; /* 用 padding 而不是给图加 margin：margin 会穿透折叠，把绝对定位的按钮一起推下去 */
+}
+
+.te-diagram {
+  display: block;
+  width: 750rpx;
+  height: 570rpx;
+}
+
+.te-field {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100rpx;
+  margin: 0 60rpx 41rpx 62rpx;
+  padding-left: 41rpx;
+  background-color: #f5f6f8;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+}
+
+.te-field:first-of-type {
+  margin-top: 59rpx;
+}
+
+.te-field-label {
+  width: 151rpx;
+  font-size: 36rpx;
+  color: #131313;
+}
+
+.te-field-input {
+  width: 76rpx;
+  height: 60rpx;
+  font-size: 28rpx;
+  color: #131313;
+}
+
+.te-ph {
+  color: #8b8c8d;
+}
+
+.te-field-unit {
+  margin-left: 5rpx;
+  color: #8b8c8d;
+}
+
+.te-buttons {
+  position: absolute;
+  left: 52rpx;
+  top: 1092rpx;
+  display: flex;
+}
+
+button.te-btn {
+  width: 198rpx;
+  height: 65rpx;
+  line-height: 65rpx;
+  margin: 0 27rpx 0 0;
+  padding: 0;
+  border-radius: 33rpx;
+  font-size: 26rpx;
+  color: #ffffff;
+}
+
+button.te-btn::after {
+  border: none;
+}
+
+.te-btn-main {
+  background-color: #0066a2;
+}
+
+.te-btn-lite {
+  background-color: #3b7aef;
+}
+
+.te-btn-deep {
+  background-color: #0068e9;
+}

@@ -228,9 +228,12 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
 
-`tank-config`, `tank-shape`, `calibration`, `backfill`, `record-settings`, `report-settings` are
-laid out from the design draft and say "暂未开放 / 云端没有对应接口" when saved. Do not make them
-send requests until the cloud side exists:
+`tank-config`, `tank-shape` (+ `tank-shape-edit`), `calibration`, `backfill`, `record-settings`,
+`report-settings` are laid out from the design draft (checked against the exported artboard PNGs by
+measuring pixels, see `openspec/changes/home-by-station/tasks.md` 3.8–3.10) and say "暂未开放 /
+云端没有对应接口" when saved. Shared pieces: form/button/switch styles in `app.wxss`,
+`components/grid-picker` (3-column tank-number sheet) and `components/side-picker` (type dropdown,
+12-colour palette). Do not make them send requests until the cloud side exists:
 
 - `config.setTank` / `config.setProbe` / `config.setAlarmThresholds` have method names but no
   argument schema (`yeweiyi-cloud/docs/miniprogram-design-gaps.md` §1).

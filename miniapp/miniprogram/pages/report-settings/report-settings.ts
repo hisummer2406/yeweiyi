@@ -13,10 +13,10 @@ Page({
     items: ITEMS,
   },
 
-  onSwitchChange(e: WechatMiniprogram.SwitchChange) {
+  onToggle(e: WechatMiniprogram.BaseEvent) {
     const key = e.currentTarget.dataset.key as string;
     const items = this.data.items.map((i: ExportItem) =>
-      i.key === key ? { ...i, on: e.detail.value } : i,
+      i.key === key ? { ...i, on: !i.on } : i,
     );
     this.setData({ items });
     wx.showToast({ title: '云端没有导出接口，仅展示交互', icon: 'none' });

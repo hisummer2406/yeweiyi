@@ -1,26 +1,37 @@
-<view class="container">
-  <view class="card muted">
-    对应设计稿「记录设置」画板。协议里没有任何"清空设备侧记录"类方法——这类操作一旦误触就是数据
-    永久丢失，这里的开关和"清空"按钮只做交互演示，不会真的发起请求。"库存记录"是一个全新的记录
-    类型，目前不在任何一条现有接口里。
+<!-- 设计稿「记录设置20」「记录设置-弹窗21」。协议里没有任何"清空设备侧记录"类方法，清空一旦误触就是数据
+     永久丢失，所以开关和"清空"只做交互展示，不发请求，操作时说明（见 .ts）。 -->
+<view class="fc" wx:for="{{groups}}" wx:key="key" style="padding-bottom:{{item.key === 'stock' ? 10 : 2}}rpx;margin-top:{{index > 2 ? 26 : 20}}rpx;">
+  <view class="sr">
+    <text>生成{{item.label}}</text>
+    <view class="sw {{item.generate ? 'sw-on' : ''}}" data-key="{{item.key}}" data-field="generate" bindtap="onToggle"><view class="sw-knob"></view></view>
   </view>
+  <view class="sr">
+    <text>删除{{item.label}}</text>
+    <view class="sw {{item.deleteOn ? 'sw-on' : ''}}" data-key="{{item.key}}" data-field="deleteOn" bindtap="onToggle"><view class="sw-knob"></view></view>
+  </view>
+  <view class="sr">
+    <text>清空{{item.label}}</text>
+    <view class="rs-chip" data-key="{{item.key}}" bindtap="onClearTap">清空</view>
+  </view>
+  <view class="sr" wx:if="{{item.key === 'stock'}}">
+    <text class="rs-interval-label">库存生成时间</text>
+    <input class="rs-interval" type="number" placeholder="0" placeholder-class="rs-ph" value="{{item.intervalMin}}" bindinput="onIntervalInput" />
+    <text class="rs-ph" style="flex:1;margin-left:5rpx;">分</text>
+  </view>
+</view>
+<view style="height:24rpx;"></view>
 
-  <view class="card" wx:for="{{groups}}" wx:key="key" style="padding:0 24rpx;">
-    <view class="switch-row">
-      <text>生成{{item.label}}</text>
-      <switch checked="{{item.generate}}" color="#05507c" data-key="{{item.key}}" data-field="generate" bindchange="onSwitchChange" />
+<!-- 设计稿「记录设置-弹窗21」：自绘的确认框，不是系统的 wx.showModal -->
+<view class="rs-mask" wx:if="{{dialogShow}}" catchtap="onDialogCancel">
+  <view class="rs-dialog" catchtap="noop">
+    <view class="rs-dialog-head">
+      <view class="rs-dialog-icon">!</view>
+      <text class="rs-dialog-title">清空记录</text>
     </view>
-    <view class="switch-row">
-      <text>删除{{item.label}}</text>
-      <switch checked="{{item.deleteOn}}" color="#05507c" data-key="{{item.key}}" data-field="deleteOn" bindchange="onSwitchChange" />
-    </view>
-    <view class="switch-row">
-      <text>清空{{item.label}}</text>
-      <button class="btn-danger-mini" size="mini" data-key="{{item.key}}" bindtap="onClearTap">清空</button>
-    </view>
-    <view class="switch-row" wx:if="{{item.key === 'stock'}}">
-      <text>库存生成时间（分）</text>
-      <input class="field-input" style="width:160rpx;text-align:right;" type="number" value="{{item.intervalMin}}" bindinput="onIntervalInput" />
+    <view class="rs-dialog-msg">谨慎！是否清空记录，记录无法恢复</view>
+    <view class="rs-dialog-btns">
+      <view class="rs-dialog-btn rs-dialog-cancel" bindtap="onDialogCancel">取消</view>
+      <view class="rs-dialog-btn rs-dialog-ok" bindtap="onDialogOk">确定</view>
     </view>
   </view>
 </view>

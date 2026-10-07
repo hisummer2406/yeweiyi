@@ -1,51 +1,13 @@
-<view class="container">
-  <view class="card muted">
-    对应设计稿「罐表设置」画板：按罐体形状输入物理尺寸，本地计算出一张液位→容积换算表再下发给设备。
-    协议里没有下发整张表的方法，"生成罐表"这里只做本地演示计算，不代表真实换算公式已确认。
-  </view>
-
-  <view class="card">
-    <view class="section-title">选择罐体形状</view>
-    <view class="shape-grid">
-      <view
-        wx:for="{{shapes}}"
-        wx:key="key"
-        class="shape-card {{activeShape === item.key ? 'shape-card-active' : ''}}"
-        data-key="{{item.key}}"
-        bindtap="onShapeTap"
-      >
-        <image class="shape-glyph" src="/assets/icons/{{item.icon}}.png" mode="aspectFit" />
-        <text>{{item.label}}</text>
-      </view>
-    </view>
-  </view>
-
-  <view class="card">
-    <view class="field">
-      <text class="field-label">罐号（生成后绑定到哪个物理罐）</text>
-      <picker mode="selector" range="{{tankOptions}}" value="{{tankIndex}}" bindchange="onTankChange">
-        <view class="field-input">{{tankOptions[tankIndex] || '请选择'}}</view>
-      </picker>
-    </view>
-    <view class="field" wx:for="{{dims}}" wx:key="key">
-      <text class="field-label">{{item.label}}（毫米）</text>
-      <input class="field-input" type="digit" value="{{item.value}}" data-key="{{item.key}}" bindinput="onDimInput" />
-    </view>
-  </view>
-
-  <view class="card" wx:if="{{previewRows.length > 0}}">
-    <view class="section-title">示例换算表（本地演示数据，非真实结果）</view>
-    <view class="row tabular-nums" wx:for="{{previewRows}}" wx:key="level" style="padding:8rpx 0;">
-      <text class="muted">液位 {{item.level}}mm</text>
-      <text class="muted">容积 {{item.volume}}L</text>
-    </view>
-  </view>
-
-  <view class="row" style="gap:16rpx;">
-    <button class="btn-secondary" style="flex:1;" bindtap="onGenerate">生成罐表</button>
-  </view>
-  <view class="row" style="gap:16rpx;margin-top:16rpx;">
-    <button class="btn-primary" style="flex:1;" bindtap="onSaveLocal">保存到手机</button>
-    <button class="btn-secondary" style="flex:1;" bindtap="onSaveDevice">保存到控制器</button>
+<!-- 设计稿「罐表设置15」：选罐体形状，点一张卡片进入对应的尺寸页（卧罐16 / 立罐17 / 长方体18）。 -->
+<view class="ts-grid">
+  <view
+    wx:for="{{shapes}}"
+    wx:key="key"
+    class="ts-card"
+    data-key="{{item.key}}"
+    bindtap="onShapeTap"
+  >
+    <image class="ts-card-img" src="/assets/illustrations/tankshape-card-{{item.key}}.png" mode="aspectFit" />
+    <text class="ts-card-label">{{item.label}}</text>
   </view>
 </view>
