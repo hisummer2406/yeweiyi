@@ -192,6 +192,12 @@ type Querier interface {
 	MaxTelemetryHourlyTank(ctx context.Context, deviceName string) (int32, error)
 	// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
+	// Idempotent operator registration (POST /api/devices). Same ownership rule as
+	// EnsureDeviceForCustomer — create, or claim an unassigned device, never move an assigned one — but
+	// also reports whether this call inserted the row, so the caller can answer 201 vs 200. xmax is 0
+	// only on a freshly inserted tuple; a conflict-update leaves it non-zero. The caller compares the
+	// returned customer_id with the requested one to detect a device owned by someone else.
+	RegisterDeviceForCustomer(ctx context.Context, arg RegisterDeviceForCustomerParams) (RegisterDeviceForCustomerRow, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
 	RenameCustomer(ctx context.Context, arg RenameCustomerParams) (Customer, error)
 	// The access decision (via the same function) plus the pieces the caller needs to pick the customer

@@ -159,6 +159,35 @@ func (q *Queries) MarkDevicesOfflineExcept(ctx context.Context, seenNames []stri
 	return result.RowsAffected(), nil
 }
 
+const registerDeviceForCustomer = `-- name: RegisterDeviceForCustomer :one
+INSERT INTO devices (device_name, customer_id) VALUES ($1, $2)
+ON CONFLICT (device_name) DO UPDATE
+    SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)
+RETURNING customer_id, (xmax = 0) AS inserted
+`
+
+type RegisterDeviceForCustomerParams struct {
+	DeviceName string      `json:"device_name"`
+	CustomerID pgtype.Int8 `json:"customer_id"`
+}
+
+type RegisterDeviceForCustomerRow struct {
+	CustomerID pgtype.Int8 `json:"customer_id"`
+	Inserted   bool        `json:"inserted"`
+}
+
+// Idempotent operator registration (POST /api/devices). Same ownership rule as
+// EnsureDeviceForCustomer — create, or claim an unassigned device, never move an assigned one — but
+// also reports whether this call inserted the row, so the caller can answer 201 vs 200. xmax is 0
+// only on a freshly inserted tuple; a conflict-update leaves it non-zero. The caller compares the
+// returned customer_id with the requested one to detect a device owned by someone else.
+func (q *Queries) RegisterDeviceForCustomer(ctx context.Context, arg RegisterDeviceForCustomerParams) (RegisterDeviceForCustomerRow, error) {
+	row := q.db.QueryRow(ctx, registerDeviceForCustomer, arg.DeviceName, arg.CustomerID)
+	var i RegisterDeviceForCustomerRow
+	err := row.Scan(&i.CustomerID, &i.Inserted)
+	return i, err
+}
+
 const setDeviceCustomer = `-- name: SetDeviceCustomer :exec
 UPDATE devices SET customer_id = $2, updated_at = now() WHERE device_name = $1
 `

@@ -259,6 +259,7 @@ var exemptRoutes = map[string]string{
 	"GET /healthz":             "no device",
 	"POST /api/login":          "no device",
 	"GET /api/devices":         "scoped to the caller; see TestTenancy_ListDevicesByRole",
+	"POST /api/devices":        "no device in the path; role-gated to platform admin, see TestRegisterDevice_*",
 	"POST /api/devices/bind":   "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
 	"POST /api/devices/unbind": "deletes only the caller's own binding row",
 

@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -398,5 +399,79 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"rows": out})
+	}
+}
+
+// registerDeviceRequest is registerDeviceHandler's body. DeviceName is the nameplate's full factory
+// code, treated as an opaque string: no prefix or length rule is enforced because the product has not
+// frozen one, and leading zeros must survive.
+type registerDeviceRequest struct {
+	DeviceName string `json:"deviceName" binding:"required"`
+	CustomerID int64  `json:"customerId" binding:"required"`
+}
+
+// registerDeviceHandler is POST /api/devices — the operator's idempotent device registration
+// (platform_admin only; the role is read from the database like every admin route).
+//
+// It exists because pairing-secret minting is not registration: that endpoint rotates a secret on
+// every call. This one touches no credential at all. Registering is what makes internal/ingest and
+// internal/rollup pick the device up (they iterate the devices table), so the operator never has to
+// wait for a scan.
+//
+// Ownership follows EnsureDeviceForCustomer: create, or claim an unassigned device, never move an
+// assigned one — a different owner is a 409. The insert and the ownership read are one statement, so
+// concurrent identical calls converge on one row and exactly one of them reports created.
+func registerDeviceHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		if actor.Role != control.RolePlatformAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only a platform administrator may register a device"})
+			return
+		}
+
+		var req registerDeviceRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "deviceName and customerId are required: " + err.Error()})
+			return
+		}
+		name := strings.TrimSpace(req.DeviceName)
+		// The name later appears in URL paths (/api/devices/:device/...), so a slash could never be
+		// addressed again; reject it up front rather than register an unreachable device.
+		if name == "" || strings.ContainsAny(name, "/?#\\") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "deviceName must be non-empty and must not contain / ? # or \\"})
+			return
+		}
+
+		ctx := c.Request.Context()
+		if _, err := deps.Queries.GetCustomer(ctx, req.CustomerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		res, err := deps.Queries.RegisterDeviceForCustomer(ctx, db.RegisterDeviceForCustomerParams{
+			DeviceName: name,
+			CustomerID: pgtype.Int8{Int64: req.CustomerID, Valid: true},
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if !res.CustomerID.Valid || res.CustomerID.Int64 != req.CustomerID {
+			c.JSON(http.StatusConflict, gin.H{"error": "device already belongs to a different customer"})
+			return
+		}
+
+		status := http.StatusOK
+		if res.Inserted {
+			status = http.StatusCreated
+		}
+		c.JSON(status, gin.H{"deviceName": name, "customerId": req.CustomerID, "created": res.Inserted})
 	}
 }

@@ -69,6 +69,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
+		authorized.POST("/devices", registerDeviceHandler(deps))
 		authorized.POST("/devices/bind", bindDeviceHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
 		// Provisioning-time only (platform_admin), not part of the mini-program's own pairing
