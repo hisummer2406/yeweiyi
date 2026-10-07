@@ -60,7 +60,9 @@ RETURNING customer_id;
 SELECT * FROM devices WHERE device_name = $1 FOR UPDATE;
 
 -- name: SetDeviceCustomer :exec
-UPDATE devices SET customer_id = $2, updated_at = now() WHERE device_name = $1;
+-- The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
+-- would otherwise refuse the change.
+UPDATE devices SET customer_id = $2, station_id = NULL, updated_at = now() WHERE device_name = $1;
 
 -- name: RegisterDeviceForCustomer :one
 -- Idempotent operator registration (POST /api/devices). Same ownership rule as
@@ -72,3 +74,9 @@ INSERT INTO devices (device_name, customer_id) VALUES ($1, $2)
 ON CONFLICT (device_name) DO UPDATE
     SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)
 RETURNING customer_id, (xmax = 0) AS inserted;
+
+-- name: SetDeviceStation :exec
+-- station_id NULL puts the device back to "ungrouped". The composite foreign key rejects a station of
+-- a different customer (23503) and the CHECK rejects a device with no customer (23514); the handler
+-- checks both first so those are the answers it gives, and the database is the backstop for a race.
+UPDATE devices SET station_id = sqlc.narg('station_id'), updated_at = now() WHERE device_name = sqlc.arg('device_name');

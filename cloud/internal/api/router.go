@@ -73,6 +73,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
+		authorized.GET("/stations", listStationsHandler(deps))
 		authorized.POST("/devices", registerDeviceHandler(deps))
 		authorized.POST("/devices/bind", bindDeviceHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
@@ -101,6 +102,10 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.PUT("/users/:id", updateUserHandler(deps))
 		authorized.PUT("/users/:id/customer", moveUserHandler(deps))
 		authorized.PUT("/devices/:device/customer", assignDeviceHandler(deps))
+		authorized.POST("/stations", createStationHandler(deps))
+		authorized.PUT("/stations/:id", updateStationHandler(deps))
+		authorized.DELETE("/stations/:id", deleteStationHandler(deps))
+		authorized.PUT("/devices/:device/station", assignDeviceStationHandler(deps))
 	}
 
 	return r

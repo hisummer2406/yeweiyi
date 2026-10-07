@@ -29,6 +29,12 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   （403）不续期。令牌带 `authAt`（上次输入密码的时间），续期时沿用，且新令牌的 `exp` 不会超过
   `authAt + auth.maxSessionAge`（默认 30 天，到点必须重新登录）。`/ws/alarms` 不受影响：连接仍在**原令牌**
   到期时以 `token expired` 关闭，客户端需用新令牌重连。续期不写 `audit_log`。
+- 油站（#43）：客户 → 油站 → 设备，油站只存在业务库（`stations` 表、`devices.station_id`），ThingsBoard 不知道，
+  设备名仍是唯一连接点。设备所属油站必须与设备所属客户一致，由复合外键 + `CHECK` 保证；`SetDeviceCustomer`
+  换客户时同时清空 `station_id`。`GET /api/devices` 每行带可空 `station_id`；`GET /api/stations` 的范围与设备列表
+  同一套规则（`customer_user` 只见其已绑定设备所在的油站，`customer_admin` 见本客户全部油站含空油站，平台管理员见全部）。
+  管理接口 `POST/PUT/DELETE /api/stations`、`PUT /api/devices/:device/station`：平台管理员不限客户，客户管理员限本客户，
+  别的客户的油站/设备与"不存在"同样返回 403。记录表不带 `station_id`，历史跟着设备所属油站走。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 

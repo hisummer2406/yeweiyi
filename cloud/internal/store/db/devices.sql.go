@@ -48,7 +48,7 @@ func (q *Queries) EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceF
 }
 
 const getDevice = `-- name: GetDevice :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at FROM devices WHERE device_name = $1
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id FROM devices WHERE device_name = $1
 `
 
 func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, error) {
@@ -62,12 +62,13 @@ func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, err
 		&i.UpdatedAt,
 		&i.CustomerID,
 		&i.CustomerAssignedAt,
+		&i.StationID,
 	)
 	return i, err
 }
 
 const getDeviceForUpdate = `-- name: GetDeviceForUpdate :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at FROM devices WHERE device_name = $1 FOR UPDATE
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id FROM devices WHERE device_name = $1 FOR UPDATE
 `
 
 // Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
@@ -83,6 +84,7 @@ func (q *Queries) GetDeviceForUpdate(ctx context.Context, deviceName string) (De
 		&i.UpdatedAt,
 		&i.CustomerID,
 		&i.CustomerAssignedAt,
+		&i.StationID,
 	)
 	return i, err
 }
@@ -189,7 +191,7 @@ func (q *Queries) RegisterDeviceForCustomer(ctx context.Context, arg RegisterDev
 }
 
 const setDeviceCustomer = `-- name: SetDeviceCustomer :exec
-UPDATE devices SET customer_id = $2, updated_at = now() WHERE device_name = $1
+UPDATE devices SET customer_id = $2, station_id = NULL, updated_at = now() WHERE device_name = $1
 `
 
 type SetDeviceCustomerParams struct {
@@ -197,8 +199,27 @@ type SetDeviceCustomerParams struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 }
 
+// The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
+// would otherwise refuse the change.
 func (q *Queries) SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error {
 	_, err := q.db.Exec(ctx, setDeviceCustomer, arg.DeviceName, arg.CustomerID)
+	return err
+}
+
+const setDeviceStation = `-- name: SetDeviceStation :exec
+UPDATE devices SET station_id = $1, updated_at = now() WHERE device_name = $2
+`
+
+type SetDeviceStationParams struct {
+	StationID  pgtype.Int8 `json:"station_id"`
+	DeviceName string      `json:"device_name"`
+}
+
+// station_id NULL puts the device back to "ungrouped". The composite foreign key rejects a station of
+// a different customer (23503) and the CHECK rejects a device with no customer (23514); the handler
+// checks both first so those are the answers it gives, and the database is the backstop for a race.
+func (q *Queries) SetDeviceStation(ctx context.Context, arg SetDeviceStationParams) error {
+	_, err := q.db.Exec(ctx, setDeviceStation, arg.StationID, arg.DeviceName)
 	return err
 }
 

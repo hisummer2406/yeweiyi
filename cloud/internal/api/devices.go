@@ -373,6 +373,7 @@ type deviceResponse struct {
 	LastOnlineAt  pgtype.Timestamptz `json:"last_online_at"`
 	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	StationID     *int64             `json:"station_id"`
 }
 
 // adminDeviceResponse is a row for a platform admin: the same fields plus the customer the device is
@@ -408,6 +409,7 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 				LastOnlineAt:  r.LastOnlineAt,
 				LastOfflineAt: r.LastOfflineAt,
 				UpdatedAt:     r.UpdatedAt,
+				StationID:     int8Ptr(r.StationID),
 			}
 			if isPlatformAdmin {
 				out = append(out, adminDeviceResponse{deviceResponse: row, CustomerID: int8Ptr(r.CustomerID)})

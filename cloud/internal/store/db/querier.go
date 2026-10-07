@@ -57,6 +57,7 @@ type Querier interface {
 	// the device changed hands — happens after this statement and no lock here could prevent it.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
+	CreateStation(ctx context.Context, arg CreateStationParams) (Station, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// Run in the same transaction as a device changing customer: bindings made under the old customer
 	// must not survive into the new one.
@@ -66,6 +67,9 @@ type Querier interface {
 	// Refused by the foreign keys (ON DELETE RESTRICT) while any user, device, command or audit row still
 	// references the customer; the handler turns that into 409. `default` is protected as above.
 	DeleteCustomer(ctx context.Context, id int64) (int64, error)
+	// A station that still has devices fails with 23503 (devices_station_customer_fk); the handler turns
+	// that into 409.
+	DeleteStation(ctx context.Context, id int64) (int64, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
@@ -87,6 +91,7 @@ type Querier interface {
 	// both win.
 	GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error)
 	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
+	GetStation(ctx context.Context, id int64) (Station, error)
 	// Used where a decision must reflect the user's *current* role and customer rather than what their
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -146,6 +151,14 @@ type Querier interface {
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
+	// The station list a caller is allowed to see, by the same three-way rule as ListDevicesForUser:
+	//   platform_admin  every station;
+	//   customer_admin  every station of their own customer — including ones with no devices yet, or a
+	//                   newly created station could never be seen and so never be given a device;
+	//   customer_user   only the stations of devices they are bound to, within their own customer. A
+	//                   station none of their devices is on is invisible, and so is how many other
+	//                   devices it has.
+	ListStationsForUser(ctx context.Context, id int64) ([]Station, error)
 	// 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
 	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
 	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
@@ -209,7 +222,13 @@ type Querier interface {
 	// This is for deciding early (and for auditing denials under the right customer). It is NOT what
 	// keeps a command honest: CreateControlCommand re-checks the rule inside the INSERT itself.
 	ResolveDeviceAccess(ctx context.Context, arg ResolveDeviceAccessParams) (ResolveDeviceAccessRow, error)
+	// The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
+	// would otherwise refuse the change.
 	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
+	// station_id NULL puts the device back to "ungrouped". The composite foreign key rejects a station of
+	// a different customer (23503) and the CHECK rejects a device with no customer (23514); the handler
+	// checks both first so those are the answers it gives, and the database is the backstop for a race.
+	SetDeviceStation(ctx context.Context, arg SetDeviceStationParams) error
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
@@ -220,6 +239,7 @@ type Querier interface {
 	// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
 	SyncDeviceOnlineStatus(ctx context.Context, arg SyncDeviceOnlineStatusParams) (int64, error)
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
+	UpdateStation(ctx context.Context, arg UpdateStationParams) (Station, error)
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
 	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
 	//

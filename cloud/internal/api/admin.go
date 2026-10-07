@@ -325,7 +325,7 @@ func deleteCustomerHandler(deps Deps) gin.HandlerFunc {
 		})
 		if err != nil {
 			if isPgCode(err, "23503") {
-				c.JSON(http.StatusConflict, gin.H{"error": "the customer still has users, devices or history and cannot be deleted"})
+				c.JSON(http.StatusConflict, gin.H{"error": "the customer still has users, devices, stations or history and cannot be deleted"})
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

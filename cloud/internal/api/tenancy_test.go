@@ -289,6 +289,9 @@ type routeCase struct {
 	// adminOnly marks a route a customer admin is refused regardless of customer, so the "own
 	// customer is allowed" half of the check does not apply to it.
 	adminOnly bool
+	// customerUserDenied marks a route open to admins of the device's customer but never to a
+	// customer user, so the "own customer is allowed" half only applies to the customer admin.
+	customerUserDenied bool
 }
 
 // exemptRoutes are the routes that take no device and therefore have no cross-customer case here.
@@ -297,6 +300,10 @@ var exemptRoutes = map[string]string{
 	"GET /healthz":             "no device",
 	"POST /api/login":          "no device",
 	"GET /api/devices":         "scoped to the caller; see TestTenancy_ListDevicesByRole",
+	"GET /api/stations":        "no device in the path; scoped to the caller in SQL, see TestStations_ListScope",
+	"POST /api/stations":       "no device; customer admin limited to their own customer, see TestStations_Create",
+	"PUT /api/stations/:id":    "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
+	"DELETE /api/stations/:id": "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
 	"POST /api/devices":        "no device in the path; role-gated to platform admin, see TestRegisterDevice_*",
 	"POST /api/devices/bind":   "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
 	"POST /api/devices/unbind": "deletes only the caller's own binding row",
@@ -339,6 +346,12 @@ func deviceScopedRoutes(t *testing.T) map[string]routeCase {
 			adminOnly: true,
 			build: func(device, _ string) (string, []byte) {
 				return "/api/devices/" + device + "/customer", []byte(`{"customerId":1}`)
+			},
+		},
+		"PUT /api/devices/:device/station": {
+			customerUserDenied: true,
+			build: func(device, _ string) (string, []byte) {
+				return "/api/devices/" + device + "/station", []byte(`{"stationId":null}`)
 			},
 		},
 		"GET /ws/alarms": {build: func(device, token string) (string, []byte) {
@@ -395,7 +408,11 @@ func TestTenancy_EveryDeviceScopedRouteDeniesCrossCustomer(t *testing.T) {
 				return
 			}
 			// The legitimate caller must get past authorization, or the checks above prove nothing.
-			for name, token := range map[string]string{"userA": tn.userA, "adminA": tn.adminA} {
+			own := map[string]string{"userA": tn.userA, "adminA": tn.adminA}
+			if rc.customerUserDenied {
+				own = map[string]string{"adminA": tn.adminA}
+			}
+			for name, token := range own {
 				if code := do(token, tn.devA1); code == http.StatusForbidden || code == http.StatusUnauthorized {
 					t.Errorf("%s on their own device was refused (%d): the request never reached its handler", name, code)
 				}

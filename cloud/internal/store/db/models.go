@@ -144,6 +144,8 @@ type Device struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前转移过的设备（有 direction=out 的 device.assign 审计）回填为迁移时刻；从未改过归属的为 NULL（没有前任客户，无需裁剪）；未分配时也为 NULL。
 	CustomerAssignedAt pgtype.Timestamptz `json:"customer_assigned_at"`
+	// 所属油站，空 = 未分组。必须属于 devices.customer_id 同一客户（复合外键 + CHECK 保证）。设备换客户时由 SetDeviceCustomer 同时清空。
+	StationID pgtype.Int8 `json:"station_id"`
 }
 
 // 设备配对密钥（哈希），与 ThingsBoard 设备凭据完全隔离，仅用于验证 /api/devices/bind 请求
@@ -223,6 +225,20 @@ type RiverQueue struct {
 	Metadata  []byte             `json:"metadata"`
 	PausedAt  pgtype.Timestamptz `json:"paused_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 油站：客户 → 油站 → 设备 的中间层，只存在于业务库，ThingsBoard 不知道油站。
+type Station struct {
+	// 油站主键。
+	ID int64 `json:"id"`
+	// 所属客户；建立后不可更改，设备换客户时设备的 station_id 同时清空。
+	CustomerID int64 `json:"customer_id"`
+	// 油站名称，同一客户下唯一。
+	Name string `json:"name"`
+	// 油站地址，可为空串。
+	Address string `json:"address"`
+	// 创建时间。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 // 出入库记录（设备协议 V1 stockEvent）。一笔移库一行，以 (device_name, event_id) 为键，幂等写入；设备用同一 eventId 重发修正版时，信封 ts 最大的一份胜出（docs/protocol-v1-stock-event.md）。业务库是长期事实来源，非必要不删除。
