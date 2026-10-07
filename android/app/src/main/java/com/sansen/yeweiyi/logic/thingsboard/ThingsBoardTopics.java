@@ -25,6 +25,11 @@ public final class ThingsBoardTopics {
     /** 订阅时用通配符匹配所有服务端下发的 RPC 请求。 */
     public static final String RPC_REQUEST_SUBSCRIBE = RPC_REQUEST_PREFIX + "+";
 
+    /** 设备自助注册（Provisioning）：用固定用户名连 broker，在这两个 topic 上一问一答领 access token。 */
+    public static final String PROVISION_USERNAME = "provision";
+    public static final String PROVISION_REQUEST = "/provision/request";
+    public static final String PROVISION_RESPONSE = "/provision/response";
+
     private ThingsBoardTopics() {
     }
 

@@ -16,6 +16,13 @@ public class ThingsBoardTopicsTest {
     }
 
     @Test
+    public void provisionTopicsMatchThingsBoardDeviceApi() {
+        assertEquals("provision", ThingsBoardTopics.PROVISION_USERNAME);
+        assertEquals("/provision/request", ThingsBoardTopics.PROVISION_REQUEST);
+        assertEquals("/provision/response", ThingsBoardTopics.PROVISION_RESPONSE);
+    }
+
+    @Test
     public void buildsRequestAndResponseTopicsById() {
         assertEquals("v1/devices/me/attributes/request/7", ThingsBoardTopics.attributesRequest(7));
         assertEquals("v1/devices/me/rpc/response/abc-123", ThingsBoardTopics.rpcResponse("abc-123"));

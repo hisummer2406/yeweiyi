@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.fragment;
 
+import android.app.AlertDialog;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
 import android.os.Bundle;
@@ -18,20 +19,15 @@ import com.sansen.yeweiyi.manager.ThingsBoardCredentialStore;
 import com.sansen.yeweiyi.manager.ThingsBoardManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
 import bean.IPBean;
 
 /**
- * 云平台（ThingsBoard）连接设置：broker 地址/端口 + 设备 deviceId/accessToken 的现场录入入口。
- * <p>
- * 在这个类之前，三者都没有任何写入路径——{@code ThingsBoardCredentialStore.save()} 全仓库
- * 无调用方，全新设备连不上云端；{@code SharePreManager.getIpBean()} 的默认分支硬编码着一个
- * 旧协议遗留 IP，{@code saveIpBean()} 同样无调用方（PR #38 人工审核 item 6 + 后续复审新发现）。
- * <p>
- * deviceId/accessToken 由云端后台注册设备时生成，现场人员手动抄录/粘贴录入——这台终端没有
- * 摄像头模块，走不了扫码配网。accessToken 落盘前由 {@link ThingsBoardCredentialStore} 用
- * Android Keystore 加密，这个 Fragment 只管收集输入、校验、转交，不接触加密细节。
+ * 云平台（ThingsBoard）连接设置：broker 地址/端口 + 设备编号（贴纸上的，设备自己读不到）。
+ * 访问令牌留空时由 {@link ThingsBoardManager} 用编号自动领取；手填令牌是兜底。
+ * 页面文案只有中文，入口只在中文界面显示（见 {@code SetSeniorFragment}）。
  */
 public class ThingsBoardSetFragment extends BaseFragment {
 
@@ -87,8 +83,44 @@ public class ThingsBoardSetFragment extends BaseFragment {
     }
 
     private void updateConnectionStatus() {
-        boolean connected = ThingsBoardManager.getInstance(main.getApplicationContext()).isConnected();
-        tv_connection_status.setText(connected ? "当前状态：已连接云平台" : "当前状态：未连接云平台");
+        ThingsBoardManager manager = ThingsBoardManager.getInstance(main.getApplicationContext());
+        String text = SystemUtils.getRsStr(manager.isConnected()
+                ? R.string.tb_status_connected : R.string.tb_status_disconnected);
+        ThingsBoardManager.ProvisionStatus status = manager.getProvisionStatus();
+        String provision = describeProvisionStatus(status);
+        tv_connection_status.setText(provision == null ? text : text + "\n" + provision);
+        if (status.state == ThingsBoardManager.ProvisionState.SUCCESS) {
+            fillProvisionedToken();
+        }
+    }
+
+    /** 领取成功后把令牌回填到令牌框，免得现场以为还是空的。 */
+    private void fillProvisionedToken() {
+        if (!TextUtils.isEmpty(et_access_token.getText())) {
+            return;
+        }
+        DeviceCredentials stored = new ThingsBoardCredentialStore(main.getApplicationContext()).load();
+        if (stored.isValid() && stored.getDeviceId().equals(et_device_id.getText().toString().trim())) {
+            et_access_token.setText(stored.getAccessToken());
+        }
+    }
+
+    private static String describeProvisionStatus(ThingsBoardManager.ProvisionStatus status) {
+        switch (status.state) {
+            case IN_PROGRESS:
+                return SystemUtils.getRsStr(R.string.tb_provision_in_progress);
+            case SUCCESS:
+                return SystemUtils.getRsStr(R.string.tb_provision_success);
+            case REJECTED:
+                return SystemUtils.getRsStr(R.string.tb_provision_rejected,
+                        status.errorMessage == null ? "" : status.errorMessage);
+            case NETWORK_ERROR:
+                return SystemUtils.getRsStr(R.string.tb_provision_network_error);
+            case NOT_CONFIGURED:
+                return SystemUtils.getRsStr(R.string.tb_provision_not_configured);
+            default:
+                return null;
+        }
     }
 
     Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
@@ -96,6 +128,8 @@ public class ThingsBoardSetFragment extends BaseFragment {
         public void onPropertyChanged(Observable sender, int propertyId) {
             String newValue = ((ObservableField<String>) sender).get();
             tv_time.setText(newValue);
+            // 时钟每秒在主线程刷新一次，顺带刷新连接/配网状态，不另起定时器
+            updateConnectionStatus();
         }
     };
     TextView tvTitle, tv_time;
@@ -116,31 +150,58 @@ public class ThingsBoardSetFragment extends BaseFragment {
         String accessToken = et_access_token.getText().toString().trim();
 
         if (TextUtils.isEmpty(host)) {
-            ToastUtils.showToast("Broker地址不能为空", 5);
+            ToastUtils.showToast(SystemUtils.getRsStr(R.string.tb_broker_host_empty), 5);
             return;
         }
         int port;
         try {
             port = Integer.parseInt(portText);
         } catch (NumberFormatException e) {
-            ToastUtils.showToast("端口必须是数字", 5);
+            ToastUtils.showToast(SystemUtils.getRsStr(R.string.tb_port_not_number), 5);
             return;
         }
         if (port <= 0 || port > 65535) {
-            ToastUtils.showToast("端口必须在 1-65535 之间", 5);
+            ToastUtils.showToast(SystemUtils.getRsStr(R.string.tb_port_out_of_range), 5);
             return;
         }
-        if (TextUtils.isEmpty(deviceId) || TextUtils.isEmpty(accessToken)) {
-            ToastUtils.showToast("设备ID和访问令牌不能为空", 5);
+        if (TextUtils.isEmpty(deviceId)) {
+            ToastUtils.showToast(SystemUtils.getRsStr(R.string.tb_device_id_empty), 5);
             return;
         }
 
+        DeviceCredentials stored = new ThingsBoardCredentialStore(main.getApplicationContext()).load();
+        boolean sameDevice = deviceId.equals(stored.getDeviceId());
+        if (!sameDevice && accessToken.equals(stored.getAccessToken())) {
+            // 换了编号但令牌框还是回显的旧令牌：旧令牌属于旧编号，作废后按新编号重新领取
+            accessToken = "";
+        } else if (sameDevice && accessToken.isEmpty() && stored.isValid()) {
+            // 编号没变、已有令牌：保留。清空会触发重新领取，而云端只允许领一次
+            accessToken = stored.getAccessToken();
+        }
+        if (!accessToken.isEmpty()) {
+            persist(host, port, deviceId, accessToken);
+            return;
+        }
+        // 自动领取：先让现场核对编号，输错会领走另一台已登记设备的身份
+        final String token = accessToken;
+        new AlertDialog.Builder(main)
+                .setTitle(SystemUtils.getRsStr(R.string.tb_confirm_device_id_title))
+                .setMessage(SystemUtils.getRsStr(R.string.tb_confirm_device_id_message, deviceId))
+                .setPositiveButton(SystemUtils.getRsStr(R.string.confirm),
+                        (dialog, which) -> persist(host, port, deviceId, token))
+                .setNegativeButton(SystemUtils.getRsStr(R.string.cancle), null)
+                .show();
+    }
+
+    private void persist(String host, int port, String deviceId, String accessToken) {
         SharePreManager.saveIpBean(new IPBean(host, port, ""));
         new ThingsBoardCredentialStore(main.getApplicationContext())
                 .save(new DeviceCredentials(deviceId, accessToken));
         ThingsBoardManager.getInstance(main.getApplicationContext()).applyUpdatedConnectionSettings(host, port);
 
-        ToastUtils.showToast("已保存，正在使用新配置重新连接云平台", 5);
+        et_access_token.setText(accessToken);
+        ToastUtils.showToast(SystemUtils.getRsStr(accessToken.isEmpty()
+                ? R.string.tb_saved_provisioning : R.string.tb_saved), 5);
         updateConnectionStatus();
     }
 
@@ -149,6 +210,12 @@ public class ThingsBoardSetFragment extends BaseFragment {
             main.setSeniorFragment = new SetSeniorFragment();
         }
         main.switchContent(main.mContent, main.setSeniorFragment);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        SerialPortEntrity.time.removeOnPropertyChangedCallback(callback);
     }
 
     @Override

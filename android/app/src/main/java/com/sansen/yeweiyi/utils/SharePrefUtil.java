@@ -97,6 +97,17 @@ public class SharePrefUtil {
 
     }
 
+    /** 多个键值一次 commit 写入，读方不会看到只写了一半的组合。参数按 key, value, key, value… 排列。 */
+    public static void saveStrings(Context context, String... keyValues) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        SharedPreferences.Editor editor = sp.edit();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            editor.putString(keyValues[i], keyValues[i + 1]);
+        }
+        editor.commit();
+    }
+
     public static void clear(Context context) {
         if (sp == null)
             sp = context.getSharedPreferences(SP_NAME, 0);

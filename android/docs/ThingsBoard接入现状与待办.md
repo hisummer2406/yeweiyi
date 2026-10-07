@@ -10,6 +10,8 @@
 >
 > 第六版补充（2026-10-06）：即时事件外层 `ts` 去重，避免在 ThingsBoard 里互相覆盖（§3.2、§3.3）。
 >
+> 第六版补充（2026-10-07）：§3.7 配网改为手输编号 + ThingsBoard Provisioning 自动领 token。
+>
 > 第五版变更（2026-10-04）：§3.7 配网已有现场手动录入入口（`9225274`）。
 
 ---
@@ -399,27 +401,20 @@ public void dispatch(String mqttRequestId, String payload) {
 
 ---
 
-### 3.7 配对联网——设备联网已有手动入口，用户绑定仍缺
+### 3.7 配对联网——设备联网改为手输编号 + 自动领 token，用户绑定仍缺
 
 **业务场景**：一台新设备从出厂到现场能正常工作，中间需要两件事都完成：设备本身要能连上 ThingsBoard；用户要能在小程序里看到/管理这台设备。这两件事是独立的业务流程。
 
-- **设备联网——✅ 已有现场手动录入入口**（`9225274`）：高级设置 → 云平台设置（`fragment/ThingsBoardSetFragment`），装机人员手动填 broker 地址、端口、`deviceId`、`accessToken`。保存时：
-  ```
-  ThingsBoardSetFragment.save()
-      → SharePreManager.saveIpBean(host, port)                     // broker 地址
-      → ThingsBoardCredentialStore.save(DeviceCredentials)          // 凭据
-      → ThingsBoardManager.applyUpdatedConnectionSettings(host, port)  // 立即断线重连，不等下次意外断线
-  ```
-  - `accessToken` 用 Android Keystore AES/GCM 密钥加密后落盘（API 23 以下回退明文并记警告日志，这台硬件不是那个版本）；`deviceId` 只是 MQTT client ID，保持明文。
-  - **入口暂时只在中文界面显示**（`SetSeniorFragment` 里用 `LanguageUtil.isChinese()` 判断）——这个页面的文案目前写死中文、没有多语言版本。英文/西语界面的设备要先切到中文配好凭据，再切回去（配置存在设备本地，切语言不丢）。
-  - 从没保存过时，`SharePreManager.getIpBean()` 仍然兜底到旧 IP `39.98.62.79:1883`（Alink 时代遗留），凭据也为空，所以**新设备不进这个页面配置就连不上**——这是预期行为，不是缺陷。
-  - 方案取的是下面 3.7.1 表格里的**方案 B（设置界面手动填）**；token 手抄易错、装机人员要能访问云端后台这两个缺点仍然成立。
+- **设备联网——✅ 手输编号 + ThingsBoard Provisioning 自动领 token**（2026-10-07，工作区未提交，**未经真机/真实 ThingsBoard 验证**）：高级设置 → 云平台设置（`fragment/ThingsBoardSetFragment`），装机人员填 broker 地址、端口和设备贴纸上的编号，访问令牌留空即自动领取，手填令牌是兜底。流程、失败处理、云端准备见 `docs/设备配网流程-编号与Provisioning.md`。
+  - `accessToken` 用 Android Keystore AES/GCM 密钥加密后落盘；`deviceId` 只是 MQTT client ID，保持明文。
+  - **入口暂时只在中文界面显示**（`SetSeniorFragment` 里用 `LanguageUtil.isChinese()` 判断）——新文案只加在 `values/strings.xml`，en/es 待设计稿。
+  - 从没保存过时，`SharePreManager.getIpBean()` 仍然兜底到旧 IP `39.98.62.79:1883`（Alink 时代遗留），所以**新设备不进这个页面配置就连不上**——这是预期行为，不是缺陷。
 - **用户绑定设备**（云端二维码配对那套业务流程，见第 2 节 `pairing-secret`/`bind`）：❌ Android 端仍然没有任何扫码页面或配对密钥输入界面。
-- **云端铸造设备身份**：❌ 仍然只有开发者命令行工具能做（见 3.7.1 第一步），装机人员手里的 `deviceId`/`accessToken` 目前得靠开发者在 ThingsBoard 控制台或命令行工具里建好设备再交给他们。
+- **云端铸造设备身份**：改由 ThingsBoard 自带的 Provisioning 完成（Device Profile 开启、预注册策略、批量导入编号），❌ 云端这些准备还没做。
 
 #### 3.7.1 `DeviceCredentials` 应该怎么拿到——设计建议（需要产品/安全确认）
 
-> 第五版注：下表方案 B 已作为过渡方案实现（见上文）。本节其余内容保留，作为将来换成方案 A 等更顺手的配网方式时的参考。
+> 已定方案（2026-10-07）：手输编号 + ThingsBoard Provisioning（见上文），本节 A–D 不再采用，保留作参考。
 
 先说清楚现在为什么拿不到，再说应该怎么拿。
 
@@ -463,7 +458,7 @@ public void dispatch(String mqttRequestId, String payload) {
 
 | 分类 | 具体内容 |
 |---|---|
-| **卡配网界面** | 用户扫码绑定界面、云端给真实设备铸造 ThingsBoard 身份的接口（见 3.7）；云平台设置页多语言文案（目前只在中文界面开放）。设备凭据写入/broker 地址配置已有手动入口（`ThingsBoardSetFragment`） |
+| **卡配网界面** | 用户扫码绑定界面；云端 Provisioning 准备（见 3.7）；云平台设置页多语言文案（目前只在中文界面开放）。设备端手输编号 + 自动领 token 已实现（`ThingsBoardSetFragment`），未经真机验证 |
 | **待决定** | `probeType` 跟云端的取值约定（Android 已按设置页命名）、`deviceModel`/`hardwareVersion` 取值定义（见 3.5）；"油体积含水"的含义需告知云端 |
 | **本地问题，只记录不在 MQTT 范围内改** | 水体积 `waterVolume` 真实模式下恒为 0（三个解析器都不计算），影响罐卡片"水体积"显示项、出入库记录起止水体积、VR350 对外协议、MQTT 上报——按"本地在用就照常上报"的规则，MQTT 继续上报（见 3.1） |
 | **V1 剩余（真机）** | 搭 ThingsBoard 环境做真机验收（执行方案 V1-T7）：报警产生/恢复、`alarmState`、断网补发、出入库快照取值疑点 |
@@ -479,7 +474,7 @@ public void dispatch(String mqttRequestId, String payload) {
 
 ## 6. 测试现状
 
-全模块 273 个 JVM 测试，0 失败（2026-10-06）。其中 `ProtocolV1ContractTest` 用云端 `fixtures/protocol/v1/` 的原样副本（`app/src/test/resources/protocol/v1/`，同步方法见该目录 README）对遥测、报警、设备属性、RPC ACK/命令结果做逐 key 比对，已知差异各用一个 `knownGap_*` 测试固定。**零真机验证**——没连过真实 ThingsBoard broker，没连过真实探针/继电器硬件。配网入口（3.7）补上之后，真机已经有路径可以填凭据连上 broker，下一步就是真机联调；配网页、凭据加密、broker 重连都依赖 Android Context，不在 JVM 测试范围内，只经过编译验证。
+全模块 283 个 JVM 测试，0 失败（2026-10-07）。其中 `ProtocolV1ContractTest` 用云端 `fixtures/protocol/v1/` 的原样副本（`app/src/test/resources/protocol/v1/`，同步方法见该目录 README）对遥测、报警、设备属性、RPC ACK/命令结果做逐 key 比对，已知差异各用一个 `knownGap_*` 测试固定。**零真机验证**——没连过真实 ThingsBoard broker，没连过真实探针/继电器硬件。配网入口（3.7）补上之后，真机已经有路径可以填凭据连上 broker，下一步就是真机联调；配网页、凭据加密、broker 重连都依赖 Android Context，不在 JVM 测试范围内，只经过编译验证。
 
 ---
 

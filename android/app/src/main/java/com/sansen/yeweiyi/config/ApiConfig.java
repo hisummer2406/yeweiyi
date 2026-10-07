@@ -31,4 +31,11 @@ public class ApiConfig {
      * 非敏感开关，走 {@code flagField} 通道，缺失即为 false。
      */
     public static final boolean THINGSBOARD_USE_TLS = BuildConfig.THINGSBOARD_USE_TLS;
+
+    /**
+     * ThingsBoard Device Profile 里生成的设备自助注册 key/secret，同型号设备共用。
+     * 为空时设备不能自动领 token，只能在云平台设置页手填。
+     */
+    public static final String PROVISION_DEVICE_KEY = BuildConfig.PROVISION_DEVICE_KEY;
+    public static final String PROVISION_DEVICE_SECRET = BuildConfig.PROVISION_DEVICE_SECRET;
 }

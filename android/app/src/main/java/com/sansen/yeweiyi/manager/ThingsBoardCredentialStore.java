@@ -26,7 +26,7 @@ import javax.crypto.spec.GCMParameterSpec;
  * SharedPreferences 文件里，跟设备名等其它现场配置一起，不新起一个存储文件。
  * <p>
  * 凭据写入时机是设备现场配网/换绑，入口见 {@code fragment.ThingsBoardSetFragment}
- * （现场手动录入 broker 地址 + deviceId/accessToken，本类只负责存取）；
+ * （现场录入 broker 地址 + 编号，token 自动领取或手填，本类只负责存取）；
  * 吊销/换绑时调用 {@link #clear()}。
  * <p>
  * {@code accessToken} 是真正的密钥材料，用 Android Keystore 的 AES/GCM 对称密钥加密后
@@ -47,6 +47,8 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
     /** 明文回退前缀：只有 API < 23 才会写这种格式，{@link #load()} 靠它判断要不要走解密。 */
     private static final String PLAINTEXT_PREFIX = "plain:";
     private static final String ENCRYPTED_PREFIX = "enc:";
+    /** 配网页和 tb-reconnect 线程各自 new 实例，锁必须是静态的才能互斥。 */
+    private static final Object LOCK = new Object();
 
     private final Context context;
 
@@ -56,22 +58,43 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
 
     @Override
     public DeviceCredentials load() {
-        String deviceId = SharePrefUtil.getString(context, SharePrefUtil.TB_DEVICE_ID, "");
-        String stored = SharePrefUtil.getString(context, SharePrefUtil.TB_ACCESS_TOKEN, "");
-        String accessToken = decode(stored);
-        return new DeviceCredentials(deviceId, accessToken);
+        synchronized (LOCK) {
+            String deviceId = SharePrefUtil.getString(context, SharePrefUtil.TB_DEVICE_ID, "");
+            String stored = SharePrefUtil.getString(context, SharePrefUtil.TB_ACCESS_TOKEN, "");
+            String accessToken = decode(stored);
+            return new DeviceCredentials(deviceId, accessToken);
+        }
     }
 
     @Override
     public void save(DeviceCredentials credentials) {
-        SharePrefUtil.saveString(context, SharePrefUtil.TB_DEVICE_ID, credentials.getDeviceId());
-        SharePrefUtil.saveString(context, SharePrefUtil.TB_ACCESS_TOKEN, encode(credentials.getAccessToken()));
+        String encoded = encode(credentials.getAccessToken());
+        synchronized (LOCK) {
+            SharePrefUtil.saveStrings(context, SharePrefUtil.TB_DEVICE_ID, credentials.getDeviceId(),
+                    SharePrefUtil.TB_ACCESS_TOKEN, encoded);
+        }
+    }
+
+    /**
+     * 自动领到 token 后写回：只有已存的仍是同一编号、且还没有有效 token 时才写，检查和写入在同一把锁里。
+     * 返回 false 说明领取期间配网页改了编号或手填了 token，这次领到的作废。
+     */
+    public boolean saveIfAwaitingToken(DeviceCredentials provisioned) {
+        synchronized (LOCK) {
+            DeviceCredentials current = load();
+            if (!provisioned.getDeviceId().equals(current.getDeviceId()) || current.isValid()) {
+                return false;
+            }
+            save(provisioned);
+            return true;
+        }
     }
 
     @Override
     public void clear() {
-        SharePrefUtil.saveString(context, SharePrefUtil.TB_DEVICE_ID, "");
-        SharePrefUtil.saveString(context, SharePrefUtil.TB_ACCESS_TOKEN, "");
+        synchronized (LOCK) {
+            SharePrefUtil.saveStrings(context, SharePrefUtil.TB_DEVICE_ID, "", SharePrefUtil.TB_ACCESS_TOKEN, "");
+        }
     }
 
     private String encode(String accessToken) {

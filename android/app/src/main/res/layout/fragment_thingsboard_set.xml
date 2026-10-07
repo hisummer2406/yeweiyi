@@ -98,7 +98,7 @@
                     android:layout_height="@dimen/dp_52"
                     android:background="@drawable/shap_login_setpwd"
                     android:textSize="@dimen/sp_22"
-                    android:hint="云平台设备注册页给出的 Device ID"/>
+                    android:hint="@string/tb_device_id_hint"/>
             </LinearLayout>
 
             <LinearLayout
@@ -119,7 +119,7 @@
                     android:layout_height="@dimen/dp_52"
                     android:background="@drawable/shap_login_setpwd"
                     android:textSize="@dimen/sp_22"
-                    android:hint="云平台设备注册页给出的 Access Token"/>
+                    android:hint="@string/tb_access_token_hint"/>
             </LinearLayout>
 
             <TextView

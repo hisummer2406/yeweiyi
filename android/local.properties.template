@@ -30,6 +30,13 @@ sansen.requestEncryptKey=
 # 服务端基址，例如 http://<host>:<port>
 sansen.baseUrl=
 
+# ThingsBoard 设备自助注册（Provisioning）的 key/secret：在 ThingsBoard 控制台
+# Device Profile → Device provisioning 里生成（策略选 Check for pre-provisioned devices），
+# 同型号设备共用。现场只填设备编号，设备用它们自动领取自己的 access token。
+# 留空则只能在云平台设置页手填 token。
+sansen.provisionDeviceKey=
+sansen.provisionDeviceSecret=
+
 # --- 正式包签名（本地一次性配置，找项目负责人索取；见 tools/generate-release-keystore.sh）---
 # keystore 文件本体固定放在 app/keystore/release.jks，不进版本库，这里只填密码/别名。
 # 三项缺一，release 构建产物就不会签名，无法安装到设备。

@@ -14,6 +14,8 @@ import com.sansen.yeweiyi.logic.thingsboard.AlarmEventBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.ClientAttributesBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
+import com.sansen.yeweiyi.logic.thingsboard.ProvisionMessages;
+import com.sansen.yeweiyi.logic.thingsboard.ProvisionResult;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
 import com.sansen.yeweiyi.logic.thingsboard.SharedAttributesParser;
 import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
@@ -62,6 +64,7 @@ public final class ThingsBoardManager {
     private static final int MAX_PENDING_ALARMS = 200;
     private static final long RECONNECT_INITIAL_DELAY_MILLIS = 2_000L;
     private static final long RECONNECT_MAX_DELAY_MILLIS = 60_000L;
+    private static final long PROVISION_TIMEOUT_MILLIS = 15_000L;
 
     private static ThingsBoardManager instance;
 
@@ -126,6 +129,8 @@ public final class ThingsBoardManager {
      */
     private final UniqueTimestampAllocator eventTsAllocator = new UniqueTimestampAllocator();
     private final AtomicBoolean started = new AtomicBoolean(false);
+    /** 只在 tb-reconnect 线程上写，配网页读。 */
+    private volatile ProvisionStatus provisionStatus = new ProvisionStatus(ProvisionState.NONE, null);
     private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
     /**
      * {@link #requestSharedAttributes()} 每次连接成功后调一次，用来把这次请求跟
@@ -249,6 +254,8 @@ public final class ThingsBoardManager {
     }
 
     private void applyUpdatedConnectionSettingsOnReconnectThread(String brokerUri) {
+        // 重新保存即解除"云端拒绝后停止注册"的状态
+        setProvisionStatus(ProvisionState.NONE, null);
         connection.updateBrokerUri(brokerUri);
         connection.disconnect();
         reconnectBackoff.reset();
@@ -534,6 +541,12 @@ public final class ThingsBoardManager {
             return;
         }
         DeviceCredentials credentials = credentialStore.load();
+        if (!credentials.isValid() && notEmpty(credentials.getDeviceId())) {
+            credentials = provisionAccessToken(credentials.getDeviceId());
+            if (credentials == null) {
+                return; // provisionAccessToken 已决定退避重试或停下等重新保存
+            }
+        }
         boolean ok = connection.connect(credentials);
         if (ok) {
             reconnectBackoff.reset();
@@ -543,5 +556,74 @@ public final class ThingsBoardManager {
         } else {
             scheduleConnectAttempt(reconnectBackoff.nextDelayMillis());
         }
+    }
+
+    // ---- 设备自助注册（Provisioning）----
+
+    /**
+     * 有编号、无 token 时向 ThingsBoard 领 token。成功返回新凭据；云端拒绝或没配 key/secret 时停下，
+     * 等配网页重新保存（{@link #applyUpdatedConnectionSettings}）再试；网络类失败按退避重试。
+     */
+    private DeviceCredentials provisionAccessToken(String deviceId) {
+        if (!notEmpty(ApiConfig.PROVISION_DEVICE_KEY) || !notEmpty(ApiConfig.PROVISION_DEVICE_SECRET)) {
+            Log.w(TAG, "未配置 provision key/secret，无法自动领取 token，只能手填");
+            setProvisionStatus(ProvisionState.NOT_CONFIGURED, null);
+            return null;
+        }
+        if (provisionStatus.state == ProvisionState.REJECTED) {
+            return null;
+        }
+        setProvisionStatus(ProvisionState.IN_PROGRESS, null);
+        String request = ProvisionMessages.buildRequest(deviceId, ApiConfig.PROVISION_DEVICE_KEY,
+                ApiConfig.PROVISION_DEVICE_SECRET);
+        ProvisionResult result = connection.provision(deviceId, request, PROVISION_TIMEOUT_MILLIS);
+        Log.i(TAG, "设备注册结果: deviceId=" + deviceId + " " + result);
+        switch (result.getOutcome()) {
+            case SUCCESS:
+                DeviceCredentials provisioned = new DeviceCredentials(deviceId, result.getAccessToken());
+                if (!credentialStore.saveIfAwaitingToken(provisioned)) {
+                    // 云端已把这个编号标记为已领取，之后再领会被拒，需云端重置
+                    Log.w(TAG, "领取期间配网页改了编号或手填了 token，编号 " + deviceId
+                            + " 领到的 token 已丢弃；该编号在云端已被占用，需云端重置后才能再领");
+                    return null;
+                }
+                setProvisionStatus(ProvisionState.SUCCESS, null);
+                return provisioned;
+            case REJECTED:
+                setProvisionStatus(ProvisionState.REJECTED, result.getErrorMessage());
+                return null;
+            default:
+                setProvisionStatus(ProvisionState.NETWORK_ERROR, result.getErrorMessage());
+                scheduleConnectAttempt(reconnectBackoff.nextDelayMillis());
+                return null;
+        }
+    }
+
+    private void setProvisionStatus(ProvisionState state, String errorMessage) {
+        provisionStatus = new ProvisionStatus(state, errorMessage);
+    }
+
+    /** 最近一次自动领 token 的状态，供配网页显示。 */
+    public ProvisionStatus getProvisionStatus() {
+        return provisionStatus;
+    }
+
+    public enum ProvisionState {
+        NONE, IN_PROGRESS, SUCCESS, REJECTED, NETWORK_ERROR, NOT_CONFIGURED
+    }
+
+    public static final class ProvisionStatus {
+        public final ProvisionState state;
+        /** 云端 errorMsg 或本地失败原因，可能为 null。 */
+        public final String errorMessage;
+
+        ProvisionStatus(ProvisionState state, String errorMessage) {
+            this.state = state;
+            this.errorMessage = errorMessage;
+        }
+    }
+
+    private static boolean notEmpty(String s) {
+        return s != null && !s.trim().isEmpty();
     }
 }

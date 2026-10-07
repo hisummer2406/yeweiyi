@@ -4,6 +4,8 @@ import android.util.Log;
 
 import com.sansen.yeweiyi.logic.thingsboard.BrokerTls;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
+import com.sansen.yeweiyi.logic.thingsboard.ProvisionMessages;
+import com.sansen.yeweiyi.logic.thingsboard.ProvisionResult;
 import com.sansen.yeweiyi.logic.thingsboard.ThingsBoardTopics;
 
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
@@ -16,6 +18,9 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.net.ssl.SSLSocketFactory;
 
@@ -162,6 +167,80 @@ public final class ThingsBoardMqttConnection {
             closeQuietly(created);
             return false;
         }
+    }
+
+    /**
+     * 用 {@link ThingsBoardTopics#PROVISION_USERNAME} 临时连同一个 broker（同样的 TLS 校验），
+     * 发一次注册请求、等应答后断开。阻塞最长约连接超时 + {@code timeoutMs}，只能在后台线程调用；
+     * 不影响 {@link #client} 字段。
+     */
+    public synchronized ProvisionResult provision(String deviceName, String requestJson, long timeoutMs) {
+        final CountDownLatch answered = new CountDownLatch(1);
+        final AtomicReference<String> response = new AtomicReference<>();
+        MqttClient temp = null;
+        try {
+            temp = new MqttClient(brokerUri, deviceName, new MemoryPersistence());
+            temp.setCallback(new MqttCallback() {
+                @Override
+                public void connectionLost(Throwable cause) {
+                    answered.countDown();
+                }
+
+                @Override
+                public void messageArrived(String topic, MqttMessage message) throws Exception {
+                    if (ThingsBoardTopics.PROVISION_RESPONSE.equals(topic)) {
+                        response.set(new String(message.getPayload(), "UTF-8"));
+                        answered.countDown();
+                    }
+                }
+
+                @Override
+                public void deliveryComplete(IMqttDeliveryToken token) {
+                }
+            });
+
+            MqttConnectOptions options = new MqttConnectOptions();
+            options.setCleanSession(true);
+            options.setUserName(ThingsBoardTopics.PROVISION_USERNAME);
+            options.setConnectionTimeout(CONNECTION_TIMEOUT_SECONDS);
+            options.setKeepAliveInterval(KEEP_ALIVE_SECONDS);
+            if (useTls) {
+                options.setSocketFactory(createTlsSocketFactory());
+            }
+            temp.connect(options);
+            temp.subscribe(ThingsBoardTopics.PROVISION_RESPONSE, QOS_AT_LEAST_ONCE);
+            MqttMessage request = new MqttMessage(requestJson.getBytes("UTF-8"));
+            request.setQos(QOS_AT_LEAST_ONCE);
+            temp.publish(ThingsBoardTopics.PROVISION_REQUEST, request);
+
+            if (!answered.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                return ProvisionResult.failure(ProvisionResult.Outcome.TIMEOUT, "等待注册应答超时");
+            }
+            String payload = response.get();
+            if (payload == null) {
+                return ProvisionResult.failure(ProvisionResult.Outcome.NETWORK_ERROR, "等待应答时连接断开");
+            }
+            return ProvisionMessages.parseResponse(payload);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return resultIfAnswered(response.get(), "注册被中断");
+        } catch (Exception e) {
+            Log.e(TAG, "ThingsBoard 设备注册连接失败: broker=" + brokerUri + " deviceName=" + deviceName, e);
+            return resultIfAnswered(response.get(), e.toString());
+        } finally {
+            closeQuietly(temp);
+        }
+    }
+
+    /**
+     * 出异常前应答可能已经到了（例如等 PUBACK 时断线）。云端那时已把编号标记为已领取，
+     * 当成网络失败去重试只会被拒，所以有应答就按应答处理。
+     */
+    private static ProvisionResult resultIfAnswered(String payload, String errorMessage) {
+        if (payload != null) {
+            return ProvisionMessages.parseResponse(payload);
+        }
+        return ProvisionResult.failure(ProvisionResult.Outcome.NETWORK_ERROR, errorMessage);
     }
 
     private static void closeQuietly(MqttClient c) {
