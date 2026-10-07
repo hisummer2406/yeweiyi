@@ -21,15 +21,10 @@ vi.mock('@/components', () => ({
   Footer: () => null,
   LangDropdown: () => null,
   OfflineBanner: () => null,
-  VersionDropdown: () => null,
 }));
 
 vi.mock('@ant-design/pro-components', () => ({
   SettingDrawer: () => null,
-}));
-
-vi.mock('@ant-design/icons', () => ({
-  LinkOutlined: () => null,
 }));
 
 vi.mock('./requestErrorConfig', () => ({

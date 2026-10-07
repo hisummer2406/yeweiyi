@@ -121,6 +121,7 @@ export default [
     name: 'exception',
     icon: 'warning',
     path: '/exception',
+    hideInMenu: true,
     routes: [
       {
         path: '/exception',

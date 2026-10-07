@@ -6,10 +6,10 @@
  * 布局组件
  */
 import Footer from './Footer';
-import { LangDropdown, VersionDropdown } from './RightContent';
+import { LangDropdown } from './RightContent';
 import { AvatarDropdown } from './RightContent/AvatarDropdown';
 
 export { default as ErrorBoundary } from './ErrorBoundary';
 export { default as OfflineBanner } from './OfflineBanner';
 
-export { AvatarDropdown, Footer, LangDropdown, VersionDropdown };
+export { AvatarDropdown, Footer, LangDropdown };

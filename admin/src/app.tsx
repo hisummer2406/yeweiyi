@@ -1,4 +1,3 @@
-import { LinkOutlined } from '@ant-design/icons';
 import type { Settings as LayoutSettings } from '@ant-design/pro-components';
 import { SettingDrawer } from '@ant-design/pro-components';
 import type { RequestConfig, RunTimeLayoutConfig } from '@umijs/max';
@@ -16,13 +15,11 @@ import {
   Footer,
   LangDropdown,
   OfflineBanner,
-  VersionDropdown,
 } from '@/components';
 import { getCurrentUser } from '@/utils/auth';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 
-const isDev = process.env.NODE_ENV === 'development';
 const loginPath = '/user/login';
 
 /**
@@ -83,10 +80,7 @@ export const layout: RunTimeLayoutConfig = ({
       // `locale` prop is a locale string, so narrow to the boolean toggle here.
       const localeEnabled =
         (initialState?.settings as { locale?: boolean })?.locale !== false;
-      return [
-        <VersionDropdown key="version" />,
-        localeEnabled && <LangDropdown key="lang" />,
-      ].filter(Boolean);
+      return [localeEnabled && <LangDropdown key="lang" />].filter(Boolean);
     },
     avatarProps: {
       title: initialState?.currentUser?.username,
@@ -127,14 +121,6 @@ export const layout: RunTimeLayoutConfig = ({
         width: '331px',
       },
     ],
-    links: isDev
-      ? [
-          <Link key="openapi" to="/umi/plugin/openapi" target="_blank">
-            <LinkOutlined />
-            <span>OpenAPI 文档</span>
-          </Link>,
-        ]
-      : [],
     // Replace ProLayout's default ErrorBoundary with our offline-aware version,
     // so chunk load errors show friendly messages instead of "Something went wrong."
     ErrorBoundary,
