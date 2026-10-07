@@ -132,10 +132,18 @@ const Login: React.FC = () => {
       <div
         style={{
           flex: '1',
+          display: 'flex',
+          flexDirection: 'column',
           padding: '32px 0',
         }}
       >
         <LoginForm
+          // LoginForm 的 container 本身是占满父级的纵向 flex，内容默认贴顶；
+          // 在它自己身上居中，标题与表单作为一个整体上下左右居中。
+          containerStyle={{
+            height: 'auto',
+            justifyContent: 'center',
+          }}
           contentStyle={{
             minWidth: 280,
             maxWidth: '75vw',
