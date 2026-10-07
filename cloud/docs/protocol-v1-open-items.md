@@ -340,7 +340,7 @@ openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶�
 
 | 接口 | 变化 | 是否破坏 |
 |---|---|---|
-| `GET /api/devices` | `platform_admin` 返回**全部**设备（原：仅已绑定）；`customer_admin` 返回本客户全部设备（原：仅已绑定）。行字段不变，**刻意不暴露** `customer_id` | 语义变化 |
+| `GET /api/devices` | `platform_admin` 返回**全部**设备（原：仅已绑定）；`customer_admin` 返回本客户全部设备（原：仅已绑定）。客户账号看到的行字段不变，**刻意不暴露** `customer_id`；`platform_admin` 的行多一个 `customer_id`（未分配为 null），供管理后台显示设备归属（`yeweiyi-admin` 的 `/ops/devices`） | 语义变化 |
 | `POST /api/devices/bind` | 新增拒绝情形：设备属于其他客户或未分配，返回与"密钥错误"完全相同的 401 | 否（只多一种失败） |
 | `POST /api/devices/:device/pairing-secret`（仅 `platform_admin`，安装工具） | 请求体新增**必填** `{"customerId": N}`；设备已属于别的客户返回 409 | **是**：不带 body 的旧调用得 400 |
 | `GET /api/audit` | `customer_admin` 可不带 `device`；`platform_admin` 可选 `?customerId=` | 否（只放宽） |

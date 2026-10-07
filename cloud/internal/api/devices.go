@@ -375,6 +375,15 @@ type deviceResponse struct {
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }
 
+// adminDeviceResponse is a row for a platform admin: the same fields plus the customer the device is
+// assigned to (null while unassigned), which the admin console needs to show who owns a device.
+// Customer accounts keep getting plain deviceResponse rows, so the mini-program's contract is
+// unchanged (TestTenancy_ListDevicesDoesNotLeakCustomerID).
+type adminDeviceResponse struct {
+	deviceResponse
+	CustomerID *int64 `json:"customer_id"`
+}
+
 // listDevicesHandler lets a client discover which device names it's even allowed to query — every
 // other endpoint requires the caller to already know an exact device_name, which only works once
 // there's a way to find out what those are first. The scope follows the same rule as
@@ -388,15 +397,23 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		out := make([]deviceResponse, 0, len(rows))
+		// The role is the one the auth middleware read from the database for this request.
+		role, _ := c.Get("role")
+		isPlatformAdmin := role == control.RolePlatformAdmin
+		out := make([]any, 0, len(rows))
 		for _, r := range rows {
-			out = append(out, deviceResponse{
+			row := deviceResponse{
 				DeviceName:    r.DeviceName,
 				IsOnline:      r.IsOnline,
 				LastOnlineAt:  r.LastOnlineAt,
 				LastOfflineAt: r.LastOfflineAt,
 				UpdatedAt:     r.UpdatedAt,
-			})
+			}
+			if isPlatformAdmin {
+				out = append(out, adminDeviceResponse{deviceResponse: row, CustomerID: int8Ptr(r.CustomerID)})
+			} else {
+				out = append(out, row)
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{"rows": out})
 	}

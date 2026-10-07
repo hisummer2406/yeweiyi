@@ -206,6 +206,44 @@ func TestTenancy_ListDevicesByRole(t *testing.T) {
 	}
 }
 
+// A platform admin's list carries each device's customer_id (null while unassigned), so the admin
+// console can show who owns a device without a second request. Customer accounts do not get it
+// (TestTenancy_ListDevicesDoesNotLeakCustomerID).
+func TestTenancy_ListDevicesCarriesCustomerIDForPlatformAdmin(t *testing.T) {
+	tn := newTenancy(t)
+	rec := tn.get(tn.platform, "/api/devices")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list devices: %d %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Rows []struct {
+			DeviceName string `json:"device_name"`
+			CustomerID *int64 `json:"customer_id"`
+		} `json:"rows"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	want := map[string]*int64{tn.devA1: &tn.custA, tn.devB1: &tn.custB, tn.devUnassigned: nil}
+	seen := 0
+	for _, r := range body.Rows {
+		w, ok := want[r.DeviceName]
+		if !ok {
+			continue
+		}
+		seen++
+		switch {
+		case w == nil && r.CustomerID != nil:
+			t.Errorf("%s is unassigned, got customer_id %d", r.DeviceName, *r.CustomerID)
+		case w != nil && (r.CustomerID == nil || *r.CustomerID != *w):
+			t.Errorf("%s: customer_id = %v, want %d", r.DeviceName, r.CustomerID, *w)
+		}
+	}
+	if seen != len(want) {
+		t.Fatalf("expected %d fixture devices in the list, saw %d", len(want), seen)
+	}
+}
+
 func contains(list []string, s string) bool {
 	for _, v := range list {
 		if v == s {
