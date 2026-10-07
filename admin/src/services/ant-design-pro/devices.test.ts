@@ -11,7 +11,9 @@ const forwardAuthFailure = vi.fn(
 vi.mock('@umijs/max', () => ({ request }));
 vi.mock('@/requestErrorConfig', () => ({ forwardAuthFailure }));
 
-const { listDevices, registerDevice } = await import('./devices');
+const { listDevices, registerDevice, assignDeviceCustomer } = await import(
+  './devices'
+);
 const { ApiError } = await import('./apiError');
 
 const httpError = (status: number, data: unknown = {}) => ({
@@ -160,5 +162,43 @@ describe('registerDevice', () => {
     }).catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(0);
+  });
+});
+
+describe('assignDeviceCustomer', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('puts the customerId to the escaped device path', async () => {
+    const result = {
+      deviceName: 'ZCT/01 #2',
+      customerId: 3,
+      changed: true,
+      bindingsCleared: 2,
+    };
+    request.mockResolvedValue(result);
+    await expect(assignDeviceCustomer('ZCT/01 #2', 3)).resolves.toEqual(result);
+    expect(request).toHaveBeenCalledWith(
+      '/api/devices/ZCT%2F01%20%232/customer',
+      expect.objectContaining({
+        method: 'PUT',
+        data: { customerId: 3 },
+        skipErrorHandler: true,
+      }),
+    );
+  });
+
+  it('404 is thrown as ApiError and not marked handled', async () => {
+    request.mockRejectedValue(httpError(404, { error: 'device not found' }));
+    const err = await assignDeviceCustomer('X', 1).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    expect(err.authHandled).toBe(false);
+  });
+
+  it('401 is forwarded to the global auth handling', async () => {
+    request.mockRejectedValue(httpError(401));
+    const err = await assignDeviceCustomer('X', 1).catch((e) => e);
+    expect(forwardAuthFailure).toHaveBeenCalledTimes(1);
+    expect(err.authHandled).toBe(true);
   });
 });

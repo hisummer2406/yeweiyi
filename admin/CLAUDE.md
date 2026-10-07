@@ -18,7 +18,9 @@
 
 **`/ops/devices` 设备登记已接**（OpenSpec 变更 `register-device-and-assign-customer`，GitHub issue #1）：
 
-- 列表 `GET /api/devices`（行是 snake_case，**没有客户归属字段**）；客户 `GET/POST /api/customers`；
+- 列表 `GET /api/devices`（行是 snake_case；`customer_id` **只有平台管理员的行才有**，null 为未分配，字段缺失是
+  旧版云端，显示「未知」而不是「未分配」）；转移/分配走 `PUT /api/devices/:device/customer`（同一事务清掉该设备的
+  所有绑定）；客户 `GET/POST /api/customers`；
   登记 `POST /api/devices`（`{deviceName,customerId}`，201 首次 / 200 已登记 / 409 属于其他客户）。
   这个接口是幂等登记，**不碰任何配对密钥**；不要改用 `pairing-secret`（它每次调用都会轮换密钥）。
 - 出厂编号一律按字符串处理、保留前导零（`src/utils/deviceCode.ts`）。`ZCT` 前缀只用于给短码生成
@@ -28,7 +30,13 @@
   `toApiError`）；返回的 `ApiError.authHandled` 为 true 时已在回登录页，调用方不要再提示。
 - 只完成了管理员登记页面。**小程序扫码绑定仍未完成**：授权规则（管理员预分配，还是同客户申请加管理员
   批准）待产品/后端确认，出厂编号是公开可猜的标识，不能当凭证用。
-- 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。
+- 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。设备列表的
+  `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
+
+**`/ops/customers`、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
+`default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码、
+换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
+和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
 `internal/api/router.go`。
@@ -118,7 +126,8 @@ src/services/           对接后端的请求函数（登录、设备、客户�
 
 - 除登录和设备登记（设备、客户）外，其余业务接口（账号、控制、进销存、审计等）的类型与请求函数
   还没写。接哪个页面就先把对应类型和请求函数按真实接口补上，不要在没对齐类型的情况下假装接口已经通了。
-- 设备登记没有联调过真实后端；列表不显示客户归属，需要 cloud 扩展设备列表字段。
+- 设备登记、客户、账号、设备转移的接口已用 curl 对真实后端验证过（2026-10-07），但页面本身没有在浏览器里走过
+  （Chrome 扩展未连上）。
 - 登录页没有联调过真实后端（见 `align-login-with-cloud` 任务 5.4）；需要 `platform_admin` 与客户
   角色账号各验证一次。
 - 生产环境的反向代理目标（`config/proxy.ts` 的 `test`/`pre`）还是占位符，部署方式和域名都没有

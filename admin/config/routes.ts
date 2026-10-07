@@ -45,6 +45,12 @@ export default [
         component: './ops/devices',
       },
       {
+        name: 'customers',
+        icon: 'shop',
+        path: '/ops/customers',
+        component: './ops/customers',
+      },
+      {
         name: 'users',
         icon: 'team',
         path: '/ops/users',

@@ -28,7 +28,9 @@ declare namespace API {
 
   /**
    * GET /api/devices 的行（yeweiyi-cloud internal/api/devices.go deviceResponse）。
-   * 注意是 snake_case，且没有客户归属字段；时间为 RFC3339 字符串，未发生过则为 null。
+   * 注意是 snake_case；时间为 RFC3339 字符串，未发生过则为 null。
+   * customer_id 只有平台管理员的行才有：null 为未分配；字段缺失说明云端还没带上它（旧版本），
+   * 此时只能显示「未知」，不能当成未分配。
    */
   type DeviceRow = {
     device_name: string;
@@ -36,6 +38,15 @@ declare namespace API {
     last_online_at: string | null;
     last_offline_at: string | null;
     updated_at: string | null;
+    customer_id?: number | null;
+  };
+
+  /** PUT /api/devices/:device/customer 响应：changed=false 表示本来就属于该客户 */
+  type AssignDeviceResult = {
+    deviceName: string;
+    customerId: number;
+    changed: boolean;
+    bindingsCleared: number;
   };
 
   /** GET /api/customers 的客户（internal/api/admin.go customerResponse） */
@@ -43,6 +54,33 @@ declare namespace API {
     id: number;
     name: string;
     createdAt: string;
+  };
+
+  type UserRole = 'platform_admin' | 'customer_admin' | 'customer_user';
+
+  /** GET /api/users 的账号（internal/api/admin.go userResponse，不含密码） */
+  type AdminUser = {
+    id: number;
+    username: string;
+    role: UserRole;
+    customerId: number | null;
+    disabled: boolean;
+    disabledAt?: string;
+    createdAt: string;
+  };
+
+  /** POST /api/users 请求体：platform_admin 不带 customerId，其余角色必填 */
+  type CreateUserParams = {
+    username: string;
+    password: string;
+    role: UserRole;
+    customerId?: number;
+  };
+
+  /** PUT /api/users/:id 请求体：disabled 和 password 至少给一个 */
+  type UpdateUserParams = {
+    disabled?: boolean;
+    password?: string;
   };
 
   /** POST /api/devices 请求体：deviceName 为铭牌完整出厂编号（按字符串，保留前导零） */

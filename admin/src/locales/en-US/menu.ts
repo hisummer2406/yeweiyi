@@ -1,6 +1,7 @@
 export default {
   'menu.ops': 'Operations',
   'menu.ops.devices': 'Devices',
+  'menu.ops.customers': 'Customers',
   'menu.ops.users': 'Accounts',
   'menu.ops.pairing-secret': 'Pairing Secret',
   'menu.ops.audit': 'Audit Log',

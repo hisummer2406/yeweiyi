@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { describeCustomerError, describeRegisterError } from './errors';
+import {
+  describeAssignError,
+  describeCustomerError,
+  describeRegisterError,
+} from './errors';
 
 describe('describeRegisterError', () => {
   it('409 says the device belongs to another customer', () => {
@@ -78,5 +82,21 @@ describe('describeCustomerError', () => {
       id: 'pages.ops.devices.error.unknown',
       detail: 'boom',
     });
+  });
+});
+
+describe('describeAssignError', () => {
+  it('404 means the device no longer exists', () => {
+    expect(describeAssignError(404).id).toBe(
+      'pages.ops.devices.error.notFound',
+    );
+  });
+  it('other statuses behave like registering', () => {
+    expect(describeAssignError(403).id).toBe(
+      'pages.ops.devices.error.forbidden',
+    );
+    expect(describeAssignError(400, 'unknown customerId').detail).toBe(
+      'unknown customerId',
+    );
   });
 });

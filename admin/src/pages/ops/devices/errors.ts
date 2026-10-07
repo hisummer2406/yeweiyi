@@ -43,3 +43,12 @@ export function describeCustomerError(
       return describeRegisterError(status, error);
   }
 }
+
+/** 分配/转移设备（PUT /api/devices/:device/customer）：404 设备不存在，其余同登记。 */
+export function describeAssignError(
+  status: number,
+  error?: string,
+): ErrorMessage {
+  if (status === 404) return { id: 'pages.ops.devices.error.notFound' };
+  return describeRegisterError(status, error);
+}

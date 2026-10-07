@@ -44,3 +44,26 @@ export async function registerDevice(
     throw toApiError(err);
   }
 }
+
+/**
+ * PUT /api/devices/:device/customer：把设备分配或转移到另一个客户，转移时同一事务内清掉该设备的所有
+ * 绑定（旧客户下绑定的人不能带着座位去新客户的设备）。仅平台管理员；设备不存在 404，客户不存在 400。
+ * 设备编号放在路径里，所以要转义。失败抛 ApiError，提示由调用方给出（401 在 toApiError 里转交）。
+ */
+export async function assignDeviceCustomer(
+  deviceName: string,
+  customerId: number,
+): Promise<API.AssignDeviceResult> {
+  try {
+    return await request<API.AssignDeviceResult>(
+      `/api/devices/${encodeURIComponent(deviceName)}/customer`,
+      {
+        method: 'PUT',
+        data: { customerId },
+        skipErrorHandler: true,
+      },
+    );
+  } catch (err) {
+    throw toApiError(err);
+  }
+}

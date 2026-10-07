@@ -1,6 +1,7 @@
 export default {
   'menu.ops': '运维管理',
   'menu.ops.devices': '设备管理',
+  'menu.ops.customers': '客户管理',
   'menu.ops.users': '账号管理',
   'menu.ops.pairing-secret': '配对密钥',
   'menu.ops.audit': '审计日志',
