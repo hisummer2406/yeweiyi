@@ -30,6 +30,8 @@ about the design draft are easy to get wrong:
   pages" below). Do not wire those up by guessing; the open questions are filed as
   `yeweiyi-cloud#43 #44 #45` and `zhongchengyeweiyi#43`.
 
+Stations (cloud main 1d9d0be, yeweiyi-cloud#53): `/api/stations` returns all of the customer's stations (including empty ones) to `customer_admin`, and only the stations holding the user's bound devices to `customer_user`. A missing `station_id` on a device row means an old cloud; `customerId` on a station is not used.
+
 ## What this project is
 
 The WeChat mini-program (微信小程序) frontend for **需求B（PC 端 / 小程序远程数据监控）** of
@@ -180,6 +182,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change;
    it's the only automated check in this repo so far (no test runner yet).
+   `npm run check` — Node checks for `utils/stations.ts` (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` is the placeholder `"touristappid"` — swap in the real AppID before anything
    beyond local preview is needed.
@@ -211,18 +214,23 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 - `utils/oilInOut.ts` — runtime guard for the `/api/oil-in-out` envelope and the "list is not
   complete" notes (unparsable / legacySkipped / partial / truncated / invalidSource). Pure.
 - `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).
+- `utils/stations.ts` — station options, grouping, default selection and search; pure functions,
+  checked in Node by `npm run check`. `utils/stationPref.ts` — remembers the selected station.
 - `pages/` — three tabBar tabs plus pushed pages:
   - **首页 `devices`** (tabBar) — tank cards grouped by device: `GET /api/devices`, then one
-    `telemetry/latest` per device in parallel, each device succeeding/failing independently. No
-    station dropdown yet — the cloud has no station entity, so the header says "我的设备" rather than
-    faking one. "+" menu: 添加设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
+    `telemetry/latest` per device in parallel, each device succeeding/failing independently. When
+    the cloud has station data the top-left shows the current station name with a dropdown
+    (`pages/station-select`) and the page lists only that station's devices; without station data
+    (old cloud, `/api/stations` failing, no device belongs to any station) there is no dropdown and
+    the header says "我的设备". The selected station is remembered per username in `wx.storage`
+    (`utils/stationPref.ts`). "+" menu: 添加设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
     in the back office with a password; there is no registration or invite in the mini-program.
     Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
     device, `yeweiyi-cloud#45`).
   - **我的记录 `records`** (tabBar) — entry list; 报警/出库/入库 pick a device then open
     `device-detail` on that tab; 交班/库存 have no cloud data and say so.
   - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
-  - `login`, `device-add` (扫一扫), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
+  - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫一扫), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
     控制命令, plus the live-alarm banner from `AlarmSocket`; polls the command list every 3s while
     any command is non-terminal), `issue-command` (one control command, raw-JSON args).
 

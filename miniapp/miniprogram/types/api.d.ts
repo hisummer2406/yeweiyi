@@ -30,6 +30,9 @@ export interface Device {
   last_online_at: string | null;
   last_offline_at: string | null;
   updated_at: string;
+  // GET /api/devices rows carry the station the device sits in (yeweiyi-cloud#53). null = not in any
+  // station ("未分组"); a MISSING key means an older cloud. Both fall back to "no station" here.
+  station_id?: number | null;
 }
 
 // yeweiyi-cloud's own CLAUDE.md: "The QR code's content format is not designed [there]... who
@@ -39,6 +42,20 @@ export interface Device {
 export interface BindDeviceRequest {
   deviceName: string;
   pairingToken: string;
+}
+
+// ---- Stations ----
+
+// GET /api/stations -> { rows: Station[] } (yeweiyi-cloud internal/api/stations.go stationResponse).
+// A customer_user only gets the stations of devices they have bound; a customer_admin gets every
+// station of their customer, including ones with no devices. `customerId` is there for the operations
+// console — this app must not depend on it.
+export interface Station {
+  id: number;
+  customerId: number;
+  name: string;
+  address: string;
+  createdAt: string;
 }
 
 // ---- Alarms ----

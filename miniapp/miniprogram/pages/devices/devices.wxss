@@ -45,6 +45,21 @@ page {
   font-size: 36rpx;
 }
 
+.home-station-pick {
+  display: flex;
+  align-items: center;
+}
+
+/* 下拉三角：用边框画，仓库里没有现成的白色下拉图标；尺寸未对照设计稿像素校准 */
+.home-station-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 16rpx;
+  border-left: 10rpx solid transparent;
+  border-right: 10rpx solid transparent;
+  border-top: 12rpx solid #ffffff;
+}
+
 .home-plus {
   width: 42rpx;
   height: 42rpx;

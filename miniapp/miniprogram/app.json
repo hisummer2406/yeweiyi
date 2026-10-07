@@ -6,6 +6,7 @@
     "pages/more/more",
     "pages/device-detail/device-detail",
     "pages/device-add/device-add",
+    "pages/station-select/station-select",
     "pages/issue-command/issue-command",
     "pages/profile/profile",
     "pages/tank-config/tank-config",

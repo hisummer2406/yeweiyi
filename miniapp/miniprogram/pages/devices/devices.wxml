@@ -1,28 +1,33 @@
 <view wx:if="{{!devicesLoaded}}" class="empty">加载中…</view>
 
 <!-- 还没有任何已绑定设备：首次使用的空状态 -->
-<view wx:elif="{{groups.length === 0 && !listError}}" class="center-page">
+<view wx:elif="{{deviceTotal === 0 && !listError}}" class="center-page">
   <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
   <view class="brand-title">还没有绑定设备</view>
   <view class="brand-subtitle">设备上贴有二维码和设备编号，扫码即可绑定</view>
   <button class="btn-primary center-card" bindtap="onScanBind">扫码绑定设备</button>
 </view>
 
-<view wx:elif="{{groups.length === 0 && listError}}" class="empty">
+<view wx:elif="{{deviceTotal === 0 && listError}}" class="empty">
   <view>{{listError}}</view>
   <button class="btn-primary" size="mini" bindtap="loadHome" style="margin-top:24rpx;">重试</button>
 </view>
 
 <view wx:else>
-  <!-- 对应设计稿「首页-卧罐01」顶部：品牌栏 + 油站行。云端目前没有油站（见 openspec/changes/home-by-station），
-       所以这里没有下拉，左侧只写"我的设备"；不要用客户名或本地写死的油站名冒充油站。 -->
+  <!-- 对应设计稿「首页-卧罐01」顶部：品牌栏 + 油站行。云端有油站数据时左侧是当前油站名加下拉标记，
+       点击进入油站选择页；没有油站数据（旧版云端、油站接口失败、没有设备属于任何油站）时不出下拉，
+       左侧写"我的设备"。不要用客户名或本地写死的油站名冒充油站。 -->
   <view class="home-header" style="padding-top:{{statusBarRpx}}rpx;">
     <view class="home-brand">
       <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
       <text class="home-brand-title">智能液位管理系统</text>
     </view>
     <view class="home-station">
-      <text class="home-station-name">我的设备</text>
+      <view wx:if="{{hasStations}}" class="home-station-pick" bindtap="onPickStation">
+        <text class="home-station-name">{{stationName}}</text>
+        <view class="home-station-arrow"></view>
+      </view>
+      <text wx:else class="home-station-name">我的设备</text>
       <view class="home-plus" bindtap="onMoreActions">
         <image src="/assets/icons/add.png" mode="aspectFit" style="width:42rpx;height:42rpx;" />
       </view>
@@ -30,6 +35,7 @@
   </view>
 
   <view class="home-list">
+    <view wx:if="{{groups.length === 0}}" class="empty">该油站下还没有设备</view>
     <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
       <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
       <view class="group-head" wx:if="{{showSingleDeviceHeader || g.ts}}">
