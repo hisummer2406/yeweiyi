@@ -59,6 +59,10 @@ Page({
   allDevices: [] as Device[],
   allStations: [] as Station[],
   stationOptions: [] as StationOption[],
+  // The station the user picked on the select page during this page's lifetime. Kept in memory so the
+  // choice survives even if the best-effort storage write failed. Logout / account switch goes through
+  // reLaunch, which destroys the page, so this cannot leak between accounts.
+  chosenStationKey: undefined as string | undefined,
 
   onLoad() {
     try {
@@ -96,7 +100,7 @@ Page({
         this.allDevices = devRes.rows;
         this.allStations = stRes.rows;
         this.stationOptions = buildStationOptions(stRes.rows, devRes.rows);
-        return this.showStation(seq, getRememberedStation(this.currentUsername()));
+        return this.showStation(seq, this.chosenStationKey || getRememberedStation(this.currentUsername()));
       })
       .catch((err: Error) => {
         if (seq !== this.loadSeq) return;
@@ -141,9 +145,10 @@ Page({
   },
 
   onStationSelected(key: string) {
+    // Only record the choice. The select page calls wx.navigateBack() right after emitting, which
+    // always fires onShow -> loadHome(); reloading here too would load everything twice.
+    this.chosenStationKey = key;
     rememberStation(this.currentUsername(), key);
-    const seq = ++this.loadSeq;
-    this.showStation(seq, key);
   },
 
   loadDevice(deviceName: string, seq: number): Promise<void> {

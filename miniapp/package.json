@@ -4,7 +4,7 @@
   "private": true,
   "description": "需求B（PC 端 / 小程序远程数据监控）的微信小程序前端",
   "scripts": {
-    "check": "node --experimental-strip-types scripts/stations.check.mjs",
+    "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/stations.check.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
