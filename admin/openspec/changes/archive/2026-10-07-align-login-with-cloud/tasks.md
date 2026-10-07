@@ -28,4 +28,4 @@
 - [x] 5.1 grep 确认 `types/index.d.ts`、`types/cache/mock/login.mock.cache.js` 中的模板 currentUser 示例无人引用后删除或裁剪
 - [x] 5.2 更新 `CLAUDE.md`「项目状态」与「仍未定案或未做的事」：登录已对齐、当前用户由 JWT 派生、无后端登出
 - [x] 5.3 运行 `npm run tsc`、`npm run lint`、`npm run test` 全部通过
-- [ ] 5.4 联调：本地起 `yeweiyi-cloud`，用 `platform_admin` 与一个客户角色账号各登录一次，确认 `/ops` 菜单仅前者可见、刷新后保持登录、退出后回登录页（若无法启动后端，在交付说明中明确"未联调"）
+- [x] 5.4 联调：本地起 `yeweiyi-cloud`，用 `platform_admin` 与一个客户角色账号各登录一次，确认 `/ops` 菜单仅前者可见、刷新后保持登录、退出后回登录页（若无法启动后端，在交付说明中明确"未联调"）
