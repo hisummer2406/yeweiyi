@@ -391,6 +391,8 @@ func TestClientAttributes_FixtureUsesDeclaredKeys(t *testing.T) {
 		declared[protocol.TankKey(i, protocol.AttrProbeType)] = true
 		declared[protocol.TankKey(i, protocol.AttrCapacityL)] = true
 	}
+	// Only tank1 has tankShape in the fixture, tank2 omits it on purpose — see its _comment.
+	declared[protocol.TankKey(1, protocol.AttrTankShape)] = true
 	// Only tank1 has calibration attributes in the fixture — see its _comment for why that's
 	// deliberate rather than an oversight.
 	declared[protocol.TankKey(1, protocol.AttrCalibrationHeightMm)] = true
@@ -688,5 +690,43 @@ func TestStockEvent_ParsesStringifiedValue(t *testing.T) {
 	}
 	if got.EventID != "in-1-1756713600000" || got.OilType != "0号柴油" {
 		t.Errorf("got %+v", got)
+	}
+}
+
+// TestParseTankShape_FixtureRoundTrips covers both cases client_attributes.json deliberately
+// carries: tank1 publishes "vertical" (not the horizontal default a lazy reader would guess), tank2
+// publishes nothing and must come back as unknown rather than horizontal.
+func TestParseTankShape_FixtureRoundTrips(t *testing.T) {
+	var attrs map[string]any
+	if err := json.Unmarshal(readFixture(t, "client_attributes.json"), &attrs); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got, ok := protocol.ParseTankShape(attrs, 1); !ok || got != protocol.TankShapeVertical {
+		t.Errorf("tank1 = (%q, %v), want (%q, true)", got, ok, protocol.TankShapeVertical)
+	}
+	if got, ok := protocol.ParseTankShape(attrs, 2); ok || got != "" {
+		t.Errorf("tank2 = (%q, %v), want unknown", got, ok)
+	}
+}
+
+func TestParseTankShape_UnknownValues(t *testing.T) {
+	key := protocol.TankKey(1, protocol.AttrTankShape)
+	for name, v := range map[string]any{
+		"null (deleted attribute)": nil,
+		"unrecognised string":      "cuboid",
+		"device-side raw int":      float64(1),
+		"empty string":             "",
+		"wrong case":               "Vertical",
+	} {
+		if got, ok := protocol.ParseTankShape(map[string]any{key: v}, 1); ok || got != "" {
+			t.Errorf("%s: got (%q, %v), want unknown", name, got, ok)
+		}
+	}
+	if got, ok := protocol.ParseTankShape(map[string]any{key: "horizontal"}, 1); !ok || got != "horizontal" {
+		t.Errorf("horizontal: got (%q, %v)", got, ok)
+	}
+	// Another tank's shape must not leak into this one.
+	if _, ok := protocol.ParseTankShape(map[string]any{key: "vertical"}, 2); ok {
+		t.Error("tank2 read tank1's attribute")
 	}
 }

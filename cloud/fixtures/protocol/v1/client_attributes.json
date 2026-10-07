@@ -1,5 +1,5 @@
 {
-  "_comment": "Published by the device to v1/devices/me/attributes on connect and whenever any of these change. current_fw_* are ThingsBoard's own reserved OTA keys, not names this protocol chose. tank1.calibration* is new/unconfirmed (zhongchengyeweiyi#42 待办1, yeweiyi-cloud#14) — tank2 deliberately omits it to also exercise the 'no calibration attribute yet' case ParseTankCalibration must handle.",
+  "_comment": "Published by the device to v1/devices/me/attributes on connect and whenever any of these change. current_fw_* are ThingsBoard's own reserved OTA keys, not names this protocol chose. tank1.calibration* is new/unconfirmed (zhongchengyeweiyi#42 待办1, yeweiyi-cloud#14) — tank2 deliberately omits it to also exercise the 'no calibration attribute yet' case ParseTankCalibration must handle. tank1.tankShape is new/unconfirmed (zhongchengyeweiyi#43, yeweiyi-cloud#45) — tank1 is \"vertical\" so a reader that defaults to horizontal is caught, and tank2 deliberately omits it to exercise the 'unknown, not horizontal' case ParseTankShape must handle.",
   "protocolVersion": 1,
   "deviceModel": "SANSEN-YWY-4T",
   "hardwareVersion": "2.1",
@@ -8,6 +8,7 @@
   "tank1.probeAddress": "01",
   "tank1.probeType": "磁致伸缩",
   "tank1.capacityL": 30000.0,
+  "tank1.tankShape": "vertical",
   "tank1.calibrationHeightMm": [0, 500, 1000],
   "tank1.calibrationVolumeL": [0.0, 14225.1, 28450.2],
   "tank2.probeAddress": "02",

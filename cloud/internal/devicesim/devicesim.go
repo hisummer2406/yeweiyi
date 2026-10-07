@@ -301,6 +301,12 @@ func (d *Device) PublishAttributes() error {
 		attrs[protocol.TankKey(i, protocol.AttrProbeAddress)] = fmt.Sprintf("%02d", i)
 		attrs[protocol.TankKey(i, protocol.AttrProbeType)] = "磁致伸缩"
 		attrs[protocol.TankKey(i, protocol.AttrCapacityL)] = 30000.0
+		// Alternate shapes so a client built against the simulator sees both illustrations.
+		if i%2 == 1 {
+			attrs[protocol.TankKey(i, protocol.AttrTankShape)] = protocol.TankShapeHorizontal
+		} else {
+			attrs[protocol.TankKey(i, protocol.AttrTankShape)] = protocol.TankShapeVertical
+		}
 	}
 
 	payload, err := json.Marshal(attrs)

@@ -40,6 +40,11 @@
 - 设备端称云端没有"为真实设备创建 ThingsBoard 身份"的接口，装机拿不到凭据（**云端待核实**）。
 - 设备端 fixture 副本拷贝自 `26fb6b6`，缺 #14 标定属性；设备端实际会发 `tank{N}.calibrationHeightMm`/
   `calibrationVolumeL`，该属性目前无契约测试覆盖。
+- `tank{n}.tankShape`（储罐形状，`"horizontal"`/`"vertical"`，缺省 = 未知）：云端已按 zhongchengyeweiyi#43 /
+  yeweiyi-cloud#45 的建议方案落地（属性声明、`ParseTankShape`、`telemetry/latest` 的 `tanks[].tankShape`、
+  fixture `client_attributes.json` 的 tank1/tank2、模拟器）。**设备端尚未发布**，设备端 fixture 副本需同步
+  该 fixture；属性名与枚举值仍待设备端确认，未冻结。注意设备端 `OilCanSet.gunType` 是默认 0 的 `int`，
+  "未设置不发布"需按"该罐是否有储罐设置记录"判断。
 - 设备端文档称 `source` "云端没有这个字段、不需要"，与事实不符：云端 `internal/protocol/stock.go` 已解析
   `source`（#15）。设备端补录仍发 `MANUAL`，云端可消费，仅文档过时，需设备端更正。
 - A-7：设备端确认恢复事件复用产生事件的 `alarmId`；补投后是否可能先收到 `CLEARED` 仍未答复。

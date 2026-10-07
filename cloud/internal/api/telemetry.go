@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -66,13 +67,42 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		// Tank shape is a client attribute, not telemetry, so it needs a second ThingsBoard read.
+		// Failing to read it must not fail the request: it only picks a tank illustration, and the
+		// readings the caller asked for are already in hand. A nil map degrades every tank to
+		// "unknown" (the key is omitted), the same answer an old device build gets.
+		attrs, err := deps.TB.Attributes(ctx, dev.ID.ID, tbclient.ScopeClient, nil)
+		if err != nil {
+			log.Printf("telemetry/latest: client attributes for %q unavailable, tank shapes omitted: %v", device, err)
+			attrs = nil
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"deviceName":  device,
 			"ts":          time.UnixMilli(snap.TS).UTC(),
 			"snapshotSeq": snap.SnapshotSeq,
-			"tanks":       snap.Tanks,
+			"tanks":       tanksWithShape(snap.Tanks, attrs),
 		})
 	}
+}
+
+// latestTank is one entry of telemetry/latest's tanks[]: the snapshot's own fields plus
+// configuration read from client attributes. protocol.Tank is deliberately left alone — it is the
+// wire shape of the device's telemetry, and tankShape is not part of that.
+type latestTank struct {
+	protocol.Tank
+	// TankShape is omitted, never zero-filled, when unknown: clients treat a missing key as
+	// "unknown" and fall back to the horizontal illustration (zhongchengyeweiyi#43, yeweiyi-cloud#45).
+	TankShape string `json:"tankShape,omitempty"`
+}
+
+func tanksWithShape(tanks []protocol.Tank, attrs map[string]any) []latestTank {
+	out := make([]latestTank, len(tanks))
+	for i, t := range tanks {
+		out[i].Tank = t
+		out[i].TankShape, _ = protocol.ParseTankShape(attrs, t.Index)
+	}
+	return out
 }
 
 // writeThingsBoardError distinguishes the three outcomes that matter to a client, which is the

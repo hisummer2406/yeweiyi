@@ -25,6 +25,15 @@ const (
 	AttrProbeType    = "probeType"    // string, 探针类型
 	AttrCapacityL    = "capacityL"    // double, 油罐公称容积, litres
 
+	// AttrTankShape is the "储罐设置" storage-tank shape (设备端 OilCanSet.gunType), used by clients
+	// to pick the horizontal or vertical tank illustration — see ParseTankShape and the
+	// TankShape* values in tankshape.go. It is NOT the shape calibration.go talks about: that one is
+	// only a local variable while the device computes a calibration curve and is never stored.
+	// Absent means unknown; never publish a default.
+	//
+	// **Not yet a confirmed part of V1** — zhongchengyeweiyi#43 / yeweiyi-cloud#45.
+	AttrTankShape = "tankShape" // string, "horizontal" | "vertical"
+
 	// AttrCalibrationHeightMm/AttrCalibrationVolumeL are the device's persisted height→volume
 	// calibration curve (paired arrays, same length, ascending by height) — see ParseTankCalibration
 	// in calibration.go for the parser and doc comment on what this is and isn't.

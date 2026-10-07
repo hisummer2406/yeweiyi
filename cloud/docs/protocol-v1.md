@@ -228,6 +228,7 @@ Topic：`v1/devices/me/attributes`（上报客户端属性 / 订阅共享属性�
 | `tank{n}.probeAddress` | string | 探针地址 |
 | `tank{n}.probeType` | string | 探针类型 |
 | `tank{n}.capacityL` | double | 油罐公称容积，**升** |
+| `tank{n}.tankShape` | string | 储罐形状（设备端"储罐设置"的 `gunType`）：`"horizontal"` 卧罐 / `"vertical"` 立罐。**不随界面语言变化**，与本地化的 `probeType` 不同。未设置、旧固件、未知取值都是"未知"：设备**不发布该键**，不得用默认值填充；云端与小程序按未知处理（小程序用卧罐图）。用户改了储罐设置后设备须主动重发。**未冻结**，见 zhongchengyeweiyi#43 / yeweiyi-cloud#45 |
 
 **注意：属性与遥测不同，属性值保留原本的 JSON 类型**（布尔就是布尔），不会被字符串化。这两个
 ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttributesReachBackend` 中固定。
