@@ -1,0 +1,98 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import zhPages from '@/locales/zh-CN/pages';
+
+const listDevices = vi.fn();
+let params = new URLSearchParams();
+const setParams = vi.fn((next: URLSearchParams, _opts?: unknown) => {
+  params = new URLSearchParams(next);
+});
+
+vi.mock('@umijs/max', () => ({
+  useIntl: () => ({
+    formatMessage: ({ id }: { id: string }, values?: Record<string, string>) =>
+      ((zhPages as Record<string, string>)[id] ?? id).replace(
+        /\{(\w+)\}/g,
+        (_, k) => values?.[k] ?? '',
+      ),
+  }),
+  useSearchParams: () => [params, setParams],
+}));
+vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
+
+const { default: DevicePicker } = await import('./DevicePicker');
+
+const dev = (name: string): API.DeviceRow => ({
+  device_name: name,
+  is_online: true,
+  last_online_at: null,
+  last_offline_at: null,
+  updated_at: null,
+});
+const child = vi.fn((d: string) => <div>records-of-{d}</div>);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  params = new URLSearchParams();
+  listDevices.mockResolvedValue([dev('D1'), dev('D2')]);
+});
+afterEach(cleanup);
+
+describe('DevicePicker', () => {
+  it('renders the records for the device named in ?device=', async () => {
+    params = new URLSearchParams('device=D1');
+    render(<DevicePicker>{child}</DevicePicker>);
+    expect(await screen.findByText('records-of-D1')).toBeTruthy();
+  });
+
+  it('does not render or request records until a device is chosen', async () => {
+    render(<DevicePicker>{child}</DevicePicker>);
+    expect(await screen.findByText('请先选择设备')).toBeTruthy();
+    expect(child).not.toHaveBeenCalled();
+  });
+
+  it('shows "no devices bound" and renders no records for an empty list', async () => {
+    listDevices.mockResolvedValue([]);
+    render(<DevicePicker>{child}</DevicePicker>);
+    expect(await screen.findByText('还没有绑定设备')).toBeTruthy();
+    expect(child).not.toHaveBeenCalled();
+  });
+
+  it('does not render records for a device the user cannot see, and says so', async () => {
+    params = new URLSearchParams('device=SECRET');
+    render(<DevicePicker>{child}</DevicePicker>);
+    expect(await screen.findByText(/设备 SECRET 不可见或不存在/)).toBeTruthy();
+    expect(child).not.toHaveBeenCalled();
+  });
+
+  it('a failed device list shows an error with retry, not "no devices"', async () => {
+    listDevices.mockRejectedValueOnce(new Error('boom'));
+    render(<DevicePicker>{child}</DevicePicker>);
+    expect(await screen.findByText('设备列表加载失败')).toBeTruthy();
+    expect(screen.queryByText('还没有绑定设备')).toBeNull();
+    params = new URLSearchParams('device=D2');
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
+    expect(await screen.findByText('records-of-D2')).toBeTruthy();
+  });
+
+  it('choosing a device writes it to ?device= (replace, keeping other params)', async () => {
+    params = new URLSearchParams('tab=alarms');
+    render(<DevicePicker>{child}</DevicePicker>);
+    await screen.findByText('请先选择设备');
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    // antd 下拉里同一个选项会渲染两份（无障碍列表 + 可点项），点最后一个
+    const options = await screen.findAllByText('D2');
+    fireEvent.click(options[options.length - 1]);
+    await waitFor(() => expect(setParams).toHaveBeenCalled());
+    const [next, opts] = setParams.mock.calls[0];
+    expect(next.get('device')).toBe('D2');
+    expect(next.get('tab')).toBe('alarms');
+    expect(opts).toEqual({ replace: true });
+  });
+});

@@ -101,6 +101,79 @@ declare namespace API {
     error?: string;
   };
 
+  /** 记录查询的公共参数（/api/alarms、/api/oil-in-out），时间为 RFC3339 */
+  type RecordsQuery = {
+    device: string;
+    beginTime: string;
+    endTime: string;
+  };
+
+  /** GET /api/alarms 的一行（internal/api/alarms.go alarmResponse）；一次状态变化一行 */
+  type Alarm = {
+    /** 云端合成的幂等 id 不是设备的 id，此时为空串 */
+    alarmId: string;
+    tank: number;
+    type: string;
+    severity: string;
+    status: string;
+    text: string;
+    value?: number;
+    time: string;
+  };
+
+  /** listAlarms 的结果：partial 来自响应头 X-Records-Partial */
+  type AlarmList = {
+    rows: Alarm[];
+    partial: boolean;
+  };
+
+  /** GET /api/oil-in-out 的一行（internal/api/stock.go stockEventResponse） */
+  type StockEvent = {
+    eventId: string;
+    tank: number;
+    direction: 'IN' | 'OUT' | string;
+    oilType?: string;
+    source: 'AUTO' | 'MANUAL' | string;
+    beginTime: string;
+    endTime: string;
+    beginLevelMm: number;
+    endLevelMm: number;
+    beginVolumeL: number;
+    endVolumeL: number;
+    beginTempC: number;
+    endTempC: number;
+    beginWeightKg: number;
+    endWeightKg: number;
+    netVolumeL: number;
+    duringDeliveryVolumeL?: number;
+    deliveredVolumeL: number;
+    time: string;
+  };
+
+  /** 出入库 502（设备固件未升级）时云端给出的说明，原样展示 */
+  type StockDegraded = {
+    code: string;
+    error?: string;
+    device?: string;
+    sample?: string;
+  };
+
+  /**
+   * listStockEvents 的结果。200 与「502 且带 code」都落到这里：502 不是通用失败，而是带
+   * 已读到的 rows 和计数的降级结果，degraded 有值即表示这次是 502。
+   */
+  type StockList = {
+    rows: StockEvent[];
+    parsed: number;
+    unparsable: number;
+    legacySkipped: number;
+    invalidSource: number;
+    folded: number;
+    truncated: boolean;
+    partial: boolean;
+    degraded?: StockDegraded;
+  };
+
   type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';
 
   /** telemetry/latest 的一个罐；tankShape 缺失表示未知 */

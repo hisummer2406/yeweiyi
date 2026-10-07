@@ -67,6 +67,66 @@ export default {
   'pages.searchTable.tenThousand': '0000',
   'pages.searchTable.batchDeletion': 'batch deletion',
   'pages.searchTable.batchApproval': 'batch approval',
+  'pages.console.records.title.alarms': 'Alarm records',
+  'pages.console.records.title.stockIn': 'Stock-in records',
+  'pages.console.records.title.stockOut': 'Stock-out records',
+  'pages.console.records.device.label': 'Device',
+  'pages.console.records.device.placeholder': 'Select a device',
+  'pages.console.records.device.none': 'No devices bound yet',
+  'pages.console.records.device.notVisible':
+    'Device {device} is not visible or does not exist, pick another.',
+  'pages.console.records.device.loadFailed': 'Failed to load devices',
+  'pages.console.records.device.pick': 'Select a device first',
+  'pages.console.records.retry': 'Retry',
+  'pages.console.records.refresh': 'Refresh',
+  'pages.console.records.range.label': 'Time range',
+  'pages.console.records.assignedNote':
+    'Records from before the device was assigned to the current customer are not shown.',
+  'pages.console.records.loadFailed': 'Failed to load records',
+  'pages.console.records.refreshFailed':
+    'Refresh failed, showing the previous result',
+  'pages.console.records.notice.partial':
+    'The initial sync has not finished; records may be incomplete.',
+  'pages.console.records.notice.truncated':
+    'Only the latest {limit} are shown, narrow the time range.',
+  'pages.console.records.notice.legacySkipped':
+    '{count} records from before the upgrade cannot be shown.',
+  'pages.console.records.notice.invalidSource':
+    '{count} records with an invalid source are not shown.',
+  'pages.console.records.notice.folded':
+    '{count} corrected records were merged.',
+  'pages.console.records.notice.firmware':
+    'The device firmware has not been upgraded; some records cannot be read.',
+  'pages.console.records.notice.firmware.detail':
+    'Device {device}, sample: {sample}',
+  'pages.console.records.empty.alarms': 'No alarms in this time range',
+  'pages.console.records.empty.stock': 'No stock records in this time range',
+  'pages.console.records.col.time': 'Time',
+  'pages.console.records.col.tank': 'Tank',
+  'pages.console.records.col.type': 'Type',
+  'pages.console.records.col.severity': 'Severity',
+  'pages.console.records.col.status': 'Status',
+  'pages.console.records.col.text': 'Description',
+  'pages.console.records.col.value': 'Value',
+  'pages.console.records.col.endTime': 'Closed at',
+  'pages.console.records.col.direction': 'Direction',
+  'pages.console.records.col.oilType': 'Oil',
+  'pages.console.records.col.source': 'Source',
+  'pages.console.records.col.delivered': 'Moved (L)',
+  'pages.console.records.col.net': 'Net change (L)',
+  'pages.console.records.col.level': 'Level (mm) begin→end',
+  'pages.console.records.col.volume': 'Volume (L) begin→end',
+  'pages.console.records.tank': 'Tank {n}',
+  'pages.console.detail.title': 'Device detail',
+  'pages.console.detail.tab.snapshot': 'Live data',
+  'pages.console.detail.tab.alarms': 'Alarms',
+  'pages.console.detail.tab.stock': 'Stock in/out',
+  'pages.console.detail.snapshot.never':
+    'This device has not reported any data yet',
+  'pages.console.detail.snapshot.forbidden':
+    'You are not allowed to view this device',
+  'pages.console.detail.snapshot.failed': 'Failed to load live data',
+  'pages.console.detail.snapshot.reportedAt': 'Reported at {time}',
   'pages.ops.customers.create': 'New customer',
   'pages.ops.customers.col.id': 'Customer ID',
   'pages.ops.customers.col.name': 'Customer name',

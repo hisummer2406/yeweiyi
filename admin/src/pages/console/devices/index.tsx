@@ -10,15 +10,14 @@ import {
   Row,
   Skeleton,
   Space,
-  Statistic,
-  Tag,
   Typography,
 } from 'antd';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { getLatestTelemetry } from '@/services/ant-design-pro/telemetry';
-import { alarmColor, alarmLabel, fmt, fmtTime } from '@/utils/telemetry';
+import { fmtTime } from '@/utils/telemetry';
+import TankCard from '../components/TankCard';
 
 /** 自动刷新间隔：遥测是快照而非实时推送，30 秒足够。 */
 const REFRESH_MS = 30_000;
@@ -30,47 +29,6 @@ type Group = {
   telemetry?: API.LatestTelemetry;
   error?: string;
 };
-
-const TankCard: React.FC<{ tank: API.Tank; onClick: () => void }> = ({
-  tank,
-  onClick,
-}) => (
-  <ProCard
-    hoverable
-    onClick={onClick}
-    title={
-      <Space>
-        <span>
-          {tank.index}号 {tank.oilType || '--'}
-        </span>
-        {tank.alarmState !== 'NORMAL' && (
-          <Tag color={alarmColor(tank.alarmState)}>
-            {alarmLabel(tank.alarmState)}
-          </Tag>
-        )}
-        {!tank.probeConnected && <Tag color="error">探针未连接</Tag>}
-      </Space>
-    }
-  >
-    <Row gutter={[16, 16]}>
-      <Col span={12}>
-        <Statistic title="液位" value={fmt(tank.oilLevelMm)} suffix="mm" />
-      </Col>
-      <Col span={12}>
-        <Statistic title="容积" value={fmt(tank.oilVolumeL)} suffix="L" />
-      </Col>
-      <Col span={12}>
-        <Statistic title="水高" value={fmt(tank.waterLevelMm)} suffix="mm" />
-      </Col>
-      <Col span={12}>
-        <Statistic title="温度" value={fmt(tank.tempC)} suffix="℃" />
-      </Col>
-      <Col span={12}>
-        <Statistic title="质量" value={fmt(tank.oilWeightKg)} suffix="kg" />
-      </Col>
-    </Row>
-  </ProCard>
-);
 
 /**
  * 设备总览——PC 端对应小程序首页（pages/devices）：

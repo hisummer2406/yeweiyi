@@ -2,7 +2,7 @@
 
 `AGENTS.md` 是本文件的符号链接。只编辑本文件，不要将该链接替换为普通文件。
 
-## 项目状态：2026-10-07 登录与 /ops/devices 设备登记已对齐 yeweiyi-cloud，其余页面功能未接
+## 项目状态：2026-10-07 登录、/ops 管理页、/console 设备总览/详情/报警/出入库记录已对齐 yeweiyi-cloud，远程控制等未接
 
 结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
 路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
@@ -37,6 +37,22 @@
 `default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码、
 换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
 和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
+
+**`/console` 只读页已接**（OpenSpec 变更 `console-readonly-records-and-detail`）：设备详情
+（`/console/devices/:deviceName`，页签 实时数据/报警/出入库，`?tab=snapshot|alarms|stock`）、报警记录、入库/出库
+记录。共用组件在 `src/pages/console/components/`（`AlarmRecords`、`StockRecords`、`TankCard`、`DevicePicker`、
+`RecordsFrame`、`useRecordsQuery`），降级提示的判定在 `src/utils/records.ts`（纯函数，改提示规则先改它的测试）。
+几个必须知道的云端行为，别凭记忆改：
+
+- 报警/出入库接口**必须带 `device`**，没有跨设备列表；默认窗口 24 小时、**默认升序**，所以前端显式传
+  `sort=false`；一次取 `limit=500`（云端上限）前端分页，没有总数。出入库**没有方向过滤**，入库/出库页在前端过滤。
+- 查询窗口下界是设备归属当前客户的时间（`customer_assigned_at`），转移前的记录看不到，平台管理员也一样。
+- 出入库的 **502（`STOCK_EVENT_FORMAT_UNSUPPORTED`）不是通用失败**，body 仍带 `rows` 和计数，`listStockEvents`
+  把它当降级结果返回；`unparsable`/`legacySkipped`/`partial`/`truncated` 和报警的 `X-Records-Partial` 头都必须如实
+  提示，**不能把「读不到/不完整」显示成「没有记录」**。
+- 403 的 body 若是 `not authorized for this device` 是「无权看这台设备」，只有恰好 `not authorized` 才是账号失效
+  （回登录页），别用前缀/包含去判断。
+- 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送、交班/库存记录。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
 `internal/api/router.go`。
@@ -132,7 +148,7 @@ src/services/           对接后端的请求函数（登录、设备、客户�
   角色账号各验证一次。
 - 生产环境的反向代理目标（`config/proxy.ts` 的 `test`/`pre`）还是占位符，部署方式和域名都没有
   定案，跟 `yeweiyi-miniapp`/`yeweiyi-cloud` 的部署决策一样悬而未决。
-- `/console/*` 要覆盖的具体交互（图表、告警展示形式等）还没有设计，只建了和小程序对应能力对齐的
-  空页面，具体长什么样需要产品侧决定，不要自己臆造。
+- `/console/*` 的趋势图、远程控制（`/console/issue-command`）、报警实时推送还没做；图表和告警的展示形式需要产品侧
+  决定，不要自己臆造。
 - 本仓库已接入 OpenSpec（`openspec/config.yaml`，变更放在 `openspec/changes/`），与 `yeweiyi-cloud` 各用各的配置，
   不共享。
