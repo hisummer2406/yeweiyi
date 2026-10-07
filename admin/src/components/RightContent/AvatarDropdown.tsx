@@ -7,14 +7,28 @@ import { history, useModel } from '@umijs/max';
 import type { MenuProps } from 'antd';
 import { Spin } from 'antd';
 import React, { startTransition } from 'react';
-import { outLogin } from '@/services/ant-design-pro/api';
+import { clearToken } from '@/utils/auth';
 import HeaderDropdown from '../HeaderDropdown';
 
 type GlobalHeaderRightProps = {
   children?: React.ReactNode;
 };
 
-const menuItems: MenuProps['items'] = [
+const roleLabels: Record<string, string> = {
+  platform_admin: '平台管理员',
+  customer_admin: '客户管理员',
+  customer_user: '客户用户',
+};
+
+const buildMenuItems = (user: API.CurrentUser): MenuProps['items'] => [
+  {
+    key: 'identity',
+    disabled: true,
+    label: `${user.username}（${roleLabels[user.access] ?? user.access}）`,
+  },
+  {
+    type: 'divider' as const,
+  },
   {
     key: 'settings',
     icon: <SettingOutlined />,
@@ -35,24 +49,10 @@ const menuItems: MenuProps['items'] = [
   },
 ];
 
-const loginOut = async () => {
-  try {
-    await outLogin();
-  } catch {
-    // Local logout has already cleared user state; redirect should still proceed.
-  }
-  const { search, pathname } = window.location;
-  const urlParams = new URL(window.location.href).searchParams;
-  const searchParams = new URLSearchParams({
-    redirect: pathname + search,
-  });
-  const redirect = urlParams.get('redirect');
-  if (window.location.pathname !== '/user/login' && !redirect) {
-    history.replace({
-      pathname: '/user/login',
-      search: searchParams.toString(),
-    });
-  }
+// 后端没有登出接口：退出只是清掉本地 token（token 在过期前对后端仍然有效）。
+const loginOut = () => {
+  clearToken();
+  history.replace('/user/login');
 };
 
 export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
@@ -92,7 +92,7 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
       menu={{
         selectedKeys: [],
         onClick: onMenuClick,
-        items: menuItems,
+        items: buildMenuItems(currentUser),
       }}
       arrow
     >

@@ -1,25 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock all heavy dependencies before importing app
 const mockReplace = vi.fn();
 const mockHistory = {
   location: {
-    pathname: '/welcome',
+    pathname: '/console/devices',
     search: '',
     hash: '',
   },
   replace: mockReplace,
 };
 
-const mockQueryCurrentUser = vi.fn();
-
 vi.mock('@umijs/max', () => ({
   history: mockHistory,
   Link: ({ children }: any) => children,
-}));
-
-vi.mock('@/services/ant-design-pro/api', () => ({
-  currentUser: mockQueryCurrentUser,
 }));
 
 vi.mock('@/components', () => ({
@@ -47,99 +40,117 @@ vi.mock('../config/defaultSettings', () => ({
   default: { navTheme: 'light' },
 }));
 
+const b64url = (obj: unknown) =>
+  btoa(JSON.stringify(obj))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+const makeToken = (claims: Record<string, unknown>) =>
+  `${b64url({ alg: 'HS256' })}.${b64url(claims)}.sig`;
+const inOneHour = Math.floor(Date.now() / 1000) + 3600;
+
+const { setToken, clearToken } = await import('@/utils/auth');
+
 describe('app getInitialState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearToken();
     mockHistory.location = {
-      pathname: '/welcome',
+      pathname: '/console/devices',
       search: '',
       hash: '',
     };
   });
 
-  it('should fetch currentUser when not on login page', async () => {
+  it('derives currentUser from a valid token off the login page', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockResolvedValue({
-      data: {
-        name: 'Test User',
-        access: 'admin',
-      },
-    });
+    setToken(
+      makeToken({
+        uid: 3,
+        sub: 'alice',
+        role: 'customer_admin',
+        exp: inOneHour,
+      }),
+    );
 
     const state = await getInitialState();
 
-    expect(mockQueryCurrentUser).toHaveBeenCalled();
     expect(state.currentUser).toEqual({
-      name: 'Test User',
-      access: 'admin',
+      userId: 3,
+      username: 'alice',
+      access: 'customer_admin',
     });
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(state.settingDrawerOpen).toBe(false);
-    expect(state.fetchUserInfo).toBeDefined();
+    expect(state.settings).toEqual({ navTheme: 'light' });
   });
 
-  it('should redirect to login when currentUser fetch fails (401)', async () => {
+  it('redirects to login when there is no token', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockRejectedValue(new Error('401 Unauthorized'));
 
     const state = await getInitialState();
 
     expect(mockReplace).toHaveBeenCalledWith(
-      expect.stringContaining('/user/login?redirect='),
+      `/user/login?redirect=${encodeURIComponent('/console/devices')}`,
     );
     expect(state.currentUser).toBeUndefined();
   });
 
-  it('should not fetch currentUser on login page', async () => {
+  it('redirects and clears an expired token', async () => {
     const { getInitialState } = await import('./app');
-    mockHistory.location = {
-      pathname: '/user/login',
-      search: '',
-      hash: '',
-    };
+    setToken(makeToken({ uid: 3, sub: 'a', role: 'customer_user', exp: 1 }));
 
     const state = await getInitialState();
 
-    expect(mockQueryCurrentUser).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalled();
+    expect(state.currentUser).toBeUndefined();
+    expect(window.localStorage.getItem('yeweiyi_admin_token')).toBeNull();
+  });
+
+  it('does not derive currentUser or redirect on the login page', async () => {
+    const { getInitialState } = await import('./app');
+    mockHistory.location = { pathname: '/user/login', search: '', hash: '' };
+
+    const state = await getInitialState();
+
+    expect(mockReplace).not.toHaveBeenCalled();
     expect(state.currentUser).toBeUndefined();
     expect(state.fetchUserInfo).toBeDefined();
   });
 
-  it('should encode redirect path correctly on 401', async () => {
+  it('encodes the redirect path with query and hash', async () => {
     const { getInitialState } = await import('./app');
     mockHistory.location = {
-      pathname: '/admin/users',
+      pathname: '/ops/users',
       search: '?page=2',
       hash: '#section',
     };
-    mockQueryCurrentUser.mockRejectedValue(new Error('401'));
 
     await getInitialState();
 
     expect(mockReplace).toHaveBeenCalledWith(
-      `/user/login?redirect=${encodeURIComponent('/admin/users?page=2#section')}`,
+      `/user/login?redirect=${encodeURIComponent('/ops/users?page=2#section')}`,
     );
   });
 
-  it('should include default settings in initial state', async () => {
+  it('fetchUserInfo re-derives the user from the stored token', async () => {
     const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockResolvedValue({
-      data: { name: 'User' },
-    });
-
+    mockHistory.location = { pathname: '/user/login', search: '', hash: '' };
     const state = await getInitialState();
+    expect(await state.fetchUserInfo?.()).toBeUndefined();
 
-    expect(state.settings).toEqual({ navTheme: 'light' });
-  });
-
-  it('fetchUserInfo should return user data on success', async () => {
-    const { getInitialState } = await import('./app');
-    mockQueryCurrentUser.mockResolvedValue({
-      data: { name: 'Fetched User', access: 'user' },
+    setToken(
+      makeToken({
+        uid: 1,
+        sub: 'root',
+        role: 'platform_admin',
+        exp: inOneHour,
+      }),
+    );
+    expect(await state.fetchUserInfo?.()).toEqual({
+      userId: 1,
+      username: 'root',
+      access: 'platform_admin',
     });
-
-    const state = await getInitialState();
-
-    const user = await state.fetchUserInfo?.();
-    expect(user).toEqual({ name: 'Fetched User', access: 'user' });
   });
 });

@@ -18,7 +18,7 @@ import {
   OfflineBanner,
   VersionDropdown,
 } from '@/components';
-import { currentUser as queryCurrentUser } from '@/services/ant-design-pro/api';
+import { getCurrentUser } from '@/utils/auth';
 import defaultSettings from '../config/defaultSettings';
 import { errorConfig } from './requestErrorConfig';
 
@@ -35,24 +35,19 @@ export async function getInitialState(): Promise<{
   fetchUserInfo?: () => Promise<API.CurrentUser | undefined>;
   settingDrawerOpen?: boolean;
 }> {
-  const fetchUserInfo = async () => {
-    try {
-      const msg = await queryCurrentUser({
-        skipErrorHandler: true,
-      });
-      return msg.data;
-    } catch (_error) {
+  // 当前用户从 JWT claims 同步派生（后端没有 currentUser 接口）；无 token / 已过期则为 undefined，
+  // 由 onPageChange 统一重定向到登录页。
+  const fetchUserInfo = async () => getCurrentUser();
+  // 如果不是登录页面，执行
+  const { location } = history;
+  if (![loginPath].includes(location.pathname)) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
       const { pathname, search, hash } = history.location;
       history.replace(
         `${loginPath}?redirect=${encodeURIComponent(pathname + search + hash)}`,
       );
     }
-    return undefined;
-  };
-  // 如果不是登录页面，执行
-  const { location } = history;
-  if (![loginPath].includes(location.pathname)) {
-    const currentUser = await fetchUserInfo();
     return {
       fetchUserInfo,
       currentUser,
@@ -94,8 +89,7 @@ export const layout: RunTimeLayoutConfig = ({
       ].filter(Boolean);
     },
     avatarProps: {
-      src: initialState?.currentUser?.avatar,
-      title: 'ProUser',
+      title: initialState?.currentUser?.username,
       render: (_, avatarChildren) => (
         <AvatarDropdown>{avatarChildren}</AvatarDropdown>
       ),

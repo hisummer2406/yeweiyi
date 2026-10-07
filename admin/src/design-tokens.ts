@@ -69,7 +69,7 @@ export const antdTheme = {
     colorInfo: dl.color.primary,
     colorSuccess: '#2E9E6B', // PSD 未含成功态，工业惯例绿，待产品确认
     colorWarning: '#E6A23C', // PSD 未含警告态，暂用 antd 默认
-    colorError: '#D93026',   // PSD 未含错误态，暂用工业红，待产品确认
+    colorError: '#D93026', // PSD 未含错误态，暂用工业红，待产品确认
     colorBgLayout: dl.color.bgPage,
     colorBgContainer: dl.color.bgSurface,
     colorText: dl.color.textPrimary,
@@ -78,7 +78,7 @@ export const antdTheme = {
     borderRadius: 4,
     fontFamily: dl.font.family,
     fontSize: 13, // PSD 表格正文 12.8 -> 13
-    controlHeight: 40,      // 触屏加高
+    controlHeight: 40, // 触屏加高
     lineWidth: 1,
     colorBorder: dl.color.border,
     colorBorderSecondary: '#E8E8E8',

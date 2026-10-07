@@ -2,17 +2,22 @@
 
 `AGENTS.md` 是本文件的符号链接。只编辑本文件，不要将该链接替换为普通文件。
 
-## 项目状态：2026-09-05 从 Ant Design Pro 官方模板建立（结构先行，功能未接）
+## 项目状态：2026-10-07 登录已对齐 yeweiyi-cloud，其余页面功能未接
 
-这是刚从 `ant-design/ant-design-pro`（degit 拉取）裁剪出来的骨架：删掉了官方 demo 页面
-（dashboard/form/list/table-list/profile/result/chatbot/account 的示例内容）和该仓库自己的
-CI/文档/mock/部署配置，换成了下面「目录」一节列出的、对应真实业务能力的空页面；`src/services/
-ant-design-pro/*` 里的类型和请求函数**还是模板自带的示例**（`RuleListItem`、`FakeCaptcha` 这些），
-尚未替换成 `yeweiyi-cloud` 真实的登录/账号/设备/控制 API 类型——这是下一步要做的事，不在这次建
-结构的范围内，动手前先读一遍下面的「四个仓库怎么关联」。
+结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
+路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
 
-`npm install` 已跑过一次验证依赖能装；`tsc --noEmit` 需要在改动 services 层之后再跑一遍确认干净
-（建结构这一步没有触碰任何请求逻辑，只删文件、改路由表和 access.ts）。
+- 只对接 `POST /api/login`（`{username,password}` → `{token}`，失败为 HTTP 状态码 + `{error}`）。
+  后端**没有** `/api/currentUser`、登出、刷新 token 接口。
+- 当前用户（`API.CurrentUser = {userId, username, access}`）由 `src/utils/auth.ts` 解码 JWT claims
+  （`uid`/`sub`/`role`/`exp`）得到，**不验签、仅用于菜单显隐**；真正鉴权在后端每次读库。角色/停用变更
+  最长 24h（token TTL）后菜单才刷新，越权请求仍会被后端 403。
+- token 存 `localStorage`（`yeweiyi_admin_token`），`requestErrorConfig.ts` 为 `/api/*` 请求附加
+  Bearer；非登录请求收到 401 会清 token 并回登录页。退出登录只清本地 token（后端无登出）。
+- 响应没有 `{success,data}` 信封，别再加 `errorThrower` 之类按信封判成败的逻辑。
+
+`src/services/ant-design-pro/` 现在只剩 `login`；接新页面时按页面逐个补请求函数和类型，先读
+`yeweiyi-cloud` 的 `internal/api/router.go`。
 
 ## 项目概要
 
@@ -92,19 +97,18 @@ src/pages/console/      客户 PC 监控台：devices / device-detail / issue-co
 src/pages/user/login/   登录（两个分区共用）
 src/pages/account/      个人设置（占位）
 src/pages/exception/    403 / 404 / 500
-src/services/           对接后端的请求函数——目前还是模板示例，未替换
+src/services/           对接后端的请求函数——目前只有登录；src/utils/auth.ts 管 token 与 JWT 解码
 ```
 
 ## 仍未定案或未做的事
 
-- `src/services/ant-design-pro/*` 的类型（`API.CurrentUser` 等）与请求函数还是 Ant Design Pro
-  官方模板自带的示例形状，没有对齐 `yeweiyi-cloud` 真实的登录响应、JWT claims 与各接口 payload。
-  接下来接哪个页面就先把那个页面对应的类型和请求函数换成真的，不要在没对齐类型的情况下假装
-  接口已经通了。
+- 除登录外，各业务接口（账号、设备、遥测、控制、进销存、审计）的类型与请求函数都还没写。接哪个
+  页面就先把对应类型和请求函数按真实接口补上，不要在没对齐类型的情况下假装接口已经通了。
+- 登录页没有联调过真实后端（见 `align-login-with-cloud` 任务 5.4）；需要 `platform_admin` 与客户
+  角色账号各验证一次。
 - 生产环境的反向代理目标（`config/proxy.ts` 的 `test`/`pre`）还是占位符，部署方式和域名都没有
   定案，跟 `yeweiyi-miniapp`/`yeweiyi-cloud` 的部署决策一样悬而未决。
 - `/console/*` 要覆盖的具体交互（图表、告警展示形式等）还没有设计，只建了和小程序对应能力对齐的
   空页面，具体长什么样需要产品侧决定，不要自己臆造。
-- 本仓库还没有接入 OpenSpec——`yeweiyi-cloud` 已经在用（见其
-  `openspec/changes/add-admin-console`），后续如果这里也要走 spec-driven 流程，需要单独跑
-  `openspec init` 补一份 `openspec/config.yaml`，不能假设两个仓库共享同一份配置。
+- 本仓库已接入 OpenSpec（`openspec/config.yaml`，变更放在 `openspec/changes/`），与 `yeweiyi-cloud` 各用各的配置，
+  不共享。

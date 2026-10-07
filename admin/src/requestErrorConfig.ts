@@ -1,108 +1,57 @@
-﻿import type { RequestOptions } from '@@/plugin-request/request';
+import type { RequestOptions } from '@@/plugin-request/request';
 import type { RequestConfig } from '@umijs/max';
-import { getIntl } from '@umijs/max';
-import { message, notification } from 'antd';
-
-// 错误处理方案： 错误类型
-enum ErrorShowType {
-  SILENT = 0,
-  WARN_MESSAGE = 1,
-  ERROR_MESSAGE = 2,
-  NOTIFICATION = 3,
-  REDIRECT = 9,
-}
-// 与后端约定的响应数据格式
-interface ResponseStructure {
-  success: boolean;
-  data: unknown;
-  errorCode?: number;
-  errorMessage?: string;
-  showType?: ErrorShowType;
-}
+import { getIntl, history } from '@umijs/max';
+import { message } from 'antd';
+import { clearToken, getToken, loginRedirectUrl } from '@/utils/auth';
 
 /**
- * @name 错误处理
- * pro 自带的错误处理， 可以在这里做自己的改动
- * @doc https://umijs.org/docs/max/request#配置
+ * yeweiyi-cloud 的响应约定：成功直接返回业务 JSON（没有 {success,data} 信封），
+ * 失败为 HTTP 状态码 + {error: string}。所以成败按 HTTP 状态判定，不再用 errorThrower。
  */
+
+/** 请求拦截：有 token 就带 Bearer；登录请求用 skipAuth 跳过。 */
+export const attachAuth = (config: RequestOptions): RequestOptions => {
+  if ((config as { skipAuth?: boolean }).skipAuth) return config;
+  const token = getToken();
+  if (token) {
+    config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
+  }
+  return config;
+};
+
+export const handleRequestError = (error: any, opts: any) => {
+  if (opts?.skipErrorHandler) throw error;
+  if (error.response) {
+    const { status, data } = error.response;
+    if (status === 401) {
+      // token 过期或失效：清掉并回登录页，保留当前地址以便登录后返回。
+      clearToken();
+      if (window.location.pathname !== '/user/login') {
+        history.replace(loginRedirectUrl());
+      }
+      return;
+    }
+    // 403 等：展示后端给出的原因，不清 token。
+    message.error(data?.error || `Response status:${status}`);
+  } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    message.error(
+      getIntl().formatMessage({
+        id: 'app.request.offline',
+        defaultMessage:
+          'Network unavailable. Please check your connection and try again.',
+      }),
+    );
+  } else if (error.request) {
+    message.error('None response! Please retry.');
+  } else {
+    message.error('Request error, please retry.');
+  }
+};
+
 export const errorConfig: RequestConfig = {
-  // 错误处理： umi@3 的错误处理方案。
   errorConfig: {
-    // 错误抛出
-    errorThrower: (res) => {
-      const { success, data, errorCode, errorMessage, showType } =
-        res as unknown as ResponseStructure;
-      if (!success) {
-        const error: any = new Error(errorMessage);
-        error.name = 'BizError';
-        error.info = { errorCode, errorMessage, showType, data };
-        throw error; // 抛出自制的错误
-      }
-    },
-    // 错误接收及处理
-    errorHandler: (error: any, opts: any) => {
-      if (opts?.skipErrorHandler) throw error;
-      // 我们的 errorThrower 抛出的错误。
-      if (error.name === 'BizError') {
-        const errorInfo: ResponseStructure | undefined = error.info;
-        if (errorInfo) {
-          const { errorMessage, errorCode } = errorInfo;
-          switch (errorInfo.showType) {
-            case ErrorShowType.SILENT:
-              // do nothing
-              break;
-            case ErrorShowType.WARN_MESSAGE:
-              message.warning(errorMessage);
-              break;
-            case ErrorShowType.ERROR_MESSAGE:
-              message.error(errorMessage);
-              break;
-            case ErrorShowType.NOTIFICATION:
-              notification.open({
-                title: errorCode,
-                description: errorMessage,
-              });
-              break;
-            case ErrorShowType.REDIRECT:
-              window.location.href = '/user/login';
-              break;
-            default:
-              message.error(errorMessage);
-          }
-        }
-      } else if (error.response) {
-        // Axios 的错误
-        // 请求成功发出且服务器也响应了状态码，但状态代码超出了 2xx 的范围
-        message.error(`Response status:${error.response.status}`);
-      } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        message.error(
-          getIntl().formatMessage({
-            id: 'app.request.offline',
-            defaultMessage:
-              'Network unavailable. Please check your connection and try again.',
-          }),
-        );
-      } else if (error.request) {
-        message.error('None response! Please retry.');
-      } else {
-        message.error('Request error, please retry.');
-      }
-    },
+    errorHandler: handleRequestError,
   },
-
-  // 请求拦截器
-  requestInterceptors: [
-    (config: RequestOptions) => {
-      // 拦截请求配置，进行个性化处理。
-      // 示例：为请求附加 token（按需启用）
-      // const token = localStorage.getItem('token');
-      // if (token) {
-      //   config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
-      // }
-      return config;
-    },
-  ],
-
-  // 响应拦截器
+  requestInterceptors: [attachAuth],
   responseInterceptors: [],
 };

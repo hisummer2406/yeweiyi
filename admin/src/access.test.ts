@@ -5,8 +5,8 @@ describe('access', () => {
   it('platform_admin gets both canPlatformAdmin and canConsole', () => {
     const result = access({
       currentUser: {
-        userid: '1',
-        name: 'Admin User',
+        userId: 1,
+        username: 'u1',
         access: 'platform_admin',
       },
     });
@@ -18,8 +18,8 @@ describe('access', () => {
   it('customer_admin gets canConsole but not canPlatformAdmin', () => {
     const result = access({
       currentUser: {
-        userid: '2',
-        name: 'Customer Admin',
+        userId: 2,
+        username: 'u2',
         access: 'customer_admin',
       },
     });
@@ -31,8 +31,8 @@ describe('access', () => {
   it('customer_user gets canConsole but not canPlatformAdmin', () => {
     const result = access({
       currentUser: {
-        userid: '3',
-        name: 'Customer User',
+        userId: 3,
+        username: 'u3',
         access: 'customer_user',
       },
     });
@@ -44,8 +44,9 @@ describe('access', () => {
   it('returns both false when role is unrecognized', () => {
     const result = access({
       currentUser: {
-        userid: '4',
-        name: 'Guest User',
+        userId: 4,
+        username: 'u4',
+        access: 'wizard' as API.Role,
       },
     });
 
