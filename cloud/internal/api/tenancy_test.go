@@ -292,6 +292,10 @@ type routeCase struct {
 	// customerUserDenied marks a route open to admins of the device's customer but never to a
 	// customer user, so the "own customer is allowed" half only applies to the customer admin.
 	customerUserDenied bool
+	// foreignAdminNotFound marks a route where a customer admin naming another customer's device gets
+	// the 404 a missing device gets, not 403: clients read 403 "not authorized" as "account revoked"
+	// and log the user out (#54). Customer users still get 403 (their role is the problem).
+	foreignAdminNotFound bool
 }
 
 // exemptRoutes are the routes that take no device and therefore have no cross-customer case here.
@@ -349,7 +353,8 @@ func deviceScopedRoutes(t *testing.T) map[string]routeCase {
 			},
 		},
 		"PUT /api/devices/:device/station": {
-			customerUserDenied: true,
+			customerUserDenied:   true,
+			foreignAdminNotFound: true,
 			build: func(device, _ string) (string, []byte) {
 				return "/api/devices/" + device + "/station", []byte(`{"stationId":null}`)
 			},
@@ -396,8 +401,12 @@ func TestTenancy_EveryDeviceScopedRouteDeniesCrossCustomer(t *testing.T) {
 
 			// Customer B (user and admin) against customer A's device: refused.
 			for name, token := range map[string]string{"userB": tn.userB, "adminB": tn.adminB} {
-				if code := do(token, tn.devA1); code != http.StatusForbidden {
-					t.Errorf("%s on customer A's device: got %d, want 403", name, code)
+				want := http.StatusForbidden
+				if name == "adminB" && rc.foreignAdminNotFound {
+					want = http.StatusNotFound
+				}
+				if code := do(token, tn.devA1); code != want {
+					t.Errorf("%s on customer A's device: got %d, want %d", name, code, want)
 				}
 			}
 			// A customer user bound to nothing of A's second device: refused too.

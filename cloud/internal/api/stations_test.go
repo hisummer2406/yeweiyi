@@ -257,8 +257,11 @@ func TestStations_Create(t *testing.T) {
 		t.Errorf("customer admin, own customer explicit: %d", rec.Code)
 	}
 	// ...but not another customer's.
-	if _, rec := tn.apiStation(t, tn.adminA, map[string]any{"customerId": tn.custB, "name": uniqueName("x")}); rec.Code != http.StatusForbidden {
-		t.Errorf("customer admin creating in another customer: got %d, want 403", rec.Code)
+	if _, rec := tn.apiStation(t, tn.adminA, map[string]any{"customerId": tn.custB, "name": uniqueName("x")}); rec.Code != http.StatusBadRequest {
+		t.Errorf("customer admin creating in another customer: got %d, want 400", rec.Code)
+	} else if _, ghost := tn.apiStation(t, tn.adminA, map[string]any{"customerId": 999999999, "name": uniqueName("x")}); ghost.Code != rec.Code || ghost.Body.String() != rec.Body.String() {
+		t.Errorf("another customer's customerId vs a missing one: %d %q vs %d %q, want identical",
+			rec.Code, rec.Body.String(), ghost.Code, ghost.Body.String())
 	}
 	if _, rec := tn.apiStation(t, tn.userA, map[string]any{"name": uniqueName("x")}); rec.Code != http.StatusForbidden {
 		t.Errorf("customer user creating: got %d, want 403", rec.Code)
@@ -314,12 +317,16 @@ func TestStations_UpdateAndDelete(t *testing.T) {
 	// Another customer's station answers exactly like one that does not exist.
 	missing := tn.send(t, "PUT", path(999999999), tn.adminA, map[string]any{"name": uniqueName("x")})
 	foreign := tn.send(t, "PUT", path(other), tn.adminA, map[string]any{"name": uniqueName("x")})
-	if missing.Code != http.StatusForbidden || foreign.Code != http.StatusForbidden || missing.Body.String() != foreign.Body.String() {
-		t.Errorf("foreign vs missing station: %d %q vs %d %q, want identical 403s",
+	// 404, not 403: clients treat 403 "not authorized" as a revoked account and log the user out (#54).
+	if missing.Code != http.StatusNotFound || foreign.Code != http.StatusNotFound || missing.Body.String() != foreign.Body.String() {
+		t.Errorf("foreign vs missing station: %d %q vs %d %q, want identical 404s",
 			foreign.Code, foreign.Body.String(), missing.Code, missing.Body.String())
 	}
-	if rec := tn.send(t, "DELETE", path(other), tn.adminA, nil); rec.Code != http.StatusForbidden {
-		t.Errorf("customer admin deleting another customer's station: got %d, want 403", rec.Code)
+	if strings.Contains(foreign.Body.String(), "not authorized") {
+		t.Errorf("an object-level refusal carries the revoked-account body: %s", foreign.Body.String())
+	}
+	if rec := tn.send(t, "DELETE", path(other), tn.adminA, nil); rec.Code != http.StatusNotFound {
+		t.Errorf("customer admin deleting another customer's station: got %d, want 404", rec.Code)
 	}
 	if rec := tn.send(t, "PUT", path(sA.ID), tn.userA, map[string]any{"name": uniqueName("x")}); rec.Code != http.StatusForbidden {
 		t.Errorf("customer user renaming: got %d, want 403", rec.Code)
@@ -400,9 +407,12 @@ func TestStations_AssignDevice(t *testing.T) {
 	// Another customer's device answers like a device that does not exist.
 	foreign := assign(tn.adminA, tn.devB1, map[string]any{"stationId": sA.ID})
 	ghost := assign(tn.adminA, tn.devGhost, map[string]any{"stationId": sA.ID})
-	if foreign.Code != http.StatusForbidden || ghost.Code != http.StatusForbidden || foreign.Body.String() != ghost.Body.String() {
-		t.Errorf("foreign vs missing device: %d %q vs %d %q, want identical 403s",
+	if foreign.Code != http.StatusNotFound || ghost.Code != http.StatusNotFound || foreign.Body.String() != ghost.Body.String() {
+		t.Errorf("foreign vs missing device: %d %q vs %d %q, want identical 404s",
 			foreign.Code, foreign.Body.String(), ghost.Code, ghost.Body.String())
+	}
+	if strings.Contains(foreign.Body.String(), "not authorized") {
+		t.Errorf("an object-level refusal carries the revoked-account body: %s", foreign.Body.String())
 	}
 	if rec := assign(tn.userA, tn.devA1, map[string]any{"stationId": sA.ID}); rec.Code != http.StatusForbidden {
 		t.Errorf("customer user assigning: got %d, want 403", rec.Code)
@@ -496,8 +506,14 @@ func TestStations_MutationsRecheckTheAdministrator(t *testing.T) {
 				if elapsed < 400*time.Millisecond {
 					t.Errorf("%s: finished in %v, it did not wait for the administrator row", name, elapsed)
 				}
-				if rec.Code != http.StatusForbidden {
-					t.Errorf("%s by an administrator who was %s mid-request: got %d %s, want 403", name, how.name, rec.Code, rec.Body.String())
+				// Still an administrator but of another customer, the device is simply no longer theirs:
+				// that is an object-level refusal (404). Everything else is about the account (403).
+				want := http.StatusForbidden
+				if name == "assign" && how.name == "moved" {
+					want = http.StatusNotFound
+				}
+				if rec.Code != want {
+					t.Errorf("%s by an administrator who was %s mid-request: got %d %s, want %d", name, how.name, rec.Code, rec.Body.String(), want)
 				}
 			}
 
@@ -533,8 +549,8 @@ func TestStations_AssignAuthorizesBeforeLockingTheDevice(t *testing.T) {
 			return tn.send(t, "PUT", "/api/devices/"+tn.devB1+"/station", tn.adminA, map[string]any{"stationId": sA})
 		},
 		func(tx pgx.Tx) {})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("foreign device: got %d %s, want 403", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("foreign device: got %d %s, want 404", rec.Code, rec.Body.String())
 	}
 	if elapsed >= 400*time.Millisecond {
 		t.Errorf("the refusal took %v: it waited for the foreign device's row lock", elapsed)

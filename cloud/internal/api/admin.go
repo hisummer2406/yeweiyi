@@ -75,15 +75,31 @@ func auditAdmin(ctx context.Context, q *db.Queries, actor db.User, action, devic
 	return err
 }
 
-// refuse audits a denied administrative attempt under the caller's own customer and answers 403.
-func refuse(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any) {
+// auditRefusal records a denied administrative attempt under the caller's own customer.
+func auditRefusal(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any) {
 	if detail == nil {
 		detail = map[string]any{}
 	}
 	detail["reason"] = reason
-	// Best effort: the 403 must not turn into a 500 because the audit write failed.
+	// Best effort: the refusal must not turn into a 500 because the audit write failed.
 	_ = auditAdmin(c.Request.Context(), deps.Queries, actor, action, "", actor.CustomerID, "denied", detail)
+}
+
+// refuse audits a denied administrative attempt and answers 403. Clients read a 403 whose body is
+// exactly "not authorized" as "this account is revoked" and send the user back to the login page, so
+// reserve it for the caller's role or account; a refusal about an object (someone else's, or missing)
+// goes through refuseObject.
+func refuse(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any) {
+	auditRefusal(c, deps, actor, action, reason, detail)
 	c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+}
+
+// refuseObject audits the attempt like refuse but answers with the status and message a missing
+// object would get, so another customer's object and a nonexistent one look identical to the caller
+// and the client does not mistake the refusal for a revoked account.
+func refuseObject(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any, status int, msg string) {
+	auditRefusal(c, deps, actor, action, reason, detail)
+	c.JSON(status, gin.H{"error": msg})
 }
 
 func mustJSON(v map[string]any) []byte {

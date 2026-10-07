@@ -34,7 +34,11 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   换客户时同时清空 `station_id`。`GET /api/devices` 每行带可空 `station_id`；`GET /api/stations` 的范围与设备列表
   同一套规则（`customer_user` 只见其已绑定设备所在的油站，`customer_admin` 见本客户全部油站含空油站，平台管理员见全部）。
   管理接口 `POST/PUT/DELETE /api/stations`、`PUT /api/devices/:device/station`：平台管理员不限客户，客户管理员限本客户，
-  别的客户的油站/设备与"不存在"同样返回 403。记录表不带 `station_id`，历史跟着设备所属油站走。
+  别的客户的油站/设备与"不存在"对客户管理员完全相同：`404 station not found` / `404 device not found`，带别的客户的
+  `customerId` 建油站与客户不存在同为 `400 unknown customerId`（#54）。**`403 {"error":"not authorized"}` 只留给角色/账号
+  问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页，
+  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObject`；两者都写 `denied` 审计）。记录表不带
+  `station_id`，历史跟着设备所属油站走。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 

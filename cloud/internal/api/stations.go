@@ -122,7 +122,8 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if !mayManageCustomer(actor, customerID) {
-			refuse(c, deps, actor, "station.create", "another customer", map[string]any{"customerId": customerID})
+			refuseObject(c, deps, actor, "station.create", "another customer", map[string]any{"customerId": customerID},
+				http.StatusBadRequest, "unknown customerId")
 			return
 		}
 		name, address, ok := validStationFields(req.Name, req.Address)
@@ -182,6 +183,11 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 // missing station; anyone else gets the same refusal for "missing" and "another customer's", so the
 // endpoint cannot be used to probe which stations exist.
 func loadManageableStation(c *gin.Context, deps Deps, actor db.User, action string) (db.Station, bool) {
+	// A customer user's problem is their role, not the station: 403, like every other admin endpoint.
+	if actor.Role != control.RolePlatformAdmin && actor.Role != control.RoleCustomerAdmin {
+		refuse(c, deps, actor, action, "not an administrator", nil)
+		return db.Station{}, false
+	}
 	id, ok := parseIDParam(c)
 	if !ok {
 		return db.Station{}, false
@@ -192,7 +198,8 @@ func loadManageableStation(c *gin.Context, deps Deps, actor db.User, action stri
 		if actor.Role == control.RolePlatformAdmin {
 			c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
 		} else {
-			refuse(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id})
+			refuseObject(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id},
+				http.StatusNotFound, "station not found")
 		}
 		return db.Station{}, false
 	case err != nil:
@@ -200,7 +207,8 @@ func loadManageableStation(c *gin.Context, deps Deps, actor db.User, action stri
 		return db.Station{}, false
 	}
 	if !mayManageCustomer(actor, st.CustomerID) {
-		refuse(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id})
+		refuseObject(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id},
+			http.StatusNotFound, "station not found")
 		return db.Station{}, false
 	}
 	return st, true
@@ -417,7 +425,8 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		case missing && actor.Role == control.RolePlatformAdmin:
 			c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		case missing || denied:
-			refuse(c, deps, actor, "device.station", "no such device for this caller", map[string]any{"device": device})
+			refuseObject(c, deps, actor, "device.station", "no such device for this caller", map[string]any{"device": device},
+				http.StatusNotFound, "device not found")
 		case noCustomer:
 			c.JSON(http.StatusConflict, gin.H{"error": "the device has no customer; assign it to a customer first"})
 		case badStation:
