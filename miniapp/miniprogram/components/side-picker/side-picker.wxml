@@ -1,0 +1,23 @@
+<view wx:if="{{show}}" class="sp-mask" catchtap="onClose">
+  <view class="sp-panel {{kind === 'swatches' ? 'sp-panel-swatches' : 'sp-panel-pills'}}" style="top:{{top}}px;" catchtap="noop">
+    <block wx:if="{{kind === 'swatches'}}">
+      <view
+        wx:for="{{options}}"
+        wx:key="*this"
+        class="sp-swatch {{index === value ? 'sp-swatch-on' : ''}}"
+        style="background-color:{{item}};"
+        data-index="{{index}}"
+        bindtap="onPick"
+      ></view>
+    </block>
+    <block wx:else>
+      <view
+        wx:for="{{options}}"
+        wx:key="*this"
+        class="sp-pill {{index === value ? 'sp-pill-on' : ''}}"
+        data-index="{{index}}"
+        bindtap="onPick"
+      >{{item}}</view>
+    </block>
+  </view>
+</view>

@@ -1,3 +1,7 @@
 {
-  "navigationBarTitleText": "储罐设置（设计预览）"
+  "navigationBarTitleText": "储罐设置",
+  "usingComponents": {
+    "grid-picker": "/components/grid-picker/grid-picker",
+    "side-picker": "/components/side-picker/side-picker"
+  }
 }

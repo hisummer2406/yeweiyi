@@ -427,7 +427,7 @@ button.btn-danger-mini::after {
 /* 储罐设置那种更紧的列：行高 90，标签 x=53、值 x=316 */
 .fr-b {
   height: 90rpx;
-  padding: 0 28rpx 0 33rpx;
+  padding: 0 26rpx 0 32rpx;
 }
 
 .fl {
