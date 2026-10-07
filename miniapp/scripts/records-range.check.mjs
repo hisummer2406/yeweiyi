@@ -91,8 +91,12 @@ test('splitAlarmPage drops the probe row and reports hasMore', () => {
   assert.equal(full.items.length, PAGE_SIZE);
   assert.equal(full.hasMore, true);
   assert.deepEqual(splitAlarmPage([1, 2, 3]), { items: [1, 2, 3], hasMore: false });
-  assert.deepEqual(splitAlarmPage(rows.slice(0, PAGE_SIZE)), { items: rows.slice(0, PAGE_SIZE), hasMore: false });
   assert.deepEqual(splitAlarmPage([]), { items: [], hasMore: false });
+  assert.equal(splitAlarmPage(rows.slice(0, PAGE_SIZE - 1)).hasMore, false);
+  // exactly a full page: the cloud may have skipped an unreadable row from the 51 it was asked for, so
+  // this must still count as "more"
+  const exact = rows.slice(0, PAGE_SIZE);
+  assert.deepEqual(splitAlarmPage(exact), { items: exact, hasMore: true });
 });
 
 test('stock pages use a bigger page and a matching offset step when a direction filter is on', () => {
@@ -130,6 +134,14 @@ test('the "more than one page" note is dropped when the list pages, kept otherwi
   const res = stockRes({ truncated: true });
   assert.match(summarizeOilInOut(res, '').note, /超过单页上限/);
   assert.equal(summarizeOilInOut(res, '', { paged: true }).note, '');
+});
+
+test('the unreadable-records note does not quote a per-page count when paging', () => {
+  const res = stockRes({ unparsable: 2, parsed: 37 });
+  assert.match(summarizeOilInOut(res, '').note, /仅展示可读取的 37 条/);
+  const paged = summarizeOilInOut(res, '', { paged: true }).note;
+  assert.doesNotMatch(paged, /37/);
+  assert.match(paged, /可能不完整/);
 });
 
 test('window-level notes survive paging', () => {

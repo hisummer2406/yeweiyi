@@ -94,7 +94,7 @@
 
     <!-- 报警记录：GET /api/alarms（裸数组，见 types/api.d.ts），触底加载下一页 -->
     <view wx:if="{{activeTab === 'alarms'}}">
-      <view wx:if="{{!rangeHint && !loading && alarmsLoaded && alarms.length === 0}}" class="empty">
+      <view wx:if="{{!rangeHint && !loading && alarmsLoaded && alarms.length === 0 && alarmsFooter === 'end'}}" class="empty">
         {{rangeKey === '24h' ? '最近 24 小时没有报警记录' : '所选范围内没有报警记录（设备分配给当前客户之前的记录不可见）'}}
       </view>
       <view wx:for="{{alarms}}" wx:key="rowKey" class="card">
@@ -105,8 +105,8 @@
         <view class="muted" style="margin-top:8rpx;">{{item.text}}</view>
         <view class="muted tabular-nums">{{item.severityLabel}}　{{item.timeText}}</view>
       </view>
-      <view wx:if="{{alarms.length > 0 && alarmsFooter}}" class="list-footer" bindtap="onRetryMore">
-        {{alarmsFooter === 'loading' ? '加载中…' : (alarmsFooter === 'end' ? '没有更多了' : (alarmsFooter === 'error' ? '加载失败，点击重试' : '上滑加载更多'))}}
+      <view wx:if="{{alarmsFooter && (alarms.length > 0 || alarmsFooter !== 'end')}}" class="list-footer" bindtap="onRetryMore">
+        {{alarmsFooter === 'loading' ? '加载中…' : (alarmsFooter === 'end' ? '没有更多了' : (alarmsFooter === 'error' ? '加载失败，点击重试' : '上滑或点击加载更多'))}}
       </view>
     </view>
 
@@ -115,10 +115,10 @@
       <view wx:if="{{oilInOutNote}}" class="card" style="background-color:#fffbe6;border:1rpx solid #ffe58f;">
         <text style="color:#d48806;">{{oilInOutNote}}</text>
       </view>
-      <view wx:if="{{!rangeHint && !loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote}}" class="empty">
+      <view wx:if="{{!rangeHint && !loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote && oilInOutFooter === 'end'}}" class="empty">
         {{rangeKey === '24h' ? '最近 24 小时没有出入库记录' : '所选范围内没有出入库记录（设备分配给当前客户之前的记录不可见）'}}
       </view>
-      <view wx:for="{{oilInOut}}" wx:key="eventId" class="card">
+      <view wx:for="{{oilInOut}}" wx:key="rowKey" class="card">
         <view class="row">
           <text>{{item.tank}} 号罐　{{item.directionLabel}}　{{item.oilType || ''}}</text>
           <text class="muted">{{item.timeText}}</text>
@@ -131,8 +131,8 @@
         </view>
         <view class="muted tabular-nums">{{item.beginTimeText}} - {{item.endTimeText}}</view>
       </view>
-      <view wx:if="{{oilInOut.length > 0 && oilInOutFooter}}" class="list-footer" bindtap="onRetryMore">
-        {{oilInOutFooter === 'loading' ? '加载中…' : (oilInOutFooter === 'end' ? '没有更多了' : (oilInOutFooter === 'error' ? '加载失败，点击重试' : '上滑加载更多'))}}
+      <view wx:if="{{oilInOutFooter && (oilInOut.length > 0 || oilInOutFooter !== 'end')}}" class="list-footer" bindtap="onRetryMore">
+        {{oilInOutFooter === 'loading' ? '加载中…' : (oilInOutFooter === 'end' ? '没有更多了' : (oilInOutFooter === 'error' ? '加载失败，点击重试' : '上滑或点击加载更多'))}}
       </view>
     </view>
 

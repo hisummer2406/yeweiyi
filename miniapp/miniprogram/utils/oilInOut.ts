@@ -33,9 +33,10 @@ export function summarizeOilInOut(
   const notes: string[] = [];
   const unparsable = res.unparsable ?? 0;
   if (unparsable > 0) {
-    // With a direction filter the device-wide "parsed" count would not match the list, so omit it.
+    // With a direction filter, or with paging, the "parsed" count would not match the list (it counts the
+    // page just fetched, not what is shown), so omit it.
     notes.push(
-      direction
+      direction || options.paged
         ? `有 ${unparsable} 条记录暂时无法解析（设备固件版本较旧），下面的列表可能不完整`
         : `有 ${unparsable} 条记录暂时无法解析（设备固件版本较旧），本页仅展示可读取的 ${res.parsed} 条`,
     );

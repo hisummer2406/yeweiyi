@@ -61,6 +61,7 @@ type OilInOutView = OilInOutRow & {
   timeText: string;
   beginTimeText: string;
   endTimeText: string;
+  rowKey: string;
 };
 type CommandView = ControlCommand & { methodLabel: string };
 
@@ -96,6 +97,8 @@ function toOilInOutView(r: OilInOutRow): OilInOutView {
     timeText: formatLocalTime(r.time),
     beginTimeText: formatLocalTime(r.beginTime),
     endTimeText: formatLocalTime(r.endTime),
+    // The cloud sends eventId "" for cloud-generated rows, so eventId alone is not a unique key.
+    rowKey: `${r.eventId}|${r.time}|${r.tank}|${r.direction}`,
   };
 }
 
@@ -161,16 +164,19 @@ Page({
   // Paging state of the two history tabs. *Seq is bumped by every fresh load and every range change, so
   // a response that arrives after the list was restarted is dropped. *Window is fixed for the whole run
   // of pages (a rolling preset resolved once), otherwise new records would shift the offsets. *Page is
-  // how many pages were consumed, which is what the next offset is computed from.
+  // how many pages were consumed, which is what the next offset is computed from. *Busy is held by a fresh
+  // load AND by a load-more for their whole run (including a filtered stock list fetching on its own), so
+  // two requests can never ask for the same page; a restart clears it, and only the run that still owns the
+  // seq may clear it afterwards.
   alarmsSeq: 0,
   alarmsPage: 0,
   alarmsHasMore: false,
-  alarmsMoreBusy: false,
+  alarmsBusy: false,
   alarmsWindow: null as QueryWindow | null,
   stockSeq: 0,
   stockPage: 0,
   stockHasMore: false,
-  stockMoreBusy: false,
+  stockBusy: false,
   stockWindow: null as QueryWindow | null,
 
   onLoad(query: Record<string, string>) {
@@ -178,7 +184,7 @@ Page({
     const requestedTab = query.tab as TabKey | undefined;
     const tab: TabKey = TABS.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
     this.oilInOutDirection = query.direction === 'IN' || query.direction === 'OUT' ? query.direction : '';
-    this.setData({ device, activeTab: tab });
+    this.setData({ device, activeTab: tab, today: formatDate(new Date()) });
     wx.setNavigationBarTitle({ title: device || '设备详情' });
     this.loadTabIfNeeded(tab);
 
@@ -275,7 +281,8 @@ Page({
   onPickRange(e: WechatMiniprogram.BaseEvent) {
     const key = e.currentTarget.dataset.key as RangeKey;
     if (key === this.data.rangeKey) return;
-    this.setData({ rangeKey: key });
+    // `today` bounds the date pickers; recompute it, the page may have been open past midnight.
+    this.setData({ rangeKey: key, today: formatDate(new Date()) });
     this.restartHistory();
   },
 
@@ -298,8 +305,8 @@ Page({
     this.stockPage = 0;
     this.alarmsHasMore = false;
     this.stockHasMore = false;
-    this.alarmsMoreBusy = false;
-    this.stockMoreBusy = false;
+    this.alarmsBusy = false;
+    this.stockBusy = false;
     this.setData({
       loading: false,
       alarms: [],
@@ -331,7 +338,7 @@ Page({
     const seq = ++this.alarmsSeq;
     this.alarmsWindow = win;
     this.alarmsPage = 0;
-    this.alarmsMoreBusy = false;
+    this.alarmsBusy = true;
     this.setData({ loading: true });
     return this.fetchAlarmPage(win, 0)
       .then(({ items, hasMore }) => {
@@ -349,22 +356,29 @@ Page({
         wx.showToast({ title: err.message, icon: 'none' });
       })
       .finally(() => {
-        if (seq === this.alarmsSeq) this.setData({ loading: false });
+        if (seq !== this.alarmsSeq) return;
+        this.alarmsBusy = false;
+        this.setData({ loading: false });
       });
   },
 
   loadMoreAlarms() {
-    if (!this.alarmsHasMore || this.alarmsMoreBusy || !this.alarmsWindow) return;
+    if (!this.alarmsHasMore || this.alarmsBusy || !this.alarmsWindow) return;
     const seq = this.alarmsSeq;
-    this.alarmsMoreBusy = true;
+    this.alarmsBusy = true;
     this.setData({ alarmsFooter: 'loading' });
     this.fetchAlarmPage(this.alarmsWindow, this.alarmsPage)
       .then(({ items, hasMore }) => {
         if (seq !== this.alarmsSeq) return;
         this.alarmsPage += 1;
         this.alarmsHasMore = hasMore;
+        // A row can show up twice across a page boundary (an unreadable row the cloud skipped shifts the
+        // offsets by one; records still syncing in can land inside a window already shown), so drop any
+        // row whose key is already in the list.
+        const seen = new Set(this.data.alarms.map((a: AlarmView) => a.rowKey));
+        const fresh = items.map(toAlarmView).filter((a) => !seen.has(a.rowKey));
         this.setData({
-          alarms: this.data.alarms.concat(items.map(toAlarmView)),
+          alarms: this.data.alarms.concat(fresh),
           alarmsFooter: hasMore ? 'more' : 'end',
         });
       })
@@ -374,7 +388,7 @@ Page({
         wx.showToast({ title: err.message, icon: 'none' });
       })
       .finally(() => {
-        if (seq === this.alarmsSeq) this.alarmsMoreBusy = false;
+        if (seq === this.alarmsSeq) this.alarmsBusy = false;
       });
   },
 
@@ -409,13 +423,16 @@ Page({
     return this.requestStockPage(win, this.stockPage).then((res) => {
       if (seq !== this.stockSeq) return;
       const { rows, note } = summarizeOilInOut(res, this.oilInOutDirection, { paged: true });
-      const views = rows.map(toOilInOutView);
+      const first = reset && pages === 0;
+      // Drop rows already shown (see the alarm list: a shifted offset or a record that synced in late).
+      const seen = new Set(first ? [] : this.data.oilInOut.map((r: OilInOutView) => r.rowKey));
+      const views = rows.map(toOilInOutView).filter((r) => !seen.has(r.rowKey));
       this.stockPage += 1;
       this.stockHasMore = !!res.truncated;
       const addedNow = added + views.length;
       const goOn = shouldAutoContinue(filtered, addedNow, this.stockHasMore, pages + 1);
       this.setData({
-        oilInOut: reset && pages === 0 ? views : this.data.oilInOut.concat(views),
+        oilInOut: first ? views : this.data.oilInOut.concat(views),
         oilInOutNote: note,
         oilInOutLoaded: true,
         oilInOutFooter: goOn ? 'loading' : this.stockHasMore ? 'more' : 'end',
@@ -430,23 +447,31 @@ Page({
     const seq = ++this.stockSeq;
     this.stockWindow = win;
     this.stockPage = 0;
-    this.stockMoreBusy = false;
+    this.stockBusy = true;
     this.setData({ loading: true });
     return this.fetchStock(seq, win, true)
       .catch((err: Error) => {
         if (seq !== this.stockSeq) return;
         wx.showToast({ title: err.message, icon: 'none' });
-        this.setData({ oilInOut: [], oilInOutNote: err.message, oilInOutLoaded: true, oilInOutFooter: '' });
+        if (this.stockPage > 0) {
+          // A later page of this run failed (a filtered list fetches several on its own): what was
+          // already fetched stays on screen and the footer offers a retry, instead of wiping it.
+          this.setData({ oilInOutFooter: 'error' });
+        } else {
+          this.setData({ oilInOut: [], oilInOutNote: err.message, oilInOutLoaded: true, oilInOutFooter: '' });
+        }
       })
       .finally(() => {
-        if (seq === this.stockSeq) this.setData({ loading: false });
+        if (seq !== this.stockSeq) return;
+        this.stockBusy = false;
+        this.setData({ loading: false });
       });
   },
 
   loadMoreOilInOut() {
-    if (!this.stockHasMore || this.stockMoreBusy || !this.stockWindow) return;
+    if (!this.stockHasMore || this.stockBusy || !this.stockWindow) return;
     const seq = this.stockSeq;
-    this.stockMoreBusy = true;
+    this.stockBusy = true;
     this.setData({ oilInOutFooter: 'loading' });
     this.fetchStock(seq, this.stockWindow, false)
       .catch((err: Error) => {
@@ -455,7 +480,7 @@ Page({
         wx.showToast({ title: err.message, icon: 'none' });
       })
       .finally(() => {
-        if (seq === this.stockSeq) this.stockMoreBusy = false;
+        if (seq === this.stockSeq) this.stockBusy = false;
       });
   },
 
@@ -465,11 +490,15 @@ Page({
     else if (this.data.activeTab === 'oilInOut') this.loadMoreOilInOut();
   },
 
-  // Tap on a footer that says 加载失败，点击重试.
+  // Tap on the footer (加载失败，点击重试 / 点击加载更多).
   onRetryMore() {
-    // A failed page leaves hasMore as it was (only a success changes it), so retrying is just asking again.
-    if (this.data.activeTab === 'alarms' && this.data.alarmsFooter === 'error') this.loadMoreAlarms();
-    else if (this.data.activeTab === 'oilInOut' && this.data.oilInOutFooter === 'error') this.loadMoreOilInOut();
+    // 'error': a failed page leaves hasMore as it was (only a success changes it), so retrying is just asking
+    // again. 'more': a short list (a filtered 入库/出库 list can end up shorter than the screen) never reaches
+    // the bottom by scrolling, so tapping the footer is the way to ask for the next page.
+    const footer = this.data.activeTab === 'alarms' ? this.data.alarmsFooter : this.data.oilInOutFooter;
+    if (footer !== 'error' && footer !== 'more') return;
+    if (this.data.activeTab === 'alarms') this.loadMoreAlarms();
+    else if (this.data.activeTab === 'oilInOut') this.loadMoreOilInOut();
   },
 
   loadCommands() {

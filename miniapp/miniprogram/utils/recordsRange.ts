@@ -112,8 +112,12 @@ export function alarmQuery(device: string, win: QueryWindow, pageIndex: number):
   return { device, ...win, limit: PAGE_SIZE + 1, offset: pageIndex * PAGE_SIZE, sort: false };
 }
 
+// "More" is a full page (>= PAGE_SIZE rows), not just the probe row: the cloud applies LIMIT in the
+// database and then silently skips a row whose payload it can no longer parse, so a request for 51 rows
+// can come back with 50 although more exist. Treating that as "more" costs at most one extra, empty
+// request at an exact page boundary; the row that was then returned twice is dropped by the caller.
 export function splitAlarmPage<T>(rows: T[]): { items: T[]; hasMore: boolean } {
-  return { items: rows.slice(0, PAGE_SIZE), hasMore: rows.length > PAGE_SIZE };
+  return { items: rows.slice(0, PAGE_SIZE), hasMore: rows.length >= PAGE_SIZE };
 }
 
 // /api/oil-in-out reports `truncated`, so no probe row is needed.
