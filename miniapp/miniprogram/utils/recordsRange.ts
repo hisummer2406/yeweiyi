@@ -116,6 +116,7 @@ export function alarmQuery(device: string, win: QueryWindow, pageIndex: number):
 // database and then silently skips a row whose payload it can no longer parse, so a request for 51 rows
 // can come back with 50 although more exist. Treating that as "more" costs at most one extra, empty
 // request at an exact page boundary; the row that was then returned twice is dropped by the caller.
+// This covers one skipped row per page; two or more in the same page would still read as the end.
 export function splitAlarmPage<T>(rows: T[]): { items: T[]; hasMore: boolean } {
   return { items: rows.slice(0, PAGE_SIZE), hasMore: rows.length >= PAGE_SIZE };
 }

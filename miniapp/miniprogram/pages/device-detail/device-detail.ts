@@ -72,7 +72,9 @@ function toAlarmView(a: Alarm): AlarmView {
     severityLabel: label(ALARM_SEVERITY_LABELS, a.severity),
     statusLabel: label(ALARM_STATUS_LABELS, a.status),
     timeText: formatLocalTime(a.time),
-    rowKey: `${a.alarmId}:${a.status}:${a.time}`,
+    // The cloud blanks alarmId for alarms it minted itself, so tank and type are part of the key too, or
+    // two such alarms in the same instant would collide (and the append-time dedupe would drop one).
+    rowKey: `${a.alarmId}:${a.tank}:${a.type}:${a.status}:${a.time}`,
   };
 }
 
@@ -336,13 +338,14 @@ Page({
     const win = this.windowForReload();
     if (!win) return Promise.resolve();
     const seq = ++this.alarmsSeq;
-    this.alarmsWindow = win;
-    this.alarmsPage = 0;
     this.alarmsBusy = true;
     this.setData({ loading: true });
     return this.fetchAlarmPage(win, 0)
       .then(({ items, hasMore }) => {
         if (seq !== this.alarmsSeq) return;
+        // The window and page counter change only together with the list: if this refresh fails, the old
+        // list stays on screen and paging must keep continuing that list, not restart at page 0.
+        this.alarmsWindow = win;
         this.alarmsPage = 1;
         this.alarmsHasMore = hasMore;
         this.setData({
