@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const request = vi.fn();
-const handleUnauthorized = vi.fn();
+// 与 requestErrorConfig.forwardAuthFailure 同样的判定：401 或「账号已失效」的 403
+const forwardAuthFailure = vi.fn(
+  (e: any) =>
+    e?.response?.status === 401 ||
+    (e?.response?.status === 403 && e.response.data?.error === 'not authorized'),
+);
 
 vi.mock('@umijs/max', () => ({ request }));
-vi.mock('@/requestErrorConfig', () => ({ handleUnauthorized }));
+vi.mock('@/requestErrorConfig', () => ({ forwardAuthFailure }));
 
 const { listDevices, registerDevice } = await import('./devices');
 const { ApiError } = await import('./apiError');
@@ -122,18 +127,29 @@ describe('registerDevice', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(status);
     expect(err.error).toBe(error);
-    expect(handleUnauthorized).not.toHaveBeenCalled();
+    expect(err.authHandled).toBe(false);
   });
 
-  it('401 is forwarded to the global unauthorized handling and still thrown', async () => {
+  it('401 is forwarded to the global auth-failure handling and marked handled', async () => {
     request.mockRejectedValue(httpError(401));
     const err = await registerDevice({
       deviceName: 'ZCT000001',
       customerId: 3,
     }).catch((e) => e);
-    expect(handleUnauthorized).toHaveBeenCalledTimes(1);
+    expect(forwardAuthFailure).toHaveBeenCalledTimes(1);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(401);
+    expect(err.authHandled).toBe(true);
+  });
+
+  it('a revoked account (403 "not authorized") is forwarded and marked handled', async () => {
+    request.mockRejectedValue(httpError(403, { error: 'not authorized' }));
+    const err = await registerDevice({
+      deviceName: 'ZCT000001',
+      customerId: 3,
+    }).catch((e) => e);
+    expect(err.status).toBe(403);
+    expect(err.authHandled).toBe(true);
   });
 
   it('a network failure has status 0', async () => {

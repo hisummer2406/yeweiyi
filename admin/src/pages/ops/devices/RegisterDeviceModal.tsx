@@ -122,7 +122,7 @@ const RegisterForm: React.FC<Omit<Props, 'open'>> = ({
       form.setFields([{ name: 'customerId', errors: [] }]);
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
-      if (apiErr?.status === 401) return; // 已在回登录页
+      if (apiErr?.authHandled) return; // 鉴权失败，已在回登录页
       message.error(
         render(
           describeCustomerError(
@@ -168,7 +168,7 @@ const RegisterForm: React.FC<Omit<Props, 'open'>> = ({
       onClose();
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
-      if (apiErr?.status === 401) return; // 已在回登录页
+      if (apiErr?.authHandled) return; // 鉴权失败，已在回登录页
       setFormError(
         render(
           describeRegisterError(

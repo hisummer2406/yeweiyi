@@ -23,8 +23,9 @@
   这个接口是幂等登记，**不碰任何配对密钥**；不要改用 `pairing-secret`（它每次调用都会轮换密钥）。
 - 出厂编号一律按字符串处理、保留前导零（`src/utils/deviceCode.ts`）。`ZCT` 前缀只用于给短码生成
   待确认的候选，各型号规则尚未确认，云端也不强制前缀或长度，不要把它写成协议。
-- 自己处理错误提示的请求设了 `skipErrorHandler`，这会**跳过全局 401 处理**，必须在失败时转交
-  `handleUnauthorized`（见 `src/services/ant-design-pro/apiError.ts` 的 `toApiError`）。
+- 自己处理错误提示的请求设了 `skipErrorHandler`，这会**跳过全局的鉴权失败处理**（401、账号已失效的
+  403），必须在失败时转交 `forwardAuthFailure`（见 `src/services/ant-design-pro/apiError.ts` 的
+  `toApiError`）；返回的 `ApiError.authHandled` 为 true 时已在回登录页，调用方不要再提示。
 - 只完成了管理员登记页面。**小程序扫码绑定仍未完成**：授权规则（管理员预分配，还是同客户申请加管理员
   批准）待产品/后端确认，出厂编号是公开可猜的标识，不能当凭证用。
 - 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。

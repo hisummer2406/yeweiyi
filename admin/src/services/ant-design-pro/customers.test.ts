@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const request = vi.fn();
-const handleUnauthorized = vi.fn();
+// 与 requestErrorConfig.forwardAuthFailure 同样的判定：401 或「账号已失效」的 403
+const forwardAuthFailure = vi.fn(
+  (e: any) =>
+    e?.response?.status === 401 ||
+    (e?.response?.status === 403 && e.response.data?.error === 'not authorized'),
+);
 
 vi.mock('@umijs/max', () => ({ request }));
-vi.mock('@/requestErrorConfig', () => ({ handleUnauthorized }));
+vi.mock('@/requestErrorConfig', () => ({ forwardAuthFailure }));
 
 const { listCustomers, createCustomer } = await import('./customers');
 const { ApiError } = await import('./apiError');
@@ -51,9 +56,26 @@ describe('createCustomer', () => {
     expect(err.status).toBe(409);
   });
 
-  it('401 is forwarded to the global unauthorized handling', async () => {
+  it('401 is forwarded to the global auth-failure handling and marked handled', async () => {
     request.mockRejectedValue({ response: { status: 401, data: {} } });
-    await createCustomer({ name: 'B 油站' }).catch(() => undefined);
-    expect(handleUnauthorized).toHaveBeenCalledTimes(1);
+    const err = await createCustomer({ name: 'B 油站' }).catch((e) => e);
+    expect(forwardAuthFailure).toHaveBeenCalledTimes(1);
+    expect(err.authHandled).toBe(true);
+  });
+
+  it('a revoked account (403 "not authorized") is marked handled', async () => {
+    request.mockRejectedValue({
+      response: { status: 403, data: { error: 'not authorized' } },
+    });
+    const err = await createCustomer({ name: 'B 油站' }).catch((e) => e);
+    expect(err.authHandled).toBe(true);
+  });
+
+  it('other errors are not marked handled', async () => {
+    request.mockRejectedValue({
+      response: { status: 409, data: { error: 'exists' } },
+    });
+    const err = await createCustomer({ name: 'B 油站' }).catch((e) => e);
+    expect(err.authHandled).toBe(false);
   });
 });

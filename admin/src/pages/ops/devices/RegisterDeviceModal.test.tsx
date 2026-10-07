@@ -225,7 +225,7 @@ describe('RegisterDeviceModal', () => {
   });
 
   it('stays silent on a 401, which is already redirecting to login', async () => {
-    registerDevice.mockRejectedValue(new ApiError(401));
+    registerDevice.mockRejectedValue(new ApiError(401, undefined, true));
     const { onClose } = setup();
     typeCode('ZCT000001');
     await pickCustomer('A 油站');
@@ -233,6 +233,19 @@ describe('RegisterDeviceModal', () => {
     await waitFor(() => expect(registerDevice).toHaveBeenCalled());
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByText(/操作失败/)).not.toBeInTheDocument();
+  });
+
+  it('stays silent when the account was revoked (403 handled as an auth failure)', async () => {
+    registerDevice.mockRejectedValue(new ApiError(403, 'not authorized', true));
+    const { onClose } = setup();
+    typeCode('ZCT000001');
+    await pickCustomer('A 油站');
+    submit();
+    await waitFor(() => expect(registerDevice).toHaveBeenCalled());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText(zhPages['pages.ops.devices.error.forbidden']),
+    ).not.toBeInTheDocument();
   });
 
   it('lets the same form submit again after a failure', async () => {
