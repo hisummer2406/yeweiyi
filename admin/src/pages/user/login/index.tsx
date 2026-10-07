@@ -148,8 +148,15 @@ const Login: React.FC = () => {
             minWidth: 280,
             maxWidth: '75vw',
           }}
-          logo={<img alt="logo" src="/logo.svg" />}
-          title={Settings.title}
+          // 公司 LOGO 自带中文名与拼音，直接作为标题展示，不再叠加文字标题。
+          logo={false}
+          title={
+            <img
+              alt="中成电气"
+              src={Settings.logo}
+              style={{ height: 48, verticalAlign: 'middle' }}
+            />
+          }
           subTitle={intl.formatMessage({
             id: 'pages.layouts.userLayout.title',
           })}
