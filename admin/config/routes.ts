@@ -31,18 +31,12 @@ export default [
   {
     path: '/ops',
     name: 'ops',
-    icon: 'crown',
+    icon: 'safetyCertificate',
     access: 'canPlatformAdmin',
     routes: [
       {
         path: '/ops',
-        redirect: '/ops/users',
-      },
-      {
-        name: 'users',
-        icon: 'team',
-        path: '/ops/users',
-        component: './ops/users',
+        redirect: '/ops/devices',
       },
       {
         name: 'devices',
@@ -51,8 +45,14 @@ export default [
         component: './ops/devices',
       },
       {
+        name: 'users',
+        icon: 'team',
+        path: '/ops/users',
+        component: './ops/users',
+      },
+      {
         name: 'pairing-secret',
-        icon: 'qrcode',
+        icon: 'key',
         path: '/ops/pairing-secret',
         component: './ops/pairing-secret',
       },
@@ -65,6 +65,9 @@ export default [
     ],
   },
   {
+    // 菜单分组参照设备端首页底栏与小程序的信息架构：
+    // 设备总览（首页）/ 记录查询（报警·入库·出库）/ 远程控制。
+    // 交班记录、库存记录、各类设置在云端暂无接口（小程序里也是置灰入口），不放进菜单。
     path: '/console',
     name: 'console',
     icon: 'desktop',
@@ -87,16 +90,39 @@ export default [
         hideInMenu: true,
       },
       {
-        name: 'issue-command',
-        icon: 'sliders',
-        path: '/console/issue-command',
-        component: './console/issue-command',
+        name: 'records',
+        icon: 'profile',
+        path: '/console/records',
+        routes: [
+          {
+            path: '/console/records',
+            redirect: '/console/records/alarms',
+          },
+          {
+            name: 'alarms',
+            icon: 'alert',
+            path: '/console/records/alarms',
+            component: './console/alarms',
+          },
+          {
+            name: 'stock-in',
+            icon: 'download',
+            path: '/console/records/stock-in',
+            component: './console/oil-in-out',
+          },
+          {
+            name: 'stock-out',
+            icon: 'upload',
+            path: '/console/records/stock-out',
+            component: './console/oil-in-out',
+          },
+        ],
       },
       {
-        name: 'oil-in-out',
-        icon: 'swap',
-        path: '/console/oil-in-out',
-        component: './console/oil-in-out',
+        name: 'issue-command',
+        icon: 'control',
+        path: '/console/issue-command',
+        component: './console/issue-command',
       },
     ],
   },
@@ -104,6 +130,7 @@ export default [
     name: 'account',
     icon: 'user',
     path: '/account',
+    hideInMenu: true,
     routes: [
       {
         path: '/account',

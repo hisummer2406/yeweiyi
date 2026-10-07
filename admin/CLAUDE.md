@@ -92,8 +92,8 @@ npm run build   # 生产构建
 ```text
 config/routes.ts        路由表，access 字段是 /ops 与 /console 的唯一分界
 src/access.ts           canPlatformAdmin / canConsole 两个角色判断
-src/pages/ops/          运维控制台：users / devices / pairing-secret / audit
-src/pages/console/      客户 PC 监控台：devices / device-detail / issue-command / oil-in-out
+src/pages/ops/          运维控制台：devices / users / pairing-secret / audit
+src/pages/console/      客户 PC 监控台：devices / device-detail / alarms / oil-in-out（入库、出库共用）/ issue-command
 src/pages/user/login/   登录（两个分区共用）
 src/pages/account/      个人设置（占位）
 src/pages/exception/    403 / 404 / 500
