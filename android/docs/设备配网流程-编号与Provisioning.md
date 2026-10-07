@@ -1,7 +1,7 @@
 # 设备配网：手输设备编号 + ThingsBoard Provisioning 自动获取 token
 
-**状态**：Android 侧已实现（2026-10-07，工作区未提交），JVM 单测通过；**未经真机、未连过真实 ThingsBoard 验证**。云端准备（§3.2）未做。
-**依据代码**：分支 `feature/thingsboard-device-protocol`，`d2a44ac` + 工作区改动。
+**状态**：已实现（`95f93a3`），JVM 单测通过；成功路径已真机验证（2026-10-07 真机实测（rk3562_t，Android 13）：编号 ZCT000001 领取成功，经 TLS 连上 `8.154.38.176:8883`，token 以 `enc:` 加密落盘；云端确认遥测每 30 秒更新、`provisionState = provisioned`）。失败路径（重复领取、未登记编号）未在真机上测。
+**依据代码**：分支 `feature/thingsboard-device-protocol`，`95f93a3` + 工作区改动（默认 broker、CA 证书）。
 **目标**：现场安装只手输一次设备编号，access token 由设备通过 ThingsBoard Provisioning 自动领取，不再手抄 token。
 
 **设备编号获取方式定为手输**：编号只印在贴纸上（明文/二维码），设备读不到，也没有扫码能力。「出厂登记 MAC、云端按 MAC 反查编号」的方案不采用。
@@ -17,6 +17,7 @@
 | 失败处理 | 云端拒绝（任何非 `SUCCESS` 的 status、凭据类型不是 `ACCESS_TOKEN`）或本机没配 key/secret：停止重试，重新保存或 App 重启后再试一次（停止状态只在内存里）；超时/网络/应答格式错：按退避重试；出异常前已收到应答的，按应答处理。状态显示在设置页状态行 | 同上，`ProvisionResult.Outcome` |
 | key/secret 注入 | `sansen.provisionDeviceKey`/`sansen.provisionDeviceSecret` → `BuildConfig` → `ApiConfig.PROVISION_DEVICE_KEY/SECRET` | `app/build.gradle`、`local.properties.template` |
 | 凭据存储 | deviceId 明文，accessToken 用 Keystore AES/GCM 加密后落盘 | `manager/ThingsBoardCredentialStore` |
+| broker 与 TLS | 未保存过地址时默认 `8.154.38.176:8883`；`sansen.thingsboardUseTls=true` 时走 TLS，只信任 `assets/thingsboard_ca.pem`（私有 CA `yeweiyi-internal-ca`，有效期至 2036-10-03）。服务端证书 SAN 含该 IP。1883 端口能建 TCP 但不响应 MQTT，不可用 | `SharePreManager.getIpBean()`、`ThingsBoardCaStore` |
 | 连接 | 没有编号时不发起连接，按退避重试；有编号无 token 时先走自动领取 | `ThingsBoardMqttConnection.connect()`、`ThingsBoardManager.attemptConnect()` |
 | 保存后生效 | 改 broker 后在 `tb-reconnect` 线程断开重连，不等重启 | `ThingsBoardManager.applyUpdatedConnectionSettings()` |
 | MQTT client ID | 用 deviceId | `ThingsBoardMqttConnection.connect()` |
@@ -25,7 +26,7 @@
 
 | 级别 | 问题 |
 |---|---|
-| 待确认 | 真机 + 真实 ThingsBoard 联调未做，见 §6 |
+| 待确认 | 失败路径（重复领取、未登记编号、Device Profile 不匹配）未在真机上测，见 §6 |
 | 低 | 手填令牌抄错时只表现为连不上，没有明确原因（暂不修：手填只是兜底路径） |
 | 低 | 新文案只加在 `values/strings.xml`，en/es 待设计稿；页面仍只在中文界面开放，标签（「设备ID」「访问令牌」「端口」等）仍是硬编码 |
 
@@ -96,6 +97,5 @@
 
 | 项 | 需要谁 |
 |---|---|
-| 所用 ThingsBoard CE 版本的 §3.4 字段、未登记编号返回的 status（`FAILURE`/`NOT_FOUND`）、`provisionState` 行为、导入设备的 Device Profile 是否必须匹配 | 云端实测 |
-| 2013 年版 Paho（`libs/mqtt-client-0.4.0.jar`）用用户名 `provision` + 空密码能否连通 | 真机/本地 broker 实测 |
+| 未登记编号返回的 status（`FAILURE`/`NOT_FOUND`）、重复领取被拒、导入设备的 Device Profile 是否必须匹配（成功应答字段和 `provisionState` 已实测确认） | 云端 + 真机实测 |
 | 出货清单（编号列表）由谁、何时交给云端导入 | 生产 / 云端 |

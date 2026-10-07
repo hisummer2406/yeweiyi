@@ -229,6 +229,10 @@ public final class ThingsBoardManager {
     }
 
     private static String buildBrokerUri(String host, int port) {
+        if (port == 8883 && !ApiConfig.THINGSBOARD_USE_TLS) {
+            // 连接失败时界面看不出原因，留一条日志方便现场排查
+            Log.w(TAG, "broker 端口 8883 通常只接受 TLS，但本构建未开启 sansen.thingsboardUseTls，将以明文连接，大概率失败");
+        }
         String scheme = ApiConfig.THINGSBOARD_USE_TLS ? "ssl://" : "tcp://";
         return scheme + host + ":" + port;
     }

@@ -97,13 +97,13 @@ public class SharePreManager {
             //ipBean=new IPBean("39.98.92.177",61613,"");
             switch (SharePrefUtil.getString(MyApplication.getInstance(), SharePrefUtil.MQTTADDRESS, "服务器01")) {
                 case "服务器01":
-                    ipBean = new IPBean("39.98.62.79", 1883, "");
+                    ipBean = new IPBean("8.154.38.176", 8883, "");
                     break;
                 case "服务器02":
                     ipBean = new IPBean("39.98.92.177", 61613, "");
                     break;
                 default:
-                    ipBean = new IPBean("39.98.62.79", 1883, "");
+                    ipBean = new IPBean("8.154.38.176", 8883, "");
                     break;
 
 
