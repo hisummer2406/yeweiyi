@@ -1,5 +1,5 @@
 import { BASE_URL } from '../config/env';
-import { clearToken, getToken } from './storage';
+import { clearToken, getToken, setToken } from './storage';
 
 interface RequestOptions {
   url: string;
@@ -26,9 +26,45 @@ export class ApiError extends Error {
 }
 
 // Every route except /api/login needs Authorization: Bearer {jwt} (see yeweiyi-cloud CLAUDE.md
-// "API surface"). A 403 means "not your device" (bound-or-not is indistinguishable by design, and
-// an unbound device answers the same 403 as one that does not exist at all) and must NOT log the
-// user out; only a 401 means the token itself is bad/expired.
+// "API surface"). Two statuses mean the session is over:
+//   - 401: the token itself is bad/expired.
+//   - 403 with the bare body "not authorized": yeweiyi-cloud's authMiddleware, which re-reads the
+//     user row on every request, found the user deleted or disabled — the token is still
+//     well-formed and unexpired, so this is the only signal. (A DB reset hits the same path.)
+// Any other 403 means "not your device" (bound-or-not is indistinguishable by design, and an
+// unbound device answers the same 403 as one that does not exist at all; its body is
+// "not authorized for this device") and must NOT log the user out.
+// Sliding renewal (yeweiyi-cloud#51): once a token is past half its life, a successful authorized
+// response carries a replacement in X-Renewed-Token. Overwriting the stored token is all the client
+// does; the cloud caps the whole chain at authAt + auth.maxSessionAge, after which the next 401
+// sends the user back to login as usual. Header names are matched case-insensitively because
+// wx.request hands back whatever casing the transport used (HTTP/2 lowercases).
+function adoptRenewedToken(header: Record<string, string> | undefined) {
+  if (!header) return;
+  for (const name of Object.keys(header)) {
+    if (name.toLowerCase() === 'x-renewed-token' && header[name]) {
+      setToken(header[name]);
+      return;
+    }
+  }
+}
+
+let loggingOut = false;
+
+function endSession() {
+  // A page fires several requests in parallel (the home page does one per device); without this
+  // each failure would reLaunch the login page again.
+  if (loggingOut) return;
+  loggingOut = true;
+  clearToken();
+  wx.reLaunch({
+    url: '/pages/login/login',
+    complete: () => {
+      loggingOut = false;
+    },
+  });
+}
+
 export function request<T>(options: RequestOptions): Promise<T> {
   const { url, method = 'GET', data, needAuth = true } = options;
   const header: Record<string, string> = { 'content-type': 'application/json' };
@@ -48,16 +84,16 @@ export function request<T>(options: RequestOptions): Promise<T> {
       success: (res) => {
         const status = res.statusCode;
         if (status >= 200 && status < 300) {
+          if (needAuth) adoptRenewedToken(res.header as Record<string, string>);
           resolve(res.data as T);
           return;
         }
         // Not for /api/login: there a 401 is just "wrong username or password", and bouncing to the
         // login page would reload it and wipe what the user typed instead of showing the message.
-        if (status === 401 && needAuth) {
-          clearToken();
-          wx.reLaunch({ url: '/pages/login/login' });
-        }
         const body = res.data as { error?: string } | undefined;
+        if (needAuth && (status === 401 || (status === 403 && body?.error === 'not authorized'))) {
+          endSession();
+        }
         reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
       },
       fail: (err) => {

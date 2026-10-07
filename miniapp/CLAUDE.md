@@ -197,7 +197,12 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   every call except `/api/login`. `ApiError` carries the HTTP status *and* the full parsed response
   body, not just the message — needed because `/api/oil-in-out`'s 502 is a structured, still-useful
   response (`{rows, unparsable, legacySkipped, ...}`), not a plain failure. A 401 clears the token
-  and bounces to login; a 403 does not (see the device-ownership note above).
+  and bounces to login; so does a 403 whose body is exactly `not authorized` (user deleted/disabled —
+  `authMiddleware`), but **not** `not authorized for this device` (see the device-ownership note
+  above). A successful authorized response carrying `X-Renewed-Token` (sliding renewal,
+  `yeweiyi-cloud#51`) replaces the stored token; the cloud caps it at 30 days from the last password
+  login, then the next 401 sends the user back to login. `AlarmSocket` re-reads the token on every
+  reconnect, so it picks the new one up without changes.
 - `utils/ws.ts` — `AlarmSocket` wraps `wx.connectSocket` for `/ws/alarms` with reconnect-on-close.
 - `utils/auth.ts` — `login()`; `usernameFromToken`/`roleFromToken` decode the JWT's `sub`/`role`
   claims client-side purely for display and UI gating (real authorization is always server-side).
