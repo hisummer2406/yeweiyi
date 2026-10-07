@@ -371,9 +371,9 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     private long startTime, currenTime = 0;
 
     @Override
-    public void refreshData(OilCan oilCan) {
+    public void refreshData(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse) {
         if (oilCan != null) {
-            inOutOilDection(oilCan);
+            inOutOilDection(oilCan, errorTimesAtParse, oilLevelAtParse);
             if (Singleton.getInstance().StockTime > 0) {
                 currenTime = System.currentTimeMillis() / 1000;
                 if (currenTime - startTime > Singleton.getInstance().StockTime) {
@@ -393,8 +393,12 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         myApplication.getmSaveOilManager().SaveOilDB();
     }
 
-    private void inOutOilDection(OilCan oilCan) {
-        InOilManager.getInstance().setOil(oilCan.getOilCanPos(), oilCan.getOilLevel());
+    private void inOutOilDection(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse) {
+        // 用解析那一刻的值判断：失败计数不为 0 的帧在断线/重连途中，液位可能是界面清成的 0，
+        // 送进去会被判成一次出/入库。中诚每 10 轮问一次长度会让紧跟的一帧被跳过，少一个采样点无妨。
+        if (errorTimesAtParse == 0) {
+            InOilManager.getInstance().setOil(oilCan.getOilCanPos(), oilLevelAtParse);
+        }
         AlarmManager.getInstance().reshOilCan(oilCan);
     }
 

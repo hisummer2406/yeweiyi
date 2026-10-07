@@ -161,6 +161,15 @@ public class StockEventMapperTest {
     }
 
     @Test
+    public void netVolumeIsRoundedToOneDecimal() {
+        DetailInoutRecord record = outRecord();
+        record.setBeginVolume(649.3);
+        record.setEndVolume(527.7);
+        // 真机上报过 -121.59999999999991
+        assertEquals(Double.valueOf(-121.6), StockEventMapper.build(record, false).get("netVolumeL"));
+    }
+
+    @Test
     public void sourceIsOmittedForAutoDetectedEvents() {
         DetailInoutRecord record = inRecord();
         assertEquals("DetailInoutRecord.source 默认应为 AUTO", StockEventMapper.SOURCE_AUTO, record.getSource());

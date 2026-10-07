@@ -85,7 +85,8 @@ public final class StockEventMapper {
         event.put("endWeightKg", record.getEndOilWeight());
         event.put("beginTempC", record.getBeginTemp());
         event.put("endTempC", record.getEndTemp());
-        event.put("netVolumeL", record.getEndVolume() - record.getBeginVolume());
+        // 保留 1 位小数，跟其它体积字段一致；直接相减会带出 -121.59999999999991 这种浮点误差
+        event.put("netVolumeL", Math.round((record.getEndVolume() - record.getBeginVolume()) * 10) / 10.0);
         // omitempty 语义：只有人工核对过 during-delivery 销量（非 0）才带这个字段，
         // 跟云端 Go 结构体的 `json:"duringDeliveryVolumeL,omitempty"` 行为保持一致。
         if (record.getDuringDelivery() != 0.0) {

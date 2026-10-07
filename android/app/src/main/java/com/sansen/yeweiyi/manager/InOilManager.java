@@ -132,7 +132,9 @@ public class InOilManager {
         }
 
         double density = oilCan.getDensity();
-        double beginVolume = DataUtils.getLitre(event.getStartHeight(), oilCan.getHightArray(), oilCan.getLitreArray());
+        // 30 点罐表走 ATGJNI，返回 float，转 double 会带 649.2999877929688 这种尾数，保留 1 位小数
+        double beginVolume = DataUtils.doubleFoment(
+                DataUtils.getLitre(event.getStartHeight(), oilCan.getHightArray(), oilCan.getLitreArray()));
         double endVolume = oilCan.getOilVolume();
 
         DetailInoutRecord detailInoutRecord = pendingRecords.remove(event.getTankId());
@@ -141,10 +143,14 @@ public class InOilManager {
             // （比如服务重启后状态机是从中途状态起算的极端情况），避免空指针。
             detailInoutRecord = new DetailInoutRecord();
             detailInoutRecord.setOilcanId(event.getTankId());
-            detailInoutRecord.setBeginHeith(event.getStartHeight());
-            detailInoutRecord.setBeginVolume(beginVolume);
             detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmssWithSeconds());
         }
+        // 起始液位/体积/质量跟出入库表同一来源（状态机起点 + 罐表）。快照是在已检测到变化后才拍的，
+        // 这三项会漏掉第一段变化；水位、温度几秒内几乎不变，仍取快照。
+        // beginTcVolume（可添油体积）也仍取快照，随液位变化，跟 beginVolume 对不上；它不上报云端，暂不处理。
+        detailInoutRecord.setBeginHeith(event.getStartHeight());
+        detailInoutRecord.setBeginVolume(beginVolume);
+        detailInoutRecord.setBeginOilWeight(DataUtils.doubleFoment(beginVolume * density));
         detailInoutRecord.setOilType(Const.getOilType(oilCan.getOilType()));
         detailInoutRecord.setEndHeight(event.getEndHeight());
         detailInoutRecord.setEndVolume(endVolume);
@@ -154,7 +160,7 @@ public class InOilManager {
         detailInoutRecord.setEndOilWeight(oilCan.getOilWeight());
         detailInoutRecord.setEndTemp(oilCan.getTemper());
         detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmssWithSeconds());
-        detailInoutRecord.setSaleVolume(endVolume - beginVolume);
+        detailInoutRecord.setSaleVolume(DataUtils.doubleFoment(endVolume - beginVolume));
 
         String time = DateUtils.getYYYMMddHHmmss();
         int savedId = 0;
