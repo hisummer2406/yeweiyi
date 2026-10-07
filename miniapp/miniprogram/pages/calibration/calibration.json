@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "参数修正（设计预览）"
+  "navigationBarTitleText": "参数修正",
+  "usingComponents": {
+    "grid-picker": "/components/grid-picker/grid-picker"
+  }
 }

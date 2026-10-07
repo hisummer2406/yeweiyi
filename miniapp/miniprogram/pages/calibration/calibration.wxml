@@ -1,32 +1,31 @@
-<view class="container">
-  <view class="card muted">
-    对应设计稿「参数修正」画板——这是传感器读数的校准偏移量，不是修正已有的出入库记录。
-    "保存到手机"是纯本地存储，可以真的保存；"保存到控制器"需要下发给设备，协议里目前没有对应方法。
+<!-- 设计稿「参数修正07/08/09」。这是传感器读数的校准偏移量，不是修正已有出入库记录。
+     "保存到手机"是纯本地存储；"保存到控制器"协议里没有对应方法，点击时说明（见 calibration.ts）。 -->
+<view class="fc" style="padding:20rpx 0 18rpx;">
+  <view class="fr" id="row-tank" bindtap="onOpenTank">
+    <text class="fl">罐号</text>
+    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? '请选择' : tankOptions[tankIndex]}}</text>
+    <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
-
-  <view class="card">
-    <view class="field">
-      <text class="field-label">罐号</text>
-      <picker mode="selector" range="{{tankOptions}}" value="{{tankIndex}}" bindchange="onTankChange">
-        <view class="field-input">{{tankOptions[tankIndex] || '请选择'}}</view>
-      </picker>
-    </view>
-    <view class="field">
-      <text class="field-label">液位修正（毫米）</text>
-      <input class="field-input" type="number" value="{{levelOffset}}" bindinput="onLevelInput" />
-    </view>
-    <view class="field">
-      <text class="field-label">水位修正（毫米）</text>
-      <input class="field-input" type="number" value="{{waterOffset}}" bindinput="onWaterInput" />
-    </view>
-    <view class="field">
-      <text class="field-label">温度修正（℃）</text>
-      <input class="field-input" type="number" value="{{tempOffset}}" bindinput="onTempInput" />
-    </view>
+  <view class="fr">
+    <text class="fl">液位修正</text>
+    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{levelOffset}}" bindinput="onLevelInput" />
+    <text class="fu">毫米</text>
   </view>
-
-  <view class="row" style="gap:16rpx;">
-    <button class="btn-primary" style="flex:1;" bindtap="onSaveLocal">保存到手机</button>
-    <button class="btn-secondary" style="flex:1;" bindtap="onSaveDevice">保存到控制器</button>
+  <view class="fr">
+    <text class="fl">水位修正</text>
+    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{waterOffset}}" bindinput="onWaterInput" />
+    <text class="fu">毫米</text>
+  </view>
+  <view class="fr">
+    <text class="fl">温度修正</text>
+    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{tempOffset}}" bindinput="onTempInput" />
+    <text class="fu">℃</text>
   </view>
 </view>
+
+<view class="pill-row" style="margin-top:134rpx;">
+  <button class="pill pill-lite" bindtap="onSaveLocal">保存到手机</button>
+  <button class="pill pill-deep" bindtap="onSaveDevice">保存到控制器</button>
+</view>
+
+<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />

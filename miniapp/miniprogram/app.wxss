@@ -405,3 +405,106 @@ button.btn-danger-mini::after {
   height: 32rpx;
   flex-shrink: 0;
 }
+
+/* ===== 表单件：「参数修正」「储罐设置」「补录记录」等设计稿页面共用 =====
+   数值取自对应 PNG 的像素实测：白卡片 x20–729、圆角约 16；一行 81（储罐设置 90）；
+   标签 28rpx #131313；值 28rpx，空值/占位 #919191；选择项右侧箭头（32rpx 的 2x 切图）。 */
+.fc {
+  margin: 20rpx 20rpx 0;
+  background-color: #ffffff;
+  border-radius: 16rpx;
+}
+
+.fr {
+  display: flex;
+  align-items: center;
+  height: 81rpx;
+  padding: 0 37rpx 0 51rpx;
+  font-size: 28rpx;
+  color: #131313;
+}
+
+/* 储罐设置那种更紧的列：行高 90，标签 x=53、值 x=316 */
+.fr-b {
+  height: 90rpx;
+  padding: 0 28rpx 0 33rpx;
+}
+
+.fl {
+  width: 233rpx;
+  flex-shrink: 0;
+}
+
+.fr-b .fl {
+  width: 263rpx;
+}
+
+.fv {
+  flex: 1;
+  min-width: 0;
+}
+
+.fv-ph {
+  color: #919191;
+}
+
+.fi {
+  width: 69rpx;
+  height: 60rpx;
+  font-size: 28rpx;
+  color: #131313;
+}
+
+.fu {
+  margin-left: 5rpx;
+  color: #919191;
+  flex: 1;
+}
+
+.fc-chevron {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+}
+
+/* 药丸按钮：313×88，文字 36rpx；颜色按设计稿各页分别取值 */
+.pill-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 36rpx;
+}
+
+button.pill {
+  width: 313rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 44rpx;
+  font-size: 36rpx;
+  color: #ffffff;
+}
+
+button.pill::after {
+  border: none;
+}
+
+.pill-lite {
+  background-color: #3b7aef;
+}
+
+.pill-deep {
+  background-color: #0068e9;
+}
+
+.pill-main {
+  background-color: #0066a2;
+}
+
+.pill-green {
+  background-color: #0f846c;
+}
+
+.pill-indigo {
+  background-color: #3b68e9;
+}

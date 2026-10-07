@@ -2,11 +2,14 @@ const STORAGE_KEY = 'calibration-draft';
 
 Page({
   data: {
-    tankOptions: ['1号罐', '2号罐', '3号罐', '4号罐'],
-    tankIndex: 0,
-    levelOffset: '0',
-    waterOffset: '0',
-    tempOffset: '0',
+    // 设计稿的罐号选择是 1–12 号
+    tankOptions: Array.from({ length: 12 }, (_, i) => `${i + 1}号`),
+    tankIndex: -1,
+    levelOffset: '',
+    waterOffset: '',
+    tempOffset: '',
+    pickerShow: false,
+    pickerTop: 0,
   },
 
   onLoad() {
@@ -16,8 +19,20 @@ Page({
     }
   },
 
-  onTankChange(e: WechatMiniprogram.PickerChange) {
-    this.setData({ tankIndex: Number(e.detail.value) });
+  onOpenTank() {
+    // 面板贴在被点的那一行下面：量出这一行的 bottom 再弹出
+    wx.createSelectorQuery()
+      .select('#row-tank')
+      .boundingClientRect((rect) => {
+        if (rect) this.setData({ pickerShow: true, pickerTop: rect.bottom });
+      })
+      .exec();
+  },
+  onPickTank(e: WechatMiniprogram.CustomEvent<{ index: number }>) {
+    this.setData({ tankIndex: e.detail.index, pickerShow: false });
+  },
+  onClosePicker() {
+    this.setData({ pickerShow: false });
   },
   onLevelInput(e: WechatMiniprogram.Input) {
     this.setData({ levelOffset: e.detail.value });

@@ -5,17 +5,42 @@ type Entry = {
   volume: string;
 };
 
-const emptyEntry = (): Entry => ({ tankIndex: 0, date: '', beforeLevel: '0', volume: '0' });
+const emptyEntry = (): Entry => ({ tankIndex: -1, date: '', beforeLevel: '', volume: '' });
 
 Page({
   data: {
-    tankOptions: ['1号罐', '2号罐', '3号罐', '4号罐'],
+    // 设计稿的罐号选择是 1–12 号
+    tankOptions: Array.from({ length: 12 }, (_, i) => `${i + 1}号`),
     inbound: emptyEntry(),
     outbound: emptyEntry(),
+    pickerShow: false,
+    pickerTop: 0,
+    pickerValue: -1,
+    pickerKind: 'inbound' as 'inbound' | 'outbound',
   },
 
-  onInboundTankChange(e: WechatMiniprogram.PickerChange) {
-    this.setData({ 'inbound.tankIndex': Number(e.detail.value) });
+  // 入库、出库两段共用一个罐号面板：记下是哪一段点的，选完写回那一段
+  onOpenTank(e: WechatMiniprogram.BaseEvent) {
+    const kind = e.currentTarget.dataset.kind as 'inbound' | 'outbound';
+    wx.createSelectorQuery()
+      .select(`#row-${kind}-tank`)
+      .boundingClientRect((rect) => {
+        if (rect) {
+          this.setData({
+            pickerShow: true,
+            pickerTop: rect.bottom,
+            pickerKind: kind,
+            pickerValue: this.data[kind].tankIndex,
+          });
+        }
+      })
+      .exec();
+  },
+  onPickTank(e: WechatMiniprogram.CustomEvent<{ index: number }>) {
+    this.setData({ [`${this.data.pickerKind}.tankIndex`]: e.detail.index, pickerShow: false });
+  },
+  onClosePicker() {
+    this.setData({ pickerShow: false });
   },
   onInboundDateChange(e: WechatMiniprogram.PickerChange) {
     this.setData({ 'inbound.date': e.detail.value });
@@ -27,9 +52,6 @@ Page({
     this.setData({ 'inbound.volume': e.detail.value });
   },
 
-  onOutboundTankChange(e: WechatMiniprogram.PickerChange) {
-    this.setData({ 'outbound.tankIndex': Number(e.detail.value) });
-  },
   onOutboundDateChange(e: WechatMiniprogram.PickerChange) {
     this.setData({ 'outbound.date': e.detail.value });
   },
@@ -50,7 +72,7 @@ Page({
     const entry = kind === '入库' ? this.data.inbound : this.data.outbound;
     wx.showModal({
       title: `${kind}记录预览`,
-      content: `罐号 ${this.data.tankOptions[entry.tankIndex]}\n时间 ${entry.date || '未选择'}\n前高度 ${entry.beforeLevel}mm\n${kind}升数 ${entry.volume}L`,
+      content: `罐号 ${this.data.tankOptions[entry.tankIndex] || '未选择'}\n时间 ${entry.date || '未选择'}\n前高度 ${entry.beforeLevel || '0'}mm\n${kind}升数 ${entry.volume || '0'}L`,
       showCancel: false,
     });
   },

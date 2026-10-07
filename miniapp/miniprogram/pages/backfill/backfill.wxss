@@ -1,0 +1,8 @@
+/* 数值取自设计稿「补录记录」PNG：分组标题 32rpx，x=59；卡片 291–652；按钮 707–794（保存 #0F846C / 预览 #3B68E9）。 */
+.bf-title {
+  height: 44rpx;
+  line-height: 44rpx;
+  margin: 0 0 21rpx 59rpx;
+  font-size: 32rpx;
+  color: #131313;
+}

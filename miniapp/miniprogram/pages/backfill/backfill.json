@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "补录记录（设计预览）"
+  "navigationBarTitleText": "补录记录",
+  "usingComponents": {
+    "grid-picker": "/components/grid-picker/grid-picker"
+  }
 }
