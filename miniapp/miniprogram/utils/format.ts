@@ -14,3 +14,18 @@ export function roundFields<T extends object>(row: T, keys: readonly (keyof T)[]
   }
   return out;
 }
+
+// The cloud sends instants as RFC3339 UTC strings (2026-10-07T10:13:29.788Z). Showing them raw makes
+// "records of October 7th" look like they run from the 6th 16:00 to the 7th 15:59 once records can be
+// queried by local day, so render the phone's local wall clock instead. Anything that is not a valid
+// time is returned unchanged rather than hidden or shown as "Invalid Date".
+export function formatLocalTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
+}

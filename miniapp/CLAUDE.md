@@ -187,7 +187,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change;
    it's the only automated check in this repo so far (no test runner yet).
-   `npm run check` — Node checks for `utils/stations.ts` (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts` and `utils/recordsRange.ts` (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` is the placeholder `"touristappid"` — swap in the real AppID before anything
    beyond local preview is needed.
@@ -226,6 +226,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 - `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).
 - `utils/stations.ts` — station options, grouping, default selection and search; pure functions,
   checked in Node by `npm run check`. `utils/stationPref.ts` — remembers the selected station.
+- `utils/recordsRange.ts` — the time range and paging of device-detail's 报警记录 / 出入库记录 tabs:
+  presets (最近24小时/近7天/近30天, rolling from "now") and custom whole local days → `beginTime`/
+  `endTime`; page queries (alarms ask for `limit+1` as a "more" probe because `/api/alarms` has no flag,
+  stock uses `truncated`); the offset steps by the page size, not by rows shown. Pure, Node-checked.
 - `pages/` — three tabBar tabs plus pushed pages:
   - **首页 `devices`** (tabBar) — tank cards grouped by device: `GET /api/devices`, then one
     `telemetry/latest` per device in parallel, each device succeeding/failing independently. When
@@ -243,6 +247,13 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫一扫), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
     控制命令, plus the live-alarm banner from `AlarmSocket`; polls the command list every 3s while
     any command is non-terminal), `issue-command` (one control command, raw-JSON args).
+    The 报警记录 / 出入库记录 tabs share one time range bar and page by scrolling to the bottom
+    (`onReachBottom`). Without it the cloud's default window is the last 24h and the app used to show
+    only the newest 50 of that, i.e. nothing older was reachable. The window never starts before the
+    device was assigned to the caller's customer, so an empty older range says so. 入库/出库 (the
+    `direction` entries) are filtered in the app, so those pages fetch bigger pages and keep going
+    (bounded) until enough rows were added. Times are shown in the phone's local zone (`formatLocalTime`),
+    not as the cloud's raw UTC strings. Page behaviour is **not verified in DevTools**.
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
 

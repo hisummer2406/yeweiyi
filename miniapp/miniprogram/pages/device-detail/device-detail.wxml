@@ -68,31 +68,60 @@
       </view>
     </view>
 
-    <!-- 报警记录：GET /api/alarms（裸数组，见 types/api.d.ts） -->
+    <!-- 报警记录与出入库记录共用的时间范围：快捷档位滚动（按点击时的当前时间往回算），自定义按本地整天。 -->
+    <view wx:if="{{activeTab === 'alarms' || activeTab === 'oilInOut'}}" class="range-bar">
+      <view class="range-chips">
+        <view
+          wx:for="{{rangePresets}}"
+          wx:key="key"
+          class="range-chip {{rangeKey === item.key ? 'range-chip-on' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="onPickRange"
+        >{{item.label}}</view>
+        <view class="range-chip {{rangeKey === 'custom' ? 'range-chip-on' : ''}}" data-key="custom" bindtap="onPickRange">自定义</view>
+      </view>
+      <view wx:if="{{rangeKey === 'custom'}}" class="range-custom">
+        <picker mode="date" value="{{customStart}}" end="{{customEnd || today}}" bindchange="onStartDate">
+          <view class="range-date">{{customStart || '开始日期'}}</view>
+        </picker>
+        <text class="range-sep">至</text>
+        <picker mode="date" value="{{customEnd}}" start="{{customStart}}" end="{{today}}" bindchange="onEndDate">
+          <view class="range-date">{{customEnd || '结束日期'}}</view>
+        </picker>
+      </view>
+      <view wx:if="{{rangeHint}}" class="muted range-hint">{{rangeHint}}</view>
+    </view>
+
+    <!-- 报警记录：GET /api/alarms（裸数组，见 types/api.d.ts），触底加载下一页 -->
     <view wx:if="{{activeTab === 'alarms'}}">
-      <view wx:if="{{!loading && alarmsLoaded && alarms.length === 0}}" class="empty">暂无报警记录</view>
-      <view wx:for="{{alarms}}" wx:key="alarmId" class="card">
+      <view wx:if="{{!rangeHint && !loading && alarmsLoaded && alarms.length === 0}}" class="empty">
+        {{rangeKey === '24h' ? '最近 24 小时没有报警记录' : '所选范围内没有报警记录（设备分配给当前客户之前的记录不可见）'}}
+      </view>
+      <view wx:for="{{alarms}}" wx:key="rowKey" class="card">
         <view class="row">
           <text>{{item.tank}} 号罐　{{item.typeLabel}}</text>
           <text class="badge {{item.status === 'ACTIVE' ? 'badge-failed' : 'badge-online'}}">{{item.statusLabel}}</text>
         </view>
         <view class="muted" style="margin-top:8rpx;">{{item.text}}</view>
-        <view class="muted tabular-nums">{{item.severityLabel}}　{{item.time}}</view>
+        <view class="muted tabular-nums">{{item.severityLabel}}　{{item.timeText}}</view>
+      </view>
+      <view wx:if="{{alarms.length > 0 && alarmsFooter}}" class="list-footer" bindtap="onRetryMore">
+        {{alarmsFooter === 'loading' ? '加载中…' : (alarmsFooter === 'end' ? '没有更多了' : (alarmsFooter === 'error' ? '加载失败，点击重试' : '上滑加载更多'))}}
       </view>
     </view>
 
-    <!-- 出入库记录：GET /api/oil-in-out，两条路径都返回 {rows, parsed, unparsable, legacySkipped, ...} -->
+    <!-- 出入库记录：GET /api/oil-in-out，两条路径都返回 {rows, parsed, unparsable, legacySkipped, ...}，触底加载下一页 -->
     <view wx:if="{{activeTab === 'oilInOut'}}">
       <view wx:if="{{oilInOutNote}}" class="card" style="background-color:#fffbe6;border:1rpx solid #ffe58f;">
         <text style="color:#d48806;">{{oilInOutNote}}</text>
       </view>
-      <view wx:if="{{!loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote}}" class="empty">
-        暂无出入库记录
+      <view wx:if="{{!rangeHint && !loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote}}" class="empty">
+        {{rangeKey === '24h' ? '最近 24 小时没有出入库记录' : '所选范围内没有出入库记录（设备分配给当前客户之前的记录不可见）'}}
       </view>
       <view wx:for="{{oilInOut}}" wx:key="eventId" class="card">
         <view class="row">
           <text>{{item.tank}} 号罐　{{item.directionLabel}}　{{item.oilType || ''}}</text>
-          <text class="muted">{{item.time}}</text>
+          <text class="muted">{{item.timeText}}</text>
         </view>
         <view class="muted tabular-nums" style="margin-top:8rpx;">
           液位 {{item.beginLevelMm}} → {{item.endLevelMm}}mm　容积 {{item.beginVolumeL}} → {{item.endVolumeL}}L
@@ -100,7 +129,10 @@
         <view class="muted tabular-nums">
           净变化 {{item.netVolumeL}}L　实际到货/发出 {{item.deliveredVolumeL}}L
         </view>
-        <view class="muted tabular-nums">{{item.beginTime}} - {{item.endTime}}</view>
+        <view class="muted tabular-nums">{{item.beginTimeText}} - {{item.endTimeText}}</view>
+      </view>
+      <view wx:if="{{oilInOut.length > 0 && oilInOutFooter}}" class="list-footer" bindtap="onRetryMore">
+        {{oilInOutFooter === 'loading' ? '加载中…' : (oilInOutFooter === 'end' ? '没有更多了' : (oilInOutFooter === 'error' ? '加载失败，点击重试' : '上滑加载更多'))}}
       </view>
     </view>
 

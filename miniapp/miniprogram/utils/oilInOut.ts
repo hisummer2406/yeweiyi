@@ -16,9 +16,14 @@ export function isOilInOutListResponse(v: unknown): v is OilInOutListResponse {
 // Turns the response into what the page shows: the rows (optionally only one direction, for the
 // 出库记录/入库记录 entries on 我的记录) and a note whenever the list cannot be complete, so it is
 // never silently short. See yeweiyi-cloud docs/protocol-v1-stock-event.md.
+//
+// `paged`: the list is paged (the page asks for more when scrolled to the bottom), so "more than one
+// page matched" is not a reason to doubt the list and its note is left out. The other notes describe
+// the whole time window, not a page, so they stay.
 export function summarizeOilInOut(
   res: OilInOutListResponse,
   direction: OilInOutDirection,
+  options: { paged?: boolean } = {},
 ): { rows: OilInOutRow[]; note: string } {
   const rows = direction ? res.rows.filter((r) => r.direction === direction) : res.rows;
 
@@ -42,7 +47,7 @@ export function summarizeOilInOut(
   if (res.partial) {
     notes.push('设备历史记录仍在同步中，列表可能不完整');
   }
-  if (res.truncated) {
+  if (res.truncated && !options.paged) {
     notes.push('符合条件的记录超过单页上限，仅显示最新的一部分');
   }
   const invalidSource = res.invalidSource ?? 0;
