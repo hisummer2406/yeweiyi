@@ -1,5 +1,6 @@
 import { ApiError, get } from '../../utils/request';
 import { AlarmSocket } from '../../utils/ws';
+import { roundFields } from '../../utils/format';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import {
@@ -45,8 +46,22 @@ function toAlarmView(a: Alarm): AlarmView {
   };
 }
 
+const OIL_IN_OUT_NUMBER_FIELDS = [
+  'beginLevelMm',
+  'endLevelMm',
+  'beginVolumeL',
+  'endVolumeL',
+  'beginTempC',
+  'endTempC',
+  'beginWeightKg',
+  'endWeightKg',
+  'netVolumeL',
+  'duringDeliveryVolumeL',
+  'deliveredVolumeL',
+] as const;
+
 function toOilInOutView(r: OilInOutRow): OilInOutView {
-  return { ...r, directionLabel: label(STOCK_DIRECTION_LABELS, r.direction) };
+  return { ...roundFields(r, OIL_IN_OUT_NUMBER_FIELDS), directionLabel: label(STOCK_DIRECTION_LABELS, r.direction) };
 }
 
 function toCommandView(c: ControlCommand): CommandView {
