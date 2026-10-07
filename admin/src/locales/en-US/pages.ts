@@ -67,4 +67,56 @@ export default {
   'pages.searchTable.tenThousand': '0000',
   'pages.searchTable.batchDeletion': 'batch deletion',
   'pages.searchTable.batchApproval': 'batch approval',
+  'pages.ops.devices.title': 'Device management',
+  'pages.ops.devices.register': 'Register device',
+  'pages.ops.devices.refresh': 'Refresh',
+  'pages.ops.devices.col.name': 'Device code',
+  'pages.ops.devices.col.status': 'Status',
+  'pages.ops.devices.col.lastOnline': 'Last online',
+  'pages.ops.devices.col.lastOffline': 'Last offline',
+  'pages.ops.devices.col.updatedAt': 'Updated at',
+  'pages.ops.devices.status.online': 'Online',
+  'pages.ops.devices.status.offline': 'Offline',
+  'pages.ops.devices.empty': 'No devices registered yet',
+  'pages.ops.devices.load.error': 'Failed to load devices',
+  'pages.ops.devices.form.title': 'Register device',
+  'pages.ops.devices.form.code.label': 'Factory code',
+  'pages.ops.devices.form.code.placeholder':
+    'Full code from the nameplate (e.g. ZCT000001) or short code (e.g. 000001)',
+  'pages.ops.devices.form.code.confirm.tip':
+    'The short code will be registered as {code}. Code rules per model are not confirmed yet; please check the nameplate.',
+  'pages.ops.devices.form.code.confirm.checkbox':
+    'I checked it; the full code is {code}',
+  'pages.ops.devices.form.code.confirm.required':
+    'Please confirm the full code first',
+  'pages.ops.devices.form.customer.label': 'Customer',
+  'pages.ops.devices.form.customer.placeholder': 'Select a customer',
+  'pages.ops.devices.form.customer.required': 'Please select a customer',
+  'pages.ops.devices.form.customer.empty': 'No customers yet, create one below',
+  'pages.ops.devices.form.customer.new.placeholder': 'New customer name',
+  'pages.ops.devices.form.customer.new.button': 'Create customer',
+  'pages.ops.devices.form.customer.loadFailed': 'Failed to load customers',
+  'pages.ops.devices.form.hint':
+    'Registering only assigns the device to a customer; user binding is separate. Collection and backfill start automatically, no scan needed.',
+  'pages.ops.devices.form.submit': 'Register',
+  'pages.ops.devices.form.cancel': 'Cancel',
+  'pages.ops.devices.success.created':
+    'Device {device} registered to customer {customer}. Collection and backfill start automatically, no scan needed.',
+  'pages.ops.devices.success.exists':
+    'Device {device} is already registered to customer {customer}; nothing to do.',
+  'pages.ops.devices.customer.created': 'Customer {name} created',
+  'pages.ops.devices.customer.error.exists':
+    'A customer with this name already exists',
+  'pages.ops.devices.customer.error.invalid': 'Invalid customer name: {detail}',
+  'pages.ops.devices.error.conflict':
+    'This device already belongs to a different customer; it cannot be moved here.',
+  'pages.ops.devices.error.invalid': 'Invalid request: {detail}',
+  'pages.ops.devices.error.forbidden':
+    'Not allowed (only platform administrators can register devices).',
+  'pages.ops.devices.error.network':
+    'Network unavailable. Please check your connection and retry.',
+  'pages.ops.devices.error.unknown': 'Operation failed: {detail}',
+  'pages.ops.devices.form.code.required': 'Please enter the device code',
+  'pages.ops.devices.form.code.invalid':
+    'Invalid code: use a full code (e.g. ZCT000001) or a numeric short code',
 };

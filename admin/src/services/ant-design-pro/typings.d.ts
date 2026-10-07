@@ -26,11 +26,42 @@ declare namespace API {
     token: string;
   };
 
+  /**
+   * GET /api/devices 的行（yeweiyi-cloud internal/api/devices.go deviceResponse）。
+   * 注意是 snake_case，且没有客户归属字段；时间为 RFC3339 字符串，未发生过则为 null。
+   */
+  type DeviceRow = {
+    device_name: string;
+    is_online: boolean;
+    last_online_at: string | null;
+    last_offline_at: string | null;
+    updated_at: string | null;
+  };
+
+  /** GET /api/customers 的客户（internal/api/admin.go customerResponse） */
+  type Customer = {
+    id: number;
+    name: string;
+    createdAt: string;
+  };
+
+  /** POST /api/devices 请求体：deviceName 为铭牌完整出厂编号（按字符串，保留前导零） */
+  type RegisterDeviceParams = {
+    deviceName: string;
+    customerId: number;
+  };
+
+  /** POST /api/devices 响应：201 首次登记 created=true，200 重复登记 created=false */
+  type RegisterDeviceResult = {
+    deviceName: string;
+    customerId: number;
+    created: boolean;
+  };
+
   /** 后端失败响应体：HTTP 状态码 + {error} */
   type ErrorBody = {
     error?: string;
   };
-}
 
   type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';
 
@@ -59,3 +90,4 @@ declare namespace API {
     snapshotSeq: number;
     tanks: Tank[];
   };
+}

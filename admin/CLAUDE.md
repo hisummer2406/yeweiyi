@@ -2,7 +2,7 @@
 
 `AGENTS.md` 是本文件的符号链接。只编辑本文件，不要将该链接替换为普通文件。
 
-## 项目状态：2026-10-07 登录已对齐 yeweiyi-cloud，其余页面功能未接
+## 项目状态：2026-10-07 登录与 /ops/devices 设备登记已对齐 yeweiyi-cloud，其余页面功能未接
 
 结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
 路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
@@ -16,8 +16,21 @@
   Bearer；非登录请求收到 401 会清 token 并回登录页。退出登录只清本地 token（后端无登出）。
 - 响应没有 `{success,data}` 信封，别再加 `errorThrower` 之类按信封判成败的逻辑。
 
-`src/services/ant-design-pro/` 现在只剩 `login`；接新页面时按页面逐个补请求函数和类型，先读
-`yeweiyi-cloud` 的 `internal/api/router.go`。
+**`/ops/devices` 设备登记已接**（OpenSpec 变更 `register-device-and-assign-customer`，GitHub issue #1）：
+
+- 列表 `GET /api/devices`（行是 snake_case，**没有客户归属字段**）；客户 `GET/POST /api/customers`；
+  登记 `POST /api/devices`（`{deviceName,customerId}`，201 首次 / 200 已登记 / 409 属于其他客户）。
+  这个接口是幂等登记，**不碰任何配对密钥**；不要改用 `pairing-secret`（它每次调用都会轮换密钥）。
+- 出厂编号一律按字符串处理、保留前导零（`src/utils/deviceCode.ts`）。`ZCT` 前缀只用于给短码生成
+  待确认的候选，各型号规则尚未确认，云端也不强制前缀或长度，不要把它写成协议。
+- 自己处理错误提示的请求设了 `skipErrorHandler`，这会**跳过全局 401 处理**，必须在失败时转交
+  `handleUnauthorized`（见 `src/services/ant-design-pro/apiError.ts` 的 `toApiError`）。
+- 只完成了管理员登记页面。**小程序扫码绑定仍未完成**：授权规则（管理员预分配，还是同客户申请加管理员
+  批准）待产品/后端确认，出厂编号是公开可猜的标识，不能当凭证用。
+- 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。
+
+`src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
+`internal/api/router.go`。
 
 ## 项目概要
 
@@ -97,13 +110,14 @@ src/pages/console/      客户 PC 监控台：devices / device-detail / alarms /
 src/pages/user/login/   登录（两个分区共用）
 src/pages/account/      个人设置（占位）
 src/pages/exception/    403 / 404 / 500
-src/services/           对接后端的请求函数——目前只有登录；src/utils/auth.ts 管 token 与 JWT 解码
+src/services/           对接后端的请求函数（登录、设备、客户等，按页面逐个补）；src/utils/auth.ts 管 token 与 JWT 解码
 ```
 
 ## 仍未定案或未做的事
 
-- 除登录外，各业务接口（账号、设备、遥测、控制、进销存、审计）的类型与请求函数都还没写。接哪个
-  页面就先把对应类型和请求函数按真实接口补上，不要在没对齐类型的情况下假装接口已经通了。
+- 除登录和设备登记（设备、客户）外，其余业务接口（账号、控制、进销存、审计等）的类型与请求函数
+  还没写。接哪个页面就先把对应类型和请求函数按真实接口补上，不要在没对齐类型的情况下假装接口已经通了。
+- 设备登记没有联调过真实后端；列表不显示客户归属，需要 cloud 扩展设备列表字段。
 - 登录页没有联调过真实后端（见 `align-login-with-cloud` 任务 5.4）；需要 `platform_admin` 与客户
   角色账号各验证一次。
 - 生产环境的反向代理目标（`config/proxy.ts` 的 `test`/`pre`）还是占位符，部署方式和域名都没有
