@@ -1,21 +1,23 @@
 # ops-device-registration Specification
 
 ## Purpose
-平台管理员在 /ops/devices 查看已登记设备、登记设备并分配客户：出厂编号规范化（字符串、保留前导零、短码需确认）、客户选择与内联创建、冲突与权限处理，对接 yeweiyi-cloud 的幂等登记接口 POST /api/devices。
+平台管理员在 /console/assets/devices（原 /ops/devices）查看已登记设备、登记设备并分配客户：出厂编号规范化（字符串、保留前导零、短码需确认）、客户选择与内联创建、冲突与权限处理，对接 yeweiyi-cloud 的幂等登记接口 POST /api/devices。
 
 ## Requirements
 
 ### Requirement: 设备列表
-`/ops/devices` SHALL 通过 `GET /api/devices` 显示业务库中已登记的设备，行字段为后端实际返回的
-`device_name`、`is_online`、`last_online_at`、`last_offline_at`、`updated_at`。页面 SHALL NOT 显示后端没有返回的字段（如客户归属）。
+`/console/assets/devices`（原 `/ops/devices`）SHALL 通过 `GET /api/devices` 显示业务库中调用者可见的已登记设备，行字段为后端实际返回的
+`device_name`、`is_online`、`last_online_at`、`last_offline_at`、`updated_at`，以及「所属油站」（`station_id`，字段缺失显示「未知」，`null` 显示「未分组」）；
+平台管理员下另显示「所属客户」（`customer_id`，字段缺失显示「未知」，`null` 显示「未分配」）。页面 SHALL NOT 显示后端没有返回的字段。
+列表的整体角色与操作差异见 `console-asset-management`。
 
 #### Scenario: 有设备
-- **WHEN** 平台管理员打开 `/ops/devices` 且后端返回非空 `rows`
-- **THEN** 页面按行显示设备名与在线状态，时间字段按本地时间显示，空值显示为占位符
+- **WHEN** 平台管理员打开 `/console/assets/devices` 且后端返回非空 `rows`
+- **THEN** 页面按行显示设备名、所属客户、所属油站与在线状态，时间字段按本地时间显示，空值显示为占位符
 
 #### Scenario: 没有设备
 - **WHEN** 后端返回空 `rows`
-- **THEN** 页面显示空状态并提供「登记设备」入口
+- **THEN** 页面显示空状态，平台管理员下并提供「登记设备」入口
 
 #### Scenario: 加载与失败
 - **WHEN** 列表请求进行中或失败
@@ -47,9 +49,9 @@
 - **THEN** 判为无效，页面禁止提交并说明原因
 
 ### Requirement: 登记设备并分配客户
-平台管理员 SHALL 能在 `/ops/devices` 的登记表单中填写出厂编号并选择客户，提交 `POST /api/devices`，请求体为
+平台管理员 SHALL 能在 `/console/assets/devices` 的登记表单中填写出厂编号并选择客户，提交 `POST /api/devices`，请求体为
 `{deviceName, customerId}`。`customerId` MUST 来自客户下拉的选择，页面 SHALL NOT 要求手填数字 id。
-短码候选必须由管理员确认后才允许提交。
+短码候选必须由管理员确认后才允许提交。登记成功后的「分配油站」动作见 `console-asset-management`。
 
 #### Scenario: 首次登记成功
 - **WHEN** 提交有效编号与已选客户，后端返回 201 `{deviceName,customerId,created:true}`
@@ -87,8 +89,8 @@
 - **THEN** 页面提示无权限并保持不变，不清除 token；401 仍按全局规则清 token 并回登录页
 
 #### Scenario: 非平台管理员
-- **WHEN** 非 `platform_admin` 角色访问 `/ops/devices`
-- **THEN** 路由层按 `canPlatformAdmin` 拒绝，页面不渲染登记入口
+- **WHEN** 客户管理员打开 `/console/assets/devices`
+- **THEN** 页面不渲染「登记设备」入口（云端对非平台管理员的登记请求仍会拒绝，这里只是不展示）
 
 ### Requirement: 客户选择与内联创建
 客户下拉 SHALL 读取 `GET /api/customers`（响应 `{customers:[{id,name,createdAt}]}`）。管理员 SHALL 能在登记表单内通过

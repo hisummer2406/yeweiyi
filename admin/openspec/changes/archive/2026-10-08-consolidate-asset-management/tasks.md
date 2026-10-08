@@ -33,5 +33,7 @@
 
 - [x] 5.1 `CLAUDE.md`：更新目录结构（`src/pages/console/assets/*`、`src/pages/ops` 只剩 users/pairing-secret/audit）、`/ops` 与「资产管理」的分工、三条旧地址重定向、设备分配油站的唯一入口、登记设备现在位于 `/console/assets/devices`（原写作 `/ops/devices` 的地方都要改）
 - [x] 5.2 `npx vitest run`、`npm run lint`、`npm run build` 全部通过
-- [ ] 5.3 在浏览器里用平台管理员与客户管理员各走一遍：菜单、客户/油站/设备三页、登记设备（含登记成功后分配油站）、转移客户、分配与清空油站、客户管理员看不到登记与转移、三条旧地址重定向、总览筛选与分段、报警页油站筛选（对着含 PR #53 的云端；若未做，在 PR 描述里如实写明）
-- [ ] 5.4 重写 PR #8 的描述以匹配新结构（页面路径、入口、已知限制保持不变）；归档本变更时手工把 `openspec/specs/ops-device-registration/spec.md` 的 Purpose 里的 `/ops/devices` 改为 `/console/assets/devices`
+- [x] 5.3 在浏览器里用平台管理员与客户管理员各走一遍：菜单、客户/油站/设备三页、登记设备（含登记成功后分配油站）、转移客户、分配与清空油站、客户管理员看不到登记与转移、三条旧地址重定向、总览筛选与分段、报警页油站筛选（对着含 PR #53 的云端；若未做，在 PR 描述里如实写明）
+- [x] 5.4 重写 PR #8 的描述以匹配新结构（页面路径、入口、已知限制保持不变）；归档本变更时手工把 `openspec/specs/ops-device-registration/spec.md` 的 Purpose 里的 `/ops/devices` 改为 `/console/assets/devices`
+
+> 归档备注：5.3 由验收人在浏览器里走查；走查之后又做了「记录查询升一级」「子菜单四字名」「两处弹窗换目标修复」，这三项只有单元测试与构建验证。5.4 的 PR 描述已重写，Purpose 里的路径已在同步主规格时改好。
