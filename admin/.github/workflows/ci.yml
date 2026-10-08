@@ -109,7 +109,7 @@ jobs:
           [[ "$STAGING" =~ ^/home/www/yeweiyi-admin/ci-[A-Za-z0-9]+$ ]]
           trap '"${SSH[@]}" "$TARGET" "rm -rf -- '\''$STAGING'\''" || true' EXIT
           tar -czf - deploy/remote-deploy.sh dist | "${SSH[@]}" "$TARGET" "tar -xzf - -C '$STAGING'"
-          "${SSH[@]}" "$TARGET" "set -eu; cd '$STAGING/dist'; sha256sum -c SHA256SUMS >/dev/null; sudo -n mkdir '/var/www/yeweiyi-admin/releases/$RELEASE'; sudo -n cp -R . '/var/www/yeweiyi-admin/releases/$RELEASE/'; sudo -n chmod -R a+rX '/var/www/yeweiyi-admin/releases/$RELEASE'; sudo -n bash '$STAGING/deploy/remote-deploy.sh' '$RELEASE'"
+          "${SSH[@]}" "$TARGET" "set -eu; cd '$STAGING/dist'; sha256sum -c SHA256SUMS >/dev/null; mkdir '/var/www/yeweiyi-admin/releases/$RELEASE'; cp -R . '/var/www/yeweiyi-admin/releases/$RELEASE/'; chmod -R a+rX '/var/www/yeweiyi-admin/releases/$RELEASE'; bash '$STAGING/deploy/remote-deploy.sh' '$RELEASE'"
       - name: 清理 Runner SSH 凭据
         if: always()
         run: rm -f ~/.ssh/id_deploy

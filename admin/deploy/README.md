@@ -13,6 +13,7 @@
 在上述两个配置的后端 `location /` 改成 `location ~ ^/(api(?:/|$)|ws(?:/|$)|healthz$)`，
 保留原代理参数，并在同一 server 中加入 `include /etc/nginx/snippets/yeweiyi-admin-static.conf;`。
 HTTPS 的 HTTP 重定向 server 不改。复制本目录 `nginx-static.conf` 到该 snippet 路径。
+admin 发布目录和部署脚本归 `www:www`，首次安装执行 `sudo -n install -d -o www -g www /var/www/yeweiyi-admin/releases /home/www/yeweiyi-admin`，并确保 `/var/www/yeweiyi-admin` 本身归 www。Nginx 配置及其备份继续由 root 管理。
 修改前备份配置，执行 `sudo -n nginx -t`，通过后 `sudo -n systemctl reload nginx`。
 
 ## 自动 CI/CD
@@ -28,7 +29,7 @@ HTTPS 的 HTTP 重定向 server 不改。复制本目录 `nginx-static.conf` 到
 
 Repository Actions Secrets：`DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PORT`（默认 22）、
 `DEPLOY_SSH_KEY`、`DEPLOY_KNOWN_HOSTS`。部署使用专用密钥，服务器授权行加 `restrict`，关闭 SSH 转发及 PTY；
-私钥仅保存于 admin 仓库 Secrets。用户已授权使用现有 www 用户及免密 sudo。
+私钥仅保存于 admin 仓库 Secrets。日常发布由 www 直接创建版本目录、复制文件和切换链接，不使用 sudo。
 主机公钥从已核实的运维 SSH 连接读取，StrictHostKeyChecking 保持启用。
 
 服务器固定路径：上传暂存 `/home/www/yeweiyi-admin/ci-*`，发布目录 `/var/www/yeweiyi-admin/releases/<SHA>-<run>-<attempt>`。
@@ -43,7 +44,7 @@ Repository Actions Secrets：`DEPLOY_HOST`、`DEPLOY_USER`、`DEPLOY_PORT`（默
 将 `remote-deploy.sh` 上传到服务器后执行：
 
 ```bash
-sudo -n bash /home/www/yeweiyi-admin/remote-deploy.sh <版本目录名>
+bash /home/www/yeweiyi-admin/remote-deploy.sh <版本目录名>
 ```
 
 脚本通过校验和检查后原子切换 current，并检查版本标识、SPA 深链接和后端健康，失败恢复旧链接。
