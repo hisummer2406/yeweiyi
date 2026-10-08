@@ -49,6 +49,11 @@ type Deps struct {
 	// WSRevalidateInterval is how often an open /ws/alarms connection re-checks that its user may
 	// still see the device. Zero means defaultWSRevalidateInterval. Tests shorten it.
 	WSRevalidateInterval time.Duration
+
+	// DeviceCodePrefixes are the model prefixes tried, in order, when a QR scan carries only the
+	// short code (`000001` for device `ZCT000001`). Empty means short-code binding matches the
+	// scanned text exactly and nothing else. See bindDeviceHandler.
+	DeviceCodePrefixes []string
 }
 
 func NewRouter(deps Deps) *gin.Engine {

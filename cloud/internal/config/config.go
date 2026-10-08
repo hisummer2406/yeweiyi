@@ -91,6 +91,16 @@ type Config struct {
 	Ingest      Ingest      `yaml:"ingest"`
 	Stock       Stock       `yaml:"stock"`
 	Telemetry   Telemetry   `yaml:"telemetry"`
+	Pairing     Pairing     `yaml:"pairing"`
+}
+
+// Pairing configures QR-code (short-code) binding.
+type Pairing struct {
+	// CodePrefixes are the factory model prefixes a scanned short code may be completed with
+	// (`000001` -> `ZCT000001`), tried in order after an exact match. Empty = exact match only.
+	// Whether every model's serial is "prefix + 6 digits" is not settled, so this is configuration,
+	// not protocol. Environment: PAIRING_CODE_PREFIXES (comma-separated; set to "-" for none).
+	CodePrefixes []string `yaml:"codePrefixes"`
 }
 
 type Server struct {
@@ -218,6 +228,7 @@ func Defaults() Config {
 		Server:   Server{ListenAddr: ":8080"},
 		Database: Database{URL: "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"},
 		Redis:    Redis{Addr: "localhost:6379"},
+		Pairing:  Pairing{CodePrefixes: []string{"ZCT"}},
 		Auth:     Auth{TokenTTL: Duration(24 * time.Hour), MaxSessionAge: Duration(30 * 24 * time.Hour)},
 		Control: Control{
 			CommandTTL:            Duration(60 * time.Second),
@@ -328,6 +339,17 @@ func (c *Config) applyEnv() error {
 	if v, ok := os.LookupEnv("STOCK_LEGACY_FORMAT_BEFORE"); ok && v != "" {
 		if err := c.Stock.LegacyFormatBefore.parse(v); err != nil {
 			return fmt.Errorf("STOCK_LEGACY_FORMAT_BEFORE: %w", err)
+		}
+	}
+
+	if v, ok := os.LookupEnv("PAIRING_CODE_PREFIXES"); ok && v != "" {
+		c.Pairing.CodePrefixes = nil
+		if v != "-" {
+			for _, p := range strings.Split(v, ",") {
+				if p = strings.TrimSpace(p); p != "" {
+					c.Pairing.CodePrefixes = append(c.Pairing.CodePrefixes, p)
+				}
+			}
 		}
 	}
 

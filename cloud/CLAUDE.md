@@ -39,6 +39,10 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页，
   对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObject`；两者都写 `denied` 审计）。记录表不带
   `station_id`，历史跟着设备所属油站走。
+- 扫码绑定（短码）：`POST /api/devices/bind` 的 `pairingToken` 可选。不带时 `deviceName` 是二维码原文（如 `000001`），
+  只在调用者所属客户的设备里解析（精确匹配优先，再 `pairing.codePrefixes` + 原文，默认 `ZCT`），`customer_admin` /
+  `customer_user` 可用，`platform_admin` 不可；不创建设备行；所有失败与密钥错误同为 401，响应带解析后的 `deviceName`。
+  已停用账号由认证中间件先挡成 403。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 

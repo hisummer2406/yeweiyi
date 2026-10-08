@@ -33,6 +33,40 @@ WITH u AS (
 )
 SELECT EXISTS (SELECT 1 FROM ok) AS bound;
 
+-- name: BindUserDeviceByCodeIfAllowed :one
+-- Short-code variant of BindUserDeviceIfAllowed: the QR code carries only "000001", not a pairing
+-- secret, so the customer boundary is the authorization. Resolution, check and insert are still one
+-- statement with the user and device rows locked FOR SHARE (same transfer-race guarantee).
+--
+-- `candidates` is ordered: the scanned text first (exact match wins), then prefix||text. Only the
+-- caller's own customer's devices are considered, so another customer's device is
+-- indistinguishable from a nonexistent one. Equality only — no LIKE. platform_admin has no customer
+-- and is refused here (use the pairing-secret path). Never creates a devices row.
+-- Returns the resolved device_name; no row means refused.
+WITH u AS (
+    SELECT users.id, users.customer_id
+    FROM users
+    WHERE users.id = sqlc.arg('user_id')
+      AND users.disabled_at IS NULL
+      AND users.role IN ('customer_admin', 'customer_user')
+      AND users.customer_id IS NOT NULL
+    FOR SHARE
+), d AS (
+    SELECT devices.device_name
+    FROM devices, u
+    WHERE devices.customer_id = u.customer_id
+      AND devices.device_name = ANY(sqlc.arg('candidates')::text[])
+    ORDER BY array_position(sqlc.arg('candidates')::text[], devices.device_name)
+    LIMIT 1
+    FOR SHARE OF devices
+), ins AS (
+    INSERT INTO user_devices (user_id, device_name)
+    SELECT u.id, d.device_name FROM u, d
+    ON CONFLICT (user_id, device_name) DO NOTHING
+    RETURNING user_id
+)
+SELECT d.device_name FROM d;
+
 -- name: UnbindUserDevice :exec
 DELETE FROM user_devices WHERE user_id = $1 AND device_name = $2;
 

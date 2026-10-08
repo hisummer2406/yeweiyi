@@ -22,6 +22,16 @@ type Querier interface {
 	// The statement start is guaranteed not to be later than the snapshot, so the cap is never later
 	// than what the decision saw.
 	AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error)
+	// Short-code variant of BindUserDeviceIfAllowed: the QR code carries only "000001", not a pairing
+	// secret, so the customer boundary is the authorization. Resolution, check and insert are still one
+	// statement with the user and device rows locked FOR SHARE (same transfer-race guarantee).
+	//
+	// `candidates` is ordered: the scanned text first (exact match wins), then prefix||text. Only the
+	// caller's own customer's devices are considered, so another customer's device is
+	// indistinguishable from a nonexistent one. Equality only — no LIKE. platform_admin has no customer
+	// and is refused here (use the pairing-secret path). Never creates a devices row.
+	// Returns the resolved device_name; no row means refused.
+	BindUserDeviceByCodeIfAllowed(ctx context.Context, arg BindUserDeviceByCodeIfAllowedParams) (string, error)
 	// Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
 	// FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
 	// can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that

@@ -25,15 +25,6 @@ func TestBindDevice_RequiresDeviceName(t *testing.T) {
 	}
 }
 
-func TestBindDevice_RequiresPairingToken(t *testing.T) {
-	env := newTestEnv(t)
-
-	rec := env.authed("POST", "/api/devices/bind", jsonBody(t, map[string]any{"deviceName": "whatever"}))
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestBindDevice_CreatesDeviceRowAndBindingForBrandNewDevice(t *testing.T) {
 	env := newTestEnv(t)
 	deviceName := newBindDeviceName(t)

@@ -123,6 +123,7 @@ func main() {
 
 		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
 		TelemetryRetention:      cfg.Telemetry.Retention.Std(),
+		DeviceCodePrefixes:      cfg.Pairing.CodePrefixes,
 	})
 
 	if cfg.Server.TLSCertFile != "" && cfg.Server.TLSKeyFile != "" {

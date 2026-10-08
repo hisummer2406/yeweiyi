@@ -44,6 +44,53 @@ func (q *Queries) AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDevice
 	return i, err
 }
 
+const bindUserDeviceByCodeIfAllowed = `-- name: BindUserDeviceByCodeIfAllowed :one
+WITH u AS (
+    SELECT users.id, users.customer_id
+    FROM users
+    WHERE users.id = $1
+      AND users.disabled_at IS NULL
+      AND users.role IN ('customer_admin', 'customer_user')
+      AND users.customer_id IS NOT NULL
+    FOR SHARE
+), d AS (
+    SELECT devices.device_name
+    FROM devices, u
+    WHERE devices.customer_id = u.customer_id
+      AND devices.device_name = ANY($2::text[])
+    ORDER BY array_position($2::text[], devices.device_name)
+    LIMIT 1
+    FOR SHARE OF devices
+), ins AS (
+    INSERT INTO user_devices (user_id, device_name)
+    SELECT u.id, d.device_name FROM u, d
+    ON CONFLICT (user_id, device_name) DO NOTHING
+    RETURNING user_id
+)
+SELECT d.device_name FROM d
+`
+
+type BindUserDeviceByCodeIfAllowedParams struct {
+	UserID     int64    `json:"user_id"`
+	Candidates []string `json:"candidates"`
+}
+
+// Short-code variant of BindUserDeviceIfAllowed: the QR code carries only "000001", not a pairing
+// secret, so the customer boundary is the authorization. Resolution, check and insert are still one
+// statement with the user and device rows locked FOR SHARE (same transfer-race guarantee).
+//
+// `candidates` is ordered: the scanned text first (exact match wins), then prefix||text. Only the
+// caller's own customer's devices are considered, so another customer's device is
+// indistinguishable from a nonexistent one. Equality only — no LIKE. platform_admin has no customer
+// and is refused here (use the pairing-secret path). Never creates a devices row.
+// Returns the resolved device_name; no row means refused.
+func (q *Queries) BindUserDeviceByCodeIfAllowed(ctx context.Context, arg BindUserDeviceByCodeIfAllowedParams) (string, error) {
+	row := q.db.QueryRow(ctx, bindUserDeviceByCodeIfAllowed, arg.UserID, arg.Candidates)
+	var device_name string
+	err := row.Scan(&device_name)
+	return device_name, err
+}
+
 const bindUserDeviceIfAllowed = `-- name: BindUserDeviceIfAllowed :one
 WITH u AS (
     SELECT users.id, users.role, users.customer_id

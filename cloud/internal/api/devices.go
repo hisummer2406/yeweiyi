@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -87,7 +88,24 @@ type deviceNameRequest struct {
 // alone is no longer sufficient, and why this is not the device's ThingsBoard access token.
 type bindDeviceRequest struct {
 	DeviceName   string `json:"deviceName" binding:"required"`
-	PairingToken string `json:"pairingToken" binding:"required"`
+	PairingToken string `json:"pairingToken"`
+}
+
+// shortCodePattern is what a scanned short code may look like. Anything else is refused before it
+// reaches SQL or a log line.
+var shortCodePattern = regexp.MustCompile(`^[0-9A-Za-z]{1,32}$`)
+
+// shortCodeCandidates is the ordered list of device names a scanned code may mean: the text itself
+// (exact match wins), then each configured model prefix + text. Nil when the text is not a valid code.
+func shortCodeCandidates(code string, prefixes []string) []string {
+	if !shortCodePattern.MatchString(code) {
+		return nil
+	}
+	out := []string{code}
+	for _, p := range prefixes {
+		out = append(out, p+code)
+	}
+	return out
 }
 
 // bindDeviceHandler is the mini-program's device-pairing endpoint (product decision, 2026-08-29:
@@ -134,6 +152,11 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
+		if req.PairingToken == "" {
+			bindDeviceByCode(c, deps, req.DeviceName)
+			return
+		}
+
 		ok, err := verifyPairingToken(ctx, deps, req.DeviceName, req.PairingToken)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -170,6 +193,36 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"deviceName": req.DeviceName, "bound": true})
 	}
+}
+
+// bindDeviceByCode is the credential-less path: the QR code encodes only the short code, so
+// req.DeviceName is the scanned text and the caller's customer is what authorizes the bind (the
+// device was assigned to that customer by an administrator). Resolution happens inside the single
+// bind statement, scoped to the caller's customer; it never creates a devices row. Every refusal —
+// unknown, other customer's, unassigned, ambiguous role, disabled, malformed — is the same 401 as a
+// wrong pairing secret. Not single-use, and the QR format is unchanged.
+func bindDeviceByCode(c *gin.Context, deps Deps, code string) {
+	refuse := func() {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
+	}
+	candidates := shortCodeCandidates(code, deps.DeviceCodePrefixes)
+	if candidates == nil {
+		refuse()
+		return
+	}
+	name, err := deps.Queries.BindUserDeviceByCodeIfAllowed(c.Request.Context(), db.BindUserDeviceByCodeIfAllowedParams{
+		UserID:     c.MustGet("userID").(int64),
+		Candidates: candidates,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		refuse()
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deviceName": name, "bound": true})
 }
 
 // bcryptCompareHashAndPassword indirects bcrypt.CompareHashAndPassword through a package variable

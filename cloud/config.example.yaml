@@ -119,6 +119,11 @@ ingest:
   # 设备配置文件里改）才变为离线；这里只决定在那之上再多等多久，调小不能让离线判定比超时更快。
   onlineStatusInterval: "30s"
 
+pairing:
+  # 扫码绑定只携带 6 位短码（二维码内容 `000001`，设备登记名 `ZCT000001`）。云端先按原文精确匹配
+  # 调用者所属客户的设备，再依次匹配"前缀+原文"。空列表 = 只精确匹配。
+  codePrefixes: ["ZCT"]
+
 stock:
   # 出入库记录的"设备固件已升级"时间点，RFC3339 且必须带时区偏移。默认不设置。
   #
@@ -159,6 +164,7 @@ stock:
 #   TELEMETRY_ROLLUP_INTERVAL        telemetry.rollupInterval
 #   TELEMETRY_ROLLUP_RECOMPUTE       telemetry.rollupRecompute
 #   STOCK_LEGACY_FORMAT_BEFORE       stock.legacyFormatBefore
+#   PAIRING_CODE_PREFIXES            pairing.codePrefixes（逗号分隔；"-" 表示清空）
 #
 # 未在此列出的项只能通过配置文件设置。
 # ---------------------------------------------------------------------------
