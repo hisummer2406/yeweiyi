@@ -18,7 +18,7 @@
 
 **菜单与入口分工（OpenSpec 变更 `consolidate-asset-management`）**：客户 → 油站 → 设备三级管理集中在顶层菜单「资产管理」
 （`/console/assets/{customers,stations,devices}`，整组 `access.canManageAssets` = 平台管理员或客户管理员，客户项只对平台管理员），
-与「设备监控」并列；URL 留在 `/console` 下，是为了客户管理员进不了 `/ops/*`。`/ops` 只剩账号管理、配对密钥、审计日志。
+与「设备监控」并列；URL 留在 `/console` 下，是为了客户管理员进不了 `/ops/*`。`/ops` 只剩账号管理、审计日志。
 旧地址 `/ops/devices`、`/ops/customers`、`/console/stations` 在 `config/routes.ts` 里重定向到新位置，别删。
 `/console/assets` 入口由 `pages/console/assets/index.tsx` 按角色分流（平台管理员→客户，客户管理员→油站）。
 一级菜单顺序是 设备监控 → 记录查询（报警·入库·出库，URL 仍是 `/console/records/*`）→ 资产管理 → 运维管理；记录查询是单独的顶层路由，不嵌在设备监控下面。
@@ -44,8 +44,9 @@
   设备二维码只有短码（如 `000001`），出厂编号是 `ZCT000001`；`POST /api/devices/bind` 的 `pairingToken` 可选，不带时云端
   只在调用者所属客户的设备里解析短码，`customer_admin`/`customer_user` 可用，`platform_admin` 不可，失败一律 401。
   所以**设备必须先在设备页登记并分配客户，客户账号才能扫码绑定**；没分配的设备、别的客户的设备都绑不上。
-  绑定本身是小程序的事，本仓库不做；「配对密钥」页（`/ops/pairing-secret`，仍是空页面）不是绑定的必经步骤，别当成前置条件；密钥仍可用，只用于带密钥绑定
-  （含平台管理员跨客户的场景），每次铸造都会轮换。
+  绑定本身是小程序的事，本仓库不做；配对密钥不是绑定的必经步骤。云端铸造接口（`POST /api/devices/:device/pairing-secret`）还在，
+  只用于带密钥绑定（含平台管理员跨客户的场景），每次铸造都会轮换；管理后台已于 2026-10-08 删除原先的空「配对密钥」页和菜单，暂无入口，
+  需要时再按真实需求重做。
   出厂编号是公开可猜的标识，不能当凭证；`ZCT` 前缀由云端配置 `pairing.codePrefixes`，不是协议。
 - 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。设备列表的
   `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
@@ -103,7 +104,7 @@
 
 液位仪云平台的 Web 前端，**一个仓库、两个分区，靠路由和角色区分**（不是两个仓库、两次部署）：
 
-- **`/ops/*` 运维/管理控制台**：账号管理、跨客户设备全量视图、配对密钥铸造、审计日志。仅
+- **`/ops/*` 运维/管理控制台**：账号管理、审计日志（设备全量视图已并入 console/assets；配对密钥铸造暂无页面）。仅
   `platform_admin` 角色可见（`src/access.ts` 的 `canPlatformAdmin`）。对应
   `yeweiyi-cloud` 的 `openspec/changes/add-admin-console` 提案与 `internal/api/admin.go`。
 - **`/console/*` 客户 PC 监控台**：小程序（`yeweiyi-miniapp`）的桌面版——同一批客户账号
@@ -172,7 +173,7 @@ npm run build   # 生产构建
 ```text
 config/routes.ts        路由表，access 字段是 /ops 与 /console 的唯一分界
 src/access.ts           canPlatformAdmin / canManageAssets / canConsole 角色判断
-src/pages/ops/          运维控制台：users / pairing-secret / audit（设备与客户已并入 console/assets）
+src/pages/ops/          运维控制台：users / audit（设备与客户已并入 console/assets）
 src/pages/console/      客户 PC 监控台：devices / device-detail / alarms / oil-in-out（入库、出库共用）/ issue-command
 src/pages/console/assets/  资产管理：customers（仅平台管理员）/ stations / devices（登记·客户归属·油站归属）
 src/pages/user/login/   登录（两个分区共用）

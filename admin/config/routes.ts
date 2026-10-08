@@ -54,12 +54,6 @@ export default [
         component: './ops/users',
       },
       {
-        name: 'pairing-secret',
-        icon: 'key',
-        path: '/ops/pairing-secret',
-        component: './ops/pairing-secret',
-      },
-      {
         name: 'audit',
         icon: 'fileSearch',
         path: '/ops/audit',

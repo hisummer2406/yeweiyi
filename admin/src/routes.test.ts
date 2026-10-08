@@ -72,9 +72,9 @@ describe('记录查询菜单', () => {
 describe('运维管理菜单', () => {
   const ops = group('/ops');
 
-  it('仍仅平台管理员，只剩 账号管理、配对密钥、审计日志', () => {
+  it('仍仅平台管理员，只剩 账号管理、审计日志', () => {
     expect(ops.access).toBe('canPlatformAdmin');
-    expect(menuNames(ops)).toEqual(['users', 'pairing-secret', 'audit']);
+    expect(menuNames(ops)).toEqual(['users', 'audit']);
   });
 
   it('默认落点是账号管理', () => {
