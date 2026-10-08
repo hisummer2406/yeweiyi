@@ -185,12 +185,14 @@ to pick Go/gin/gorilla over alternatives: this codebase is written primarily by 
 No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` itself on preview/upload.
 
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
-2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change;
-   it's the only automated check in this repo so far (no test runner yet).
+2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
+   There is no test runner; the only other automated check is `npm run check` below.
    `npm run check` — Node checks for `utils/stations.ts` and `utils/recordsRange.ts` (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
-   already). `appid` is the placeholder `"touristappid"` — swap in the real AppID before anything
-   beyond local preview is needed.
+   already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
+   to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
+   the mini-program that will be published — confirm it in the WeChat admin console before uploading.
+   `project.private.config.json` is gitignored and holds no appid.
 4. `config/env.ts`'s `BASE_URL`/`WS_BASE_URL` default to `http://127.0.0.1:8080` /
    `ws://127.0.0.1:8080` (`yeweiyi-cloud`'s `LISTEN_ADDR` default). Local non-HTTPS origins need
    DevTools' 详情 → 本地设置 → "不校验合法域名..." checked.

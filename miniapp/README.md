@@ -61,11 +61,13 @@ openspec/                     # 需求与设计（OpenSpec），进行中的变�
 
 ```bash
 npm install          # 只拉取 typescript 与类型声明，不打包进小程序本体
-npm run typecheck     # tsc --noEmit，本仓库目前唯一的自动化检查
+npm run typecheck     # tsc --noEmit
+npm run check         # 纯逻辑（油站、记录时间范围与翻页）的 Node 检查，需要 Node 22.6+
 ```
 
 用 WeChat DevTools 打开仓库根目录（`project.config.json` 已指向 `miniprogram/` 作为小程序根目录）。
-`appid` 默认是游客态占位值，正式发布前需换成真实 AppID。
+`project.config.json` 里的 `appid` 是 `wx2f6409ecf18a918b`（提交 `415250e` 起，不再是游客态的 `touristappid`）。
+这个 AppID 是否就是将要发布的小程序，本仓库无法验证，上传前请在微信公众平台核对。
 
 `config/env.ts` 的 `BASE_URL` / `WS_BASE_URL` 默认指向本地 `yeweiyi-cloud`
 （`http://127.0.0.1:8080` / `ws://127.0.0.1:8080`），按实际后端地址修改。本地非 HTTPS 地址需要在
