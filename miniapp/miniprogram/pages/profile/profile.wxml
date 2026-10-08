@@ -1,7 +1,7 @@
 <view class="container">
   <view class="card">
     <view class="list-row" style="border-bottom:none;padding-top:8rpx;">
-      <view class="list-row-icon">户</view>
+      <image class="avatar" src="/assets/icons/avatar-logo.png" mode="aspectFit" />
       <view class="list-row-body">
         <text>{{username || '--'}}</text>
         <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>

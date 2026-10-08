@@ -2,7 +2,7 @@
      各入口暂未接云端的原因在点击时用提示说明（见 more.ts），不写在行内。 -->
 <view class="menu-list" style="margin-bottom:20rpx;">
   <view class="menu-row" bindtap="onAccountTap">
-    <view class="list-row-icon" style="margin-right:19rpx;">户</view>
+    <image class="avatar" style="margin-right:19rpx;" src="/assets/icons/avatar-logo.png" mode="aspectFit" />
     <view class="menu-title">
       <text>{{username || '--'}}</text>
       <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>

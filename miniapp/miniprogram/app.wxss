@@ -226,6 +226,15 @@ button.btn-secondary::after {
   flex-shrink: 0;
 }
 
+/* 默认头像：公司 logo 的圆形标志 */
+.avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
 /* 无底色的图标行，用于「设置/我的记录」菜单——设计稿里这些图标是直接放在白底上的，没有色块背景 */
 .list-row-icon-plain {
   width: 40rpx;
