@@ -20,6 +20,9 @@ import java.util.Map;
  * 新增字段，云端目前没有对应的 attribute 消费逻辑，需要跨仓库确认后云端才能落地存储/展示
  * （见 CLAUDE.md「协议还未冻结」的约定），不是本次改动单方面冻结的协议。
  * <p>
+ * 体积为 NaN/Infinity 的点连同对应高度一起去掉：JSON 不能表示这两种值，Gson 遇到会抛异常，
+ * 整条属性消息都发不出去（{@code EllipseTable} 生成的罐表最后一点曾出现 NaN）。
+ * <p>
  * 纯 Java，无 Android 依赖，可在 JVM 单测里直接构造 {@link OilCanSet}/{@link OilCanTable} 校验。
  */
 public final class TankCalibrationAttributeBuilder {
@@ -54,10 +57,32 @@ public final class TankCalibrationAttributeBuilder {
             }
             OilCanTable table = tables.get(tableIndex);
             table.StringToArray();
-            attributes.put(tankKey(tankIndex, "calibrationHeightMm"), table.getHeight());
-            attributes.put(tankKey(tankIndex, "calibrationVolumeL"), table.getVolum());
+            int[] heights = table.getHeight();
+            double[] volumes = table.getVolum();
+            int n = Math.min(heights.length, volumes.length);
+            int valid = 0;
+            for (int i = 0; i < n; i++) {
+                if (isFinite(volumes[i])) {
+                    valid++;
+                }
+            }
+            int[] keptHeights = new int[valid];
+            double[] keptVolumes = new double[valid];
+            for (int i = 0, k = 0; i < n; i++) {
+                if (isFinite(volumes[i])) {
+                    keptHeights[k] = heights[i];
+                    keptVolumes[k] = volumes[i];
+                    k++;
+                }
+            }
+            attributes.put(tankKey(tankIndex, "calibrationHeightMm"), keptHeights);
+            attributes.put(tankKey(tankIndex, "calibrationVolumeL"), keptVolumes);
         }
         return attributes;
+    }
+
+    private static boolean isFinite(double value) {
+        return !Double.isNaN(value) && !Double.isInfinite(value);
     }
 
     private static String tankKey(int index, String field) {

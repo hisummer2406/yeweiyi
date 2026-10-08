@@ -228,6 +228,19 @@ public final class ThingsBoardManager {
         }
     }
 
+    /**
+     * 后台线程池任务的保护层：未捕获的异常会经全局崩溃处理把整个应用带崩，上报出错不能影响本地业务。
+     */
+    private static Runnable guarded(String what, Runnable task) {
+        return () -> {
+            try {
+                task.run();
+            } catch (RuntimeException e) {
+                Log.e(TAG, what + "失败", e);
+            }
+        };
+    }
+
     private static String buildBrokerUri(String host, int port) {
         if (port == 8883 && !ApiConfig.THINGSBOARD_USE_TLS) {
             // 连接失败时界面看不出原因，留一条日志方便现场排查
@@ -281,7 +294,7 @@ public final class ThingsBoardManager {
      * （PR #38 Codex 第五轮审核 P2）。
      */
     public void reportAlarmTransition(ActiveAlarmTracker.Transition transition) {
-        outboundEventExecutor.execute(() -> doReportAlarmTransition(transition));
+        outboundEventExecutor.execute(guarded("报警上报", () -> doReportAlarmTransition(transition)));
     }
 
     private void doReportAlarmTransition(ActiveAlarmTracker.Transition transition) {
@@ -326,7 +339,7 @@ public final class ThingsBoardManager {
      */
     public void reportRawEvent(String telemetryKey, String rawValue) {
         long generatedAt = System.currentTimeMillis();
-        outboundEventExecutor.execute(() -> doReportRawEvent(telemetryKey, rawValue, generatedAt));
+        outboundEventExecutor.execute(guarded("事件上报", () -> doReportRawEvent(telemetryKey, rawValue, generatedAt)));
     }
 
     private void doReportRawEvent(String telemetryKey, String rawValue, long generatedAt) {
@@ -373,17 +386,22 @@ public final class ThingsBoardManager {
      * 动作，这个滞后可以接受。
      */
     private void publishClientAttributes() {
-        Map<String, Object> attributes = new java.util.LinkedHashMap<>(
-                ClientAttributesBuilder.build(currentTankAttributes()));
-        List<com.sansen.yeweiyi.db.OilCanSet> oilCanSets = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
-        List<com.sansen.yeweiyi.db.OilCanTable> tables = OilTankRepositoryImpl.getInstance().findAllOilCanTable();
-        attributes.putAll(TankCalibrationAttributeBuilder.build(oilCanSets, tables));
-        connection.publishAttributes(gson.toJson(attributes));
+        // 连接成功后紧跟着要请求共享属性；这里抛异常会让那一步被跳过，所以就地吞掉并记日志
+        try {
+            Map<String, Object> attributes = new java.util.LinkedHashMap<>(
+                    ClientAttributesBuilder.build(currentTankAttributes()));
+            List<com.sansen.yeweiyi.db.OilCanSet> oilCanSets = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
+            List<com.sansen.yeweiyi.db.OilCanTable> tables = OilTankRepositoryImpl.getInstance().findAllOilCanTable();
+            attributes.putAll(TankCalibrationAttributeBuilder.build(oilCanSets, tables));
+            connection.publishAttributes(gson.toJson(attributes));
+        } catch (RuntimeException e) {
+            Log.e(TAG, "客户端属性发布失败", e);
+        }
     }
 
     private void onTankConfigReloaded() {
         CloudAlarmReporter.getInstance().onTanksReloaded(currentEnabledTankIds());
-        outboundEventExecutor.execute(this::publishClientAttributes);
+        outboundEventExecutor.execute(guarded("客户端属性上报", this::publishClientAttributes));
     }
 
     /** OilcanDataManager 里当前加载的罐号——它只加载启用的罐（setProbeData 按 enable==1 过滤）。 */
@@ -477,7 +495,7 @@ public final class ThingsBoardManager {
      * 下一条 MQTT 消息（PR #38 Codex 第三轮审核 P1）。
      */
     private void onRpcRequest(String mqttRequestId, String payloadJson) {
-        rpcDispatchExecutor.execute(() -> rpcDispatcher.dispatch(mqttRequestId, payloadJson));
+        rpcDispatchExecutor.execute(guarded("RPC 处理", () -> rpcDispatcher.dispatch(mqttRequestId, payloadJson)));
     }
 
     /**

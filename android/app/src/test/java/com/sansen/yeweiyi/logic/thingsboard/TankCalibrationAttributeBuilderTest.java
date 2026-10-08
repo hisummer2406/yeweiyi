@@ -84,4 +84,31 @@ public class TankCalibrationAttributeBuilderTest {
         assertArrayEquals(new int[]{11, 21}, (int[]) attributes.get("tank2.calibrationHeightMm"));
         assertEquals(4, attributes.size());
     }
+
+    @Test
+    public void dropsNonFinitePointsTogetherWithTheirHeights() {
+        List<OilCanSet> sets = new ArrayList<>();
+        sets.add(enabledSet(1));
+        List<OilCanTable> tables = new ArrayList<>();
+        // 真机 1 号罐罐表最后一点就是 900 → NaN
+        tables.add(tableWith("880 890 900", "739.8 741.4 NaN"));
+
+        Map<String, Object> attributes = TankCalibrationAttributeBuilder.build(sets, tables);
+
+        assertArrayEquals(new int[]{880, 890}, (int[]) attributes.get("tank1.calibrationHeightMm"));
+        assertArrayEquals(new double[]{739.8, 741.4},
+                (double[]) attributes.get("tank1.calibrationVolumeL"), 0.0001);
+    }
+
+    @Test
+    public void resultSerializesWithDefaultGsonEvenWhenTableHasNaN() {
+        List<OilCanSet> sets = new ArrayList<>();
+        sets.add(enabledSet(1));
+        List<OilCanTable> tables = new ArrayList<>();
+        tables.add(tableWith("10 20 30", "NaN 200.0 Infinity"));
+
+        // 默认 Gson 遇到 NaN/Infinity 会抛 IllegalArgumentException，真机正是因此崩溃
+        String json = new com.google.gson.Gson().toJson(TankCalibrationAttributeBuilder.build(sets, tables));
+        assertEquals("{\"tank1.calibrationHeightMm\":[20],\"tank1.calibrationVolumeL\":[200.0]}", json);
+    }
 }
