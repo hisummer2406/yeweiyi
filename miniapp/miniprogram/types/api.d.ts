@@ -36,13 +36,18 @@ export interface Device {
   station_id?: number | null;
 }
 
-// yeweiyi-cloud's own CLAUDE.md: "The QR code's content format is not designed [there]... who
-// calls the minting endpoint at install time belong to whoever designs that label." This repo is
-// the one place that has to pick something, so it does: a JSON object. Documented as a placeholder,
-// not a frozen decision — see utils/pairing.ts.
+// POST /api/devices/bind (yeweiyi-cloud#56). The label's QR holds a short code sent as `deviceName`
+// with `pairingToken` omitted; the cloud resolves it inside the caller's customer. A caller that
+// has the secret may still send `pairingToken` with a full device name (backward compatible).
 export interface BindDeviceRequest {
   deviceName: string;
-  pairingToken: string;
+  pairingToken?: string;
+}
+
+// `deviceName` is the RESOLVED full name (e.g. "ZCT000001") — use it, not the scanned text.
+export interface BindDeviceResponse {
+  deviceName: string;
+  bound: boolean;
 }
 
 // ---- Stations ----

@@ -74,13 +74,16 @@ assumes a `device` string typed/pasted by the user will work without binding fir
 - `POST /api/login` — `{username, password}` → `{token}`. The JWT's `sub` claim is the username and
   its `role` claim is `platform_admin`/`customer_admin`/`customer_user` — see `utils/auth.ts`. A
   role change does not take effect until the user's next login.
-- **Device pairing.** `POST /api/devices/bind` — `{deviceName, pairingToken}` → `200
-  {deviceName, bound:true}` (idempotent). `pairingToken` is a secret minted server-side via
-  `POST /api/devices/:device/pairing-secret` (platform_admin only, plaintext returned exactly once)
-  — it is **not** the device's ThingsBoard access token, and this app never sees or needs that.
-  **The physical QR code's content format is not designed cloud-side** — `utils/pairing.ts` picks a
-  JSON-object placeholder (`{"deviceName":"...","pairingToken":"..."}`) and says so; that is the one
-  file to change if the real label ends up encoding something else. `POST /api/devices/unbind` —
+- **Device pairing.** `POST /api/devices/bind` — `{deviceName, pairingToken?}` → `200
+  {deviceName, bound:true}` (idempotent). Since `yeweiyi-cloud#56` the `pairingToken` is optional: the
+  label's QR holds only a short code (e.g. `000001`), this app sends it as `deviceName` with no token,
+  and the cloud resolves it to the full name (`ZCT000001`, returned in the response) among the caller's
+  **own customer's** devices (`customer_admin`/`customer_user` only, not `platform_admin`). Any failure
+  to resolve (no such device, other customer, unassigned, malformed) is one **401** `invalid device name
+  or pairing token` — so `utils/bind.ts` shows "未找到该设备…" and passes `keepSessionOn401` so that 401
+  does not log the user out. `utils/pairing.ts` only validates the text (letters/digits, ≤32). The
+  secret path (`POST /api/devices/:device/pairing-secret`, platform_admin) still exists but this app
+  does not use it. `POST /api/devices/unbind` —
   `{deviceName}`. `GET /api/devices` → `{rows: [Device...]}` — call this to populate the device list;
   there is no other way to discover which `device_name`s a user may even query. **`is_online` on
   each row is real but lags** — `yeweiyi-cloud` `internal/ingest/online.go` re-syncs it every 30s
@@ -153,8 +156,7 @@ not just unimplemented here:
   clients, no per-client-type account silo.
 - **Device pairing**: a freshly-logged-in user has zero bound devices — the first real flow after
   login is "scan the QR code on a physical device to bind it" (`wx.scanCode()` →
-  `POST /api/devices/bind` with `{deviceName, pairingToken}` parsed from the code — see
-  `utils/pairing.ts`'s placeholder-format caveat above).
+  `POST /api/devices/bind` with the scanned short code as `deviceName`, no token — see above).
 - **Read-only views**: realtime oil-tank snapshot (poll-on-demand, not a live stream), alarm history,
   出入库 (stock in/out) history — all paginated by time range, and 出入库 specifically must surface
   `unparsable`/`legacySkipped` rather than silently showing an incomplete list as complete.
@@ -213,7 +215,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 - `utils/ws.ts` — `AlarmSocket` wraps `wx.connectSocket` for `/ws/alarms` with reconnect-on-close.
 - `utils/auth.ts` — `login()`; `usernameFromToken`/`roleFromToken` decode the JWT's `sub`/`role`
   claims client-side purely for display and UI gating (real authorization is always server-side).
-- `utils/pairing.ts` — parses the device-pairing QR payload. Placeholder format, see above.
+- `utils/pairing.ts` — validates the device short code in the QR payload.
 - `utils/labels.ts` — Chinese labels for the closed enums the cloud API returns (alarm type/severity/
   status, tank alarm state, stock direction) and the mirrored control-method table. One place so an
   unmapped value falls back to itself rather than rendering blank.

@@ -1,7 +1,11 @@
-// yeweiyi-cloud defaults to LISTEN_ADDR ":8080" (see that repo's CLAUDE.md). Point this at
-// wherever that server is actually reachable from a device/simulator during development, and
-// swap to the real HTTPS domain (registered in the mp.weixin.qq.com backend's request domain
-// allowlist) before releasing. In WeChat DevTools, local http(s) origins not on that allowlist
-// only work with "不校验合法域名..." enabled under 详情 -> 本地设置.
-export const BASE_URL = 'http://8.154.38.176';
-export const WS_BASE_URL = 'ws://8.154.38.176';
+export const DEBUG_MODE = false; // true = 本地后端（127.0.0.1:8080），false = 线上。改完重新编译即可；发布前必须是 false
+//
+// 本地非 HTTPS 域名要在开发者工具 详情 → 本地设置 勾选“不校验合法域名...”；
+// 真机预览请把 LOCAL 里的 127.0.0.1 换成电脑的局域网 IP。
+const LOCAL = { http: 'http://127.0.0.1:8080', ws: 'ws://127.0.0.1:8080' };
+const PROD = { http: 'http://8.154.38.176', ws: 'ws://8.154.38.176' };
+
+const active = DEBUG_MODE ? LOCAL : PROD;
+
+export const BASE_URL = active.http;
+export const WS_BASE_URL = active.ws;

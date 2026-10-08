@@ -6,6 +6,9 @@ interface RequestOptions {
   method?: 'GET' | 'POST';
   data?: Record<string, unknown>;
   needAuth?: boolean;
+  // POST /api/devices/bind answers 401 for "device not found / not yours" while the token is fine, so
+  // that call must not end the session on 401. (Its 403 "not authorized" still does.)
+  keepSessionOn401?: boolean;
 }
 
 // Carries the HTTP status and the full parsed body alongside the message. Most callers only need
@@ -66,7 +69,7 @@ function endSession() {
 }
 
 export function request<T>(options: RequestOptions): Promise<T> {
-  const { url, method = 'GET', data, needAuth = true } = options;
+  const { url, method = 'GET', data, needAuth = true, keepSessionOn401 = false } = options;
   const header: Record<string, string> = { 'content-type': 'application/json' };
   if (needAuth) {
     const token = getToken();
@@ -91,7 +94,10 @@ export function request<T>(options: RequestOptions): Promise<T> {
         // Not for /api/login: there a 401 is just "wrong username or password", and bouncing to the
         // login page would reload it and wipe what the user typed instead of showing the message.
         const body = res.data as { error?: string } | undefined;
-        if (needAuth && (status === 401 || (status === 403 && body?.error === 'not authorized'))) {
+        if (
+          needAuth &&
+          ((status === 401 && !keepSessionOn401) || (status === 403 && body?.error === 'not authorized'))
+        ) {
           endSession();
         }
         reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
@@ -107,6 +113,11 @@ export function get<T>(url: string, data?: Record<string, unknown>, needAuth = t
   return request<T>({ url, method: 'GET', data, needAuth });
 }
 
-export function post<T>(url: string, data?: Record<string, unknown>, needAuth = true): Promise<T> {
-  return request<T>({ url, method: 'POST', data, needAuth });
+export function post<T>(
+  url: string,
+  data?: Record<string, unknown>,
+  needAuth = true,
+  extra?: { keepSessionOn401?: boolean },
+): Promise<T> {
+  return request<T>({ url, method: 'POST', data, needAuth, ...extra });
 }

@@ -1,37 +1,13 @@
-// Parses a device-pairing QR code's payload.
+// Validates a device label's QR payload.
 //
-// **The QR code's content format is not designed cloud-side** — yeweiyi-cloud's own CLAUDE.md
-// lists it under "Do not assume these are decided": binding needs `deviceName` and a pairing
-// secret minted via `POST /api/devices/:device/pairing-secret` (platform_admin only, returned in
-// plaintext exactly once), but "how they are encoded on the physical label ... and who calls the
-// minting endpoint at install time belong to whoever designs that label."
-//
-// This repo is the one place that has to pick *something* in order to have a working scan flow, so
-// it picks a JSON object: no delimiter-escaping questions (a pairing secret is base64url and could
-// collide with a chosen separator), and it extends cleanly if a future field is needed. **Treat
-// this as a placeholder, not a frozen decision** — if the physical label ends up encoding something
-// else (a deeplink, a bare separated string), this is the only place that needs to change.
-export interface DevicePairing {
-  deviceName: string;
-  pairingToken: string;
-}
+// The label encodes only the device's short code (e.g. `000001`) — no pairing secret
+// (yeweiyi-cloud#56 made `pairingToken` optional on POST /api/devices/bind; issue #2 here). The raw
+// text is sent as `deviceName` and the cloud resolves it to the full name (`ZCT000001`) within the
+// caller's own customer. The cloud accepts letters and digits only, at most 32 characters, so
+// anything else is rejected here before a request is spent on it.
+const DEVICE_CODE = /^[A-Za-z0-9]{1,32}$/;
 
-export function parseDevicePairingQr(raw: string): DevicePairing | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (typeof parsed !== 'object' || parsed === null) {
-    return null;
-  }
-  const obj = parsed as Record<string, unknown>;
-  if (typeof obj.deviceName !== 'string' || typeof obj.pairingToken !== 'string') {
-    return null;
-  }
-  if (!obj.deviceName || !obj.pairingToken) {
-    return null;
-  }
-  return { deviceName: obj.deviceName, pairingToken: obj.pairingToken };
+export function parseDeviceCodeQr(raw: string): string | null {
+  const code = raw.trim();
+  return DEVICE_CODE.test(code) ? code : null;
 }
