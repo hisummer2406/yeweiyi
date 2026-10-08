@@ -19,4 +19,4 @@
 ## 4. 文档与后续
 
 - [x] 4.1 (CLAUDE.md 已更新；归档时同步主规格。注：停用用户由认证中间件返回 403，先于本路径的 401) 更新 `CLAUDE.md` 与 `docs/` 中配对流程说明；归档时同步 `tenant-access-control` 主规格。
-- [ ] 4.2 通知 `yeweiyi-miniapp`（扫码后直接发原文，省略 `pairingToken`）与 `yeweiyi-admin`（CLAUDE.md 里“小程序扫码绑定”段与配对密钥页说明）跟进。
+- [x] 4.2 通知 `yeweiyi-miniapp`（扫码后直接发原文，省略 `pairingToken`）与 `yeweiyi-admin`（CLAUDE.md 里“小程序扫码绑定”段与配对密钥页说明）跟进。
