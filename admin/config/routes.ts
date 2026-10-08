@@ -6,6 +6,7 @@
  * 两个分区，同一个应用，靠 access 区分（详见项目根 CLAUDE.md「两个前台，一个仓库」）：
  * - /ops/*      运维/管理控制台，仅 platform_admin（access.ts 的 canPlatformAdmin）
  * - /console/*  客户 PC 监控台，小程序的桌面版，三种角色都能进（canConsole）
+ * - /records/*  记录查询（报警·入库·出库）、/assets/* 资产管理：与监控台并列的一级菜单，权限见各组 access
  */
 export default [
   {
@@ -41,11 +42,11 @@ export default [
       // 设备登记与客户管理已并入「资产管理」，旧地址保留重定向
       {
         path: '/ops/devices',
-        redirect: '/console/assets/devices',
+        redirect: '/assets/devices',
       },
       {
         path: '/ops/customers',
-        redirect: '/console/assets/customers',
+        redirect: '/assets/customers',
       },
       {
         name: 'users',
@@ -92,75 +93,110 @@ export default [
         path: '/console/issue-command',
         component: './console/issue-command',
       },
-      // 旧地址保留重定向；油站管理已移到「资产管理」
+      // 旧地址保留重定向（书签、旧文档里的链接）：油站管理已移到「资产管理」，记录查询和资产管理
+      // 已从 /console/* 搬到 /records/*、/assets/*。
       {
         path: '/console/stations',
-        redirect: '/console/assets/stations',
+        redirect: '/assets/stations',
+      },
+      {
+        path: '/console/records',
+        redirect: '/records/alarms',
+      },
+      {
+        path: '/console/records/alarms',
+        redirect: '/records/alarms',
+      },
+      {
+        path: '/console/records/stock-in',
+        redirect: '/records/stock-in',
+      },
+      {
+        path: '/console/records/stock-out',
+        redirect: '/records/stock-out',
+      },
+      {
+        path: '/console/assets',
+        redirect: '/assets',
+      },
+      {
+        path: '/console/assets/customers',
+        redirect: '/assets/customers',
+      },
+      {
+        path: '/console/assets/stations',
+        redirect: '/assets/stations',
+      },
+      {
+        path: '/console/assets/devices',
+        redirect: '/assets/devices',
       },
     ],
   },
   {
     // 记录查询单独成一级菜单：放在「设备监控」下面要点三层（设备监控 → 记录查询 → 报警记录），
-    // 而且报警/出入库要先选设备，本来就不属于设备总览。URL 仍是 /console/records/*。
-    path: '/console/records',
+    // 而且报警/出入库要先选设备，本来就不属于设备总览。URL 是 /records/*，不放在 /console/ 下：ProLayout 按前缀匹配菜单
+    // （路径 P 会匹配 P/(.*)），分组 path 是 /console 时，/console/* 下的页面会把「设备监控」一并点亮。
+    path: '/records',
     name: 'records',
     icon: 'profile',
     access: 'canConsole',
     routes: [
       {
-        path: '/console/records',
-        redirect: '/console/records/alarms',
+        path: '/records',
+        redirect: '/records/alarms',
       },
       {
         name: 'alarms',
         icon: 'alert',
-        path: '/console/records/alarms',
+        path: '/records/alarms',
         component: './console/alarms',
       },
       {
         name: 'stock-in',
         icon: 'download',
-        path: '/console/records/stock-in',
+        path: '/records/stock-in',
         component: './console/oil-in-out',
       },
       {
         name: 'stock-out',
         icon: 'upload',
-        path: '/console/records/stock-out',
+        path: '/records/stock-out',
         component: './console/oil-in-out',
       },
     ],
   },
   {
-    // 资产管理：客户 → 油站 → 设备三级，按层级排列。与「设备监控」并列的顶层菜单，URL 仍在 /console 下，
-    // 这样客户管理员不会碰到 /ops 的拦截。整组对平台管理员和客户管理员开放，客户项只对平台管理员。
-    path: '/console/assets',
+    // 资产管理：客户 → 油站 → 设备三级，按层级排列。与「设备监控」并列的顶层菜单，URL 是 /assets/*
+    // （原因同记录查询：不能放在 /console/ 下）。它不在 /ops 下，所以客户管理员不会碰到 /ops 的拦截。
+    // 整组对平台管理员和客户管理员开放，客户项只对平台管理员。
+    path: '/assets',
     name: 'assets',
     icon: 'database',
     access: 'canManageAssets',
     routes: [
       {
         // 落到第一个可见项：平台管理员 → 客户，客户管理员 → 油站（按角色分流，见 pages/console/assets/index.tsx）
-        path: '/console/assets',
+        path: '/assets',
         component: './console/assets',
       },
       {
         name: 'customers',
         icon: 'shop',
-        path: '/console/assets/customers',
+        path: '/assets/customers',
         component: './console/assets/customers',
         access: 'canPlatformAdmin',
       },
       {
         name: 'stations',
         icon: 'environment',
-        path: '/console/assets/stations',
+        path: '/assets/stations',
         component: './console/assets/stations',
       },
       {
         name: 'devices',
         icon: 'cluster',
-        path: '/console/assets/devices',
+        path: '/assets/devices',
         component: './console/assets/devices',
       },
     ],

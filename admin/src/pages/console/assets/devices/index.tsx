@@ -5,15 +5,15 @@ import { useAccess, useIntl } from '@umijs/max';
 import { Badge, Button, Space } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
-import AssignStationModal from './AssignStationModal';
 import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
+import AssignStationModal from './AssignStationModal';
 import RegisterDeviceModal from './RegisterDeviceModal';
 import TransferDeviceModal from './TransferDeviceModal';
 
 /**
- * 资产管理 · 设备（/console/assets/devices）：列出调用者可见的设备（GET /api/devices，平台管理员看到全部，
+ * 资产管理 · 设备（/assets/devices）：列出调用者可见的设备（GET /api/devices，平台管理员看到全部，
  * 客户管理员看到本客户的）。设备的登记、客户归属、油站归属都在这一页：
  * - 平台管理员：「登记设备」（POST /api/devices，见 RegisterDeviceModal）、行内「分配/转移客户」
  *   （PUT /api/devices/:device/customer）、「所属客户」列。客户归属来自行的 customer_id（云端只给平台管理员）；
