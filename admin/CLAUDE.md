@@ -40,8 +40,13 @@
 - 自己处理错误提示的请求设了 `skipErrorHandler`，这会**跳过全局的鉴权失败处理**（401、账号已失效的
   403），必须在失败时转交 `forwardAuthFailure`（见 `src/services/ant-design-pro/apiError.ts` 的
   `toApiError`）；返回的 `ApiError.authHandled` 为 true 时已在回登录页，调用方不要再提示。
-- 只完成了管理员登记页面。**小程序扫码绑定仍未完成**：授权规则（管理员预分配，还是同客户申请加管理员
-  批准）待产品/后端确认，出厂编号是公开可猜的标识，不能当凭证用。
+- **扫码绑定的授权依据是「管理员先登记并分配客户」**（yeweiyi-cloud #56，OpenSpec `bind-device-by-short-code`）：
+  设备二维码只有短码（如 `000001`），出厂编号是 `ZCT000001`；`POST /api/devices/bind` 的 `pairingToken` 可选，不带时云端
+  只在调用者所属客户的设备里解析短码，`customer_admin`/`customer_user` 可用，`platform_admin` 不可，失败一律 401。
+  所以**设备必须先在设备页登记并分配客户，客户账号才能扫码绑定**；没分配的设备、别的客户的设备都绑不上。
+  绑定本身是小程序的事，本仓库不做；「配对密钥」页（`/ops/pairing-secret`，仍是空页面）不是绑定的必经步骤，别当成前置条件；密钥仍可用，只用于带密钥绑定
+  （含平台管理员跨客户的场景），每次铸造都会轮换。
+  出厂编号是公开可猜的标识，不能当凭证；`ZCT` 前缀由云端配置 `pairing.codePrefixes`，不是协议。
 - 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。设备列表的
   `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
 
@@ -184,8 +189,11 @@ src/services/           对接后端的请求函数（登录、设备、客户�
   （Chrome 扩展未连上）。
 - 登录页没有联调过真实后端（见 `align-login-with-cloud` 任务 5.4）；需要 `platform_admin` 与客户
   角色账号各验证一次。
-- 生产环境的反向代理目标（`config/proxy.ts` 的 `test`/`pre`）还是占位符，部署方式和域名都没有
-  定案，跟 `yeweiyi-miniapp`/`yeweiyi-cloud` 的部署决策一样悬而未决。
+- **2026-10-08 已部署 ECS**：与 cloud 共用 `8.154.38.176` 上的 Nginx，静态产物位于
+  `/var/www/yeweiyi-admin/current`；同源 `/api/`、`/ws/`、`/healthz` 转发到 `127.0.0.1:8080`。
+  备案期间入口为 `http://8.154.38.176/user/login`；HTTPS 域名 `api.zhongchengelec.com` 已接入静态配置，
+  但外网 HTTPS 当前连接失败，不能视为可用。发布/回滚见 `deploy/README.md`，尚未接 GitHub Actions。
+  `config/proxy.ts` 的 `test`/`pre` 仅用于本地开发，仍是占位符，与生产 Nginx 无关。
 - `/console/*` 的趋势图、远程控制（`/console/issue-command`）、报警实时推送还没做；图表和告警的展示形式需要产品侧
   决定，不要自己臆造。
 - 本仓库已接入 OpenSpec（`openspec/config.yaml`，变更放在 `openspec/changes/`），与 `yeweiyi-cloud` 各用各的配置，
