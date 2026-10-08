@@ -42,10 +42,13 @@ jobs:
           printf '%s\n' "$RELEASE_SHA" > dist/release.txt
           cd dist
           find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          cd ..
+          # exportStatic 动态路由目录含冒号，artifact 不接受此类文件名。
+          tar -czf admin-dist.tar.gz -C dist .
       - uses: actions/upload-artifact@v4
         with:
           name: admin-dist
-          path: dist/
+          path: admin-dist.tar.gz
           retention-days: 14
           if-no-files-found: error
 
@@ -65,7 +68,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: admin-dist
-          path: dist
+          path: artifact
+      - name: 解包构建产物
+        run: |
+          mkdir dist
+          tar -xzf artifact/admin-dist.tar.gz -C dist
       - name: 校验 main 版本及配置
         id: gate
         run: |
