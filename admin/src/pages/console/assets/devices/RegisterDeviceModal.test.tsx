@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -70,12 +71,20 @@ const submit = () =>
 
 describe('RegisterDeviceModal', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     listCustomers.mockResolvedValue(customers);
     vi.spyOn(message, 'success').mockImplementation((() => undefined) as never);
     vi.spyOn(message, 'error').mockImplementation((() => undefined) as never);
   });
-  afterEach(() => cleanup());
+  afterEach(async () => {
+    // rc-component 的延迟状态更新可能在卸载后触发，须在 DOM 环境销毁前排空。
+    cleanup();
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    vi.useRealTimers();
+  });
 
   it('does not send a request without a customer', async () => {
     setup();
