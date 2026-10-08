@@ -34,11 +34,9 @@ const buildMenuItems = (user: API.CurrentUser): MenuProps['items'] => [
     icon: <SettingOutlined />,
     label: '个人设置',
   },
-  {
-    key: 'theme',
-    icon: <SkinOutlined />,
-    label: '主题设置',
-  },
+  ...(process.env.NODE_ENV === 'development'
+    ? [{ key: 'theme', icon: <SkinOutlined />, label: '主题设置' }]
+    : []),
   {
     type: 'divider' as const,
   },
@@ -69,7 +67,7 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
       loginOut();
       return;
     }
-    if (key === 'theme') {
+    if (key === 'theme' && process.env.NODE_ENV === 'development') {
       setInitialState((s) => ({ ...s, settingDrawerOpen: true }));
       return;
     }

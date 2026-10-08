@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockReplace = vi.fn();
 const mockHistory = {
@@ -24,7 +25,7 @@ vi.mock('@/components', () => ({
 }));
 
 vi.mock('@ant-design/pro-components', () => ({
-  SettingDrawer: () => null,
+  SettingDrawer: () => <div data-testid="layout-settings" />,
 }));
 
 vi.mock('./requestErrorConfig', () => ({
@@ -45,6 +46,26 @@ const makeToken = (claims: Record<string, unknown>) =>
 const inOneHour = Math.floor(Date.now() / 1000) + 3600;
 
 const { setToken, clearToken } = await import('@/utils/auth');
+
+describe('layout settings environment', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(['production', 'development'])(
+    'limits the drawer in %s',
+    async (env) => {
+      vi.stubEnv('NODE_ENV', env);
+      const { layout } = await import('./app');
+      const config = layout({
+        initialState: { settingDrawerOpen: true },
+        setInitialState: vi.fn(),
+      } as any);
+      const html = renderToStaticMarkup(
+        config.childrenRender?.(<div>page</div>, {} as any) as any,
+      );
+      expect(html.includes('layout-settings')).toBe(env === 'development');
+    },
+  );
+});
 
 describe('app getInitialState', () => {
   beforeEach(() => {

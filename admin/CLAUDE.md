@@ -193,7 +193,8 @@ src/services/           对接后端的请求函数（登录、设备、客户�
 - **2026-10-08 已部署 ECS**：与 cloud 共用 `8.154.38.176` 上的 Nginx，静态产物位于
   `/var/www/yeweiyi-admin/current`；同源 `/api/`、`/ws/`、`/healthz` 转发到 `127.0.0.1:8080`。
   备案期间入口为 `http://8.154.38.176/user/login`；HTTPS 域名 `api.zhongchengelec.com` 已接入静态配置，
-  但外网 HTTPS 当前连接失败，不能视为可用。发布/回滚见 `deploy/README.md`，尚未接 GitHub Actions。
+  但外网 HTTPS 当前连接失败，不能视为可用。发布/回滚见 `deploy/README.md`。GitHub Actions `.github/workflows/ci.yml` 在 PR 上执行检查与构建，
+  main 更新后通过检查自动部署同一构建产物；部署失败恢复前一静态版本。依赖锁文件必须提交，CI 使用 `npm ci`。
   `config/proxy.ts` 的 `test`/`pre` 仅用于本地开发，仍是占位符，与生产 Nginx 无关。
 - `/console/*` 的趋势图、远程控制（`/console/issue-command`）、报警实时推送还没做；图表和告警的展示形式需要产品侧
   决定，不要自己臆造。

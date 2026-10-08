@@ -1,0 +1,108 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 不取消正在切换线上版本的发布；旧提交在部署前检查是否仍为 main 最新版本。
+concurrency:
+  group: admin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test
+      - name: 发布脚本检查和回滚测试
+        run: |
+          bash -n deploy/remote-deploy.sh
+          python3 deploy/test-remote-deploy.py
+      - run: npm run build
+        env:
+          MOCK: none
+          COMMIT_HASH: ${{ github.sha }}
+      - name: 记录版本和文件校验和
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          printf '%s\n' "$RELEASE_SHA" > dist/release.txt
+          cd dist
+          find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-dist
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+
+  deploy:
+    needs: check-build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: ${{ github.sha }}
+      TARGET_HOST: ${{ secrets.DEPLOY_HOST }}
+      TARGET_USER: ${{ secrets.DEPLOY_USER }}
+      TARGET_PORT: ${{ secrets.DEPLOY_PORT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: admin-dist
+          path: dist
+      - name: 校验 main 版本及配置
+        id: gate
+        run: |
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          if [[ "$latest" != "$RELEASE_SHA" ]]; then
+            echo 'main 已更新，跳过旧版本发布'
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$TARGET_HOST" =~ ^[A-Za-z0-9.-]+$ && "$TARGET_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "${TARGET_PORT:-22}" =~ ^[0-9]+$ ]]
+          [[ "$(cat dist/release.txt)" == "$RELEASE_SHA" ]]
+          (cd dist && sha256sum -c SHA256SUMS >/dev/null)
+          echo 'current=true' >> "$GITHUB_OUTPUT"
+      - name: 配置专用 SSH 密钥
+        if: steps.gate.outputs.current == 'true'
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [[ -n "$KEY" && -n "$KNOWN_HOSTS" ]]
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: 上传已验证产物并发布
+        if: steps.gate.outputs.current == 'true'
+        run: |
+          set -euo pipefail
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          TARGET="$TARGET_USER@$TARGET_HOST"
+          RELEASE="${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          STAGING="$("${SSH[@]}" "$TARGET" 'mktemp -d /home/www/yeweiyi-admin/ci-XXXXXXXX')"
+          [[ "$STAGING" =~ ^/home/www/yeweiyi-admin/ci-[A-Za-z0-9]+$ ]]
+          trap '"${SSH[@]}" "$TARGET" "rm -rf -- '\''$STAGING'\''" || true' EXIT
+          tar -czf - deploy/remote-deploy.sh dist | "${SSH[@]}" "$TARGET" "tar -xzf - -C '$STAGING'"
+          "${SSH[@]}" "$TARGET" "set -eu; cd '$STAGING/dist'; sha256sum -c SHA256SUMS >/dev/null; sudo -n mkdir '/var/www/yeweiyi-admin/releases/$RELEASE'; sudo -n cp -R . '/var/www/yeweiyi-admin/releases/$RELEASE/'; sudo -n chmod -R a+rX '/var/www/yeweiyi-admin/releases/$RELEASE'; sudo -n bash '$STAGING/deploy/remote-deploy.sh' '$RELEASE'"
+      - name: 清理 Runner SSH 凭据
+        if: always()
+        run: rm -f ~/.ssh/id_deploy
