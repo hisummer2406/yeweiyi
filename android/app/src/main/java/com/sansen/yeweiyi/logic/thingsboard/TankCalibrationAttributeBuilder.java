@@ -12,10 +12,9 @@ import java.util.Map;
  * {@code CreateOilTableFragment} 生成、写入 {@code oiltablearray} 那份高度→体积离散点）
  * 作为 ThingsBoard client attribute 上报——zhongchengyeweiyi#42 待办1 的落地。
  * <p>
- * <b>范围刻意收窄</b>：只报安卓端已经真实持久化的数据（标定表本身）。罐型分类
- * （椭圆/圆柱/长方体）和原始尺寸参数（长度/半径/封头高度等）在安卓端从未真正落库——
- * {@code CreateOilTableFragment} 只把这些当算标定表用的临时局部变量，算完即丢，
- * {@code OilCanSet.gunType} 声明了但从未被真正 set 过——所以这里不报，不是遗漏。
+ * <b>范围刻意收窄</b>：只报安卓端已经真实持久化的数据（标定表本身）。原始尺寸参数（长度/半径/
+ * 封头高度等）只是 {@code CreateOilTableFragment} 算表用的临时变量，从未落库，所以不报；
+ * 储罐类型（{@code OilCanSet.gunType}）由 {@link TankSettingsAttributeBuilder} 上报。
  * <p>
  * 新增字段，云端目前没有对应的 attribute 消费逻辑，需要跨仓库确认后云端才能落地存储/展示
  * （见 CLAUDE.md「协议还未冻结」的约定），不是本次改动单方面冻结的协议。

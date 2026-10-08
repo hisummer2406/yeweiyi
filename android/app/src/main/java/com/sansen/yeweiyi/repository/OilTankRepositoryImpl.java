@@ -80,12 +80,28 @@ public class OilTankRepositoryImpl implements OilTankRepository {
 
     @Override
     public void updateOilCanSet(final OilCanSet oilCanSet) {
-        update(oilCanSet);
+        update(oilCanSet, this::notifyOilCanSetChanged);
     }
 
     @Override
     public void updateOilCanSetSync(OilCanSet oilCanSet) throws DbException {
         db.update(oilCanSet);
+        notifyOilCanSetChanged();
+    }
+
+    private volatile Runnable oilCanSetChangedListener;
+
+    /** 所有罐设置保存入口（设置页、下拉框、复制、报警开关、RPC）都经过本类，挂在这里一处即可。 */
+    @Override
+    public void setOilCanSetChangedListener(Runnable listener) {
+        this.oilCanSetChangedListener = listener;
+    }
+
+    private void notifyOilCanSetChanged() {
+        Runnable listener = oilCanSetChangedListener;
+        if (listener != null) {
+            listener.run();
+        }
     }
 
     @Override
@@ -193,6 +209,11 @@ public class OilTankRepositoryImpl implements OilTankRepository {
     }
 
     private <T> void update(final T object) {
+        update(object, null);
+    }
+
+    /** @param afterWrite 写库成功后在写库线程上执行，可为 null */
+    private <T> void update(final T object, final Runnable afterWrite) {
         if (object != null) {
             ThreadManager.getShortPool().execute(new Runnable() {
                 @Override
@@ -201,6 +222,10 @@ public class OilTankRepositoryImpl implements OilTankRepository {
                         db.update(object);
                     } catch (DbException e) {
                         Log.e(TAG, "update 数据库操作失败", e);
+                        return;
+                    }
+                    if (afterWrite != null) {
+                        afterWrite.run();
                     }
                 }
             });

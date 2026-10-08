@@ -369,15 +369,17 @@ public void dispatch(String mqttRequestId, String payload) {
 
 **业务场景**：把设备的静态配置（不是实时数据）同步给云端，方便远程查看/核对装机参数。
 
-**当前实现**（一条 attributes 消息，两部分合并）：
+**当前实现**（一条 attributes 消息，四部分合并；后两部分 2026-10-08 新增，key 名和单位是本仓库自定，云端尚未对齐）：
 - `ClientAttributesBuilder`（协议 §5.1）：`protocolVersion`（恒为 1）、`tankCount`（最大罐号，跟快照同一语义）、每罐 `probeAddress`（`OilCan.getProbeAdr()`）、`probeType`、`capacityL`（罐设置最大容量）。
-- `TankCalibrationAttributeBuilder`：每个启用罐的"高度→体积"标定表（`tank{n}.calibrationHeightMm`/`calibrationVolumeL`）。之前只在本地持久化，现在发了，但云端没有接口转发（见第 2 节）。
+- `TankCalibrationAttributeBuilder`：每个启用罐的"高度→体积"标定表（`tank{n}.calibrationHeightMm`/`calibrationVolumeL`）。之前只在本地持久化，现在发了，但云端没有接口转发（见第 2 节）。体积为 NaN/Infinity 的点连同高度一起去掉（`EllipseTable` 生成的罐表末点曾为 NaN，导致整条属性发不出去、保存罐配置时崩溃）。
+- `TankSettingsAttributeBuilder`：罐设置页各项，每个启用罐 `tank{n}.` + `tankHeightMm`、`sensorLengthMm`、`tankShape`（储罐类型：0 = 卧罐，1 = 立罐，对应 `array.xml` 的 `guan_type`）、`oilType`（名称，同遥测）、`alarmHighHighLevelMm`/`alarmHighLevelMm`/`alarmLowLevelMm`/`alarmLowLowLevelMm`/`alarmHighWaterMm`（毫米）、`alarmHighTempC`/`alarmLowTempC`（℃）、`levelCorrectionMm`/`waterCorrectionMm`/`tempCorrectionC`、`density`（原样上报：设置页标 kg/m³，库里存 0.56 这类值，单位待对齐）。报警阈值 0 = 未启用。颜色、`densVar` 不报。
+- `DeviceSettingsAttributeBuilder`：基础设置页出入库阈值 `inStockHeightThresholdMm`/`inStockTimeThresholdSec`/`outStockHeightThresholdMm`/`outStockTimeThresholdSec`（0 = 未配置）。
 
 **`probeType`**：上报通讯协议名，字符串跟串口设置页一致：`ZHONGCHENG`（中盛探针协议）/`MODBUS`（标准 Modbus 协议）/`4-20MA`（4-20mA），不是云端样例里的"磁致伸缩"（测量原理），取值待跟云端约定。来源是 `OilCan.getProbeType()`——它**不读 `probeType` 字段，而是返回 `Singleton.ChuanKou2`**，即"高级设置 → 串口设置 → 串口 2"的选择：0 = 中盛探针协议（`ZhongChengCompany`）、1 = 标准 Modbus 协议（`LDCompany`）、2 = 4-20mA（`LD2Company`）。这是**整机一个设置**，同一台设备所有罐的 `probeType` 相同。（2026-10-04 更正：此前误以为 `setProbeType()` 无调用方即"恒为 0"。）
 
 **不发的**：`deviceModel`/`hardwareVersion`（没人定义过取值；候选来源有 `Build.MODEL` = `rk3562_t`、厂商接口 `XzjhSystemManager.xzjhGetSerialNo()`/`xzjhGetDeviceKernelInfo()`）、`localControlMode`（设备上没有这个状态）。不编造值。
 
-**触发时机**：连接成功后；以及罐配置重新加载（`OilcanDataManager.refresh()`，保存罐设置、RPC 改阈值都会触发）之后，经 `setConfigChangedListener` 回调立即重发。标定表的保存不一定走 `refresh()`，改了标定表可能要等下次重连——装机阶段的一次性动作，可以接受。
+**触发时机**：连接成功后立即发；设置变化后经 `ThingsBoardManager.requestClientAttributesPublish()` 防抖 2 秒重发——罐设置写库完成（`OilTankRepository.setOilCanSetChangedListener`，覆盖设置页、下拉框、复制、报警开关、RPC 全部入口；写库是异步的，所以等写完再读）、基础设置页保存、罐配置重新加载（`OilcanDataManager.refresh()`）。标定表保存不触发，要等下次重连或设置变化。发布异常只记日志，不影响后续的共享属性请求，也不会让 app 崩溃。
 
 **现状**：✅ 已发，云端未接。跟共享样例逐 key 比对，已知差异：上面三个不发的字段、`probeType` 取值。
 

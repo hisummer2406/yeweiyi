@@ -35,6 +35,9 @@ public interface OilTankRepository {
      */
     void updateOilCanSetSync(OilCanSet oilCanSet) throws DbException;
 
+    /** 罐设置写库完成后回调（{@link #updateOilCanSet} 在写库线程上、写完之后才回调），传 null 取消。 */
+    void setOilCanSetChangedListener(Runnable listener);
+
     // ---- OilCanTable（罐表标定，行数固定，只查不增删） ----
 
     List<OilCanTable> findAllOilCanTable();

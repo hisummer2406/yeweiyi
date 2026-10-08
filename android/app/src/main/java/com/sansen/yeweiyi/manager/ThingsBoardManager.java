@@ -11,7 +11,9 @@ import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.logic.thingsboard.ActiveAlarmTracker;
 import com.sansen.yeweiyi.logic.thingsboard.AlarmEventBuilder;
+import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.thingsboard.ClientAttributesBuilder;
+import com.sansen.yeweiyi.logic.thingsboard.DeviceSettingsAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
 import com.sansen.yeweiyi.logic.thingsboard.ProvisionMessages;
@@ -19,6 +21,7 @@ import com.sansen.yeweiyi.logic.thingsboard.ProvisionResult;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
 import com.sansen.yeweiyi.logic.thingsboard.SharedAttributesParser;
 import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
+import com.sansen.yeweiyi.logic.thingsboard.TankSettingsAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.UniqueTimestampAllocator;
@@ -32,6 +35,7 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
+import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.List;
 import java.util.Map;
@@ -65,6 +69,8 @@ public final class ThingsBoardManager {
     private static final long RECONNECT_INITIAL_DELAY_MILLIS = 2_000L;
     private static final long RECONNECT_MAX_DELAY_MILLIS = 60_000L;
     private static final long PROVISION_TIMEOUT_MILLIS = 15_000L;
+    /** 罐设置保存是逐字段异步写库，等这么久再读库，同时把连续多次保存合并成一次上报。 */
+    private static final long ATTRIBUTES_DEBOUNCE_MILLIS = 2_000L;
 
     private static ThingsBoardManager instance;
 
@@ -129,6 +135,8 @@ public final class ThingsBoardManager {
      */
     private final UniqueTimestampAllocator eventTsAllocator = new UniqueTimestampAllocator();
     private final AtomicBoolean started = new AtomicBoolean(false);
+    private final Object attributesLock = new Object();
+    private ScheduledFuture<?> pendingAttributesPublish;
     /** 只在 tb-reconnect 线程上写，配网页读。 */
     private volatile ProvisionStatus provisionStatus = new ProvisionStatus(ProvisionState.NONE, null);
     private final java.util.concurrent.atomic.AtomicLong snapshotSeq = new java.util.concurrent.atomic.AtomicLong(0);
@@ -187,6 +195,7 @@ public final class ThingsBoardManager {
         // 罐配置变更（保存罐设置、RPC 改阈值等都会 refresh）后：清理已删除/停用罐的报警，并立即重发
         // 客户端属性，不等下次重连
         OilcanDataManager.getInstance(MyApplication.getInstance()).setConfigChangedListener(this::onTankConfigReloaded);
+        OilTankRepositoryImpl.getInstance().setOilCanSetChangedListener(this::requestClientAttributesPublish);
         // 启动时也清理一次：App 没运行期间罐可能已经被删除或停用
         CloudAlarmReporter.getInstance().onTanksReloaded(currentEnabledTankIds());
         scheduleConnectAttempt(0);
@@ -197,6 +206,7 @@ public final class ThingsBoardManager {
             return;
         }
         OilcanDataManager.getInstance(MyApplication.getInstance()).setConfigChangedListener(null);
+        OilTankRepositoryImpl.getInstance().setOilCanSetChangedListener(null);
         telemetryScheduler.stop();
         synchronized (connectLock) {
             if (pendingConnect != null) {
@@ -376,14 +386,9 @@ public final class ThingsBoardManager {
     }
 
     /**
-     * 客户端属性：协议 §5.1 的设备配置（{@link ClientAttributesBuilder}）+ 罐体标定表
-     * （{@link TankCalibrationAttributeBuilder}，zhongchengyeweiyi#42 待办1），合成一条发出。
-     * <p>
-     * 不进 30 秒快照，也不走补投队列：这是静态配置，不是"必须送达的事件"，断线时这次没发出去，
-     * 下次连上会带着最新值重发。触发点两个：连接建立成功之后；罐配置重新加载
-     * （{@code OilcanDataManager.refresh()}，保存罐设置、RPC 改阈值都会触发）之后。
-     * 标定表的保存不一定走 refresh，改了标定表可能要等下次重连才更新——标定是安装阶段的一次性
-     * 动作，这个滞后可以接受。
+     * 客户端属性合成一条发出：协议 §5.1 设备配置 + 标定表 + 罐设置页各项 + 出入库阈值。
+     * 静态配置，不走补投队列，断线时没发出去下次连上会重发。触发：连接成功后；设置变化后经
+     * {@link #requestClientAttributesPublish()} 防抖重发。标定表保存不触发，要等下次重连或设置变化。
      */
     private void publishClientAttributes() {
         // 连接成功后紧跟着要请求共享属性；这里抛异常会让那一步被跳过，所以就地吞掉并记日志
@@ -393,6 +398,10 @@ public final class ThingsBoardManager {
             List<com.sansen.yeweiyi.db.OilCanSet> oilCanSets = OilTankRepositoryImpl.getInstance().findAllOilCanSet();
             List<com.sansen.yeweiyi.db.OilCanTable> tables = OilTankRepositoryImpl.getInstance().findAllOilCanTable();
             attributes.putAll(TankCalibrationAttributeBuilder.build(oilCanSets, tables));
+            attributes.putAll(TankSettingsAttributeBuilder.build(oilCanSets, Const::getOilType));
+            Singleton settings = Singleton.getInstance();
+            attributes.putAll(DeviceSettingsAttributeBuilder.build(
+                    settings.InHight, settings.InTime, settings.OutHight, settings.OutTime));
             connection.publishAttributes(gson.toJson(attributes));
         } catch (RuntimeException e) {
             Log.e(TAG, "客户端属性发布失败", e);
@@ -401,7 +410,23 @@ public final class ThingsBoardManager {
 
     private void onTankConfigReloaded() {
         CloudAlarmReporter.getInstance().onTanksReloaded(currentEnabledTankIds());
-        outboundEventExecutor.execute(guarded("客户端属性上报", this::publishClientAttributes));
+        requestClientAttributesPublish();
+    }
+
+    /**
+     * 设置变了之后重发客户端属性：罐设置写库完成（仓库层回调）、基础设置页保存、罐配置重新加载时调用。
+     * 等 {@link #ATTRIBUTES_DEBOUNCE_MILLIS} 再发，期间再次调用只会推迟，不会多发。未连接时发送会失败，
+     * 下次连上会带最新值重发。
+     */
+    public void requestClientAttributesPublish() {
+        synchronized (attributesLock) {
+            if (pendingAttributesPublish != null) {
+                pendingAttributesPublish.cancel(false);
+            }
+            pendingAttributesPublish = reconnectExecutor.schedule(
+                    () -> outboundEventExecutor.execute(guarded("客户端属性上报", this::publishClientAttributes)),
+                    ATTRIBUTES_DEBOUNCE_MILLIS, TimeUnit.MILLISECONDS);
+        }
     }
 
     /** OilcanDataManager 里当前加载的罐号——它只加载启用的罐（setProbeData 按 enable==1 过滤）。 */

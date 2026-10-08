@@ -53,6 +53,10 @@ public class SetAlarmThresholdHandlerTest {
         }
 
         @Override
+        public void setOilCanSetChangedListener(Runnable listener) {
+        }
+
+        @Override
         public List<OilCanTable> findAllOilCanTable() {
             throw new UnsupportedOperationException();
         }
