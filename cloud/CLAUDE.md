@@ -41,7 +41,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `station_id`，历史跟着设备所属油站走。
 - 扫码绑定（短码）：`POST /api/devices/bind` 的 `pairingToken` 可选。不带时 `deviceName` 是二维码原文（如 `000001`），
   只在调用者所属客户的设备里解析（精确匹配优先，再 `pairing.codePrefixes` + 原文，默认 `ZCT`），`customer_admin` /
-  `customer_user` 可用，`platform_admin` 不可；不创建设备行；所有失败与密钥错误同为 401，响应带解析后的 `deviceName`。
+  `customer_user` 可用，`platform_admin` 不可；不创建设备行；所有失败同为 `401 {"error":"未找到可绑定的设备"}`（带密钥路径仍是 `invalid device name or pairing token`），响应带解析后的 `deviceName`。
   已停用账号由认证中间件先挡成 403。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。

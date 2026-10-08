@@ -15,7 +15,7 @@ import (
 // Short-code binding: the QR code carries only the 6-digit code, no pairing secret, so the
 // customer boundary is the authorization (openspec change bind-device-by-short-code).
 
-const shortCodeWrongCredential = `{"error":"invalid device name or pairing token"}`
+const shortCodeWrongCredential = `{"error":"未找到可绑定的设备"}`
 
 func newShortCodeEnv(t *testing.T, prefixes ...string) *testEnv {
 	t.Helper()

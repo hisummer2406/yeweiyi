@@ -95,6 +95,9 @@ type bindDeviceRequest struct {
 // reaches SQL or a log line.
 var shortCodePattern = regexp.MustCompile(`^[0-9A-Za-z]{1,32}$`)
 
+// shortCodeRefusedMessage is the single answer to a refused short-code bind.
+const shortCodeRefusedMessage = "未找到可绑定的设备"
+
 // shortCodeCandidates is the ordered list of device names a scanned code may mean: the text itself
 // (exact match wins), then each configured model prefix + text. Nil when the text is not a valid code.
 func shortCodeCandidates(code string, prefixes []string) []string {
@@ -202,8 +205,10 @@ func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 // unknown, other customer's, unassigned, ambiguous role, disabled, malformed — is the same 401 as a
 // wrong pairing secret. Not single-use, and the QR format is unchanged.
 func bindDeviceByCode(c *gin.Context, deps Deps, code string) {
+	// One message for every refusal, so it stays no oracle; it says nothing about a pairing token
+	// because this path has none.
 	refuse := func() {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": shortCodeRefusedMessage})
 	}
 	candidates := shortCodeCandidates(code, deps.DeviceCodePrefixes)
 	if candidates == nil {
