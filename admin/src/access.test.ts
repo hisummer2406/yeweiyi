@@ -68,3 +68,22 @@ describe('access', () => {
     expect(result.canConsole).toBeFalsy();
   });
 });
+
+describe('canManageAssets', () => {
+  const roleOf = (role: string) =>
+    access({
+      currentUser: { userId: 1, username: 'u', access: role as API.Role },
+    }).canManageAssets;
+
+  it('is open to platform_admin and customer_admin only', () => {
+    expect(roleOf('platform_admin')).toBe(true);
+    expect(roleOf('customer_admin')).toBe(true);
+    expect(roleOf('customer_user')).toBe(false);
+    expect(roleOf('wizard')).toBe(false);
+  });
+
+  it('is falsy without a current user', () => {
+    expect(access(undefined).canManageAssets).toBeFalsy();
+    expect(access({ currentUser: undefined }).canManageAssets).toBeFalsy();
+  });
+});

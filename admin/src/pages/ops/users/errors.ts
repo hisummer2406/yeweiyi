@@ -1,4 +1,4 @@
-import type { ErrorMessage } from '../devices/errors';
+import type { ErrorMessage } from '../../console/assets/devices/errors';
 
 /**
  * 账号相关请求失败时的提示归类，按 HTTP 状态码判断，不解析后端文案；

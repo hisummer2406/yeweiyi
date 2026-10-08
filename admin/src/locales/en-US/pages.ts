@@ -260,4 +260,68 @@ export default {
   'pages.ops.devices.form.code.required': 'Please enter the device code',
   'pages.ops.devices.form.code.invalid':
     'Invalid code: use a full code (e.g. ZCT000001) or a numeric short code',
+  'pages.console.stations.create': 'New station',
+  'pages.console.stations.empty': 'No stations yet',
+  'pages.console.stations.col.name': 'Station name',
+  'pages.console.stations.col.address': 'Address',
+  'pages.console.stations.col.customer': 'Customer',
+  'pages.console.stations.col.createdAt': 'Created at',
+  'pages.console.stations.col.actions': 'Actions',
+  'pages.console.stations.action.edit': 'Edit',
+  'pages.console.stations.action.delete': 'Delete',
+  'pages.console.stations.form.name.label': 'Station name',
+  'pages.console.stations.form.name.required': 'Please enter the station name',
+  'pages.console.stations.form.name.placeholder': 'Station name',
+  'pages.console.stations.form.address.label': 'Address',
+  'pages.console.stations.form.address.placeholder': 'Optional',
+  'pages.console.stations.form.customer.label': 'Customer',
+  'pages.console.stations.form.customer.required': 'Please select a customer',
+  'pages.console.stations.form.customer.placeholder': 'Select a customer',
+  'pages.console.stations.form.submit.create': 'Create',
+  'pages.console.stations.form.submit.edit': 'Save',
+  'pages.console.stations.form.cancel': 'Cancel',
+  'pages.console.stations.create.success': 'Station {name} created',
+  'pages.console.stations.edit.success': 'Station {name} saved',
+  'pages.console.stations.delete.confirm':
+    'Delete station {name}? Only stations without devices can be deleted.',
+  'pages.console.stations.delete.success': 'Station {name} deleted',
+  'pages.console.stations.error.exists':
+    'This customer already has a station with that name.',
+  'pages.console.stations.error.invalid': 'Invalid input: {detail}',
+  'pages.console.stations.error.notFound':
+    'Station not found. Please refresh the list.',
+  'pages.console.stations.error.inUse':
+    'This station still has devices. Move them to another station or clear their station first.',
+  'pages.console.stations.error.forbidden':
+    'No permission, or the object no longer exists.',
+  'pages.console.stations.error.network':
+    'Network unreachable. Please try again later.',
+  'pages.console.stations.error.unknown': 'Operation failed: {detail}',
+  'pages.console.stations.devices.col.station': 'Station',
+  'pages.console.stations.devices.station.none': 'Ungrouped',
+  'pages.console.stations.devices.station.unknown': 'Unknown',
+  'pages.console.stations.devices.action.assign': 'Assign station',
+  'pages.console.stations.assign.title': 'Assign station',
+  'pages.console.stations.assign.noStations':
+    'This customer has no stations yet. Create one on the Stations page first.',
+  'pages.console.stations.assign.target': 'Station',
+  'pages.console.stations.assign.placeholder':
+    'Select a station; clear to ungroup',
+  'pages.console.stations.assign.submit': 'Confirm',
+  'pages.console.stations.assign.success':
+    'Device {device} assigned to {station}',
+  'pages.console.stations.assign.cleared':
+    'Device {device} removed from its station',
+  'pages.console.stations.assign.unchanged':
+    'The device is already in this station; nothing changed.',
+  'pages.console.stations.assign.error.badStation':
+    "This station does not belong to the device's customer. Please refresh and retry.",
+  'pages.console.stations.assign.error.noCustomer':
+    'The device has no customer yet, or the device/station was just modified. Please refresh and retry; if the device has no customer, assign a customer first.',
+  'pages.console.stations.assign.error.notFound':
+    'Device not found. Please refresh the list.',
+  'pages.console.stationFilter.label': 'Station',
+  'pages.console.stationFilter.all': 'All stations',
+  'pages.console.stationFilter.none': 'Ungrouped',
+  'pages.console.stationFilter.placeholder': 'Filter by station',
 };

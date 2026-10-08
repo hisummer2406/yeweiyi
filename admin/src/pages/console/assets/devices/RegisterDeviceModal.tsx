@@ -32,7 +32,12 @@ type Props = {
   open: boolean;
   onClose: () => void;
   /** 登记成功（含"已登记"）后调用，用于刷新列表 */
-  onRegistered: () => void;
+  onRegistered: (outcome: { deviceName: string; customerId: number }) => void;
+  /** 给了就在成功提示里带「分配油站」动作（点击才调用，不自动弹出）；不给则提示只有文字 */
+  onAssignStation?: (outcome: {
+    deviceName: string;
+    customerId: number;
+  }) => void;
 };
 
 type FormValues = {
@@ -43,6 +48,7 @@ type FormValues = {
 const RegisterForm: React.FC<Omit<Props, 'open'>> = ({
   onClose,
   onRegistered,
+  onAssignStation,
 }) => {
   const intl = useIntl();
   const [form] = Form.useForm<FormValues>();
@@ -156,15 +162,41 @@ const RegisterForm: React.FC<Omit<Props, 'open'>> = ({
       const customer =
         customers.find((c) => c.id === outcome.customerId)?.name ??
         String(outcome.customerId);
-      message.success(
-        text(
-          outcome.kind === 'created'
-            ? 'pages.ops.devices.success.created'
-            : 'pages.ops.devices.success.exists',
-          { device: outcome.deviceName, customer },
-        ),
+      const successText = text(
+        outcome.kind === 'created'
+          ? 'pages.ops.devices.success.created'
+          : 'pages.ops.devices.success.exists',
+        { device: outcome.deviceName, customer },
       );
-      onRegistered();
+      if (onAssignStation) {
+        const key = `registered-${outcome.deviceName}`;
+        message.success({
+          key,
+          duration: 8,
+          content: (
+            <span>
+              {successText}{' '}
+              <a
+                onClick={() => {
+                  message.destroy(key);
+                  onAssignStation({
+                    deviceName: outcome.deviceName,
+                    customerId: outcome.customerId,
+                  });
+                }}
+              >
+                {text('pages.console.stations.devices.action.assign')}
+              </a>
+            </span>
+          ),
+        });
+      } else {
+        message.success(successText);
+      }
+      onRegistered({
+        deviceName: outcome.deviceName,
+        customerId: outcome.customerId,
+      });
       onClose();
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
@@ -323,6 +355,7 @@ const RegisterDeviceModal: React.FC<Props> = ({
   open,
   onClose,
   onRegistered,
+  onAssignStation,
 }) => {
   const intl = useIntl();
   return (
@@ -334,7 +367,11 @@ const RegisterDeviceModal: React.FC<Props> = ({
       destroyOnHidden
       mask={{ closable: false }}
     >
-      <RegisterForm onClose={onClose} onRegistered={onRegistered} />
+      <RegisterForm
+        onClose={onClose}
+        onRegistered={onRegistered}
+        onAssignStation={onAssignStation}
+      />
     </Modal>
   );
 };

@@ -11,6 +11,7 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
+import { StationFilter, useStationFilter } from './useStationFilter';
 
 type Props = {
   /** 设备可见且已选中时才渲染；记录请求只会在这里发起，保证没选设备就不请求 */
@@ -20,6 +21,8 @@ type Props = {
 /**
  * 记录页顶部的设备选择。选项来自 GET /api/devices（调用者可见的设备），选中的设备同步在 `?device=`，
  * 所以可以直达某台设备。云端记录接口必须带 device，没有「全部设备」。
+ * 有油站数据时多一个油站筛选（`?station=`），它只缩小设备下拉的候选：`?device=` 是否可见仍按完整设备列表判断，
+ * 换油站不会清掉已选设备，已选设备不在候选里时下拉仍显示它。云端记录接口必须带 device，没有按油站聚合的查询。
  * 状态：加载中、列表失败（可重试）、没有可见设备、URL 里的设备不可见、尚未选择。
  */
 const DevicePicker: React.FC<Props> = ({ children }) => {
@@ -32,6 +35,7 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
   const [devices, setDevices] = useState<API.DeviceRow[]>();
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const sf = useStationFilter(devices);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,17 +83,30 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
     !!requested && !!devices?.some((d) => d.device_name === requested);
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Space>
+      <Space wrap>
+        {sf.show && (
+          <>
+            <span>{t('pages.console.stationFilter.label')}</span>
+            <StationFilter
+              value={sf.value}
+              onChange={sf.setValue}
+              stations={sf.stations}
+              labelOf={sf.labelOf}
+            />
+          </>
+        )}
         <span>{t('pages.console.records.device.label')}</span>
         <Select
           showSearch
           style={{ minWidth: 260 }}
           value={visible ? requested : undefined}
           placeholder={t('pages.console.records.device.placeholder')}
-          options={(devices ?? []).map((d) => ({
-            value: d.device_name,
-            label: d.device_name,
-          }))}
+          options={(devices ?? [])
+            .filter((d) => d.device_name === requested || sf.matches(d))
+            .map((d) => ({
+              value: d.device_name,
+              label: d.device_name,
+            }))}
           onChange={select}
         />
       </Space>

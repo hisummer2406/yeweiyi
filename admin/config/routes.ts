@@ -36,19 +36,16 @@ export default [
     routes: [
       {
         path: '/ops',
-        redirect: '/ops/devices',
+        redirect: '/ops/users',
       },
+      // 设备登记与客户管理已并入「资产管理」，旧地址保留重定向
       {
-        name: 'devices',
-        icon: 'cluster',
         path: '/ops/devices',
-        component: './ops/devices',
+        redirect: '/console/assets/devices',
       },
       {
-        name: 'customers',
-        icon: 'shop',
         path: '/ops/customers',
-        component: './ops/customers',
+        redirect: '/console/assets/customers',
       },
       {
         name: 'users',
@@ -72,7 +69,7 @@ export default [
   },
   {
     // 菜单分组参照设备端首页底栏与小程序的信息架构：
-    // 设备总览（首页）/ 记录查询（报警·入库·出库）/ 远程控制。
+    // 设备总览（首页）/ 记录查询（报警·入库·出库，下面单独成一级）/ 远程控制。
     // 交班记录、库存记录、各类设置在云端暂无接口（小程序里也是置灰入口），不放进菜单。
     path: '/console',
     name: 'console',
@@ -96,39 +93,81 @@ export default [
         hideInMenu: true,
       },
       {
-        name: 'records',
-        icon: 'profile',
-        path: '/console/records',
-        routes: [
-          {
-            path: '/console/records',
-            redirect: '/console/records/alarms',
-          },
-          {
-            name: 'alarms',
-            icon: 'alert',
-            path: '/console/records/alarms',
-            component: './console/alarms',
-          },
-          {
-            name: 'stock-in',
-            icon: 'download',
-            path: '/console/records/stock-in',
-            component: './console/oil-in-out',
-          },
-          {
-            name: 'stock-out',
-            icon: 'upload',
-            path: '/console/records/stock-out',
-            component: './console/oil-in-out',
-          },
-        ],
-      },
-      {
         name: 'issue-command',
         icon: 'control',
         path: '/console/issue-command',
         component: './console/issue-command',
+      },
+      // 旧地址保留重定向；油站管理已移到「资产管理」
+      {
+        path: '/console/stations',
+        redirect: '/console/assets/stations',
+      },
+    ],
+  },
+  {
+    // 记录查询单独成一级菜单：放在「设备监控」下面要点三层（设备监控 → 记录查询 → 报警记录），
+    // 而且报警/出入库要先选设备，本来就不属于设备总览。URL 仍是 /console/records/*。
+    path: '/console/records',
+    name: 'records',
+    icon: 'profile',
+    access: 'canConsole',
+    routes: [
+      {
+        path: '/console/records',
+        redirect: '/console/records/alarms',
+      },
+      {
+        name: 'alarms',
+        icon: 'alert',
+        path: '/console/records/alarms',
+        component: './console/alarms',
+      },
+      {
+        name: 'stock-in',
+        icon: 'download',
+        path: '/console/records/stock-in',
+        component: './console/oil-in-out',
+      },
+      {
+        name: 'stock-out',
+        icon: 'upload',
+        path: '/console/records/stock-out',
+        component: './console/oil-in-out',
+      },
+    ],
+  },
+  {
+    // 资产管理：客户 → 油站 → 设备三级，按层级排列。与「设备监控」并列的顶层菜单，URL 仍在 /console 下，
+    // 这样客户管理员不会碰到 /ops 的拦截。整组对平台管理员和客户管理员开放，客户项只对平台管理员。
+    path: '/console/assets',
+    name: 'assets',
+    icon: 'database',
+    access: 'canManageAssets',
+    routes: [
+      {
+        // 落到第一个可见项：平台管理员 → 客户，客户管理员 → 油站（按角色分流，见 pages/console/assets/index.tsx）
+        path: '/console/assets',
+        component: './console/assets',
+      },
+      {
+        name: 'customers',
+        icon: 'shop',
+        path: '/console/assets/customers',
+        component: './console/assets/customers',
+        access: 'canPlatformAdmin',
+      },
+      {
+        name: 'stations',
+        icon: 'environment',
+        path: '/console/assets/stations',
+        component: './console/assets/stations',
+      },
+      {
+        name: 'devices',
+        icon: 'cluster',
+        path: '/console/assets/devices',
+        component: './console/assets/devices',
       },
     ],
   },

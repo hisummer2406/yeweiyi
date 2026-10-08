@@ -16,8 +16,13 @@ import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { getLatestTelemetry } from '@/services/ant-design-pro/telemetry';
+import { sectionByStation } from '@/utils/stationFilter';
 import { fmtTime } from '@/utils/telemetry';
 import TankCard from '../components/TankCard';
+import {
+  StationFilter,
+  useStationFilter,
+} from '../components/useStationFilter';
 
 /** 自动刷新间隔：遥测是快照而非实时推送，30 秒足够。 */
 const REFRESH_MS = 30_000;
@@ -115,8 +120,72 @@ const ConsoleDevices: React.FC = () => {
     };
   }, [load]);
 
+  const sf = useStationFilter(groups?.map((g) => g.device));
+  // 筛选只改变渲染：已取到的遥测直接按筛选重新显示，不触发额外请求，轮询逻辑不变
+  const shown = (groups ?? []).filter((g) => sf.matches(g.device));
+  const sectioned = sf.show && sf.value === 'all';
+
   const openDetail = (name: string) =>
     history.push(`/console/devices/${encodeURIComponent(name)}`);
+
+  const renderGroup = (g: Group) => (
+    <ProCard
+      key={g.device.device_name}
+      headerBordered
+      title={
+        <Space>
+          <Typography.Text strong>{g.device.device_name}</Typography.Text>
+          <Badge
+            status={g.device.is_online ? 'success' : 'default'}
+            text={g.device.is_online ? '在线' : '离线'}
+          />
+        </Space>
+      }
+      extra={
+        <Typography.Text type="secondary">
+          {g.telemetry
+            ? `上报时间 ${fmtTime(g.telemetry.ts)}`
+            : g.device.is_online
+              ? ''
+              : `最后在线 ${fmtTime(g.device.last_online_at)}`}
+        </Typography.Text>
+      }
+    >
+      {g.state === 'loading' && <Skeleton active />}
+      {g.state === 'never' && <Empty description="该设备还没有上报过数据" />}
+      {g.state === 'error' && (
+        <Alert
+          type="error"
+          showIcon
+          message={g.error}
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                const s = seq.current;
+                patch(g.device.device_name, s, { state: 'loading' });
+                loadDevice(g.device.device_name, s);
+              }}
+            >
+              重试
+            </Button>
+          }
+        />
+      )}
+      {g.state === 'ok' && g.telemetry && (
+        <Row gutter={[16, 16]}>
+          {g.telemetry.tanks.map((t) => (
+            <Col key={t.index} xs={24} md={12} xl={8}>
+              <TankCard
+                tank={t}
+                onClick={() => openDetail(g.device.device_name)}
+              />
+            </Col>
+          ))}
+        </Row>
+      )}
+    </ProCard>
+  );
 
   let body: React.ReactNode;
   if (groups === null) {
@@ -136,66 +205,28 @@ const ConsoleDevices: React.FC = () => {
     body = (
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {listError && <Alert type="warning" showIcon message={listError} />}
-        {groups.map((g) => (
-          <ProCard
-            key={g.device.device_name}
-            headerBordered
-            title={
-              <Space>
-                <Typography.Text strong>{g.device.device_name}</Typography.Text>
-                <Badge
-                  status={g.device.is_online ? 'success' : 'default'}
-                  text={g.device.is_online ? '在线' : '离线'}
-                />
-              </Space>
-            }
-            extra={
-              <Typography.Text type="secondary">
-                {g.telemetry
-                  ? `上报时间 ${fmtTime(g.telemetry.ts)}`
-                  : g.device.is_online
-                    ? ''
-                    : `最后在线 ${fmtTime(g.device.last_online_at)}`}
-              </Typography.Text>
-            }
-          >
-            {g.state === 'loading' && <Skeleton active />}
-            {g.state === 'never' && (
-              <Empty description="该设备还没有上报过数据" />
-            )}
-            {g.state === 'error' && (
-              <Alert
-                type="error"
-                showIcon
-                message={g.error}
-                action={
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      const s = seq.current;
-                      patch(g.device.device_name, s, { state: 'loading' });
-                      loadDevice(g.device.device_name, s);
-                    }}
-                  >
-                    重试
-                  </Button>
-                }
-              />
-            )}
-            {g.state === 'ok' && g.telemetry && (
-              <Row gutter={[16, 16]}>
-                {g.telemetry.tanks.map((t) => (
-                  <Col key={t.index} xs={24} md={12} xl={8}>
-                    <TankCard
-                      tank={t}
-                      onClick={() => openDetail(g.device.device_name)}
-                    />
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </ProCard>
-        ))}
+        {sf.show && shown.length === 0 && (
+          <Empty description="该范围内没有设备" />
+        )}
+        {sectioned
+          ? sectionByStation(
+              shown.map((g) => ({ ...g, station_id: g.device.station_id })),
+              sf.visibleIds,
+            ).map((sec) => (
+              <section key={String(sec.key)}>
+                <Typography.Title level={5}>
+                  {sec.key === 'none' ? '未分组' : sf.labelOf(sec.key)}
+                </Typography.Title>
+                <Space
+                  direction="vertical"
+                  size="large"
+                  style={{ width: '100%' }}
+                >
+                  {sec.items.map(renderGroup)}
+                </Space>
+              </section>
+            ))
+          : shown.map(renderGroup)}
       </Space>
     );
   }
@@ -214,6 +245,17 @@ const ConsoleDevices: React.FC = () => {
         </Button>,
       ]}
     >
+      {sf.show && (
+        <Space style={{ marginBottom: 16 }}>
+          <span>油站</span>
+          <StationFilter
+            value={sf.value}
+            onChange={sf.setValue}
+            stations={sf.stations}
+            labelOf={sf.labelOf}
+          />
+        </Space>
+      )}
       {body}
     </PageContainer>
   );

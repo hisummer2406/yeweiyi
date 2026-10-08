@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
 const listDevices = vi.fn();
+const listStations = vi.fn();
 let params = new URLSearchParams();
 const setParams = vi.fn((next: URLSearchParams, _opts?: unknown) => {
   params = new URLSearchParams(next);
@@ -23,8 +24,13 @@ vi.mock('@umijs/max', () => ({
       ),
   }),
   useSearchParams: () => [params, setParams],
+  useAccess: () => ({ canPlatformAdmin: false }),
 }));
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
+vi.mock('@/services/ant-design-pro/stations', () => ({ listStations }));
+vi.mock('@/services/ant-design-pro/customers', () => ({
+  listCustomers: vi.fn().mockResolvedValue([]),
+}));
 
 const { default: DevicePicker } = await import('./DevicePicker');
 
@@ -41,6 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   params = new URLSearchParams();
   listDevices.mockResolvedValue([dev('D1'), dev('D2')]);
+  listStations.mockResolvedValue([]);
 });
 afterEach(cleanup);
 
@@ -94,5 +101,68 @@ describe('DevicePicker', () => {
     expect(next.get('device')).toBe('D2');
     expect(next.get('tab')).toBe('alarms');
     expect(opts).toEqual({ replace: true });
+  });
+});
+
+describe('DevicePicker station filter', () => {
+  const withStation = (name: string, station_id: number | null) => ({
+    ...dev(name),
+    station_id,
+  });
+  const stations = [
+    { id: 1, customerId: 7, name: '甲站', address: '', createdAt: '' },
+    { id: 2, customerId: 7, name: '乙站', address: '', createdAt: '' },
+  ];
+  const deviceOptions = async () => {
+    const combos = await screen.findAllByRole('combobox');
+    fireEvent.mouseDown(combos[combos.length - 1]);
+    return Array.from(document.querySelectorAll('.ant-select-item-option')).map(
+      (e) => e.getAttribute('title'),
+    );
+  };
+
+  beforeEach(() => {
+    listStations.mockResolvedValue(stations);
+    listDevices.mockResolvedValue([
+      withStation('D1', 1),
+      withStation('D2', 2),
+      withStation('D3', null),
+    ]);
+  });
+
+  it('narrows the device candidates to the chosen station', async () => {
+    params = new URLSearchParams('station=2');
+    render(<DevicePicker>{child}</DevicePicker>);
+    expect(await deviceOptions()).toEqual(['D2']);
+    // 只选了油站、没选设备：仍不请求记录
+    expect(child).not.toHaveBeenCalled();
+    expect(await screen.findByText('请先选择设备')).toBeTruthy();
+  });
+
+  it('keeps the chosen device selected and visible when the station filter changes', async () => {
+    params = new URLSearchParams('device=D1&station=2');
+    render(<DevicePicker>{child}</DevicePicker>);
+    // 已选设备 D1 不属于油站 2，仍显示记录，也没有「不可见」提示
+    expect(await screen.findByText('records-of-D1')).toBeTruthy();
+    expect(screen.queryByText(/不可见|看不到/)).toBeNull();
+    expect(await deviceOptions()).toEqual(['D1', 'D2']);
+  });
+
+  it('writes the station into ?station= while keeping ?device=', async () => {
+    params = new URLSearchParams('device=D1');
+    render(<DevicePicker>{child}</DevicePicker>);
+    const combos = await screen.findAllByRole('combobox');
+    fireEvent.mouseDown(combos[0]);
+    fireEvent.click(await screen.findByTitle('乙站'));
+    const next = setParams.mock.calls[0][0] as URLSearchParams;
+    expect(next.get('station')).toBe('2');
+    expect(next.get('device')).toBe('D1');
+  });
+
+  it('has no station filter when the stations endpoint fails', async () => {
+    listStations.mockRejectedValue(new Error('404'));
+    render(<DevicePicker>{child}</DevicePicker>);
+    await screen.findByText('请先选择设备');
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
 });

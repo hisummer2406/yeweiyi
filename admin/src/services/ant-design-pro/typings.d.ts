@@ -39,6 +39,8 @@ declare namespace API {
     last_offline_at: string | null;
     updated_at: string | null;
     customer_id?: number | null;
+    /** 所属油站；null 为未分组，字段缺失 = 旧版云端 */
+    station_id?: number | null;
   };
 
   /** PUT /api/devices/:device/customer 响应：changed=false 表示本来就属于该客户 */
@@ -54,6 +56,22 @@ declare namespace API {
     id: number;
     name: string;
     createdAt: string;
+  };
+
+  /** GET /api/stations 的油站（internal/api/stations.go stationResponse） */
+  type Station = {
+    id: number;
+    customerId: number;
+    name: string;
+    address: string;
+    createdAt: string;
+  };
+
+  /** PUT /api/devices/:device/station 响应：changed=false 表示本来就在该油站 */
+  type AssignStationResult = {
+    deviceName: string;
+    stationId: number | null;
+    changed: boolean;
   };
 
   type UserRole = 'platform_admin' | 'customer_admin' | 'customer_user';

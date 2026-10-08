@@ -2,7 +2,7 @@
 
 `AGENTS.md` 是本文件的符号链接。只编辑本文件，不要将该链接替换为普通文件。
 
-## 项目状态：2026-10-07 登录、/ops 管理页、/console 设备总览/详情/报警/出入库记录已对齐 yeweiyi-cloud，远程控制等未接
+## 项目状态：2026-10-08 登录、/ops 管理页、/console 设备总览/详情/报警/出入库记录、「资产管理」（客户·油站·设备）已对齐 yeweiyi-cloud，远程控制等未接
 
 结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
 路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
@@ -16,7 +16,17 @@
   Bearer；非登录请求收到 401 会清 token 并回登录页。退出登录只清本地 token（后端无登出）。
 - 响应没有 `{success,data}` 信封，别再加 `errorThrower` 之类按信封判成败的逻辑。
 
-**`/ops/devices` 设备登记已接**（OpenSpec 变更 `register-device-and-assign-customer`，GitHub issue #1）：
+**菜单与入口分工（OpenSpec 变更 `consolidate-asset-management`）**：客户 → 油站 → 设备三级管理集中在顶层菜单「资产管理」
+（`/console/assets/{customers,stations,devices}`，整组 `access.canManageAssets` = 平台管理员或客户管理员，客户项只对平台管理员），
+与「设备监控」并列；URL 留在 `/console` 下，是为了客户管理员进不了 `/ops/*`。`/ops` 只剩账号管理、配对密钥、审计日志。
+旧地址 `/ops/devices`、`/ops/customers`、`/console/stations` 在 `config/routes.ts` 里重定向到新位置，别删。
+`/console/assets` 入口由 `pages/console/assets/index.tsx` 按角色分流（平台管理员→客户，客户管理员→油站）。
+一级菜单顺序是 设备监控 → 记录查询（报警·入库·出库，URL 仍是 `/console/records/*`）→ 资产管理 → 运维管理；记录查询是单独的顶层路由，不嵌在设备监控下面。
+设备页是设备**登记、客户归属、油站归属**的唯一入口：登记设备、分配/转移客户、「所属客户」列只对平台管理员显示（UI 隐藏，
+权限边界在云端）；「分配油站」对两种管理员都有，是分配油站的唯一入口。登记成功的提示里带「分配油站」动作（点了才打开弹窗）。
+客户管理员的设备行没有 `customer_id`，所以设备页对它不请求 `GET /api/customers`（云端只允许平台管理员，请求必然 403 并弹错）。
+
+**设备登记（页面现位于 `/console/assets/devices`，原 `/ops/devices`；OpenSpec 变更 `register-device-and-assign-customer`，GitHub issue #1）**：
 
 - 列表 `GET /api/devices`（行是 snake_case；`customer_id` **只有平台管理员的行才有**，null 为未分配，字段缺失是
   旧版云端，显示「未知」而不是「未分配」）；转移/分配走 `PUT /api/devices/:device/customer`（同一事务清掉该设备的
@@ -25,6 +35,8 @@
   这个接口是幂等登记，**不碰任何配对密钥**；不要改用 `pairing-secret`（它每次调用都会轮换密钥）。
 - 出厂编号一律按字符串处理、保留前导零（`src/utils/deviceCode.ts`）。`ZCT` 前缀只用于给短码生成
   待确认的候选，各型号规则尚未确认，云端也不强制前缀或长度，不要把它写成协议。
+- 列表另有「所属油站」列（`station_id` 缺失显示「未知」，null 为「未分组」），行内「分配油站」给 `customer_id` 不是 null 的设备
+  （平台管理员行是数字，客户管理员行没有该字段；见下方油站段落）。
 - 自己处理错误提示的请求设了 `skipErrorHandler`，这会**跳过全局的鉴权失败处理**（401、账号已失效的
   403），必须在失败时转交 `forwardAuthFailure`（见 `src/services/ant-design-pro/apiError.ts` 的
   `toApiError`）；返回的 `ApiError.authHandled` 为 true 时已在回登录页，调用方不要再提示。
@@ -33,7 +45,7 @@
 - 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。设备列表的
   `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
 
-**`/ops/customers`、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
+**客户管理（页面现位于 `/console/assets/customers`，原 `/ops/customers`）、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
 `default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码、
 换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
 和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
@@ -53,6 +65,31 @@
 - 403 的 body 若是 `not authorized for this device` 是「无权看这台设备」，只有恰好 `not authorized` 才是账号失效
   （回登录页），别用前缀/包含去判断。
 - 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送、交班/库存记录。
+
+**油站（`/console/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。
+油站页只管油站增删改（对平台管理员和客户管理员开放，`access.canManageAssets`）；给设备分配油站在设备页。云端契约：
+`GET /api/stations`（`{rows}`，平台管理员看全部，客户管理员看本客户全部含空油站）、`POST/PUT/DELETE /api/stations(/:id)`、
+`PUT /api/devices/:device/station`（`{stationId: N | null}`，**键必须存在**，清空发显式 `null`）。必须知道的行为：
+
+- 平台管理员新建油站必须带 `customerId`，客户管理员不带（界面从不发；带别的客户的 → `400 unknown customerId`，和带不存在的客户相同）。
+- 删除仍挂有设备的油站 → 409，提示先把设备移走；它和创建时的 409（同客户重名）含义不同，错误归类分开写（`errors.ts`）。
+- 客户管理员面对"别的客户的"和"不存在"的油站/设备得到完全相同的 `404`（`station not found` / `device not found`，
+  yeweiyi-cloud#54、PR #55），界面按 404 提示"不存在，请刷新列表"。**更早的云端构建（PR #55 之前）对这两种情形答
+  `403 not authorized`**，这个 body 恰好是上面"账号失效"的判据，会被 `toApiError` 当成账号失效而清 token、回登录页（例如和别的
+  管理员竞争删除了油站）；联调时若看到这种莫名登出，先确认云端构建包含 PR #55。现在仍答 403 的只有 `customer_user` 调管理接口
+  （角色问题，且该页面对他们不可见），它同样是 `not authorized`，按账号失效处理回登录页是合理的。因此
+  `pages.console.stations.error.forbidden` 实际到不了，只是防御性兜底；别在界面上对 403 特判（会掩盖真正的账号失效）。
+- 分配接口的 409：平台管理员是"设备没有客户"，客户管理员只会遇到"设备或油站刚被修改"的竞争，文案两种都覆盖。
+- 联调真实云端需要包含 yeweiyi-cloud PR #53（油站）和 PR #55（对象级拒绝改为 404/400）的构建；没有油站接口的旧版云端 `/api/stations` 答 404：设备页和监控页筛选的油站请求是
+  静默的（`listStations({ silent: true })`，失败退化为空列表，不弹错误），油站页的列表请求不静默，会显示全局错误提示。
+- 设备行的 `station_id` 字段缺失 = 旧版云端，显示"未知"，不要当成"未分组"。设备没有客户（`customer_id: null`）时云端不允许挂油站，界面不给操作。
+- 分配时候选油站按设备所属客户过滤（平台管理员看到多个客户的油站），这只是不让用户选到，云端的复合外键才是最后防线。
+- 油站管理员角色（cloud#44）、邀请与员工管理、按用户授权不在本仓库范围。
+- **监控页按油站筛选/分段**：设备总览与报警/入库/出库的 `DevicePicker` 有油站筛选（`?station=`：省略=全部，`none`=未分组，数字=油站 id，
+  非法或不可见回退为全部）；逻辑在 `src/pages/console/components/useStationFilter.tsx` 与纯函数 `src/utils/stationFilter.ts`。
+  `GET /api/stations` 对三种角色都能调（客户用户只看到自己设备所在的油站）。没有油站、请求失败（旧版云端 404）、或设备行都没有
+  `station_id` 时不出现筛选和分段。总览选「全部油站」时按油站分段，筛选只改渲染，不重取遥测；`DevicePicker` 的筛选只缩小设备候选，
+  `?device=` 的可见性仍按完整列表判断，换油站不清已选设备。平台管理员下油站标签追加客户名（跨客户可能重名）。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
 `internal/api/router.go`。
@@ -129,9 +166,10 @@ npm run build   # 生产构建
 
 ```text
 config/routes.ts        路由表，access 字段是 /ops 与 /console 的唯一分界
-src/access.ts           canPlatformAdmin / canConsole 两个角色判断
-src/pages/ops/          运维控制台：devices / users / pairing-secret / audit
+src/access.ts           canPlatformAdmin / canManageAssets / canConsole 角色判断
+src/pages/ops/          运维控制台：users / pairing-secret / audit（设备与客户已并入 console/assets）
 src/pages/console/      客户 PC 监控台：devices / device-detail / alarms / oil-in-out（入库、出库共用）/ issue-command
+src/pages/console/assets/  资产管理：customers（仅平台管理员）/ stations / devices（登记·客户归属·油站归属）
 src/pages/user/login/   登录（两个分区共用）
 src/pages/account/      个人设置（占位）
 src/pages/exception/    403 / 404 / 500

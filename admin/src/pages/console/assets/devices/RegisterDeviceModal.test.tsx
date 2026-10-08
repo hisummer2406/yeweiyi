@@ -36,13 +36,19 @@ const customers = [
   { id: 4, name: 'B 油站', createdAt: '2026-10-07T00:00:00Z' },
 ];
 
-const setup = () => {
+const setup = (withAssign = false) => {
   const onClose = vi.fn();
   const onRegistered = vi.fn();
+  const onAssignStation = vi.fn();
   render(
-    <RegisterDeviceModal open onClose={onClose} onRegistered={onRegistered} />,
+    <RegisterDeviceModal
+      open
+      onClose={onClose}
+      onRegistered={onRegistered}
+      onAssignStation={withAssign ? onAssignStation : undefined}
+    />,
   );
-  return { onClose, onRegistered };
+  return { onClose, onRegistered, onAssignStation };
 };
 
 const codeInput = () =>
@@ -166,6 +172,85 @@ describe('RegisterDeviceModal', () => {
     expect(message.success).toHaveBeenCalledWith(
       expect.stringContaining('无需重复登记'),
     );
+  });
+
+  it('passes the registered device and customer to onRegistered', async () => {
+    registerDevice.mockResolvedValue({
+      kind: 'created',
+      deviceName: 'ZCT000001',
+      customerId: 3,
+    });
+    const { onRegistered } = setup();
+    typeCode('ZCT000001');
+    await pickCustomer('A 油站');
+    submit();
+    await waitFor(() =>
+      expect(onRegistered).toHaveBeenCalledWith({
+        deviceName: 'ZCT000001',
+        customerId: 3,
+      }),
+    );
+  });
+
+  describe('assign-station action on the success toast', () => {
+    const toastContent = () => {
+      const arg = (message.success as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0][0];
+      return render(<div>{arg.content}</div>);
+    };
+
+    it.each(['created', 'exists'] as const)(
+      'offers it after a %s registration, and only calls back when clicked',
+      async (kind) => {
+        registerDevice.mockResolvedValue({
+          kind,
+          deviceName: 'ZCT000001',
+          customerId: 3,
+        });
+        const { onAssignStation, onRegistered } = setup(true);
+        typeCode('ZCT000001');
+        await pickCustomer('A 油站');
+        submit();
+        await waitFor(() => expect(onRegistered).toHaveBeenCalled());
+        // 不点就不会有任何分配动作
+        expect(onAssignStation).not.toHaveBeenCalled();
+        const view = toastContent();
+        fireEvent.click(
+          view.getByText(
+            zhPages['pages.console.stations.devices.action.assign'],
+          ),
+        );
+        expect(onAssignStation).toHaveBeenCalledWith({
+          deviceName: 'ZCT000001',
+          customerId: 3,
+        });
+      },
+    );
+
+    it('is plain text when no handler is given', async () => {
+      registerDevice.mockResolvedValue({
+        kind: 'created',
+        deviceName: 'ZCT000001',
+        customerId: 3,
+      });
+      const { onRegistered } = setup(false);
+      typeCode('ZCT000001');
+      await pickCustomer('A 油站');
+      submit();
+      await waitFor(() => expect(onRegistered).toHaveBeenCalled());
+      expect(typeof (message.success as any).mock.calls[0][0]).toBe('string');
+    });
+
+    it('does not appear when registration fails with 409', async () => {
+      registerDevice.mockRejectedValue(new ApiError(409, 'belongs'));
+      const { onAssignStation } = setup(true);
+      typeCode('ZCT000001');
+      await pickCustomer('A 油站');
+      submit();
+      await screen.findByText(zhPages['pages.ops.devices.error.conflict']);
+      expect(message.success).not.toHaveBeenCalled();
+      expect(onAssignStation).not.toHaveBeenCalled();
+    });
   });
 
   it('sends only one request when the form is submitted again while one is pending', async () => {
