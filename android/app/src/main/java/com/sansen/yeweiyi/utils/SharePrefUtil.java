@@ -177,6 +177,13 @@ public class SharePrefUtil {
      * @param defValue
      * @return
      */
+    /** 同 {@link #saveInt}，但返回 commit() 是否成功写盘（读回不能证明落盘：内存缓存先于磁盘更新）。 */
+    public static boolean saveIntChecked(Context context, String key, int value) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        return sp.edit().putInt(key, value).commit();
+    }
+
     public static int getInt(Context context, String key, int defValue) {
         //Log.i(TAG, "getInt: "+key);
         if (sp == null)

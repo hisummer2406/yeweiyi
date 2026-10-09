@@ -38,6 +38,8 @@ public final class TankSettingsAttributeBuilder {
             // 储罐类型下拉框序号：0 = 卧罐，1 = 立罐（res/values*/array.xml guan_type）；文字随界面语言变，不报文字
             attributes.put(key(tank, "tankShape"), set.getGunType());
             attributes.put(key(tank, "oilType"), oilTypeNames.nameOf(set.getOilType()));
+            // 名称随界面语言变化，云端读写以序号为准（config.setTankSettings 下发的也是序号）
+            attributes.put(key(tank, "oilTypeIndex"), set.getOilType());
             attributes.put(key(tank, "alarmHighHighLevelMm"), set.getHheightOilAlarm());
             attributes.put(key(tank, "alarmHighLevelMm"), set.getHeightOilAlarm());
             attributes.put(key(tank, "alarmLowLevelMm"), set.getLowOilAlarm());

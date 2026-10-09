@@ -9,15 +9,21 @@ import java.util.Map;
  */
 public final class DeviceSettingsAttributeBuilder {
 
+    /** 上报与下发（{@code config.setDeviceSettings}）共用的字段名，改名只改这里。 */
+    public static final String KEY_IN_HEIGHT_MM = "inStockHeightThresholdMm";
+    public static final String KEY_IN_TIME_SEC = "inStockTimeThresholdSec";
+    public static final String KEY_OUT_HEIGHT_MM = "outStockHeightThresholdMm";
+    public static final String KEY_OUT_TIME_SEC = "outStockTimeThresholdSec";
+
     private DeviceSettingsAttributeBuilder() {
     }
 
     public static Map<String, Object> build(int inHeightMm, int inTimeSec, int outHeightMm, int outTimeSec) {
         Map<String, Object> attributes = new LinkedHashMap<>();
-        attributes.put("inStockHeightThresholdMm", inHeightMm);
-        attributes.put("inStockTimeThresholdSec", inTimeSec);
-        attributes.put("outStockHeightThresholdMm", outHeightMm);
-        attributes.put("outStockTimeThresholdSec", outTimeSec);
+        attributes.put(KEY_IN_HEIGHT_MM, inHeightMm);
+        attributes.put(KEY_IN_TIME_SEC, inTimeSec);
+        attributes.put(KEY_OUT_HEIGHT_MM, outHeightMm);
+        attributes.put(KEY_OUT_TIME_SEC, outTimeSec);
         return attributes;
     }
 }

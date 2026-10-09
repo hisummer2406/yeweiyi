@@ -334,6 +334,8 @@ public void dispatch(String mqttRequestId, String payload) {
 | 方法 | 业务动作 | 当前真实行为 |
 |---|---|---|
 | `config.setAlarmThresholds` | 改某个罐子的高高/高/低/低低四档报警阈值 | ✅ 真实执行：校验合法性（非负、四档必须严格递减）→ 同步写库 → 刷新 `OilcanDataManager` 缓存，让 `AlarmDetection` 立刻用上新阈值 |
+| `config.setTankSettings` | 改某个罐的报警阈值（不含低温）、修正值、密度、油品序号、容量，字段名同客户端属性 | ✅ 2026-10-08 新增：白名单 + 范围校验（全部通过才写，否则整条拒绝）→ 同步写库 → 刷新缓存 → 客户端属性自动回显。清单见 `docs/远程配置下发-字段清单.md`。**云端未对齐、未经真机验证** |
+| `config.setDeviceSettings` | 改出入库高度/时间阈值 | ✅ 2026-10-08 新增：校验 → 写 SharedPreferences → 刷新 `Singleton` → 回显。**云端未对齐、未经真机验证** |
 | `pump.start`/`pump.stop` | 启/停指定油泵 | 恒拒绝（`FEATURE_DISABLED`），无真实业务逻辑 |
 | `valve.open`/`valve.close` | 开/关指定阀门 | 同上 |
 | `alarm.mute` | 现场消音，不改变报警状态本身 | 同上——但这是非物理动作，云端装机验收工具专门测它，优先级最高 |
@@ -372,7 +374,7 @@ public void dispatch(String mqttRequestId, String payload) {
 **当前实现**（一条 attributes 消息，四部分合并；后两部分 2026-10-08 新增，key 名和单位是本仓库自定，云端尚未对齐）：
 - `ClientAttributesBuilder`（协议 §5.1）：`protocolVersion`（恒为 1）、`tankCount`（最大罐号，跟快照同一语义）、每罐 `probeAddress`（`OilCan.getProbeAdr()`）、`probeType`、`capacityL`（罐设置最大容量）。
 - `TankCalibrationAttributeBuilder`：每个启用罐的"高度→体积"标定表（`tank{n}.calibrationHeightMm`/`calibrationVolumeL`）。之前只在本地持久化，现在发了，但云端没有接口转发（见第 2 节）。体积为 NaN/Infinity 的点连同高度一起去掉（`EllipseTable` 生成的罐表末点曾为 NaN，导致整条属性发不出去、保存罐配置时崩溃）。
-- `TankSettingsAttributeBuilder`：罐设置页各项，每个启用罐 `tank{n}.` + `tankHeightMm`、`sensorLengthMm`、`tankShape`（储罐类型：0 = 卧罐，1 = 立罐，对应 `array.xml` 的 `guan_type`）、`oilType`（名称，同遥测）、`alarmHighHighLevelMm`/`alarmHighLevelMm`/`alarmLowLevelMm`/`alarmLowLowLevelMm`/`alarmHighWaterMm`（毫米）、`alarmHighTempC`/`alarmLowTempC`（℃）、`levelCorrectionMm`/`waterCorrectionMm`/`tempCorrectionC`、`density`（原样上报：设置页标 kg/m³，库里存 0.56 这类值，单位待对齐）。报警阈值 0 = 未启用。颜色、`densVar` 不报。
+- `TankSettingsAttributeBuilder`：罐设置页各项，每个启用罐 `tank{n}.` + `tankHeightMm`、`sensorLengthMm`、`tankShape`（储罐类型：0 = 卧罐，1 = 立罐，对应 `array.xml` 的 `guan_type`）、`oilType`（名称，同遥测，随界面语言变化）、`oilTypeIndex`（油品序号，云端读写以它为准）、`alarmHighHighLevelMm`/`alarmHighLevelMm`/`alarmLowLevelMm`/`alarmLowLowLevelMm`/`alarmHighWaterMm`（毫米）、`alarmHighTempC`/`alarmLowTempC`（℃）、`levelCorrectionMm`/`waterCorrectionMm`/`tempCorrectionC`、`density`（原样上报：设置页标 kg/m³，库里存 0.56 这类值，单位待对齐）。报警阈值 0 = 未启用。颜色、`densVar` 不报。
 - `DeviceSettingsAttributeBuilder`：基础设置页出入库阈值 `inStockHeightThresholdMm`/`inStockTimeThresholdSec`/`outStockHeightThresholdMm`/`outStockTimeThresholdSec`（0 = 未配置）。
 
 **`probeType`**：上报通讯协议名，字符串跟串口设置页一致：`ZHONGCHENG`（中盛探针协议）/`MODBUS`（标准 Modbus 协议）/`4-20MA`（4-20mA），不是云端样例里的"磁致伸缩"（测量原理），取值待跟云端约定。来源是 `OilCan.getProbeType()`——它**不读 `probeType` 字段，而是返回 `Singleton.ChuanKou2`**，即"高级设置 → 串口设置 → 串口 2"的选择：0 = 中盛探针协议（`ZhongChengCompany`）、1 = 标准 Modbus 协议（`LDCompany`）、2 = 4-20mA（`LD2Company`）。这是**整机一个设置**，同一台设备所有罐的 `probeType` 相同。（2026-10-04 更正：此前误以为 `setProbeType()` 无调用方即"恒为 0"。）

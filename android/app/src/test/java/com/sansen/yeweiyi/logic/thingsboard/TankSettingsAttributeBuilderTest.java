@@ -52,6 +52,7 @@ public class TankSettingsAttributeBuilderTest {
         assertEquals("float 不能带出 2.5999999046325684 这种尾数", 2.6, a.get("tank1.sensorLengthMm"));
         assertEquals(1, a.get("tank1.tankShape"));
         assertEquals("type3", a.get("tank1.oilType"));
+        assertEquals(3, a.get("tank1.oilTypeIndex"));
         assertEquals(1500, a.get("tank1.alarmHighHighLevelMm"));
         assertEquals(600, a.get("tank1.alarmHighLevelMm"));
         assertEquals(100, a.get("tank1.alarmLowLevelMm"));
@@ -63,7 +64,7 @@ public class TankSettingsAttributeBuilderTest {
         assertEquals(-0.5, a.get("tank1.waterCorrectionMm"));
         assertEquals(0.2, a.get("tank1.tempCorrectionC"));
         assertEquals(0.56, a.get("tank1.density"));
-        assertEquals(15, a.size());
+        assertEquals(16, a.size());
     }
 
     @Test

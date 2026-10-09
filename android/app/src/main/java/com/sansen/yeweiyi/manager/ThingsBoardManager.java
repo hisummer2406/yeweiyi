@@ -32,9 +32,13 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcMethodRegistry;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcResultStatus;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetDeviceSettingsHandler;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankSettingsHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
+import com.sansen.yeweiyi.utils.Constans;
+import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.List;
@@ -167,6 +171,10 @@ public final class ThingsBoardManager {
         registry.register(SetAlarmThresholdHandler.METHOD,
                 new SetAlarmThresholdHandler(OilTankRepositoryImpl.getInstance(),
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
+        registry.register(SetTankSettingsHandler.METHOD,
+                new SetTankSettingsHandler(OilTankRepositoryImpl.getInstance(),
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
+        registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
         HighRiskActionHandler highRiskActionHandler = new HighRiskActionHandler();
         registry.register(HighRiskActionHandler.METHOD_START_PUMP, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_STOP_PUMP, highRiskActionHandler);
@@ -289,6 +297,35 @@ public final class ThingsBoardManager {
         if (started.get()) {
             reconnectNow();
         }
+    }
+
+    /**
+     * {@code config.setDeviceSettings} 的落盘：写基础设置页同一份 SharedPreferences，按 commit() 结果确认
+     * 写盘，再刷新 {@link Singleton}（出入库检测读它），最后重发客户端属性回显新值。
+     */
+    private void saveDeviceSettings(Map<String, Integer> values) {
+        Context context = MyApplication.getInstance().getApplicationContext();
+        for (Map.Entry<String, Integer> entry : values.entrySet()) {
+            String prefKey = DEVICE_SETTING_PREF_KEYS.get(entry.getKey());
+            if (prefKey == null) {
+                throw new IllegalStateException("没有对应的本地配置项: " + entry.getKey());
+            }
+            if (!SharePrefUtil.saveIntChecked(context, prefKey, entry.getValue())) {
+                throw new IllegalStateException("写入配置失败: " + entry.getKey());
+            }
+            Singleton.getInstance().getSetData(prefKey);
+        }
+        requestClientAttributesPublish();
+    }
+
+    /** 下发字段名 → 基础设置页使用的 SharedPreferences 键（{@code Constans}）。 */
+    private static final Map<String, String> DEVICE_SETTING_PREF_KEYS = new java.util.HashMap<>();
+
+    static {
+        DEVICE_SETTING_PREF_KEYS.put(DeviceSettingsAttributeBuilder.KEY_IN_HEIGHT_MM, Constans.InHight);
+        DEVICE_SETTING_PREF_KEYS.put(DeviceSettingsAttributeBuilder.KEY_IN_TIME_SEC, Constans.InTime);
+        DEVICE_SETTING_PREF_KEYS.put(DeviceSettingsAttributeBuilder.KEY_OUT_HEIGHT_MM, Constans.OutHight);
+        DEVICE_SETTING_PREF_KEYS.put(DeviceSettingsAttributeBuilder.KEY_OUT_TIME_SEC, Constans.OutTime);
     }
 
     // ---- 报警立即上报 ----
