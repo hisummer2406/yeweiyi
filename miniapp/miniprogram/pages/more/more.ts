@@ -1,5 +1,6 @@
-import { roleFromToken, usernameFromToken } from '../../utils/auth';
-import { getToken } from '../../utils/storage';
+import { roleFromToken } from '../../utils/auth';
+import { maskPhone } from '../../utils/loginFlow';
+import { getProfile, getToken } from '../../utils/storage';
 
 const ROLE_LABELS: Record<string, string> = {
   platform_admin: '平台管理员',
@@ -59,7 +60,7 @@ const ITEMS: MoreItem[] = [
 Page({
   data: {
     items: ITEMS,
-    username: '',
+    account: '',
     roleLabel: '',
   },
 
@@ -67,7 +68,7 @@ Page({
     const token = getToken();
     const role = token ? roleFromToken(token) : '';
     this.setData({
-      username: token ? usernameFromToken(token) : '',
+      account: token ? maskPhone(getProfile()?.phone) : '',
       roleLabel: ROLE_LABELS[role] || role,
     });
   },

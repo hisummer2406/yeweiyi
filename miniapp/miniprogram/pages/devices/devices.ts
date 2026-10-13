@@ -2,7 +2,7 @@ import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndBind } from '../../utils/bind';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
-import { usernameFromToken } from '../../utils/auth';
+import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
 import {
   buildStationOptions,
@@ -100,7 +100,7 @@ Page({
         this.allDevices = devRes.rows;
         this.allStations = stRes.rows;
         this.stationOptions = buildStationOptions(stRes.rows, devRes.rows);
-        return this.showStation(seq, this.chosenStationKey || getRememberedStation(this.currentUsername()));
+        return this.showStation(seq, this.chosenStationKey || getRememberedStation(this.currentUserKey()));
       })
       .catch((err: Error) => {
         if (seq !== this.loadSeq) return;
@@ -109,8 +109,10 @@ Page({
       });
   },
 
-  currentUsername(): string {
-    return usernameFromToken(getToken());
+  // The station preference is kept per account, keyed by user id (not phone or username, which a
+  // customer-side account does not have as a stable name).
+  currentUserKey(): string {
+    return userKeyFromToken(getToken());
   },
 
   // Show one station's devices (or every device when there is no dropdown) and load their telemetry.
@@ -148,7 +150,7 @@ Page({
     // Only record the choice. The select page calls wx.navigateBack() right after emitting, which
     // always fires onShow -> loadHome(); reloading here too would load everything twice.
     this.chosenStationKey = key;
-    rememberStation(this.currentUsername(), key);
+    rememberStation(this.currentUserKey(), key);
   },
 
   loadDevice(deviceName: string, seq: number): Promise<void> {

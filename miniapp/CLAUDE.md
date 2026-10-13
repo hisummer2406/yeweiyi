@@ -71,9 +71,22 @@ unbound-or-nonexistent device answers the same 403/401 either way, by design (de
 enumeration prevention), so don't treat those as necessarily "not yours," and don't build UI that
 assumes a `device` string typed/pasted by the user will work without binding first.
 
-- `POST /api/login` — `{username, password}` → `{token}`. The JWT's `sub` claim is the username and
-  its `role` claim is `platform_admin`/`customer_admin`/`customer_user` — see `utils/auth.ts`. A
-  role change does not take effect until the user's next login.
+- **Login is WeChat phone authorization** (yeweiyi-cloud#59, miniapp #4; contract
+  `yeweiyi-cloud/docs/account-phone-wechat-contract.md`). There is no password form: the administrator
+  provisions the account (phone + customer) in the web back office, and the user proves the number
+  with `<button open-type="getPhoneNumber">`. `POST /api/auth/wechat/login` `{loginCode}` restores a
+  session for a WeChat already bound (401 `wechat_not_bound` → show the phone button);
+  `POST /api/auth/wechat/phone-login` `{loginCode, phoneCode}` binds on first use. The two codes are
+  single-use — a **fresh `wx.login` code is fetched for every call**, never cached — and the app never
+  sends a phone number or openid itself. Failures carry a `code` (`utils/loginFlow.ts` maps each to
+  its own message: not provisioned / disabled / not onboarded (#60, reserved) / identity conflict /
+  code invalid / WeChat unavailable). Login calls go out with `needAuth=false`, so no failure there can
+  be taken for a dead session. The JWT's `sub` is the **user id**, not a username (customer-side
+  accounts have none): read identity from the login response (`utils/storage` profile) and key local
+  storage by `userKeyFromToken` ("u12"). `role` is still read from the token for gating. A role change
+  does not take effect until the next login. After 退出登录 `autoLogin` is switched off so the login page
+  does not silently restore the same WeChat; the next successful login switches it back on.
+  **Not verified on a real device or against real WeChat** — see the PR.
 - **Device pairing.** `POST /api/devices/bind` — `{deviceName, pairingToken?}` → `200
   {deviceName, bound:true}` (idempotent). Since `yeweiyi-cloud#56` the `pairingToken` is optional: the
   label's QR holds only a short code (e.g. `000001`), this app sends it as `deviceName` with no token,
@@ -213,8 +226,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   login, then the next 401 sends the user back to login. `AlarmSocket` re-reads the token on every
   reconnect, so it picks the new one up without changes.
 - `utils/ws.ts` — `AlarmSocket` wraps `wx.connectSocket` for `/ws/alarms` with reconnect-on-close.
-- `utils/auth.ts` — `login()`; `usernameFromToken`/`roleFromToken` decode the JWT's `sub`/`role`
-  claims client-side purely for display and UI gating (real authorization is always server-side).
+- `utils/auth.ts` — `wechatRestore()` / `wechatPhoneLogin()`; `roleFromToken`/`userKeyFromToken`
+  decode the JWT's `role`/`uid` claims client-side purely for display, UI gating and storage keys
+  (real authorization is always server-side). `utils/loginFlow.ts` — the pure part (failure → message,
+  getPhoneNumber result, phone masking), checked in Node by `npm run check`.
 - `utils/pairing.ts` — validates the device short code in the QR payload.
 - `utils/labels.ts` — Chinese labels for the closed enums the cloud API returns (alarm type/severity/
   status, tank alarm state, stock direction) and the mirrored control-method table. One place so an
@@ -240,9 +255,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     the cloud has station data the top-left shows the current station name with a dropdown
     (`pages/station-select`) and the page lists only that station's devices; without station data
     (old cloud, `/api/stations` failing, no device belongs to any station) there is no dropdown and
-    the header says "我的设备". The selected station is remembered per username in `wx.storage`
+    the header says "我的设备". The selected station is remembered per account (user id key) in `wx.storage`
     (`utils/stationPref.ts`). "+" menu: 添加设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
-    in the back office with a password; there is no registration or invite in the mini-program.
+    in the back office (by the platform administrator: phone + customer); there is no registration or
+    invite in the mini-program.
     Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
     device, `yeweiyi-cloud#45`).
   - **我的记录 `records`** (tabBar) — entry list; 报警/出库/入库 pick a device then open

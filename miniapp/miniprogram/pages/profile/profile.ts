@@ -1,5 +1,6 @@
-import { roleFromToken, usernameFromToken } from '../../utils/auth';
-import { clearToken, getToken } from '../../utils/storage';
+import { roleFromToken } from '../../utils/auth';
+import { maskPhone } from '../../utils/loginFlow';
+import { clearToken, getProfile, getToken, setAutoLogin } from '../../utils/storage';
 
 const ROLE_LABELS: Record<string, string> = {
   platform_admin: '平台管理员',
@@ -9,7 +10,8 @@ const ROLE_LABELS: Record<string, string> = {
 
 Page({
   data: {
-    username: '',
+    // The account is shown by its masked phone number: the full number is not needed on screen.
+    account: '',
     roleLabel: '',
   },
 
@@ -17,12 +19,15 @@ Page({
     const token = getToken();
     const role = token ? roleFromToken(token) : '';
     this.setData({
-      username: token ? usernameFromToken(token) : '',
+      account: maskPhone(getProfile()?.phone),
       roleLabel: ROLE_LABELS[role] || role,
     });
   },
 
   onLogout() {
+    // Remember that the user chose to leave, so the login page does not sign this WeChat straight
+    // back in (the cloud would restore it).
+    setAutoLogin(false);
     clearToken();
     wx.reLaunch({ url: '/pages/login/login' });
   },

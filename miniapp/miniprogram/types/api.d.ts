@@ -12,8 +12,21 @@
 
 // ---- Auth ----
 
+// The user object of the WeChat login responses (yeweiyi-cloud docs/account-phone-wechat-contract.md
+// §3.1). A customer-side account has no username: `phone` identifies it, and the user sees their own
+// number in full. The JWT's `sub` is the user id, NOT a username — read identity from here.
+export interface SessionUser {
+  id: number;
+  role: 'platform_admin' | 'customer_admin' | 'customer_user';
+  customerId: number | null;
+  username: string | null;
+  phone: string | null;
+  disabled: boolean;
+}
+
 export interface LoginResponse {
   token: string;
+  user: SessionUser;
 }
 
 // ---- Devices ----
