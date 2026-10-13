@@ -1,6 +1,7 @@
 # 客户手机号账号与微信小程序登录：三端契约（草案，待确认）
 
-状态：**草案，尚未被三端负责人确认，代码未实现。** 确认前不得改三端实现。
+状态：**已确认（2026-10-13），范围仅 #59。** 实施进度：云端 PR-1（手机号账号、创建权限收紧、`/api/me`、密码登录规则、
+令牌语义）已实现；PR-2（微信接口）、网页、小程序见各自 PR。#60、#63 不在本批，§9 的限制仍然成立。
 主需求：[cloud#59](https://github.com/hisummer2406/yeweiyi-cloud/issues/59)；
 配套：[miniapp#4](https://github.com/hisummer2406/yeweiyi-miniapp/issues/4)、
 [admin#13](https://github.com/hisummer2406/yeweiyi-admin/issues/13)。
