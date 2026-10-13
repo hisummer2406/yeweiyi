@@ -106,12 +106,16 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 	if len(suffix) > 60 {
 		suffix = suffix[len(suffix)-60:]
 	}
-	username := "ctl-" + suffix
+	// Customer-side usernames are their phone numbers (users_phone_role_check), so a valid-looking
+	// number that no other test range uses.
+	username := fmt.Sprintf("170%08d", time.Now().UnixNano()%100_000_000)
 	deviceName := "ctl-dev-" + suffix
 
 	var userID int64
 	err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, 'x', $2::text,
+		`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,
+			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE $1 END,
+			CASE WHEN $2::text = 'customer_user' THEN NULL ELSE 'x' END, $2::text,
 			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE (SELECT id FROM customers WHERE name = 'default') END) RETURNING id`,
 		username, role).Scan(&userID)
 	if err != nil {

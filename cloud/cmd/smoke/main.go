@@ -186,8 +186,9 @@ func run() int {
 			// POST /api/devices/:device/pairing-secret in the real flow; that handler and its
 			// role gate have their own dedicated tests in internal/api/devices_test.go). Doing it
 			// this way, rather than granting the throwaway login user platform_admin just to call
-			// that endpoint, keeps every later step exercising the ordinary customer_user
-			// ownership-gated path a real mini-program user actually takes.
+			// that endpoint, keeps every later step on the ordinary
+			// customer-side path a real client takes (a customer admin here, since staff cannot log in
+			// with a password).
 			pairingSecret, err := mintPairingSecretFixture(ctx, *dbURL, name)
 			if err != nil {
 				return "", fmt.Errorf("mint pairing secret fixture: %w", err)
@@ -690,7 +691,10 @@ func loginAsThrowawayUser(ctx context.Context, apiURL, dbURL string) (*apiClient
 		return nil, "", nil, fmt.Errorf("ping business database (-db / DATABASE_URL): %w", err)
 	}
 
-	username := fmt.Sprintf("smoke-%d", time.Now().UnixNano())
+	// A customer admin, logged in by phone: staff (customer_user) have no password any more and can
+	// only get a token through the WeChat login, which a smoke run cannot do. The phone is a
+	// throwaway 11-digit number in a range of its own (190…), whose username must equal it.
+	username := fmt.Sprintf("190%08d", time.Now().UnixNano()%100_000_000)
 	passwordBytes := make([]byte, 18)
 	if _, err := rand.Read(passwordBytes); err != nil {
 		pool.Close()
@@ -705,8 +709,8 @@ func loginAsThrowawayUser(ctx context.Context, apiURL, dbURL string) (*apiClient
 
 	var userID int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, (SELECT id FROM customers WHERE name = 'default')) RETURNING id`,
-		username, string(hash), control.RoleCustomerUser,
+		`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1, $1, $2, $3, (SELECT id FROM customers WHERE name = 'default')) RETURNING id`,
+		username, string(hash), control.RoleCustomerAdmin,
 	).Scan(&userID); err != nil {
 		pool.Close()
 		return nil, "", nil, fmt.Errorf("seed throwaway login user: %w", err)
@@ -722,7 +726,7 @@ func loginAsThrowawayUser(ctx context.Context, apiURL, dbURL string) (*apiClient
 		Token string `json:"token"`
 	}
 	code, raw, err := client.do(ctx, http.MethodPost, "/api/login", map[string]string{
-		"username": username, "password": password,
+		"phone": username, "password": password,
 	}, &loginOut)
 	if err != nil {
 		cleanup()

@@ -105,6 +105,7 @@ type Querier interface {
 	// Used where a decision must reflect the user's *current* role and customer rather than what their
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
 	GetUserForShare(ctx context.Context, id int64) (User, error)

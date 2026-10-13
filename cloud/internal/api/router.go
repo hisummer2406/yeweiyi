@@ -75,6 +75,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		// /api/oilcan/latest (replaced by /api/devices/:device/telemetry/latest below) and
 		// /api/shifts (设备协议 V1 has no 交班 uplink on either side, so it could only return
 		// an empty list — see docs/protocol-v1-reconciliation.md).
+		authorized.GET("/me", meHandler(deps))
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))

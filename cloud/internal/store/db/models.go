@@ -288,8 +288,8 @@ type User struct {
 	ID int64 `json:"id"`
 	// 登录用户名，唯一。
 	Username string `json:"username"`
-	// bcrypt 密码哈希，不存明文。
-	PasswordHash string `json:"password_hash"`
+	// bcrypt 哈希。平台管理员、客户管理员必填；客户普通用户（员工）必须为 NULL，只能经微信登录。
+	PasswordHash pgtype.Text `json:"password_hash"`
 	// 账号创建时间。
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	// 角色：platform_admin=平台管理员，customer_admin=客户管理员，customer_user=客户普通用户。控制命令的权限分级依据此列（见 internal/protocol 的 PermissionLevel）。
@@ -298,6 +298,8 @@ type User struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 停用时间；NULL=启用。停用后无法登录，且已签发的 token 也无法访问任何设备（判定读库）。
 	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
+	// 规范化手机号（中国大陆 11 位）。平台管理员为 NULL，客户管理员/员工必填，且 username 与之相等；全局唯一。
+	Phone pgtype.Text `json:"phone"`
 }
 
 // 用户-设备绑定关系（多对多），小程序端通过扫描设备物理二维码建立绑定（CLAUDE.md 2026-08-29 authorization pass）。

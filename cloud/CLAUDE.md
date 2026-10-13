@@ -29,6 +29,13 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   （403）不续期。令牌带 `authAt`（上次输入密码的时间），续期时沿用，且新令牌的 `exp` 不会超过
   `authAt + auth.maxSessionAge`（默认 30 天，到点必须重新登录）。`/ws/alarms` 不受影响：连接仍在**原令牌**
   到期时以 `token expired` 关闭，客户端需用新令牌重连。续期不写 `audit_log`。
+- 账号（#59，契约见 [docs/account-phone-wechat-contract.md](docs/account-phone-wechat-contract.md)）：客户侧账号以手机号
+  标识（`users.phone`，11 位大陆号，全局唯一，客户角色的 `username` 等于手机号）；员工（`customer_user`）**没有网页密码**
+  （`password_hash` 必须为 NULL，由 CHECK 保证），只能经微信登录。**只有平台管理员能创建/停用/启用/重置账号**，客户管理员
+  调用这些接口一律 `403 not authorized`（在解析请求体之前，写 `denied` 审计）；客户管理员只能列出本客户员工（手机号脱敏）。
+  `POST /api/login` 的 `username`（平台管理员）与 `phone`（客户管理员）二选一；员工以任何方式密码登录都与密码错误同样
+  `401 invalid_credentials`。令牌 `sub` 是用户 ID，不是用户名；客户端用登录响应的 `user` 或 `GET /api/me` 取身份。
+  新增的认证/账号响应带 `code` 字段，客户端按 `code` 分支。开发库里升级前的旧客户账号不迁移，需重建。
 - 油站（#43）：客户 → 油站 → 设备，油站只存在业务库（`stations` 表、`devices.station_id`），ThingsBoard 不知道，
   设备名仍是唯一连接点。设备所属油站必须与设备所属客户一致，由复合外键 + `CHECK` 保证；`SetDeviceCustomer`
   换客户时同时清空 `station_id`。`GET /api/devices` 每行带可空 `station_id`；`GET /api/stations` 的范围与设备列表

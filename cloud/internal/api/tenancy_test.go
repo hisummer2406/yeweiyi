@@ -303,6 +303,7 @@ type routeCase struct {
 var exemptRoutes = map[string]string{
 	"GET /healthz":             "no device",
 	"POST /api/login":          "no device",
+	"GET /api/me":              "no device; returns only the caller's own row",
 	"GET /api/devices":         "scoped to the caller; see TestTenancy_ListDevicesByRole",
 	"GET /api/stations":        "no device in the path; scoped to the caller in SQL, see TestStations_ListScope",
 	"POST /api/stations":       "no device; customer admin limited to their own customer, see TestStations_Create",
@@ -316,9 +317,9 @@ var exemptRoutes = map[string]string{
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"PUT /api/customers/:id":      "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"DELETE /api/customers/:id":   "no device; role-gated to platform admin, see TestAdmin_Customers",
-	"POST /api/users":             "no device; scoped to the caller's customer, see TestAdmin_UserLifecycle",
-	"GET /api/users":              "no device; scoped to the caller's customer, see TestAdmin_UserLifecycle",
-	"PUT /api/users/:id":          "no device; target must be in the caller's customer, see TestAdmin_DisableAndResetPassword",
+	"POST /api/users":             "no device; role-gated to platform admin, see TestAdmin_UserLifecycle",
+	"GET /api/users":              "no device; a customer admin sees only their customer's staff, see TestAdmin_UserLifecycle",
+	"PUT /api/users/:id":          "no device; role-gated to platform admin, see TestAdmin_DisableAndResetPassword",
 	"PUT /api/users/:id/customer": "no device; role-gated to platform admin, see TestAdmin_MoveUser",
 }
 
@@ -705,9 +706,11 @@ func TestTenancy_AuditScope(t *testing.T) {
 			t.Errorf("customer A sees B's refused attempt against A's device: %+v", e)
 		}
 	}
+	var platformName string
+	tn.env.pool.QueryRow(context.Background(), `SELECT username FROM users WHERE id = $1`, tn.platformID).Scan(&platformName)
 	var sawPlatform bool
 	for _, e := range a {
-		if strings.HasPrefix(e.Actor, "api-test-other-") && e.Outcome == "allowed" {
+		if e.Actor == platformName && e.Outcome == "allowed" {
 			sawPlatform = true
 		}
 	}
@@ -752,12 +755,47 @@ func TestTenancy_SchemaInvariants(t *testing.T) {
 	}
 	name := func(s string) string { return fmt.Sprintf("schema-%s-%d", s, time.Now().UnixNano()) }
 
+	// Each row below is valid in every respect but the one invariant it names, so the rejection
+	// cannot come from an unrelated CHECK.
 	if err := exec(`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x','platform_admin',$2)`,
 		name("pa"), tn.custA); err == nil {
 		t.Error("a platform admin with a customer must be rejected")
 	}
-	if err := exec(`INSERT INTO users (username, password_hash, role) VALUES ($1,'x','customer_user')`, name("cu")); err == nil {
+	ph := testPhone()
+	if err := exec(`INSERT INTO users (username, phone, role) VALUES ($1,$1,'customer_user')`, ph); err == nil {
 		t.Error("a customer user without a customer must be rejected")
+	}
+	ph = testPhone()
+	if err := exec(`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,$1,'x','customer_user',$2)`,
+		ph, tn.custA); err == nil {
+		t.Error("staff (customer_user) with a password hash must be rejected")
+	}
+	ph = testPhone()
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,$1,'customer_admin',$2)`,
+		ph, tn.custA); err == nil {
+		t.Error("a customer admin without a password hash must be rejected")
+	}
+	if err := exec(`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x','customer_admin',$2)`,
+		testPhone(), tn.custA); err == nil {
+		t.Error("a customer account without a phone must be rejected")
+	}
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,'12345678901','customer_user',$2)`,
+		"12345678901", tn.custA); err == nil {
+		t.Error("a malformed phone must be rejected")
+	}
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ('someone-else',$1,'customer_user',$2)`,
+		testPhone(), tn.custA); err == nil {
+		t.Error("a customer account whose username differs from its phone must be rejected")
+	}
+	dup := testPhone()
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,$1,'customer_user',$2)`,
+		dup, tn.custA); err != nil {
+		t.Fatalf("seed for the duplicate-phone check: %v", err)
+	}
+	t.Cleanup(func() { tn.env.pool.Exec(context.Background(), `DELETE FROM users WHERE phone = $1`, dup) })
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ('dup-'||$1,$1,'customer_user',$2)`,
+		dup, tn.custA); err == nil {
+		t.Error("a second account with the same phone must be rejected")
 	}
 	if err := exec(`INSERT INTO customers (name) VALUES ('default')`); err == nil {
 		t.Error("a duplicate customer name must be rejected")
@@ -786,7 +824,7 @@ func TestTenancy_MintUsesTheCurrentDatabaseRole(t *testing.T) {
 	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET role = 'customer_user', customer_id = $2 WHERE id = $1`, demotedID, tn.custA); err != nil {
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET role = 'customer_user', customer_id = $2, phone = username, password_hash = NULL WHERE id = $1`, demotedID, tn.custA); err != nil {
 		t.Fatal(err)
 	}
 
@@ -951,7 +989,7 @@ func TestTenancy_DemotedAdminLosesAdminMethodsImmediately(t *testing.T) {
 	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusAccepted {
 		t.Fatalf("precondition: a customer admin may issue %s, got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
 	}
-	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user' WHERE id = $1`, tn.adminAID); err != nil {
+	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user', password_hash = NULL WHERE id = $1`, tn.adminAID); err != nil {
 		t.Fatal(err)
 	}
 	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusForbidden {

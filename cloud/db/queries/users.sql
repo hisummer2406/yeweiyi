@@ -7,7 +7,12 @@ SELECT * FROM users WHERE username = $1;
 SELECT * FROM users WHERE id = $1;
 
 -- name: CreateUser :one
-INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, $4) RETURNING *;
+INSERT INTO users (username, password_hash, role, customer_id, phone)
+VALUES (sqlc.arg('username'), sqlc.narg('password_hash'), sqlc.arg('role'), sqlc.arg('customer_id'), sqlc.narg('phone'))
+RETURNING *;
+
+-- name: GetUserByPhone :one
+SELECT * FROM users WHERE phone = $1;
 
 -- name: ListUsers :many
 -- customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
