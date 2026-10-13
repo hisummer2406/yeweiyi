@@ -389,3 +389,48 @@ func TestValidate_MaxSessionAgeMustCoverTokenTTL(t *testing.T) {
 		t.Errorf("error should name the key, got: %v", err)
 	}
 }
+
+func TestLoad_WeChatIsOffByDefault(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.WeChat.Enabled {
+		t.Error("WeChat login must be off unless configured: offline deployments depend on it")
+	}
+}
+
+func TestLoad_WeChatEnabledNeedsCredentials(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	t.Setenv("WECHAT_ENABLED", "true")
+	if _, err := config.Load(""); err == nil {
+		t.Fatal("enabling WeChat without an AppID and secret must fail at startup, not on the first login")
+	}
+	t.Setenv("WECHAT_APP_ID", "wx123")
+	t.Setenv("WECHAT_APP_SECRET", "shh")
+	cfg, err := config.Load("")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.WeChat.Enabled || cfg.WeChat.AppID != "wx123" || cfg.WeChat.AppSecret != "shh" {
+		t.Errorf("wechat = %+v", cfg.WeChat)
+	}
+}
+
+func TestLoad_WeChatSecretNotAllowedInFile(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	path := writeConfig(t, "wechat:\n  enabled: true\n  appId: wx123\n  appSecret: from-the-file\n")
+	_, err := config.Load(path)
+	if err == nil || !strings.Contains(err.Error(), "WECHAT_APP_SECRET") {
+		t.Fatalf("a file-supplied appSecret must be refused with a pointer to the env var, got %v", err)
+	}
+}
+
+func TestLoad_WeChatBadBoolIsAnError(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	t.Setenv("WECHAT_ENABLED", "yes")
+	if _, err := config.Load(""); err == nil {
+		t.Fatal("WECHAT_ENABLED=yes must be rejected rather than read as false")
+	}
+}

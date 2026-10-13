@@ -43,3 +43,8 @@ SELECT * FROM users WHERE id = $1 FOR UPDATE;
 -- name: GetUserForShare :one
 -- Locks the acting administrator against being demoted, moved or disabled mid-transaction.
 SELECT * FROM users WHERE id = $1 FOR SHARE;
+
+-- name: GetUserByPhoneForUpdate :one
+-- WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
+-- second sees the first's identity row instead of racing it.
+SELECT * FROM users WHERE phone = $1 FOR UPDATE;

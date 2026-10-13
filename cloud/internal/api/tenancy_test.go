@@ -301,17 +301,20 @@ type routeCase struct {
 // exemptRoutes are the routes that take no device and therefore have no cross-customer case here.
 // Each needs a reason: a route that is merely forgotten must fail the test, not slip through.
 var exemptRoutes = map[string]string{
-	"GET /healthz":             "no device",
-	"POST /api/login":          "no device",
-	"GET /api/me":              "no device; returns only the caller's own row",
-	"GET /api/devices":         "scoped to the caller; see TestTenancy_ListDevicesByRole",
-	"GET /api/stations":        "no device in the path; scoped to the caller in SQL, see TestStations_ListScope",
-	"POST /api/stations":       "no device; customer admin limited to their own customer, see TestStations_Create",
-	"PUT /api/stations/:id":    "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
-	"DELETE /api/stations/:id": "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
-	"POST /api/devices":        "no device in the path; role-gated to platform admin, see TestRegisterDevice_*",
-	"POST /api/devices/bind":   "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
-	"POST /api/devices/unbind": "deletes only the caller's own binding row",
+	"GET /healthz":    "no device",
+	"POST /api/login": "no device",
+	"GET /api/me":     "no device; returns only the caller's own row",
+
+	"POST /api/auth/wechat/login":       "no device, no session yet; see TestWeChat_*",
+	"POST /api/auth/wechat/phone-login": "no device, no session yet; binds only to the account of the WeChat-verified phone, see TestWeChat_*",
+	"GET /api/devices":                  "scoped to the caller; see TestTenancy_ListDevicesByRole",
+	"GET /api/stations":                 "no device in the path; scoped to the caller in SQL, see TestStations_ListScope",
+	"POST /api/stations":                "no device; customer admin limited to their own customer, see TestStations_Create",
+	"PUT /api/stations/:id":             "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
+	"DELETE /api/stations/:id":          "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
+	"POST /api/devices":                 "no device in the path; role-gated to platform admin, see TestRegisterDevice_*",
+	"POST /api/devices/bind":            "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
+	"POST /api/devices/unbind":          "deletes only the caller's own binding row",
 
 	"POST /api/customers":         "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",

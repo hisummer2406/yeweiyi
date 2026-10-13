@@ -96,18 +96,24 @@ H=(-H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json')
 # 新增客户，记下返回的 id。注意 default 客户占用了 id 1，新客户不会是 1——不要硬编码
 CID=$(curl -s "${H[@]}" localhost:8080/api/customers -d '{"name":"客户名称"}' | jq -r .id)
 
-# 客户管理员（创建时需要指定客户）
+# 客户管理员：手机号 + 密码 + 客户（客户侧账号以手机号标识，没有用户名）
 USER_ID=$(curl -s "${H[@]}" localhost:8080/api/users \
-  -d "{\"username\":\"site-admin\",\"password\":\"至少8位的密码\",\"role\":\"customer_admin\",\"customerId\":$CID}" \
+  -d "{\"phone\":\"13800138000\",\"password\":\"至少8位的密码\",\"role\":\"customer_admin\",\"customerId\":$CID}" \
   | jq -r .id)
+
+# 员工：手机号 + 客户，**不带密码**（带了会 400 password_not_allowed）；员工只能经微信小程序登录
+STAFF_ID=$(curl -s "${H[@]}" localhost:8080/api/users \
+  -d "{\"phone\":\"13900139000\",\"role\":\"customer_user\",\"customerId\":$CID}" | jq -r .id)
 
 curl "${H[@]}" -X PUT localhost:8080/api/devices/DEVICE_NAME/customer -d "{\"customerId\":$CID}"   # 分配/转移设备
 curl "${H[@]}" -X PUT localhost:8080/api/users/$USER_ID -d '{"disabled":true}'                      # 停用用户（立即生效）
-curl "${H[@]}" -X PUT localhost:8080/api/users/$USER_ID -d '{"password":"新的至少8位密码"}'          # 重置密码
+curl "${H[@]}" -X PUT localhost:8080/api/users/$USER_ID -d '{"password":"新的至少8位密码"}'          # 重置客户管理员密码
 ```
 
-客户管理员只能在**本客户**内创建、停用 `customer_user`、重置其密码；创建 `customer_admin` 与其余管理
-操作需平台管理员。转移设备或用户会**同时清除它们的设备绑定**（旧客户下的绑定不能带到新客户）。
+**账号的创建、停用/启用、重置密码只有平台管理员能做**，客户管理员调用这些接口一律 `403`（只能列出本
+客户员工，手机号脱敏）。员工没有密码，对员工重置密码返回 `409 no_password_for_role`。网页管理员登录用
+`{"phone": ..., "password": ...}`（客户管理员）或 `{"username": ..., "password": ...}`（平台管理员）。
+升级到手机号账号之前创建的客户账号**不迁移**，需用上面的接口重建。转移设备或用户会**同时清除它们的设备绑定**（旧客户下的绑定不能带到新客户）。
 设备需先归属客户，才能被该客户的用户绑定：安装人员以平台管理员调
 `POST /api/devices/:device/pairing-secret`，请求体带 `{"customerId": <客户 id>}`；设备已属于另一个
 客户时返回 409，不会被静默改归属（要转移请用上面的分配接口）。有历史记录的客户无法删除。
@@ -573,6 +579,26 @@ docker compose down -v
 `offline-load.sh` 校验后导入。
 
 ---
+
+## 微信小程序登录（可选，默认关闭）
+
+员工（`customer_user`）和客户管理员在小程序里通过"微信手机号授权"登录。它**需要出网访问
+`api.weixin.qq.com`**，因此是可选能力：`wechat.enabled` 默认 `false`，关闭时两个
+`/api/auth/wechat/*` 接口返回 `503 wechat_unavailable`，管理员网页密码登录和服务启动完全不受影响。
+完全离线的私有化部署保持关闭即可，**离线下员工没有任何登录方式**——若离线交付需要员工入口，需另行设计。
+
+```bash
+export WECHAT_ENABLED=true
+export WECHAT_APP_ID=wx0123456789abcdef
+export WECHAT_APP_SECRET=...        # 只能走环境变量；写进 config.yaml 会让服务拒绝启动
+```
+
+- 开启前核实目标小程序的**手机号快速验证能力**资格与费用，并在小程序后台配置服务器域名。
+- 启动时不访问微信；`access_token` 只存内存。AppSecret、access_token、openid、两类 code 不写日志、不进审计。
+- 员工需先由平台管理员创建（手机号 + 客户）才能登录；未开通手机号 `404 phone_not_provisioned`，
+  不会自动注册。微信身份一旦绑定不会自动换绑：员工换微信号目前只能由运维用 SQL 删除
+  `user_wechat_identities` 中对应行（是否提供管理接口待产品决定，契约 Q3）。
+- **仅用假微信服务器验证过**；真实小程序端到端联调尚未做。
 
 ## 无公网依赖
 

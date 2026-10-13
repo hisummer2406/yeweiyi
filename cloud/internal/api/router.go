@@ -14,6 +14,7 @@ import (
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
+	"yeweiyi-cloud/internal/wechat"
 )
 
 type Deps struct {
@@ -28,6 +29,10 @@ type Deps struct {
 	// MaxSessionAge caps how long sliding renewal can keep a login alive, counted from the password
 	// login (the token's authAt). Zero means defaultMaxSessionAge.
 	MaxSessionAge time.Duration
+
+	// WeChat verifies mini-program login codes. Nil means the feature is off (config wechat.enabled);
+	// the WeChat routes then answer 503 wechat_unavailable and nothing else is affected.
+	WeChat wechat.Client
 
 	// TB and Control belong to the ThingsBoard single stack. Both are optional so the server can
 	// still boot without ThingsBoard configured — the routes that need them answer 503 rather than
@@ -61,6 +66,8 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	r.GET("/healthz", healthzHandler(deps))
 	r.POST("/api/login", loginHandler(deps))
+	r.POST("/api/auth/wechat/login", wechatLoginHandler(deps))
+	r.POST("/api/auth/wechat/phone-login", wechatPhoneLoginHandler(deps))
 	// Not in the authorized group: gin's JWT middleware only checks the Authorization header, but
 	// this endpoint also accepts the token as a query param (see wsAuthToken) since browser/mini-
 	// program WebSocket clients can't set that header on the handshake request.

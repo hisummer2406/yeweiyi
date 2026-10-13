@@ -36,6 +36,10 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `POST /api/login` 的 `username`（平台管理员）与 `phone`（客户管理员）二选一；员工以任何方式密码登录都与密码错误同样
   `401 invalid_credentials`。令牌 `sub` 是用户 ID，不是用户名；客户端用登录响应的 `user` 或 `GET /api/me` 取身份。
   新增的认证/账号响应带 `code` 字段，客户端按 `code` 分支。开发库里升级前的旧客户账号不迁移，需重建。
+  微信登录：`POST /api/auth/wechat/login`（已绑定身份恢复）与 `/phone-login`（首次手机号授权并绑定，只收 `loginCode`
+  `phoneCode`，手机号/openid 一律由服务端向微信验证，绝不收客户端提交的值）；不自动注册、不自动换绑，冲突 `409
+  wechat_identity_conflict`。`wechat.enabled` 默认关，关闭时 `503 wechat_unavailable` 且不影响密码登录与启动；
+  AppSecret 只能走 `WECHAT_APP_SECRET`。**只用假微信服务器测过，真实小程序联调未做**（`internal/wechat`）。
 - 油站（#43）：客户 → 油站 → 设备，油站只存在业务库（`stations` 表、`devices.station_id`），ThingsBoard 不知道，
   设备名仍是唯一连接点。设备所属油站必须与设备所属客户一致，由复合外键 + `CHECK` 保证；`SetDeviceCustomer`
   换客户时同时清空 `station_id`。`GET /api/devices` 每行带可空 `station_id`；`GET /api/stations` 的范围与设备列表

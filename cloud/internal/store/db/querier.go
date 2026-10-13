@@ -69,6 +69,9 @@ type Querier interface {
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
 	CreateStation(ctx context.Context, arg CreateStationParams) (Station, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// A concurrent bind of the same openid or the same user trips a UNIQUE constraint (23505); the caller
+	// re-reads and decides, so two requests can never produce two rows or move an identity.
+	CreateWechatIdentity(ctx context.Context, arg CreateWechatIdentityParams) (UserWechatIdentity, error)
 	// Run in the same transaction as a device changing customer: bindings made under the old customer
 	// must not survive into the new one.
 	DeleteBindingsForDevice(ctx context.Context, deviceName string) (int64, error)
@@ -106,12 +109,17 @@ type Querier interface {
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, error)
+	// WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
+	// second sees the first's identity row instead of racing it.
+	GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
 	GetUserForShare(ctx context.Context, id int64) (User, error)
 	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
 	// again, so a concurrent move or disable cannot slip in between the first check and the write.
 	GetUserForUpdate(ctx context.Context, id int64) (User, error)
+	GetWechatIdentity(ctx context.Context, arg GetWechatIdentityParams) (UserWechatIdentity, error)
+	GetWechatIdentityByUser(ctx context.Context, userID int64) (UserWechatIdentity, error)
 	HasRecordBackfill(ctx context.Context, deviceName string) (bool, error)
 	// 同一份重放不改变已有行。
 	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
@@ -249,6 +257,7 @@ type Querier interface {
 	// 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
 	// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
 	SyncDeviceOnlineStatus(ctx context.Context, arg SyncDeviceOnlineStatusParams) (int64, error)
+	TouchWechatLogin(ctx context.Context, id int64) error
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	UpdateStation(ctx context.Context, arg UpdateStationParams) (Station, error)
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost

@@ -89,6 +89,28 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, 
 	return i, err
 }
 
+const getUserByPhoneForUpdate = `-- name: GetUserByPhoneForUpdate :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE phone = $1 FOR UPDATE
+`
+
+// WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
+// second sees the first's identity row instead of racing it.
+func (q *Queries) GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByPhoneForUpdate, phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+		&i.Phone,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE username = $1
 `

@@ -311,3 +311,16 @@ type UserDevice struct {
 	// 绑定建立时间。
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
+
+// 微信小程序身份与业务账号的一对一关联。账号删除时随之删除；停用不删除，停用账号的微信登录由业务层拒绝。
+type UserWechatIdentity struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+	// 小程序 AppID。同一 openid 在不同小程序下不同，所以与 openid 一起唯一。
+	Appid string `json:"appid"`
+	// 经微信 jscode2session 验证的 openid；绝不接受客户端直接提交。
+	Openid  string             `json:"openid"`
+	BoundAt pgtype.Timestamptz `json:"bound_at"`
+	// 最近一次经微信完成登录的时间，仅供排查。
+	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
+}

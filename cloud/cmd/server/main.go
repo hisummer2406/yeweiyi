@@ -15,6 +15,7 @@ import (
 	"yeweiyi-cloud/internal/rollup"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
+	"yeweiyi-cloud/internal/wechat"
 )
 
 func main() {
@@ -111,7 +112,24 @@ func main() {
 			"and device/control endpoints will answer 503")
 	}
 
+	// WeChat login is optional: no client means the routes answer wechat_unavailable. Constructing
+	// the client does no network I/O, so an unreachable WeChat can never block startup.
+	var wx wechat.Client
+	if cfg.WeChat.Enabled {
+		wx, err = wechat.New(wechat.Config{
+			AppID: cfg.WeChat.AppID, AppSecret: cfg.WeChat.AppSecret,
+			BaseURL: cfg.WeChat.BaseURL, Timeout: cfg.WeChat.Timeout.Std(),
+		})
+		if err != nil {
+			log.Fatalf("wechat: %v", err)
+		}
+		log.Print("wechat: mini-program login enabled")
+	} else {
+		log.Print("wechat: mini-program login disabled (wechat.enabled=false); password login is unaffected")
+	}
+
 	router := api.NewRouter(api.Deps{
+		WeChat:        wx,
 		Queries:       queries,
 		Redis:         rdb,
 		Pool:          pool,
