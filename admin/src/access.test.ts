@@ -28,7 +28,7 @@ describe('access', () => {
     expect(result.canConsole).toBe(true);
   });
 
-  it('customer_user gets canConsole but not canPlatformAdmin', () => {
+  it('customer_user (staff) gets neither: staff use the mini program, not the web console', () => {
     const result = access({
       currentUser: {
         userId: 3,
@@ -38,7 +38,8 @@ describe('access', () => {
     });
 
     expect(result.canPlatformAdmin).toBe(false);
-    expect(result.canConsole).toBe(true);
+    expect(result.canConsole).toBe(false);
+    expect(result.canManageAssets).toBe(false);
   });
 
   it('returns both false when role is unrecognized', () => {

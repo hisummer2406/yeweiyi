@@ -3,8 +3,10 @@ export default {
   'pages.login.accountLogin.errorMessage': 'Incorrect username or password',
   'pages.login.failure': 'Login failed, please try again!',
   'pages.login.success': 'Login successful!',
-  'pages.login.username.placeholder': 'Username',
-  'pages.login.username.required': 'Please input your username!',
+  'pages.login.username.placeholder': 'Phone number / username',
+  'pages.login.username.required':
+    'Please input your phone number or username!',
+  'pages.login.staffNoWeb': 'Staff accounts sign in through the mini program.',
   'pages.login.password.placeholder': 'Password',
   'pages.login.password.required': 'Please input your password!',
   'pages.login.submit': 'Login',
@@ -138,6 +140,8 @@ export default {
   'pages.ops.users.create': 'New account',
   'pages.ops.users.empty': 'No accounts yet',
   'pages.ops.users.col.username': 'Username',
+  'pages.ops.users.col.account': 'Account (phone / username)',
+  'pages.ops.users.col.phone': 'Phone number',
   'pages.ops.users.col.role': 'Role',
   'pages.ops.users.col.customer': 'Customer',
   'pages.ops.users.col.status': 'Status',
@@ -156,6 +160,10 @@ export default {
     'A disabled account cannot log in. Disable it?',
   'pages.ops.users.form.username.required': 'Enter a username',
   'pages.ops.users.form.username.max': 'Username is at most 64 characters',
+  'pages.ops.users.form.phone.invalid':
+    'Enter a valid 11-digit mainland China mobile number',
+  'pages.ops.users.form.staff.hint':
+    'Staff have no web password and sign in only through the mini program with WeChat phone authorization. A customer admin assigns their tanks afterwards.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',
@@ -175,6 +183,14 @@ export default {
   'pages.ops.users.success.disabled': 'Account disabled',
   'pages.ops.users.success.enabled': 'Account enabled',
   'pages.ops.users.error.exists': 'Username already exists',
+  'pages.ops.users.error.phoneExists':
+    'This phone number is already registered.',
+  'pages.ops.users.error.invalidPhone':
+    'Invalid phone number. Only 11-digit mainland China numbers are supported.',
+  'pages.ops.users.error.passwordNotAllowed':
+    'Staff accounts have no password.',
+  'pages.ops.users.error.noPasswordForRole':
+    'Staff accounts have no password to reset.',
   'pages.ops.users.error.invalid': 'Invalid input: {detail}',
   'pages.ops.users.error.forbidden': 'You are not allowed to do this.',
   'pages.ops.users.error.notFound': 'Account not found, refresh the list.',

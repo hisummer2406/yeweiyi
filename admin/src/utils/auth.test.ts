@@ -4,6 +4,7 @@ import {
   decodeToken,
   getCurrentUser,
   getToken,
+  setProfile,
   setToken,
 } from './auth';
 
@@ -67,7 +68,26 @@ describe('decodeToken', () => {
     expect(decodeToken('', NOW)).toBeUndefined();
   });
 
-  it.each(['uid', 'sub', 'role', 'exp'])('rejects a token missing %s', (k) => {
+  it('a token whose sub is the user id (cloud #59) carries no username', () => {
+    const token = makeToken({
+      uid: 12,
+      sub: '12',
+      role: 'customer_admin',
+      exp: future,
+    });
+    expect(decodeToken(token, NOW)).toEqual({
+      userId: 12,
+      username: '',
+      access: 'customer_admin',
+    });
+  });
+
+  it('does not require sub at all', () => {
+    const token = makeToken({ uid: 3, role: 'platform_admin', exp: future });
+    expect(decodeToken(token, NOW)?.userId).toBe(3);
+  });
+
+  it.each(['uid', 'role', 'exp'])('rejects a token missing %s', (k) => {
     const claims: Record<string, unknown> = {
       uid: 1,
       sub: 'a',
@@ -81,6 +101,41 @@ describe('decodeToken', () => {
   it('keeps unknown roles as-is', () => {
     const token = makeToken({ uid: 1, sub: 'a', role: 'wizard', exp: future });
     expect(decodeToken(token, NOW)?.access).toBe('wizard');
+  });
+});
+
+describe('staff tokens and the display label', () => {
+  afterEach(() => {
+    clearToken();
+  });
+
+  const tokenFor = (claims: Record<string, unknown>) => {
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    return makeToken({ exp, ...claims });
+  };
+
+  it('a customer_user token never yields a current user and is discarded', () => {
+    setToken(tokenFor({ uid: 5, sub: '5', role: 'customer_user' }));
+    expect(getCurrentUser()).toBeUndefined();
+    expect(getToken()).toBeUndefined();
+  });
+
+  it('shows the label stored at login for the same user id only', () => {
+    setToken(tokenFor({ uid: 8, sub: '8', role: 'customer_admin' }));
+    setProfile(8, '13800138000');
+    expect(getCurrentUser()?.username).toBe('13800138000');
+
+    setToken(tokenFor({ uid: 9, sub: '9', role: 'customer_admin' }));
+    // 令牌换成另一个账号后，上一个账号的标签不能串过来
+    expect(getCurrentUser()?.username).toBe('');
+  });
+
+  it('clearToken forgets the label', () => {
+    setToken(tokenFor({ uid: 8, sub: '8', role: 'customer_admin' }));
+    setProfile(8, '13800138000');
+    clearToken();
+    setToken(tokenFor({ uid: 8, sub: '8', role: 'customer_admin' }));
+    expect(getCurrentUser()?.username).toBe('');
   });
 });
 

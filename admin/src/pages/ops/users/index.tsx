@@ -8,7 +8,7 @@ import { useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listUsers, updateUser } from '@/services/ant-design-pro/users';
-import { describeUserError } from './errors';
+import { describeUserError, userLabel } from './errors';
 import {
   CreateUserModal,
   MoveUserModal,
@@ -51,6 +51,7 @@ const AdminUsers: React.FC = () => {
       const m = describeUserError(
         apiErr?.status ?? -1,
         apiErr?.error ?? (err as Error)?.message,
+        apiErr?.code,
       );
       message.error(
         intl.formatMessage({ id: m.id }, { detail: m.detail ?? '' }),
@@ -59,7 +60,11 @@ const AdminUsers: React.FC = () => {
   };
 
   const columns: ProColumns<Row>[] = [
-    { title: t('pages.ops.users.col.username'), dataIndex: 'username' },
+    {
+      title: t('pages.ops.users.col.account'),
+      dataIndex: 'phone',
+      render: (_, row) => userLabel(row),
+    },
     {
       title: t('pages.ops.users.col.role'),
       dataIndex: 'role',
@@ -93,9 +98,12 @@ const AdminUsers: React.FC = () => {
       valueType: 'option',
       render: (_, row) => (
         <Space>
-          <a onClick={() => setResetTarget(row)}>
-            {t('pages.ops.users.action.resetPassword')}
-          </a>
+          {/* 员工没有密码可重置（云端对员工重置密码返回 409） */}
+          {row.role !== 'customer_user' && (
+            <a onClick={() => setResetTarget(row)}>
+              {t('pages.ops.users.action.resetPassword')}
+            </a>
+          )}
           {row.role !== 'platform_admin' && (
             <a onClick={() => setMoveTarget(row)}>
               {t('pages.ops.users.action.move')}

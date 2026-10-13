@@ -12,7 +12,14 @@ import { createStyles } from 'antd-style';
 import React, { startTransition, useState } from 'react';
 import { Footer } from '@/components';
 import { login } from '@/services/ant-design-pro/api';
-import { classifyLoginError, setToken } from '@/utils/auth';
+import {
+  classifyLoginError,
+  clearToken,
+  sessionLabel,
+  setProfile,
+  setToken,
+} from '@/utils/auth';
+import { buildLoginParams } from '@/utils/loginIdentifier';
 import Settings from '../../../../config/defaultSettings';
 
 /**
@@ -84,20 +91,31 @@ const LoginMessage: React.FC<{
 };
 
 const Login: React.FC = () => {
-  const [errorKind, setErrorKind] = useState<'credentials' | 'failure'>();
+  const [errorKind, setErrorKind] = useState<
+    'credentials' | 'failure' | 'staff'
+  >();
   const { initialState, setInitialState } = useModel('@@initialState');
   const { styles } = useStyles();
   const { message } = App.useApp();
   const intl = useIntl();
 
-  const handleSubmit = async (values: API.LoginParams) => {
+  const handleSubmit = async (values: {
+    username: string;
+    password: string;
+  }) => {
     setErrorKind(undefined);
     try {
-      const { token } = await login({
-        username: values.username,
-        password: values.password,
-      });
+      const { token, user } = await login(
+        buildLoginParams(values.username, values.password),
+      );
+      // 员工没有网页后台。云端本就不让员工密码登录，这里是对"拿到的是员工令牌"的兜底。
+      if (user?.role === 'customer_user') {
+        clearToken();
+        setErrorKind('staff');
+        return;
+      }
       setToken(token);
+      if (user) setProfile(user.id, sessionLabel(user));
       const userInfo = await initialState?.fetchUserInfo?.();
       if (userInfo) {
         startTransition(() => {
@@ -161,7 +179,9 @@ const Login: React.FC = () => {
             id: 'pages.layouts.userLayout.title',
           })}
           onFinish={async (values) => {
-            await handleSubmit(values as API.LoginParams);
+            await handleSubmit(
+              values as { username: string; password: string },
+            );
           }}
         >
           {errorKind === 'credentials' && (
@@ -169,6 +189,14 @@ const Login: React.FC = () => {
               content={intl.formatMessage({
                 id: 'pages.login.accountLogin.errorMessage',
                 defaultMessage: '账号或密码错误',
+              })}
+            />
+          )}
+          {errorKind === 'staff' && (
+            <LoginMessage
+              content={intl.formatMessage({
+                id: 'pages.login.staffNoWeb',
+                defaultMessage: '员工账号请使用小程序登录。',
               })}
             />
           )}
@@ -189,7 +217,7 @@ const Login: React.FC = () => {
             }}
             placeholder={intl.formatMessage({
               id: 'pages.login.username.placeholder',
-              defaultMessage: '用户名',
+              defaultMessage: '手机号 / 用户名',
             })}
             rules={[
               {
@@ -197,7 +225,7 @@ const Login: React.FC = () => {
                 message: (
                   <FormattedMessage
                     id="pages.login.username.required"
-                    defaultMessage="请输入用户名!"
+                    defaultMessage="请输入手机号或用户名!"
                   />
                 ),
               },

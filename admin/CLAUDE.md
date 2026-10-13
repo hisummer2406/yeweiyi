@@ -7,7 +7,8 @@
 结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
 路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
 
-- 只对接 `POST /api/login`（`{username,password}` → `{token}`，失败为 HTTP 状态码 + `{error}`）。
+- 只对接 `POST /api/login`（`{username,password}` 或 `{phone,password}`，**恰好给一个** → `{token, user}`，失败为 HTTP 状态码 + `{error, code?}`；
+  见下方「手机号账号」）。
   后端**没有** `/api/currentUser`、登出、刷新 token 接口。
 - 当前用户（`API.CurrentUser = {userId, username, access}`）由 `src/utils/auth.ts` 解码 JWT claims
   （`uid`/`sub`/`role`/`exp`）得到，**不验签、仅用于菜单显隐**；真正鉴权在后端每次读库。角色/停用变更
@@ -52,9 +53,25 @@
   `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
 
 **客户管理（页面现位于 `/console/assets/customers`，原 `/ops/customers`）、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
-`default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码、
+`default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码（仅有密码的账号）、
 换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
 和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
+
+**手机号账号（GitHub issue #13，云端 yeweiyi-cloud#59，契约 `docs/account-phone-wechat-contract.md`）**：
+
+- 客户侧账号（`customer_admin`/`customer_user`）以**手机号**标识，没有用户名；平台管理员仍是用户名。登录框一个输入，
+  `src/utils/loginIdentifier.ts` 按内容决定发 `phone` 还是 `username`（云端不替你猜，两个都发或都不发是 400）。
+- **令牌 `sub` 现在是用户 ID，不是用户名**。显示标签来自登录响应的 `user`（`setProfile`，按 `userId` 核对，换账号不串），
+  旧令牌里的用户名只是兜底；取不到时界面显示空串/`#id`，不要再从 `sub` 取名字。
+- **员工（`customer_user`）没有网页后台**：`access.canConsole` 只给两种管理员，`getCurrentUser` 遇到员工令牌（小程序登录得来的、
+  或旧本地状态）会清掉并回登录页，登录页拿到员工 `user` 也不保存令牌。这只是界面边界，云端对管理接口的角色校验才是安全边界，
+  员工的业务 REST 仍对小程序开放，别因此在云端或这里封禁。
+- **账号只有平台管理员能创建/停用/启用/重置密码**（云端对客户管理员一律 403）。创建表单按角色出字段：平台管理员=用户名+密码；
+  客户管理员=手机号+密码+客户；员工=手机号+客户，**没有密码框，请求体也不带 `password`**（带了 400 `password_not_allowed`），
+  员工行没有"重置密码"（云端 409 `no_password_for_role`）。`buildCreateUserParams` 按角色挑字段，别让残留表单值漏进请求。
+- 云端新接口带机器码 `code`（`phone_exists` 等），`ApiError.code` 承载；`describeUserError` 先按 code 再按状态码。
+  重复手机号的提示不说明在哪个客户。客户管理员列员工（给油罐分配选人，#17/cloud#63）手机号是脱敏的；#17 的油罐分配本批未做。
+- 微信登录与客户开通（#60）、油罐授权（#63）不在本仓库这一批；网页只走手机号/用户名 + 密码，离线可用。
 
 **`/console` 只读页已接**（OpenSpec 变更 `console-readonly-records-and-detail`）：设备详情
 （`/console/devices/:deviceName`，页签 实时数据/报警/出入库，`?tab=snapshot|alarms|stock`）、报警记录、入库/出库
