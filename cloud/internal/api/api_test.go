@@ -362,8 +362,8 @@ func (e *testEnv) seedDeviceIn(deviceName string, customerID int64) {
 func (e *testEnv) bindDevice(deviceName string) {
 	e.t.Helper()
 	if _, err := e.pool.Exec(context.Background(), `
-		INSERT INTO user_devices (user_id, device_name)
-		SELECT id, $2 FROM users WHERE username = $1
+		INSERT INTO user_tank_grants (user_id, device_name, tank)
+		SELECT id, $2, g FROM users, generate_series(1, 16) g WHERE username = $1
 		ON CONFLICT DO NOTHING`, e.username, deviceName); err != nil {
 		e.t.Fatalf("bind device %s: %v", deviceName, err)
 	}

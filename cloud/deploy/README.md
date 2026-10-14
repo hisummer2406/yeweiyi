@@ -580,6 +580,42 @@ docker compose down -v
 
 ---
 
+## 升级到迁移 000023：油站与大屏一对一（cloud#61）
+
+迁移 `000023_station_one_device` 给 `devices.station_id` 加唯一约束。**升级前**在目标库只读检查是否已有一站多设备：
+
+```sql
+SELECT station_id, array_agg(device_name ORDER BY device_name) AS devices
+FROM devices WHERE station_id IS NOT NULL
+GROUP BY station_id HAVING count(*) > 1;
+```
+
+- 无结果：直接升级。
+- 有结果：迁移会**失败并在错误里列出冲突**，不改任何数据（失败后 golang-migrate 记为 dirty，确认库结构未变后
+  `migrate force 22` 再处理）。每个冲突油站须由业务方决定保留哪一台设备，其余通过
+  `PUT /api/devices/:device/station {"stationId": null}` 解除关联（设备、记录与绑定都保留），然后重跑。
+  不要在迁移里自动挑选或删除。
+- 回滚（down）只删除唯一索引并恢复普通索引，不改数据。
+
+换机（A → B）不迁移任何数据：B 必须先按完整出厂编码登记（`POST /api/devices`），再由平台/客户管理员调用
+`POST /api/stations/:id/replace-device`。B 没有任何用户绑定，需重新授权；A 保留在原客户下为未分组设备。
+
+## 升级到迁移 000024：员工按油罐授权（cloud#63）
+
+迁移 `000024_tank_grants` 新增 `user_tank_grants` 并改写 `user_may_access_device`，**不转换**旧的 `user_devices` 绑定。
+升级后：
+
+- 客户普通用户（员工）在被客户管理员明确分配油罐之前看不到任何设备——这是有意的（旧设备级绑定不能当作"全部油罐"的放行依据）。
+  升级窗口内请通知客户管理员用 `PUT /api/users/:id/tank-grants/:device` 重新分配（罐号来自 `GET /api/devices/:device/tanks`，
+  设备需已上报）。
+- `POST /api/devices/bind` 恒返回 `410 bind_removed`；扫码改用 `POST /api/devices/resolve`（只定位，不授权）。旧版小程序
+  在升级后扫码会收到 410，需同步发布新版。
+- 员工只读：不能发命令，不读命令历史与审计。管理员行为不变。
+- 回滚（down）恢复旧函数并删除 `user_tank_grants`；回滚后员工的可见性重新由 `user_devices` 决定。
+- 升级前可只读核对影响面：
+  `SELECT u.id, u.phone, count(*) FROM user_devices ud JOIN users u ON u.id = ud.user_id GROUP BY 1,2;`
+  即将失去可见性、需要重新分配的员工与其绑定数。
+
 ## 微信小程序登录（可选，默认关闭）
 
 员工（`customer_user`）和客户管理员在小程序里通过"微信手机号授权"登录。它**需要出网访问

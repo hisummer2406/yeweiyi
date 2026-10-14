@@ -1,71 +1,6 @@
--- name: BindUserDeviceIfAllowed :one
--- Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
--- FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
--- can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that
--- passed its check earlier then inserts a binding *behind* that cleanup. Here the bind queues behind
--- the transfer's lock and is evaluated against the post-transfer state (Postgres re-reads the locked
--- row after the wait), so it is refused — or, if it went first, the transfer's cleanup removes it.
---
--- A platform admin may bind anything (as before); everyone else only a device of their own
--- customer, and a disabled user nothing. Idempotent: binding an already-bound device is a success.
--- `bound` is false when the bind was refused; the handler reports that exactly like a wrong pairing
--- secret so the endpoint cannot be used to learn which devices exist or who owns them.
-WITH u AS (
-    SELECT users.id, users.role, users.customer_id
-    FROM users
-    WHERE users.id = sqlc.arg('user_id') AND users.disabled_at IS NULL
-    FOR SHARE
-), d AS (
-    SELECT devices.device_name, devices.customer_id
-    FROM devices
-    WHERE devices.device_name = sqlc.arg('device_name')
-    FOR SHARE
-), ok AS (
-    SELECT u.id AS user_id, sqlc.arg('device_name')::text AS device_name
-    FROM u
-    WHERE u.role = 'platform_admin'
-       OR EXISTS (SELECT 1 FROM d WHERE d.customer_id = u.customer_id)
-), ins AS (
-    INSERT INTO user_devices (user_id, device_name)
-    SELECT ok.user_id, ok.device_name FROM ok
-    ON CONFLICT (user_id, device_name) DO NOTHING
-    RETURNING user_id
-)
-SELECT EXISTS (SELECT 1 FROM ok) AS bound;
-
--- name: BindUserDeviceByCodeIfAllowed :one
--- Short-code variant of BindUserDeviceIfAllowed: the QR code carries only "000001", not a pairing
--- secret, so the customer boundary is the authorization. Resolution, check and insert are still one
--- statement with the user and device rows locked FOR SHARE (same transfer-race guarantee).
---
--- `candidates` is ordered: the scanned text first (exact match wins), then prefix||text. Only the
--- caller's own customer's devices are considered, so another customer's device is
--- indistinguishable from a nonexistent one. Equality only — no LIKE. platform_admin has no customer
--- and is refused here (use the pairing-secret path). Never creates a devices row.
--- Returns the resolved device_name; no row means refused.
-WITH u AS (
-    SELECT users.id, users.customer_id
-    FROM users
-    WHERE users.id = sqlc.arg('user_id')
-      AND users.disabled_at IS NULL
-      AND users.role IN ('customer_admin', 'customer_user')
-      AND users.customer_id IS NOT NULL
-    FOR SHARE
-), d AS (
-    SELECT devices.device_name
-    FROM devices, u
-    WHERE devices.customer_id = u.customer_id
-      AND devices.device_name = ANY(sqlc.arg('candidates')::text[])
-    ORDER BY array_position(sqlc.arg('candidates')::text[], devices.device_name)
-    LIMIT 1
-    FOR SHARE OF devices
-), ins AS (
-    INSERT INTO user_devices (user_id, device_name)
-    SELECT u.id, d.device_name FROM u, d
-    ON CONFLICT (user_id, device_name) DO NOTHING
-    RETURNING user_id
-)
-SELECT d.device_name FROM d;
+-- 旧的设备级绑定查询（BindUserDeviceIfAllowed / BindUserDeviceByCodeIfAllowed）已在 cloud#63 中移除：
+-- 扫码不再创建任何授权，授权只来自 user_tank_grants（db/queries/tank_grants.sql）。user_devices 表保留为
+-- 只读历史，不再被任何授权判定引用。
 
 -- name: UnbindUserDevice :exec
 DELETE FROM user_devices WHERE user_id = $1 AND device_name = $2;
@@ -126,7 +61,8 @@ LEFT JOIN devices d ON d.device_name = sqlc.arg('device_name')
 WHERE u.id = sqlc.arg('user_id');
 
 -- name: ListDevicesForUser :many
--- Same three-way rule as UserMayAccessDevice, expressed as a list.
+-- Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on
+-- which they hold at least one tank grant (cloud#63); the tanks themselves are listed separately.
 SELECT d.*
 FROM devices d
 JOIN users u ON u.id = $1 AND u.disabled_at IS NULL
@@ -136,8 +72,8 @@ WHERE u.role = 'platform_admin'
        AND (
            u.role = 'customer_admin'
            OR EXISTS (
-               SELECT 1 FROM user_devices ud
-               WHERE ud.user_id = u.id AND ud.device_name = d.device_name
+               SELECT 1 FROM user_tank_grants g
+               WHERE g.user_id = u.id AND g.device_name = d.device_name
            )
        )
    )

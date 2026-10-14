@@ -20,7 +20,7 @@ LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 -- it (see ListControlCommandsVisibleToUser for why):
 --   * a disabled or unknown user reads nothing;
 --   * naming a device requires access to it (user_may_access_device);
---   * a customer user must name a device;
+--   * a customer user reads nothing (tank-level view access only, cloud#63; audit rows are device-wide);
 --   * a platform admin sees every customer's rows, optionally narrowed by customer_id;
 --   * everyone else is pinned to their own customer's rows, even when a device is named, so a device
 --     that changed hands never shows its previous owner's history to the new one.
@@ -29,7 +29,7 @@ FROM audit_log a
 JOIN users u ON u.id = sqlc.arg('user_id') AND u.disabled_at IS NULL
 WHERE (sqlc.narg('device_name')::TEXT IS NULL OR a.device_name = sqlc.narg('device_name')::TEXT)
   AND (sqlc.narg('device_name')::TEXT IS NULL OR user_may_access_device(u.id, sqlc.narg('device_name')::TEXT))
-  AND (u.role <> 'customer_user' OR sqlc.narg('device_name')::TEXT IS NOT NULL)
+  AND u.role <> 'customer_user'
   AND CASE
           WHEN u.role = 'platform_admin'
               THEN (sqlc.narg('customer_id')::BIGINT IS NULL OR a.customer_id = sqlc.narg('customer_id')::BIGINT)

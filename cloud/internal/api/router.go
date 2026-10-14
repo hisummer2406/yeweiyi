@@ -88,7 +88,11 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.GET("/stations", listStationsHandler(deps))
 		authorized.POST("/devices", registerDeviceHandler(deps))
-		authorized.POST("/devices/bind", bindDeviceHandler(deps))
+		authorized.POST("/devices/bind", bindDeviceHandler(deps)) // retired (410), cloud#63
+		authorized.POST("/devices/resolve", resolveDeviceHandler(deps))
+		authorized.GET("/devices/:device/tanks", listDeviceTanksHandler(deps))
+		authorized.GET("/users/:id/tank-grants", listUserTankGrantsHandler(deps))
+		authorized.PUT("/users/:id/tank-grants/:device", putUserTankGrantsHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
 		// Provisioning-time only (platform_admin), not part of the mini-program's own pairing
 		// flow — see mintPairingSecretHandler's doc comment.
@@ -119,6 +123,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.PUT("/stations/:id", updateStationHandler(deps))
 		authorized.DELETE("/stations/:id", deleteStationHandler(deps))
 		authorized.PUT("/devices/:device/station", assignDeviceStationHandler(deps))
+		authorized.POST("/stations/:id/replace-device", replaceStationDeviceHandler(deps))
 	}
 
 	return r

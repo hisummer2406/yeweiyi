@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createStation = `-- name: CreateStation :one
@@ -63,6 +65,48 @@ func (q *Queries) GetStation(ctx context.Context, id int64) (Station, error) {
 	return i, err
 }
 
+const getStationDevice = `-- name: GetStationDevice :one
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id FROM devices WHERE station_id = $1
+`
+
+// The one device currently on a station, if any (at most one: devices_station_id_key).
+func (q *Queries) GetStationDevice(ctx context.Context, stationID pgtype.Int8) (Device, error) {
+	row := q.db.QueryRow(ctx, getStationDevice, stationID)
+	var i Device
+	err := row.Scan(
+		&i.DeviceName,
+		&i.IsOnline,
+		&i.LastOnlineAt,
+		&i.LastOfflineAt,
+		&i.UpdatedAt,
+		&i.CustomerID,
+		&i.CustomerAssignedAt,
+		&i.StationID,
+	)
+	return i, err
+}
+
+const getStationForUpdate = `-- name: GetStationForUpdate :one
+SELECT id, customer_id, name, address, created_at FROM stations WHERE id = $1 FOR UPDATE
+`
+
+// Serializes everything that changes which device is on a station (ordinary assignment and device
+// replacement). Lock order is always station first, then device rows by device_name, so the two
+// paths cannot deadlock. The partial unique index devices_station_id_key is the actual guarantee;
+// this lock only lets a handler see the occupant and answer with a precise conflict.
+func (q *Queries) GetStationForUpdate(ctx context.Context, id int64) (Station, error) {
+	row := q.db.QueryRow(ctx, getStationForUpdate, id)
+	var i Station
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.Name,
+		&i.Address,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listStationsForUser = `-- name: ListStationsForUser :many
 SELECT s.id, s.customer_id, s.name, s.address, s.created_at
 FROM stations s
@@ -75,8 +119,8 @@ WHERE u.role = 'platform_admin'
            OR EXISTS (
                SELECT 1
                FROM devices d
-               JOIN user_devices ud ON ud.device_name = d.device_name AND ud.user_id = u.id
                WHERE d.station_id = s.id AND d.customer_id = u.customer_id
+                 AND EXISTS (SELECT 1 FROM user_tank_grants g WHERE g.user_id = u.id AND g.device_name = d.device_name)
            )
        )
    )
@@ -88,7 +132,7 @@ ORDER BY s.customer_id, s.name, s.id
 //	platform_admin  every station;
 //	customer_admin  every station of their own customer — including ones with no devices yet, or a
 //	                newly created station could never be seen and so never be given a device;
-//	customer_user   only the stations of devices they are bound to, within their own customer. A
+//	customer_user   only the stations of devices on which they hold a tank grant, within their own customer. A
 //	                station none of their devices is on is invisible, and so is how many other
 //	                devices it has.
 func (q *Queries) ListStationsForUser(ctx context.Context, id int64) ([]Station, error) {

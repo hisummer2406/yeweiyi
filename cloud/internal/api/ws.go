@@ -11,6 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+
+	"yeweiyi-cloud/internal/store/db"
 )
 
 var wsUpgrader = websocket.Upgrader{
@@ -171,6 +173,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 				}
 				var fanout struct {
 					DeviceName string `json:"deviceName"`
+					Tank       int    `json:"tank"`
 				}
 				if err := json.Unmarshal([]byte(msg.Payload), &fanout); err != nil {
 					continue
@@ -184,6 +187,13 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 					closeWith("access revoked")
 					return
 				}
+				// The stream is per device but authorization is per tank: a frame for a tank this user
+				// does not hold (or a whole-device frame, tank 0, for an employee) is dropped here and
+				// never written. Asked per frame, from the database, so a revoked grant stops the very
+				// next alarm (cloud#63).
+				if !tankAllowed(deps, claims.UserID, device, fanout.Tank) {
+					continue
+				}
 				conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
 				if err := conn.WriteMessage(websocket.TextMessage, []byte(msg.Payload)); err != nil {
 					return
@@ -191,4 +201,17 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			}
 		}
 	}
+}
+
+// tankAllowed answers user_may_access_tank for one alarm frame. Anything but a clear yes — including
+// a database error — drops the frame: failing open would hand an alarm to someone not entitled to it.
+func tankAllowed(deps Deps, userID int64, device string, tank int) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), wsAccessCheckTimeout)
+	defer cancel()
+	ok, err := deps.Queries.UserMayAccessTank(ctx, db.UserMayAccessTankParams{UserID: userID, DeviceName: device, Tank: int32(tank)})
+	if err != nil {
+		log.Printf("ws: tank access check for user %d on %q tank %d failed, dropping frame: %v", userID, device, tank, err)
+		return false
+	}
+	return ok
 }

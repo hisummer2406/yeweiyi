@@ -95,6 +95,12 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		// An explicitly requested tank the caller may not view is refused, whether or not the device has
+		// such a tank (cloud#63): the answer is the same either way.
+		if !requireTankAccess(c, deps, device, tank) {
+			return
+		}
+
 		var fields []string
 		seen := map[string]bool{}
 		for _, f := range strings.Split(c.Query("fields"), ",") {

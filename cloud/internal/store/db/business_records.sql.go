@@ -88,14 +88,16 @@ FROM alarm_events a
 WHERE a.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
+  AND user_may_access_tank($4, a.device_name, CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END)
 ORDER BY occurred_at ASC, alarm_id ASC, status ASC
-LIMIT $5 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListAlarmEventsAscParams struct {
 	DeviceName string             `json:"device_name"`
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
+	UserID     int64              `json:"user_id"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -111,6 +113,7 @@ func (q *Queries) ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAsc
 		arg.DeviceName,
 		arg.BeginTime,
 		arg.EndTime,
+		arg.UserID,
 		arg.Off,
 		arg.Lim,
 	)
@@ -138,14 +141,16 @@ FROM alarm_events a
 WHERE a.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
+  AND user_may_access_tank($4, a.device_name, CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END)
 ORDER BY occurred_at DESC, alarm_id DESC, status DESC
-LIMIT $5 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListAlarmEventsDescParams struct {
 	DeviceName string             `json:"device_name"`
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
+	UserID     int64              `json:"user_id"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -161,6 +166,7 @@ func (q *Queries) ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDe
 		arg.DeviceName,
 		arg.BeginTime,
 		arg.EndTime,
+		arg.UserID,
 		arg.Off,
 		arg.Lim,
 	)
@@ -188,14 +194,16 @@ FROM stock_events s
 WHERE s.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
+  AND user_may_access_tank($4, s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
 ORDER BY occurred_at ASC, event_id ASC
-LIMIT $5 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListStockEventsAscParams struct {
 	DeviceName string             `json:"device_name"`
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
+	UserID     int64              `json:"user_id"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -207,12 +215,15 @@ type ListStockEventsAscRow struct {
 	ReportCount int32              `json:"report_count"`
 }
 
+// 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
+// （payload 无罐号，tank=0）只有管理员可见。
 // 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
 func (q *Queries) ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error) {
 	rows, err := q.db.Query(ctx, listStockEventsAsc,
 		arg.DeviceName,
 		arg.BeginTime,
 		arg.EndTime,
+		arg.UserID,
 		arg.Off,
 		arg.Lim,
 	)
@@ -245,14 +256,16 @@ FROM stock_events s
 WHERE s.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
+  AND user_may_access_tank($4, s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
 ORDER BY occurred_at DESC, event_id DESC
-LIMIT $5 OFFSET $4
+LIMIT $6 OFFSET $5
 `
 
 type ListStockEventsDescParams struct {
 	DeviceName string             `json:"device_name"`
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
+	UserID     int64              `json:"user_id"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -269,6 +282,7 @@ func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDe
 		arg.DeviceName,
 		arg.BeginTime,
 		arg.EndTime,
+		arg.UserID,
 		arg.Off,
 		arg.Lim,
 	)

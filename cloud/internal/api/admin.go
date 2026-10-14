@@ -98,8 +98,18 @@ func refuse(c *gin.Context, deps Deps, actor db.User, action, reason string, det
 // object would get, so another customer's object and a nonexistent one look identical to the caller
 // and the client does not mistake the refusal for a revoked account.
 func refuseObject(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any, status int, msg string) {
+	refuseObjectCode(c, deps, actor, action, reason, detail, status, msg, "")
+}
+
+// refuseObjectCode is refuseObject with a machine-readable code in the body. The code is the same
+// for "another customer's" and "does not exist", so it adds nothing a caller could probe with.
+func refuseObjectCode(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any, status int, msg, code string) {
 	auditRefusal(c, deps, actor, action, reason, detail)
-	c.JSON(status, gin.H{"error": msg})
+	body := gin.H{"error": msg}
+	if code != "" {
+		body["code"] = code
+	}
+	c.JSON(status, body)
 }
 
 func mustJSON(v map[string]any) []byte {
@@ -882,10 +892,16 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 			if moved, err = q.MoveUserToCustomer(ctx, db.MoveUserToCustomerParams{ID: id, CustomerID: int8(req.CustomerID)}); err != nil {
 				return err
 			}
-			cleared, err := q.DeleteBindingsForUser(ctx, id)
+			// Grants made under the old customer must not survive into the new one (cloud#63).
+			grantsCleared, err := q.DeleteTankGrantsForUser(ctx, id)
 			if err != nil {
 				return err
 			}
+			legacyCleared, err := q.DeleteBindingsForUser(ctx, id)
+			if err != nil {
+				return err
+			}
+			cleared := int64(grantsCleared) + legacyCleared
 			// Filed under both customers so each side's admin can see the user leave / arrive.
 			for _, side := range []struct {
 				customer  pgtype.Int8
@@ -986,9 +1002,15 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 			if err := q.SetDeviceCustomer(ctx, db.SetDeviceCustomerParams{DeviceName: device, CustomerID: int8(req.CustomerID)}); err != nil {
 				return err
 			}
-			if cleared, err = q.DeleteBindingsForDevice(ctx, device); err != nil {
+			grantsCleared, err := q.DeleteTankGrantsForDevice(ctx, device)
+			if err != nil {
 				return err
 			}
+			legacyCleared, err := q.DeleteBindingsForDevice(ctx, device)
+			if err != nil {
+				return err
+			}
+			cleared = int64(grantsCleared) + legacyCleared
 			sides := []struct {
 				customer  pgtype.Int8
 				direction string

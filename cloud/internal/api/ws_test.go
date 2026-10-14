@@ -157,7 +157,7 @@ func readUntilClosed(conn *websocket.Conn, budget time.Duration) (msgs []string,
 
 func alarmFanout(t *testing.T, device, id string) []byte {
 	t.Helper()
-	b, err := json.Marshal(map[string]any{"deviceName": device, "alarmId": id})
+	b, err := json.Marshal(map[string]any{"deviceName": device, "alarmId": id, "tank": 1})
 	if err != nil {
 		t.Fatalf("marshal fanout: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestWSAlarms_UnbindingTheDeviceClosesTheStream(t *testing.T) {
 	conn := connectedAndDelivering(t, env, device)
 
 	if _, err := env.pool.Exec(context.Background(),
-		`DELETE FROM user_devices WHERE device_name = $1`, device); err != nil {
+		`DELETE FROM user_tank_grants WHERE device_name = $1`, device); err != nil {
 		t.Fatalf("unbind: %v", err)
 	}
 	requireRevoked(t, env, conn, device)

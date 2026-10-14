@@ -60,6 +60,7 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		args := db.ListAlarmEventsAscParams{
 			DeviceName: p.device, BeginTime: begin, EndTime: end, Lim: p.limit, Off: p.offset,
+			UserID: c.MustGet("userID").(int64),
 		}
 		if p.asc {
 			res, err := deps.Queries.ListAlarmEventsAsc(ctx, args)

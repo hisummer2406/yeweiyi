@@ -221,6 +221,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		args := db.ListStockEventsAscParams{
 			DeviceName: p.device, BeginTime: begin, EndTime: end,
 			Lim: p.limit + 1, Off: p.offset,
+			UserID: c.MustGet("userID").(int64),
 		}
 		var stored []stockRowData
 		if p.asc {
@@ -266,6 +267,14 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+		if isEmployee(c) {
+			// An unreadable record has no decodable tank, so it cannot be attributed to a tank the
+			// employee was granted. Its *existence* is a device-wide format fault and is still
+			// reported — otherwise a window of unreadable records would read as a successful empty
+			// list, the failure this endpoint exists to prevent — but its raw text may describe
+			// another tank, so the sample is withheld (cloud#63).
+			summary.Sample = ""
 		}
 
 		backfilled, err := recordsBackfilled(c, deps, p.device)

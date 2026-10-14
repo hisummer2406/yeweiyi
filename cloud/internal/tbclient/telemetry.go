@@ -42,15 +42,21 @@ func (c *Client) LatestTimeseries(ctx context.Context, deviceID string, keys []s
 	q := url.Values{"keys": {strings.Join(keys, ",")}}
 	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/values/timeseries" + query(q)
 
-	var raw map[string][]TSValue
+	// Value is a pointer because this ThingsBoard answers a key that was never reported with
+	// [{"ts":<now>,"value":null}] rather than omitting it. Decoding that null into a plain string
+	// would yield "" with a timestamp, which callers read as a real, unparsable value.
+	var raw map[string][]struct {
+		TS    int64   `json:"ts"`
+		Value *string `json:"value"`
+	}
 	if err := c.do(ctx, http.MethodGet, path, nil, &raw); err != nil {
 		return nil, fmt.Errorf("latest timeseries for %s: %w", deviceID, err)
 	}
 
 	out := make(map[string]TSValue, len(raw))
 	for k, points := range raw {
-		if len(points) > 0 {
-			out[k] = points[0]
+		if len(points) > 0 && points[0].Value != nil {
+			out[k] = TSValue{TS: points[0].TS, Value: *points[0].Value}
 		}
 	}
 	return out, nil

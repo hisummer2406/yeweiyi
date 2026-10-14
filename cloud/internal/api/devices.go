@@ -93,7 +93,7 @@ type bindDeviceRequest struct {
 
 // shortCodePattern is what a scanned short code may look like. Anything else is refused before it
 // reaches SQL or a log line.
-var shortCodePattern = regexp.MustCompile(`^[0-9A-Za-z]{1,32}$`)
+var shortCodePattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
 
 // shortCodeRefusedMessage is the single answer to a refused short-code bind.
 const shortCodeRefusedMessage = "未找到可绑定的设备"
@@ -111,123 +111,66 @@ func shortCodeCandidates(code string, prefixes []string) []string {
 	return out
 }
 
-// bindDeviceHandler is the mini-program's device-pairing endpoint (product decision, 2026-08-29:
-// binding happens by scanning a QR code printed/displayed on the physical device). The trust model
-// this is meant to express is possession of the physical device — but until round 5's fix, that was
-// never actually checked at all: the handler accepted any client-supplied deviceName verbatim and
-// EnsureDevice+BindUserDevice'd it unconditionally, so any logged-in user who could guess or observe
-// a real deviceName (e.g. "tank-farm-014", enumerable by pattern) could bind themselves to somebody
-// else's device. Found in review of PR #11 (round 5, plain PR comment — GitHub does not let the PR's
-// own author submit a formal "request changes" review on it).
+// bindDeviceHandler is POST /api/devices/bind, retired by cloud#63. Binding used to create a
+// device-level authorization from a scanned code, which is exactly what the product now forbids:
+// scanning only navigates, and an employee sees a tank only after a customer administrator granted
+// that (device_name, tank). The route stays so an old client gets an explicit, machine-readable
+// refusal instead of a 404 it might retry or misread; it never writes anything, whatever the body
+// (including a valid pairing token), so there is no old entry left to bypass the rule.
 //
-// Round 5's fix required a pairingToken and verified it against ThingsBoard's own
-// GetDeviceCredentials — reusing the device's real ThingsBoard access token as the pairing proof.
-// **That fix was itself a P1, found in the very next review round**: the ThingsBoard access token
-// IS the device's MQTT identity (its passwordless MQTT username — see internal/devicesim's
-// SetUsername(AccessToken)). Putting it in a QR code and verifying it as a *pairing* credential
-// meant anyone who photographed the code, or captured it from a proxy/client log, could connect to
-// MQTT *as the device* — forge telemetry, alarms and cmdResults — not merely bind themselves to it
-// in this backend. A pairing credential leaking should only cost a binding; this one could cost the
-// device's entire on-wire identity.
-//
-// Fixed properly this time by giving pairing its own secret, fully independent of ThingsBoard: see
-// mintPairingSecretHandler (mints and returns it once, platform_admin only) and
-// device_pairing_secrets (migration 000012, stores only a bcrypt hash — never the plaintext).
-// verifyPairingToken below checks pairingToken against that hash and nothing else; ThingsBoard is
-// not consulted at all, so a leaked pairing secret only ever grants "bind this device to my
-// account", never "speak for this device on MQTT". This also decouples binding from ThingsBoard's
-// own availability, consistent with the rest of this package's "business endpoints work even
-// without ThingsBoard configured" convention (see deps.TB == nil checks elsewhere in this file).
-//
-// Deliberately NOT single-use: this project's product decision (CLAUDE.md, 2026-08-29 authorization
-// pass) is that more than one staff member can legitimately bind the same device from the same
-// physical QR code over time (e.g. multiple technicians on one tank), so a secret that could only be
-// redeemed once would break that on the very first successful bind. Minting always rotates, so a
-// leaked or lost secret is fixed by re-minting (which does not evict any already-bound user), not by
-// making every pairing single-use.
+// Navigation by scanned code is POST /api/devices/resolve.
 func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req bindDeviceRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		ctx := c.Request.Context()
-
-		if req.PairingToken == "" {
-			bindDeviceByCode(c, deps, req.DeviceName)
-			return
-		}
-
-		ok, err := verifyPairingToken(ctx, deps, req.DeviceName, req.PairingToken)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if !ok {
-			// Deliberately the same response whether deviceName has no pairing secret minted at all
-			// or one is minted but pairingToken is wrong — see verifyPairingToken's doc comment for
-			// why distinguishing the two would turn this endpoint into a device-name oracle.
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
-			return
-		}
-
-		userID := c.MustGet("userID").(int64)
-
-		if err := deps.Queries.EnsureDevice(ctx, req.DeviceName); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		// A valid pairing secret proves possession of the device, not that it is *this user's
-		// customer's* device. The customer check and the insert are one statement (see the query), and
-		// a refusal is indistinguishable from a wrong secret: a QR code from another customer's
-		// device, an unassigned device and a wrong secret all get the identical 401 above.
-		bound, err := deps.Queries.BindUserDeviceIfAllowed(ctx, db.BindUserDeviceIfAllowedParams{UserID: userID, DeviceName: req.DeviceName})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if !bound {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid device name or pairing token"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"deviceName": req.DeviceName, "bound": true})
+		c.JSON(http.StatusGone, gin.H{
+			"error": "device binding was removed: scanning only locates a device and grants nothing; ask a customer administrator to assign tanks",
+			"code":  "bind_removed",
+		})
 	}
 }
 
-// bindDeviceByCode is the credential-less path: the QR code encodes only the short code, so
-// req.DeviceName is the scanned text and the caller's customer is what authorizes the bind (the
-// device was assigned to that customer by an administrator). Resolution happens inside the single
-// bind statement, scoped to the caller's customer; it never creates a devices row. Every refusal —
-// unknown, other customer's, unassigned, ambiguous role, disabled, malformed — is the same 401 as a
-// wrong pairing secret. Not single-use, and the QR format is unchanged.
-func bindDeviceByCode(c *gin.Context, deps Deps, code string) {
-	// One message for every refusal, so it stays no oracle; it says nothing about a pairing token
-	// because this path has none.
-	refuse := func() {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": shortCodeRefusedMessage})
+// resolveDeviceRequest is resolveDeviceHandler's body. Code is the scanned text, untrusted.
+type resolveDeviceRequest struct {
+	Code string `json:"code"`
+}
+
+// resolveDeviceHandler is POST /api/devices/resolve: the navigation half of a scan. It maps the
+// scanned text to the actual device_name the client should open, and writes nothing — no binding, no
+// authorization, no customer or station change. Repeating it is therefore harmless by construction.
+//
+// Only devices the caller could already open are resolved (a customer administrator: any device of
+// their customer; an employee: a device on which they hold a tank grant). Every other outcome —
+// unknown code, another customer's device, a device with no grant for this employee, a disabled
+// account — is the same 404, so the endpoint is not an oracle for which devices exist. 404 here is
+// an object-level answer: it is never the bare `not authorized` that clients read as a revoked account.
+func resolveDeviceHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req resolveDeviceRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			apiError(c, http.StatusBadRequest, "invalid_request", err.Error())
+			return
+		}
+		notFound := func() {
+			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
+		}
+		candidates := shortCodeCandidates(strings.TrimSpace(req.Code), deps.DeviceCodePrefixes)
+		if candidates == nil {
+			notFound()
+			return
+		}
+		name, err := deps.Queries.ResolveDeviceForNavigation(c.Request.Context(), db.ResolveDeviceForNavigationParams{
+			UserID:     c.MustGet("userID").(int64),
+			Candidates: candidates,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			notFound()
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deviceName": name})
 	}
-	candidates := shortCodeCandidates(code, deps.DeviceCodePrefixes)
-	if candidates == nil {
-		refuse()
-		return
-	}
-	name, err := deps.Queries.BindUserDeviceByCodeIfAllowed(c.Request.Context(), db.BindUserDeviceByCodeIfAllowedParams{
-		UserID:     c.MustGet("userID").(int64),
-		Candidates: candidates,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		refuse()
-		return
-	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"deviceName": name, "bound": true})
 }
 
 // bcryptCompareHashAndPassword indirects bcrypt.CompareHashAndPassword through a package variable
@@ -411,12 +354,9 @@ func unbindDeviceHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		userID := c.MustGet("userID").(int64)
-		if err := deps.Queries.UnbindUserDevice(c.Request.Context(), db.UnbindUserDeviceParams{UserID: userID, DeviceName: req.DeviceName}); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
+		// Retired with bind (cloud#63): access is a set of tank grants managed by a customer
+		// administrator, and an employee must not be able to edit it. Kept as a harmless no-op so an
+		// old client that unbinds after a failed scan does not error.
 		c.JSON(http.StatusOK, gin.H{"deviceName": req.DeviceName, "bound": false})
 	}
 }
@@ -432,6 +372,9 @@ type deviceResponse struct {
 	LastOfflineAt pgtype.Timestamptz `json:"last_offline_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 	StationID     *int64             `json:"station_id"`
+	// GrantedTanks is the tank numbers an employee may view on this device, null for administrators
+	// (who see every tank). It is what the client shows as "your tanks"; the server filters anyway.
+	GrantedTanks []int `json:"granted_tanks"`
 }
 
 // adminDeviceResponse is a row for a platform admin: the same fields plus the customer the device is
@@ -459,6 +402,17 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 		// The role is the one the auth middleware read from the database for this request.
 		role, _ := c.Get("role")
 		isPlatformAdmin := role == control.RolePlatformAdmin
+		granted := map[string][]int{}
+		if role == control.RoleCustomerUser {
+			gr, err := deps.Queries.ListTankGrantsForUser(c.Request.Context(), userID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			for _, g := range gr {
+				granted[g.DeviceName] = append(granted[g.DeviceName], int(g.Tank))
+			}
+		}
 		out := make([]any, 0, len(rows))
 		for _, r := range rows {
 			row := deviceResponse{
@@ -468,6 +422,12 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 				LastOfflineAt: r.LastOfflineAt,
 				UpdatedAt:     r.UpdatedAt,
 				StationID:     int8Ptr(r.StationID),
+			}
+			if role == control.RoleCustomerUser {
+				row.GrantedTanks = granted[r.DeviceName]
+				if row.GrantedTanks == nil {
+					row.GrantedTanks = []int{}
+				}
 			}
 			if isPlatformAdmin {
 				out = append(out, adminDeviceResponse{deviceResponse: row, CustomerID: int8Ptr(r.CustomerID)})

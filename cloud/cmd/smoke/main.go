@@ -179,29 +179,22 @@ func run() int {
 	}()
 
 	if api != nil {
-		if !r.step("设备绑定（POST /api/devices/bind）", func() (string, error) {
-			// The pairing secret is minted directly in the business database, the same
-			// fixture-setup convention loginAsThrowawayUser above already uses — it stands in for
-			// whoever provisions the device physically (platform_admin, via
-			// POST /api/devices/:device/pairing-secret in the real flow; that handler and its
-			// role gate have their own dedicated tests in internal/api/devices_test.go). Doing it
-			// this way, rather than granting the throwaway login user platform_admin just to call
-			// that endpoint, keeps every later step on the ordinary
-			// customer-side path a real client takes (a customer admin here, since staff cannot log in
-			// with a password).
-			pairingSecret, err := mintPairingSecretFixture(ctx, *dbURL, name)
-			if err != nil {
-				return "", fmt.Errorf("mint pairing secret fixture: %w", err)
+		// Binding was retired (cloud#63): scanning only locates a device and grants nothing. The throwaway
+		// user is a customer administrator, who reaches every device of their customer without any
+		// grant, so the fixture only has to register the device under that customer.
+		if !r.step("设备登记并定位（POST /api/devices/resolve）", func() (string, error) {
+			if _, err := mintPairingSecretFixture(ctx, *dbURL, name); err != nil {
+				return "", fmt.Errorf("register device fixture: %w", err)
 			}
-
-			code, _, err := api.do(ctx, http.MethodPost, "/api/devices/bind", map[string]string{"deviceName": name, "pairingToken": pairingSecret}, nil)
+			code, body, err := api.do(ctx, http.MethodPost, "/api/devices/resolve", map[string]string{"code": name}, nil)
 			if err != nil {
 				return "", err
 			}
 			if code != http.StatusOK {
 				return "", fmt.Errorf("HTTP %d", code)
 			}
-			return "bound", nil
+			_ = body
+			return "resolved", nil
 		}) {
 			return r.report()
 		}

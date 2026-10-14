@@ -235,6 +235,7 @@ FROM control_commands c
 JOIN users u ON u.id = $1
 WHERE c.device_name = $2
   AND user_may_access_device(u.id, $2)
+  AND u.role <> 'customer_user'
   AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id)
 ORDER BY c.issued_at DESC
 LIMIT $4 OFFSET $3
@@ -253,6 +254,8 @@ type ListControlCommandsVisibleToUserParams struct {
 // lets a user move between them — and then get history snapshotted under the customer they just
 // joined for a device they can no longer reach.
 //
+// A customer user (tank-level view access only, cloud#63) sees no command history: commands are
+// whole-device and carry other tanks' operators and arguments.
 // A platform admin sees every command for the device. Anyone else sees only commands filed under
 // their own customer, so a device that changed hands never shows its previous owner's commands
 // (operator, reason, arguments, results) to the new one.

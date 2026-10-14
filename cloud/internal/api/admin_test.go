@@ -83,7 +83,7 @@ func (tn *tenancy) createUser(t *testing.T, token, role string, customerID *int6
 	}
 	u := decodeAs[adminUser](t, rec)
 	t.Cleanup(func() {
-		tn.env.pool.Exec(context.Background(), `DELETE FROM user_devices WHERE user_id = $1`, u.ID)
+		tn.env.pool.Exec(context.Background(), `DELETE FROM user_tank_grants WHERE user_id = $1`, u.ID)
 		tn.env.pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, u.ID)
 	})
 	return u, rec
@@ -550,7 +550,7 @@ func TestAdmin_MoveUser(t *testing.T) {
 	}
 	bindings := func(userID int64) int {
 		var n int
-		tn.env.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_devices WHERE user_id = $1`, userID).Scan(&n)
+		tn.env.pool.QueryRow(context.Background(), `SELECT count(DISTINCT device_name) FROM user_tank_grants WHERE user_id = $1`, userID).Scan(&n)
 		return n
 	}
 

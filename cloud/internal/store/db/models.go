@@ -144,7 +144,7 @@ type Device struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前转移过的设备（有 direction=out 的 device.assign 审计）回填为迁移时刻；从未改过归属的为 NULL（没有前任客户，无需裁剪）；未分配时也为 NULL。
 	CustomerAssignedAt pgtype.Timestamptz `json:"customer_assigned_at"`
-	// 所属油站，空 = 未分组。必须属于 devices.customer_id 同一客户（复合外键 + CHECK 保证）。设备换客户时由 SetDeviceCustomer 同时清空。
+	// 所属油站，空 = 未分组/待安装。必须属于 devices.customer_id 同一客户（复合外键 + CHECK 保证）；同一非空油站至多一台设备（devices_station_id_key，cloud#61）。设备换客户时由 SetDeviceCustomer 同时清空。
 	StationID pgtype.Int8 `json:"station_id"`
 }
 
@@ -309,6 +309,19 @@ type UserDevice struct {
 	// 绑定的设备名，关联 devices.device_name。
 	DeviceName string `json:"device_name"`
 	// 绑定建立时间。
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// 员工-油罐查看授权：(用户, 设备名, 罐号)。只授予查看，不含配置/控制/物理命令。写入由 InsertTankGrantIfAllowed 在同一条语句内复核同客户与角色。
+type UserTankGrant struct {
+	// 被授权的用户，必须是 customer_user（客户管理员与平台管理员看全部罐，无需授权）。
+	UserID int64 `json:"user_id"`
+	// 设备名，关联 devices.device_name。设备换客户时授权同事务清除。
+	DeviceName string `json:"device_name"`
+	// 罐号，1..64（协议 MaxTankCount）。tank=0（整机事件）不可授权，员工看不到整机级记录。
+	Tank int32 `json:"tank"`
+	// 执行授权的管理员；管理员被删除后置空。
+	GrantedBy pgtype.Int8        `json:"granted_by"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 

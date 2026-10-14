@@ -2,20 +2,18 @@ package api_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"yeweiyi-cloud/internal/api"
-	"yeweiyi-cloud/internal/control"
 )
 
-// Short-code binding: the QR code carries only the 6-digit code, no pairing secret, so the
-// customer boundary is the authorization (openspec change bind-device-by-short-code).
-
-const shortCodeWrongCredential = `{"error":"未找到可绑定的设备"}`
+// Scanning a device code only navigates (cloud#63): POST /api/devices/resolve maps the scanned text
+// to the device the client should open and writes nothing; POST /api/devices/bind is retired. The
+// tests below prove "scan grants nothing" from the database, not from the response.
 
 func newShortCodeEnv(t *testing.T, prefixes ...string) *testEnv {
 	t.Helper()
@@ -27,192 +25,142 @@ func uniqueCode() string {
 	return fmt.Sprintf("%09d", time.Now().UnixNano()%1_000_000_000)
 }
 
-func (e *testEnv) bindByCode(token []byte, code string) (int, string) {
-	e.t.Helper()
-	rec := e.do("POST", "/api/devices/bind", token, jsonBody(e.t, map[string]any{"deviceName": code}))
-	return rec.Code, rec.Body.String()
+type resolveBody struct {
+	DeviceName string `json:"deviceName"`
+	Code       string `json:"code"`
+	Error      string `json:"error"`
 }
 
-func (e *testEnv) countBindings(deviceName string) int {
-	e.t.Helper()
+func (tn *tenancy) resolve(t *testing.T, token, code string) (int, resolveBody, string) {
+	t.Helper()
+	rec := tn.send(t, "POST", "/api/devices/resolve", token, map[string]any{"code": code})
+	return rec.Code, decodeAs[resolveBody](t, rec), rec.Body.String()
+}
+
+func (tn *tenancy) grantCount(t *testing.T) int {
+	t.Helper()
 	var n int
-	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_devices WHERE device_name = $1`, deviceName).Scan(&n); err != nil {
-		e.t.Fatalf("count bindings: %v", err)
+	if err := tn.env.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_tank_grants`).Scan(&n); err != nil {
+		t.Fatal(err)
 	}
 	return n
 }
 
-func (e *testEnv) deviceRows(like string) int {
-	e.t.Helper()
+func (tn *tenancy) legacyBindingCount(t *testing.T) int {
+	t.Helper()
 	var n int
-	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM devices WHERE device_name LIKE $1`, like).Scan(&n); err != nil {
-		e.t.Fatalf("count devices: %v", err)
+	if err := tn.env.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_devices`).Scan(&n); err != nil {
+		t.Fatal(err)
 	}
 	return n
 }
 
-func TestBindByCode_CustomerUserAndAdminBindOwnCustomersDevice(t *testing.T) {
-	for _, role := range []string{control.RoleCustomerUser, control.RoleCustomerAdmin} {
-		t.Run(role, func(t *testing.T) {
-			env := newShortCodeEnv(t, "ZCT")
-			code := uniqueCode()
-			full := "ZCT" + code
-			env.seedDevice(full)
-			token, _ := env.userIn(role, env.defaultCustomerID())
+func TestResolve_NavigatesAndGrantsNothing(t *testing.T) {
+	tn := newTenancy(t)
+	// userA holds grants on devA1 only (newTenancy); devA2 is another device of the same customer.
+	grants, legacy := tn.grantCount(t), tn.legacyBindingCount(t)
 
-			status, body := env.bindByCode([]byte(token), code)
-			if status != http.StatusOK {
-				t.Fatalf("expected 200, got %d: %s", status, body)
-			}
-			var resp struct {
-				DeviceName string `json:"deviceName"`
-				Bound      bool   `json:"bound"`
-			}
-			if err := json.Unmarshal([]byte(body), &resp); err != nil {
-				t.Fatal(err)
-			}
-			if resp.DeviceName != full || !resp.Bound {
-				t.Fatalf("expected resolved name %q bound, got %+v", full, resp)
-			}
-			if env.countBindings(full) != 1 {
-				t.Fatal("expected one binding")
-			}
-		})
+	// An employee resolves a device they hold a grant on, by its exact name.
+	code, got, body := tn.resolve(t, tn.userA, tn.devA1)
+	if code != http.StatusOK || got.DeviceName != tn.devA1 {
+		t.Fatalf("employee on a granted device: %d %s", code, body)
+	}
+	// A customer admin resolves any device of their customer, granted to anyone or not.
+	if code, got, body := tn.resolve(t, tn.adminA, tn.devA2); code != http.StatusOK || got.DeviceName != tn.devA2 {
+		t.Fatalf("customer admin: %d %s", code, body)
+	}
+
+	// An employee scanning a device of their own customer that they hold nothing on, another
+	// customer's device and a code that does not exist all get the identical 404 — no oracle.
+	c1, _, b1 := tn.resolve(t, tn.userA, tn.devA2)
+	c2, _, b2 := tn.resolve(t, tn.userA, tn.devB1)
+	c3, _, b3 := tn.resolve(t, tn.userA, tn.devGhost)
+	if c1 != http.StatusNotFound || c2 != c1 || c3 != c1 || b1 != b2 || b2 != b3 {
+		t.Errorf("ungranted/foreign/missing differ: %d %s | %d %s | %d %s", c1, b1, c2, b2, c3, b3)
+	}
+	if strings.Contains(b1, "not authorized") {
+		t.Errorf("an object-level answer carries the revoked-account body: %s", b1)
+	}
+	// Repeating a scan, scanning a refused device and a malformed code leave no trace.
+	for i := 0; i < 3; i++ {
+		tn.resolve(t, tn.userA, tn.devA1)
+		tn.resolve(t, tn.userA, tn.devA2)
+	}
+	if code, _, _ := tn.resolve(t, tn.userA, "bad code!"); code != http.StatusNotFound {
+		t.Errorf("malformed code: %d, want 404", code)
+	}
+	if n := tn.grantCount(t); n != grants {
+		t.Errorf("scanning changed the grant table: %d -> %d rows", grants, n)
+	}
+	if n := tn.legacyBindingCount(t); n != legacy {
+		t.Errorf("scanning wrote a legacy binding: %d -> %d rows", legacy, n)
+	}
+	// And the refused device is still unreachable afterwards.
+	if rec := tn.get(tn.userA, "/api/devices/"+tn.devA2+"/telemetry/latest"); rec.Code != http.StatusForbidden {
+		t.Errorf("after scanning devA2 the employee reads it: %d, want 403", rec.Code)
+	}
+	// A disabled account is refused like anyone else.
+	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET disabled_at = now() WHERE id = $1`, tn.userAID); err != nil {
+		t.Fatal(err)
+	}
+	if rec := tn.send(t, "POST", "/api/devices/resolve", tn.userA, map[string]any{"code": tn.devA1}); rec.Code == http.StatusOK {
+		t.Errorf("a disabled account resolved a device")
 	}
 }
 
-func TestBindByCode_IsIdempotent(t *testing.T) {
-	env := newShortCodeEnv(t, "ZCT")
+func TestResolve_ExactMatchWinsAndPrefixesApplyInOrder(t *testing.T) {
+	env := newShortCodeEnv(t, "ZCT", "ABC")
 	code := uniqueCode()
-	env.seedDevice("ZCT" + code)
-	for i := 0; i < 2; i++ {
-		if status, body := env.bindByCode([]byte(env.token), code); status != http.StatusOK {
-			t.Fatalf("attempt %d: expected 200, got %d: %s", i, status, body)
+	env.ownDevice("ZCT" + code)
+	env.ownDevice("ABC" + code)
+
+	rec := env.do("POST", "/api/devices/resolve", []byte(env.token), jsonBody(t, map[string]any{"code": code}))
+	got := decodeAs[resolveBody](t, rec)
+	if rec.Code != http.StatusOK || got.DeviceName != "ZCT"+code {
+		t.Errorf("a bare code with two prefixed candidates: %d %s, want the first configured prefix (ZCT)", rec.Code, rec.Body.String())
+	}
+	// The full name is an exact match and wins over any prefix expansion.
+	rec = env.do("POST", "/api/devices/resolve", []byte(env.token), jsonBody(t, map[string]any{"code": "ABC" + code}))
+	got = decodeAs[resolveBody](t, rec)
+	if rec.Code != http.StatusOK || got.DeviceName != "ABC"+code {
+		t.Errorf("exact name: %d %s", rec.Code, rec.Body.String())
+	}
+	// Leading zeros survive: the code is an opaque string.
+	zero := "000" + code
+	env.ownDevice("ZCT" + zero)
+	rec = env.do("POST", "/api/devices/resolve", []byte(env.token), jsonBody(t, map[string]any{"code": zero}))
+	got = decodeAs[resolveBody](t, rec)
+	if rec.Code != http.StatusOK || got.DeviceName != "ZCT"+zero {
+		t.Errorf("leading zeros: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// The retired bind endpoint never writes: not with a short code, not with a pairing secret, not for
+// any role, so there is no old entry through which a scan could still hand out access.
+func TestBind_IsRetiredAndWritesNothing(t *testing.T) {
+	tn := newTenancy(t)
+	secretRec := tn.mint(tn.platform, tn.devA2, fmt.Sprintf(`{"customerId":%d}`, tn.custA))
+	secret := tn.secretFrom(t, secretRec)
+	grants, legacy := tn.grantCount(t), tn.legacyBindingCount(t)
+
+	for name, tok := range map[string]string{"employee": tn.userA, "customerAdmin": tn.adminA, "platformAdmin": tn.platform} {
+		for label, body := range map[string]map[string]any{
+			"short code":     {"deviceName": tn.devA2},
+			"pairing secret": {"deviceName": tn.devA2, "pairingToken": secret},
+		} {
+			rec := tn.send(t, "POST", "/api/devices/bind", tok, body)
+			if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), `"bind_removed"`) {
+				t.Errorf("%s via %s: %d %s, want 410 bind_removed", name, label, rec.Code, rec.Body.String())
+			}
 		}
 	}
-	if env.countBindings("ZCT"+code) != 1 {
-		t.Fatal("expected exactly one binding")
+	if n := tn.grantCount(t); n != grants {
+		t.Errorf("bind changed the grant table: %d -> %d", grants, n)
 	}
-}
-
-func TestBindByCode_RefusalsAreIdenticalAndHaveNoSideEffects(t *testing.T) {
-	env := newShortCodeEnv(t, "ZCT")
-	other := env.newCustomer("shortcode-other")
-
-	foreign, unassigned, missing := uniqueCode(), uniqueCode()+"1", uniqueCode()+"2"
-	env.seedDeviceIn("ZCT"+foreign, other)
-	env.seedDeviceIn("ZCT"+unassigned, 0)
-	own := uniqueCode() + "3"
-	env.seedDevice("ZCT" + own)
-
-	adminToken, _ := env.userIn(control.RolePlatformAdmin, 0)
-	disabledToken, disabledID := env.userIn(control.RoleCustomerUser, env.defaultCustomerID())
-	if _, err := env.pool.Exec(context.Background(), `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
-		t.Fatal(err)
+	if n := tn.legacyBindingCount(t); n != legacy {
+		t.Errorf("bind wrote a legacy binding: %d -> %d", legacy, n)
 	}
-
-	cases := []struct {
-		name  string
-		token string
-		code  string
-	}{
-		{"other customer's device", env.token, foreign},
-		{"unassigned device", env.token, unassigned},
-		{"no such device", env.token, missing},
-		{"platform_admin", adminToken, own},
-		{"space", env.token, "00 01"},
-		{"percent", env.token, "%"},
-		{"underscore", env.token, "_"},
-		{"too long", env.token, "012345678901234567890123456789012"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			status, body := env.bindByCode([]byte(tc.token), tc.code)
-			if status != http.StatusUnauthorized || body != shortCodeWrongCredential {
-				t.Fatalf("expected the generic 401, got %d: %s", status, body)
-			}
-		})
-	}
-	// A disabled account never reaches the handler: the auth middleware answers 403 (the client
-	// treats it as "account invalid"). The SQL still filters disabled_at for the race window.
-	if status, _ := env.bindByCode([]byte(disabledToken), own); status != http.StatusForbidden {
-		t.Fatalf("disabled user: expected 403 from auth middleware, got %d", status)
-	}
-	if env.countBindings("ZCT"+foreign)+env.countBindings("ZCT"+unassigned)+env.countBindings("ZCT"+own) != 0 {
-		t.Fatal("a refused bind created a binding")
-	}
-	if env.deviceRows("%"+missing) != 0 {
-		t.Fatal("a refused bind created a devices row")
-	}
-}
-
-func TestBindByCode_ExactMatchWinsOverPrefix(t *testing.T) {
-	env := newShortCodeEnv(t, "ZCT")
-	code := uniqueCode()
-	env.seedDevice(code)
-	env.seedDevice("ZCT" + code)
-	if status, body := env.bindByCode([]byte(env.token), code); status != http.StatusOK {
-		t.Fatalf("got %d: %s", status, body)
-	}
-	if env.countBindings(code) != 1 || env.countBindings("ZCT"+code) != 0 {
-		t.Fatal("exact match must win")
-	}
-}
-
-func TestBindByCode_NoPrefixConfiguredMeansExactOnly(t *testing.T) {
-	env := newShortCodeEnv(t)
-	code := uniqueCode()
-	env.seedDevice("ZCT" + code)
-	if status, _ := env.bindByCode([]byte(env.token), code); status != http.StatusUnauthorized {
-		t.Fatalf("expected 401 without prefixes, got %d", status)
-	}
-	exact := uniqueCode() + "9"
-	env.seedDevice(exact)
-	if status, body := env.bindByCode([]byte(env.token), exact); status != http.StatusOK {
-		t.Fatalf("exact name should bind, got %d: %s", status, body)
-	}
-}
-
-// A transfer holding the device row's lock must make a queued short-code bind see the new owner.
-func TestBindByCode_RacingDeviceTransferIsRefused(t *testing.T) {
-	env := newShortCodeEnv(t, "ZCT")
-	other := env.newCustomer("shortcode-race")
-	code := uniqueCode()
-	full := "ZCT" + code
-	env.seedDevice(full)
-
-	ctx := context.Background()
-	tx, err := env.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT 1 FROM devices WHERE device_name = $1 FOR UPDATE`, full); err != nil {
-		t.Fatal(err)
-	}
-
-	type result struct {
-		status int
-		body   string
-	}
-	done := make(chan result, 1)
-	go func() {
-		s, b := env.bindByCode([]byte(env.token), code)
-		done <- result{s, b}
-	}()
-	time.Sleep(300 * time.Millisecond)
-	if _, err := tx.Exec(ctx, `UPDATE devices SET customer_id = $2 WHERE device_name = $1`, full, other); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	r := <-done
-	if r.status != http.StatusUnauthorized || r.body != shortCodeWrongCredential {
-		t.Fatalf("expected generic 401 after transfer, got %d: %s", r.status, r.body)
-	}
-	if env.countBindings(full) != 0 {
-		t.Fatal("binding left behind a transfer")
+	if rec := tn.get(tn.userA, "/api/devices/"+tn.devA2+"/telemetry/latest"); rec.Code != http.StatusForbidden {
+		t.Errorf("after a bind attempt the employee reads the device: %d, want 403", rec.Code)
 	}
 }

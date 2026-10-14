@@ -196,10 +196,10 @@ func loadManageableStation(c *gin.Context, deps Deps, actor db.User, action stri
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		if actor.Role == control.RolePlatformAdmin {
-			c.JSON(http.StatusNotFound, gin.H{"error": "station not found"})
+			apiError(c, http.StatusNotFound, "station_not_found", "station not found")
 		} else {
-			refuseObject(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id},
-				http.StatusNotFound, "station not found")
+			refuseObjectCode(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id},
+				http.StatusNotFound, "station not found", "station_not_found")
 		}
 		return db.Station{}, false
 	case err != nil:
@@ -207,8 +207,8 @@ func loadManageableStation(c *gin.Context, deps Deps, actor db.User, action stri
 		return db.Station{}, false
 	}
 	if !mayManageCustomer(actor, st.CustomerID) {
-		refuseObject(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id},
-			http.StatusNotFound, "station not found")
+		refuseObjectCode(c, deps, actor, action, "no such station for this caller", map[string]any{"stationId": id},
+			http.StatusNotFound, "station not found", "station_not_found")
 		return db.Station{}, false
 	}
 	return st, true
@@ -319,6 +319,26 @@ func deleteStationHandler(deps Deps) gin.HandlerFunc {
 	}
 }
 
+// lockManageableStation takes the station row lock when the caller may manage that station's
+// customer. A missing station, or one the caller may not manage, is left for the caller's ordinary
+// checks to answer (no lock, no error).
+func lockManageableStation(ctx context.Context, q *db.Queries, actor db.User, stationID int64) error {
+	st, err := q.GetStation(ctx, stationID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !mayManageCustomer(actor, st.CustomerID) {
+		return nil
+	}
+	if _, err := q.GetStationForUpdate(ctx, stationID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return err
+	}
+	return nil
+}
+
 // assignStationRequest keeps stationId as raw JSON so "missing" (a client bug, 400) can be told apart
 // from an explicit null ("ungrouped").
 type assignStationRequest struct {
@@ -358,6 +378,7 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		var previous pgtype.Int8
 		var denied, missing, noCustomer, badStation, unchanged bool
+		var occupiedBy string
 		err := withTx(ctx, deps, func(q *db.Queries) error {
 			actorNow, err := lockStationActor(ctx, q, actor.ID)
 			if err != nil {
@@ -373,6 +394,15 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 			if !allowed {
 				denied = true
 				return nil
+			}
+			// Lock order is station, then device (replaceStationDeviceHandler does the same), so the
+			// two paths cannot deadlock. The station is only locked for a caller allowed to manage
+			// it: a customer admin naming another customer's station must not queue behind that
+			// customer's traffic. The unique index, not this lock, is the guarantee.
+			if want.Valid {
+				if err := lockManageableStation(ctx, q, actor, want.Int64); err != nil {
+					return err
+				}
 			}
 			dev, err := q.GetDeviceForUpdate(ctx, device)
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -401,6 +431,16 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 				if err != nil {
 					return err
 				}
+				// One device per station: an occupied station is never taken over silently. The
+				// same device already being there is the idempotent case and falls through.
+				occ, err := q.GetStationDevice(ctx, want)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				if err == nil && occ.DeviceName != device {
+					occupiedBy = occ.DeviceName
+					return nil
+				}
 			}
 			previous = dev.StationID
 			if previous == want {
@@ -416,6 +456,14 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		switch {
 		case errors.Is(err, errStationActorLost):
 			refuse(c, deps, actor, "device.station", "authority changed", map[string]any{"device": device})
+		case err != nil && isPgCode(err, "23505"):
+			// Two concurrent assignments passed the checks above and the unique index picked one.
+			// Answered like the ordinary conflict; the occupant is looked up after the rollback.
+			body := gin.H{"error": "the station already has a device", "code": "station_occupied"}
+			if occ, qerr := deps.Queries.GetStationDevice(ctx, want); qerr == nil {
+				body["occupiedBy"] = occ.DeviceName
+			}
+			c.JSON(http.StatusConflict, body)
 		case err != nil && (isPgCode(err, "23503") || isPgCode(err, "23514")):
 			// Lost a race with a station delete or a customer transfer; the checks above passed but
 			// the database, which is the actual guarantee, refused.
@@ -423,16 +471,218 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		case err != nil:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		case missing && actor.Role == control.RolePlatformAdmin:
-			c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
 		case missing || denied:
-			refuseObject(c, deps, actor, "device.station", "no such device for this caller", map[string]any{"device": device},
-				http.StatusNotFound, "device not found")
+			refuseObjectCode(c, deps, actor, "device.station", "no such device for this caller", map[string]any{"device": device},
+				http.StatusNotFound, "device not found", "device_not_found")
+		case occupiedBy != "":
+			c.JSON(http.StatusConflict, gin.H{"error": "the station already has a device; release it or replace it first",
+				"code": "station_occupied", "occupiedBy": occupiedBy})
 		case noCustomer:
-			c.JSON(http.StatusConflict, gin.H{"error": "the device has no customer; assign it to a customer first"})
+			apiError(c, http.StatusConflict, "device_without_customer", "the device has no customer; assign it to a customer first")
 		case badStation:
 			c.JSON(http.StatusBadRequest, gin.H{"error": "stationId does not name a station of the device's customer"})
 		default:
 			c.JSON(http.StatusOK, gin.H{"deviceName": device, "stationId": int8Ptr(want), "changed": !unchanged})
+		}
+	}
+}
+
+// replaceDeviceRequest keeps expectedCurrentDeviceName as raw JSON for the same reason as
+// assignStationRequest: a missing key (a client that never looked at the station) is a 400, while
+// an explicit null means "the page showed an empty station".
+type replaceDeviceRequest struct {
+	DeviceName                string          `json:"deviceName"`
+	ExpectedCurrentDeviceName json.RawMessage `json:"expectedCurrentDeviceName"`
+}
+
+// replaceStationDeviceHandler is POST /api/stations/:id/replace-device (cloud#61). It moves the
+// station from its current device to a new one in a single transaction, so a failure never leaves a
+// station with no device or a device on two stations.
+//
+// Nothing is migrated: the old device keeps its customer, its records and its user bindings, the
+// new device starts with none, and no row is renamed. Data is keyed by device_name everywhere, so
+// the isolation between old and new is structural.
+func replaceStationDeviceHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		st, ok := loadManageableStation(c, deps, actor, "station.replace_device")
+		if !ok {
+			return
+		}
+		var req replaceDeviceRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		newName := req.DeviceName
+		if newName == "" {
+			apiError(c, http.StatusBadRequest, "invalid_request", "deviceName is required")
+			return
+		}
+		var expected *string
+		switch {
+		case len(req.ExpectedCurrentDeviceName) == 0:
+			apiError(c, http.StatusBadRequest, "invalid_request",
+				"expectedCurrentDeviceName is required (the device the page showed, or null for an empty station)")
+			return
+		case string(req.ExpectedCurrentDeviceName) != "null":
+			var v string
+			if err := json.Unmarshal(req.ExpectedCurrentDeviceName, &v); err != nil || v == "" {
+				apiError(c, http.StatusBadRequest, "invalid_request", "expectedCurrentDeviceName must be a device name or null")
+				return
+			}
+			expected = &v
+		}
+		if expected != nil && *expected == newName {
+			apiError(c, http.StatusBadRequest, "same_device", "the new device is the device already on the station")
+			return
+		}
+
+		ctx := c.Request.Context()
+		var (
+			previous                               string
+			changed                                bool
+			denied, stationGone, deviceMissing     bool
+			conflictCode, conflictMsg, currentName string
+		)
+		err := withTx(ctx, deps, func(q *db.Queries) error {
+			actorNow, err := lockStationActor(ctx, q, actor.ID)
+			if err != nil {
+				return err
+			}
+			actor = actorNow
+			if !mayManageCustomer(actor, st.CustomerID) {
+				denied = true
+				return nil
+			}
+			// Authorize the new device before looking at it (invariant 6): another customer's device,
+			// an unassigned one and a nonexistent one cost a customer admin the same 404.
+			allowed, err := q.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{UserID: actor.ID, DeviceName: newName})
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				deviceMissing = true
+				return nil
+			}
+			// Station first, then devices in name order.
+			if _, err := q.GetStationForUpdate(ctx, st.ID); errors.Is(err, pgx.ErrNoRows) {
+				stationGone = true
+				return nil
+			} else if err != nil {
+				return err
+			}
+			current, err := q.GetStationDevice(ctx, int8(st.ID))
+			hasCurrent := err == nil
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			names := []string{newName}
+			if hasCurrent {
+				names = append(names, current.DeviceName)
+			}
+			if len(names) == 2 && names[1] < names[0] {
+				names[0], names[1] = names[1], names[0]
+			}
+			locked := map[string]db.Device{}
+			for _, n := range names {
+				d, err := q.GetDeviceForUpdate(ctx, n)
+				if errors.Is(err, pgx.ErrNoRows) {
+					if n == newName {
+						deviceMissing = true
+						return nil
+					}
+					continue // the current device vanished between the two reads; handled below
+				}
+				if err != nil {
+					return err
+				}
+				locked[n] = d
+			}
+			// Decide again with both rows locked.
+			cur, curOK := locked[current.DeviceName]
+			if !hasCurrent || !curOK || cur.StationID != int8(st.ID) {
+				hasCurrent = false
+			}
+			nd := locked[newName]
+			if hasCurrent && cur.DeviceName == newName {
+				// A retry of a replacement that already happened.
+				previous = newName
+				return nil
+			}
+			if hasCurrent && (expected == nil || *expected != cur.DeviceName) {
+				conflictCode, conflictMsg, currentName = "station_device_changed", "the station's device changed; reload and try again", cur.DeviceName
+				return nil
+			}
+			if !hasCurrent && expected != nil {
+				conflictCode, conflictMsg = "station_device_changed", "the station's device changed; reload and try again"
+				return nil
+			}
+			switch {
+			case !nd.CustomerID.Valid:
+				conflictCode, conflictMsg = "device_without_customer", "the device has no customer; assign it to a customer first"
+				return nil
+			case nd.CustomerID.Int64 != st.CustomerID:
+				conflictCode, conflictMsg = "device_customer_mismatch", "the device belongs to another customer"
+				return nil
+			case nd.StationID.Valid && nd.StationID.Int64 != st.ID:
+				conflictCode, conflictMsg = "device_in_other_station", "the device is on another station; release it there first"
+				return nil
+			}
+			if hasCurrent {
+				previous = cur.DeviceName
+				if err := q.SetDeviceStation(ctx, db.SetDeviceStationParams{DeviceName: cur.DeviceName}); err != nil {
+					return err
+				}
+			}
+			if err := q.SetDeviceStation(ctx, db.SetDeviceStationParams{DeviceName: newName, StationID: int8(st.ID)}); err != nil {
+				return err
+			}
+			changed = true
+			detail := map[string]any{"stationId": st.ID, "from": nil, "to": newName}
+			if previous != "" {
+				detail["from"] = previous
+			}
+			return auditAdmin(ctx, q, actor, "station.replace_device", newName, pgtype.Int8{Int64: st.CustomerID, Valid: true}, "allowed", detail)
+		})
+		switch {
+		case errors.Is(err, errStationActorLost) || (err == nil && denied):
+			refuse(c, deps, actor, "station.replace_device", "authority changed", map[string]any{"stationId": st.ID})
+		case err != nil && isPgCode(err, "23505"):
+			// The new device was put on this station by a path that does not take the station lock.
+			body := gin.H{"error": "the station already has a device", "code": "station_device_changed"}
+			if occ, qerr := deps.Queries.GetStationDevice(ctx, int8(st.ID)); qerr == nil {
+				body["currentDeviceName"] = occ.DeviceName
+			}
+			c.JSON(http.StatusConflict, body)
+		case err != nil && (isPgCode(err, "23503") || isPgCode(err, "23514")):
+			apiError(c, http.StatusConflict, "station_device_changed", "the device or station changed while replacing; reload and try again")
+		case err != nil:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		case stationGone:
+			refuseObjectCode(c, deps, actor, "station.replace_device", "no such station for this caller", map[string]any{"stationId": st.ID},
+				http.StatusNotFound, "station not found", "station_not_found")
+		case deviceMissing && actor.Role == control.RolePlatformAdmin:
+			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
+		case deviceMissing:
+			refuseObjectCode(c, deps, actor, "station.replace_device", "no such device for this caller", map[string]any{"device": newName},
+				http.StatusNotFound, "device not found", "device_not_found")
+		case conflictCode != "":
+			body := gin.H{"error": conflictMsg, "code": conflictCode}
+			if currentName != "" {
+				body["currentDeviceName"] = currentName
+			}
+			c.JSON(http.StatusConflict, body)
+		default:
+			var prev any
+			if previous != "" && changed {
+				prev = previous
+			}
+			c.JSON(http.StatusOK, gin.H{"stationId": st.ID, "deviceName": newName, "previousDeviceName": prev, "changed": changed})
 		}
 	}
 }
