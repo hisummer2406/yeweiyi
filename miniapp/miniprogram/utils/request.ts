@@ -55,15 +55,20 @@ function adoptRenewedToken(header: Record<string, string> | undefined) {
 }
 
 let loggingOut = false;
+// The reason the session was last ended, kept until a request goes out with a token again. Requests
+// already queued when the token is cleared go out bare and answer 401; without this they would
+// reLaunch a plain login page over the one that carries the notice.
+let endedNotice = '';
 
 function endSession(notice?: string) {
+  if (notice) endedNotice = notice;
   // A page fires several requests in parallel (the home page does one per device); without this
   // each failure would reLaunch the login page again.
   if (loggingOut) return;
   loggingOut = true;
   clearToken();
   wx.reLaunch({
-    url: loginUrlForSession(notice),
+    url: loginUrlForSession(endedNotice || undefined),
     complete: () => {
       loggingOut = false;
     },
@@ -76,6 +81,7 @@ export function request<T>(options: RequestOptions): Promise<T> {
   if (needAuth) {
     const token = getToken();
     if (token) {
+      endedNotice = '';
       header.Authorization = `Bearer ${token}`;
     }
   }
