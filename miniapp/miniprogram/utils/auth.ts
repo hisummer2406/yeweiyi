@@ -35,6 +35,15 @@ export async function wechatPhoneLogin(phoneCode: string): Promise<LoginResponse
   return adopt(await post<LoginResponse>('/api/auth/wechat/phone-login', { loginCode, phoneCode }, false));
 }
 
+// Password login (POST /api/login): `phone` for a customer administrator, `username` for a platform
+// administrator. Staff (customer_user) have no password and sign in with WeChat only. Like the
+// WeChat calls it goes out without a session, so a wrong password can never end one.
+export async function passwordLogin(
+  body: { phone: string; password: string } | { username: string; password: string },
+): Promise<LoginResponse> {
+  return adopt(await post<LoginResponse>('/api/login', body, false));
+}
+
 // The JWT's "role" claim (platform_admin/customer_admin/customer_user) and "uid" claim, decoded
 // client-side for display, UI gating and local storage keys only — the token is untrusted input as
 // far as this app's own authorization goes, since every real check happens server-side.

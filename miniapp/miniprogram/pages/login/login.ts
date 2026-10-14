@@ -1,5 +1,11 @@
-import { wechatPhoneLogin, wechatRestore } from '../../utils/auth';
-import { classifyPhoneAuth, codeOfBody, describeLoginFailure, noticeFromQuery } from '../../utils/loginFlow';
+import { passwordLogin, wechatPhoneLogin, wechatRestore } from '../../utils/auth';
+import {
+  buildPasswordLogin,
+  classifyPhoneAuth,
+  codeOfBody,
+  describeLoginFailure,
+  noticeFromQuery,
+} from '../../utils/loginFlow';
 import { ApiError } from '../../utils/request';
 import { autoLoginEnabled, getToken } from '../../utils/storage';
 import { detailUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
@@ -11,6 +17,11 @@ import { detailUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
 //               administrator provisioned for that number
 type Stage = 'restoring' | 'ready' | 'needPhone';
 
+// Which way in the page offers: WeChat is the default; 账号密码登录 is the same single form as the
+// web back office (POST /api/login) — one 手机号 / 用户名 input, for administrators. Staff have no
+// password.
+type Mode = 'wechat' | 'password';
+
 const HOME = '/pages/devices/devices';
 
 Page({
@@ -18,9 +29,12 @@ Page({
   scene: null as string | null,
 
   data: {
+    mode: 'wechat' as Mode,
     stage: 'ready' as Stage,
     busy: false,
     errorMsg: '',
+    account: '',
+    password: '',
   },
 
   onLoad(query: Record<string, string>) {
@@ -49,6 +63,43 @@ Page({
       return;
     }
     wx.switchTab({ url: HOME });
+  },
+
+  onSwitchMode(e: WechatMiniprogram.TouchEvent) {
+    if (this.data.busy) return;
+    const mode = e.currentTarget.dataset.mode as Mode;
+    if (mode === this.data.mode) return;
+    this.setData({ mode, errorMsg: '', account: '', password: '' });
+  },
+
+  onAccountInput(e: WechatMiniprogram.Input) {
+    this.setData({ account: e.detail.value });
+  },
+
+  onPasswordInput(e: WechatMiniprogram.Input) {
+    this.setData({ password: e.detail.value });
+  },
+
+  onPasswordLogin() {
+    if (this.data.busy) return;
+    const form = buildPasswordLogin(this.data.account, this.data.password);
+    if (!form.ok) {
+      this.setData({ errorMsg: form.message });
+      return;
+    }
+    this.setData({ busy: true, errorMsg: '' });
+    passwordLogin(form.body)
+      .then(() => {
+        // Do not keep the password around once it has been used.
+        this.setData({ password: '' });
+        this.enter();
+      })
+      .catch((err: Error) => {
+        const status = err instanceof ApiError ? err.status : 0;
+        const code = err instanceof ApiError ? codeOfBody(err.body) : undefined;
+        this.setData({ errorMsg: describeLoginFailure(status, code).message });
+      })
+      .finally(() => this.setData({ busy: false }));
   },
 
   onWechatLogin() {

@@ -71,10 +71,16 @@ unbound-or-nonexistent device answers the same 403/401 either way, by design (de
 enumeration prevention), so don't treat those as necessarily "not yours," and don't build UI that
 assumes a `device` string typed/pasted by the user will work without binding first.
 
-- **Login is WeChat phone authorization** (yeweiyi-cloud#59, miniapp #4; contract
-  `yeweiyi-cloud/docs/account-phone-wechat-contract.md`). There is no password form: the administrator
-  provisions the account (phone + customer) in the web back office, and the user proves the number
-  with `<button open-type="getPhoneNumber">`. `POST /api/auth/wechat/login` `{loginCode}` restores a
+- **Login is WeChat phone authorization by default** (yeweiyi-cloud#59, miniapp #4; contract
+  `yeweiyi-cloud/docs/account-phone-wechat-contract.md`): the administrator provisions the account
+  (phone + customer) in the web back office, and the user proves the number with
+  `<button open-type="getPhoneNumber">`. The login page also offers
+  账号密码登录 — the same single form as yeweiyi-admin (one 手机号 / 用户名 input + password,
+  `POST /api/login`, contract §4.1; `utils/auth.ts` `passwordLogin`, `buildPasswordLogin` in
+  `utils/loginFlow.ts` mirrors admin's `utils/loginIdentifier.ts`): a mainland number is sent as `phone`
+  (customer_admin), anything else as `username` (platform_admin). **customer_user (staff) has no
+  password** — the cloud answers them the same `401 invalid_credentials` as a wrong password. There is
+  no SMS-code login (the cloud has none). `POST /api/auth/wechat/login` `{loginCode}` restores a
   session for a WeChat already bound (401 `wechat_not_bound` → show the phone button);
   `POST /api/auth/wechat/phone-login` `{loginCode, phoneCode}` binds on first use. The two codes are
   single-use — a **fresh `wx.login` code is fetched for every call**, never cached — and the app never
