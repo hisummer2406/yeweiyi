@@ -11,9 +11,11 @@ import (
 	"yeweiyi-cloud/internal/control"
 )
 
-// WeChat limits scene to 32 visible characters from this set; device names are well inside it, but
-// a name outside it must be refused rather than printed as a code that scans to something else.
-var sceneRe = regexp.MustCompile(`^[0-9A-Za-z!#$&'()*+,/:;=?@._~-]{1,32}$`)
+// sceneRe is the intersection of what WeChat accepts for scene (32 visible characters) and what
+// POST /api/devices/resolve accepts (shortCodePattern: [0-9A-Za-z_-]). A name WeChat would take but
+// the resolver rejects, such as "tank.1", would yield a printed code that always scans to
+// device_not_found, so it is refused here instead.
+var sceneRe = regexp.MustCompile(`^[0-9A-Za-z_-]{1,32}$`)
 
 // deviceMiniCodeHandler renders the device's mini-program code: scene = device name, page = the
 // device detail page. Platform administrators only: it is a printing/installation aid, and the code

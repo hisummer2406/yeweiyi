@@ -448,6 +448,20 @@ func TestMiniCode_PlatformAdminOnlyAndNoGrant(t *testing.T) {
 	}
 }
 
+// A device name the resolver cannot parse must not get a printable code: it would scan to a 404.
+func TestMiniCode_SceneMustBeResolvable(t *testing.T) {
+	env, fx := wxEnv(t)
+	env.setRole(control.RolePlatformAdmin)
+	const dev = "tank.1"
+	env.seedDevice(dev)
+	if rec := env.authed("GET", "/api/devices/"+dev+"/mini-code", nil); rec.Code != http.StatusBadRequest {
+		t.Fatalf("unresolvable name: %d, want 400", rec.Code)
+	}
+	if fx.lastCode[0] != "" {
+		t.Errorf("WeChat was called for %q", fx.lastCode[0])
+	}
+}
+
 func TestMiniCode_WeChatOffIs503(t *testing.T) {
 	env := newTestEnv(t)
 	env.setRole(control.RolePlatformAdmin)
