@@ -4,7 +4,9 @@ import {
   classifyPhoneAuth,
   codeOfBody,
   describeLoginFailure,
+  isNotOnboarded,
   maskPhone,
+  noticeFromQuery,
 } from '../miniprogram/utils/loginFlow.ts';
 
 let n = 0;
@@ -90,6 +92,18 @@ test('maskPhone keeps 3 + 4 digits and refuses anything that is not a mainland n
   assert.equal(maskPhone(''), '');
   assert.equal(maskPhone(null), '');
   assert.equal(maskPhone(undefined), '');
+});
+
+test('customer_not_onboarded: exact notice, only 403 + that code, not the dead-account 403', () => {
+  const msg = '所在客户尚未完成开通，请联系平台管理员';
+  assert.equal(describeLoginFailure(403, 'customer_not_onboarded').message, msg);
+  assert.equal(isNotOnboarded(403, { error: 'customer not onboarded', code: 'customer_not_onboarded' }), true);
+  assert.equal(isNotOnboarded(403, { error: 'not authorized' }), false);
+  assert.equal(isNotOnboarded(403, { error: 'not authorized for this device' }), false);
+  assert.equal(isNotOnboarded(401, { code: 'customer_not_onboarded' }), false);
+  assert.equal(noticeFromQuery({ notice: 'customer_not_onboarded' }), msg);
+  assert.equal(noticeFromQuery({ notice: 'x' }), '');
+  assert.equal(noticeFromQuery({}), '');
 });
 
 console.log(`${n} checks passed`);

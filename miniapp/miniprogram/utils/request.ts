@@ -1,4 +1,5 @@
 import { BASE_URL } from '../config/env';
+import { isNotOnboarded, NOT_ONBOARDED_CODE } from './loginFlow';
 import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
@@ -55,14 +56,14 @@ function adoptRenewedToken(header: Record<string, string> | undefined) {
 
 let loggingOut = false;
 
-function endSession() {
+function endSession(notice?: string) {
   // A page fires several requests in parallel (the home page does one per device); without this
   // each failure would reLaunch the login page again.
   if (loggingOut) return;
   loggingOut = true;
   clearToken();
   wx.reLaunch({
-    url: loginUrlForSession(),
+    url: loginUrlForSession(notice),
     complete: () => {
       loggingOut = false;
     },
@@ -96,6 +97,15 @@ export function request<T>(options: RequestOptions): Promise<T> {
         // A 401 there is "code spent / not bound" and a 403 is "disabled" — bouncing to the login page
         // would reload it and replace the message with a retry loop, so they are shown instead.
         const body = res.data as { error?: string } | undefined;
+        // 403 customer_not_onboarded (customer-onboarding-contract §3): the customer is still being
+        // configured. Not a dead account, and it carries no X-Renewed-Token. The token is dropped
+        // because a login page that still finds one would walk straight back in; the login page shows
+        // the notice and does not retry by itself.
+        if (needAuth && isNotOnboarded(status, res.data)) {
+          endSession(NOT_ONBOARDED_CODE);
+          reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
+          return;
+        }
         if (
           needAuth &&
           ((status === 401 && !keepSessionOn401) || (status === 403 && body?.error === 'not authorized'))

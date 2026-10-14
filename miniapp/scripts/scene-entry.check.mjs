@@ -51,4 +51,15 @@ test('no device and no usable scene is invalid, never an empty device', () => {
   }
 });
 
+test('a session notice rides along with the scene on the login URL', () => {
+  setActiveScene(null);
+  assert.equal(loginUrlForSession('customer_not_onboarded'), '/pages/login/login?notice=customer_not_onboarded');
+  setActiveScene('ZCT000001');
+  assert.equal(
+    loginUrlForSession('customer_not_onboarded'),
+    '/pages/login/login?scene=ZCT000001&notice=customer_not_onboarded',
+  );
+  setActiveScene(null);
+});
+
 console.log(`${n} passed`);

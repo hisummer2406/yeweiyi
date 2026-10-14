@@ -41,8 +41,13 @@ export function setActiveScene(scene: string | null): void {
   activeScene = scene;
 }
 
-export function loginUrlForSession(): string {
-  return activeScene ? loginUrlForScene(activeScene) : LOGIN;
+// `notice` is a login-page notice code (loginFlow.noticeFromQuery), e.g. the session ended because
+// the customer is not onboarded; it rides along with the scene so both survive the bounce.
+export function loginUrlForSession(notice?: string): string {
+  const params: string[] = [];
+  if (activeScene) params.push(`scene=${encodeURIComponent(activeScene)}`);
+  if (notice) params.push(`notice=${encodeURIComponent(notice)}`);
+  return params.length ? `${LOGIN}?${params.join('&')}` : LOGIN;
 }
 
 // How the device page was opened, decided from its launch query alone:
