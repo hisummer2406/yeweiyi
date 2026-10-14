@@ -1,4 +1,5 @@
 import { BASE_URL } from '../config/env';
+import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
 interface RequestOptions {
@@ -61,7 +62,7 @@ function endSession() {
   loggingOut = true;
   clearToken();
   wx.reLaunch({
-    url: '/pages/login/login',
+    url: loginUrlForSession(),
     complete: () => {
       loggingOut = false;
     },

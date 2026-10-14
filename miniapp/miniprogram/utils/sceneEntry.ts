@@ -31,3 +31,16 @@ export function loginUrlForScene(scene: string): string {
 export function detailUrlForScene(scene: string): string {
   return `${DETAIL}?scene=${encodeURIComponent(scene)}`;
 }
+
+// The scene of the device page currently open from a mini-program code, so a session that dies while
+// that page is open (401 mid-use) can come back to the same device after login. Held only while that
+// page exists (device-detail sets it on enter and clears it on unload); never persisted.
+let activeScene: string | null = null;
+
+export function setActiveScene(scene: string | null): void {
+  activeScene = scene;
+}
+
+export function loginUrlForSession(): string {
+  return activeScene ? loginUrlForScene(activeScene) : LOGIN;
+}

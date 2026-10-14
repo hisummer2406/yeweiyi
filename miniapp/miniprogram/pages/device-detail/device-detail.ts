@@ -5,7 +5,7 @@ import { roleFromToken } from '../../utils/auth';
 import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
-import { loginUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
+import { loginUrlForScene, sceneFromQuery, setActiveScene } from '../../utils/sceneEntry';
 import { formatLocalTime, roundFields } from '../../utils/format';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
 import {
@@ -221,6 +221,7 @@ Page({
     // name. Locate it first; nothing is queried until the cloud has answered.
     const scene = device ? null : sceneFromQuery(query);
     if (scene) {
+      setActiveScene(scene);
       this.enterByScene(scene);
       return;
     }
@@ -364,6 +365,7 @@ Page({
   },
 
   onUnload() {
+    setActiveScene(null);
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;

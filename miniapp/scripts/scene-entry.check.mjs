@@ -1,6 +1,6 @@
 // Run with: npm run check   (node --experimental-strip-types; pure logic only, no wx)
 import assert from 'node:assert/strict';
-import { detailUrlForScene, loginUrlForScene, sceneFromQuery } from '../miniprogram/utils/sceneEntry.ts';
+import { detailUrlForScene, loginUrlForScene, loginUrlForSession, sceneFromQuery, setActiveScene } from '../miniprogram/utils/sceneEntry.ts';
 
 let n = 0;
 const test = (name, fn) => {
@@ -28,6 +28,14 @@ test('login round trip keeps the scene', () => {
   assert.equal(detailUrlForScene('ZCT000001'), '/pages/device-detail/device-detail?scene=ZCT000001');
   const back = new URL('http://x' + login).searchParams.get('scene');
   assert.equal(sceneFromQuery({ scene: back }), 'ZCT000001');
+});
+
+test('a session that dies while a scene page is open returns there; otherwise plain login', () => {
+  assert.equal(loginUrlForSession(), '/pages/login/login');
+  setActiveScene('ZCT000001');
+  assert.equal(loginUrlForSession(), '/pages/login/login?scene=ZCT000001');
+  setActiveScene(null);
+  assert.equal(loginUrlForSession(), '/pages/login/login');
 });
 
 console.log(`${n} passed`);
