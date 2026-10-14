@@ -497,7 +497,7 @@ Page({
           // 403 here is "not authorized for this device": no assignment for this device. Say what to do
           // instead of the cloud's English text; nothing in the app can grant it.
           wx.showToast({
-            title: err.status === 403 ? '你暂无该设备的查看权限，请联系客户管理员分配' : err.message,
+            title: err.status === 403 ? '你暂无该设备的查看权限，请联系平台管理员分配' : err.message,
             icon: 'none',
             duration: 3000,
           });

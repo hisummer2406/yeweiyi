@@ -91,7 +91,7 @@ assumes a `device` string typed/pasted by the user will work without binding fir
   /api/devices/resolve` `{code}` (the label text exactly as scanned) → `200 {deviceName}`: the actual
   device name, used for everything after. It writes nothing, so scanning twice changes nothing.
   Every "cannot locate" case (unknown, other customer, no granted tank, disabled) is the same **404**
-  `code=device_not_found` — shown as "未找到该设备，或你暂无…请联系客户管理员"; it is not a dead session.
+  `code=device_not_found` — shown as "未找到该设备，或你暂无…请联系平台管理员（油罐授权仅平台管理员可分配，cloud#63 v1.1）"; it is not a dead session.
   `POST /api/devices/bind` is retired (always 410 `bind_removed`): **do not call it**, and nothing in
   the app may grant visibility. What a customer_user can see is decided by the cloud per
   `(device_name, tank)`: `GET /api/devices` lists only devices with a granted tank (rows carry
