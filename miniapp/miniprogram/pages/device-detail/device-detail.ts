@@ -4,6 +4,8 @@ import { AlarmSocket } from '../../utils/ws';
 import { roleFromToken } from '../../utils/auth';
 import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
+import { describeResolveError, resolveDevice } from '../../utils/scan';
+import { loginUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
 import { formatLocalTime, roundFields } from '../../utils/format';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
 import {
@@ -215,10 +217,39 @@ Page({
     this.stationId = stationIdFromKey(query.station);
     this.setData({ device, tabs, activeTab: tab, today: formatDate(new Date()) });
     wx.setNavigationBarTitle({ title: device || '设备详情' });
+    // Opened from a device mini-program code: the scene is the device's printed code, not yet a device
+    // name. Locate it first; nothing is queried until the cloud has answered.
+    const scene = device ? null : sceneFromQuery(query);
+    if (scene) {
+      this.enterByScene(scene);
+      return;
+    }
     this.loadTabIfNeeded(tab);
     this.openSocket(device);
     // Catch a replacement that happened between the home list being drawn and this page opening.
     this.refreshAssociation();
+  },
+
+  // Mini-program-code entry. Not signed in → login first (it brings the user back here with the same
+  // scene). Signed in → POST /api/devices/resolve, then show that device exactly like any other
+  // entry; a failure is shown as a notice here, never as a dead session.
+  enterByScene(scene: string) {
+    if (!getToken()) {
+      wx.reLaunch({ url: loginUrlForScene(scene) });
+      return;
+    }
+    this.setData({ deviceActive: false, notice: '', loading: true });
+    const gen = this.deviceGen;
+    resolveDevice(scene)
+      .then((deviceName) => {
+        if (gen !== this.deviceGen) return;
+        this.setData({ loading: false });
+        this.switchDevice(deviceName, '');
+      })
+      .catch((err: Error) => {
+        if (gen !== this.deviceGen) return;
+        this.setData({ loading: false, deviceActive: false, notice: describeResolveError(err) });
+      });
   },
 
   // One socket per device. A socket's own messages are checked against the generation it was opened
@@ -244,6 +275,9 @@ Page({
   // on pull-down and after a "not authorized for this device" answer.
   refreshAssociation(): Promise<unknown> {
     if (this.associationBusy) return Promise.resolve();
+    // Nothing shown and no station to follow (a scene still being located, or its locate failed): the
+    // notice on screen is the answer, and 'device-gone' must not overwrite it.
+    if (!this.data.device && typeof this.stationId !== 'number') return Promise.resolve();
     this.associationBusy = true;
     const gen = this.deviceGen;
     return get<{ rows: Device[] }>('/api/devices')

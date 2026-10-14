@@ -244,6 +244,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   shared by the home page and `device-detail`. Pure, no `wx`.
 - `utils/scan.ts` — `wx.scanCode` → `POST /api/devices/resolve`, shared by the home page and
   `device-add`; hands the caller the actual device name. `utils/roles.ts` — `isReadOnlyRole`.
+- `utils/sceneEntry.ts` — device mini-program code entry (miniapp#7): path `pages/device-detail/device-detail`,
+  `scene` = device name as printed. `device-detail` resolves it with `resolveDevice` (`utils/scan.ts`); not
+  signed in → `login?scene=` and login returns to `device-detail?scene=`. A failed resolve is a notice on the
+  page, never a dead session. Pure, Node-checked (`scripts/scene-entry.check.mjs`).
 - `utils/oilInOut.ts` — runtime guard for the `/api/oil-in-out` envelope and the "list is not
   complete" notes (unparsable / legacySkipped / partial / truncated / invalidSource). Pure.
 - `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).

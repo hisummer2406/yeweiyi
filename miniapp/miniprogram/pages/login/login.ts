@@ -2,6 +2,7 @@ import { wechatPhoneLogin, wechatRestore } from '../../utils/auth';
 import { classifyPhoneAuth, codeOfBody, describeLoginFailure } from '../../utils/loginFlow';
 import { ApiError } from '../../utils/request';
 import { autoLoginEnabled, getToken } from '../../utils/storage';
+import { detailUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
 
 // Where the login page is in the flow:
 //   restoring - a silent attempt for an already-bound WeChat is in flight (once per page load)
@@ -13,15 +14,19 @@ type Stage = 'restoring' | 'ready' | 'needPhone';
 const HOME = '/pages/devices/devices';
 
 Page({
+  // Set when the login was started by a device mini-program code: after signing in, go to that device.
+  scene: null as string | null,
+
   data: {
     stage: 'ready' as Stage,
     busy: false,
     errorMsg: '',
   },
 
-  onLoad() {
+  onLoad(query: Record<string, string>) {
+    this.scene = sceneFromQuery(query);
     if (getToken()) {
-      wx.switchTab({ url: HOME });
+      this.enter();
       return;
     }
     // After an explicit logout the same WeChat must not be signed straight back in, or logging out
@@ -29,6 +34,14 @@ Page({
     if (autoLoginEnabled()) {
       this.restore();
     }
+  },
+
+  enter() {
+    if (this.scene) {
+      wx.reLaunch({ url: detailUrlForScene(this.scene) });
+      return;
+    }
+    wx.switchTab({ url: HOME });
   },
 
   onWechatLogin() {
@@ -39,7 +52,7 @@ Page({
   restore() {
     this.setData({ stage: 'restoring', busy: true, errorMsg: '' });
     wechatRestore()
-      .then(() => wx.switchTab({ url: HOME }))
+      .then(() => this.enter())
       .catch((err: Error) => this.fail(err, 'restore'))
       .finally(() => this.setData({ busy: false }));
   },
@@ -59,7 +72,7 @@ Page({
     }
     this.setData({ busy: true, errorMsg: '' });
     wechatPhoneLogin(result.code)
-      .then(() => wx.switchTab({ url: HOME }))
+      .then(() => this.enter())
       .catch((err: Error) => this.fail(err, 'phone'))
       .finally(() => this.setData({ busy: false }));
   },
