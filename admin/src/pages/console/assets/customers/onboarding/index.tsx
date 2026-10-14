@@ -136,7 +136,7 @@ const CustomerOnboarding: React.FC = () => {
   }, [customerId, load]);
 
   const name = customer?.name ?? `#${customerId}`;
-  const back = () => history.push('/console/assets/customers');
+  const back = () => history.push('/assets/customers');
 
   if (loading) {
     return (

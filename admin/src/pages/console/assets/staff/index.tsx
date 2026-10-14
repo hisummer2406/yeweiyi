@@ -13,7 +13,7 @@ import TankGrantsModal from './TankGrantsModal';
 type Row = API.AdminUser & { customerName?: string };
 
 /**
- * 资产管理 · 员工授权（/console/assets/staff，yeweiyi-admin#17，云端契约 tank-grants-contract v1.1）：
+ * 资产管理 · 员工授权（/assets/staff，yeweiyi-admin#17，云端契约 tank-grants-contract v1.1）：
  * 列出可见的员工（customer_user），给选中的员工按 油站 → 设备 → 罐 分配/撤销查看权限。
  * - 仅平台管理员（云端 v1.1：客户管理员读写授权一律 403，路由已按 canPlatformAdmin 收窄）；看到全部客户的员工。
  * - 这里**不创建、停用、改客户**员工账号：账号管理仍只归平台管理员（/ops/users，#13）。

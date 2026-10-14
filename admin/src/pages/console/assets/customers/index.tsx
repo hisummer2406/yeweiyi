@@ -35,7 +35,7 @@ const AdminCustomers: React.FC = () => {
   // 新建成功后直接进入该客户的开通向导（新客户一定是配置中，cloud#60）
   const createdId = useRef<number>(undefined);
   const openOnboarding = (id: number) =>
-    history.push(`/console/assets/customers/${id}/onboarding`);
+    history.push(`/assets/customers/${id}/onboarding`);
   const reload = () => actionRef.current?.reload();
 
   const remove = async (customer: API.Customer) => {

@@ -23,12 +23,12 @@ describe('AssetsIndex', () => {
   it('sends the platform admin to the customers page', () => {
     canPlatformAdmin = true;
     render(<AssetsIndex />);
-    expect(navigated).toEqual(['/console/assets/customers']);
+    expect(navigated).toEqual(['/assets/customers']);
   });
 
   it('sends the customer admin to the stations page (no customers item)', () => {
     canPlatformAdmin = false;
     render(<AssetsIndex />);
-    expect(navigated).toEqual(['/console/assets/stations']);
+    expect(navigated).toEqual(['/assets/stations']);
   });
 });

@@ -18,16 +18,20 @@
 - 响应没有 `{success,data}` 信封，别再加 `errorThrower` 之类按信封判成败的逻辑。
 
 **菜单与入口分工（OpenSpec 变更 `consolidate-asset-management`）**：客户 → 油站 → 设备三级管理集中在顶层菜单「资产管理」
-（`/console/assets/{customers,stations,devices}`，整组 `access.canManageAssets` = 平台管理员或客户管理员，客户项只对平台管理员），
-与「设备监控」并列；URL 留在 `/console` 下，是为了客户管理员进不了 `/ops/*`。`/ops` 只剩账号管理、审计日志。
-旧地址 `/ops/devices`、`/ops/customers`、`/console/stations` 在 `config/routes.ts` 里重定向到新位置，别删。
-`/console/assets` 入口由 `pages/console/assets/index.tsx` 按角色分流（平台管理员→客户，客户管理员→油站）。
-一级菜单顺序是 设备监控 → 记录查询（报警·入库·出库，URL 仍是 `/console/records/*`）→ 资产管理 → 运维管理；记录查询是单独的顶层路由，不嵌在设备监控下面。
+（`/assets/{customers,stations,devices}`，整组 `access.canManageAssets` = 平台管理员或客户管理员，客户项只对平台管理员），
+与「设备监控」并列；URL 不在 `/ops` 下，所以客户管理员不会被 `/ops/*` 拦截；也**不能放在 `/console/` 下**（见下方「菜单高亮」）。`/ops` 只剩账号管理、审计日志。
+旧地址 `/ops/devices`、`/ops/customers`、`/console/stations`、`/console/records/*`、`/console/assets/*` 在 `config/routes.ts` 里重定向到新位置，别删。
+`/assets` 入口由 `pages/assets/index.tsx` 按角色分流（平台管理员→客户，客户管理员→油站）。
+**菜单高亮（别踩）**：ProLayout 用 `@umijs/route-utils` 的 `getMatchMenu` 算选中项，路径 `P` 会匹配 `P/(.*)`，而分组 path 又是菜单 key。
+「设备监控」分组的 path 是 `/console`，所以记录查询、资产管理曾放在 `/console/records/*`、`/console/assets/*` 时，点它们会把「设备监控」一并点亮；
+现在它们是 `/records/*`、`/assets/*`。**新增菜单组时，别把 URL 放在另一个分组的 path 前缀下**，分组里也别放 path 等于分组 path 的无名重定向。
+`src/routes.test.ts` 的「菜单高亮」用同一个 `getMatchMenu` 守着这一点。分组 path 也不能随便改成别的值：react-router 要求嵌套的绝对子路径以父路径开头。
+一级菜单顺序是 设备监控 → 记录查询（报警·入库·出库，URL 是 `/records/*`）→ 资产管理 → 运维管理；记录查询是单独的顶层路由，不嵌在设备监控下面。
 设备页是设备**登记、客户归属、油站归属**的唯一入口：登记设备、分配/转移客户、「所属客户」列只对平台管理员显示（UI 隐藏，
 权限边界在云端）；「分配油站」对两种管理员都有，是分配油站的唯一入口。登记成功的提示里带「分配油站」动作（点了才打开弹窗）。
 客户管理员的设备行没有 `customer_id`，所以设备页对它不请求 `GET /api/customers`（云端只允许平台管理员，请求必然 403 并弹错）。
 
-**设备登记（页面现位于 `/console/assets/devices`，原 `/ops/devices`；OpenSpec 变更 `register-device-and-assign-customer`，GitHub issue #1）**：
+**设备登记（页面现位于 `/assets/devices`，原 `/ops/devices`；OpenSpec 变更 `register-device-and-assign-customer`，GitHub issue #1）**：
 
 - 列表 `GET /api/devices`（行是 snake_case；`customer_id` **只有平台管理员的行才有**，null 为未分配，字段缺失是
   旧版云端，显示「未知」而不是「未分配」）；转移/分配走 `PUT /api/devices/:device/customer`（同一事务清掉该设备的
@@ -52,7 +56,7 @@
 - 本地联调需要含 cloud #49 的 `yeweiyi-cloud` `main`；该接口不在 `feat/tank-shape-attribute` 分支上。设备列表的
   `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
 
-**客户管理（页面现位于 `/console/assets/customers`，原 `/ops/customers`）、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
+**客户管理（页面现位于 `/assets/customers`，原 `/ops/customers`）、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
 `default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码（仅有密码的账号）、
 换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
 和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
@@ -89,7 +93,7 @@
   （回登录页），别用前缀/包含去判断。
 - 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送、交班/库存记录。
 
-**油站（`/console/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。
+**油站（`/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。
 油站页只管油站增删改（对平台管理员和客户管理员开放，`access.canManageAssets`）；给设备分配油站在设备页。云端契约：
 `GET /api/stations`（`{rows}`，平台管理员看全部，客户管理员看本客户全部含空油站）、`POST/PUT/DELETE /api/stations(/:id)`、
 `PUT /api/devices/:device/station`（`{stationId: N | null}`，**键必须存在**，清空发显式 `null`）。必须知道的行为：
@@ -141,7 +145,7 @@
   正在看 A 才自动切，用户手动选了别的不动；多台（历史冲突）或暂无设备不据此切换。不带 `?station=` 的独立入口按设备编码直接看 A，保留。
   云端不推送换机事件，只能靠轮询得知，所以切换最长有一个轮询周期的延迟。
 - **员工按罐授权（#17，云端契约 `docs/tank-grants-contract.md` v1.1，cloud#63；v1.1 起**仅平台管理员**读写授权，客户管理员 `GET/PUT tank-grants` 一律 403，SHA256 待按 v1.1 重算）**：「资产管理 → 员工授权」
-  （`/console/assets/staff`，仅平台管理员，路由 `access: canPlatformAdmin`）。列出员工（`GET /api/users` 过滤 `customer_user`，全部客户），
+  （`/assets/staff`，仅平台管理员，路由 `access: canPlatformAdmin`）。列出员工（`GET /api/users` 过滤 `customer_user`，全部客户），
   行内「分配油罐」弹窗按 **油站 → 设备 → 罐** 勾选：罐号来自 `GET /api/devices/:device/tanks`（设备已上报的罐），已授权来自
   `GET /api/users/:id/tank-grants`，保存是对**单台设备**的整组替换 `PUT /api/users/:id/tank-grants/:device {tanks:[...]}`；空选择 = 撤销，
   不自动全选；设备从未上报时只能撤销（否则 409 `tanks_unknown`）；授权键是 `(员工, device_name, 罐号)`，没有按油站/整机授权。错误按 `code`
@@ -151,7 +155,7 @@
 - **客户开通向导（#14，云端契约 `docs/customer-onboarding-contract.md`，cloud#60；云端未联调前只有 mock 测试）**：客户有
   `onboardingStatus`（`configuring`|`active`，字段缺失是旧版云端，列表显示「未知」不当成已开通）。配置中客户下**所有**账号不能登录/续期
   （`403 customer_not_onboarded`）：这是业务提示不是账号失效，登录页和全局错误处理单独提示、不清 token。向导页
-  `/console/assets/customers/:id/onboarding`（仅平台管理员，不进菜单）串起现有接口：客户管理员（手机号+密码）→ 油站 → 登记设备并分配油站，
+  `/assets/customers/:id/onboarding`（仅平台管理员，不进菜单）串起现有接口：客户管理员（手机号+密码）→ 油站 → 登记设备并分配油站，
   每步即时保存，进度一律以 `GET /api/customers/:id/onboarding` 为准（刷新恢复），「完成开通」按钮仅在 `complete` 时可点，
   `409 onboarding_incomplete` 刷新并按 `missing` 提示。新建客户成功后自动进入向导；客户列表对配置中的客户给「开通向导」入口。
   向导只收完整出厂编号（不做短码补全），设备登记与分配油站是两次请求，分配失败时设备留在该客户下，提示去设备页重试。
@@ -235,7 +239,7 @@ config/routes.ts        路由表，access 字段是 /ops 与 /console 的唯一
 src/access.ts           canPlatformAdmin / canManageAssets / canConsole 角色判断
 src/pages/ops/          运维控制台：users / audit（设备与客户已并入 console/assets）
 src/pages/console/      客户 PC 监控台：devices / device-detail / alarms / oil-in-out（入库、出库共用）/ issue-command
-src/pages/console/assets/  资产管理：customers（仅平台管理员）/ stations / devices（登记·客户归属·油站归属）
+src/pages/assets/  资产管理：customers（仅平台管理员）/ stations / devices（登记·客户归属·油站归属）
 src/pages/user/login/   登录（两个分区共用）
 src/pages/account/      个人设置（占位）
 src/pages/exception/    403 / 404 / 500

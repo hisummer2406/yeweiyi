@@ -78,9 +78,7 @@ describe('AdminCustomers', () => {
       expect(createCustomer).toHaveBeenCalledWith({ name: 'A 油站' }),
     );
     await waitFor(() =>
-      expect(push).toHaveBeenCalledWith(
-        '/console/assets/customers/2/onboarding',
-      ),
+      expect(push).toHaveBeenCalledWith('/assets/customers/2/onboarding'),
     );
     expect(message.success).toHaveBeenCalled();
   });
@@ -109,7 +107,7 @@ describe('AdminCustomers', () => {
     const a = await rowOf('A 油站');
     expect(within(a).getByText('配置中')).toBeTruthy();
     fireEvent.click(within(a).getByText('开通向导'));
-    expect(push).toHaveBeenCalledWith('/console/assets/customers/2/onboarding');
+    expect(push).toHaveBeenCalledWith('/assets/customers/2/onboarding');
     const b = await rowOf('B 油站');
     expect(within(b).getByText('已开通')).toBeTruthy();
     expect(within(b).queryByText('开通向导')).toBeNull();
