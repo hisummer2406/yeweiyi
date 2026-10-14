@@ -9,6 +9,11 @@ export interface LoginFailure {
   offerPhone: boolean;
 }
 
+// customer-onboarding-contract §3/§4 (miniapp#5): the customer is still being configured, so no
+// account under it can sign in or renew. A business notice — not a dead account, not a wrong password.
+export const NOT_ONBOARDED_CODE = 'customer_not_onboarded';
+export const NOT_ONBOARDED_MESSAGE = '所在客户尚未完成开通，请联系平台管理员';
+
 const UNKNOWN: LoginFailure = { message: '登录失败，请稍后重试', offerPhone: false };
 
 // Keyed by the cloud's `code`. None of these is the generic 403 "not authorized" that request.ts
@@ -18,7 +23,7 @@ const BY_CODE: Record<string, LoginFailure> = {
   wechat_not_bound: { message: '', offerPhone: true },
   phone_not_provisioned: { message: '该手机号尚未开通，请联系管理员', offerPhone: false },
   account_disabled: { message: '账号已停用，请联系管理员', offerPhone: false },
-  customer_not_onboarded: { message: '客户尚未完成开通，请联系平台管理员', offerPhone: false },
+  [NOT_ONBOARDED_CODE]: { message: NOT_ONBOARDED_MESSAGE, offerPhone: false },
   wechat_identity_conflict: {
     message: '该微信或该账号已绑定其他身份，请联系管理员处理',
     offerPhone: false,
@@ -43,6 +48,17 @@ export function codeOfBody(body: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
+// A request that arrived with a session and was refused because the customer is not onboarded
+// (403 `customer_not_onboarded`). Distinct from the bare 403 `not authorized` (dead account).
+export function isNotOnboarded(status: number, body: unknown): boolean {
+  return status === 403 && codeOfBody(body) === NOT_ONBOARDED_CODE;
+}
+
+// The notice a login page is asked to show (`?notice=` on its URL), or '' for none / unknown.
+export function noticeFromQuery(query: Record<string, string | undefined> | undefined): string {
+  return query?.notice === NOT_ONBOARDED_CODE ? NOT_ONBOARDED_MESSAGE : '';
+}
+
 export type PhoneAuthResult =
   | { kind: 'ok'; code: string }
   | { kind: 'denied' }
@@ -65,4 +81,34 @@ export function classifyPhoneAuth(detail: { code?: string; errMsg?: string } | u
 export function maskPhone(phone: string | null | undefined): string {
   if (!phone || !/^\d{11}$/.test(phone)) return '';
   return `${phone.slice(0, 3)}****${phone.slice(7)}`;
+}
+
+// Whether a failed authorized response ends the session. Pure (no `wx`), checked in Node by
+// `npm run check`.
+//
+// `sentToken` is the token the request went out with, `currentToken` the one stored when the answer
+// arrives. They differ when the user signed in again while the request was in flight: that answer
+// belongs to the old session and must not clear the new token or bounce to login. Requests that went
+// out bare ('') while still signed out match a still-empty store, so they end the session as before.
+export interface SessionEndInput {
+  status: number;
+  body: unknown;
+  needAuth: boolean;
+  keepSessionOn401: boolean;
+  sentToken: string;
+  currentToken: string;
+}
+
+export type SessionDecision = { end: false } | { end: true; notice?: string };
+
+export function sessionDecision(i: SessionEndInput): SessionDecision {
+  // Login calls (needAuth=false) have no session to end: their 401/403 are shown, not acted on.
+  if (!i.needAuth) return { end: false };
+  const bodyError = i.body && typeof i.body === 'object' ? (i.body as { error?: unknown }).error : undefined;
+  const notOnboarded = isNotOnboarded(i.status, i.body);
+  const dead =
+    (i.status === 401 && !i.keepSessionOn401) || (i.status === 403 && bodyError === 'not authorized');
+  if (!notOnboarded && !dead) return { end: false };
+  if (i.sentToken !== i.currentToken) return { end: false };
+  return notOnboarded ? { end: true, notice: NOT_ONBOARDED_CODE } : { end: true };
 }

@@ -1,4 +1,5 @@
 import { BASE_URL } from '../config/env';
+import { sessionDecision } from './loginFlow';
 import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
@@ -54,15 +55,20 @@ function adoptRenewedToken(header: Record<string, string> | undefined) {
 }
 
 let loggingOut = false;
+// The reason the session was last ended, kept until a request goes out with a token again. Requests
+// already queued when the token is cleared go out bare and answer 401; without this they would
+// reLaunch a plain login page over the one that carries the notice.
+let endedNotice = '';
 
-function endSession() {
+function endSession(notice?: string) {
+  if (notice) endedNotice = notice;
   // A page fires several requests in parallel (the home page does one per device); without this
   // each failure would reLaunch the login page again.
   if (loggingOut) return;
   loggingOut = true;
   clearToken();
   wx.reLaunch({
-    url: loginUrlForSession(),
+    url: loginUrlForSession(endedNotice || undefined),
     complete: () => {
       loggingOut = false;
     },
@@ -72,9 +78,14 @@ function endSession() {
 export function request<T>(options: RequestOptions): Promise<T> {
   const { url, method = 'GET', data, needAuth = true, keepSessionOn401 = false } = options;
   const header: Record<string, string> = { 'content-type': 'application/json' };
+  // The token this request goes out with; an answer is only allowed to end the session if it is still
+  // the stored one when it arrives (see sessionDecision in loginFlow.ts).
+  let sentToken = '';
   if (needAuth) {
     const token = getToken();
     if (token) {
+      sentToken = token;
+      endedNotice = '';
       header.Authorization = `Bearer ${token}`;
     }
   }
@@ -96,12 +107,20 @@ export function request<T>(options: RequestOptions): Promise<T> {
         // A 401 there is "code spent / not bound" and a 403 is "disabled" — bouncing to the login page
         // would reload it and replace the message with a retry loop, so they are shown instead.
         const body = res.data as { error?: string } | undefined;
-        if (
-          needAuth &&
-          ((status === 401 && !keepSessionOn401) || (status === 403 && body?.error === 'not authorized'))
-        ) {
-          endSession();
-        }
+        // 403 customer_not_onboarded (customer-onboarding-contract §3): the customer is still being
+        // configured. Not a dead account, and it carries no X-Renewed-Token. The token is dropped
+        // because a login page that still finds one would walk straight back in; the login page shows
+        // the notice and does not retry by itself. Whether this answer may end the session at all is
+        // decided by sessionDecision (loginFlow.ts) (an answer for an already-replaced session may not).
+        const decision = sessionDecision({
+          status,
+          body: res.data,
+          needAuth,
+          keepSessionOn401,
+          sentToken,
+          currentToken: getToken(),
+        });
+        if (decision.end) endSession(decision.notice);
         reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
       },
       fail: (err) => {

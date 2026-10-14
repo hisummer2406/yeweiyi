@@ -32,7 +32,7 @@ test('anything that is not a bare code is refused before a request is spent', ()
 test('device_not_found is one message for unknown / other customer / not granted', () => {
   const m = describeResolveFailure(404, 'device_not_found', 'device not found');
   assert.match(m, /未找到该设备/);
-  assert.match(m, /联系客户管理员/);
+  assert.match(m, /联系平台管理员/);
 });
 
 test('410 bind_removed is not shown as a session problem; other failures keep their own text', () => {

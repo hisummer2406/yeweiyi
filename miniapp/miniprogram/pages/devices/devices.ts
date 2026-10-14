@@ -139,7 +139,7 @@ Page({
       stationKey: current ? current.key : '',
       deviceTotal: this.allDevices.length,
       stationNotice: lostStation
-        ? '上次查看的油站当前没有你可查看的设备。若已更换设备，请联系客户管理员重新分配油罐。'
+        ? '上次查看的油站当前没有你可查看的设备。若已更换设备，请联系平台管理员重新分配油罐。'
         : '',
     });
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));

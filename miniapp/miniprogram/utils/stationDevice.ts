@@ -47,9 +47,9 @@ export function followStationDevice(
 }
 
 export const FOLLOW_NOTICES: Record<'no-device' | 'ambiguous' | 'device-gone', string> = {
-  'no-device': '该油站当前没有你可查看的设备。若已更换设备，请联系客户管理员重新分配油罐。',
+  'no-device': '该油站当前没有你可查看的设备。若已更换设备，请联系平台管理员重新分配油罐。',
   ambiguous: '该油站关联了多台设备，数据不会合并显示，请联系管理员处理。',
-  'device-gone': '该设备已不在你的可查看范围内，请联系客户管理员。',
+  'device-gone': '该设备已不在你的可查看范围内，请联系平台管理员。',
 };
 
 // Identity of one tank's data and of anything cached for it: the device name AND the tank number.

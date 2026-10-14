@@ -1,5 +1,5 @@
 import { wechatPhoneLogin, wechatRestore } from '../../utils/auth';
-import { classifyPhoneAuth, codeOfBody, describeLoginFailure } from '../../utils/loginFlow';
+import { classifyPhoneAuth, codeOfBody, describeLoginFailure, noticeFromQuery } from '../../utils/loginFlow';
 import { ApiError } from '../../utils/request';
 import { autoLoginEnabled, getToken } from '../../utils/storage';
 import { detailUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
@@ -25,6 +25,13 @@ Page({
 
   onLoad(query: Record<string, string>) {
     this.scene = sceneFromQuery(query);
+    // Bounced here by a session that was refused mid-use (e.g. customer not onboarded): say why and
+    // wait for the user, rather than silently re-asking the cloud the same question.
+    const notice = noticeFromQuery(query);
+    if (notice) {
+      this.setData({ errorMsg: notice });
+      return;
+    }
     if (getToken()) {
       this.enter();
       return;

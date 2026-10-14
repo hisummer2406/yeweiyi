@@ -79,7 +79,7 @@ assumes a `device` string typed/pasted by the user will work without binding fir
   `POST /api/auth/wechat/phone-login` `{loginCode, phoneCode}` binds on first use. The two codes are
   single-use — a **fresh `wx.login` code is fetched for every call**, never cached — and the app never
   sends a phone number or openid itself. Failures carry a `code` (`utils/loginFlow.ts` maps each to
-  its own message: not provisioned / disabled / not onboarded (#60, reserved) / identity conflict /
+  its own message: not provisioned / disabled / customer not onboarded (#5) / identity conflict /
   code invalid / WeChat unavailable). Login calls go out with `needAuth=false`, so no failure there can
   be taken for a dead session. The JWT's `sub` is the **user id**, not a username (customer-side
   accounts have none): read identity from the login response (`utils/storage` profile) and key local
@@ -91,7 +91,7 @@ assumes a `device` string typed/pasted by the user will work without binding fir
   /api/devices/resolve` `{code}` (the label text exactly as scanned) → `200 {deviceName}`: the actual
   device name, used for everything after. It writes nothing, so scanning twice changes nothing.
   Every "cannot locate" case (unknown, other customer, no granted tank, disabled) is the same **404**
-  `code=device_not_found` — shown as "未找到该设备，或你暂无…请联系客户管理员"; it is not a dead session.
+  `code=device_not_found` — shown as "未找到该设备，或你暂无…请联系平台管理员（油罐授权仅平台管理员可分配，cloud#63 v1.1）"; it is not a dead session.
   `POST /api/devices/bind` is retired (always 410 `bind_removed`): **do not call it**, and nothing in
   the app may grant visibility. What a customer_user can see is decided by the cloud per
   `(device_name, tank)`: `GET /api/devices` lists only devices with a granted tank (rows carry
@@ -229,6 +229,15 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   `yeweiyi-cloud#51`) replaces the stored token; the cloud caps it at 30 days from the last password
   login, then the next 401 sends the user back to login. `AlarmSocket` re-reads the token on every
   reconnect, so it picks the new one up without changes.
+  **403 `code=customer_not_onboarded`** (yeweiyi-cloud#68, `docs/customer-onboarding-contract.md` §3/§4,
+  miniapp#5): the customer is still being configured. Not a dead account and not a wrong password: the
+  token is dropped, the app returns to login with `?notice=customer_not_onboarded` (alongside a `scene`
+  if one is active) and the login page shows "所在客户尚未完成开通，请联系平台管理员" without silently
+  restoring. It carries no `X-Renewed-Token`. Whether a failed answer may end the session is decided by
+  `sessionDecision` (`utils/loginFlow.ts`, Node-checked): an answer to a request sent with a token that
+  is no longer the stored one (the user signed in again meanwhile) never clears the new session. The
+  `/ws/alarms` handshake refusal exposes no status to `wx`, so the notice there relies on another HTTP
+  request of the same page.
 - `utils/ws.ts` — `AlarmSocket` wraps `wx.connectSocket` for `/ws/alarms` with reconnect-on-close.
 - `utils/auth.ts` — `wechatRestore()` / `wechatPhoneLogin()`; `roleFromToken`/`userKeyFromToken`
   decode the JWT's `role`/`uid` claims client-side purely for display, UI gating and storage keys
