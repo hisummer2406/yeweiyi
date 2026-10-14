@@ -7,6 +7,7 @@ import {
   isNotOnboarded,
   sessionDecision,
   maskPhone,
+  buildPasswordLogin,
   noticeFromQuery,
 } from '../miniprogram/utils/loginFlow.ts';
 
@@ -135,6 +136,27 @@ test('sessionDecision: an answer for a replaced session never clears the new one
 
 test('sessionDecision: still signed out, a bare queued request still ends the session', () => {
   assert.deepEqual(sessionDecision({ ...base, sentToken: '', currentToken: '', status: 401, body: {} }), { end: true });
+});
+
+test('password login: one identifier, phone or username decided by the input (same as admin)', () => {
+  const phone = { ok: true, body: { phone: '13800138000', password: 'p w' } };
+  assert.deepEqual(buildPasswordLogin(' 138 0013-8000 ', 'p w'), phone);
+  assert.deepEqual(buildPasswordLogin('+86 13800138000', 'p w'), phone);
+  assert.deepEqual(buildPasswordLogin('008613800138000', 'p w'), phone);
+  assert.deepEqual(buildPasswordLogin(' admin ', 'x'), { ok: true, body: { username: 'admin', password: 'x' } });
+  // 11 digits that are not a mainland mobile number are a username, not a malformed phone
+  assert.deepEqual(buildPasswordLogin('12345678901', 'x'), { ok: true, body: { username: '12345678901', password: 'x' } });
+});
+
+test('password login: empty fields are told apart from a wrong password', () => {
+  assert.equal(buildPasswordLogin('  ', 'x').message, '请输入手机号或用户名');
+  assert.equal(buildPasswordLogin('admin', '').message, '请输入密码');
+});
+
+test('password login: invalid_credentials is its own message and never offers the phone button', () => {
+  const f = describeLoginFailure(401, 'invalid_credentials');
+  assert.equal(f.offerPhone, false);
+  assert.equal(f.message, '账号或密码错误');
 });
 
 console.log(`${n} checks passed`);

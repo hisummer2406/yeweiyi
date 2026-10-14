@@ -33,6 +33,9 @@ const BY_CODE: Record<string, LoginFailure> = {
   wechat_upstream_error: { message: '微信服务暂时不可用，请稍后重试', offerPhone: false },
   phone_unsupported: { message: '仅支持中国大陆手机号', offerPhone: false },
   invalid_request: { message: '登录请求不完整，请重试', offerPhone: false },
+  // POST /api/login. One answer for wrong password, unknown account, disabled account and a role
+  // that has no password (customer_user), by design: it must not reveal which of those it was.
+  invalid_credentials: { message: '账号或密码错误', offerPhone: false },
 };
 
 export function describeLoginFailure(status: number, code?: string): LoginFailure {
@@ -75,6 +78,35 @@ export function classifyPhoneAuth(detail: { code?: string; errMsg?: string } | u
     return { kind: 'failed', message: '当前小程序未开通手机号授权能力，请联系管理员' };
   }
   return { kind: 'failed', message: '获取手机号授权失败，请重试' };
+}
+
+// The password login form (POST /api/login takes exactly one of phone / username, plus password).
+// Same rule as yeweiyi-admin src/utils/loginIdentifier.ts: ONE input, "手机号 / 用户名", and the
+// client decides which field it is — the cloud does not guess. After stripping spaces and hyphens
+// and a +86 / 0086 / 86 prefix, a mainland number (1[3-9] + 9 digits, same as the cloud's
+// phone.go) goes out as `phone`; anything else is a `username`.
+const PHONE = /^1[3-9]\d{9}$/;
+
+export function normalizePhone(raw: string): string | undefined {
+  const s = raw.replace(/[\s-]/g, '');
+  for (const prefix of ['+86', '0086', '86']) {
+    if (s.startsWith(prefix) && PHONE.test(s.slice(prefix.length))) return s.slice(prefix.length);
+  }
+  return PHONE.test(s) ? s : undefined;
+}
+
+export type PasswordForm =
+  | { ok: true; body: { phone: string; password: string } | { username: string; password: string } }
+  | { ok: false; message: string };
+
+// Only what the cloud would reject as a 400 anyway is checked here, so an empty field is told apart
+// from a wrong password. The password is never trimmed: spaces in it are the user's.
+export function buildPasswordLogin(identifier: string, password: string): PasswordForm {
+  const id = identifier.trim();
+  if (!id) return { ok: false, message: '请输入手机号或用户名' };
+  if (!password) return { ok: false, message: '请输入密码' };
+  const phone = normalizePhone(id);
+  return { ok: true, body: phone ? { phone, password } : { username: id, password } };
 }
 
 // 13800138000 -> 138****8000. The full number is not shown without need (issue #4).

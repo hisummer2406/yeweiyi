@@ -103,11 +103,52 @@ page {
   border-bottom: 1rpx solid #c5c9d0;
 }
 
-.home-tank-img {
+.home-tank {
+  position: relative;
   width: 240rpx;
   height: 176rpx;
   flex-shrink: 0;
   margin: 87rpx 0 0 50rpx;
+}
+
+.home-tank-img {
+  width: 240rpx;
+  height: 176rpx;
+}
+
+/* 罐身区域（不含顶部人孔和底座），按 tank-horizontal-home.png 实测；填充只在这一块内 */
+.home-tank-body {
+  position: absolute;
+  left: 2rpx;
+  right: 2rpx;
+  top: 26rpx;
+  height: 139rpx;
+  border-radius: 28rpx;
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.6;
+}
+
+.fill-water {
+  background-color: #1e88e5;
+}
+
+.fill-oil {
+  background-color: #f2a516;
+}
+
+.fill-oil.fill-alarm {
+  background-color: #d93a3a;
+}
+
+.fill-oil.fill-fault {
+  background-color: #8a8f98;
 }
 
 .tank-info {
