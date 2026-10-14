@@ -11,6 +11,9 @@ export class ApiError extends Error {
   status: number;
   error?: string;
   code?: string;
+  /** 冲突响应附带的对象信息（station-device-replacement-contract v1.0）：station_occupied 的 occupiedBy、station_device_changed 的 currentDeviceName */
+  occupiedBy?: string;
+  currentDeviceName?: string;
   authHandled: boolean;
 
   constructor(
@@ -18,12 +21,15 @@ export class ApiError extends Error {
     error?: string,
     authHandled = false,
     code?: string,
+    extra?: { occupiedBy?: string; currentDeviceName?: string },
   ) {
     super(error || `Response status:${status}`);
     this.name = 'ApiError';
     this.status = status;
     this.error = error;
     this.code = code;
+    this.occupiedBy = extra?.occupiedBy;
+    this.currentDeviceName = extra?.currentDeviceName;
     this.authHandled = authHandled;
   }
 }
@@ -39,5 +45,9 @@ export function toApiError(err: unknown): ApiError {
   const authHandled = forwardAuthFailure(err);
   const code =
     typeof response?.data?.code === 'string' ? response.data.code : undefined;
-  return new ApiError(status, response?.data?.error, authHandled, code);
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  return new ApiError(status, response?.data?.error, authHandled, code, {
+    occupiedBy: str(response?.data?.occupiedBy),
+    currentDeviceName: str(response?.data?.currentDeviceName),
+  });
 }

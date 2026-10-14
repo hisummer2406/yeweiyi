@@ -125,8 +125,13 @@ const ConsoleDevices: React.FC = () => {
   const shown = (groups ?? []).filter((g) => sf.matches(g.device));
   const sectioned = sf.show && sf.value === 'all';
 
-  const openDetail = (name: string) =>
-    history.push(`/console/devices/${encodeURIComponent(name)}`);
+  // 带上油站：从油站分段进入的详情页会在换机后自动切到该油站的新设备（契约 §8.1）
+  const openDetail = (name: string, stationId?: number | null) =>
+    history.push(
+      `/console/devices/${encodeURIComponent(name)}${
+        typeof stationId === 'number' ? `?station=${stationId}` : ''
+      }`,
+    );
 
   const renderGroup = (g: Group) => (
     <ProCard
@@ -178,7 +183,9 @@ const ConsoleDevices: React.FC = () => {
             <Col key={t.index} xs={24} md={12} xl={8}>
               <TankCard
                 tank={t}
-                onClick={() => openDetail(g.device.device_name)}
+                onClick={() =>
+                  openDetail(g.device.device_name, g.device.station_id)
+                }
               />
             </Col>
           ))}

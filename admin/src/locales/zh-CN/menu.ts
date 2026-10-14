@@ -4,6 +4,7 @@ export default {
   'menu.ops.audit': '审计日志',
   'menu.console': '设备监控',
   'menu.console.devices': '设备总览',
+  'menu.console.device-detail': '设备详情',
   'menu.records': '记录查询',
   'menu.records.alarms': '报警记录',
   'menu.records.stock-in': '入库记录',

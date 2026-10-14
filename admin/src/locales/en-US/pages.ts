@@ -283,6 +283,7 @@ export default {
   'pages.console.stations.col.customer': 'Customer',
   'pages.console.stations.col.createdAt': 'Created at',
   'pages.console.stations.col.actions': 'Actions',
+  'pages.console.stations.action.monitor': 'Monitor',
   'pages.console.stations.action.edit': 'Edit',
   'pages.console.stations.action.delete': 'Delete',
   'pages.console.stations.form.name.label': 'Station name',
@@ -332,10 +333,53 @@ export default {
     'The device is already in this station; nothing changed.',
   'pages.console.stations.assign.error.badStation':
     "This station does not belong to the device's customer. Please refresh and retry.",
-  'pages.console.stations.assign.error.noCustomer':
-    'The device has no customer yet, or the device/station was just modified. Please refresh and retry; if the device has no customer, assign a customer first.',
+  'pages.console.stations.assign.error.conflict':
+    'Assignment rejected: the station may already have another device, the device/station was just modified, or the device has no customer. The list was refreshed; please check and retry.',
+  'pages.console.stations.assign.occupied':
+    '{station} (already has device {device})',
+  'pages.console.stations.assign.occupiedHint':
+    'A station has exactly one screen at a time, so an occupied station cannot be assigned directly. Use "Replace" on the current device instead.',
+  'pages.console.stations.devices.action.replace': 'Replace',
+  'pages.console.stations.replace.title': 'Replace device: {station}',
+  'pages.console.stations.replace.station': 'Station',
+  'pages.console.stations.replace.old': 'Old device code',
+  'pages.console.stations.replace.new': 'New device code',
+  'pages.console.stations.replace.newPlaceholder':
+    'Pick a registered device of the same customer with no station',
+  'pages.console.stations.replace.notice':
+    'The new device collects data from scratch and does not continue the old device history. Old records stay under the old device and are neither deleted nor merged; user authorizations are not copied and must be granted again for the new device.',
+  'pages.console.stations.replace.noCandidates':
+    'No device can be swapped in. The new device must first be registered separately with its full factory code (platform admin, "Register device"), belong to the same customer and have no station.',
+  'pages.console.stations.replace.submit': 'Confirm replacement',
+  'pages.console.stations.replace.unchanged':
+    'Device {newDevice} is already the current device of station {station}; nothing changed.',
+  'pages.console.stations.replace.success':
+    'Station {station}: {oldDevice} replaced by {newDevice}. The new device now collects data from scratch.',
+  'pages.console.stations.col.device': 'Current screen',
+  'pages.console.stations.device.none': 'Not installed',
+  'pages.console.stations.device.unknown': 'Unknown',
+  'pages.console.stations.device.conflict':
+    'Anomaly: {count} devices linked (should be 1)',
   'pages.console.stations.assign.error.notFound':
     'Device not found. Please refresh the list.',
+  'pages.console.stations.assign.error.occupiedBy':
+    'This station is already occupied by device {detail} and cannot be assigned directly; use "Replace" on that device. The list was refreshed.',
+  'pages.console.stations.assign.error.noCustomer':
+    'The device has no customer yet. Assign a customer first.',
+  'pages.console.stations.replace.error.changed':
+    "The station's current device has changed (now {detail}); this page is stale. The list was refreshed; please check and replace again.",
+  'pages.console.stations.replace.error.otherStation':
+    'The new device is already in another station and will not be moved silently; remove it from that station first.',
+  'pages.console.stations.replace.error.customerMismatch':
+    'The new device belongs to another customer and cannot be put into this station.',
+  'pages.console.stations.replace.error.notFound':
+    'The station or the new device does not exist. The new device must first be registered with its full factory code; the list was refreshed.',
+  'pages.console.stations.replace.error.deviceNotFound':
+    'The new device does not exist: register it separately with its full factory code first, under this customer. The list was refreshed.',
+  'pages.console.stations.replace.error.sameDevice':
+    'The new device must differ from the old device.',
+  'pages.console.stations.replace.error.invalid':
+    'The request was invalid; please choose again.',
   'pages.console.stationFilter.label': 'Station',
   'pages.console.stationFilter.all': 'All stations',
   'pages.console.stationFilter.none': 'Ungrouped',

@@ -4,6 +4,7 @@ export default {
   'menu.ops.audit': 'Audit Log',
   'menu.console': 'Monitoring',
   'menu.console.devices': 'Devices',
+  'menu.console.device-detail': 'Device detail',
   'menu.records': 'Records',
   'menu.records.alarms': 'Alarms',
   'menu.records.stock-in': 'Stock In',

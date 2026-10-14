@@ -176,4 +176,60 @@ describe('useRecordsQuery', () => {
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
     expect(fetcher.mock.calls[1][0].device).toBe('D1');
   });
+  it("never exposes the previous device's data under a new device, even on the first frame", async () => {
+    const hold = deferred<string>();
+    const fetcher = vi.fn((q: Q) =>
+      q.device === 'B' ? hold.promise : Promise.resolve(`rows-of-${q.device}`),
+    );
+    // 记录 device === 'B' 的每一次渲染：effect 清空旧数据之前的那一帧也不能带着 A 的数据
+    const framesOfB: Array<{ data?: string; loading: boolean }> = [];
+    const { result, rerender } = renderHook(
+      ({ device }) => {
+        const r = useRecordsQuery<string>(fetcher, device);
+        if (device === 'B')
+          framesOfB.push({ data: r.data, loading: r.loading });
+        return r;
+      },
+      { initialProps: { device: 'A' } },
+    );
+    await waitFor(() => expect(result.current.data).toBe('rows-of-A'));
+    rerender({ device: 'B' });
+    await act(async () => hold.resolve('rows-of-B'));
+    expect(framesOfB.length).toBeGreaterThan(0);
+    expect(framesOfB[0]).toEqual({ data: undefined, loading: true });
+    expect(framesOfB.some((f) => f.data === 'rows-of-A')).toBe(false);
+    expect(result.current.data).toBe('rows-of-B');
+  });
+
+  it("drops a late response of the old device so it cannot overwrite the new device's state", async () => {
+    const a = deferred<string>();
+    const b = deferred<string>();
+    const fetcher = vi.fn((q: Q) => (q.device === 'A' ? a.promise : b.promise));
+    const { result, rerender } = renderHook(
+      ({ device }) => useRecordsQuery(fetcher, device),
+      { initialProps: { device: 'A' } },
+    );
+    await act(async () => {});
+    rerender({ device: 'B' });
+    await act(async () => {});
+    await act(async () => b.resolve('rows-of-B'));
+    expect(result.current.data).toBe('rows-of-B');
+    // A 的响应迟到：既不能改数据，也不能让错误/加载态回到 B 的页面
+    await act(async () => a.resolve('rows-of-A'));
+    expect(result.current.data).toBe('rows-of-B');
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('a new device with no data shows empty data, not the old cache', async () => {
+    const fetcher = vi.fn((q: Q) =>
+      Promise.resolve(q.device === 'A' ? ['a1'] : []),
+    );
+    const { result, rerender } = renderHook(
+      ({ device }) => useRecordsQuery<string[]>(fetcher, device),
+      { initialProps: { device: 'A' } },
+    );
+    await waitFor(() => expect(result.current.data).toEqual(['a1']));
+    rerender({ device: 'B' });
+    await waitFor(() => expect(result.current.data).toEqual([]));
+  });
 });

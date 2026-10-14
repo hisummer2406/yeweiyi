@@ -93,6 +93,14 @@ declare namespace API {
     changed: boolean;
   };
 
+  /** POST /api/stations/:id/replace-device 响应；changed=false 表示新设备本来就是该油站当前设备 */
+  type ReplaceStationDeviceResult = {
+    stationId: number;
+    deviceName: string;
+    previousDeviceName: string | null;
+    changed: boolean;
+  };
+
   type UserRole = 'platform_admin' | 'customer_admin' | 'customer_user';
 
   /** GET /api/users 的账号（internal/api/admin.go userResponse，不含密码） */

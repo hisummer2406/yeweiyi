@@ -261,6 +261,7 @@ export default {
   'pages.console.stations.col.customer': '所属客户',
   'pages.console.stations.col.createdAt': '创建时间',
   'pages.console.stations.col.actions': '操作',
+  'pages.console.stations.action.monitor': '查看监控',
   'pages.console.stations.action.edit': '编辑',
   'pages.console.stations.action.delete': '删除',
   'pages.console.stations.form.name.label': '油站名称',
@@ -302,9 +303,49 @@ export default {
   'pages.console.stations.assign.unchanged': '设备已在该油站，无需更改。',
   'pages.console.stations.assign.error.badStation':
     '该油站不属于设备所属客户，请刷新后重试。',
-  'pages.console.stations.assign.error.noCustomer':
-    '设备还没有客户，或设备/油站刚被修改。请刷新后重试；如设备还没有客户，请先分配客户。',
+  'pages.console.stations.assign.error.conflict':
+    '分配被拒绝：该油站可能已有其他设备，或设备/油站刚被修改，或设备还没有客户。列表已刷新，请确认后重试。',
+  'pages.console.stations.assign.occupied': '{station}（已有设备 {device}）',
+  'pages.console.stations.assign.occupiedHint':
+    '已有设备的油站不能直接分配，一个油站同时只有一台大屏；需要更换请在原设备行使用「换机」。',
+  'pages.console.stations.devices.action.replace': '换机',
+  'pages.console.stations.replace.title': '换机：{station}',
+  'pages.console.stations.replace.station': '油站',
+  'pages.console.stations.replace.old': '旧设备编码',
+  'pages.console.stations.replace.new': '新设备编码',
+  'pages.console.stations.replace.newPlaceholder':
+    '选择已登记、同一客户且未分配油站的新设备',
+  'pages.console.stations.replace.notice':
+    '新设备重新采集，不接续旧设备历史。旧设备的历史记录仍保留在旧设备名下，不会被删除或合并；旧设备的用户授权不会自动复制到新设备，需要按新设备重新授权/扫码。',
+  'pages.console.stations.replace.noCandidates':
+    '没有可换入的设备。新设备必须先按完整出厂编码独立登记（平台管理员在「登记设备」中操作），属于同一客户且未分配油站。',
+  'pages.console.stations.replace.submit': '确认换机',
+  'pages.console.stations.replace.unchanged':
+    '新设备 {newDevice} 本来就是油站 {station} 的当前设备，无需更改。',
+  'pages.console.stations.replace.success':
+    '油站 {station} 已由 {oldDevice} 换为 {newDevice}，新设备从现在起重新采集。',
+  'pages.console.stations.col.device': '当前大屏',
+  'pages.console.stations.device.none': '未安装',
+  'pages.console.stations.device.unknown': '未知',
+  'pages.console.stations.device.conflict':
+    '异常：关联了 {count} 台设备（应只有 1 台）',
   'pages.console.stations.assign.error.notFound': '设备不存在，请刷新列表。',
+  'pages.console.stations.assign.error.occupiedBy':
+    '该油站已被设备 {detail} 占用，不能直接分配；需要更换请在原设备行使用「换机」。列表已刷新。',
+  'pages.console.stations.assign.error.noCustomer':
+    '设备还没有客户，请先分配客户。',
+  'pages.console.stations.replace.error.changed':
+    '油站的当前设备已变化（现为 {detail}），页面已过期。列表已刷新，请确认后重新换机。',
+  'pages.console.stations.replace.error.otherStation':
+    '新设备已在另一个油站，不会被静默搬走；请先在设备页把它移出原油站。',
+  'pages.console.stations.replace.error.customerMismatch':
+    '新设备属于另一个客户，不能换入该油站。',
+  'pages.console.stations.replace.error.notFound':
+    '油站或新设备不存在。新设备需先按完整出厂编码独立登记；列表已刷新。',
+  'pages.console.stations.replace.error.deviceNotFound':
+    '新设备不存在：必须先按完整出厂编码独立登记，且属于本客户。列表已刷新。',
+  'pages.console.stations.replace.error.sameDevice': '新设备不能与旧设备相同。',
+  'pages.console.stations.replace.error.invalid': '新设备不能与旧设备相同。',
   'pages.console.stationFilter.label': '油站',
   'pages.console.stationFilter.all': '全部油站',
   'pages.console.stationFilter.none': '未分组',

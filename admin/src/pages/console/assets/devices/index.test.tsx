@@ -35,6 +35,7 @@ vi.mock('@/services/ant-design-pro/customers', () => ({
 vi.mock('@/services/ant-design-pro/stations', () => ({
   listStations,
   assignDeviceStation: vi.fn(),
+  replaceStationDevice: vi.fn(),
 }));
 
 vi.mock('./RegisterDeviceModal', () => ({
@@ -220,5 +221,35 @@ describe('AdminDevices as a platform admin', () => {
     fireEvent.click(screen.getByText(zhPages['pages.ops.devices.register']));
     fireEvent.click(await screen.findByText('register-stub-assign'));
     expect(await screen.findByText('分配油站：D-NEW')).toBeTruthy();
+  });
+});
+
+describe('AdminDevices replace action (one station : one device)', () => {
+  beforeEach(() => {
+    listStations.mockResolvedValue([
+      { id: 3, customerId: 1, name: '甲站', address: '', createdAt: '' },
+    ]);
+    listDevices.mockResolvedValue([
+      dev('000123', 1, 3),
+      dev('ZCT000999', 1, null),
+      dev('ZCT000888', 1, undefined),
+    ]);
+  });
+
+  it('offers 换机 only on a device that is in a station', async () => {
+    render(<AdminDevices />);
+    expect(within(await rowOf('000123')).getByText('换机')).toBeTruthy();
+    expect(within(await rowOf('ZCT000999')).queryByText('换机')).toBeNull();
+    // 旧版云端没有 station_id：状态未知，不提供
+    expect(within(await rowOf('ZCT000888')).queryByText('换机')).toBeNull();
+  });
+
+  it('opens the replace dialog showing the old code and the station', async () => {
+    render(<AdminDevices />);
+    fireEvent.click(within(await rowOf('000123')).getByText('换机'));
+    expect(await screen.findByText('换机：甲站')).toBeTruthy();
+    expect(
+      screen.getByText(zhPages['pages.console.stations.replace.old']),
+    ).toBeTruthy();
   });
 });

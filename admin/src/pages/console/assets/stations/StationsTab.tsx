@@ -2,21 +2,27 @@ import { PlusOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { useAccess, useIntl } from '@umijs/max';
-import { Button, message, Popconfirm, Space } from 'antd';
+import { Button, message, Popconfirm, Space, Tag, Tooltip } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import { listCustomers } from '@/services/ant-design-pro/customers';
+import { listDevices } from '@/services/ant-design-pro/devices';
 import {
   createStation,
   deleteStation,
   listStations,
   updateStation,
 } from '@/services/ant-design-pro/stations';
+import { occupantsByStation } from '@/utils/stationOccupancy';
 import { describeDeleteStationError, describeStationError } from './errors';
 import StationFormModal from './StationFormModal';
 
-type Row = API.Station & { customerName?: string };
+/**
+ * devices：当前挂在该油站名下的设备编号。undefined = 设备列表没取到（或旧版云端不带 station_id），
+ * 显示「未知」而不是「未安装」。一个油站只应有一台大屏，多于一台是历史冲突数据，如实标出，不挑一个顶替。
+ */
+type Row = API.Station & { customerName?: string; devices?: string[] };
 
 /**
  * 油站表格：列表（GET /api/stations）、新建、编辑、删除。平台管理员看到全部客户的油站，所以多一列"所属客户"，
@@ -55,6 +61,26 @@ const StationsTab: React.FC = () => {
   const columns: ProColumns<Row>[] = [
     { title: t('pages.console.stations.col.name'), dataIndex: 'name' },
     { title: t('pages.console.stations.col.address'), dataIndex: 'address' },
+    {
+      title: t('pages.console.stations.col.device'),
+      dataIndex: 'devices',
+      render: (_: unknown, row: Row) => {
+        if (row.devices === undefined)
+          return t('pages.console.stations.device.unknown');
+        if (row.devices.length === 0)
+          return t('pages.console.stations.device.none');
+        if (row.devices.length === 1) return row.devices[0];
+        return (
+          <Tooltip title={row.devices.join('、')}>
+            <Tag color="error">
+              {t('pages.console.stations.device.conflict', {
+                count: String(row.devices.length),
+              })}
+            </Tag>
+          </Tooltip>
+        );
+      },
+    },
     ...(canPlatformAdmin
       ? [
           {
@@ -75,6 +101,13 @@ const StationsTab: React.FC = () => {
       valueType: 'option',
       render: (_, row) => (
         <Space>
+          {row.devices?.length === 1 && (
+            <a
+              href={`/console/devices/${encodeURIComponent(row.devices[0])}?station=${row.id}`}
+            >
+              {t('pages.console.stations.action.monitor')}
+            </a>
+          )}
           <a onClick={() => setEditTarget(row)}>
             {t('pages.console.stations.action.edit')}
           </a>
@@ -102,14 +135,26 @@ const StationsTab: React.FC = () => {
         options={{ density: false, setting: false }}
         pagination={{ pageSize: 20, showSizeChanger: false }}
         request={async () => {
-          const stations = await listStations();
-          if (!canPlatformAdmin) return { data: stations, success: true };
+          const [stations, deviceRows] = await Promise.all([
+            listStations(),
+            // 当前大屏只是显示用，设备列表失败不拖垮油站列表，退化为「未知」
+            listDevices().catch(() => undefined),
+          ]);
+          // 旧版云端的设备行没有 station_id，推不出占用关系，同样退化为「未知」
+          const occupants = deviceRows?.some((d) => d.station_id !== undefined)
+            ? occupantsByStation(deviceRows)
+            : undefined;
+          const withDevices = stations.map((s) => ({
+            ...s,
+            devices: occupants ? (occupants.get(s.id) ?? []) : undefined,
+          }));
+          if (!canPlatformAdmin) return { data: withDevices, success: true };
           // 客户名只是显示用，加载失败时退化成 #id，不拖垮油站列表
           const cs = await listCustomers().catch(() => [] as API.Customer[]);
           setCustomers(cs);
           const names = new Map(cs.map((c) => [c.id, c.name]));
           return {
-            data: stations.map((s) => ({
+            data: withDevices.map((s) => ({
               ...s,
               customerName: names.get(s.customerId),
             })),

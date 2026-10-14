@@ -114,6 +114,35 @@
   `station_id` 时不出现筛选和分段。总览选「全部油站」时按油站分段，筛选只改渲染，不重取遥测；`DevicePicker` 的筛选只缩小设备候选，
   `?device=` 的可见性仍按完整列表判断，换油站不清已选设备。平台管理员下油站标签追加客户名（跨客户可能重名）。
 
+**油站与大屏一对一、换机（GitHub issue #15，云端 yeweiyi-cloud#61，契约 `docs/station-device-replacement-contract.md` v1.3，
+云端仓库内、SHA256 `bb1cb5ba…fdfc93`（v1.3），基准 cloud `08c0524`；云端已实现；后台已对隔离测试实例做 API 级联调，并用真实 Chrome 对生产构建做过 UI 级验收，见 `docs/handoffs/station-device-replacement.md`）**：这条**更正了 #6 的"一站多设备"假设**——
+一个油站同一时刻至多一台大屏，一台大屏只属于一个油站；一台大屏下有多个罐，按「设备码 + 罐号」定位；换大屏用**新设备码**，
+从新设备重新采集，不迁移/合并/接续旧设备历史，不删旧设备记录，不自动复制旧设备的用户授权。
+
+- 错误按 `ApiError.code` 分支，不按 `error` 文案；`403 not authorized` 仍只表示账号失效。`ApiError` 带 `occupiedBy` /
+  `currentDeviceName`（冲突响应附带）。契约新增的码：`station_occupied`、`station_device_changed`、`device_in_other_station`、
+  `device_customer_mismatch`、`device_without_customer`；v1.1 起 404 带 `station_not_found` / `device_not_found`（对客户管理员，
+  别客户的与不存在的完全相同），换机 400 带 `invalid_request` / `same_device`。没有 code（旧版云端）时退回合并提示。
+- 展示：契约**不给** `GET /api/stations` 加设备字段（Q4），油站页「当前大屏」列由 `GET /api/devices` 的 `station_id` 推导
+  （`src/utils/stationOccupancy.ts`）：一台显示编码、零台「未安装」、多台是历史冲突数据（迁移后不应再出现），标「异常」并给出数量，
+  **不聚合、不挑一台**；设备列表取不到或旧版云端不带 `station_id` 时显示「未知」。
+- 分配：`PUT /api/devices/:device/station`。`AssignStationModal` 把已被**别的设备**占用的油站禁用并标出占用者（预提示，列表可能过期）；
+  云端 `409 station_occupied` 才是裁决，文案带 `occupiedBy`；400/404/409 之后**关闭弹窗并刷新**。普通分配不会顶替旧设备。
+- 换机：设备页行内「换机」（只对 `station_id` 是数字的行，即旧设备）调用 `POST /api/stations/:id/replace-device`
+  （`{deviceName, expectedCurrentDeviceName}`，后者必填，传页面看到的旧设备码；空油站传显式 `null`）。云端事务化，没有半成品，
+  所以前端**没有**两步编排。新设备必须已按完整出厂编码**独立登记**（未登记 → 404），弹窗候选只列同客户、未分配油站的已登记设备；
+  不提供改旧编码模拟换机的入口。弹窗显示旧/新编码和「新设备重新采集，不接续旧设备历史」，授权不自动复制。`changed:false` 是幂等重试。
+- 监控数据隔离：`useRecordsQuery` 的状态记录归属设备，换设备的那一帧也不暴露旧设备的数据/错误；设备详情页签按设备编号做
+  `key`，路由换设备即整体重建。迟到的旧响应由请求序号丢弃。仓库里没有罐选择、WebSocket 订阅、跨页缓存；以后加了，必须按设备码归属。
+  已停报超保留期的设备可能误报 404（云端既有缺陷 #28），按「无数据」处理，不当错误。
+- **油站入口的监控页自动跟随换机（契约 §8.1）**：带 `?station=N` 打开的设备详情（`/console/devices/:device?station=N`，来源：设备总览的
+  卡片、油站页「查看监控」）用 `useStationCurrentDevice` 每 30 秒刷新 `GET /api/devices`，油站当前设备变成 B 就 `replace` 跳到 B（保留
+  `tab`/`station`），页签按设备编号 key 整体重建，A 的数据/缓存/定时器清掉。记录页的 `DevicePicker` 选定油站时同理：当前设备由 A 变 B 且
+  正在看 A 才自动切，用户手动选了别的不动；多台（历史冲突）或暂无设备不据此切换。不带 `?station=` 的独立入口按设备编码直接看 A，保留。
+  云端不推送换机事件，只能靠轮询得知，所以切换最长有一个轮询周期的延迟。
+- 没做：客户开通向导（#14，依赖 cloud#60，仓库里还不存在；落地时向导里的设备选择要遵守同一套
+  「已占用不可选」与换机规则）、扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
+
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
 `internal/api/router.go`。
 

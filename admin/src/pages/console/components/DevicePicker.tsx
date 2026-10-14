@@ -9,8 +9,10 @@ import {
   Typography,
 } from 'antd';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
+import { currentDeviceOf } from '@/utils/stationOccupancy';
+import { REFRESH_MS } from './useRecordsQuery';
 import { StationFilter, useStationFilter } from './useStationFilter';
 
 type Props = {
@@ -37,21 +39,25 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
   const [failed, setFailed] = useState(false);
   const sf = useStationFilter(devices);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       setDevices(await listDevices());
       setFailed(false);
     } catch {
-      // 全局错误处理已提示；这里只标记，不把失败当成「没有设备」
-      setFailed(true);
+      // 全局错误处理已提示；这里只标记，不把失败当成「没有设备」。
+      // 后台轮询失败保留已有列表，不闪成失败态
+      if (!silent) setFailed(true);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
+    // 云端不推送换机事件，靠定期刷新设备的 station_id 得知油站当前设备变化（契约 §8.1）
+    const timer = setInterval(() => void load(true), REFRESH_MS);
+    return () => clearInterval(timer);
   }, [load]);
 
   const select = (device: string) => {
@@ -59,6 +65,34 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
     next.set('device', device);
     setParams(next, { replace: true });
   };
+
+  // 选定油站时（油站入口）：该油站的当前设备由 A 变成 B，且正在看的恰是 A，就自动切到 B；
+  // 用户手动选了别的设备则不动。多台（历史冲突数据）或暂无设备不据此切换。
+  const lastCurrent = useRef<
+    { station: number; device?: string | null } | undefined
+  >(undefined);
+  const stationValue = sf.value;
+  useEffect(() => {
+    if (typeof stationValue !== 'number' || !devices) {
+      lastCurrent.current = undefined;
+      return;
+    }
+    const cur = currentDeviceOf(devices, stationValue);
+    const prev = lastCurrent.current;
+    lastCurrent.current = { station: stationValue, device: cur };
+    if (
+      prev &&
+      prev.station === stationValue &&
+      typeof prev.device === 'string' &&
+      typeof cur === 'string' &&
+      cur !== prev.device &&
+      requested === prev.device
+    ) {
+      const next = new URLSearchParams(params);
+      next.set('device', cur);
+      setParams(next, { replace: true });
+    }
+  }, [devices, stationValue, requested, params, setParams]);
 
   if (loading && !devices) return <Skeleton active />;
   if (failed && !devices) {
