@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import AlarmRecords from '../components/AlarmRecords';
 import StockRecords from '../components/StockRecords';
 import { useStationCurrentDevice } from '../components/useStationCurrentDevice';
+import DeviceOwnership from './DeviceOwnership';
 import SnapshotTab from './SnapshotTab';
 
 const TAB_KEYS = ['snapshot', 'alarms', 'stock'] as const;
@@ -57,6 +58,7 @@ const ConsoleDeviceDetail: React.FC = () => {
 
   return (
     <PageContainer title={`${t('pages.console.detail.title')}：${deviceName}`}>
+      <DeviceOwnership key={deviceName} device={deviceName} />
       <Tabs
         activeKey={tab}
         onChange={onChange}

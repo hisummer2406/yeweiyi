@@ -104,6 +104,25 @@ describe('AdminDevices mini-program code', () => {
   });
 });
 
+describe('AdminDevices status column', () => {
+  it('a never-reported device says "从未上线", not "离线"; one that dropped says "离线"', async () => {
+    listDevices.mockResolvedValue([
+      dev('D-NEW'),
+      { ...dev('D-DROPPED'), last_online_at: '2026-10-01T00:00:00Z' },
+      {
+        ...dev('D-LIVE'),
+        is_online: true,
+        last_online_at: '2026-10-14T00:00:00Z',
+      },
+    ]);
+    render(<AdminDevices />);
+    expect(within(await rowOf('D-NEW')).getByText('从未上线')).toBeTruthy();
+    expect(within(await rowOf('D-NEW')).queryByText('离线')).toBeNull();
+    expect(within(await rowOf('D-DROPPED')).getByText('离线')).toBeTruthy();
+    expect(within(await rowOf('D-LIVE')).getByText('在线')).toBeTruthy();
+  });
+});
+
 describe('AdminDevices customer column', () => {
   beforeEach(() =>
     listDevices.mockResolvedValue([
