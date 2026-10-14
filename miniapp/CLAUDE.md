@@ -212,7 +212,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts` and `utils/pairing.ts`/`utils/roles.ts` (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts` and `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts` (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -289,6 +289,9 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     (`utils/stationPref.ts`). "+" menu: 扫码查看设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
     in the back office (by the platform administrator: phone + customer); there is no registration or
     invite in the mini-program.
+    The tank illustration carries a level fill (oil on top of water, `tankFill` in `utils/tankFill.ts`,
+    from `oilRatioPct`/`waterRatioPct`; red on ALARM, grey on FAULT, nothing without a probe). The
+    fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
     Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
     device, `yeweiyi-cloud#45`).
   - **我的记录 `records`** (tabBar) — entry list; 报警/出库/入库 pick a device then open
