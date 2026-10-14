@@ -5,6 +5,7 @@ import {
   codeOfBody,
   describeLoginFailure,
   isNotOnboarded,
+  sessionDecision,
   maskPhone,
   noticeFromQuery,
 } from '../miniprogram/utils/loginFlow.ts';
@@ -104,6 +105,36 @@ test('customer_not_onboarded: exact notice, only 403 + that code, not the dead-a
   assert.equal(noticeFromQuery({ notice: 'customer_not_onboarded' }), msg);
   assert.equal(noticeFromQuery({ notice: 'x' }), '');
   assert.equal(noticeFromQuery({}), '');
+});
+
+const base = { needAuth: true, keepSessionOn401: false, sentToken: 'old', currentToken: 'old' };
+const NOT_ONBOARDED = { error: 'customer not onboarded', code: 'customer_not_onboarded' };
+
+test('sessionDecision: not onboarded ends the session with the notice; dead account without it', () => {
+  assert.deepEqual(sessionDecision({ ...base, status: 403, body: NOT_ONBOARDED }), { end: true, notice: 'customer_not_onboarded' });
+  assert.deepEqual(sessionDecision({ ...base, status: 403, body: { error: 'not authorized' } }), { end: true });
+  assert.deepEqual(sessionDecision({ ...base, status: 401, body: { error: 'expired' } }), { end: true });
+});
+
+test('sessionDecision: other failures and login calls never end the session', () => {
+  assert.deepEqual(sessionDecision({ ...base, status: 403, body: { error: 'not authorized for this device' } }), { end: false });
+  assert.deepEqual(sessionDecision({ ...base, status: 403, body: { code: 'tank_not_authorized' } }), { end: false });
+  assert.deepEqual(sessionDecision({ ...base, status: 500, body: undefined }), { end: false });
+  assert.deepEqual(sessionDecision({ ...base, status: 401, body: {}, keepSessionOn401: true }), { end: false });
+  assert.deepEqual(sessionDecision({ ...base, needAuth: false, status: 403, body: NOT_ONBOARDED }), { end: false });
+  assert.deepEqual(sessionDecision({ ...base, needAuth: false, status: 401, body: {} }), { end: false });
+});
+
+test('sessionDecision: an answer for a replaced session never clears the new one', () => {
+  const signedInAgain = { ...base, sentToken: 'old', currentToken: 'new' };
+  assert.deepEqual(sessionDecision({ ...signedInAgain, status: 403, body: NOT_ONBOARDED }), { end: false });
+  assert.deepEqual(sessionDecision({ ...signedInAgain, status: 401, body: {} }), { end: false });
+  // a request that went out bare answers 401 after a new sign-in
+  assert.deepEqual(sessionDecision({ ...base, sentToken: '', currentToken: 'new', status: 401, body: {} }), { end: false });
+});
+
+test('sessionDecision: still signed out, a bare queued request still ends the session', () => {
+  assert.deepEqual(sessionDecision({ ...base, sentToken: '', currentToken: '', status: 401, body: {} }), { end: true });
 });
 
 console.log(`${n} checks passed`);

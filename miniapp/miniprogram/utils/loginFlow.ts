@@ -82,3 +82,33 @@ export function maskPhone(phone: string | null | undefined): string {
   if (!phone || !/^\d{11}$/.test(phone)) return '';
   return `${phone.slice(0, 3)}****${phone.slice(7)}`;
 }
+
+// Whether a failed authorized response ends the session. Pure (no `wx`), checked in Node by
+// `npm run check`.
+//
+// `sentToken` is the token the request went out with, `currentToken` the one stored when the answer
+// arrives. They differ when the user signed in again while the request was in flight: that answer
+// belongs to the old session and must not clear the new token or bounce to login. Requests that went
+// out bare ('') while still signed out match a still-empty store, so they end the session as before.
+export interface SessionEndInput {
+  status: number;
+  body: unknown;
+  needAuth: boolean;
+  keepSessionOn401: boolean;
+  sentToken: string;
+  currentToken: string;
+}
+
+export type SessionDecision = { end: false } | { end: true; notice?: string };
+
+export function sessionDecision(i: SessionEndInput): SessionDecision {
+  // Login calls (needAuth=false) have no session to end: their 401/403 are shown, not acted on.
+  if (!i.needAuth) return { end: false };
+  const bodyError = i.body && typeof i.body === 'object' ? (i.body as { error?: unknown }).error : undefined;
+  const notOnboarded = isNotOnboarded(i.status, i.body);
+  const dead =
+    (i.status === 401 && !i.keepSessionOn401) || (i.status === 403 && bodyError === 'not authorized');
+  if (!notOnboarded && !dead) return { end: false };
+  if (i.sentToken !== i.currentToken) return { end: false };
+  return notOnboarded ? { end: true, notice: NOT_ONBOARDED_CODE } : { end: true };
+}

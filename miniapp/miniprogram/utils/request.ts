@@ -1,5 +1,5 @@
 import { BASE_URL } from '../config/env';
-import { isNotOnboarded, NOT_ONBOARDED_CODE } from './loginFlow';
+import { sessionDecision } from './loginFlow';
 import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
@@ -78,9 +78,13 @@ function endSession(notice?: string) {
 export function request<T>(options: RequestOptions): Promise<T> {
   const { url, method = 'GET', data, needAuth = true, keepSessionOn401 = false } = options;
   const header: Record<string, string> = { 'content-type': 'application/json' };
+  // The token this request goes out with; an answer is only allowed to end the session if it is still
+  // the stored one when it arrives (see sessionDecision in loginFlow.ts).
+  let sentToken = '';
   if (needAuth) {
     const token = getToken();
     if (token) {
+      sentToken = token;
       endedNotice = '';
       header.Authorization = `Bearer ${token}`;
     }
@@ -106,18 +110,17 @@ export function request<T>(options: RequestOptions): Promise<T> {
         // 403 customer_not_onboarded (customer-onboarding-contract §3): the customer is still being
         // configured. Not a dead account, and it carries no X-Renewed-Token. The token is dropped
         // because a login page that still finds one would walk straight back in; the login page shows
-        // the notice and does not retry by itself.
-        if (needAuth && isNotOnboarded(status, res.data)) {
-          endSession(NOT_ONBOARDED_CODE);
-          reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
-          return;
-        }
-        if (
-          needAuth &&
-          ((status === 401 && !keepSessionOn401) || (status === 403 && body?.error === 'not authorized'))
-        ) {
-          endSession();
-        }
+        // the notice and does not retry by itself. Whether this answer may end the session at all is
+        // decided by sessionDecision (loginFlow.ts) (an answer for an already-replaced session may not).
+        const decision = sessionDecision({
+          status,
+          body: res.data,
+          needAuth,
+          keepSessionOn401,
+          sentToken,
+          currentToken: getToken(),
+        });
+        if (decision.end) endSession(decision.notice);
         reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
       },
       fail: (err) => {
