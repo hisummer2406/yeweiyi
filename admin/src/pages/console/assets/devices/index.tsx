@@ -69,15 +69,27 @@ const AdminDevices: React.FC = () => {
     {
       title: t('pages.ops.devices.col.status'),
       dataIndex: 'is_online',
-      render: (_, row) =>
-        row.is_online ? (
-          <Badge status="success" text={t('pages.ops.devices.status.online')} />
-        ) : (
+      render: (_, row) => {
+        if (row.is_online)
+          return (
+            <Badge
+              status="success"
+              text={t('pages.ops.devices.status.online')}
+            />
+          );
+        // 刚登记、还没上报过的设备不是「掉线」，别和曾经上线后离线的混在一起（#16 G3）
+        const never = row.last_online_at === null;
+        return (
           <Badge
             status="default"
-            text={t('pages.ops.devices.status.offline')}
+            text={t(
+              never
+                ? 'pages.ops.devices.status.neverOnline'
+                : 'pages.ops.devices.status.offline',
+            )}
           />
-        ),
+        );
+      },
     },
     {
       title: t('pages.ops.devices.col.lastOnline'),

@@ -19,6 +19,8 @@ const getLatestTelemetry = vi.fn();
 const listAlarms = vi.fn();
 const listStockEvents = vi.fn();
 const listDevices = vi.fn();
+const listCustomers = vi.fn();
+const listStations = vi.fn();
 
 // 路由相关的 hook 用真实的 react-router，这样「设备名按 URL 解码」「?tab= 同步」都是真实行为
 vi.mock('@umijs/max', async () => {
@@ -46,6 +48,8 @@ vi.mock('@/services/ant-design-pro/telemetry', () => ({ getLatestTelemetry }));
 vi.mock('@/services/ant-design-pro/alarms', () => ({ listAlarms }));
 vi.mock('@/services/ant-design-pro/stock', () => ({ listStockEvents }));
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
+vi.mock('@/services/ant-design-pro/customers', () => ({ listCustomers }));
+vi.mock('@/services/ant-design-pro/stations', () => ({ listStations }));
 
 const { default: ConsoleDeviceDetail } = await import('./index');
 
@@ -104,8 +108,47 @@ beforeEach(() => {
   listAlarms.mockResolvedValue({ rows: [], partial: false });
   listStockEvents.mockResolvedValue(emptyStock);
   listDevices.mockResolvedValue([]);
+  listCustomers.mockResolvedValue([]);
+  listStations.mockResolvedValue([]);
 });
 afterEach(cleanup);
+
+describe('ConsoleDeviceDetail ownership line (#16 G1)', () => {
+  const row = (over: Partial<API.DeviceRow>): API.DeviceRow => ({
+    device_name: 'D1',
+    is_online: true,
+    last_online_at: null,
+    last_offline_at: null,
+    updated_at: null,
+    ...over,
+  });
+
+  it('shows customer and station next to the device code', async () => {
+    listDevices.mockResolvedValue([row({ customer_id: 2, station_id: 5 })]);
+    listCustomers.mockResolvedValue([{ id: 2, name: 'A 客户', createdAt: '' }]);
+    listStations.mockResolvedValue([
+      { id: 5, customerId: 2, name: '五号站', address: '', createdAt: '' },
+    ]);
+    at('/console/devices/D1');
+    expect(await screen.findByText('所属客户：A 客户')).toBeTruthy();
+    expect(screen.getByText('所属油站：五号站')).toBeTruthy();
+  });
+
+  it('customer admin rows carry no customer_id: no customer shown, customers not requested', async () => {
+    listDevices.mockResolvedValue([row({ station_id: null })]);
+    at('/console/devices/D1');
+    expect(await screen.findByText('所属油站：未分组')).toBeTruthy();
+    expect(screen.queryByText(/所属客户/)).toBeNull();
+    expect(listCustomers).not.toHaveBeenCalled();
+  });
+
+  it('missing station_id (legacy cloud) is unknown, not ungrouped', async () => {
+    listDevices.mockResolvedValue([row({ customer_id: null })]);
+    at('/console/devices/D1');
+    expect(await screen.findByText('所属客户：未分配')).toBeTruthy();
+    expect(screen.getByText('所属油站：未知')).toBeTruthy();
+  });
+});
 
 describe('ConsoleDeviceDetail tabs', () => {
   it('opens on the live data tab by default and does not touch the record APIs', async () => {
@@ -320,7 +363,9 @@ describe('station entry (?station=) follows a screen replacement (contract §8.1
     listDevices.mockResolvedValue([row('A', null), row('B', 5)]);
     at('/console/devices/A');
     expect(await screen.findByText(/1号 92#/)).toBeTruthy();
-    expect(listDevices).not.toHaveBeenCalled();
+    // 只有归属行的一次查询；没有 ?station= 时不为「跟随换机」轮询设备列表
+    await new Promise((r) => setTimeout(r, 30));
+    expect(listDevices).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('where').textContent).toBe('/console/devices/A');
   });
 
