@@ -158,10 +158,18 @@ type customerResponse struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`
+	// OnboardingStatus is "configuring" or "active" (cloud#60); OnboardedAt is null until active.
+	OnboardingStatus string     `json:"onboardingStatus"`
+	OnboardedAt      *time.Time `json:"onboardedAt"`
 }
 
 func toCustomerResponse(c db.Customer) customerResponse {
-	return customerResponse{ID: c.ID, Name: c.Name, CreatedAt: c.CreatedAt.Time}
+	r := customerResponse{ID: c.ID, Name: c.Name, CreatedAt: c.CreatedAt.Time, OnboardingStatus: c.OnboardingStatus}
+	if c.OnboardedAt.Valid {
+		t := c.OnboardedAt.Time
+		r.OnboardedAt = &t
+	}
+	return r
 }
 
 type customerNameRequest struct {

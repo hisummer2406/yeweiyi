@@ -116,6 +116,8 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/customers", listCustomersHandler(deps))
 		authorized.PUT("/customers/:id", renameCustomerHandler(deps))
 		authorized.DELETE("/customers/:id", deleteCustomerHandler(deps))
+		authorized.GET("/customers/:id/onboarding", getOnboardingHandler(deps))
+		authorized.POST("/customers/:id/onboarding/complete", completeOnboardingHandler(deps))
 		authorized.POST("/users", createUserHandler(deps))
 		authorized.GET("/users", listUsersHandler(deps))
 		authorized.PUT("/users/:id", updateUserHandler(deps))

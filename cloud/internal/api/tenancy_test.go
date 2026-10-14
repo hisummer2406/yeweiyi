@@ -304,6 +304,9 @@ var exemptRoutes = map[string]string{
 	"POST /api/login": "no device",
 	"GET /api/me":     "no device; returns only the caller's own row",
 
+	"GET /api/customers/:id/onboarding":           "no device; platform admin only, see TestOnboarding_*",
+	"POST /api/customers/:id/onboarding/complete": "no device; platform admin only, see TestOnboarding_*",
+
 	"POST /api/auth/wechat/login":           "no device, no session yet; see TestWeChat_*",
 	"POST /api/auth/wechat/phone-login":     "no device, no session yet; binds only to the account of the WeChat-verified phone, see TestWeChat_*",
 	"GET /api/devices":                      "scoped to the caller; see TestTenancy_ListDevicesByRole",

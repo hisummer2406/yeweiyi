@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -47,6 +48,9 @@ const (
 	codeInvalidRequest     = "invalid_request"
 	codeInvalidCredentials = "invalid_credentials"
 	codeInvalidPhone       = "invalid_phone"
+	// codeCustomerNotOnboarded: the user's customer is still being configured (cloud#60). It is a
+	// business notice, deliberately not the bare "not authorized" that clients read as a revoked account.
+	codeCustomerNotOnboarded = "customer_not_onboarded"
 )
 
 // amr values: how the session's authAt was earned.
@@ -93,6 +97,26 @@ func timingDummyHash() []byte {
 
 // apiError writes {"error": msg, "code": code}. New auth responses carry a code; older endpoints keep
 // their error-only body.
+// customerNotOnboarded reports whether user belongs to a customer that has not completed onboarding.
+// Platform admins have no customer and are never blocked. Callers must have authenticated the user
+// first, so the answer cannot be used to probe which accounts or customers exist.
+func customerNotOnboarded(ctx context.Context, deps Deps, user db.User) (bool, error) {
+	if user.Role == control.RolePlatformAdmin || !user.CustomerID.Valid {
+		return false, nil
+	}
+	cust, err := deps.Queries.GetCustomer(ctx, user.CustomerID.Int64)
+	if err != nil {
+		return false, err // fail closed: an unreadable status must not become a login
+	}
+	return cust.OnboardingStatus != customerActive, nil
+}
+
+const customerActive = "active"
+
+func abortNotOnboarded(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "customer not onboarded", "code": codeCustomerNotOnboarded})
+}
+
 func apiError(c *gin.Context, status int, code, msg string) {
 	c.JSON(status, gin.H{"error": msg, "code": code})
 }
@@ -151,6 +175,15 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		// which accounts exist, are staff, or are disabled.
 		if bcrypt.CompareHashAndPassword(hash, []byte(req.Password)) != nil || !usable || user.DisabledAt.Valid {
 			apiError(c, http.StatusUnauthorized, codeInvalidCredentials, "invalid username or password")
+			return
+		}
+
+		// After the credentials are proven, so this answer is only ever given to the account's owner.
+		if blocked, err := customerNotOnboarded(ctx, deps, user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if blocked {
+			abortNotOnboarded(c)
 			return
 		}
 
@@ -278,6 +311,14 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 		}
 		if user.DisabledAt.Valid {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+			return
+		}
+
+		if blocked, err := customerNotOnboarded(c.Request.Context(), deps, user); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if blocked {
+			abortNotOnboarded(c)
 			return
 		}
 

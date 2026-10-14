@@ -102,6 +102,13 @@ func wechatLoginHandler(deps Deps) gin.HandlerFunc {
 			apiError(c, http.StatusForbidden, codeAccountDisabled, "this account has been disabled")
 			return
 		}
+		if blocked, err := customerNotOnboarded(ctx, deps, user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if blocked {
+			abortNotOnboarded(c)
+			return
+		}
 		if err := deps.Queries.TouchWechatLogin(ctx, identity.ID); err != nil {
 			log.Printf("wechat: touch last_login for identity %d: %v", identity.ID, err)
 		}
@@ -117,6 +124,7 @@ const (
 	bindNotProvisioned
 	bindDisabled
 	bindConflict
+	bindNotOnboarded
 )
 
 type bindResult struct {
@@ -185,6 +193,14 @@ func wechatPhoneLoginHandler(deps Deps) gin.HandlerFunc {
 				res.outcome = bindDisabled
 				return nil
 			}
+			// Nothing is bound for a customer still being configured: the user binds on their first
+			// login after onboarding completes.
+			if blocked, err := customerNotOnboarded(ctx, deps, user); err != nil {
+				return err
+			} else if blocked {
+				res.outcome = bindNotOnboarded
+				return nil
+			}
 
 			// Is this openid already someone's, or this user already someone's?
 			byOpenID, errOpen := q.GetWechatIdentity(ctx, db.GetWechatIdentityParams{Appid: appid, Openid: openid})
@@ -231,6 +247,8 @@ func wechatPhoneLoginHandler(deps Deps) gin.HandlerFunc {
 			apiError(c, http.StatusNotFound, codePhoneNotProvisioned, "this phone number has no account; contact your administrator")
 		case bindDisabled:
 			apiError(c, http.StatusForbidden, codeAccountDisabled, "this account has been disabled")
+		case bindNotOnboarded:
+			apiError(c, http.StatusForbidden, codeCustomerNotOnboarded, "customer not onboarded")
 		case bindConflict:
 			if err := auditAdmin(ctx, deps.Queries, res.user, "auth.wechat_bind", "", res.user.CustomerID, "denied",
 				map[string]any{"userId": res.user.ID, "reason": "identity conflict"}); err != nil {

@@ -82,6 +82,18 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		// Same status gate as authMiddleware: a token minted before its customer was put back into
+		// configuring (or for a customer never onboarded) must not open a stream.
+		if u, err := deps.Queries.GetUserByID(c.Request.Context(), claims.UserID); err == nil && !u.DisabledAt.Valid {
+			if blocked, err := customerNotOnboarded(c.Request.Context(), deps, u); err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			} else if blocked {
+				abortNotOnboarded(c)
+				return
+			}
+		}
+
 		// This handler authenticates its own JWT outside authMiddleware (a WebSocket handshake can't
 		// carry the usual middleware chain), so it calls the shared rule directly rather than
 		// requireDeviceOwnership. The rule is applied here at the handshake and again while the

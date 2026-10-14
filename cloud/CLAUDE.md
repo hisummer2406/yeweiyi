@@ -67,6 +67,13 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   （`GET /api/devices/:device/tanks`），客户端不能自造。旧 `user_devices` 不转换、不再被任何判定引用。员工**只读**：
   不能发任何命令，不读命令历史与审计；整机级记录（无罐号/tank=0）、无法解析的出入库原文只对管理员可见。授权每次读库，
   停用/撤销/换客户立即生效，WebSocket 逐帧复核。换机用新 `device_name`，天然没有任何授权。
+- 客户开通（#60，契约见 [docs/customer-onboarding-contract.md](docs/customer-onboarding-contract.md)）：`customers.onboarding_status`
+  `configuring`|`active`（迁移 000025，存量客户一律 `active`，新建默认 `configuring`，单向）。配置中的客户下**所有**非平台管理员账号
+  不能登录/续期/访问业务：密码与微信登录在身份验证通过后、旧令牌在认证中间件与 `/ws/alarms` 握手均返回
+  `403 {"code":"customer_not_onboarded"}`（不同于账号失效的裸 `not authorized`），`user_may_access_device/tank` 同样拒绝。
+  仅平台管理员可 `GET /api/customers/:id/onboarding`、`POST .../onboarding/complete`（事务内锁客户行复检：有未停用且有手机号
+  密码的客户管理员、至少一个油站、至少一台在该客户油站内的设备；不全 `409 onboarding_incomplete` + `missing`；重复幂等）。
+  不使用 `users.disabled_at` 模拟客户状态；测试里 `newCustomer` 直接种为 `active`。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 

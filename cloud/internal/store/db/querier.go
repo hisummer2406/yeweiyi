@@ -50,6 +50,9 @@ type Querier interface {
 	// A concurrent bind of the same openid or the same user trips a UNIQUE constraint (23505); the caller
 	// re-reads and decides, so two requests can never produce two rows or move an identity.
 	CreateWechatIdentity(ctx context.Context, arg CreateWechatIdentityParams) (UserWechatIdentity, error)
+	// The three minimum conditions for onboarding (cloud#60). A device only counts when it sits in a
+	// station of the same customer; the composite FK already guarantees that, the join keeps it explicit.
+	CustomerOnboardingCounts(ctx context.Context, customerID pgtype.Int8) (CustomerOnboardingCountsRow, error)
 	// Run in the same transaction as a device changing customer: bindings made under the old customer
 	// must not survive into the new one.
 	DeleteBindingsForDevice(ctx context.Context, deviceName string) (int64, error)
@@ -83,6 +86,8 @@ type Querier interface {
 	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
 	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
+	// Completing onboarding locks the row so the readiness check and the status write see one state.
+	GetCustomerForUpdate(ctx context.Context, id int64) (Customer, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
 	// Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
 	// both win.
@@ -221,6 +226,7 @@ type Querier interface {
 	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	MarkCustomerOnboarded(ctx context.Context, id int64) (Customer, error)
 	// ThingsBoard 里已经不存在的设备（被删除）不会再出现在列表里，只靠 SyncDeviceOnlineStatus 它们会
 	// 永远停在在线。传入本轮在 ThingsBoard 看到的全部设备名，其余仍标记在线的一律置为离线。
 	MarkDevicesOfflineExcept(ctx context.Context, seenNames []string) (int64, error)

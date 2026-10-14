@@ -126,6 +126,10 @@ type Customer struct {
 	// 客户名称，全局唯一
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 开通状态：configuring（配置中，其下账号不能登录）| active（已开通）。单向，新增资产或停用账号不会退回。
+	OnboardingStatus string `json:"onboarding_status"`
+	// 完成开通的时间；configuring 时为空。
+	OnboardedAt pgtype.Timestamptz `json:"onboarded_at"`
 }
 
 // 设备在线状态表，记录 thing/event/isOline 的最新状态（design doc §4.2）。

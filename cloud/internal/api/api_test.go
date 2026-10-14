@@ -203,7 +203,7 @@ func (e *testEnv) newCustomer(label string) int64 {
 	var id int64
 	name := fmt.Sprintf("api-test-%s-%s-%d", label, e.t.Name(), time.Now().UnixNano())
 	if err := e.pool.QueryRow(context.Background(),
-		`INSERT INTO customers (name) VALUES ($1) RETURNING id`, name).Scan(&id); err != nil {
+		`INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`, name).Scan(&id); err != nil {
 		e.t.Fatalf("seed customer: %v", err)
 	}
 	e.t.Cleanup(func() {
