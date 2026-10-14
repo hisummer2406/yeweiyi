@@ -1,6 +1,6 @@
 import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
-import { scanAndBind } from '../../utils/bind';
+import { scanAndLocate } from '../../utils/scan';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -207,14 +207,17 @@ Page({
     });
   },
 
-  onScanBind() {
-    scanAndBind(() => this.loadHome());
+  onScanDevice() {
+    // Locates only: nothing is bound or granted. The detail page shows the granted tanks.
+    scanAndLocate((deviceName) => {
+      wx.navigateTo({ url: `/pages/device-detail/device-detail?device=${encodeURIComponent(deviceName)}` });
+    });
   },
 
-  // 设计稿「首页-添加」：+ 号菜单。邀请加入本阶段不做（账号只在后台创建），油站管理暂未开放。
+  // 设计稿「首页-添加」：+ 号菜单（扫码只定位设备，不创建绑定或授权）。邀请加入本阶段不做（账号只在后台创建），油站管理暂未开放。
   onMoreActions() {
     wx.showActionSheet({
-      itemList: ['添加设备', '油站管理'],
+      itemList: ['扫码查看设备', '油站管理'],
       success: (res) => {
         if (res.tapIndex === 0) {
           wx.navigateTo({ url: '/pages/device-add/device-add' });

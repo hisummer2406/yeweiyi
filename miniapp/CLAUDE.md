@@ -87,17 +87,21 @@ assumes a `device` string typed/pasted by the user will work without binding fir
   does not take effect until the next login. After 退出登录 `autoLogin` is switched off so the login page
   does not silently restore the same WeChat; the next successful login switches it back on.
   **Not verified on a real device or against real WeChat** — see the PR.
-- **Device pairing.** `POST /api/devices/bind` — `{deviceName, pairingToken?}` → `200
-  {deviceName, bound:true}` (idempotent). Since `yeweiyi-cloud#56` the `pairingToken` is optional: the
-  label's QR holds only a short code (e.g. `000001`), this app sends it as `deviceName` with no token,
-  and the cloud resolves it to the full name (`ZCT000001`, returned in the response) among the caller's
-  **own customer's** devices (`customer_admin`/`customer_user` only, not `platform_admin`). Any failure
-  to resolve (no such device, other customer, unassigned, malformed) is one **401** `invalid device name
-  or pairing token` — so `utils/bind.ts` shows "未找到该设备…" and passes `keepSessionOn401` so that 401
-  does not log the user out. `utils/pairing.ts` only validates the text (letters/digits, ≤32). The
-  secret path (`POST /api/devices/:device/pairing-secret`, platform_admin) still exists but this app
-  does not use it. `POST /api/devices/unbind` —
-  `{deviceName}`. `GET /api/devices` → `{rows: [Device...]}` — call this to populate the device list;
+- **Scan locates, it never grants** (yeweiyi-cloud#63, `docs/tank-grants-contract.md` v1.0). `POST
+  /api/devices/resolve` `{code}` (the label text exactly as scanned) → `200 {deviceName}`: the actual
+  device name, used for everything after. It writes nothing, so scanning twice changes nothing.
+  Every "cannot locate" case (unknown, other customer, no granted tank, disabled) is the same **404**
+  `code=device_not_found` — shown as "未找到该设备，或你暂无…请联系客户管理员"; it is not a dead session.
+  `POST /api/devices/bind` is retired (always 410 `bind_removed`): **do not call it**, and nothing in
+  the app may grant visibility. What a customer_user can see is decided by the cloud per
+  `(device_name, tank)`: `GET /api/devices` lists only devices with a granted tank (rows carry
+  `granted_tanks`), `telemetry/latest`, alarms, oil-in-out and `/ws/alarms` carry only granted tanks,
+  and `telemetry/history` for another tank is `403 code=tank_not_authorized`. Three 403s stay distinct:
+  `not authorized for this device` (device level), `tank_not_authorized` (tank level), bare
+  `not authorized` (dead account — the only one that ends the session). customer_user is view-only:
+  no 控制命令 tab. `utils/pairing.ts` only validates the text (`[0-9A-Za-z_-]`, 1–64; no padding, no
+  prefix, no length assumption). `POST /api/devices/unbind` is a no-op.
+  `GET /api/devices` → `{rows: [Device...]}` — call this to populate the device list;
   there is no other way to discover which `device_name`s a user may even query. **`is_online` on
   each row is real but lags** — `yeweiyi-cloud` `internal/ingest/online.go` re-syncs it every 30s
   from ThingsBoard's `active` flag, which only flips to inactive after ThingsBoard's inactivity
@@ -167,9 +171,9 @@ not just unimplemented here:
 
 - **Auth**: `/api/login` issues a JWT — one shared account/auth system for mini-program and PC-remote
   clients, no per-client-type account silo.
-- **Device pairing**: a freshly-logged-in user has zero bound devices — the first real flow after
-  login is "scan the QR code on a physical device to bind it" (`wx.scanCode()` →
-  `POST /api/devices/bind` with the scanned short code as `deviceName`, no token — see above).
+- **Scan to open a device**: `wx.scanCode()` → `POST /api/devices/resolve` → the device detail page,
+  which shows only the tanks the cloud granted this user. A user with no grants sees "contact the
+  customer administrator" — there is no scan-to-authorize (see above).
 - **Read-only views**: realtime oil-tank snapshot (poll-on-demand, not a live stream), alarm history,
   出入库 (stock in/out) history — all paginated by time range, and 出入库 specifically must surface
   `unparsable`/`legacySkipped` rather than silently showing an incomplete list as complete.
@@ -202,7 +206,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts` and `utils/recordsRange.ts` (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts` and `utils/pairing.ts`/`utils/roles.ts` (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -230,7 +234,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   decode the JWT's `role`/`uid` claims client-side purely for display, UI gating and storage keys
   (real authorization is always server-side). `utils/loginFlow.ts` — the pure part (failure → message,
   getPhoneNumber result, phone masking), checked in Node by `npm run check`.
-- `utils/pairing.ts` — validates the device short code in the QR payload.
+- `utils/pairing.ts` — validates the label text and words a failed resolve. Pure.
 - `utils/labels.ts` — Chinese labels for the closed enums the cloud API returns (alarm type/severity/
   status, tank alarm state, stock direction) and the mirrored control-method table. One place so an
   unmapped value falls back to itself rather than rendering blank.
@@ -238,8 +242,8 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   trusting it if time has passed.
 - `utils/telemetry.ts` — telemetry snapshot → tank view-model and the "never reported" (404) test,
   shared by the home page and `device-detail`. Pure, no `wx`.
-- `utils/bind.ts` — `wx.scanCode` → `POST /api/devices/bind`, shared by the home empty state and
-  `device-add`.
+- `utils/scan.ts` — `wx.scanCode` → `POST /api/devices/resolve`, shared by the home page and
+  `device-add`; hands the caller the actual device name. `utils/roles.ts` — `isReadOnlyRole`.
 - `utils/oilInOut.ts` — runtime guard for the `/api/oil-in-out` envelope and the "list is not
   complete" notes (unparsable / legacySkipped / partial / truncated / invalidSource). Pure.
 - `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).
@@ -250,8 +254,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   per station; data never merged by station/tank number), `tankKey` (device_name + tank = data/cache
   identity), and the follow decision `device-detail` uses after a replacement (A→B: drop A's data,
   socket, poll and in-flight requests, load B; B not visible to this user → notice, no fallback to A).
-  Only pages opened from a station entry (`station` query param) follow; a page opened by device name
-  alone (我的记录) is an independent view. Pure, Node-checked.
+  Pure, Node-checked (contract v1.3).
 - `utils/recordsRange.ts` — the time range and paging of device-detail's 报警记录 / 出入库记录 tabs:
   presets (最近24小时/近7天/近30天, rolling from "now") and custom whole local days → `beginTime`/
   `endTime`; page queries (alarms ask for `limit+1` as a "more" probe because `/api/alarms` has no flag,
@@ -263,7 +266,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     (`pages/station-select`) and the page lists only that station's devices; without station data
     (old cloud, `/api/stations` failing, no device belongs to any station) there is no dropdown and
     the header says "我的设备". The selected station is remembered per account (user id key) in `wx.storage`
-    (`utils/stationPref.ts`). "+" menu: 添加设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
+    (`utils/stationPref.ts`). "+" menu: 扫码查看设备 / 油站管理 (placeholder). **No 邀请加入**: accounts are created
     in the back office (by the platform administrator: phone + customer); there is no registration or
     invite in the mini-program.
     Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
@@ -271,7 +274,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   - **我的记录 `records`** (tabBar) — entry list; 报警/出库/入库 pick a device then open
     `device-detail` on that tab; 交班/库存 have no cloud data and say so.
   - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
-  - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫一扫), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
+  - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫码查看设备), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
     控制命令, plus the live-alarm banner from `AlarmSocket`; polls the command list every 3s while
     any command is non-terminal), `issue-command` (one control command, raw-JSON args).
     The 报警记录 / 出入库记录 tabs share one time range bar and page by scrolling to the bottom

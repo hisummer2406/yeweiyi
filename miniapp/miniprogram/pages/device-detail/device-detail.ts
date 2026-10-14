@@ -1,6 +1,9 @@
 import { ApiError, get } from '../../utils/request';
 import { FOLLOW_NOTICES, followStationDevice, stationIdFromKey } from '../../utils/stationDevice';
 import { AlarmSocket } from '../../utils/ws';
+import { roleFromToken } from '../../utils/auth';
+import { isReadOnlyRole } from '../../utils/roles';
+import { getToken } from '../../utils/storage';
 import { formatLocalTime, roundFields } from '../../utils/format';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
 import {
@@ -203,11 +206,14 @@ Page({
 
   onLoad(query: Record<string, string>) {
     const device = query.device || '';
+    // A view-only account (customer_user) gets no 控制命令 tab: it cannot issue commands and the cloud
+    // does not show it the command history either (tank-grants-contract v1.0 §2).
+    const tabs = isReadOnlyRole(roleFromToken(getToken())) ? TABS.filter((t) => t.key !== 'commands') : TABS;
     const requestedTab = query.tab as TabKey | undefined;
-    const tab: TabKey = TABS.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
+    const tab: TabKey = tabs.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
     this.oilInOutDirection = query.direction === 'IN' || query.direction === 'OUT' ? query.direction : '';
     this.stationId = stationIdFromKey(query.station);
-    this.setData({ device, activeTab: tab, today: formatDate(new Date()) });
+    this.setData({ device, tabs, activeTab: tab, today: formatDate(new Date()) });
     wx.setNavigationBarTitle({ title: device || '设备详情' });
     this.loadTabIfNeeded(tab);
     this.openSocket(device);

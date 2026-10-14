@@ -47,20 +47,23 @@ export interface Device {
   // GET /api/devices rows carry the station the device sits in (yeweiyi-cloud#53). null = not in any
   // station ("未分组"); a MISSING key means an older cloud. Both fall back to "no station" here.
   station_id?: number | null;
+  // customer_user rows: the tank numbers granted to this user on the device (yeweiyi-cloud#63). The
+  // server already filters every read to these tanks; this is informational. null/missing for admins.
+  granted_tanks?: number[] | null;
 }
 
-// POST /api/devices/bind (yeweiyi-cloud#56). The label's QR holds a short code sent as `deviceName`
-// with `pairingToken` omitted; the cloud resolves it inside the caller's customer. A caller that
-// has the secret may still send `pairingToken` with a full device name (backward compatible).
-export interface BindDeviceRequest {
-  deviceName: string;
-  pairingToken?: string;
+// POST /api/devices/resolve (yeweiyi-cloud tank-grants-contract v1.0 §3). Locates a device from the
+// scanned label text; writes nothing — no binding, no grant. `code` is the label text as scanned.
+// POST /api/devices/bind is retired (always 410 bind_removed) and must not be called.
+export interface ResolveDeviceRequest {
+  code: string;
 }
 
-// `deviceName` is the RESOLVED full name (e.g. "ZCT000001") — use it, not the scanned text.
-export interface BindDeviceResponse {
+// `deviceName` is the RESOLVED actual device name — use it, not the scanned text. Every "cannot
+// locate" case (unknown, other customer, no granted tank, disabled) is the same
+// 404 {error:"device not found", code:"device_not_found"}; none of them is a dead session.
+export interface ResolveDeviceResponse {
   deviceName: string;
-  bound: boolean;
 }
 
 // ---- Stations ----
