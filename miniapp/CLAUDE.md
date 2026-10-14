@@ -245,6 +245,13 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 - `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).
 - `utils/stations.ts` — station options, grouping, default selection and search; pure functions,
   checked in Node by `npm run check`. `utils/stationPref.ts` — remembers the selected station.
+- `utils/stationDevice.ts` — station → current device from `GET /api/devices` `station_id` (cloud
+  contract `docs/station-device-replacement-contract.md` v1.3: no read-by-station endpoint; one device
+  per station; data never merged by station/tank number), `tankKey` (device_name + tank = data/cache
+  identity), and the follow decision `device-detail` uses after a replacement (A→B: drop A's data,
+  socket, poll and in-flight requests, load B; B not visible to this user → notice, no fallback to A).
+  Only pages opened from a station entry (`station` query param) follow; a page opened by device name
+  alone (我的记录) is an independent view. Pure, Node-checked.
 - `utils/recordsRange.ts` — the time range and paging of device-detail's 报警记录 / 出入库记录 tabs:
   presets (最近24小时/近7天/近30天, rolling from "now") and custom whole local days → `beginTime`/
   `endTime`; page queries (alarms ask for `limit+1` as a "more" probe because `/api/alarms` has no flag,

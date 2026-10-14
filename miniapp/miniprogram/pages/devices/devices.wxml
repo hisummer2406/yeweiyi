@@ -35,6 +35,7 @@
   </view>
 
   <view class="home-list">
+    <view wx:if="{{stationNotice}}" class="empty">{{stationNotice}}</view>
     <view wx:if="{{groups.length === 0}}" class="empty">该油站下还没有设备</view>
     <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
       <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
@@ -54,7 +55,7 @@
       <view
         wx:for="{{g.tanks}}"
         wx:for-item="t"
-        wx:key="index"
+        wx:key="key"
         class="tank-row"
         data-device="{{g.deviceName}}"
         bindtap="onTapTank"

@@ -4,6 +4,7 @@ import { scanAndBind } from '../../utils/bind';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
+import { stationIdFromKey, stationParam } from '../../utils/stationDevice';
 import {
   buildStationOptions,
   devicesOfStation,
@@ -47,6 +48,9 @@ Page({
     // All devices this user can see, regardless of the selected station. Distinguishes "no devices at
     // all" (first-run empty state: go scan) from "the selected station has none".
     deviceTotal: 0,
+    // Shown when the station the user last looked at has no device they can see any more — typically
+    // after the back office replaced its screen and the new one is not assigned to them yet.
+    stationNotice: '',
     showSingleDeviceHeader: false,
     // The header is drawn under the status bar (navigationStyle: custom), so it needs the status
     // bar's height in rpx. Falls back to the design draft's 88rpx if the API is unavailable.
@@ -119,6 +123,10 @@ Page({
   showStation(seq: number, preferredKey?: string): Promise<unknown> {
     const options = this.stationOptions as StationOption[];
     const current = pickStation(options, preferredKey);
+    // A remembered station that is no longer offered: its device was replaced, or never reached this
+    // user. Say so instead of silently landing elsewhere. Nothing here can authorize the new device.
+    const lostStation =
+      typeof stationIdFromKey(preferredKey) === 'number' && !options.some((o) => o.key === preferredKey);
     const visible = current ? devicesOfStation(this.allDevices, this.allStations, current.key) : this.allDevices;
     const groups = visible.map((d: Device) => emptyGroup(d.device_name));
     this.setData({
@@ -130,6 +138,9 @@ Page({
       stationName: current ? current.name : '',
       stationKey: current ? current.key : '',
       deviceTotal: this.allDevices.length,
+      stationNotice: lostStation
+        ? '上次查看的油站当前没有你可查看的设备。若已更换设备，请联系客户管理员重新分配油罐。'
+        : '',
     });
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
   },
@@ -157,7 +168,7 @@ Page({
     return get<LatestTelemetryResponse>(
       `/api/devices/${encodeURIComponent(deviceName)}/telemetry/latest`,
     )
-      .then((res) => this.patchGroup(deviceName, seq, { state: 'ok', ts: res.ts, tanks: toTankViews(res), error: '' }))
+      .then((res) => this.patchGroup(deviceName, seq, { state: 'ok', ts: res.ts, tanks: toTankViews(res, deviceName), error: '' }))
       .catch((err: ApiError) => {
         if (isNeverReported(err)) {
           // Authorized and provisioned, but has never reported — a real state, not an error.
@@ -187,7 +198,13 @@ Page({
 
   onTapTank(e: WechatMiniprogram.BaseEvent) {
     const device = e.currentTarget.dataset.device as string;
-    wx.navigateTo({ url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}` });
+    // The station the card was shown under travels with the device, so the detail page can follow the
+    // station if its device is replaced while the page is open (see device-detail refreshAssociation).
+    const station = stationParam(stationIdFromKey(this.data.stationKey));
+    const stationQuery = station ? `&station=${station}` : '';
+    wx.navigateTo({
+      url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}${stationQuery}`,
+    });
   },
 
   onScanBind() {

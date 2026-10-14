@@ -1,4 +1,5 @@
 import { ApiError, get } from '../../utils/request';
+import { FOLLOW_NOTICES, followStationDevice, stationIdFromKey } from '../../utils/stationDevice';
 import { AlarmSocket } from '../../utils/ws';
 import { formatLocalTime, roundFields } from '../../utils/format';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
@@ -29,6 +30,7 @@ import type {
   Alarm,
   AlarmPushMessage,
   ControlCommand,
+  Device,
   LatestTelemetryResponse,
   ListCommandsResponse,
   OilInOutListResponse,
@@ -122,6 +124,10 @@ const RANGE_HINTS: Record<Exclude<RangeProblem, ''>, string> = {
 Page({
   data: {
     device: '',
+    // false while the station has no device this user may see (replacement not assigned to them, or the
+    // device left their scope): the tabs are hidden and `notice` says why. Nothing is queried then.
+    deviceActive: true,
+    notice: '',
     tabs: TABS,
     activeTab: 'snapshot' as TabKey,
     loading: false,
@@ -157,6 +163,20 @@ Page({
   },
 
   socket: null as AlarmSocket | null,
+  // Identity of "the device this page is showing". Bumped on every switch; every request and the
+  // socket callback capture it and drop their result if it moved on, so nothing that was asked for the
+  // old device can write into the new device's view. (The alarms/stock lists have their own seqs too,
+  // which a switch also bumps.)
+  deviceGen: 0,
+  snapshotSeq: 0,
+  commandsSeq: 0,
+  // The station this page was opened from (contract v1.2 §8.1): a number only when opened from a
+  // station entry on the home page; the device then follows the station's current device
+  // (utils/stationDevice.ts followStationDevice). Opened by device name alone (我的记录) it stays
+  // undefined and the page is an independent view of that device: it never switches, and only checks
+  // the device is still in this user's scope.
+  stationId: undefined as number | null | undefined,
+  associationBusy: false,
   commandsPollTimer: null as ReturnType<typeof setTimeout> | null,
   // Set from the `direction` query param when arriving from the 我的记录 page's 出库/入库 entries
   // (device-detail itself only has one combined 出入库记录 tab; those two rows are the same tab
@@ -186,11 +206,21 @@ Page({
     const requestedTab = query.tab as TabKey | undefined;
     const tab: TabKey = TABS.some((t) => t.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
     this.oilInOutDirection = query.direction === 'IN' || query.direction === 'OUT' ? query.direction : '';
+    this.stationId = stationIdFromKey(query.station);
     this.setData({ device, activeTab: tab, today: formatDate(new Date()) });
     wx.setNavigationBarTitle({ title: device || '设备详情' });
     this.loadTabIfNeeded(tab);
+    this.openSocket(device);
+    // Catch a replacement that happened between the home list being drawn and this page opening.
+    this.refreshAssociation();
+  },
 
-    this.socket = new AlarmSocket(device, (msg: AlarmPushMessage) => {
+  // One socket per device. A socket's own messages are checked against the generation it was opened
+  // for, so a push that was already in flight when the device switched is dropped.
+  openSocket(device: string) {
+    const gen = this.deviceGen;
+    const socket = new AlarmSocket(device, (msg: AlarmPushMessage) => {
+      if (gen !== this.deviceGen || socket !== this.socket) return;
       this.setData({ liveAlarm: `${label(ALARM_TYPE_LABELS, msg.type)}：${msg.msg}` });
       // A live push means the alarm list is stale if the user is looking at it.
       // Only when the list is the live tail: a rolling range, and the user has not paged down (a reload
@@ -199,10 +229,89 @@ Page({
         this.loadAlarms();
       }
     });
-    this.socket.connect();
+    this.socket = socket;
+    socket.connect();
+  },
+
+  // Re-read GET /api/devices and let the station decide which device this page shows (contract v1.0
+  // §3.3: no read-by-station endpoint, only station_id on the device rows). Called on open, on show,
+  // on pull-down and after a "not authorized for this device" answer.
+  refreshAssociation(): Promise<unknown> {
+    if (this.associationBusy) return Promise.resolve();
+    this.associationBusy = true;
+    const gen = this.deviceGen;
+    return get<{ rows: Device[] }>('/api/devices')
+      .then((res) => {
+        if (gen !== this.deviceGen) return;
+        const devices = res.rows;
+        const device = this.data.device as string;
+        const decision = followStationDevice(devices, device, this.stationId);
+        if (decision.kind === 'switch') {
+          this.switchDevice(decision.device, '');
+        } else if (decision.kind === 'none') {
+          const notice = FOLLOW_NOTICES[decision.reason];
+          // Already showing this notice with nothing held: nothing to clear again.
+          if (this.data.device || this.data.notice !== notice) this.switchDevice('', notice);
+        }
+      })
+      // A failed re-read changes nothing: the current device stays as it was.
+      .catch(() => undefined)
+      .finally(() => {
+        this.associationBusy = false;
+      });
+  },
+
+  // Everything held for the old device is dropped here — latest value, tanks, alarms, stock records,
+  // commands, live banner, paging state, the socket and the poll timer — and requests still in flight
+  // for it are invalidated, before anything is asked for the new one. `device` '' = show the notice and
+  // query nothing. Nothing is migrated: the new device's view starts empty and says so.
+  switchDevice(device: string, notice: string) {
+    this.deviceGen++;
+    this.snapshotSeq++;
+    this.commandsSeq++;
+    this.alarmsSeq++;
+    this.stockSeq++;
+    this.alarmsPage = 0;
+    this.stockPage = 0;
+    this.alarmsHasMore = false;
+    this.stockHasMore = false;
+    this.alarmsBusy = false;
+    this.stockBusy = false;
+    this.alarmsWindow = null;
+    this.stockWindow = null;
+    this.stopCommandsPoll();
+    this.socket?.close();
+    this.socket = null;
+    this.setData({
+      device,
+      deviceActive: !!device,
+      notice,
+      loading: false,
+      liveAlarm: '',
+      snapshotTs: '',
+      tanks: [],
+      snapshotLoaded: false,
+      alarms: [],
+      alarmsLoaded: false,
+      alarmsFooter: '',
+      oilInOut: [],
+      oilInOutNote: '',
+      oilInOutLoaded: false,
+      oilInOutFooter: '',
+      commands: [],
+      commandsLoaded: false,
+      rangeHint: '',
+    });
+    wx.setNavigationBarTitle({ title: device || '设备详情' });
+    if (!device) return;
+    this.loadTabIfNeeded(this.data.activeTab);
+    this.openSocket(device);
   },
 
   onShow() {
+    // Back from another page (or the app was in the background): the back office may have replaced the
+    // station's device meanwhile.
+    this.refreshAssociation();
     // Coming back from issue-command after a submit — refresh so the new command's initial state
     // (usually 'pending' or 'sent') is visible without a manual pull-to-refresh.
     if (this.data.activeTab === 'commands' && this.data.commandsLoaded) {
@@ -235,6 +344,11 @@ Page({
   },
 
   onPullDownRefresh() {
+    if (!this.data.deviceActive) {
+      this.refreshAssociation().finally(() => wx.stopPullDownRefresh());
+      return;
+    }
+    this.refreshAssociation();
     const reload: Record<TabKey, () => Promise<unknown>> = {
       snapshot: () => this.loadSnapshot(),
       alarms: () => this.loadAlarms(),
@@ -246,22 +360,38 @@ Page({
 
   // GET /api/devices/:device/telemetry/latest — replaces the deleted /api/oilcan/latest entirely.
   loadSnapshot() {
+    if (!this.data.device) return Promise.resolve();
+    const device = this.data.device as string;
+    const seq = ++this.snapshotSeq;
     this.setData({ loading: true });
-    return get<LatestTelemetryResponse>(
-      `/api/devices/${encodeURIComponent(this.data.device)}/telemetry/latest`,
-    )
+    return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
-        this.setData({ snapshotTs: res.ts, tanks: toTankViews(res), snapshotLoaded: true });
+        if (seq !== this.snapshotSeq) return;
+        this.setData({ snapshotTs: res.ts, tanks: toTankViews(res, device), snapshotLoaded: true });
       })
       .catch((err: ApiError) => {
+        if (seq !== this.snapshotSeq) return;
         if (isNeverReported(err)) {
-          // Authorized and provisioned, but has never reported — a real state, not an error.
+          // Authorized and provisioned, but no data — a real state, not an error. Also what a replaced
+          // device's successor looks like until it reports (and yeweiyi-cloud#28 can answer 404 for a
+          // device that stopped reporting): an empty state, never the previous device's readings.
           this.setData({ tanks: [], snapshotTs: '', snapshotLoaded: true });
         } else {
-          wx.showToast({ title: err.message, icon: 'none' });
+          // 403 here is "not authorized for this device": no assignment for this device. Say what to do
+          // instead of the cloud's English text; nothing in the app can grant it.
+          wx.showToast({
+            title: err.status === 403 ? '你暂无该设备的查看权限，请联系客户管理员分配' : err.message,
+            icon: 'none',
+            duration: 3000,
+          });
+          // "not authorized for this device" is an object-level refusal, not a dead session (request.ts
+          // keeps the session): the device may have left this user's scope, so re-resolve the station.
+          if (err.status === 403) this.refreshAssociation();
         }
       })
-      .finally(() => this.setData({ loading: false }));
+      .finally(() => {
+        if (seq === this.snapshotSeq) this.setData({ loading: false });
+      });
   },
 
   // ---- Time range (shared by 报警记录 and 出入库记录) ----
@@ -505,17 +635,25 @@ Page({
   },
 
   loadCommands() {
+    if (!this.data.device) return Promise.resolve();
+    const seq = ++this.commandsSeq;
     this.setData({ loading: true });
     return get<ListCommandsResponse>(
       `/api/devices/${encodeURIComponent(this.data.device)}/commands`,
       { limit: 50 },
     )
       .then((res) => {
+        if (seq !== this.commandsSeq) return;
         this.setData({ commands: res.commands.map(toCommandView), commandsLoaded: true });
         this.scheduleCommandsPoll(res.commands);
       })
-      .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }))
-      .finally(() => this.setData({ loading: false }));
+      .catch((err: Error) => {
+        if (seq !== this.commandsSeq) return;
+        wx.showToast({ title: err.message, icon: 'none' });
+      })
+      .finally(() => {
+        if (seq === this.commandsSeq) this.setData({ loading: false });
+      });
   },
 
   // An ACK is not success: a command stays non-terminal until the device reports its real outcome,
