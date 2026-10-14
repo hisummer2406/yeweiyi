@@ -100,3 +100,23 @@ describe('describeAssignError', () => {
     );
   });
 });
+
+describe('describeMiniCodeError', () => {
+  it('branches on the cloud code first, then falls back to status', async () => {
+    const { describeMiniCodeError: d } = await import('./errors');
+    expect(d(404, 'device_not_found').id).toBe(
+      'pages.console.miniCode.error.notFound',
+    );
+    expect(d(503, 'wechat_unavailable').id).toBe(
+      'pages.console.miniCode.error.unavailable',
+    );
+    expect(d(502, 'wechat_upstream_error').id).toBe(
+      'pages.console.miniCode.error.upstream',
+    );
+    expect(d(502).id).toBe('pages.console.miniCode.error.upstream');
+    expect(d(500, undefined, 'boom')).toEqual({
+      id: 'pages.console.miniCode.error.unknown',
+      detail: 'boom',
+    });
+  });
+});

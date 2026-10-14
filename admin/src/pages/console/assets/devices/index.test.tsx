@@ -12,6 +12,7 @@ let canPlatformAdmin = true;
 const listDevices = vi.fn();
 const listCustomers = vi.fn();
 const listStations = vi.fn();
+const downloadMiniCode = vi.fn();
 
 vi.mock('@umijs/max', () => ({
   useAccess: () => ({ canPlatformAdmin }),
@@ -38,6 +39,7 @@ vi.mock('@/services/ant-design-pro/stations', () => ({
   replaceStationDevice: vi.fn(),
 }));
 
+vi.mock('./downloadMiniCode', () => ({ downloadMiniCode }));
 vi.mock('./RegisterDeviceModal', () => ({
   default: (props: {
     open: boolean;
@@ -80,6 +82,27 @@ beforeEach(() => {
   listStations.mockResolvedValue([]);
 });
 afterEach(cleanup);
+
+describe('AdminDevices mini-program code', () => {
+  it('platform admin downloads the code of that row', async () => {
+    listDevices.mockResolvedValue([dev('000123', 1)]);
+    render(<AdminDevices />);
+    fireEvent.click(within(await rowOf('000123')).getByText('下载小程序码'));
+    expect(downloadMiniCode).toHaveBeenCalledWith(
+      '000123',
+      expect.any(Function),
+    );
+  });
+
+  it('customer admin gets no entry', async () => {
+    canPlatformAdmin = false;
+    listDevices.mockResolvedValue([dev('000123')]);
+    render(<AdminDevices />);
+    expect(
+      within(await rowOf('000123')).queryByText('下载小程序码'),
+    ).toBeNull();
+  });
+});
 
 describe('AdminDevices customer column', () => {
   beforeEach(() =>

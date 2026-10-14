@@ -339,6 +339,15 @@ export default {
     '{station} (already has device {device})',
   'pages.console.stations.assign.occupiedHint':
     'A station has exactly one screen at a time, so an occupied station cannot be assigned directly. Use "Replace" on the current device instead.',
+  'pages.console.miniCode.action': 'Mini-program code',
+  'pages.console.miniCode.error.notFound':
+    'Device not found; please refresh the list.',
+  'pages.console.miniCode.error.unavailable':
+    'WeChat is not enabled on the cloud; cannot generate the code.',
+  'pages.console.miniCode.error.upstream':
+    'WeChat service failed; please retry later.',
+  'pages.console.miniCode.error.unknown':
+    'Failed to download the code: {detail}',
   'pages.console.stations.devices.action.replace': 'Replace',
   'pages.console.stations.replace.title': 'Replace device: {station}',
   'pages.console.stations.replace.station': 'Station',

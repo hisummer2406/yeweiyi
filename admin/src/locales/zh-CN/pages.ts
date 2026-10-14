@@ -308,6 +308,12 @@ export default {
   'pages.console.stations.assign.occupied': '{station}（已有设备 {device}）',
   'pages.console.stations.assign.occupiedHint':
     '已有设备的油站不能直接分配，一个油站同时只有一台大屏；需要更换请在原设备行使用「换机」。',
+  'pages.console.miniCode.action': '下载小程序码',
+  'pages.console.miniCode.error.notFound': '设备不存在，请刷新列表。',
+  'pages.console.miniCode.error.unavailable':
+    '云端未启用微信，无法生成小程序码。',
+  'pages.console.miniCode.error.upstream': '微信服务返回失败，请稍后重试。',
+  'pages.console.miniCode.error.unknown': '下载小程序码失败：{detail}',
   'pages.console.stations.devices.action.replace': '换机',
   'pages.console.stations.replace.title': '换机：{station}',
   'pages.console.stations.replace.station': '油站',

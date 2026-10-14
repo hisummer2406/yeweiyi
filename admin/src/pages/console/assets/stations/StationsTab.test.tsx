@@ -35,7 +35,9 @@ vi.mock('@/services/ant-design-pro/stations', () => ({
   deleteStation,
 }));
 vi.mock('@/services/ant-design-pro/customers', () => ({ listCustomers }));
+const downloadMiniCode = vi.fn();
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
+vi.mock('../devices/downloadMiniCode', () => ({ downloadMiniCode }));
 
 const { default: StationsTab } = await import('./StationsTab');
 const { ApiError } = await import('@/services/ant-design-pro/apiError');
@@ -257,6 +259,27 @@ describe('StationsTab', () => {
       );
       const r2 = await rowOf('二号站');
       expect(within(r2).queryByText('查看监控')).toBeNull();
+    });
+
+    it('offers the mini-program code only to platform admins and only for a single device', async () => {
+      canPlatformAdmin = true;
+      listDevices.mockResolvedValue([dev('000123', 3)]);
+      const { unmount } = render(<StationsTab />);
+      fireEvent.click(within(await rowOf('一号站')).getByText('下载小程序码'));
+      expect(downloadMiniCode).toHaveBeenCalledWith(
+        '000123',
+        expect.any(Function),
+      );
+      expect(
+        within(await rowOf('二号站')).queryByText('下载小程序码'),
+      ).toBeNull();
+      unmount();
+      cleanup();
+      canPlatformAdmin = false;
+      render(<StationsTab />);
+      expect(
+        within(await rowOf('一号站')).queryByText('下载小程序码'),
+      ).toBeNull();
     });
 
     it('flags legacy data with several devices on one station instead of aggregating or picking one', async () => {

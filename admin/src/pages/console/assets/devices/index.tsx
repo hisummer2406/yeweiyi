@@ -9,6 +9,7 @@ import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
 import AssignStationModal from './AssignStationModal';
+import { downloadMiniCode } from './downloadMiniCode';
 import RegisterDeviceModal from './RegisterDeviceModal';
 import ReplaceDeviceModal from './ReplaceDeviceModal';
 import TransferDeviceModal from './TransferDeviceModal';
@@ -110,6 +111,11 @@ const AdminDevices: React.FC = () => {
           {row.customer_id !== null && (
             <a onClick={() => setStationTarget(row)}>
               {t('pages.console.stations.devices.action.assign')}
+            </a>
+          )}
+          {canPlatformAdmin && (
+            <a onClick={() => downloadMiniCode(row.device_name, t)}>
+              {t('pages.console.miniCode.action')}
             </a>
           )}
           {typeof row.station_id === 'number' && (

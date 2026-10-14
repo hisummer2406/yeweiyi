@@ -15,6 +15,7 @@ import {
   updateStation,
 } from '@/services/ant-design-pro/stations';
 import { occupantsByStation } from '@/utils/stationOccupancy';
+import { downloadMiniCode } from '../devices/downloadMiniCode';
 import { describeDeleteStationError, describeStationError } from './errors';
 import StationFormModal from './StationFormModal';
 
@@ -106,6 +107,11 @@ const StationsTab: React.FC = () => {
               href={`/console/devices/${encodeURIComponent(row.devices[0])}?station=${row.id}`}
             >
               {t('pages.console.stations.action.monitor')}
+            </a>
+          )}
+          {canPlatformAdmin && row.devices?.length === 1 && (
+            <a onClick={() => downloadMiniCode(row.devices?.[0] ?? '', t)}>
+              {t('pages.console.miniCode.action')}
             </a>
           )}
           <a onClick={() => setEditTarget(row)}>
