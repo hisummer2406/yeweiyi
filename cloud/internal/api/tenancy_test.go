@@ -319,7 +319,7 @@ var exemptRoutes = map[string]string{
 	"POST /api/devices/bind":                "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
 	"POST /api/devices/unbind":              "deletes only the caller's own binding row",
 	"POST /api/devices/resolve":             "device comes from the body; never 403 — a device the caller may not open is the same 404 as a missing one and nothing is written, see TestResolve_*",
-	"GET /api/users/:id/tank-grants":        "no device; an administrator reads one employee of their own customer, see TestTankGrants_*",
+	"GET /api/users/:id/tank-grants":        "no device; platform admin only, see TestTankGrants_*",
 
 	"POST /api/customers":         "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",
@@ -370,11 +370,10 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 			},
 		},
 		"GET /api/devices/:device/tanks": {build: path("/tanks")},
-		// userAID is an employee of customer A: customer B's administrator names a foreign employee
-		// (404, like a missing one), and an employee is refused by role (403).
+		// userAID is an employee of customer A. Only a platform administrator writes grants, so every
+		// customer-side caller (admin or employee, own customer or not) is refused by role.
 		"PUT /api/users/:id/tank-grants/:device": {
-			customerUserDenied:   true,
-			foreignAdminNotFound: true,
+			adminOnly: true,
 			build: func(device, _ string) (string, []byte) {
 				return fmt.Sprintf("/api/users/%d/tank-grants/%s", tn.userAID, device), []byte(`{"tanks":[]}`)
 			},

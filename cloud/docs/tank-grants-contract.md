@@ -10,7 +10,7 @@
 
 - 【需求】授权粒度是 `(用户, device_name, 罐号)`，不是油站、不是整机。员工（`customer_user`）只能查看被授予的罐；未授予默认无权。
   客户管理员看本客户全部设备与罐；平台管理员保留现有范围。
-- 【需求】授权写入者：客户管理员（限本客户员工、本客户设备）与平台管理员。**不能**通过授权操作创建或修改账号。
+- 【需求】授权读写者**仅平台管理员**（产品决定 2026-10-14，更正此前“客户管理员”）。客户管理员**没有**此权限：`GET`/`PUT` 一律 `403 not authorized`（按数据库当前角色，写 `denied` 审计），不能通过授权操作创建或修改账号。
 - 【选择】存储 `user_tank_grants(user_id, device_name, tank 1..64, granted_by, created_at)`，主键三元组，外键级联；
   迁移 `000024_tank_grants`。设备归属（客户/油站）与罐授权相互独立。
 - 【选择】**旧设备级绑定 `user_devices` 不转换**（#63："不能无提示把设备绑定转换成所有罐权限"）：升级后员工在被明确分配
@@ -63,8 +63,8 @@
 设备不可定位 → `403 not authorized for this device`；ThingsBoard 不可用 `503`。
 
 ### `GET /api/users/:id/tank-grants`
-`200 {"userId", "grants": [{"deviceName", "tanks": [1,2]}]}`。目标必须是本范围内的员工，否则：
-别客户/不存在 `404 code=user_not_found`（客户管理员视角二者相同）；目标是管理员 `409 code=grant_not_applicable`。
+`200 {"userId", "grants": [{"deviceName", "tanks": [1,2]}]}`。仅平台管理员；目标必须是员工，否则：
+不存在 `404 code=user_not_found`；目标是管理员 `409 code=grant_not_applicable`。
 
 ### `PUT /api/users/:id/tank-grants/:device`
 请求 `{"tanks": [1,2]}`：把该员工在该设备上的授权**整组替换**为给定集合；`[]` = 撤销该设备全部授权。`tanks` 键必须存在。
@@ -74,8 +74,8 @@
 - `400 invalid_request`（缺 `tanks`/非列表）、`400 invalid_tank`（不在 1..64 或设备未上报该罐）。
 - `409 tanks_unknown`（设备从未上报，不能新增）、`409 device_customer_mismatch`（设备与员工不同客户）、
   `409 grant_not_applicable`（目标不是员工）。
-- `404 user_not_found` / `404 device_not_found`（客户管理员视角：别客户的与不存在的完全相同）。
-- 写入在同一事务内复核管理员角色与客户、员工与设备同属一客户；INSERT 语句自己再带同客户与角色条件（判定与写入同一条语句）。
+- `404 user_not_found` / `404 device_not_found`（调用者是平台管理员，不存在即不存在）；非平台管理员 `403 not authorized`。
+- 写入在同一事务内复核调用者仍是平台管理员、员工与设备同属一客户；INSERT 语句自己再带同客户与角色条件（判定与写入同一条语句）。
 - 审计 `tank.grants.set`：`{userId, before, after}`，归属设备所属客户；拒绝写 `denied`。
 - 员工换客户、设备换客户：授权在同一事务内清除（`bindingsCleared` 计数含授权所涉设备/用户数）。
 
@@ -96,8 +96,8 @@
 
 | 端 | 需要做 | 说明 |
 | --- | --- | --- |
-| 后台 admin | 员工详情页：按设备列出可分配罐（`/devices/:device/tanks`）与已授权（`GET …/tank-grants`），整组保存（`PUT`）；处理 `409 tanks_unknown/invalid_tank` | 客户管理员仅本客户；不提供创建/改员工账号入口（仍归平台管理员，#59） |
-| 小程序 | 扫码改调 `POST /api/devices/resolve`，再进设备详情；不再调 `bind`；详情按 `granted_tanks`/服务端过滤结果展示；无授权设备提示联系客户管理员；`410 bind_removed` 与 `404 device_not_found` 都不是账号失效 | 服务端是权限边界，客户端不得靠隐藏 |
+| 后台 admin | 员工详情页：按设备列出可分配罐（`/devices/:device/tanks`）与已授权（`GET …/tank-grants`），整组保存（`PUT`）；处理 `409 tanks_unknown/invalid_tank` | 仅平台管理员可见该页面与调用；客户管理员无授权入口，不提供创建/改员工账号入口（同归平台管理员，#59） |
+| 小程序 | 扫码改调 `POST /api/devices/resolve`，再进设备详情；不再调 `bind`；详情按 `granted_tanks`/服务端过滤结果展示；无授权设备提示联系平台管理员；`410 bind_removed` 与 `404 device_not_found` 都不是账号失效 | 服务端是权限边界，客户端不得靠隐藏 |
 | 安卓 | 无变化；不新增线协议字段 | |
 
 ## 8. 待确认项
@@ -110,6 +110,7 @@
 
 ## 9. 版本记录
 
+- v1.1（2026-10-14）：授权读写改为仅平台管理员（产品决定），客户管理员 `GET`/`PUT` tank-grants 一律 403；此前文本写作“客户管理员”，已更正。
 - v1.0（2026-10-14）：初稿，云端已实现；基于 `08c0524` 之上的未提交改动。§2 命令历史/审计措辞澄清为“发起 403、列表 200 空”（小程序提问），接口不变。
 
 ## 设备小程序码（#63 补充）

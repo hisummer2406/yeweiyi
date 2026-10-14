@@ -123,7 +123,7 @@
 ## 6. 授权与扫码（#63 已落地，契约见 [tank-grants-contract.md](tank-grants-contract.md)）
 
 - 【需求】设备码只是标识，不是授权凭证；换机**不复制**授权，B 没有任何旧授权。
-- 【需求】扫码只导航；员工只能看已分配的 `device_name+罐号`；客户管理员只分配罐，不创建/修改员工账号。
+- 【需求】扫码只导航；员工只能看已分配的 `device_name+罐号`；分配罐与创建/修改员工账号都只归平台管理员，客户管理员无此权限。
 - 【现状】授权为罐粒度（`user_tank_grants`）：`POST /api/devices/resolve` 只定位；`POST /api/devices/bind` 已停用（`410 bind_removed`）；
   员工只读。换机后：员工对 B 为 `403 not authorized for this device`，B 不在其设备列表，油站在员工的油站列表里也不再出现
   （旧设备已不在该站、新设备无授权）；管理员在 B 上报罐后用 `PUT /api/users/:id/tank-grants/:device` 重新分配。

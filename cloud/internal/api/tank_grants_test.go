@@ -17,8 +17,9 @@ import (
 	"yeweiyi-cloud/internal/devicesim"
 )
 
-// cloud#63: an employee (customer_user) sees only the (device, tank) pairs a customer administrator
-// granted. These run against real PostgreSQL and a real ThingsBoard with a simulated 3-tank device,
+// cloud#63: an employee (customer_user) sees only the (device, tank) pairs a
+// platform administrator
+// granted (platform administrator only). These run against real PostgreSQL and a real ThingsBoard with a simulated 3-tank device,
 // and read every path an employee could use: lists, latest, history, alarms, stock, WebSocket.
 
 type grantEnv struct {
@@ -28,6 +29,7 @@ type grantEnv struct {
 	cust     int64
 	admin    string
 	adminID  int64
+	platform string // platform administrator: the only role that writes grants
 	emp      string
 	empID    int64
 	otherCus int64
@@ -53,6 +55,7 @@ func newGrantEnv(t *testing.T) *grantEnv {
 
 	g := &grantEnv{env: env, device: device, token: token, cust: env.defaultCustomerID()}
 	g.admin, g.adminID = env.userIn(control.RoleCustomerAdmin, g.cust)
+	g.platform, _ = env.userIn(control.RolePlatformAdmin, 0)
 	g.emp, g.empID = env.userIn(control.RoleCustomerUser, g.cust)
 	g.otherCus = env.newCustomer("other")
 
@@ -164,7 +167,7 @@ func TestTankGrants_EmployeeSeesOnlyGrantedTanks(t *testing.T) {
 		t.Fatalf("employee without grants lists the device: %d %s", code, body)
 	}
 
-	if code, body := g.set(t, g.admin, g.empID, d, 1); code != http.StatusOK || !strings.Contains(body, `"changed":true`) {
+	if code, body := g.set(t, g.platform, g.empID, d, 1); code != http.StatusOK || !strings.Contains(body, `"changed":true`) {
 		t.Fatalf("grant tank 1: %d %s", code, body)
 	}
 
@@ -247,7 +250,7 @@ func TestTankGrants_EmployeeSeesOnlyGrantedTanks(t *testing.T) {
 	}
 
 	// Revocation takes effect on the next request.
-	if code, body := g.set(t, g.admin, g.empID, d); code != http.StatusOK {
+	if code, body := g.set(t, g.platform, g.empID, d); code != http.StatusOK {
 		t.Fatalf("revoke: %d %s", code, body)
 	}
 	if code, _ := g.call(t, "GET", "/api/devices/"+d+"/telemetry/latest", g.emp, nil); code != http.StatusForbidden {
@@ -260,7 +263,7 @@ func TestTankGrants_EmployeeSeesOnlyGrantedTanks(t *testing.T) {
 
 func TestTankGrants_WebSocketOnlyCarriesGrantedTanks(t *testing.T) {
 	g := newGrantEnv(t)
-	if code, body := g.set(t, g.admin, g.empID, g.device, 1); code != http.StatusOK {
+	if code, body := g.set(t, g.platform, g.empID, g.device, 1); code != http.StatusOK {
 		t.Fatalf("grant: %d %s", code, body)
 	}
 	srv := httptest.NewServer(g.env.router)
@@ -315,23 +318,30 @@ func TestTankGrants_Authority(t *testing.T) {
 	g := newGrantEnv(t)
 	d := g.device
 	otherAdmin, _ := g.env.userIn(control.RoleCustomerAdmin, g.otherCus)
-	otherEmp, otherEmpID := g.env.userIn(control.RoleCustomerUser, g.otherCus)
-	_ = otherEmp
+	_, otherEmpID := g.env.userIn(control.RoleCustomerUser, g.otherCus)
 
-	// Employees cannot grant (role, 403 — the account-level answer).
-	if code, body := g.set(t, g.emp, g.empID, d, 1); code != http.StatusForbidden || !strings.Contains(body, "not authorized") {
-		t.Errorf("employee granting: %d %s, want 403 not authorized", code, body)
+	// Only a platform administrator writes grants. Every customer-side caller gets the role-level
+	// 403, whatever they name, and nothing is written.
+	for name, tok := range map[string]string{"employee": g.emp, "own customer admin": g.admin, "foreign customer admin": otherAdmin} {
+		if code, body := g.set(t, tok, g.empID, d, 1); code != http.StatusForbidden || !strings.Contains(body, "not authorized") {
+			t.Errorf("%s granting: %d %s, want 403 not authorized", name, code, body)
+		}
+		if code, _ := g.call(t, "GET", fmt.Sprintf("/api/users/%d/tank-grants", g.empID), tok, nil); code != http.StatusForbidden {
+			t.Errorf("%s listing grants: %d, want 403", name, code)
+		}
 	}
-	// Another customer's administrator: the employee and the device look missing (404, never the bare 403).
-	if code, body := g.set(t, otherAdmin, g.empID, d, 1); code != http.StatusNotFound || strings.Contains(body, `"not authorized"`) {
-		t.Errorf("foreign admin: %d %s, want 404", code, body)
+	var denied int
+	g.env.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM audit_log WHERE action = 'tank.grants.set' AND outcome = 'denied' AND actor_id = $1`, g.adminID).Scan(&denied)
+	if denied == 0 {
+		t.Errorf("a refused customer admin left no denied audit row")
 	}
-	// Own customer's employee but another customer's device: refused without saying whether it exists.
-	if code, _ := g.set(t, g.admin, otherEmpID, d, 1); code != http.StatusNotFound {
-		t.Errorf("admin granting another customer's employee: %d, want 404", code)
+	// An employee of another customer than the device: a mismatch, never a grant.
+	if code, body := g.set(t, g.platform, otherEmpID, d, 1); code != http.StatusConflict || !strings.Contains(body, "device_customer_mismatch") {
+		t.Errorf("cross-customer grant: %d %s, want 409 device_customer_mismatch", code, body)
 	}
 	// An administrator is not a grant target.
-	if code, body := g.set(t, g.admin, g.adminID, d, 1); code != http.StatusConflict || !strings.Contains(body, "grant_not_applicable") {
+	if code, body := g.set(t, g.platform, g.adminID, d, 1); code != http.StatusConflict || !strings.Contains(body, "grant_not_applicable") {
 		t.Errorf("granting an administrator: %d %s, want 409 grant_not_applicable", code, body)
 	}
 	// Tank numbers the client invents are refused; missing key is a client bug, not "revoke all".
@@ -343,7 +353,7 @@ func TestTankGrants_Authority(t *testing.T) {
 		"not a list":  {"tanks": "1"},
 		"null":        {"tanks": nil},
 	} {
-		code, resp := g.call(t, "PUT", fmt.Sprintf("/api/users/%d/tank-grants/%s", g.empID, d), g.admin, body)
+		code, resp := g.call(t, "PUT", fmt.Sprintf("/api/users/%d/tank-grants/%s", g.empID, d), g.platform, body)
 		if code != http.StatusBadRequest {
 			t.Errorf("%s: %d %s, want 400", name, code, resp)
 		}
@@ -354,14 +364,14 @@ func TestTankGrants_Authority(t *testing.T) {
 		t.Errorf("a refused request created %d grants", n)
 	}
 
-	// Idempotent, and a platform admin can do it too.
-	if code, body := g.set(t, g.admin, g.empID, d, 1, 2); code != http.StatusOK || !strings.Contains(body, `"changed":true`) {
+	// Idempotent.
+	if code, body := g.set(t, g.platform, g.empID, d, 1, 2); code != http.StatusOK || !strings.Contains(body, `"changed":true`) {
 		t.Fatalf("grant: %d %s", code, body)
 	}
-	if code, body := g.set(t, g.admin, g.empID, d, 2, 1); code != http.StatusOK || !strings.Contains(body, `"changed":false`) {
+	if code, body := g.set(t, g.platform, g.empID, d, 2, 1); code != http.StatusOK || !strings.Contains(body, `"changed":false`) {
 		t.Errorf("repeat: %d %s, want changed=false", code, body)
 	}
-	if code, body := g.call(t, "GET", fmt.Sprintf("/api/users/%d/tank-grants", g.empID), g.admin, nil); code != http.StatusOK ||
+	if code, body := g.call(t, "GET", fmt.Sprintf("/api/users/%d/tank-grants", g.empID), g.platform, nil); code != http.StatusOK ||
 		!strings.Contains(body, `"tanks":[1,2]`) {
 		t.Errorf("list: %d %s", code, body)
 	}
@@ -384,7 +394,7 @@ func TestTankGrants_Authority(t *testing.T) {
 			if i%2 == 1 {
 				set = []int{3}
 			}
-			codes[i], _ = g.set(t, g.admin, g.empID, d, set...)
+			codes[i], _ = g.set(t, g.platform, g.empID, d, set...)
 		}(i)
 	}
 	wg.Wait()
@@ -420,7 +430,7 @@ func TestTankGrants_Authority(t *testing.T) {
 func TestTankGrants_ReplacementDeviceInheritsNothing(t *testing.T) {
 	g := newGrantEnv(t)
 	ctx := context.Background()
-	if code, body := g.set(t, g.admin, g.empID, g.device, 1, 2); code != http.StatusOK {
+	if code, body := g.set(t, g.platform, g.empID, g.device, 1, 2); code != http.StatusOK {
 		t.Fatalf("grant on A: %d %s", code, body)
 	}
 	newDev := fmt.Sprintf("tank-grant-b-%d", time.Now().UnixNano())
@@ -464,10 +474,10 @@ func TestTankGrants_ReplacementDeviceInheritsNothing(t *testing.T) {
 		t.Errorf("employee lists the new device: %d %s", code, body)
 	}
 	// Re-assignment before the new device has reported any tank is refused: no invented tanks.
-	if code, body := g.set(t, g.admin, g.empID, newDev, 1); code != http.StatusConflict && code != http.StatusNotFound && code != http.StatusServiceUnavailable {
+	if code, body := g.set(t, g.platform, g.empID, newDev, 1); code != http.StatusConflict && code != http.StatusNotFound && code != http.StatusServiceUnavailable {
 		t.Errorf("grant on a device that never reported: %d %s, want a refusal", code, body)
 	}
-	if code, body := g.set(t, g.admin, g.empID, newDev, 1); code == http.StatusOK {
+	if code, body := g.set(t, g.platform, g.empID, newDev, 1); code == http.StatusOK {
 		t.Errorf("grant on a never-reported device succeeded: %s", body)
 	}
 }

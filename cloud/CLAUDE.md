@@ -62,7 +62,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `(device_name, 罐号)` 获得**只读**查看权，存于 `user_tank_grants`；管理员（客户/平台）看其范围内全部罐。
   **扫码只定位**：`POST /api/devices/resolve`（`{"code":...}`，精确匹配优先再 `pairing.codePrefixes`，只在调用者客户内，
   只返回调用者本来就能定位的设备，其余一律同一 `404 device_not_found`，不写任何东西）。`POST /api/devices/bind` 已停用，
-  恒 `410 bind_removed`，不论请求体（含配对密钥）都不写库；`/api/devices/unbind` 保留为无副作用空操作。授权只由客户管理员
+  恒 `410 bind_removed`，不论请求体（含配对密钥）都不写库；`/api/devices/unbind` 保留为无副作用空操作。授权只由**平台管理员**（客户管理员无此权限，一律 403；2026-10-14 产品决定）
   经 `PUT /api/users/:id/tank-grants/:device`（`{"tanks":[...]}` 整组替换，幂等）写入；罐号必须是设备已上报的罐
   （`GET /api/devices/:device/tanks`），客户端不能自造。旧 `user_devices` 不转换、不再被任何判定引用。员工**只读**：
   不能发任何命令，不读命令历史与审计；整机级记录（无罐号/tank=0）、无法解析的出入库原文只对管理员可见。授权每次读库，

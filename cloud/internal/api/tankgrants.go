@@ -18,7 +18,7 @@ import (
 )
 
 // Tank-level viewing authorization (cloud#63). An employee (customer_user) sees a tank only when a
-// customer administrator granted (device_name, tank) to them; administrators see every tank of the
+// platform administrator granted (device_name, tank) to them (a customer administrator cannot); administrators see every tank of the
 // devices in their scope. The decision is the SQL function user_may_access_tank, read from the
 // database on every request — never from the token — and every read path below applies it:
 //
@@ -161,12 +161,12 @@ type deviceGrantRow struct {
 	Tanks      []int  `json:"tanks"`
 }
 
-// loadGrantTarget resolves :id for the grant endpoints. A grant target is an employee of a customer
-// the caller manages. A platform admin gets the real reason; a customer admin gets the same 404 for
-// "missing" and "another customer's" so the endpoint is not a user oracle (#54: never the bare 403).
+// loadGrantTarget resolves :id for the grant endpoints. Only a platform administrator manages grants
+// (product decision 2026-10-14): a customer administrator is refused by role, with the account-level
+// 403 and a `denied` audit row, before the body or the target is looked at.
 func loadGrantTarget(c *gin.Context, deps Deps, actor db.User, action string) (db.User, bool) {
-	if actor.Role != control.RolePlatformAdmin && actor.Role != control.RoleCustomerAdmin {
-		refuse(c, deps, actor, action, "not an administrator", nil)
+	if actor.Role != control.RolePlatformAdmin {
+		refuse(c, deps, actor, action, "only a platform administrator manages tank grants", nil)
 		return db.User{}, false
 	}
 	id, ok := parseIDParam(c)
@@ -176,21 +176,10 @@ func loadGrantTarget(c *gin.Context, deps Deps, actor db.User, action string) (d
 	target, err := deps.Queries.GetUserByID(c.Request.Context(), id)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
-		if actor.Role == control.RolePlatformAdmin {
-			apiError(c, http.StatusNotFound, "user_not_found", "user not found")
-		} else {
-			refuseObjectCode(c, deps, actor, action, "no such user for this caller", map[string]any{"userId": id},
-				http.StatusNotFound, "user not found", "user_not_found")
-		}
+		apiError(c, http.StatusNotFound, "user_not_found", "user not found")
 		return db.User{}, false
 	case err != nil:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return db.User{}, false
-	}
-	if actor.Role == control.RoleCustomerAdmin &&
-		(!target.CustomerID.Valid || !actor.CustomerID.Valid || target.CustomerID.Int64 != actor.CustomerID.Int64) {
-		refuseObjectCode(c, deps, actor, action, "no such user for this caller", map[string]any{"userId": id},
-			http.StatusNotFound, "user not found", "user_not_found")
 		return db.User{}, false
 	}
 	if target.Role != control.RoleCustomerUser {
@@ -279,21 +268,10 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		// The device must be one the actor manages and the employee's own customer's: authorize before
-		// existence, and answer a customer admin the same for "missing" and "another customer's".
-		allowed, err := deps.Queries.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{UserID: actor.ID, DeviceName: device})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		// The actor is a platform administrator, so existence is not an oracle here.
 		dev, derr := deps.Queries.GetDevice(ctx, device)
-		if !allowed || errors.Is(derr, pgx.ErrNoRows) {
-			if actor.Role == control.RolePlatformAdmin {
-				apiError(c, http.StatusNotFound, "device_not_found", "device not found")
-			} else {
-				refuseObjectCode(c, deps, actor, "tank.grants.set", "no such device for this caller", map[string]any{"device": device},
-					http.StatusNotFound, "device not found", "device_not_found")
-			}
+		if errors.Is(derr, pgx.ErrNoRows) {
+			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
 			return
 		}
 		if derr != nil {
@@ -365,7 +343,7 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 				return err
 			}
 			if tNow.Role != control.RoleCustomerUser || !tNow.CustomerID.Valid || !dNow.CustomerID.Valid ||
-				tNow.CustomerID.Int64 != dNow.CustomerID.Int64 || !mayManageCustomer(actor, tNow.CustomerID.Int64) {
+				tNow.CustomerID.Int64 != dNow.CustomerID.Int64 || actor.Role != control.RolePlatformAdmin {
 				denied = true
 				return nil
 			}

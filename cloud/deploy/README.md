@@ -605,8 +605,8 @@ GROUP BY station_id HAVING count(*) > 1;
 迁移 `000024_tank_grants` 新增 `user_tank_grants` 并改写 `user_may_access_device`，**不转换**旧的 `user_devices` 绑定。
 升级后：
 
-- 客户普通用户（员工）在被客户管理员明确分配油罐之前看不到任何设备——这是有意的（旧设备级绑定不能当作"全部油罐"的放行依据）。
-  升级窗口内请通知客户管理员用 `PUT /api/users/:id/tank-grants/:device` 重新分配（罐号来自 `GET /api/devices/:device/tanks`，
+- 客户普通用户（员工）在被平台管理员明确分配油罐之前看不到任何设备——这是有意的（旧设备级绑定不能当作"全部油罐"的放行依据）。
+  升级窗口内请由平台管理员用 `PUT /api/users/:id/tank-grants/:device` 重新分配（罐号来自 `GET /api/devices/:device/tanks`，
   设备需已上报）。
 - `POST /api/devices/bind` 恒返回 `410 bind_removed`；扫码改用 `POST /api/devices/resolve`（只定位，不授权）。旧版小程序
   在升级后扫码会收到 410，需同步发布新版。
