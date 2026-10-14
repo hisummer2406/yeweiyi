@@ -5,7 +5,7 @@ import { roleFromToken } from '../../utils/auth';
 import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
-import { loginUrlForScene, sceneFromQuery, setActiveScene } from '../../utils/sceneEntry';
+import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
 import { formatLocalTime, roundFields } from '../../utils/format';
 import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
 import {
@@ -126,6 +126,9 @@ const RANGE_HINTS: Record<Exclude<RangeProblem, ''>, string> = {
   future: '开始日期不能晚于今天',
 };
 
+const INVALID_ENTRY_NOTICE = '入口无效，请重新扫描设备小程序码，或从首页进入设备。';
+const RETRY_HINT = '下拉可重试。';
+
 Page({
   data: {
     device: '',
@@ -182,6 +185,9 @@ Page({
   // the device is still in this user's scope.
   stationId: undefined as number | null | undefined,
   associationBusy: false,
+  // Set while the entry has not yet produced a device (see retryEntry). `scene` is the code to locate.
+  entryPending: null as 'scene' | 'station' | null,
+  scene: '',
   commandsPollTimer: null as ReturnType<typeof setTimeout> | null,
   // Set from the `direction` query param when arriving from the 我的记录 page's 出库/入库 entries
   // (device-detail itself only has one combined 出入库记录 tab; those two rows are the same tab
@@ -219,10 +225,23 @@ Page({
     wx.setNavigationBarTitle({ title: device || '设备详情' });
     // Opened from a device mini-program code: the scene is the device's printed code, not yet a device
     // name. Locate it first; nothing is queried until the cloud has answered.
-    const scene = device ? null : sceneFromQuery(query);
-    if (scene) {
-      setActiveScene(scene);
-      this.enterByScene(scene);
+    const entry = classifyEntry(query);
+    if (entry.kind === 'scene') {
+      this.scene = entry.scene;
+      this.entryPending = 'scene';
+      setActiveScene(entry.scene);
+      this.enterByScene(entry.scene);
+      return;
+    }
+    if (entry.kind === 'invalid') {
+      this.setData({ deviceActive: false, notice: INVALID_ENTRY_NOTICE });
+      return;
+    }
+    if (entry.kind === 'station') {
+      // The device name on the query is only what the home list showed a moment ago: the station may
+      // have been replaced since. Decide first, then query and subscribe.
+      this.entryPending = 'station';
+      this.enterByStation();
       return;
     }
     this.loadTabIfNeeded(tab);
@@ -231,25 +250,70 @@ Page({
     this.refreshAssociation();
   },
 
+  // Entry that has not produced a device yet (scene not located, station not decided): run it again.
+  // Used by pull-down and by coming back to the page. No-op once the entry resolved.
+  retryEntry(): Promise<unknown> {
+    // Not signed in: the login redirect from onLoad is already under way; do not start a second one.
+    if (this.entryPending === 'scene' && this.scene && getToken()) return this.enterByScene(this.scene);
+    if (this.entryPending === 'station') return this.enterByStation();
+    return Promise.resolve();
+  },
+
   // Mini-program-code entry. Not signed in → login first (it brings the user back here with the same
   // scene). Signed in → POST /api/devices/resolve, then show that device exactly like any other
-  // entry; a failure is shown as a notice here, never as a dead session.
-  enterByScene(scene: string) {
+  // entry; a failure is shown as a notice here, never as a dead session, and the scene is kept so a
+  // pull-down locates it again.
+  enterByScene(scene: string): Promise<unknown> {
     if (!getToken()) {
       wx.reLaunch({ url: loginUrlForScene(scene) });
-      return;
+      return Promise.resolve();
     }
+    if (this.associationBusy) return Promise.resolve();
+    this.associationBusy = true;
     this.setData({ deviceActive: false, notice: '', loading: true });
     const gen = this.deviceGen;
-    resolveDevice(scene)
+    return resolveDevice(scene)
       .then((deviceName) => {
         if (gen !== this.deviceGen) return;
+        this.entryPending = null;
         this.setData({ loading: false });
         this.switchDevice(deviceName, '');
       })
       .catch((err: Error) => {
         if (gen !== this.deviceGen) return;
-        this.setData({ loading: false, deviceActive: false, notice: describeResolveError(err) });
+        this.setData({ loading: false, deviceActive: false, notice: `${describeResolveError(err)} ${RETRY_HINT}` });
+      })
+      .finally(() => {
+        this.associationBusy = false;
+      });
+  },
+
+  // Station entry: GET /api/devices decides which device the station shows before any request or socket
+  // is started. A failed read shows a notice and keeps nothing on screen (the passed device name may be
+  // the replaced one); pull-down reads again.
+  enterByStation(): Promise<unknown> {
+    if (this.associationBusy) return Promise.resolve();
+    this.associationBusy = true;
+    this.setData({ deviceActive: false, notice: '', loading: true });
+    const gen = this.deviceGen;
+    const device = this.data.device as string;
+    return get<{ rows: Device[] }>('/api/devices')
+      .then((res) => {
+        if (gen !== this.deviceGen) return;
+        this.entryPending = null;
+        const decision = followStationDevice(res.rows, device, this.stationId);
+        if (decision.kind === 'none') {
+          this.switchDevice('', FOLLOW_NOTICES[decision.reason]);
+        } else {
+          this.switchDevice(decision.kind === 'switch' ? decision.device : device, '');
+        }
+      })
+      .catch((err: Error) => {
+        if (gen !== this.deviceGen) return;
+        this.setData({ loading: false, deviceActive: false, notice: `${err.message || '获取设备信息失败'} ${RETRY_HINT}` });
+      })
+      .finally(() => {
+        this.associationBusy = false;
       });
   },
 
@@ -275,6 +339,7 @@ Page({
   // §3.3: no read-by-station endpoint, only station_id on the device rows). Called on open, on show,
   // on pull-down and after a "not authorized for this device" answer.
   refreshAssociation(): Promise<unknown> {
+    if (this.entryPending) return this.retryEntry();
     if (this.associationBusy) return Promise.resolve();
     // Nothing shown and no station to follow (a scene still being located, or its locate failed): the
     // notice on screen is the answer, and 'device-gone' must not overwrite it.

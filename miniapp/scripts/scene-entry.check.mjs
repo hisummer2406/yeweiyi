@@ -1,6 +1,6 @@
 // Run with: npm run check   (node --experimental-strip-types; pure logic only, no wx)
 import assert from 'node:assert/strict';
-import { detailUrlForScene, loginUrlForScene, loginUrlForSession, sceneFromQuery, setActiveScene } from '../miniprogram/utils/sceneEntry.ts';
+import { classifyEntry, detailUrlForScene, loginUrlForScene, loginUrlForSession, sceneFromQuery, setActiveScene } from '../miniprogram/utils/sceneEntry.ts';
 
 let n = 0;
 const test = (name, fn) => {
@@ -36,6 +36,19 @@ test('a session that dies while a scene page is open returns there; otherwise pl
   assert.equal(loginUrlForSession(), '/pages/login/login?scene=ZCT000001');
   setActiveScene(null);
   assert.equal(loginUrlForSession(), '/pages/login/login');
+});
+
+test('entry kind: scene, station, plain device, invalid', () => {
+  assert.deepEqual(classifyEntry({ scene: 'ZCT000001' }), { kind: 'scene', scene: 'ZCT000001' });
+  assert.deepEqual(classifyEntry({ device: 'ZCT000001', station: '12' }), { kind: 'station', device: 'ZCT000001', stationId: 12 });
+  assert.deepEqual(classifyEntry({ device: 'ZCT000001' }), { kind: 'device', device: 'ZCT000001' });
+  assert.deepEqual(classifyEntry({ device: 'ZCT000001', station: 'none' }), { kind: 'device', device: 'ZCT000001' });
+});
+
+test('no device and no usable scene is invalid, never an empty device', () => {
+  for (const q of [undefined, {}, { device: '' }, { scene: '' }, { scene: 'a b' }, { scene: '%E0%A4%A' }, { station: '12' }]) {
+    assert.deepEqual(classifyEntry(q), { kind: 'invalid' }, JSON.stringify(q));
+  }
 });
 
 console.log(`${n} passed`);

@@ -44,3 +44,29 @@ export function setActiveScene(scene: string | null): void {
 export function loginUrlForSession(): string {
   return activeScene ? loginUrlForScene(activeScene) : LOGIN;
 }
+
+// How the device page was opened, decided from its launch query alone:
+//  - scene: a mini-program code; the device must be located first (POST /api/devices/resolve);
+//  - station: opened from a station on the home page; the station's current device must be decided
+//    (GET /api/devices) before anything is asked for or subscribed to the device name that was passed;
+//  - device: opened by device name alone (我的记录), an independent view of that device;
+//  - invalid: neither a device nor a usable scene. Nothing may be queried or subscribed — an empty
+//    device name would open /ws/alarms?device= and reconnect forever.
+export type EntryKind =
+  | { kind: 'scene'; scene: string }
+  | { kind: 'station'; device: string; stationId: number }
+  | { kind: 'device'; device: string }
+  | { kind: 'invalid' };
+
+export function classifyEntry(query: Record<string, string | undefined> | undefined): EntryKind {
+  const device = typeof query?.device === 'string' ? query.device : '';
+  if (!device) {
+    const scene = sceneFromQuery(query);
+    return scene ? { kind: 'scene', scene } : { kind: 'invalid' };
+  }
+  // Same reading as stationDevice.stationIdFromKey: a numeric id is a station; 'none'/absent is not.
+  const station = query?.station;
+  return typeof station === 'string' && /^\d+$/.test(station)
+    ? { kind: 'station', device, stationId: Number(station) }
+    : { kind: 'device', device };
+}

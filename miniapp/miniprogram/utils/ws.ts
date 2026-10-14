@@ -26,6 +26,8 @@ export class AlarmSocket {
   }
 
   connect(): void {
+    // No device, no socket: `?device=` would be refused and retried with backoff forever.
+    if (!this.device) return;
     this.closedByCaller = false;
     const token = getToken();
     const url = `${WS_BASE_URL}/ws/alarms?device=${encodeURIComponent(this.device)}&token=${encodeURIComponent(token)}`;
