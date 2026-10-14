@@ -9,6 +9,7 @@ import (
 	"yeweiyi-cloud/internal/wechat"
 
 	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/store/db"
 )
 
 // Customer onboarding (cloud#60). The fixture customer is seeded active; each test flips it to
@@ -213,5 +214,37 @@ func TestOnboarding_WeChatEntrancesRefusedWhileConfiguring(t *testing.T) {
 	fx.openids["R2"] = "openid-onb"
 	if code, body := env.wxPost("/api/auth/wechat/login", map[string]any{"loginCode": "R2"}); code != http.StatusOK {
 		t.Errorf("restore after onboarding: %d %v", code, body)
+	}
+}
+
+// The list query is an independent copy of the device-access rule. A caller that reaches it without
+// the HTTP middleware (anything internal) must get the same answer as user_may_access_device: nothing
+// for a configuring customer's admin or employee, everything again once it is active.
+func TestOnboarding_DeviceListAgreesWithAccessFunction(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := db.New(tn.env.pool)
+	list := func(userID int64) int {
+		rows, err := q.ListDevicesForUser(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListDevicesForUser: %v", err)
+		}
+		return len(rows)
+	}
+	if list(tn.adminAID) == 0 {
+		t.Fatalf("fixture: customer A's admin sees no device while the customer is active")
+	}
+	tn.setOnboarding(t, tn.custA, "configuring")
+	for name, id := range map[string]int64{"admin": tn.adminAID, "employee": tn.userAID} {
+		if n := list(id); n != 0 {
+			t.Errorf("%s of a configuring customer lists %d devices, want 0", name, n)
+		}
+	}
+	if list(tn.platformID) == 0 {
+		t.Errorf("a platform administrator must keep listing devices of a configuring customer")
+	}
+	tn.setOnboarding(t, tn.custA, "active")
+	if list(tn.adminAID) == 0 {
+		t.Errorf("after completion the admin lists nothing")
 	}
 }

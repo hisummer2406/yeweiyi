@@ -122,7 +122,7 @@ func shortCodeCandidates(code string, prefixes []string) []string {
 func bindDeviceHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.JSON(http.StatusGone, gin.H{
-			"error": "device binding was removed: scanning only locates a device and grants nothing; ask a customer administrator to assign tanks",
+			"error": "device binding was removed: scanning only locates a device and grants nothing; ask a platform administrator to assign tanks",
 			"code":  "bind_removed",
 		})
 	}

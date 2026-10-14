@@ -320,26 +320,32 @@ func (q *Queries) MarkRecordBackfill(ctx context.Context, deviceName string) err
 
 const summarizeStockRejects = `-- name: SummarizeStockRejects :one
 SELECT
-    COUNT(*) FILTER (WHERE reason = 'invalid_source')::INT AS invalid_source,
-    COUNT(*) FILTER (WHERE reason = 'unparsable' AND $1::BIGINT > 0
-                       AND env_ts < $1::BIGINT)::INT AS legacy,
-    COUNT(*) FILTER (WHERE reason = 'unparsable' AND NOT ($1::BIGINT > 0
-                       AND env_ts < $1::BIGINT))::INT AS unparsable,
+    COUNT(*) FILTER (WHERE reason = 'invalid_source' AND user_may_access_tank(
+        $1, $2,
+        -- 嵌套 CASE 保证只对 invalid_source（必为合法 JSON）做 jsonb 转换，unparsable 原文不会触发转换错误
+        CASE WHEN reason = 'invalid_source' THEN
+            CASE WHEN (raw::jsonb)->>'tank' ~ '^[0-9]{1,3}$' THEN ((raw::jsonb)->>'tank')::INT ELSE 0 END
+        ELSE 0 END))::INT AS invalid_source,
+    COUNT(*) FILTER (WHERE reason = 'unparsable' AND $3::BIGINT > 0
+                       AND env_ts < $3::BIGINT)::INT AS legacy,
+    COUNT(*) FILTER (WHERE reason = 'unparsable' AND NOT ($3::BIGINT > 0
+                       AND env_ts < $3::BIGINT))::INT AS unparsable,
     COALESCE((SELECT r.raw FROM record_rejects r
               WHERE r.kind = 'stock' AND r.device_name = $2 AND r.reason = 'unparsable'
-                AND r.env_ts >= $3 AND r.env_ts < $4
-                AND NOT ($1::BIGINT > 0 AND r.env_ts < $1::BIGINT)
+                AND r.env_ts >= $4 AND r.env_ts < $5
+                AND NOT ($3::BIGINT > 0 AND r.env_ts < $3::BIGINT)
                 AND r.customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
               ORDER BY r.env_ts ASC, r.id ASC LIMIT 1), '')::TEXT AS sample
 FROM record_rejects
 WHERE kind = 'stock' AND device_name = $2
-  AND env_ts >= $3 AND env_ts < $4
+  AND env_ts >= $4 AND env_ts < $5
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
 `
 
 type SummarizeStockRejectsParams struct {
-	CutoffMs   int64  `json:"cutoff_ms"`
+	UserID     int64  `json:"user_id"`
 	DeviceName string `json:"device_name"`
+	CutoffMs   int64  `json:"cutoff_ms"`
 	BeginMs    int64  `json:"begin_ms"`
 	EndMs      int64  `json:"end_ms"`
 }
@@ -353,10 +359,14 @@ type SummarizeStockRejectsRow struct {
 
 // 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 // 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
+// invalid_source 是合法 JSON，能识别罐号：只计入调用者可见的罐（user_may_access_tank，整机级无罐号
+// 记录只对管理员可见），否则员工能借计数得知未授权罐有被拒记录（#63）。unparsable 无法归属到罐，
+// 作为整机格式故障照常计数。
 func (q *Queries) SummarizeStockRejects(ctx context.Context, arg SummarizeStockRejectsParams) (SummarizeStockRejectsRow, error) {
 	row := q.db.QueryRow(ctx, summarizeStockRejects,
-		arg.CutoffMs,
+		arg.UserID,
 		arg.DeviceName,
+		arg.CutoffMs,
 		arg.BeginMs,
 		arg.EndMs,
 	)

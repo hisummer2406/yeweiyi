@@ -78,6 +78,7 @@ JOIN users u ON u.id = $1 AND u.disabled_at IS NULL
 WHERE u.role = 'platform_admin'
    OR (
        d.customer_id = u.customer_id
+       AND EXISTS (SELECT 1 FROM customers c WHERE c.id = u.customer_id AND c.onboarding_status = 'active')
        AND (
            u.role = 'customer_admin'
            OR EXISTS (
@@ -91,6 +92,9 @@ ORDER BY d.device_name
 
 // Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on
 // which they hold at least one tank grant (cloud#63); the tanks themselves are listed separately.
+// A customer still being configured (cloud#60) lists nothing for its non-platform accounts, exactly
+// as user_may_access_device answers, so the list and the decision agree even for a caller that does
+// not go through the HTTP middleware.
 func (q *Queries) ListDevicesForUser(ctx context.Context, id int64) ([]Device, error) {
 	rows, err := q.db.Query(ctx, listDevicesForUser, id)
 	if err != nil {

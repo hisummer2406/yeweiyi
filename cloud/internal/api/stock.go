@@ -263,6 +263,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		// of the movements above: the payload is not decodable, so there is no close time to use.
 		summary, err := deps.Queries.SummarizeStockRejects(ctx, db.SummarizeStockRejectsParams{
 			DeviceName: p.device, BeginMs: begin.Time.UnixMilli(), EndMs: end.Time.UnixMilli(), CutoffMs: cutoffMs,
+			UserID: c.MustGet("userID").(int64),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

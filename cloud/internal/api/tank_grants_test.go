@@ -239,6 +239,37 @@ func TestTankGrants_EmployeeSeesOnlyGrantedTanks(t *testing.T) {
 		t.Errorf("limit=1 employee alarms = %v, want al-t1 (limit applies after the tank filter)", got)
 	}
 
+	// Rejected records are counted per tank too: an invalid_source reject for tank 2 must not raise the
+	// counter an employee granted only tank 1 sees. A garbled (unparsable) record has no tank and is
+	// still reported as a device-wide format fault.
+	rejTS := time.Now().Add(-time.Hour).UnixMilli()
+	for i, raw := range []string{`{"eventId":"rj-t2","tank":2,"source":"BOGUS"}`, `{"eventId":"rj-none","source":"BOGUS"}`} {
+		if _, err := g.env.pool.Exec(context.Background(), `
+			INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw, customer_id)
+			VALUES ('stock', $1, $2, 'invalid_source', $3, $4)`, d, rejTS+int64(i), raw, g.cust); err != nil {
+			t.Fatalf("seed reject: %v", err)
+		}
+	}
+	invalid := func(token string) int {
+		code, body := g.call(t, "GET", "/api/oil-in-out?device="+d+stockWindow, token, nil)
+		if code != http.StatusOK {
+			t.Fatalf("oil-in-out: %d %s", code, body)
+		}
+		var v struct {
+			InvalidSource int `json:"invalidSource"`
+		}
+		if err := json.Unmarshal([]byte(body), &v); err != nil {
+			t.Fatalf("decode %q: %v", body, err)
+		}
+		return v.InvalidSource
+	}
+	if n := invalid(g.emp); n != 0 {
+		t.Errorf("employee (tank 1 only) invalidSource = %d, want 0: the rejects are tank 2 and whole-device", n)
+	}
+	if n := invalid(g.admin); n != 2 {
+		t.Errorf("admin invalidSource = %d, want 2", n)
+	}
+
 	// Commands and the audit trail are whole-device: not shown, not allowed.
 	// (Issuing is refused by role in internal/control — TestIssue_CustomerUserCannotIssueAnyCommand —
 	// and this environment has no command service wired, so only the read side is checked here.)

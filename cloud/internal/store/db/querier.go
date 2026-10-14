@@ -163,6 +163,9 @@ type Querier interface {
 	ListCustomers(ctx context.Context) ([]Customer, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on
 	// which they hold at least one tank grant (cloud#63); the tanks themselves are listed separately.
+	// A customer still being configured (cloud#60) lists nothing for its non-platform accounts, exactly
+	// as user_may_access_device answers, so the list and the decision agree even for a caller that does
+	// not go through the HTTP middleware.
 	ListDevicesForUser(ctx context.Context, id int64) ([]Device, error)
 	// INTERNAL: no authorization and no customer scoping — only ingest's command reconcile may call it.
 	// One row per device that still has a command a result could close, with the oldest such command's
@@ -268,6 +271,9 @@ type Querier interface {
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
+	// invalid_source 是合法 JSON，能识别罐号：只计入调用者可见的罐（user_may_access_tank，整机级无罐号
+	// 记录只对管理员可见），否则员工能借计数得知未授权罐有被拒记录（#63）。unparsable 无法归属到罐，
+	// 作为整机格式故障照常计数。
 	SummarizeStockRejects(ctx context.Context, arg SummarizeStockRejectsParams) (SummarizeStockRejectsRow, error)
 	// 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
 	// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
