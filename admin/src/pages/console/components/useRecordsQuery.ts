@@ -29,7 +29,9 @@ export type RecordsQueryState<T> = {
  * - 没有 device 就不请求；
  * - 默认窗口每次请求按当前时间重新计算（滚动的最近 24 小时），用户选了范围就固定不动；
  * - 请求序号：device/窗口变了、重复刷新、卸载之后，迟到的旧响应一律丢弃；
- * - device 或窗口变化时清掉旧数据（别把上一台设备的记录挂在新设备下面），后台刷新则保留旧数据不闪。
+ * - device 或窗口变化时清掉旧数据（别把上一台设备的记录挂在新设备下面），后台刷新则保留旧数据不闪；
+ * - 状态记下它属于哪台设备（owner）：device 变了的那一帧（effect 还没来得及清）也不对外暴露旧设备的
+ *   数据、错误，而是表现为「正在加载」，不会短暂地把 A 的记录挂在 B 下面。
  */
 export function useRecordsQuery<T>(
   fetcher: (q: API.RecordsQuery) => Promise<T>,
@@ -42,6 +44,7 @@ export function useRecordsQuery<T>(
   const [error, setError] = useState<unknown>();
   const [range, setRange] = useState<RecordsWindow>();
   const [version, setVersion] = useState(0);
+  const [owner, setOwner] = useState(device);
   const seq = useRef(0);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
@@ -49,6 +52,7 @@ export function useRecordsQuery<T>(
   const run = useCallback(
     async (fresh: boolean) => {
       const mine = ++seq.current;
+      setOwner(device);
       if (!device) {
         setData(undefined);
         setError(undefined);
@@ -95,11 +99,13 @@ export function useRecordsQuery<T>(
   const reload = useCallback(() => void run(false), [run]);
   const setWindow = useCallback((r?: RecordsWindow) => setRange(r), []);
 
+  // 状态属于另一台设备（换设备后的第一帧）：当作还没加载，等 effect 清空并发起新请求
+  const current = owner === device;
   return {
-    data,
-    loading,
-    refreshing,
-    error,
+    data: current ? data : undefined,
+    loading: current ? loading : !!device,
+    refreshing: current ? refreshing : false,
+    error: current ? error : undefined,
     reload,
     range,
     setRange: setWindow,

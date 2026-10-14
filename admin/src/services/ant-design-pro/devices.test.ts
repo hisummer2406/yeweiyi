@@ -11,7 +11,8 @@ const forwardAuthFailure = vi.fn(
 vi.mock('@umijs/max', () => ({ request }));
 vi.mock('@/requestErrorConfig', () => ({ forwardAuthFailure }));
 
-const { listDevices, registerDevice, assignDeviceCustomer } = await import(
+const { listDevices, registerDevice, assignDeviceCustomer, getDeviceMiniCode } =
+  await import(
   './devices'
 );
 const { ApiError } = await import('./apiError');
@@ -199,6 +200,42 @@ describe('assignDeviceCustomer', () => {
     request.mockRejectedValue(httpError(401));
     const err = await assignDeviceCustomer('X', 1).catch((e) => e);
     expect(forwardAuthFailure).toHaveBeenCalledTimes(1);
+    expect(err.authHandled).toBe(true);
+  });
+});
+
+describe('getDeviceMiniCode', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('GETs the escaped path as a blob without the global error handler', async () => {
+    const blob = new Blob(['x'], { type: 'image/png' });
+    request.mockResolvedValue(blob);
+    await expect(getDeviceMiniCode('000123')).resolves.toBe(blob);
+    expect(request).toHaveBeenCalledWith('/api/devices/000123/mini-code', {
+      method: 'GET',
+      responseType: 'blob',
+      skipErrorHandler: true,
+    });
+  });
+
+  it('decodes the blob error body so code is available', async () => {
+    request.mockRejectedValue(
+      httpError(
+        503,
+        new Blob([JSON.stringify({ error: 'x', code: 'wechat_unavailable' })]),
+      ),
+    );
+    const err = await getDeviceMiniCode('D').catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(503);
+    expect(err.code).toBe('wechat_unavailable');
+  });
+
+  it('a 403 not authorized (blob body) is forwarded as account invalid', async () => {
+    request.mockRejectedValue(
+      httpError(403, new Blob([JSON.stringify({ error: 'not authorized' })])),
+    );
+    const err = await getDeviceMiniCode('D').catch((e) => e);
     expect(err.authHandled).toBe(true);
   });
 });

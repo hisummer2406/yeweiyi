@@ -7,7 +7,8 @@
 结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
 路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
 
-- 只对接 `POST /api/login`（`{username,password}` → `{token}`，失败为 HTTP 状态码 + `{error}`）。
+- 只对接 `POST /api/login`（`{username,password}` 或 `{phone,password}`，**恰好给一个** → `{token, user}`，失败为 HTTP 状态码 + `{error, code?}`；
+  见下方「手机号账号」）。
   后端**没有** `/api/currentUser`、登出、刷新 token 接口。
 - 当前用户（`API.CurrentUser = {userId, username, access}`）由 `src/utils/auth.ts` 解码 JWT claims
   （`uid`/`sub`/`role`/`exp`）得到，**不验签、仅用于菜单显隐**；真正鉴权在后端每次读库。角色/停用变更
@@ -52,9 +53,25 @@
   `customer_id` 需要云端 `feat/device-list-customer-id` 分支（PR 合并前，管理后台的「所属客户」列会显示「未知」）。
 
 **客户管理（页面现位于 `/console/assets/customers`，原 `/ops/customers`）、`/ops/users` 已接**（未走 OpenSpec）：客户管理是列表、新建、重命名、删除（真删除不可恢复，云端只允许删没有账号/设备/历史的客户，否则 409；名为
-`default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码、
+`default` 的内置客户不能改名也不能删，界面不给这两个操作）；账号管理是列表、新建、重置密码（仅有密码的账号）、
 换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
 和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
+
+**手机号账号（GitHub issue #13，云端 yeweiyi-cloud#59，契约 `docs/account-phone-wechat-contract.md`）**：
+
+- 客户侧账号（`customer_admin`/`customer_user`）以**手机号**标识，没有用户名；平台管理员仍是用户名。登录框一个输入，
+  `src/utils/loginIdentifier.ts` 按内容决定发 `phone` 还是 `username`（云端不替你猜，两个都发或都不发是 400）。
+- **令牌 `sub` 现在是用户 ID，不是用户名**。显示标签来自登录响应的 `user`（`setProfile`，按 `userId` 核对，换账号不串），
+  旧令牌里的用户名只是兜底；取不到时界面显示空串/`#id`，不要再从 `sub` 取名字。
+- **员工（`customer_user`）没有网页后台**：`access.canConsole` 只给两种管理员，`getCurrentUser` 遇到员工令牌（小程序登录得来的、
+  或旧本地状态）会清掉并回登录页，登录页拿到员工 `user` 也不保存令牌。这只是界面边界，云端对管理接口的角色校验才是安全边界，
+  员工的业务 REST 仍对小程序开放，别因此在云端或这里封禁。
+- **账号只有平台管理员能创建/停用/启用/重置密码**（云端对客户管理员一律 403）。创建表单按角色出字段：平台管理员=用户名+密码；
+  客户管理员=手机号+密码+客户；员工=手机号+客户，**没有密码框，请求体也不带 `password`**（带了 400 `password_not_allowed`），
+  员工行没有"重置密码"（云端 409 `no_password_for_role`）。`buildCreateUserParams` 按角色挑字段，别让残留表单值漏进请求。
+- 云端新接口带机器码 `code`（`phone_exists` 等），`ApiError.code` 承载；`describeUserError` 先按 code 再按状态码。
+  重复手机号的提示不说明在哪个客户。客户管理员列员工（给油罐分配选人，#17/cloud#63）手机号是脱敏的；#17 的油罐分配本批未做。
+- 微信登录与客户开通（#60）、油罐授权（#63）不在本仓库这一批；网页只走手机号/用户名 + 密码，离线可用。
 
 **`/console` 只读页已接**（OpenSpec 变更 `console-readonly-records-and-detail`）：设备详情
 （`/console/devices/:deviceName`，页签 实时数据/报警/出入库，`?tab=snapshot|alarms|stock`）、报警记录、入库/出库
@@ -96,6 +113,43 @@
   `GET /api/stations` 对三种角色都能调（客户用户只看到自己设备所在的油站）。没有油站、请求失败（旧版云端 404）、或设备行都没有
   `station_id` 时不出现筛选和分段。总览选「全部油站」时按油站分段，筛选只改渲染，不重取遥测；`DevicePicker` 的筛选只缩小设备候选，
   `?device=` 的可见性仍按完整列表判断，换油站不清已选设备。平台管理员下油站标签追加客户名（跨客户可能重名）。
+
+**油站与大屏一对一、换机（GitHub issue #15，云端 yeweiyi-cloud#61，契约 `docs/station-device-replacement-contract.md` v1.3，
+云端仓库内、SHA256 `bb1cb5ba…fdfc93`（v1.3），基准 cloud `08c0524`；云端已实现；后台已对隔离测试实例做 API 级联调，并用真实 Chrome 对生产构建做过 UI 级验收，见 `docs/handoffs/station-device-replacement.md`）**：这条**更正了 #6 的"一站多设备"假设**——
+一个油站同一时刻至多一台大屏，一台大屏只属于一个油站；一台大屏下有多个罐，按「设备码 + 罐号」定位；换大屏用**新设备码**，
+从新设备重新采集，不迁移/合并/接续旧设备历史，不删旧设备记录，不自动复制旧设备的用户授权。
+
+- 错误按 `ApiError.code` 分支，不按 `error` 文案；`403 not authorized` 仍只表示账号失效。`ApiError` 带 `occupiedBy` /
+  `currentDeviceName`（冲突响应附带）。契约新增的码：`station_occupied`、`station_device_changed`、`device_in_other_station`、
+  `device_customer_mismatch`、`device_without_customer`；v1.1 起 404 带 `station_not_found` / `device_not_found`（对客户管理员，
+  别客户的与不存在的完全相同），换机 400 带 `invalid_request` / `same_device`。没有 code（旧版云端）时退回合并提示。
+- 展示：契约**不给** `GET /api/stations` 加设备字段（Q4），油站页「当前大屏」列由 `GET /api/devices` 的 `station_id` 推导
+  （`src/utils/stationOccupancy.ts`）：一台显示编码、零台「未安装」、多台是历史冲突数据（迁移后不应再出现），标「异常」并给出数量，
+  **不聚合、不挑一台**；设备列表取不到或旧版云端不带 `station_id` 时显示「未知」。
+- 分配：`PUT /api/devices/:device/station`。`AssignStationModal` 把已被**别的设备**占用的油站禁用并标出占用者（预提示，列表可能过期）；
+  云端 `409 station_occupied` 才是裁决，文案带 `occupiedBy`；400/404/409 之后**关闭弹窗并刷新**。普通分配不会顶替旧设备。
+- 换机：设备页行内「换机」（只对 `station_id` 是数字的行，即旧设备）调用 `POST /api/stations/:id/replace-device`
+  （`{deviceName, expectedCurrentDeviceName}`，后者必填，传页面看到的旧设备码；空油站传显式 `null`）。云端事务化，没有半成品，
+  所以前端**没有**两步编排。新设备必须已按完整出厂编码**独立登记**（未登记 → 404），弹窗候选只列同客户、未分配油站的已登记设备；
+  不提供改旧编码模拟换机的入口。弹窗显示旧/新编码和「新设备重新采集，不接续旧设备历史」，授权不自动复制。`changed:false` 是幂等重试。
+- 监控数据隔离：`useRecordsQuery` 的状态记录归属设备，换设备的那一帧也不暴露旧设备的数据/错误；设备详情页签按设备编号做
+  `key`，路由换设备即整体重建。迟到的旧响应由请求序号丢弃。仓库里没有罐选择、WebSocket 订阅、跨页缓存；以后加了，必须按设备码归属。
+  已停报超保留期的设备可能误报 404（云端既有缺陷 #28），按「无数据」处理，不当错误。
+- **油站入口的监控页自动跟随换机（契约 §8.1）**：带 `?station=N` 打开的设备详情（`/console/devices/:device?station=N`，来源：设备总览的
+  卡片、油站页「查看监控」）用 `useStationCurrentDevice` 每 30 秒刷新 `GET /api/devices`，油站当前设备变成 B 就 `replace` 跳到 B（保留
+  `tab`/`station`），页签按设备编号 key 整体重建，A 的数据/缓存/定时器清掉。记录页的 `DevicePicker` 选定油站时同理：当前设备由 A 变 B 且
+  正在看 A 才自动切，用户手动选了别的不动；多台（历史冲突）或暂无设备不据此切换。不带 `?station=` 的独立入口按设备编码直接看 A，保留。
+  云端不推送换机事件，只能靠轮询得知，所以切换最长有一个轮询周期的延迟。
+- **员工按罐授权（#17，云端契约 `docs/tank-grants-contract.md` v1.0，SHA256 `abb1b1dd…fccdb`，cloud#63）**：「资产管理 → 员工授权」
+  （`/console/assets/staff`，平台管理员与客户管理员）。列出员工（`GET /api/users` 过滤 `customer_user`；客户管理员看本客户员工，手机号脱敏），
+  行内「分配油罐」弹窗按 **油站 → 设备 → 罐** 勾选：罐号来自 `GET /api/devices/:device/tanks`（设备已上报的罐），已授权来自
+  `GET /api/users/:id/tank-grants`，保存是对**单台设备**的整组替换 `PUT /api/users/:id/tank-grants/:device {tanks:[...]}`；空选择 = 撤销，
+  不自动全选；设备从未上报时只能撤销（否则 409 `tanks_unknown`）；授权键是 `(员工, device_name, 罐号)`，没有按油站/整机授权。错误按 `code`
+  （`invalid_tank`/`tanks_unknown`/`device_customer_mismatch`/`grant_not_applicable`/`user_not_found`/`device_not_found`），过期结果刷新可选罐，
+  `user_not_found` 关闭弹窗。设备列表里看不到但仍有授权的设备在「其它设备上的既有授权」下可撤销。本页**不创建/停用/改客户**员工（仍只在 `/ops/users`，平台管理员）。
+  旧 `user_devices` 绑定不转换（P2）：升级后员工在被明确分配前什么都看不到。后台不调 `POST /api/devices/bind`（已停用 410，扫码用 resolve，归小程序）。
+- 没做：客户开通向导（#14，依赖 cloud#60，仓库里还不存在；落地时向导里的设备选择要遵守同一套
+  「已占用不可选」与换机规则）、扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
 `internal/api/router.go`。

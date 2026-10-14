@@ -5,11 +5,13 @@ import { useAccess, useIntl } from '@umijs/max';
 import { Badge, Button, Space } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
-import AssignStationModal from './AssignStationModal';
 import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
+import AssignStationModal from './AssignStationModal';
+import { downloadMiniCode } from './downloadMiniCode';
 import RegisterDeviceModal from './RegisterDeviceModal';
+import ReplaceDeviceModal from './ReplaceDeviceModal';
 import TransferDeviceModal from './TransferDeviceModal';
 
 /**
@@ -34,6 +36,7 @@ const AdminDevices: React.FC = () => {
   const [transferTarget, setTransferTarget] = useState<API.DeviceRow>();
   const [stations, setStations] = useState<API.Station[]>([]);
   const [stationTarget, setStationTarget] = useState<API.DeviceRow>();
+  const [replaceTarget, setReplaceTarget] = useState<API.DeviceRow>();
   // 最近一次加载的行：登记成功提示里的「分配油站」用它取到设备当前的油站（已登记的设备可能已有油站）
   const rowsRef = useRef<API.DeviceRow[]>([]);
 
@@ -108,6 +111,16 @@ const AdminDevices: React.FC = () => {
           {row.customer_id !== null && (
             <a onClick={() => setStationTarget(row)}>
               {t('pages.console.stations.devices.action.assign')}
+            </a>
+          )}
+          {canPlatformAdmin && (
+            <a onClick={() => downloadMiniCode(row.device_name, t)}>
+              {t('pages.console.miniCode.action')}
+            </a>
+          )}
+          {typeof row.station_id === 'number' && (
+            <a onClick={() => setReplaceTarget(row)}>
+              {t('pages.console.stations.devices.action.replace')}
             </a>
           )}
         </Space>
@@ -194,9 +207,17 @@ const AdminDevices: React.FC = () => {
         onClose={() => setTransferTarget(undefined)}
         onDone={() => actionRef.current?.reload()}
       />
+      <ReplaceDeviceModal
+        device={replaceTarget}
+        devices={rowsRef.current}
+        stations={stations}
+        onClose={() => setReplaceTarget(undefined)}
+        onDone={() => actionRef.current?.reload()}
+      />
       <AssignStationModal
         device={stationTarget}
         stations={stations}
+        devices={rowsRef.current}
         onClose={() => setStationTarget(undefined)}
         onDone={() => actionRef.current?.reload()}
       />

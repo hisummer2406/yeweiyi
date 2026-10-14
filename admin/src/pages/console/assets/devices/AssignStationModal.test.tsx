@@ -202,15 +202,16 @@ describe('AssignStationModal', () => {
     );
   });
 
-  it("400 says the station is not the device customer's and keeps the dialog open", async () => {
+  it("400 says the station is not the device customer's, then closes and refreshes the stale list", async () => {
     assignDeviceStation.mockRejectedValue(new ApiError(400, 'x'));
     const onClose = vi.fn();
+    const onDone = vi.fn();
     render(
       <AssignStationModal
         device={device({ station_id: 3 })}
         stations={stations}
         onClose={onClose}
-        onDone={() => {}}
+        onDone={onDone}
       />,
     );
     await screen.findByText('甲站');
@@ -220,7 +221,9 @@ describe('AssignStationModal', () => {
         '该油站不属于设备所属客户，请刷新后重试。',
       ),
     );
-    expect(onClose).not.toHaveBeenCalled();
+    // 过期的页面状态不能让用户在同一份旧选项上反复重试：关弹窗并刷新出真实数据
+    expect(onClose).toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalled();
   });
 
   it('stays silent when the auth failure was already handled', async () => {
@@ -237,5 +240,131 @@ describe('AssignStationModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /确\s*认/ }));
     await waitFor(() => expect(assignDeviceStation).toHaveBeenCalled());
     expect(message.error).not.toHaveBeenCalled();
+  });
+
+  describe('one station : one device', () => {
+    const rows = [
+      device({ device_name: 'D1', station_id: null }),
+      device({ device_name: '000777', station_id: 3 }),
+    ];
+
+    it('disables a station already held by another device and names the occupant', async () => {
+      render(
+        <AssignStationModal
+          device={device()}
+          stations={stations}
+          devices={rows}
+          onClose={() => {}}
+          onDone={() => {}}
+        />,
+      );
+      await openSelect();
+      const opt = await screen.findByText('甲站（已有设备 000777）');
+      expect(
+        opt.closest('.ant-select-item')?.getAttribute('aria-disabled'),
+      ).toBe('true');
+      expect(
+        screen.getByText(zhPages['pages.console.stations.assign.occupiedHint']),
+      ).toBeTruthy();
+      // 点占用项不会选中，也就提交不出覆盖
+      fireEvent.click(opt);
+      fireEvent.click(screen.getByRole('button', { name: /确\s*认/ }));
+      await waitFor(() =>
+        expect(assignDeviceStation).toHaveBeenCalledWith('D1', null),
+      );
+      expect(assignDeviceStation).not.toHaveBeenCalledWith('D1', 3);
+    });
+
+    it("does not treat the device's own station as occupied", async () => {
+      render(
+        <AssignStationModal
+          device={device({ device_name: '000777', station_id: 3 })}
+          stations={stations}
+          devices={rows}
+          onClose={() => {}}
+          onDone={() => {}}
+        />,
+      );
+      expect(await screen.findByText('甲站')).toBeTruthy();
+      expect(screen.queryByText(/已有设备/)).toBeNull();
+    });
+
+    it('a server-side 409 (lost race / occupied) explains, closes and refreshes the list', async () => {
+      assignDeviceStation.mockRejectedValue(
+        new ApiError(409, 'station already has a device'),
+      );
+      const onDone = vi.fn();
+      const onClose = vi.fn();
+      render(
+        <AssignStationModal
+          device={device()}
+          stations={stations}
+          // 页面列表是过期的：本地看这个油站是空的，云端说已被占用
+          devices={[device()]}
+          onClose={onClose}
+          onDone={onDone}
+        />,
+      );
+      await openSelect();
+      fireEvent.click(await screen.findByText('甲站'));
+      fireEvent.click(screen.getByRole('button', { name: /确\s*认/ }));
+      await waitFor(() =>
+        expect(message.error).toHaveBeenCalledWith(
+          zhPages['pages.console.stations.assign.error.conflict'],
+        ),
+      );
+      expect(onClose).toHaveBeenCalled();
+      expect(onDone).toHaveBeenCalled(); // 刷新出真实状态
+      expect(message.success).not.toHaveBeenCalled();
+    });
+
+    it('station_occupied names the device holding the station and refreshes', async () => {
+      assignDeviceStation.mockRejectedValue(
+        new ApiError(409, 'x', false, 'station_occupied', {
+          occupiedBy: '000777',
+        }),
+      );
+      const onDone = vi.fn();
+      render(
+        <AssignStationModal
+          device={device()}
+          stations={stations}
+          devices={[device()]}
+          onClose={() => {}}
+          onDone={onDone}
+        />,
+      );
+      await openSelect();
+      fireEvent.click(await screen.findByText('甲站'));
+      fireEvent.click(screen.getByRole('button', { name: /确\s*认/ }));
+      await waitFor(() =>
+        expect(message.error).toHaveBeenCalledWith(
+          '该油站已被设备 000777 占用，不能直接分配；需要更换请在原设备行使用「换机」。列表已刷新。',
+        ),
+      );
+      expect(onDone).toHaveBeenCalled();
+    });
+
+    it('a failed auth is not reported again (already redirecting to login)', async () => {
+      assignDeviceStation.mockRejectedValue(
+        new ApiError(401, 'unauthorized', true),
+      );
+      const onDone = vi.fn();
+      render(
+        <AssignStationModal
+          device={device()}
+          stations={stations}
+          devices={[device()]}
+          onClose={() => {}}
+          onDone={onDone}
+        />,
+      );
+      await openSelect();
+      fireEvent.click(await screen.findByText('甲站'));
+      fireEvent.click(screen.getByRole('button', { name: /确\s*认/ }));
+      await waitFor(() => expect(assignDeviceStation).toHaveBeenCalled());
+      expect(message.error).not.toHaveBeenCalled();
+      expect(onDone).not.toHaveBeenCalled();
+    });
   });
 });

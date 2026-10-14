@@ -163,6 +163,13 @@ export default [
         path: '/console/assets/devices',
         component: './console/assets/devices',
       },
+      {
+        // 员工按罐授权（#17）：平台管理员与客户管理员；账号本身的管理仍只在 /ops/users
+        name: 'staff',
+        icon: 'team',
+        path: '/console/assets/staff',
+        component: './console/assets/staff',
+      },
     ],
   },
   {

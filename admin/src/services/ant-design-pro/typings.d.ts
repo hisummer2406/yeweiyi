@@ -6,8 +6,10 @@ declare namespace API {
   type Role = 'platform_admin' | 'customer_admin' | 'customer_user';
 
   /**
-   * 从 JWT claims 解码得到（uid / sub / role），仅用于界面可见性，不是授权依据。
+   * 从 JWT claims 解码得到（uid / role），仅用于界面可见性，不是授权依据。
    * access 解码时原样保留；未知角色由 access.ts 判为无权限。
+   * username 只是显示标签：令牌 sub 自 yeweiyi-cloud#59 起是用户 ID，不再是用户名，所以它来自登录响应里的
+   * user（平台管理员=用户名，客户管理员=手机号），旧令牌才会取到 sub 里的用户名；取不到时为空串。
    */
   type CurrentUser = {
     userId: number;
@@ -15,15 +17,32 @@ declare namespace API {
     access: Role;
   };
 
-  /** POST /api/login 请求体 */
+  /**
+   * POST /api/login 请求体：username（平台管理员）与 phone（客户管理员）**恰好给一个**，
+   * 由调用方按输入内容决定（见 utils/loginIdentifier.ts），云端不替你猜。
+   */
   type LoginParams = {
-    username: string;
+    username?: string;
+    phone?: string;
     password: string;
+  };
+
+  /** 登录响应与 GET /api/me 里的用户（cloud docs/account-phone-wechat-contract.md §3.1） */
+  type SessionUser = {
+    id: number;
+    role: Role;
+    customerId: number | null;
+    /** 仅平台管理员有；客户侧账号为 null */
+    username: string | null;
+    /** 本人与平台管理员看到完整号码，其余为 138****0000 */
+    phone: string | null;
+    disabled: boolean;
   };
 
   /** POST /api/login 成功响应 */
   type LoginResult = {
     token: string;
+    user?: SessionUser;
   };
 
   /**
@@ -74,12 +93,43 @@ declare namespace API {
     changed: boolean;
   };
 
+  /** POST /api/stations/:id/replace-device 响应；changed=false 表示新设备本来就是该油站当前设备 */
+  type ReplaceStationDeviceResult = {
+    stationId: number;
+    deviceName: string;
+    previousDeviceName: string | null;
+    changed: boolean;
+  };
+
+  /** GET /api/devices/:device/tanks（tank-grants-contract §4）：设备已上报的罐；reported:false = 从未上报 */
+  type DeviceTanks = {
+    deviceName: string;
+    reported: boolean;
+    tanks: { index: number }[];
+  };
+
+  /** GET /api/users/:id/tank-grants：员工在各设备上被授予的罐 */
+  type UserTankGrants = {
+    userId: number;
+    grants: { deviceName: string; tanks: number[] }[];
+  };
+
+  /** PUT /api/users/:id/tank-grants/:device 响应：changed=false 表示集合未变（幂等） */
+  type SetTankGrantsResult = {
+    userId: number;
+    deviceName: string;
+    tanks: number[];
+    changed: boolean;
+  };
+
   type UserRole = 'platform_admin' | 'customer_admin' | 'customer_user';
 
   /** GET /api/users 的账号（internal/api/admin.go userResponse，不含密码） */
   type AdminUser = {
     id: number;
-    username: string;
+    /** 仅平台管理员有；客户侧账号以手机号标识，此处为 null */
+    username: string | null;
+    phone: string | null;
     role: UserRole;
     customerId: number | null;
     disabled: boolean;
@@ -87,13 +137,21 @@ declare namespace API {
     createdAt: string;
   };
 
-  /** POST /api/users 请求体：platform_admin 不带 customerId，其余角色必填 */
-  type CreateUserParams = {
-    username: string;
-    password: string;
-    role: UserRole;
-    customerId?: number;
-  };
+  /**
+   * POST /api/users 请求体，按角色（cloud 契约 §4.5），只有平台管理员能调：
+   * - platform_admin：username + password，不带 phone / customerId；
+   * - customer_admin：phone + password + customerId，不带 username；
+   * - customer_user（员工）：phone + customerId，**不带 password**（带了 400 password_not_allowed）。
+   */
+  type CreateUserParams =
+    | { role: 'platform_admin'; username: string; password: string }
+    | {
+        role: 'customer_admin';
+        phone: string;
+        password: string;
+        customerId: number;
+      }
+    | { role: 'customer_user'; phone: string; customerId: number };
 
   /** PUT /api/users/:id 请求体：disabled 和 password 至少给一个 */
   type UpdateUserParams = {

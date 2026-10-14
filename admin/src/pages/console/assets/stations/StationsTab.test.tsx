@@ -15,6 +15,7 @@ const createStation = vi.fn();
 const updateStation = vi.fn();
 const deleteStation = vi.fn();
 const listCustomers = vi.fn();
+const listDevices = vi.fn();
 let canPlatformAdmin = false;
 
 vi.mock('@umijs/max', () => ({
@@ -34,6 +35,9 @@ vi.mock('@/services/ant-design-pro/stations', () => ({
   deleteStation,
 }));
 vi.mock('@/services/ant-design-pro/customers', () => ({ listCustomers }));
+const downloadMiniCode = vi.fn();
+vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
+vi.mock('../devices/downloadMiniCode', () => ({ downloadMiniCode }));
 
 const { default: StationsTab } = await import('./StationsTab');
 const { ApiError } = await import('@/services/ant-design-pro/apiError');
@@ -62,6 +66,7 @@ describe('StationsTab', () => {
     vi.clearAllMocks();
     canPlatformAdmin = false;
     listStations.mockResolvedValue(rows);
+    listDevices.mockResolvedValue([]);
     listCustomers.mockResolvedValue([
       { id: 1, name: '客户甲', createdAt: '' },
       { id: 2, name: '客户乙', createdAt: '' },
@@ -223,5 +228,81 @@ describe('StationsTab', () => {
     await waitFor(() => expect(deleteStation).toHaveBeenCalledWith(4));
     await waitFor(() => expect(listStations).toHaveBeenCalledTimes(2));
     expect(message.success).toHaveBeenCalledWith('已删除油站 二号站');
+  });
+
+  describe('current screen column (one station : one device)', () => {
+    const dev = (device_name: string, station_id?: number | null) => ({
+      device_name,
+      station_id,
+      is_online: false,
+      last_online_at: null,
+      last_offline_at: null,
+      updated_at: null,
+    });
+
+    it('shows the single device code with leading zeros, and 未安装 for an empty station', async () => {
+      listDevices.mockResolvedValue([dev('000123', 3), dev('ZCT000002', null)]);
+      render(<StationsTab />);
+      const r1 = await rowOf('一号站');
+      expect(within(r1).getByText('000123')).toBeTruthy();
+      const r2 = await rowOf('二号站');
+      expect(within(r2).getByText('未安装')).toBeTruthy();
+    });
+
+    it('offers a monitoring entry that carries the station only when it has exactly one device', async () => {
+      listDevices.mockResolvedValue([dev('000123', 3)]);
+      render(<StationsTab />);
+      const r1 = await rowOf('一号站');
+      const link = within(r1).getByText('查看监控').closest('a');
+      expect(link?.getAttribute('href')).toBe(
+        '/console/devices/000123?station=3',
+      );
+      const r2 = await rowOf('二号站');
+      expect(within(r2).queryByText('查看监控')).toBeNull();
+    });
+
+    it('offers the mini-program code only to platform admins and only for a single device', async () => {
+      canPlatformAdmin = true;
+      listDevices.mockResolvedValue([dev('000123', 3)]);
+      const { unmount } = render(<StationsTab />);
+      fireEvent.click(within(await rowOf('一号站')).getByText('下载小程序码'));
+      expect(downloadMiniCode).toHaveBeenCalledWith(
+        '000123',
+        expect.any(Function),
+      );
+      expect(
+        within(await rowOf('二号站')).queryByText('下载小程序码'),
+      ).toBeNull();
+      unmount();
+      cleanup();
+      canPlatformAdmin = false;
+      render(<StationsTab />);
+      expect(
+        within(await rowOf('一号站')).queryByText('下载小程序码'),
+      ).toBeNull();
+    });
+
+    it('flags legacy data with several devices on one station instead of aggregating or picking one', async () => {
+      listDevices.mockResolvedValue([dev('A1', 3), dev('A2', 3)]);
+      render(<StationsTab />);
+      const r1 = await rowOf('一号站');
+      expect(within(r1).getByText(/关联了 2 台设备/)).toBeTruthy();
+      expect(within(r1).queryByText('A1')).toBeNull();
+    });
+
+    it('shows 未知 (not 未安装) when the device list failed', async () => {
+      listDevices.mockRejectedValue(new Error('boom'));
+      render(<StationsTab />);
+      const r1 = await rowOf('一号站');
+      expect(within(r1).getByText('未知')).toBeTruthy();
+      expect(within(r1).queryByText('未安装')).toBeNull();
+    });
+
+    it('shows 未知 when an old cloud returns device rows without station_id', async () => {
+      listDevices.mockResolvedValue([dev('A1')]);
+      render(<StationsTab />);
+      const r1 = await rowOf('一号站');
+      expect(within(r1).getByText('未知')).toBeTruthy();
+    });
   });
 });

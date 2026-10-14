@@ -52,3 +52,39 @@ export function describeAssignError(
   if (status === 404) return { id: 'pages.ops.devices.error.notFound' };
   return describeRegisterError(status, error);
 }
+
+/**
+ * 下载小程序码（GET /api/devices/:device/mini-code）：按云端机器码分支，不解析文案。
+ * 404 device_not_found 设备不存在；503 wechat_unavailable 云端未启用微信；502 wechat_upstream_error 微信侧失败。
+ * 恰好 `403 not authorized` 是账号失效，已由 toApiError 转交全局，到不了这里。
+ */
+export function describeMiniCodeError(
+  status: number,
+  code?: string,
+  error?: string,
+): ErrorMessage {
+  switch (code) {
+    case 'device_not_found':
+      return { id: 'pages.console.miniCode.error.notFound' };
+    case 'wechat_unavailable':
+      return { id: 'pages.console.miniCode.error.unavailable' };
+    case 'wechat_upstream_error':
+      return { id: 'pages.console.miniCode.error.upstream' };
+    default:
+  }
+  switch (status) {
+    case 404:
+      return { id: 'pages.console.miniCode.error.notFound' };
+    case 503:
+      return { id: 'pages.console.miniCode.error.unavailable' };
+    case 502:
+      return { id: 'pages.console.miniCode.error.upstream' };
+    case 0:
+      return { id: 'pages.ops.devices.error.network' };
+    default:
+      return {
+        id: 'pages.console.miniCode.error.unknown',
+        detail: error ?? '',
+      };
+  }
+}

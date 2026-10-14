@@ -5,13 +5,20 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
 const getLatestTelemetry = vi.fn();
 const listAlarms = vi.fn();
 const listStockEvents = vi.fn();
+const listDevices = vi.fn();
 
 // 路由相关的 hook 用真实的 react-router，这样「设备名按 URL 解码」「?tab= 同步」都是真实行为
 vi.mock('@umijs/max', async () => {
@@ -22,6 +29,7 @@ vi.mock('@umijs/max', async () => {
   return {
     useParams: rr.useParams,
     useSearchParams: rr.useSearchParams,
+    useNavigate: rr.useNavigate,
     useIntl: () => ({
       formatMessage: (
         { id }: { id: string },
@@ -37,6 +45,7 @@ vi.mock('@umijs/max', async () => {
 vi.mock('@/services/ant-design-pro/telemetry', () => ({ getLatestTelemetry }));
 vi.mock('@/services/ant-design-pro/alarms', () => ({ listAlarms }));
 vi.mock('@/services/ant-design-pro/stock', () => ({ listStockEvents }));
+vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
 
 const { default: ConsoleDeviceDetail } = await import('./index');
 
@@ -94,6 +103,7 @@ beforeEach(() => {
   getLatestTelemetry.mockResolvedValue(telemetry);
   listAlarms.mockResolvedValue({ rows: [], partial: false });
   listStockEvents.mockResolvedValue(emptyStock);
+  listDevices.mockResolvedValue([]);
 });
 afterEach(cleanup);
 
@@ -234,5 +244,93 @@ describe('live data tab states', () => {
     expect(await screen.findByText('实时数据加载失败')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
     expect(await screen.findByText(/1号 92#/)).toBeTruthy();
+  });
+});
+
+describe('switching device in place (e.g. after a screen replacement)', () => {
+  const Nav = () => {
+    const go = useNavigate();
+    return (
+      <button type="button" onClick={() => go('/console/devices/D2')}>
+        go-d2
+      </button>
+    );
+  };
+
+  it("never shows device A's tanks under device B; B with no data says so; A's late reply is dropped", async () => {
+    let resolveA!: (t: API.LatestTelemetry) => void;
+    getLatestTelemetry.mockImplementation((name: string) =>
+      name === 'D1'
+        ? new Promise((r) => {
+            resolveA = r;
+          })
+        : Promise.resolve(null),
+    );
+    render(
+      <MemoryRouter initialEntries={['/console/devices/D1']}>
+        <Nav />
+        <Routes>
+          <Route
+            path="/console/devices/:deviceName"
+            element={<ConsoleDeviceDetail />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledWith('D1'));
+    fireEvent.click(screen.getByText('go-d2'));
+    // 新设备从未上报：明确显示无数据
+    expect(await screen.findByText('该设备还没有上报过数据')).toBeTruthy();
+    expect(getLatestTelemetry).toHaveBeenCalledWith('D2');
+    // 旧设备 A 的响应迟到，不能写进 B 的页面
+    resolveA(telemetry);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByText(/1号 92#/)).toBeNull();
+    expect(screen.getByText('该设备还没有上报过数据')).toBeTruthy();
+  });
+});
+
+describe('station entry (?station=) follows a screen replacement (contract §8.1)', () => {
+  const row = (device_name: string, station_id: number | null) => ({
+    device_name,
+    station_id,
+    is_online: false,
+    last_online_at: null,
+    last_offline_at: null,
+    updated_at: null,
+  });
+
+  it('opened for A but the station now holds B: switches to B, keeps tab/station, never queries A afterwards', async () => {
+    listDevices.mockResolvedValue([row('A', null), row('B', 5)]);
+    getLatestTelemetry.mockImplementation((n: string) =>
+      Promise.resolve(n === 'B' ? null : telemetry),
+    );
+    at('/console/devices/A?station=5&tab=snapshot');
+    await waitFor(() =>
+      expect(screen.getByTestId('where').textContent).toBe(
+        '/console/devices/B?station=5&tab=snapshot',
+      ),
+    );
+    // B 尚无数据：空状态，不显示 A 的罐
+    expect(await screen.findByText('该设备还没有上报过数据')).toBeTruthy();
+    expect(screen.queryByText(/1号 92#/)).toBeNull();
+  });
+
+  it('without ?station= (independent entry for A) it stays on A', async () => {
+    listDevices.mockResolvedValue([row('A', null), row('B', 5)]);
+    at('/console/devices/A');
+    expect(await screen.findByText(/1号 92#/)).toBeTruthy();
+    expect(listDevices).not.toHaveBeenCalled();
+    expect(screen.getByTestId('where').textContent).toBe('/console/devices/A');
+  });
+
+  it('station with several devices (legacy data) or none does not switch', async () => {
+    listDevices.mockResolvedValue([row('A', 5), row('B', 5)]);
+    at('/console/devices/A?station=5');
+    expect(await screen.findByText(/1号 92#/)).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByTestId('where').textContent).toBe(
+      '/console/devices/A?station=5',
+    );
   });
 });

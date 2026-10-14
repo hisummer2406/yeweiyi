@@ -16,6 +16,7 @@ const {
   updateStation,
   deleteStation,
   assignDeviceStation,
+  replaceStationDevice,
 } = await import('./stations');
 const { ApiError } = await import('./apiError');
 
@@ -152,5 +153,86 @@ describe('assignDeviceStation', () => {
     const [, options] = request.mock.calls[0];
     expect(options.data).toStrictEqual({ stationId: null });
     expect('stationId' in options.data).toBe(true);
+  });
+});
+
+describe('replaceStationDevice', () => {
+  it('POSTs the contract body to the station-scoped endpoint, codes kept as strings', async () => {
+    request.mockResolvedValue({
+      stationId: 3,
+      deviceName: 'ZCT000999',
+      previousDeviceName: '000123',
+      changed: true,
+    });
+    const res = await replaceStationDevice(3, {
+      deviceName: 'ZCT000999',
+      expectedCurrentDeviceName: '000123',
+    });
+    expect(res.changed).toBe(true);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith('/api/stations/3/replace-device', {
+      method: 'POST',
+      data: { deviceName: 'ZCT000999', expectedCurrentDeviceName: '000123' },
+      skipErrorHandler: true,
+    });
+  });
+
+  it('sends an explicit null expectedCurrentDeviceName for an empty station (key must exist)', async () => {
+    request.mockResolvedValue({ changed: true });
+    await replaceStationDevice(3, {
+      deviceName: 'B',
+      expectedCurrentDeviceName: null,
+    });
+    expect(request.mock.calls[0][1].data).toEqual({
+      deviceName: 'B',
+      expectedCurrentDeviceName: null,
+    });
+  });
+
+  it('surfaces the machine code and currentDeviceName of a stale-page 409', async () => {
+    request.mockRejectedValue({
+      response: {
+        status: 409,
+        data: {
+          code: 'station_device_changed',
+          error: 'x',
+          currentDeviceName: 'ZCT000777',
+        },
+      },
+    });
+    const err = await replaceStationDevice(3, {
+      deviceName: 'B',
+      expectedCurrentDeviceName: 'A',
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(err.code).toBe('station_device_changed');
+    expect(err.currentDeviceName).toBe('ZCT000777');
+    expect(err.authHandled).toBe(false);
+  });
+
+  it('a 403 not authorized is an account failure, not an object-level refusal', async () => {
+    request.mockRejectedValue({
+      response: { status: 403, data: { error: 'not authorized' } },
+    });
+    const err = await replaceStationDevice(3, {
+      deviceName: 'B',
+      expectedCurrentDeviceName: 'A',
+    }).catch((e) => e);
+    expect(err.authHandled).toBe(true);
+  });
+});
+
+describe('assignDeviceStation conflict details', () => {
+  it('carries code station_occupied and occupiedBy', async () => {
+    request.mockRejectedValue({
+      response: {
+        status: 409,
+        data: { code: 'station_occupied', error: 'x', occupiedBy: '000777' },
+      },
+    });
+    const err = await assignDeviceStation('D1', 3).catch((e) => e);
+    expect(err.code).toBe('station_occupied');
+    expect(err.occupiedBy).toBe('000777');
   });
 });

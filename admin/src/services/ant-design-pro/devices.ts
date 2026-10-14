@@ -67,3 +67,29 @@ export async function assignDeviceCustomer(
     throw toApiError(err);
   }
 }
+
+/**
+ * GET /api/devices/:device/mini-code：设备的小程序码图片（PNG/JPEG，云端按内容判定类型），仅平台管理员
+ * （yeweiyi-cloud docs/tank-grants-contract.md「设备小程序码」）。需要 Authorization 头，所以走 request 取 blob，
+ * 不能用 <img src>。码只是定位入口，不授予任何权限。
+ * 失败时 axios 把 body 也读成 Blob，这里先还原成 JSON，toApiError 才拿得到 `code`/`error`
+ * （403 not authorized 要靠 error 文案判账号失效）。
+ */
+export async function getDeviceMiniCode(deviceName: string): Promise<Blob> {
+  try {
+    return await request<Blob>(
+      `/api/devices/${encodeURIComponent(deviceName)}/mini-code`,
+      { method: 'GET', responseType: 'blob', skipErrorHandler: true },
+    );
+  } catch (err) {
+    const response = (err as { response?: { data?: unknown } })?.response;
+    if (response?.data instanceof Blob) {
+      try {
+        response.data = JSON.parse(await response.data.text());
+      } catch {
+        response.data = undefined;
+      }
+    }
+    throw toApiError(err);
+  }
+}

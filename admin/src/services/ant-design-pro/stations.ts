@@ -97,3 +97,26 @@ export async function assignDeviceStation(
     throw toApiError(err);
   }
 }
+
+/**
+ * POST /api/stations/:id/replace-device：同站换机，云端在一个事务里「解除旧设备、关联新设备」
+ * （yeweiyi-cloud docs/station-device-replacement-contract.md v1.0 §3.2）。
+ * expectedCurrentDeviceName 必填：页面看到的旧设备码，空油站传 null（缺失是 400，防止过期页面盲替）。
+ * 200 `changed:false` 是幂等重试。失败按 ApiError.code 分支：station_device_changed（带 currentDeviceName）、
+ * device_in_other_station、device_customer_mismatch、device_without_customer 均为 409；新设备未登记 404；
+ * 新设备 = 旧设备 400；油站不存在/别的客户的 404；403 not authorized 仍是账号失效（authHandled）。
+ * 油站 id 在路径里；设备码是请求体里的原样字符串（保留前导零）。
+ */
+export async function replaceStationDevice(
+  stationId: number,
+  body: { deviceName: string; expectedCurrentDeviceName: string | null },
+): Promise<API.ReplaceStationDeviceResult> {
+  try {
+    return await request<API.ReplaceStationDeviceResult>(
+      `/api/stations/${stationId}/replace-device`,
+      { method: 'POST', data: body, skipErrorHandler: true },
+    );
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
