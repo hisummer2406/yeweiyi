@@ -143,6 +143,8 @@ export default {
   'pages.ops.customers.form.adminPhone.label': 'Customer admin phone',
   'pages.ops.customers.create.success':
     'Customer "{name}" and its admin were created',
+  'pages.ops.customers.create.carryOn':
+    'Customer {name} was created but a later step failed: {detail}. Continue in the onboarding wizard.',
   'pages.ops.customers.create.partial':
     'Customer "{name}" was created but its admin could not be, and the rollback failed; handle it in the customer list.',
   'pages.ops.customers.form.submit': 'Create',
@@ -456,6 +458,13 @@ export default {
     'The device platform is temporarily unavailable; try again shortly.',
   'pages.console.staff.error.network': 'Network error; please try again.',
   'pages.console.staff.error.unknown': 'Operation failed: {detail}',
+  'pages.console.customerFilter.label': 'Customer',
+  'pages.console.customerFilter.all': 'All customers',
+  'pages.console.records.device.current': 'Current display: {device}',
+  'pages.console.records.station.noDevice':
+    'This station has no display installed',
+  'pages.console.records.station.multiple':
+    'This station has multiple devices (legacy conflict); fix it in Asset management',
   'pages.console.stationFilter.label': 'Station',
   'pages.console.stationFilter.all': 'All stations',
   'pages.console.stationFilter.none': 'Ungrouped',

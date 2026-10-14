@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from '@testing-library/react';
 import { message } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +18,7 @@ const assignDeviceStation = vi.fn();
 const registerDevice = vi.fn();
 const createUser = vi.fn();
 const push = vi.fn();
+const deleteStation = vi.fn();
 
 vi.mock('@umijs/max', () => ({
   history: { push },
@@ -39,6 +39,7 @@ vi.mock('@/services/ant-design-pro/customers', () => ({
 vi.mock('@/services/ant-design-pro/stations', () => ({
   listStations,
   createStation,
+  deleteStation,
   assignDeviceStation,
 }));
 vi.mock('@/services/ant-design-pro/devices', () => ({ registerDevice }));
@@ -81,10 +82,12 @@ describe('CustomerOnboarding wizard', () => {
       { id: 4, customerId: 8, name: '别家站' },
     ]);
     render(<Wizard />);
-    expect(await screen.findByText(/已有 1 个未停用的客户管理员/)).toBeTruthy();
-    expect(screen.getByText(/已有 1 个油站/)).toBeTruthy();
-    const btn = screen.getByRole('button', { name: /完成开通/ });
-    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    // 管理员已建好：不再显示管理员步骤
+    expect(await screen.findByText(/一号站：未装大屏/)).toBeTruthy();
+    expect(screen.queryByText('客户管理员')).toBeNull();
+    // 条件没齐：没有「完成开通」按钮，只有添加油站和大屏（管理员已建，所以按钮是「添加并开通」）
+    expect(screen.queryByRole('button', { name: /完成开通/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /添加并开通/ })).toBeTruthy();
   });
 
   it('completes onboarding when the cloud says complete', async () => {
@@ -105,6 +108,8 @@ describe('CustomerOnboarding wizard', () => {
       expect(completeCustomerOnboarding).toHaveBeenCalledWith(7),
     );
     await waitFor(() => expect(message.success).toHaveBeenCalled());
+    // 开通后回客户列表
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/assets/customers'));
   });
 
   it('409 onboarding_incomplete refreshes progress and names what is missing', async () => {
@@ -162,37 +167,108 @@ describe('CustomerOnboarding wizard', () => {
     ).toBeTruthy();
     // 旧版云端 /api/stations 的 404 不能被当成「客户不存在」
     expect(screen.queryByText('客户不存在，请刷新列表。')).toBeNull();
-    expect(
-      screen.queryByText(
-        zhPages['pages.ops.customers.onboarding.device.noStation'],
-      ),
-    ).toBeNull();
     // 重试后恢复
     listStations.mockResolvedValue([{ id: 3, customerId: 7, name: '一号站' }]);
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
-    expect(await screen.findByText(/已有 1 个油站/)).toBeTruthy();
+    expect(await screen.findByText(/一号站：未装大屏/)).toBeTruthy();
+  });
+
+  const fillAndSubmit = async (station: string, code: string) => {
+    fireEvent.change(await screen.findByRole('textbox', { name: /油站名称/ }), {
+      target: { value: station },
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: /出厂编号/ }), {
+      target: { value: code },
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: /添加油站和大屏|添加并开通/ }),
+    );
+  };
+
+  it('one submit creates the station, registers the device and assigns it', async () => {
+    createStation.mockResolvedValue({ id: 9, customerId: 7, name: '甲站' });
+    registerDevice.mockResolvedValue({
+      kind: 'created',
+      deviceName: 'ZCT000001',
+    });
+    assignDeviceStation.mockResolvedValue(undefined);
+    render(<Wizard />);
+    await fillAndSubmit('甲站', 'ZCT000001');
+    await waitFor(() =>
+      expect(assignDeviceStation).toHaveBeenCalledWith('ZCT000001', 9),
+    );
+    expect(createStation).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: 7, name: '甲站' }),
+    );
+    expect(registerDevice).toHaveBeenCalledWith({
+      deviceName: 'ZCT000001',
+      customerId: 7,
+    });
+  });
+
+  it('rolls the empty station back when device registration fails', async () => {
+    createStation.mockResolvedValue({ id: 9, customerId: 7, name: '甲站' });
+    registerDevice.mockRejectedValue(
+      new ApiError(409, 'device belongs to another customer'),
+    );
+    deleteStation.mockResolvedValue(undefined);
+    render(<Wizard />);
+    await fillAndSubmit('甲站', 'ZCT000001');
+    await waitFor(() => expect(deleteStation).toHaveBeenCalledWith(9));
+    expect(assignDeviceStation).not.toHaveBeenCalled();
+    expect(message.error).toHaveBeenCalled();
   });
 
   it('a failed refresh after loading keeps the page instead of replacing it with an error', async () => {
     render(<Wizard />);
-    await screen.findByRole('button', { name: /完成开通/ });
+    await screen.findByRole('textbox', { name: /油站名称/ });
     createStation.mockResolvedValue({ id: 9, customerId: 7, name: 'X' });
+    registerDevice.mockResolvedValue({
+      kind: 'created',
+      deviceName: 'ZCT000001',
+    });
+    assignDeviceStation.mockResolvedValue(undefined);
     getCustomerOnboarding.mockRejectedValue(new ApiError(500, 'boom'));
-    fireEvent.click(screen.getByRole('button', { name: /新建油站/ }));
-    const name = await screen.findByRole('textbox', { name: /名称/ });
-    fireEvent.change(name, { target: { value: 'X' } });
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', {
-        name: /创\s*建/,
-      }),
-    );
+    await fillAndSubmit('X', 'ZCT000001');
     await waitFor(() => expect(createStation).toHaveBeenCalled());
     await waitFor(() =>
       expect(message.error).toHaveBeenCalledWith(
         zhPages['pages.ops.customers.onboarding.loadFailed'],
       ),
     );
-    expect(screen.getByRole('button', { name: /完成开通/ })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: /油站名称/ })).toBeTruthy();
+  });
+
+  it('opens the customer automatically once the station and device make it complete', async () => {
+    getCustomerOnboarding
+      .mockResolvedValueOnce(
+        progress({
+          missing: ['station', 'device_in_station'],
+          counts: { customerAdmins: 1, stations: 0, devicesInStation: 0 },
+        }),
+      )
+      .mockResolvedValue(
+        progress({
+          complete: true,
+          missing: [],
+          counts: { customerAdmins: 1, stations: 1, devicesInStation: 1 },
+        }),
+      );
+    createStation.mockResolvedValue({ id: 9, customerId: 7, name: '甲站' });
+    registerDevice.mockResolvedValue({
+      kind: 'created',
+      deviceName: 'ZCT000001',
+    });
+    assignDeviceStation.mockResolvedValue(undefined);
+    completeCustomerOnboarding.mockResolvedValue(
+      progress({ status: 'active', complete: true, missing: [] }),
+    );
+    render(<Wizard />);
+    await fillAndSubmit('甲站', 'ZCT000001');
+    await waitFor(() =>
+      expect(completeCustomerOnboarding).toHaveBeenCalledWith(7),
+    );
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/assets/customers'));
   });
 
   it('shows an active customer without the complete button', async () => {

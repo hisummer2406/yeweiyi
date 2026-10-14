@@ -8,7 +8,6 @@ import {
   Input,
   message,
   Result,
-  Select,
   Space,
   Spin,
   Tag,
@@ -30,10 +29,11 @@ import {
   getCustomerOnboarding,
   listCustomers,
 } from '@/services/ant-design-pro/customers';
-import { registerDevice } from '@/services/ant-design-pro/devices';
+import { listDevices, registerDevice } from '@/services/ant-design-pro/devices';
 import {
   assignDeviceStation,
   createStation,
+  deleteStation,
   listStations,
 } from '@/services/ant-design-pro/stations';
 import { createUser } from '@/services/ant-design-pro/users';
@@ -43,7 +43,6 @@ import {
   describeAssignStationError,
   describeStationError,
 } from '../../stations/errors';
-import StationFormModal from '../../stations/StationFormModal';
 import { describeOnboardingError } from '../errors';
 
 const MISSING_ORDER: API.OnboardingMissing[] = [
@@ -68,9 +67,10 @@ const CustomerOnboarding: React.FC = () => {
   const [customer, setCustomer] = useState<API.Customer>();
   const [progress, setProgress] = useState<API.CustomerOnboarding>();
   const [stations, setStations] = useState<API.Station[]>([]);
+  // 油站 id → 已装的大屏编码。一油站一台大屏：已被占用的油站不能再选。取不到时为空（云端 409 仍会兜底）
+  const [occupied, setOccupied] = useState<Map<number, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<'notFound' | 'failed'>();
-  const [stationOpen, setStationOpen] = useState(false);
 
   const fail = (err: unknown, describe: (e?: ApiError) => string) => {
     const apiErr = err instanceof ApiError ? err : undefined;
@@ -85,7 +85,7 @@ const CustomerOnboarding: React.FC = () => {
   > => {
     try {
       let stationsFailed = false;
-      const [p, customers, sts] = await Promise.all([
+      const [p, customers, sts, devs] = await Promise.all([
         getCustomerOnboarding(customerId),
         listCustomers(),
         // 油站是向导的必需数据：取不到不能当成「没有油站」（否则会误导用户重复建站）。
@@ -94,6 +94,9 @@ const CustomerOnboarding: React.FC = () => {
           stationsFailed = true;
           return [] as API.Station[];
         }),
+        Promise.resolve()
+          .then(() => listDevices())
+          .catch(() => [] as API.DeviceRow[]),
       ]);
       if (stationsFailed) {
         if (loaded.current)
@@ -105,6 +108,13 @@ const CustomerOnboarding: React.FC = () => {
       setProgress(p);
       setCustomer(customers.find((c) => c.id === customerId));
       setStations(sts.filter((s) => s.customerId === customerId));
+      const occ = new Map<number, string>();
+      for (const d of devs ?? []) {
+        if (typeof d.station_id === 'number' && !occ.has(d.station_id)) {
+          occ.set(d.station_id, d.device_name);
+        }
+      }
+      setOccupied(occ);
       setLoadError(undefined);
       return p;
     } catch (err) {
@@ -136,6 +146,12 @@ const CustomerOnboarding: React.FC = () => {
   }, [customerId, load]);
 
   const name = customer?.name ?? `#${customerId}`;
+  const { complete, submitting: completing } = useComplete(
+    customerId,
+    name,
+    load,
+    fail,
+  );
   const back = () => history.push('/assets/customers');
 
   if (loading) {
@@ -199,51 +215,41 @@ const CustomerOnboarding: React.FC = () => {
               : 'pages.ops.customers.onboarding.intro',
           )}
         />
-        <AdminStep
-          customerId={customerId}
-          done={!missing.has('customer_admin')}
-          count={progress.counts.customerAdmins}
-          disabled={active}
-          onChanged={load}
-          fail={fail}
-        />
-        <StationStep
-          done={!missing.has('station')}
-          count={progress.counts.stations}
-          disabled={active}
-          onCreate={() => setStationOpen(true)}
-        />
-        <DeviceStep
-          customerId={customerId}
-          done={!missing.has('device_in_station')}
-          count={progress.counts.devicesInStation}
-          stations={stations}
-          disabled={active}
-          onChanged={load}
-          fail={fail}
-        />
-        {!active && (
-          <CompleteButton
+        {/* 新建客户时管理员已一起建好；只有旧数据里缺管理员的客户才需要这一步 */}
+        {missing.has('customer_admin') && (
+          <AdminStep
             customerId={customerId}
-            name={name}
-            enabled={progress.complete}
+            done={!missing.has('customer_admin')}
+            count={progress.counts.customerAdmins}
+            disabled={active}
             onChanged={load}
             fail={fail}
           />
         )}
+        <StationDeviceStep
+          customerId={customerId}
+          done={!missing.has('station') && !missing.has('device_in_station')}
+          count={progress.counts.devicesInStation}
+          stations={stations}
+          occupied={occupied}
+          disabled={active}
+          onChanged={load}
+          adminDone={!missing.has('customer_admin')}
+          onReady={complete}
+          fail={fail}
+        />
+        {/* 一般不用点：添加油站和大屏时条件一满足就自动开通。这个按钮只在条件已齐、但上次开通没成功时出现 */}
+        {!active && progress.complete && (
+          <Button
+            type="primary"
+            size="large"
+            loading={completing}
+            onClick={complete}
+          >
+            {t('pages.ops.customers.onboarding.complete')}
+          </Button>
+        )}
       </Space>
-      <StationFormModal
-        open={stationOpen}
-        title={t('pages.ops.customers.onboarding.station.title', { name })}
-        okText={t('pages.console.stations.form.submit.create')}
-        onSubmit={(v) =>
-          createStation({ customerId, name: v.name, address: v.address })
-        }
-        describeError={describeStationError}
-        successId="pages.console.stations.create.success"
-        onClose={() => setStationOpen(false)}
-        onDone={load}
-      />
     </PageContainer>
   );
 };
@@ -399,67 +405,83 @@ const AdminStep: React.FC<{
   );
 };
 
-const StationStep: React.FC<{
-  done: boolean;
-  count: number;
-  disabled: boolean;
-  onCreate: () => void;
-}> = ({ done, count, disabled, onCreate }) => {
-  const intl = useIntl();
-  const t = (id: string, values?: Record<string, string>) =>
-    intl.formatMessage({ id }, values);
-  return (
-    <StepCard
-      title={t('pages.ops.customers.onboarding.step.station')}
-      done={done}
-    >
-      <Typography.Paragraph type={done ? undefined : 'secondary'}>
-        {done
-          ? t('pages.ops.customers.onboarding.step.station.done', {
-              count: String(count),
-            })
-          : t('pages.ops.customers.onboarding.step.station.hint')}
-      </Typography.Paragraph>
-      {!disabled && (
-        <Button onClick={onCreate}>
-          {t('pages.ops.customers.onboarding.station.create')}
-        </Button>
-      )}
-    </StepCard>
-  );
-};
-
-const DeviceStep: React.FC<{
+/**
+ * 油站与大屏合为一步：一个油站只有一台大屏，所以一次提交 = 新建油站 + 登记设备 + 分配到该油站。
+ * 云端没有一次建三样的接口，这里串起来：设备登记失败就删掉刚建的空油站（回滚）；分配失败时设备已登记，
+ * 提示去设备页重试（油站也留着）。已有的油站和各自的大屏列在下面，可以继续添加下一个。
+ */
+const StationDeviceStep: React.FC<{
   customerId: number;
   done: boolean;
   count: number;
   stations: API.Station[];
+  occupied: Map<number, string>;
   disabled: boolean;
-  onChanged: () => void;
+  onChanged: () => Promise<API.CustomerOnboarding | undefined>;
+  /** 管理员已建：此时添加完油站和大屏就满足开通条件，自动开通 */
+  adminDone: boolean;
+  onReady: () => Promise<void>;
   fail: StepFail;
-}> = ({ customerId, done, count, stations, disabled, onChanged, fail }) => {
+}> = ({
+  customerId,
+  done,
+  count,
+  stations,
+  occupied,
+  disabled,
+  onChanged,
+  adminDone,
+  onReady,
+  fail,
+}) => {
   const intl = useIntl();
   const t = (id: string, values?: Record<string, string>) =>
     intl.formatMessage({ id }, values);
-  const [form] = Form.useForm<{ deviceCode: string; stationId: number }>();
+  const [form] = Form.useForm<{ stationName: string; deviceCode: string }>();
   const [submitting, setSubmitting] = useState(false);
   const busy = useRef(false);
 
-  const submit = async (v: { deviceCode: string; stationId: number }) => {
+  const submit = async (v: { stationName: string; deviceCode: string }) => {
     if (busy.current) return;
     busy.current = true;
     setSubmitting(true);
-    let deviceName = '';
     try {
       // 只收完整出厂编号：短码补前缀属于「需管理员确认」的流程，向导里不做猜测
       const parsed = normalizeDeviceCode(v.deviceCode);
       if (parsed.status !== 'full') return;
-      deviceName = parsed.code;
-      await registerDevice({ deviceName, customerId });
+      const deviceName = parsed.code;
+      const stationName = v.stationName.trim();
+      let station: API.Station;
       try {
-        await assignDeviceStation(deviceName, v.stationId);
+        station = await createStation({ customerId, name: stationName });
       } catch (err) {
-        // 登记已成功、分配失败：设备留在该客户下（未分组），提示用户重试；刷新后进度仍以云端为准
+        fail(err, (e) => {
+          const m = describeStationError(
+            e?.status ?? -1,
+            e?.error ?? (err as Error)?.message,
+          );
+          return t(m.id, { detail: m.detail ?? '' });
+        });
+        return;
+      }
+      try {
+        await registerDevice({ deviceName, customerId });
+      } catch (err) {
+        // 设备登记失败：删掉刚建的空油站，表单保留，用户改完重试
+        await deleteStation(station.id).catch(() => undefined);
+        fail(err, (e) => {
+          const m = describeRegisterError(
+            e?.status ?? -1,
+            e?.error ?? (err as Error)?.message,
+          );
+          return t(m.id, { detail: m.detail ?? '' });
+        });
+        onChanged();
+        return;
+      }
+      try {
+        await assignDeviceStation(deviceName, station.id);
+      } catch (err) {
         fail(err, (e) => {
           const m = describeAssignStationError(
             e?.status ?? -1,
@@ -481,21 +503,13 @@ const DeviceStep: React.FC<{
       message.success(
         t('pages.ops.customers.onboarding.device.success', {
           device: deviceName,
-          station:
-            stations.find((s) => s.id === v.stationId)?.name ??
-            String(v.stationId),
+          station: stationName,
         }),
       );
       form.resetFields();
-      onChanged();
-    } catch (err) {
-      fail(err, (e) => {
-        const m = describeRegisterError(
-          e?.status ?? -1,
-          e?.error ?? (err as Error)?.message,
-        );
-        return t(m.id, { detail: m.detail ?? '' });
-      });
+      const fresh = await onChanged();
+      // 管理员、油站、大屏都齐了就直接开通，不再要用户去点第二个按钮
+      if (fresh?.complete && fresh.status !== 'active') await onReady();
     } finally {
       busy.current = false;
       setSubmitting(false);
@@ -504,91 +518,96 @@ const DeviceStep: React.FC<{
 
   return (
     <StepCard
-      title={t('pages.ops.customers.onboarding.step.device')}
+      title={t('pages.ops.customers.onboarding.step.stationDevice')}
       done={done}
     >
       <Typography.Paragraph type={done ? undefined : 'secondary'}>
         {done
-          ? t('pages.ops.customers.onboarding.step.device.done', {
+          ? t('pages.ops.customers.onboarding.step.stationDevice.done', {
               count: String(count),
             })
-          : t('pages.ops.customers.onboarding.step.device.hint')}
+          : t('pages.ops.customers.onboarding.step.stationDevice.hint')}
       </Typography.Paragraph>
-      {!disabled &&
-        (stations.length === 0 ? (
-          <Typography.Text type="secondary">
-            {t('pages.ops.customers.onboarding.device.noStation')}
-          </Typography.Text>
-        ) : (
-          <Form
-            form={form}
-            layout="vertical"
-            autoComplete="off"
-            onFinish={submit}
-            style={{ maxWidth: 360 }}
+      {stations.length > 0 && (
+        <ul style={{ paddingLeft: 20 }}>
+          {stations.map((s) => (
+            <li key={s.id}>
+              {s.name}
+              {'：'}
+              {occupied.get(s.id) ??
+                t('pages.ops.customers.onboarding.station.noDevice')}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!disabled && (
+        <Form
+          form={form}
+          layout="vertical"
+          autoComplete="off"
+          onFinish={submit}
+          style={{ maxWidth: 360 }}
+        >
+          <Form.Item
+            name="stationName"
+            label={t('pages.ops.customers.onboarding.station.name')}
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: t(
+                  'pages.ops.customers.onboarding.station.name.required',
+                ),
+              },
+            ]}
           >
-            <Form.Item
-              name="deviceCode"
-              label={t('pages.ops.customers.onboarding.device.code')}
-              rules={[
-                {
-                  validator: (_, value?: string) =>
-                    normalizeDeviceCode(value ?? '').status === 'full'
-                      ? Promise.resolve()
-                      : Promise.reject(
-                          new Error(
-                            t(
-                              'pages.ops.customers.onboarding.device.code.invalid',
-                            ),
+            <Input autoComplete="off" />
+          </Form.Item>
+          <Form.Item
+            name="deviceCode"
+            label={t('pages.ops.customers.onboarding.device.code')}
+            rules={[
+              {
+                validator: (_, value?: string) =>
+                  normalizeDeviceCode(value ?? '').status === 'full'
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(
+                          t(
+                            'pages.ops.customers.onboarding.device.code.invalid',
                           ),
                         ),
-                },
-              ]}
-            >
-              <Input
-                autoComplete="off"
-                placeholder={t(
-                  'pages.ops.customers.onboarding.device.code.placeholder',
-                )}
-              />
-            </Form.Item>
-            <Form.Item
-              name="stationId"
-              label={t('pages.ops.customers.onboarding.device.station')}
-              rules={[
-                {
-                  required: true,
-                  message: t(
-                    'pages.ops.customers.onboarding.device.station.required',
-                  ),
-                },
-              ]}
-            >
-              <Select
-                showSearch
-                optionFilterProp="label"
-                options={stations.map((s) => ({
-                  value: s.id,
-                  label: s.name,
-                }))}
-              />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" loading={submitting}>
-              {t('pages.ops.customers.onboarding.device.submit')}
-            </Button>
-          </Form>
-        ))}
+                      ),
+              },
+            ]}
+          >
+            <Input
+              autoComplete="off"
+              placeholder={t(
+                'pages.ops.customers.onboarding.device.code.placeholder',
+              )}
+            />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={submitting}>
+            {t(
+              adminDone
+                ? 'pages.ops.customers.onboarding.stationDevice.submitAndOpen'
+                : 'pages.ops.customers.onboarding.stationDevice.submit',
+            )}
+          </Button>
+        </Form>
+      )}
     </StepCard>
   );
 };
 
-const CompleteButton: React.FC<{
-  customerId: number;
-  name: string;
-  enabled: boolean;
-  onChanged: () => Promise<API.CustomerOnboarding | undefined>;
-  fail: StepFail;
-}> = ({ customerId, name, enabled, onChanged, fail }) => {
+/** 完成开通：成功后回客户列表；409 onboarding_incomplete 时刷新进度并提示缺什么。 */
+function useComplete(
+  customerId: number,
+  name: string,
+  onChanged: () => Promise<API.CustomerOnboarding | undefined>,
+  fail: StepFail,
+) {
   const intl = useIntl();
   const t = (id: string, values?: Record<string, string>) =>
     intl.formatMessage({ id }, values);
@@ -604,7 +623,7 @@ const CompleteButton: React.FC<{
       message.success(
         t('pages.ops.customers.onboarding.complete.success', { name }),
       );
-      onChanged();
+      history.push('/assets/customers');
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
       if (apiErr?.code === 'onboarding_incomplete') {
@@ -630,19 +649,8 @@ const CompleteButton: React.FC<{
       setSubmitting(false);
     }
   };
-
-  return (
-    <Button
-      type="primary"
-      size="large"
-      disabled={!enabled}
-      loading={submitting}
-      onClick={complete}
-    >
-      {t('pages.ops.customers.onboarding.complete')}
-    </Button>
-  );
-};
+  return { complete, submitting };
+}
 
 const missingLabels = (
   missing: API.OnboardingMissing[],

@@ -15,6 +15,11 @@ const createCustomer = vi.fn();
 const renameCustomer = vi.fn();
 const deleteCustomer = vi.fn();
 const createUser = vi.fn();
+const completeCustomerOnboarding = vi.fn();
+const createStation = vi.fn();
+const deleteStation = vi.fn();
+const assignDeviceStation = vi.fn();
+const registerDevice = vi.fn();
 
 const push = vi.fn();
 vi.mock('@umijs/max', () => ({
@@ -32,7 +37,14 @@ vi.mock('@/services/ant-design-pro/customers', () => ({
   createCustomer,
   renameCustomer,
   deleteCustomer,
+  completeCustomerOnboarding,
 }));
+vi.mock('@/services/ant-design-pro/stations', () => ({
+  createStation,
+  deleteStation,
+  assignDeviceStation,
+}));
+vi.mock('@/services/ant-design-pro/devices', () => ({ registerDevice }));
 
 vi.mock('@/services/ant-design-pro/users', () => ({ createUser }));
 
@@ -67,6 +79,12 @@ const fill = (
   fireEvent.change(screen.getByLabelText('初始密码'), {
     target: { value: password },
   });
+  fireEvent.change(screen.getByLabelText('油站名称'), {
+    target: { value: '一号站' },
+  });
+  fireEvent.change(screen.getByLabelText('设备出厂编号'), {
+    target: { value: 'ZCT000001' },
+  });
 };
 const submitCreate = () =>
   fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
@@ -75,6 +93,14 @@ describe('AdminCustomers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     createUser.mockResolvedValue({ id: 10 });
+    createStation.mockResolvedValue({ id: 5, customerId: 2, name: '一号站' });
+    registerDevice.mockResolvedValue({
+      kind: 'created',
+      deviceName: 'ZCT000001',
+    });
+    assignDeviceStation.mockResolvedValue(undefined);
+    completeCustomerOnboarding.mockResolvedValue({ status: 'active' });
+    deleteStation.mockResolvedValue(undefined);
     deleteCustomer.mockResolvedValue(undefined);
     listCustomers.mockResolvedValue(rows);
     vi.spyOn(message, 'success').mockImplementation((() => {}) as never);
@@ -87,7 +113,7 @@ describe('AdminCustomers', () => {
     expect(await screen.findByText('default')).toBeTruthy();
   });
 
-  it('creates a trimmed customer name and opens its onboarding wizard', async () => {
+  it('creates customer, admin, station and device, then completes onboarding in one go', async () => {
     createCustomer.mockResolvedValue({
       id: 2,
       name: 'A 油站',
@@ -109,9 +135,42 @@ describe('AdminCustomers', () => {
       }),
     );
     await waitFor(() =>
+      expect(assignDeviceStation).toHaveBeenCalledWith('ZCT000001', 5),
+    );
+    expect(registerDevice).toHaveBeenCalledWith({
+      deviceName: 'ZCT000001',
+      customerId: 2,
+    });
+    await waitFor(() =>
+      expect(completeCustomerOnboarding).toHaveBeenCalledWith(2),
+    );
+    await waitFor(() => expect(message.success).toHaveBeenCalled());
+    // 一次建完就已开通，不再进向导
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('a device failure removes the empty station and carries on in the wizard', async () => {
+    const warn = vi
+      .spyOn(message, 'warning')
+      .mockImplementation((() => {}) as never);
+    createCustomer.mockResolvedValue({
+      id: 2,
+      name: 'A 油站',
+      createdAt: '',
+      onboardingStatus: 'configuring',
+    });
+    registerDevice.mockRejectedValue(
+      new ApiError(409, 'device belongs to another customer'),
+    );
+    const input = await openModal();
+    fill(input, 'A 油站');
+    submitCreate();
+    await waitFor(() => expect(deleteStation).toHaveBeenCalledWith(5));
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(completeCustomerOnboarding).not.toHaveBeenCalled();
+    await waitFor(() =>
       expect(push).toHaveBeenCalledWith('/assets/customers/2/onboarding'),
     );
-    expect(message.success).toHaveBeenCalled();
   });
 
   it('legacy cloud (no onboardingStatus) does not open the wizard, just reloads the list', async () => {

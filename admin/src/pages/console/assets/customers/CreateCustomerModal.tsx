@@ -12,18 +12,37 @@ import {
 import { buildCreateUserParams } from '@/pages/ops/users/UserModals';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import {
+  completeCustomerOnboarding,
   createCustomer,
   deleteCustomer,
 } from '@/services/ant-design-pro/customers';
+import { registerDevice } from '@/services/ant-design-pro/devices';
+import {
+  assignDeviceStation,
+  createStation,
+  deleteStation,
+} from '@/services/ant-design-pro/stations';
 import { createUser } from '@/services/ant-design-pro/users';
 import {
   CUSTOMER_NAME_MAX,
   customerNameCount,
   customerNameLength,
 } from '@/utils/customerName';
-import { describeCustomerError } from '../devices/errors';
+import { normalizeDeviceCode } from '@/utils/deviceCode';
+import {
+  describeCustomerError,
+  describeRegisterError,
+} from '../devices/errors';
+import { describeStationError } from '../stations/errors';
+import { describeOnboardingError } from './errors';
 
-type Values = { name: string; phone: string; password: string };
+type Values = {
+  name: string;
+  phone: string;
+  password: string;
+  stationName: string;
+  deviceCode: string;
+};
 
 type Props = {
   open: boolean;
@@ -35,9 +54,11 @@ type Props = {
 };
 
 /**
- * 新建客户 = 客户 + 它唯一的客户管理员（一对一）。云端没有「一次建两个」的接口，所以串两次请求：
- * 先建客户，再建管理员；管理员失败（手机号已被占用最常见）就删掉刚建的空客户，弹窗保持打开、
- * 表单保留，改完直接重试，不留下没有管理员的孤儿客户。回滚本身失败才会留下孤儿，此时明确提示。
+ * 新建客户一步到位：客户 + 它唯一的客户管理员 + 第一个油站和它的大屏，建完直接开通。云端没有一次建多样的接口，
+ * 前端依次请求：客户 → 管理员 → 油站 → 登记设备 → 分配油站 → 完成开通。
+ * 管理员失败（手机号已被占用最常见）就删掉刚建的空客户，弹窗保持打开、表单保留，改完直接重试；
+ * 管理员建好后客户已有账号，不能再整体回滚，后面任何一步失败都留下已建好的部分，提示并进开通向导接着做
+ * （进度以云端为准）。其中设备登记失败会先删掉刚建的空油站。更多油站在「资产管理」里加。
  */
 const CreateCustomerModal: React.FC<Props> = ({
   open,
@@ -73,6 +94,14 @@ const CreateCustomerModal: React.FC<Props> = ({
     busy.current = true;
     setSubmitting(true);
     const name = v.name.trim();
+    // 设备编号先在本地校验：只收完整出厂编号，免得客户建好了才发现编号不对
+    const parsed = normalizeDeviceCode(v.deviceCode);
+    if (parsed.status !== 'full') {
+      busy.current = false;
+      setSubmitting(false);
+      return;
+    }
+    const deviceName = parsed.code;
     try {
       let created: API.Customer;
       try {
@@ -103,9 +132,62 @@ const CreateCustomerModal: React.FC<Props> = ({
         }
         return;
       }
+      // 客户和管理员已建好；后面失败不回滚，留给开通向导接着做
+      const carryOn = (detail: string) => {
+        message.warning(
+          t('pages.ops.customers.create.carryOn', { name, detail }),
+        );
+        close();
+        onDone(created);
+      };
+      const describeStep = (
+        err: unknown,
+        describe: typeof describeUserError,
+      ) => {
+        const apiErr = err instanceof ApiError ? err : undefined;
+        const m = describe(
+          apiErr?.status ?? -1,
+          apiErr?.error ?? (err as Error)?.message,
+          apiErr?.code,
+        );
+        return t(m.id, { detail: m.detail ?? '' });
+      };
+      let station: API.Station;
+      try {
+        station = await createStation({
+          customerId: created.id,
+          name: v.stationName.trim(),
+        });
+      } catch (err) {
+        if ((err as ApiError)?.authHandled) return;
+        carryOn(describeStep(err, describeStationError));
+        return;
+      }
+      try {
+        await registerDevice({ deviceName, customerId: created.id });
+      } catch (err) {
+        if ((err as ApiError)?.authHandled) return;
+        await deleteStation(station.id).catch(() => undefined);
+        carryOn(describeStep(err, describeRegisterError));
+        return;
+      }
+      try {
+        await assignDeviceStation(deviceName, station.id);
+      } catch (err) {
+        if ((err as ApiError)?.authHandled) return;
+        carryOn(describeStep(err, describeStationError));
+        return;
+      }
+      try {
+        await completeCustomerOnboarding(created.id);
+      } catch (err) {
+        if ((err as ApiError)?.authHandled) return;
+        carryOn(describeStep(err, describeOnboardingError));
+        return;
+      }
       message.success(t('pages.ops.customers.create.success', { name }));
       close();
-      onDone(created);
+      onDone({ ...created, onboardingStatus: 'active' });
     } finally {
       busy.current = false;
       setSubmitting(false);
@@ -191,6 +273,44 @@ const CreateCustomerModal: React.FC<Props> = ({
           ]}
         >
           <Input.Password autoComplete="new-password" />
+        </Form.Item>
+        <Form.Item
+          name="stationName"
+          label={t('pages.ops.customers.onboarding.station.name')}
+          rules={[
+            {
+              required: true,
+              whitespace: true,
+              message: t(
+                'pages.ops.customers.onboarding.station.name.required',
+              ),
+            },
+          ]}
+        >
+          <Input autoComplete="off" />
+        </Form.Item>
+        <Form.Item
+          name="deviceCode"
+          label={t('pages.ops.customers.onboarding.device.code')}
+          rules={[
+            {
+              validator: (_: unknown, value?: string) =>
+                normalizeDeviceCode(value ?? '').status === 'full'
+                  ? Promise.resolve()
+                  : Promise.reject(
+                      new Error(
+                        t('pages.ops.customers.onboarding.device.code.invalid'),
+                      ),
+                    ),
+            },
+          ]}
+        >
+          <Input
+            autoComplete="off"
+            placeholder={t(
+              'pages.ops.customers.onboarding.device.code.placeholder',
+            )}
+          />
         </Form.Item>
       </Form>
     </Modal>

@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -132,18 +131,20 @@ describe('ConsoleDevices (overview) station filter', () => {
     );
   });
 
-  it('groups the cards by station with the ungrouped section last', async () => {
+  it('titles each card with its station and orders ungrouped last, with no section headings', async () => {
+    listDevices.mockResolvedValue([
+      dev('D-C', null),
+      dev('D-B', 2),
+      dev('D-A', 1),
+    ]);
     render(<ConsoleDevices />);
     await filter();
-    const headings = (await screen.findAllByRole('heading', { level: 5 })).map(
-      (h) => h.textContent,
-    );
-    expect(headings).toEqual(['甲站', '乙站', '未分组']);
-    const sec = screen
-      .getByRole('heading', { name: '甲站' })
-      .closest('section') as HTMLElement;
-    expect(within(sec).getByText('D-A')).toBeTruthy();
-    expect(within(sec).queryByText('D-B')).toBeNull();
+    expect(await screen.findByText('甲站')).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 5 })).toBeNull();
+    const text = document.body.textContent ?? '';
+    expect(text.indexOf('甲站')).toBeLessThan(text.indexOf('乙站'));
+    expect(text.indexOf('乙站')).toBeLessThan(text.indexOf('D-C'));
+    expect(screen.getByText('D-A')).toBeTruthy();
   });
 
   it('filters to one station without sections, and does not re-request telemetry', async () => {
@@ -204,25 +205,22 @@ describe('ConsoleDevices (overview) station filter', () => {
   it('labels a station #id when its device points at one the caller cannot see', async () => {
     listDevices.mockResolvedValue([dev('D-A', 1), dev('D-X', 77)]);
     render(<ConsoleDevices />);
-    const headings = (await screen.findAllByRole('heading', { level: 5 })).map(
-      (h) => h.textContent,
-    );
-    expect(headings).toEqual(['甲站', '#77']);
+    expect(await screen.findByText('#77')).toBeTruthy();
+    expect(screen.getByText('甲站')).toBeTruthy();
   });
 
-  it('appends the customer name to station labels for a platform admin only', async () => {
+  it('appends the customer name to station titles for a platform admin only', async () => {
     canPlatformAdmin = true;
     listCustomers.mockResolvedValue([{ id: 7, name: '客户七', createdAt: '' }]);
     render(<ConsoleDevices />);
-    const headings = (await screen.findAllByRole('heading', { level: 5 })).map(
-      (h) => h.textContent,
-    );
-    expect(headings[0]).toBe('甲站（客户七）');
+    expect(
+      (await screen.findAllByText('甲站（客户七）')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('keeps the plain station name for a customer admin and never asks for customers', async () => {
     render(<ConsoleDevices />);
-    await screen.findAllByRole('heading', { level: 5 });
+    await screen.findByText('甲站');
     expect(listCustomers).not.toHaveBeenCalled();
   });
 });
@@ -286,21 +284,6 @@ describe('ConsoleDevices (overview) paging and request control', () => {
     await waitFor(() => expect(running).toBe(0));
     expect(peak).toBeLessThanOrEqual(5);
     expect(peak).toBeGreaterThan(1);
-  });
-
-  it('never splits a station across pages when sectioned', async () => {
-    listStations.mockResolvedValue([
-      { id: 1, customerId: 7, name: '甲站', address: '', createdAt: '' },
-      { id: 2, customerId: 7, name: '乙站', address: '', createdAt: '' },
-    ]);
-    listDevices.mockResolvedValue(many(16, (i) => (i < 8 ? 1 : 2)));
-    render(<ConsoleDevices />);
-    expect(await screen.findByRole('heading', { name: '甲站' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: '乙站' })).toBeNull();
-    expect(screen.getByText('D008')).toBeTruthy();
-    fireEvent.click(screen.getByTitle('2'));
-    expect(await screen.findByRole('heading', { name: '乙站' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: '甲站' })).toBeNull();
   });
 
   it('returns to page 1 when the station filter changes', async () => {

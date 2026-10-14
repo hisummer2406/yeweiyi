@@ -13,7 +13,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { currentDeviceOf } from '@/utils/stationOccupancy';
 import { REFRESH_MS } from './useRecordsQuery';
-import { StationFilter, useStationFilter } from './useStationFilter';
+import {
+  CustomerFilter,
+  StationFilter,
+  useStationFilter,
+} from './useStationFilter';
 
 type Props = {
   /** 设备可见且已选中时才渲染；记录请求只会在这里发起，保证没选设备就不请求 */
@@ -73,33 +77,57 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
     setParams(next, { replace: true });
   };
 
-  // 选定油站时（油站入口）：该油站的当前设备由 A 变成 B，且正在看的恰是 A，就自动切到 B；
-  // 用户手动选了别的设备则不动。多台（历史冲突数据）或暂无设备不据此切换。
-  const lastCurrent = useRef<
-    { station: number; device?: string | null } | undefined
-  >(undefined);
+  // 一油站一台大屏：选定油站时设备由油站决定（设备下拉隐藏），油站换机后自动跟随（契约 §8.1）。
+  // 多于一台（历史冲突数据）或暂无设备时不择一，给出提示。
   const stationValue = sf.value;
+  const stationDevice =
+    typeof stationValue === 'number' && devices
+      ? currentDeviceOf(devices, stationValue)
+      : undefined;
+  const byStation = typeof stationValue === 'number' && !!devices;
+  const effective = byStation
+    ? typeof stationDevice === 'string'
+      ? stationDevice
+      : undefined
+    : requested;
+
   useEffect(() => {
-    if (typeof stationValue !== 'number' || !devices) {
-      lastCurrent.current = undefined;
+    if (!byStation || typeof stationDevice !== 'string') return;
+    if (requested === stationDevice) return;
+    const next = new URLSearchParams(params);
+    next.set('device', stationDevice);
+    setParams(next, { replace: true });
+  }, [byStation, stationDevice, requested, params, setParams]);
+
+  // 什么都没指定：默认选第一个有设备的油站（没有油站数据时退回第一台候选设备），让记录表格直接出现
+  const firstStation =
+    sf.show && devices
+      ? sf.stations.find(
+          (s) => typeof currentDeviceOf(devices, s.id) === 'string',
+        )
+      : undefined;
+  const firstCandidate = devices?.find((d) => sf.matches(d))?.device_name;
+  useEffect(() => {
+    if (requested || !devices) return;
+    const next = new URLSearchParams(params);
+    if (firstStation && sf.value === 'all') {
+      next.set('station', String(firstStation.id));
+      next.set('device', currentDeviceOf(devices, firstStation.id) as string);
+    } else if (firstCandidate) {
+      next.set('device', firstCandidate);
+    } else {
       return;
     }
-    const cur = currentDeviceOf(devices, stationValue);
-    const prev = lastCurrent.current;
-    lastCurrent.current = { station: stationValue, device: cur };
-    if (
-      prev &&
-      prev.station === stationValue &&
-      typeof prev.device === 'string' &&
-      typeof cur === 'string' &&
-      cur !== prev.device &&
-      requested === prev.device
-    ) {
-      const next = new URLSearchParams(params);
-      next.set('device', cur);
-      setParams(next, { replace: true });
-    }
-  }, [devices, stationValue, requested, params, setParams]);
+    setParams(next, { replace: true });
+  }, [
+    requested,
+    devices,
+    firstStation,
+    firstCandidate,
+    sf.value,
+    params,
+    setParams,
+  ]);
 
   if (loading && !devices) return <Skeleton active />;
   if (failed && !devices) {
@@ -121,10 +149,20 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
   }
 
   const visible =
-    !!requested && !!devices?.some((d) => d.device_name === requested);
+    !!effective && !!devices?.some((d) => d.device_name === effective);
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Space wrap>
+        {sf.customerShow && (
+          <>
+            <span>{t('pages.console.customerFilter.label')}</span>
+            <CustomerFilter
+              value={sf.customerValue}
+              onChange={sf.setCustomer}
+              customers={sf.customers}
+            />
+          </>
+        )}
         {sf.show && (
           <>
             <span>{t('pages.console.stationFilter.label')}</span>
@@ -136,22 +174,45 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
             />
           </>
         )}
-        <span>{t('pages.console.records.device.label')}</span>
-        <Select
-          showSearch
-          style={{ minWidth: 260 }}
-          value={visible ? requested : undefined}
-          placeholder={t('pages.console.records.device.placeholder')}
-          options={(devices ?? [])
-            .filter((d) => d.device_name === requested || sf.matches(d))
-            .map((d) => ({
-              value: d.device_name,
-              label: d.device_name,
-            }))}
-          onChange={select}
-        />
+        {byStation ? (
+          visible && (
+            <Typography.Text type="secondary">
+              {t('pages.console.records.device.current', {
+                device: effective as string,
+              })}
+            </Typography.Text>
+          )
+        ) : (
+          <>
+            <span>{t('pages.console.records.device.label')}</span>
+            <Select
+              showSearch
+              style={{ minWidth: 260 }}
+              value={visible ? requested : undefined}
+              placeholder={t('pages.console.records.device.placeholder')}
+              options={(devices ?? [])
+                .filter((d) => d.device_name === requested || sf.matches(d))
+                .map((d) => ({
+                  value: d.device_name,
+                  label: d.device_name,
+                }))}
+              onChange={select}
+            />
+          </>
+        )}
       </Space>
-      {requested && !visible && (
+      {byStation && typeof stationDevice !== 'string' && (
+        <Alert
+          type="info"
+          showIcon
+          title={t(
+            stationDevice === null
+              ? 'pages.console.records.station.noDevice'
+              : 'pages.console.records.station.multiple',
+          )}
+        />
+      )}
+      {!byStation && requested && !visible && (
         <Alert
           type="warning"
           showIcon
@@ -160,12 +221,12 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
           })}
         />
       )}
-      {!requested && (
+      {!byStation && !requested && (
         <Typography.Text type="secondary">
           {t('pages.console.records.device.pick')}
         </Typography.Text>
       )}
-      {visible && children(requested as string)}
+      {visible && children(effective as string)}
     </Space>
   );
 };

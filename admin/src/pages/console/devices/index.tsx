@@ -23,10 +23,10 @@ import {
   packPages,
   TELEMETRY_CONCURRENCY,
 } from '@/utils/overviewPaging';
-import { sectionByStation } from '@/utils/stationFilter';
 import { fmtTime } from '@/utils/telemetry';
 import TankCard from '../components/TankCard';
 import {
+  CustomerFilter,
   StationFilter,
   useStationFilter,
 } from '../components/useStationFilter';
@@ -147,37 +147,18 @@ const ConsoleDevices: React.FC = () => {
   const sf = useStationFilter(groups?.map((g) => g.device));
   // 筛选只改变渲染：已取到的遥测直接按筛选重新显示，不触发额外请求，轮询逻辑不变
   const shown = (groups ?? []).filter((g) => sf.matches(g.device));
-  const sectioned = sf.show && sf.value === 'all';
-
-  // 分页单位：分段时是整个油站（不拆开），否则是单台设备
-  const sections = sectioned
-    ? sectionByStation(
-        shown.map((g) => ({ ...g, station_id: g.device.station_id })),
-        sf.visibleIds,
-      ).flatMap((sec) => {
-        // 一个分段本身超过一页（如大量未分组设备）时切开，续页重复标题
-        const parts: (typeof sec)[] = [];
-        for (let i = 0; i < sec.items.length; i += OVERVIEW_PAGE_SIZE) {
-          parts.push({
-            key: sec.key,
-            items: sec.items.slice(i, i + OVERVIEW_PAGE_SIZE),
-          });
-        }
-        return parts;
-      })
-    : null;
-  const pages: (Group[] | NonNullable<typeof sections>)[] = sections
-    ? packPages(sections, (s) => s.items.length, OVERVIEW_PAGE_SIZE)
-    : packPages(shown, () => 1, OVERVIEW_PAGE_SIZE);
+  // 一油站一台大屏：每张卡片就是一个油站，不再按油站分段；按油站顺序排列，未分组的在最后
+  const order = (g: Group) => {
+    const i = sf.visibleIds.indexOf(g.device.station_id as number);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const ordered = sf.show
+    ? [...shown].sort((x, y) => order(x) - order(y))
+    : shown;
+  const pages: Group[][] = packPages(ordered, () => 1, OVERVIEW_PAGE_SIZE);
   const pageCount = pages.length;
   const current = Math.min(page, Math.max(pageCount, 1));
-  const pageUnits = pages[current - 1] ?? [];
-  const pageGroups: Group[] = sections
-    ? (pageUnits as NonNullable<typeof sections>).flatMap((s) => s.items)
-    : (pageUnits as Group[]);
-  const pageSections = sections
-    ? (pageUnits as NonNullable<typeof sections>)
-    : null;
+  const pageGroups: Group[] = pages[current - 1] ?? [];
 
   // 换筛选回到第一页；设备减少导致页码越界由 current 兜底
   useEffect(() => {
@@ -221,7 +202,18 @@ const ConsoleDevices: React.FC = () => {
       headerBordered
       title={
         <Space>
-          <Typography.Text strong>{g.device.device_name}</Typography.Text>
+          {typeof g.device.station_id === 'number' ? (
+            <>
+              <Typography.Text strong>
+                {sf.labelOf(g.device.station_id)}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {g.device.device_name}
+              </Typography.Text>
+            </>
+          ) : (
+            <Typography.Text strong>{g.device.device_name}</Typography.Text>
+          )}
           <Badge
             status={g.device.is_online ? 'success' : 'default'}
             text={g.device.is_online ? '在线' : '离线'}
@@ -297,22 +289,7 @@ const ConsoleDevices: React.FC = () => {
         {sf.show && shown.length === 0 && (
           <Empty description="该范围内没有设备" />
         )}
-        {pageSections
-          ? pageSections.map((sec) => (
-              <section key={String(sec.key)}>
-                <Typography.Title level={5}>
-                  {sec.key === 'none' ? '未分组' : sf.labelOf(sec.key)}
-                </Typography.Title>
-                <Space
-                  direction="vertical"
-                  size="large"
-                  style={{ width: '100%' }}
-                >
-                  {sec.items.map(renderGroup)}
-                </Space>
-              </section>
-            ))
-          : pageGroups.map(renderGroup)}
+        {pageGroups.map(renderGroup)}
         {pageCount > 1 && (
           <Pagination
             style={{ textAlign: 'center' }}
@@ -342,15 +319,29 @@ const ConsoleDevices: React.FC = () => {
         </Button>,
       ]}
     >
-      {sf.show && (
-        <Space style={{ marginBottom: 16 }}>
-          <span>油站</span>
-          <StationFilter
-            value={sf.value}
-            onChange={sf.setValue}
-            stations={sf.stations}
-            labelOf={sf.labelOf}
-          />
+      {(sf.customerShow || sf.show) && (
+        <Space wrap style={{ marginBottom: 16 }}>
+          {sf.customerShow && (
+            <>
+              <span>客户</span>
+              <CustomerFilter
+                value={sf.customerValue}
+                onChange={sf.setCustomer}
+                customers={sf.customers}
+              />
+            </>
+          )}
+          {sf.show && (
+            <>
+              <span>油站</span>
+              <StationFilter
+                value={sf.value}
+                onChange={sf.setValue}
+                stations={sf.stations}
+                labelOf={sf.labelOf}
+              />
+            </>
+          )}
         </Space>
       )}
       {body}

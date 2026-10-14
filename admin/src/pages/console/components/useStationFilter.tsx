@@ -56,8 +56,37 @@ export function useStationFilter(devices: API.DeviceRow[] | undefined) {
     [stations, customers, canPlatformAdmin],
   );
 
-  const visibleIds = useMemo(() => stations.map((s) => s.id), [stations]);
-  const show = loaded && stationFilterAvailable(stations.length, devices);
+  // 客户筛选（仅平台管理员）：?customer=<id>，省略=全部客户。非法或不可见的值回退为全部。
+  const customerShow = canPlatformAdmin && customers.length > 0;
+  const customerRaw = params.get('customer');
+  const customerValue: number | 'all' =
+    customerShow &&
+    customerRaw &&
+    /^\d+$/.test(customerRaw) &&
+    customers.some((c) => c.id === Number(customerRaw))
+      ? Number(customerRaw)
+      : 'all';
+  const setCustomer = (next: number | 'all') => {
+    const p = new URLSearchParams(params);
+    if (next === 'all') p.delete('customer');
+    else p.set('customer', String(next));
+    // 油站属于客户，换客户后原选中的油站不再适用
+    p.delete('station');
+    setParams(p, { replace: true });
+  };
+  const scopedStations = useMemo(
+    () =>
+      customerValue === 'all'
+        ? stations
+        : stations.filter((s) => s.customerId === customerValue),
+    [stations, customerValue],
+  );
+
+  const visibleIds = useMemo(
+    () => scopedStations.map((s) => s.id),
+    [scopedStations],
+  );
+  const show = loaded && stationFilterAvailable(scopedStations.length, devices);
   // 筛选不可用时一律当作「全部」，URL 上残留的 ?station= 不应把设备藏起来
   const value: StationFilterValue = show
     ? parseStationParam(params.get('station'), visibleIds)
@@ -75,10 +104,16 @@ export function useStationFilter(devices: API.DeviceRow[] | undefined) {
     show,
     value,
     setValue,
-    stations,
+    stations: scopedStations,
     visibleIds,
     labelOf,
-    matches: (d: API.DeviceRow) => matchesStation(d, value),
+    customers,
+    customerShow,
+    customerValue,
+    setCustomer,
+    matches: (d: API.DeviceRow) =>
+      (customerValue === 'all' || d.customer_id === customerValue) &&
+      matchesStation(d, value),
   };
 }
 
@@ -110,6 +145,36 @@ export const StationFilter: React.FC<FilterProps> = ({
         { value: 'all', label: t('pages.console.stationFilter.all') },
         { value: 'none', label: t('pages.console.stationFilter.none') },
         ...stations.map((s) => ({ value: s.id, label: labelOf(s.id) })),
+      ]}
+    />
+  );
+};
+
+type CustomerFilterProps = {
+  value: number | 'all';
+  onChange: (v: number | 'all') => void;
+  customers: API.Customer[];
+};
+
+/** 客户下拉（仅平台管理员，放在筛选条第一位）：「全部客户」+ 各客户。 */
+export const CustomerFilter: React.FC<CustomerFilterProps> = ({
+  value,
+  onChange,
+  customers,
+}) => {
+  const intl = useIntl();
+  const t = (id: string) => intl.formatMessage({ id });
+  return (
+    <Select<number | 'all'>
+      showSearch
+      optionFilterProp="label"
+      aria-label={t('pages.console.customerFilter.label')}
+      style={{ minWidth: 200 }}
+      value={value}
+      onChange={onChange}
+      options={[
+        { value: 'all', label: t('pages.console.customerFilter.all') },
+        ...customers.map((c) => ({ value: c.id, label: c.name })),
       ]}
     />
   );

@@ -131,7 +131,10 @@ export default {
   'pages.ops.customers.form.name.required': '请输入客户名称',
   'pages.ops.customers.form.name.max': '客户名称最多 {max} 个字符',
   'pages.ops.customers.form.adminPhone.label': '客户管理员手机号',
-  'pages.ops.customers.create.success': '客户「{name}」及其管理员已创建',
+  'pages.ops.customers.create.success':
+    '客户「{name}」已开通：管理员、油站和大屏都已建好',
+  'pages.ops.customers.create.carryOn':
+    '客户 {name} 已建好，但后面的步骤没有完成：{detail}。请在开通向导里接着做。',
   'pages.ops.customers.create.partial':
     '客户「{name}」已创建，但管理员创建失败且未能回滚；请在客户列表里处理。',
   'pages.ops.customers.form.submit': '创建',
@@ -223,12 +226,12 @@ export default {
   'pages.ops.customers.onboarding.title': '客户开通：{name}',
   'pages.ops.customers.onboarding.back': '返回客户列表',
   'pages.ops.customers.onboarding.intro':
-    '配置中的客户，其客户管理员和员工不能登录小程序或网页。依次完成下面三步后点击「完成开通」；每一步都即时保存，刷新页面会恢复进度。',
+    '配置中的客户，其客户管理员和员工不能登录小程序或网页。补齐下面的内容后会自动开通；每一步都即时保存，刷新页面会恢复进度。',
   'pages.ops.customers.onboarding.active':
     '该客户已开通。后续增减油站、设备或账号请到对应的管理页，不会退回配置中。',
   'pages.ops.customers.onboarding.step.done': '已完成',
   'pages.ops.customers.onboarding.step.todo': '待完成',
-  'pages.ops.customers.onboarding.step.admin': '1. 客户管理员',
+  'pages.ops.customers.onboarding.step.admin': '客户管理员',
   'pages.ops.customers.onboarding.step.admin.done':
     '已有 {count} 个未停用的客户管理员。更多账号请到账号管理。',
   'pages.ops.customers.onboarding.step.admin.hint':
@@ -260,11 +263,25 @@ export default {
   'pages.ops.customers.onboarding.device.station': '所属油站',
   'pages.ops.customers.onboarding.device.station.required': '请选择油站',
   'pages.ops.customers.onboarding.device.noStation': '请先完成第 2 步新建油站',
+  'pages.ops.customers.onboarding.device.allOccupied':
+    '所有油站都已安装大屏。如需再加设备，请先在第 2 步新建油站。',
+  'pages.ops.customers.onboarding.device.station.occupied':
+    '{name}（已装 {device}）',
   'pages.ops.customers.onboarding.device.submit': '登记并分配',
   'pages.ops.customers.onboarding.device.success':
     '设备 {device} 已登记并分配到油站 {station}',
   'pages.ops.customers.onboarding.device.assignFailed':
     '设备 {device} 已登记，但分配油站失败：{detail}。刷新后可在设备页重新分配。',
+  'pages.ops.customers.onboarding.step.stationDevice': '油站与大屏',
+  'pages.ops.customers.onboarding.step.stationDevice.done':
+    '已有 {count} 个油站装好了大屏。',
+  'pages.ops.customers.onboarding.step.stationDevice.hint':
+    '一个油站只有一台大屏：填写油站名称和大屏出厂编号，一次建好油站并绑定大屏。一个客户可以有多个油站，可连续添加。',
+  'pages.ops.customers.onboarding.station.name': '油站名称',
+  'pages.ops.customers.onboarding.station.name.required': '请输入油站名称',
+  'pages.ops.customers.onboarding.station.noDevice': '未装大屏',
+  'pages.ops.customers.onboarding.stationDevice.submit': '添加油站和大屏',
+  'pages.ops.customers.onboarding.stationDevice.submitAndOpen': '添加并开通',
   'pages.ops.customers.onboarding.complete': '完成开通',
   'pages.ops.customers.onboarding.complete.success': '客户 {name} 已开通',
   'pages.ops.customers.onboarding.complete.incomplete':
@@ -473,6 +490,12 @@ export default {
   'pages.console.staff.error.unavailable': '设备平台暂时不可用，请稍后重试。',
   'pages.console.staff.error.network': '网络不通，请稍后重试。',
   'pages.console.staff.error.unknown': '操作失败：{detail}',
+  'pages.console.customerFilter.label': '客户',
+  'pages.console.customerFilter.all': '全部客户',
+  'pages.console.records.device.current': '当前大屏：{device}',
+  'pages.console.records.station.noDevice': '该油站还没有安装大屏',
+  'pages.console.records.station.multiple':
+    '该油站挂有多台设备（历史冲突数据），请到资产管理处理',
   'pages.console.stationFilter.label': '油站',
   'pages.console.stationFilter.all': '全部油站',
   'pages.console.stationFilter.none': '未分组',
