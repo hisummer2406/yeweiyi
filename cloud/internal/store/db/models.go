@@ -126,6 +126,10 @@ type Customer struct {
 	// 客户名称，全局唯一
 	Name      string             `json:"name"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	// 开通状态：configuring（配置中，其下账号不能登录）| active（已开通）。单向，新增资产或停用账号不会退回。
+	OnboardingStatus string `json:"onboarding_status"`
+	// 完成开通的时间；configuring 时为空。
+	OnboardedAt pgtype.Timestamptz `json:"onboarded_at"`
 }
 
 // 设备在线状态表，记录 thing/event/isOline 的最新状态（design doc §4.2）。
@@ -144,7 +148,7 @@ type Device struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 设备归属当前客户的时刻；历史遥测查询不早于此。由触发器在 customer_id 变化时维护，不要在应用层写。迁移前转移过的设备（有 direction=out 的 device.assign 审计）回填为迁移时刻；从未改过归属的为 NULL（没有前任客户，无需裁剪）；未分配时也为 NULL。
 	CustomerAssignedAt pgtype.Timestamptz `json:"customer_assigned_at"`
-	// 所属油站，空 = 未分组。必须属于 devices.customer_id 同一客户（复合外键 + CHECK 保证）。设备换客户时由 SetDeviceCustomer 同时清空。
+	// 所属油站，空 = 未分组/待安装。必须属于 devices.customer_id 同一客户（复合外键 + CHECK 保证）；同一非空油站至多一台设备（devices_station_id_key，cloud#61）。设备换客户时由 SetDeviceCustomer 同时清空。
 	StationID pgtype.Int8 `json:"station_id"`
 }
 
@@ -288,8 +292,8 @@ type User struct {
 	ID int64 `json:"id"`
 	// 登录用户名，唯一。
 	Username string `json:"username"`
-	// bcrypt 密码哈希，不存明文。
-	PasswordHash string `json:"password_hash"`
+	// bcrypt 哈希。平台管理员、客户管理员必填；客户普通用户（员工）必须为 NULL，只能经微信登录。
+	PasswordHash pgtype.Text `json:"password_hash"`
 	// 账号创建时间。
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	// 角色：platform_admin=平台管理员，customer_admin=客户管理员，customer_user=客户普通用户。控制命令的权限分级依据此列（见 internal/protocol 的 PermissionLevel）。
@@ -298,6 +302,8 @@ type User struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 停用时间；NULL=启用。停用后无法登录，且已签发的 token 也无法访问任何设备（判定读库）。
 	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
+	// 规范化手机号（中国大陆 11 位）。平台管理员为 NULL，客户管理员/员工必填，且 username 与之相等；全局唯一。
+	Phone pgtype.Text `json:"phone"`
 }
 
 // 用户-设备绑定关系（多对多），小程序端通过扫描设备物理二维码建立绑定（CLAUDE.md 2026-08-29 authorization pass）。
@@ -308,4 +314,30 @@ type UserDevice struct {
 	DeviceName string `json:"device_name"`
 	// 绑定建立时间。
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// 员工-油罐查看授权：(用户, 设备名, 罐号)。只授予查看，不含配置/控制/物理命令。写入由 InsertTankGrantIfAllowed 在同一条语句内复核同客户与角色。
+type UserTankGrant struct {
+	// 被授权的用户，必须是 customer_user（客户管理员与平台管理员看全部罐，无需授权）。
+	UserID int64 `json:"user_id"`
+	// 设备名，关联 devices.device_name。设备换客户时授权同事务清除。
+	DeviceName string `json:"device_name"`
+	// 罐号，1..64（协议 MaxTankCount）。tank=0（整机事件）不可授权，员工看不到整机级记录。
+	Tank int32 `json:"tank"`
+	// 执行授权的管理员；管理员被删除后置空。
+	GrantedBy pgtype.Int8        `json:"granted_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+// 微信小程序身份与业务账号的一对一关联。账号删除时随之删除；停用不删除，停用账号的微信登录由业务层拒绝。
+type UserWechatIdentity struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+	// 小程序 AppID。同一 openid 在不同小程序下不同，所以与 openid 一起唯一。
+	Appid string `json:"appid"`
+	// 经微信 jscode2session 验证的 openid；绝不接受客户端直接提交。
+	Openid  string             `json:"openid"`
+	BoundAt pgtype.Timestamptz `json:"bound_at"`
+	// 最近一次经微信完成登录的时间，仅供排查。
+	LastLoginAt pgtype.Timestamptz `json:"last_login_at"`
 }

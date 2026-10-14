@@ -37,11 +37,23 @@ func decodeAs[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 }
 
 type adminUser struct {
-	ID         int64  `json:"id"`
-	Username   string `json:"username"`
-	Role       string `json:"role"`
-	CustomerID *int64 `json:"customerId"`
-	Disabled   bool   `json:"disabled"`
+	ID         int64   `json:"id"`
+	Username   *string `json:"username"`
+	Phone      string  `json:"phone"`
+	Role       string  `json:"role"`
+	CustomerID *int64  `json:"customerId"`
+	Disabled   bool    `json:"disabled"`
+}
+
+// loginName is what the user logs in with: the phone for customer accounts, the username otherwise.
+func (u adminUser) loginName() string {
+	if u.Phone != "" {
+		return u.Phone
+	}
+	if u.Username != nil {
+		return *u.Username
+	}
+	return ""
 }
 
 func uniqueName(label string) string { return fmt.Sprintf("adm-%s-%d", label, time.Now().UnixNano()) }
@@ -51,7 +63,17 @@ const testPassword = "correct-horse-1"
 // createUser creates a user through the API as token and registers cleanup.
 func (tn *tenancy) createUser(t *testing.T, token, role string, customerID *int64) (adminUser, *httptest.ResponseRecorder) {
 	t.Helper()
-	body := map[string]any{"username": uniqueName("u"), "password": testPassword, "role": role}
+	body := map[string]any{"role": role}
+	switch role {
+	case control.RolePlatformAdmin:
+		body["username"] = uniqueName("u")
+		body["password"] = testPassword
+	case control.RoleCustomerAdmin:
+		body["phone"] = testPhone()
+		body["password"] = testPassword
+	default: // staff have no password
+		body["phone"] = testPhone()
+	}
 	if customerID != nil {
 		body["customerId"] = *customerID
 	}
@@ -61,14 +83,19 @@ func (tn *tenancy) createUser(t *testing.T, token, role string, customerID *int6
 	}
 	u := decodeAs[adminUser](t, rec)
 	t.Cleanup(func() {
-		tn.env.pool.Exec(context.Background(), `DELETE FROM user_devices WHERE user_id = $1`, u.ID)
+		tn.env.pool.Exec(context.Background(), `DELETE FROM user_tank_grants WHERE user_id = $1`, u.ID)
 		tn.env.pool.Exec(context.Background(), `DELETE FROM users WHERE id = $1`, u.ID)
 	})
 	return u, rec
 }
 
-func (tn *tenancy) loginCode(username, password string) int {
-	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+// loginCode posts a password login for u, with the field the contract assigns to its role.
+func (tn *tenancy) loginCode(u adminUser, password string) int {
+	field := "username"
+	if u.Phone != "" {
+		field = "phone"
+	}
+	body, _ := json.Marshal(map[string]string{field: u.loginName(), "password": password})
 	return tn.env.do("POST", "/api/login", nil, body).Code
 }
 
@@ -194,59 +221,121 @@ func TestAdmin_UserLifecycle(t *testing.T) {
 	if strings.Contains(rec.Body.String(), "password") || strings.Contains(rec.Body.String(), "$2") {
 		t.Errorf("the response exposes credential material: %s", rec.Body.String())
 	}
-	if code := tn.loginCode(ca.Username, testPassword); code != http.StatusOK {
+	if code := tn.loginCode(ca, testPassword); code != http.StatusOK {
 		t.Errorf("the new customer admin cannot log in: %d", code)
 	}
 
-	// A customer admin creates customer users in their own customer — with or without naming it.
-	cu, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, nil)
-	if rec.Code != http.StatusCreated || cu.CustomerID == nil || *cu.CustomerID != tn.custA {
-		t.Fatalf("customer admin creating a customer user: %d %s", rec.Code, rec.Body.String())
+	// Staff are created by the platform admin with a phone and a customer, and no password. They
+	// cannot log in with a password at all.
+	cu, rec := tn.createUser(t, tn.platform, control.RoleCustomerUser, ptr(tn.custA))
+	if rec.Code != http.StatusCreated || cu.CustomerID == nil || *cu.CustomerID != tn.custA || cu.Role != control.RoleCustomerUser {
+		t.Fatalf("platform admin creating staff: %d %s", rec.Code, rec.Body.String())
 	}
-	if _, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, ptr(tn.custA)); rec.Code != http.StatusCreated {
-		t.Errorf("naming their own customer explicitly should work: %d", rec.Code)
+	if cu.Username != nil || cu.Phone == "" {
+		t.Errorf("a customer-side account is identified by phone, not username: %+v", cu)
+	}
+	var hashIsNull bool
+	tn.env.pool.QueryRow(context.Background(), `SELECT password_hash IS NULL FROM users WHERE id = $1`, cu.ID).Scan(&hashIsNull)
+	if !hashIsNull {
+		t.Error("staff must be stored without any password hash")
+	}
+	for _, pw := range []string{testPassword, "", "x"} {
+		if code := tn.loginCode(cu, pw); code == http.StatusOK {
+			t.Errorf("staff logged in with a password %q", pw)
+		}
 	}
 
-	// ... but never a role above their own, and never in someone else's customer.
+	// Nobody but a platform admin creates accounts: not a customer admin, whatever role or customer
+	// they name, and not staff. Every attempt is refused before the body is read and creates nothing.
+	var before int
+	tn.env.pool.QueryRow(context.Background(), `SELECT count(*) FROM users`).Scan(&before)
 	for name, tc := range map[string]struct {
 		token string
 		role  string
 		cust  *int64
 	}{
-		"customer admin creating a customer admin":    {tn.adminA, control.RoleCustomerAdmin, nil},
-		"customer admin creating a platform admin":    {tn.adminA, control.RolePlatformAdmin, nil},
-		"customer admin creating in another customer": {tn.adminA, control.RoleCustomerUser, ptr(tn.custB)},
-		"customer user creating anyone":               {tn.userA, control.RoleCustomerUser, nil},
+		"customer admin creating staff":                 {tn.adminA, control.RoleCustomerUser, nil},
+		"customer admin creating staff, naming its own": {tn.adminA, control.RoleCustomerUser, ptr(tn.custA)},
+		"customer admin creating a customer admin":      {tn.adminA, control.RoleCustomerAdmin, nil},
+		"customer admin creating a platform admin":      {tn.adminA, control.RolePlatformAdmin, nil},
+		"customer admin creating in another customer":   {tn.adminA, control.RoleCustomerUser, ptr(tn.custB)},
+		"staff creating anyone":                         {tn.userA, control.RoleCustomerUser, nil},
 	} {
 		if _, rec := tn.createUser(t, tc.token, tc.role, tc.cust); rec.Code != http.StatusForbidden {
 			t.Errorf("%s: got %d, want 403 (%s)", name, rec.Code, rec.Body.String())
 		}
 	}
-
-	// Validation.
-	post := func(body map[string]any) int { return tn.send(t, "POST", "/api/users", tn.platform, body).Code }
-	good := func() map[string]any {
-		return map[string]any{"username": uniqueName("v"), "password": testPassword, "role": control.RoleCustomerUser, "customerId": tn.custA}
+	// A forged body that no valid request would send gets the same 403 — it is not even parsed.
+	if rec := tn.send(t, "POST", "/api/users", tn.adminA, map[string]any{"role": "root", "phone": "x", "customerId": "y"}); rec.Code != http.StatusForbidden {
+		t.Errorf("forged body from a customer admin: got %d, want 403", rec.Code)
 	}
-	for name, mutate := range map[string]func(map[string]any){
-		"short password":                   func(b map[string]any) { b["password"] = "short" },
-		"password over bcrypt's 72 bytes":  func(b map[string]any) { b["password"] = strings.Repeat("x", 73) },
-		"unknown role":                     func(b map[string]any) { b["role"] = "root" },
-		"blank username":                   func(b map[string]any) { b["username"] = "  " },
-		"customer role without a customer": func(b map[string]any) { delete(b, "customerId") },
-		"unknown customer":                 func(b map[string]any) { b["customerId"] = 999999999 },
-		"platform admin with a customer":   func(b map[string]any) { b["role"] = control.RolePlatformAdmin },
+	var after int
+	tn.env.pool.QueryRow(context.Background(), `SELECT count(*) FROM users`).Scan(&after)
+	if after != before {
+		t.Errorf("refused creations left %d new user rows", after-before)
+	}
+
+	// Validation (as the platform admin).
+	post := func(body map[string]any) (int, string) {
+		rec := tn.send(t, "POST", "/api/users", tn.platform, body)
+		return rec.Code, rec.Body.String()
+	}
+	good := func() map[string]any {
+		return map[string]any{"phone": testPhone(), "role": control.RoleCustomerUser, "customerId": tn.custA}
+	}
+	for name, tc := range map[string]struct {
+		mutate func(map[string]any)
+		code   string
+	}{
+		"password sent for staff":          {func(b map[string]any) { b["password"] = testPassword }, "password_not_allowed"},
+		"unknown role":                     {func(b map[string]any) { b["role"] = "root" }, "invalid_request"},
+		"blank phone":                      {func(b map[string]any) { b["phone"] = "  " }, "invalid_phone"},
+		"malformed phone":                  {func(b map[string]any) { b["phone"] = "12345" }, "invalid_phone"},
+		"foreign country code":             {func(b map[string]any) { b["phone"] = "+1 13800138000" }, "invalid_phone"},
+		"username on a customer account":   {func(b map[string]any) { b["username"] = "someone" }, "invalid_request"},
+		"customer role without a customer": {func(b map[string]any) { delete(b, "customerId") }, "invalid_request"},
+		"platform admin with a customer": {func(b map[string]any) {
+			b["role"] = control.RolePlatformAdmin
+			delete(b, "phone")
+			b["username"] = uniqueName("v")
+			b["password"] = testPassword
+		}, "invalid_request"},
+		"customer admin without password": {func(b map[string]any) { b["role"] = control.RoleCustomerAdmin }, "invalid_request"},
+		"customer admin short password": {func(b map[string]any) {
+			b["role"] = control.RoleCustomerAdmin
+			b["password"] = "short"
+		}, "invalid_request"},
+		"customer admin password over bcrypt's 72 bytes": {func(b map[string]any) {
+			b["role"] = control.RoleCustomerAdmin
+			b["password"] = strings.Repeat("x", 73)
+		}, "invalid_request"},
 	} {
 		b := good()
-		mutate(b)
-		if code := post(b); code != http.StatusBadRequest {
-			t.Errorf("%s: got %d, want 400", name, code)
+		tc.mutate(b)
+		code, body := post(b)
+		if code != http.StatusBadRequest || !strings.Contains(body, `"code":"`+tc.code+`"`) {
+			t.Errorf("%s: got %d %s, want 400 with code %s", name, code, body, tc.code)
 		}
 	}
+	unknown := good()
+	unknown["customerId"] = 999999999
+	if code, _ := post(unknown); code != http.StatusBadRequest {
+		t.Errorf("unknown customer: got %d, want 400", code)
+	}
 	dup := good()
-	dup["username"] = cu.Username
-	if code := post(dup); code != http.StatusConflict {
-		t.Errorf("duplicate username: got %d, want 409", code)
+	dup["phone"] = cu.Phone
+	code, body := post(dup)
+	if code != http.StatusConflict || !strings.Contains(body, `"code":"phone_exists"`) {
+		t.Errorf("duplicate phone: got %d %s, want 409 phone_exists", code, body)
+	}
+	// The same number, written differently, is the same number — also across customers.
+	dupOther := good()
+	dupOther["phone"] = "+86 " + cu.Phone[:3] + " " + cu.Phone[3:]
+	dupOther["customerId"] = tn.custB
+	if code, body := post(dupOther); code != http.StatusConflict {
+		t.Errorf("duplicate phone in another customer, formatted differently: got %d %s, want 409", code, body)
+	} else if strings.Contains(body, "custom") && strings.Contains(strings.ToLower(body), "customer a") {
+		t.Errorf("the conflict must not name the other customer: %s", body)
 	}
 
 	// A platform admin can create another platform admin, which belongs to no customer.
@@ -265,9 +354,27 @@ func TestAdmin_UserLifecycle(t *testing.T) {
 		}
 		return out
 	}
-	mine := ids(tn.send(t, "GET", "/api/users", tn.adminA, nil))
-	if !mine[cu.ID] || !mine[tn.userAID] || mine[tn.userBID] || mine[tn.adminBID] || mine[tn.platformID] {
+	listA := tn.send(t, "GET", "/api/users", tn.adminA, nil)
+	mine := ids(listA)
+	// A customer admin lists their own customer's staff — to choose whom to assign tanks to — and
+	// not the customer's other administrators.
+	if !mine[cu.ID] || !mine[tn.userAID] || mine[tn.userBID] || mine[tn.adminBID] || mine[tn.platformID] || mine[ca.ID] || mine[tn.adminAID] {
 		t.Errorf("customer admin A's user list is wrong: %v", mine)
+	}
+	for _, u := range decodeAs[struct {
+		Users []adminUser `json:"users"`
+	}](t, listA).Users {
+		if u.Phone == "" || !strings.Contains(u.Phone, "****") {
+			t.Errorf("a customer admin must see masked phone numbers, got %q", u.Phone)
+		}
+	}
+	platformView := decodeAs[struct {
+		Users []adminUser `json:"users"`
+	}](t, tn.send(t, "GET", fmt.Sprintf("/api/users?customerId=%d", tn.custA), tn.platform, nil))
+	for _, u := range platformView.Users {
+		if u.ID == cu.ID && u.Phone != cu.Phone {
+			t.Errorf("a platform admin sees the full number: got %q, want %q", u.Phone, cu.Phone)
+		}
 	}
 	if rec := tn.send(t, "GET", "/api/users?customerId="+fmt.Sprint(tn.custB), tn.adminA, nil); ids(rec)[tn.userBID] {
 		t.Error("a customer admin widened their user list with ?customerId=")
@@ -283,8 +390,11 @@ func TestAdmin_UserLifecycle(t *testing.T) {
 		t.Errorf("malformed customerId: got %d, want 400", rec.Code)
 	}
 
-	// The creation is audited under the new user's customer.
-	if n := tn.auditCount(t, `action = 'user.create' AND outcome = 'allowed' AND customer_id = $1`, tn.custA); n < 3 {
+	// The creation is audited under the new user's customer — by id and role, never by phone.
+	if n := tn.auditCount(t, `action = 'user.create' AND detail::text LIKE '%'||$1||'%'`, cu.Phone); n != 0 {
+		t.Error("a phone number was written into the audit log")
+	}
+	if n := tn.auditCount(t, `action = 'user.create' AND outcome = 'allowed' AND customer_id = $1`, tn.custA); n < 2 {
 		t.Errorf("expected the creations to be audited under customer A, got %d", n)
 	}
 }
@@ -292,74 +402,110 @@ func TestAdmin_UserLifecycle(t *testing.T) {
 func TestAdmin_DisableAndResetPassword(t *testing.T) {
 	tn := newTenancy(t)
 
-	cu, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, nil)
+	cu, rec := tn.createUser(t, tn.platform, control.RoleCustomerUser, ptr(tn.custA))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create: %d", rec.Code)
 	}
+	ca, rec := tn.createUser(t, tn.platform, control.RoleCustomerAdmin, ptr(tn.custA))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create admin: %d", rec.Code)
+	}
 	tn.bind(t, cu.ID, tn.devA2)
-	token := tn.env.login(cu.Username, testPassword)
+	token := tn.env.login(cu.Phone, "")
 	path := "/api/devices/" + tn.devA2 + "/commands"
 	if rec := tn.get(token, path); rec.Code != http.StatusOK {
 		t.Fatalf("precondition: the bound user should have access, got %d", rec.Code)
 	}
 	userPath := fmt.Sprintf("/api/users/%d", cu.ID)
+	caPath := fmt.Sprintf("/api/users/%d", ca.ID)
 
-	// Disabling takes effect immediately, even for a token issued before it.
-	if rec := tn.send(t, "PUT", userPath, tn.adminA, map[string]any{"disabled": true}); rec.Code != http.StatusOK || !decodeAs[adminUser](t, rec).Disabled {
+	// A customer admin cannot enable, disable or reset anyone — staff of their own customer included —
+	// and the refusal leaves the user untouched.
+	for name, body := range map[string]map[string]any{
+		"disable": {"disabled": true},
+		"reset":   {"password": "brand-new-pass-2"},
+	} {
+		if rec := tn.send(t, "PUT", userPath, tn.adminA, body); rec.Code != http.StatusForbidden {
+			t.Errorf("customer admin trying to %s their own staff: got %d, want 403", name, rec.Code)
+		}
+	}
+	if rec := tn.get(token, path); rec.Code != http.StatusOK {
+		t.Errorf("the refused requests must not have disabled the user: got %d", rec.Code)
+	}
+	if rec := tn.send(t, "PUT", userPath, tn.userA, map[string]any{"disabled": true}); rec.Code != http.StatusForbidden {
+		t.Errorf("staff managing users: got %d, want 403", rec.Code)
+	}
+	// An unknown id and another customer's user are indistinguishable to a customer admin: both 403
+	// before anything is looked up, so the endpoint is not a user-id oracle.
+	other := tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", tn.userBID), tn.adminA, map[string]any{"disabled": true})
+	ghost := tn.send(t, "PUT", "/api/users/999999999", tn.adminA, map[string]any{"disabled": true})
+	if other.Code != http.StatusForbidden || other.Body.String() != ghost.Body.String() || ghost.Code != other.Code {
+		t.Errorf("other customer's user: %d %s; unknown id: %d %s — want identical 403s", other.Code, other.Body.String(), ghost.Code, ghost.Body.String())
+	}
+
+	// The platform admin disables staff; it takes effect immediately, even for a token issued before.
+	if rec := tn.send(t, "PUT", userPath, tn.platform, map[string]any{"disabled": true}); rec.Code != http.StatusOK || !decodeAs[adminUser](t, rec).Disabled {
 		t.Fatalf("disable: %d %s", rec.Code, rec.Body.String())
 	}
 	if rec := tn.get(token, path); rec.Code != http.StatusForbidden {
 		t.Errorf("a disabled user's existing token must be refused at once: got %d", rec.Code)
 	}
-	if code := tn.loginCode(cu.Username, testPassword); code != http.StatusUnauthorized {
-		t.Errorf("a disabled user logging in: got %d, want 401", code)
-	}
-	if code := tn.loginCode(cu.Username, "wrong-password"); code != http.StatusUnauthorized {
-		t.Errorf("wrong password: got %d, want 401", code)
-	}
 	if rec := tn.send(t, "GET", "/api/audit?device="+tn.devA2, token, nil); rec.Code != http.StatusForbidden {
 		t.Errorf("a disabled user reading the audit log: got %d, want 403", rec.Code)
 	}
-
+	if rec := tn.send(t, "GET", "/api/me", token, nil); rec.Code != http.StatusForbidden {
+		t.Errorf("a disabled user reading /api/me: got %d, want 403", rec.Code)
+	}
 	// Re-enabling restores access.
-	if rec := tn.send(t, "PUT", userPath, tn.adminA, map[string]any{"disabled": false}); rec.Code != http.StatusOK {
+	if rec := tn.send(t, "PUT", userPath, tn.platform, map[string]any{"disabled": false}); rec.Code != http.StatusOK {
 		t.Fatalf("enable: %d", rec.Code)
 	}
 	if rec := tn.get(token, path); rec.Code != http.StatusOK {
 		t.Errorf("after re-enabling: got %d, want 200", rec.Code)
 	}
 
-	// Password reset: the old password stops working, the new one works.
-	if rec := tn.send(t, "PUT", userPath, tn.adminA, map[string]any{"password": "brand-new-pass-2"}); rec.Code != http.StatusOK {
+	// A disabled customer admin cannot log in, and is answered like a wrong password.
+	if rec := tn.send(t, "PUT", caPath, tn.platform, map[string]any{"disabled": true}); rec.Code != http.StatusOK {
+		t.Fatalf("disable admin: %d", rec.Code)
+	}
+	if code := tn.loginCode(ca, testPassword); code != http.StatusUnauthorized {
+		t.Errorf("a disabled admin logging in: got %d, want 401", code)
+	}
+	if code := tn.loginCode(ca, "wrong-password"); code != http.StatusUnauthorized {
+		t.Errorf("wrong password: got %d, want 401", code)
+	}
+	tn.send(t, "PUT", caPath, tn.platform, map[string]any{"disabled": false})
+
+	// Password reset applies to accounts that have a password: the old one stops working.
+	if rec := tn.send(t, "PUT", caPath, tn.platform, map[string]any{"password": "brand-new-pass-2"}); rec.Code != http.StatusOK {
 		t.Fatalf("reset: %d %s", rec.Code, rec.Body.String())
 	}
-	if code := tn.loginCode(cu.Username, testPassword); code != http.StatusUnauthorized {
+	if code := tn.loginCode(ca, testPassword); code != http.StatusUnauthorized {
 		t.Errorf("the old password after a reset: got %d, want 401", code)
 	}
-	if code := tn.loginCode(cu.Username, "brand-new-pass-2"); code != http.StatusOK {
+	if code := tn.loginCode(ca, "brand-new-pass-2"); code != http.StatusOK {
 		t.Errorf("the new password: got %d, want 200", code)
 	}
 	if n := tn.auditCount(t, `action = 'user.reset-password' AND detail::text LIKE '%brand-new%'`); n != 0 {
 		t.Error("the new password must never be written to the audit log")
 	}
+	// ... staff have none to reset, and none is invented.
+	rec = tn.send(t, "PUT", userPath, tn.platform, map[string]any{"password": "brand-new-pass-2"})
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"no_password_for_role"`) {
+		t.Errorf("resetting staff's password: got %d %s, want 409 no_password_for_role", rec.Code, rec.Body.String())
+	}
+	var stillNull bool
+	tn.env.pool.QueryRow(context.Background(), `SELECT password_hash IS NULL FROM users WHERE id = $1`, cu.ID).Scan(&stillNull)
+	if !stillNull {
+		t.Error("the refused reset gave staff a password")
+	}
+	if code := tn.loginCode(cu, "brand-new-pass-2"); code == http.StatusOK {
+		t.Error("staff logged in with a password after a refused reset")
+	}
 
-	// Reach: another customer's user and a nonexistent id are indistinguishable.
-	other := tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", tn.userBID), tn.adminA, map[string]any{"disabled": true})
-	ghost := tn.send(t, "PUT", "/api/users/999999999", tn.adminA, map[string]any{"disabled": true})
-	if other.Code != http.StatusNotFound || ghost.Code != http.StatusNotFound || other.Body.String() != ghost.Body.String() {
-		t.Errorf("other customer's user: %d %s; unknown id: %d %s — want identical 404s", other.Code, other.Body.String(), ghost.Code, ghost.Body.String())
-	}
-	if rec := tn.get(tn.userB, "/api/devices/"+tn.devB1+"/commands"); rec.Code != http.StatusOK {
-		t.Errorf("the refused request must not have disabled customer B's user: got %d", rec.Code)
-	}
-
-	// A customer admin manages customer users only — not peers, not themselves.
-	peer, _ := tn.createUser(t, tn.platform, control.RoleCustomerAdmin, ptr(tn.custA))
-	if rec := tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", peer.ID), tn.adminA, map[string]any{"disabled": true}); rec.Code != http.StatusForbidden {
-		t.Errorf("customer admin disabling a peer admin: got %d, want 403", rec.Code)
-	}
-	if rec := tn.send(t, "PUT", userPath, tn.userA, map[string]any{"disabled": true}); rec.Code != http.StatusForbidden {
-		t.Errorf("customer user managing users: got %d, want 403", rec.Code)
+	// Unknown id, as the platform admin, is a plain 404.
+	if rec := tn.send(t, "PUT", "/api/users/999999999", tn.platform, map[string]any{"disabled": true}); rec.Code != http.StatusNotFound {
+		t.Errorf("platform admin updating an unknown id: got %d, want 404", rec.Code)
 	}
 
 	// A platform admin cannot lock themselves out.
@@ -368,21 +514,21 @@ func TestAdmin_DisableAndResetPassword(t *testing.T) {
 	}
 
 	// Validation.
-	if rec := tn.send(t, "PUT", userPath, tn.adminA, map[string]any{}); rec.Code != http.StatusBadRequest {
+	if rec := tn.send(t, "PUT", caPath, tn.platform, map[string]any{}); rec.Code != http.StatusBadRequest {
 		t.Errorf("empty update: got %d, want 400", rec.Code)
 	}
-	if rec := tn.send(t, "PUT", userPath, tn.adminA, map[string]any{"password": "short"}); rec.Code != http.StatusBadRequest {
+	if rec := tn.send(t, "PUT", caPath, tn.platform, map[string]any{"password": "short"}); rec.Code != http.StatusBadRequest {
 		t.Errorf("short password: got %d, want 400", rec.Code)
 	}
 
-	// A disabled administrator cannot administer with a token they already hold.
-	boss, _ := tn.createUser(t, tn.platform, control.RoleCustomerAdmin, ptr(tn.custA))
-	bossToken := tn.env.login(boss.Username, testPassword)
-	if _, rec := tn.createUser(t, bossToken, control.RoleCustomerUser, nil); rec.Code != http.StatusCreated {
-		t.Fatalf("precondition: an active admin can create users, got %d", rec.Code)
+	// A disabled platform admin cannot administer with a token they already hold.
+	boss, _ := tn.createUser(t, tn.platform, control.RolePlatformAdmin, nil)
+	bossToken := tn.env.login(boss.loginName(), testPassword)
+	if _, rec := tn.createUser(t, bossToken, control.RoleCustomerUser, ptr(tn.custA)); rec.Code != http.StatusCreated {
+		t.Fatalf("precondition: an active platform admin can create users, got %d", rec.Code)
 	}
 	tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", boss.ID), tn.platform, map[string]any{"disabled": true})
-	if _, rec := tn.createUser(t, bossToken, control.RoleCustomerUser, nil); rec.Code != http.StatusForbidden {
+	if _, rec := tn.createUser(t, bossToken, control.RoleCustomerUser, ptr(tn.custA)); rec.Code != http.StatusForbidden {
 		t.Errorf("a disabled admin creating a user: got %d, want 403", rec.Code)
 	}
 
@@ -404,7 +550,7 @@ func TestAdmin_MoveUser(t *testing.T) {
 	}
 	bindings := func(userID int64) int {
 		var n int
-		tn.env.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_devices WHERE user_id = $1`, userID).Scan(&n)
+		tn.env.pool.QueryRow(context.Background(), `SELECT count(DISTINCT device_name) FROM user_tank_grants WHERE user_id = $1`, userID).Scan(&n)
 		return n
 	}
 
@@ -613,64 +759,39 @@ func TestAdmin_HistoryStaysAfterReassignment(t *testing.T) {
 }
 
 // TestAdmin_UpdateUserRechecksUnderLock reproduces the race deterministically. Our own transaction
-// holds the target's row lock — as a platform admin in the middle of moving them to another customer
-// would — while the customer admin's request, which already passed its early check, arrives. It must
-// block on the lock, and when the move commits it must decide again and find the user is no longer
-// its customer's, instead of acting on the stale answer.
+// holds the target's row lock — as another administrator in the middle of disabling them would —
+// while a platform admin's request, which already passed its early check, arrives. It must block on
+// the lock and then act on the row as committed, not on what it read before queueing: here the other
+// administrator disabled the user an hour ago, and the original timestamp has to survive. (Whether
+// the *actor* is re-checked under lock is covered by TestAdmin_CreateUserRechecksTheCreator.)
 func TestAdmin_UpdateUserRechecksUnderLock(t *testing.T) {
 	tn := newTenancy(t)
 	ctx := context.Background()
-	cu, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, nil)
+	cu, rec := tn.createUser(t, tn.platform, control.RoleCustomerUser, ptr(tn.custA))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create: %d", rec.Code)
 	}
+	disabledAt := time.Now().Add(-time.Hour).Truncate(time.Second)
 
-	tx, err := tn.env.pool.Begin(ctx)
-	if err != nil {
-		t.Fatal(err)
+	rec, elapsed := holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, cu.ID,
+		func() *httptest.ResponseRecorder {
+			return tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", cu.ID), tn.platform, map[string]any{"disabled": true})
+		},
+		func(tx pgx.Tx) {
+			if _, err := tx.Exec(ctx, `UPDATE users SET disabled_at = $1 WHERE id = $2`, disabledAt, cu.ID); err != nil {
+				t.Fatal(err)
+			}
+		})
+	if elapsed < 400*time.Millisecond {
+		t.Errorf("the request finished in %v: it did not wait for the lock", elapsed)
 	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, cu.ID); err != nil {
-		t.Fatal(err)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("disable: %d %s", rec.Code, rec.Body.String())
 	}
-
-	type result struct {
-		rec     *httptest.ResponseRecorder
-		elapsed time.Duration
-	}
-	done := make(chan result, 1)
-	go func() {
-		start := time.Now()
-		r := tn.send(t, "PUT", fmt.Sprintf("/api/users/%d", cu.ID), tn.adminA, map[string]any{"disabled": true})
-		done <- result{r, time.Since(start)}
-	}()
-
-	time.Sleep(500 * time.Millisecond) // let the request pass its early check and queue on the lock
-	if _, err := tx.Exec(ctx, `UPDATE users SET customer_id = $1 WHERE id = $2`, tn.custB, cu.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM user_devices WHERE user_id = $1`, cu.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case r := <-done:
-		if r.elapsed < 400*time.Millisecond {
-			t.Errorf("the request finished in %v: it did not wait for the lock", r.elapsed)
-		}
-		if r.rec.Code != http.StatusNotFound {
-			t.Errorf("after the user moved to another customer: got %d %s, want 404", r.rec.Code, r.rec.Body.String())
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the request never returned")
-	}
-	var disabled bool
-	tn.env.pool.QueryRow(ctx, `SELECT disabled_at IS NOT NULL FROM users WHERE id = $1`, cu.ID).Scan(&disabled)
-	if disabled {
-		t.Error("the old customer's admin disabled a user who had already been moved to another customer")
+	var got time.Time
+	tn.env.pool.QueryRow(ctx, `SELECT disabled_at FROM users WHERE id = $1`, cu.ID).Scan(&got)
+	if !got.Truncate(time.Second).Equal(disabledAt) {
+		t.Errorf("disabled_at = %v, want the earlier timestamp %v kept", got, disabledAt)
 	}
 }
 
@@ -716,56 +837,55 @@ func holdLockThen(t *testing.T, tn *tenancy, lockSQL string, lockArg any, reques
 }
 
 // TestAdmin_CreateUserRechecksTheCreator: bcrypt runs between the early check and the insert, and
-// that is exactly when an administrator can be moved or disabled. The creator is locked and reloaded
-// inside the transaction, and the new user's customer is derived from that current row.
+// that is exactly when an administrator can be demoted or disabled. The creator is locked and
+// reloaded inside the transaction and the decision is made again on that current row.
 func TestAdmin_CreateUserRechecksTheCreator(t *testing.T) {
 	tn := newTenancy(t)
 	ctx := context.Background()
-	create := func(token, username string) func() *httptest.ResponseRecorder {
+	create := func(token, phone string) func() *httptest.ResponseRecorder {
 		return func() *httptest.ResponseRecorder {
 			return tn.send(t, "POST", "/api/users", token, map[string]any{
-				"username": username, "password": testPassword, "role": control.RoleCustomerUser,
+				"phone": phone, "role": control.RoleCustomerUser, "customerId": tn.custA,
 			})
 		}
 	}
-	exists := func(username string) bool {
+	exists := func(phone string) bool {
 		var n int
-		tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE username = $1`, username).Scan(&n)
+		tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE phone = $1`, phone).Scan(&n)
 		return n > 0
 	}
 
-	// Moved from A to B while the request is in flight: the account must not appear in A.
-	movedToken, movedID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
-	name1 := uniqueName("raced-move")
-	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE username = $1`, name1) })
-	rec, elapsed := holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, movedID, create(movedToken, name1),
+	// Demoted to customer admin while the request is in flight: nothing may be created.
+	demotedToken, demotedID := tn.env.userIn(control.RolePlatformAdmin, 0)
+	phone1 := testPhone()
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE phone = $1`, phone1) })
+	rec, elapsed := holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, demotedID, create(demotedToken, phone1),
 		func(tx pgx.Tx) {
-			if _, err := tx.Exec(ctx, `UPDATE users SET customer_id = $1 WHERE id = $2`, tn.custB, movedID); err != nil {
+			if _, err := tx.Exec(ctx,
+				`UPDATE users SET role = 'customer_admin', customer_id = $1, phone = username WHERE id = $2`,
+				tn.custA, demotedID); err != nil {
 				t.Fatal(err)
 			}
 		})
 	if elapsed < 400*time.Millisecond {
 		t.Errorf("the request finished in %v: it did not wait for the lock", elapsed)
 	}
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("a customer admin who was moved mid-request: got %d %s", rec.Code, rec.Body.String())
-	}
-	if u := decodeAs[adminUser](t, rec); u.CustomerID == nil || *u.CustomerID != tn.custB {
-		t.Errorf("the account was created in customer %v, want the creator's *current* customer %d, not %d", u.CustomerID, tn.custB, tn.custA)
+	if rec.Code != http.StatusForbidden || exists(phone1) {
+		t.Errorf("an administrator demoted mid-request: got %d, account exists=%v; want 403 and no account", rec.Code, exists(phone1))
 	}
 
-	// Disabled while the request is in flight: nothing may be created.
-	disabledToken, disabledID := tn.env.userIn(control.RoleCustomerAdmin, tn.custA)
-	name2 := uniqueName("raced-disable")
-	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE username = $1`, name2) })
-	rec, _ = holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, disabledID, create(disabledToken, name2),
+	// Disabled while the request is in flight: nothing may be created either.
+	disabledToken, disabledID := tn.env.userIn(control.RolePlatformAdmin, 0)
+	phone2 := testPhone()
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE phone = $1`, phone2) })
+	rec, _ = holdLockThen(t, tn, `SELECT 1 FROM users WHERE id = $1 FOR UPDATE`, disabledID, create(disabledToken, phone2),
 		func(tx pgx.Tx) {
 			if _, err := tx.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
 				t.Fatal(err)
 			}
 		})
-	if rec.Code != http.StatusForbidden || exists(name2) {
-		t.Errorf("an administrator disabled mid-request: got %d, account exists=%v; want 403 and no account", rec.Code, exists(name2))
+	if rec.Code != http.StatusForbidden || exists(phone2) {
+		t.Errorf("an administrator disabled mid-request: got %d, account exists=%v; want 403 and no account", rec.Code, exists(phone2))
 	}
 }
 
@@ -776,7 +896,7 @@ func TestAdmin_ConcurrentMovesAreAuditedFromTheLockedRow(t *testing.T) {
 	tn := newTenancy(t)
 	ctx := context.Background()
 	custC := tn.env.newCustomer("c")
-	cu, rec := tn.createUser(t, tn.adminA, control.RoleCustomerUser, nil)
+	cu, rec := tn.createUser(t, tn.platform, control.RoleCustomerUser, ptr(tn.custA))
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create: %d", rec.Code)
 	}

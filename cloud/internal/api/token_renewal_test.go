@@ -3,12 +3,14 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
 	"yeweiyi-cloud/internal/api"
+	"yeweiyi-cloud/internal/control"
 )
 
 const (
@@ -44,7 +46,8 @@ func (e *testEnv) mintToken(issuedAt, expiresAt time.Time, authAt *time.Time) st
 	e.t.Helper()
 	claims := jwt.MapClaims{
 		"uid": e.userID(),
-		"sub": e.username,
+		"sub": strconv.FormatInt(e.userID(), 10),
+		"amr": "wx",
 		"iat": issuedAt.Unix(),
 		"exp": expiresAt.Unix(),
 	}
@@ -92,8 +95,15 @@ func (e *testEnv) probe(token string) (code int, renewed string) {
 
 func TestLogin_TokenCarriesAuthAt(t *testing.T) {
 	env := renewEnv(t)
+	env.setRole(control.RolePlatformAdmin) // a role that has a password; staff cannot log in with one
 	claims := parseTestToken(t, env.login(env.username, "e2e-test-pass"))
 	within(t, "authAt", claimTime(t, claims, "authAt"), time.Now(), 5*time.Second)
+	if claims["sub"] != strconv.FormatInt(env.userID(), 10) {
+		t.Errorf("sub = %v, want the user id: the token must not carry the username or phone", claims["sub"])
+	}
+	if claims["amr"] != "pwd" {
+		t.Errorf("amr = %v, want pwd", claims["amr"])
+	}
 }
 
 func TestRenewal_NearExpiryIssuesWorkingToken(t *testing.T) {
@@ -113,7 +123,8 @@ func TestRenewal_NearExpiryIssuesWorkingToken(t *testing.T) {
 	claims := parseTestToken(t, renewed)
 	within(t, "exp", claimTime(t, claims, "exp"), now.Add(renewTTL), 5*time.Second)
 	within(t, "authAt", claimTime(t, claims, "authAt"), authAt, time.Second)
-	if int64(claims["uid"].(float64)) != env.userID() || claims["sub"] != env.username {
+	if int64(claims["uid"].(float64)) != env.userID() ||
+		claims["sub"] != strconv.FormatInt(env.userID(), 10) || claims["amr"] != "wx" {
 		t.Fatalf("renewed token changed identity: %v", claims)
 	}
 

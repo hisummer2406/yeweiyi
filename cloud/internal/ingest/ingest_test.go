@@ -89,7 +89,7 @@ func newStack(t *testing.T, cfg control.Config) *stack {
 	// --- provision the device on both sides ---
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 	deviceName := "ing-dev-" + suffix
-	username := "ing-user-" + suffix
+	username := fmt.Sprintf("171%08d", time.Now().UnixNano()%100_000_000) // phone-shaped: see users_phone_role_check
 
 	tbDev, err := tb.EnsureDevice(ctx, deviceName, tbclient.DefaultDeviceProfile)
 	if err != nil {
@@ -104,7 +104,7 @@ func newStack(t *testing.T, cfg control.Config) *stack {
 
 	var userID int64
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x',$2::text,
+		`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,$1,'x',$2::text,
 			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE (SELECT id FROM customers WHERE name = 'default') END) RETURNING id`,
 		username, control.RoleCustomerAdmin).Scan(&userID); err != nil {
 		t.Fatalf("seed user: %v", err)
@@ -324,15 +324,15 @@ func TestControl_CrossTenantAccessIsRejected(t *testing.T) {
 
 	var customerID int64
 	if err := s.pool.QueryRow(ctx,
-		`INSERT INTO customers (name) VALUES ($1) RETURNING id`,
+		`INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`,
 		fmt.Sprintf("intruder-co-%d", time.Now().UnixNano())).Scan(&customerID); err != nil {
 		t.Fatalf("seed customer: %v", err)
 	}
 
 	var intruderID int64
-	username := fmt.Sprintf("intruder-%d", time.Now().UnixNano())
+	username := fmt.Sprintf("172%08d", time.Now().UnixNano()%100_000_000)
 	if err := s.pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x',$2,$3) RETURNING id`,
+		`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,$1,'x',$2,$3) RETURNING id`,
 		username, control.RoleCustomerAdmin, customerID).Scan(&intruderID); err != nil {
 		t.Fatalf("seed intruder: %v", err)
 	}

@@ -244,7 +244,7 @@ func TestRecords_OwnershipIsStampedAtIngestNotInferredFromDeviceClock(t *testing
 
 	ctx := context.Background()
 	var newCustomer int64
-	if err := env.pool.QueryRow(ctx, `INSERT INTO customers (name) VALUES ($1) RETURNING id`, "own-"+device).Scan(&newCustomer); err != nil {
+	if err := env.pool.QueryRow(ctx, `INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`, "own-"+device).Scan(&newCustomer); err != nil {
 		t.Fatalf("create customer: %v", err)
 	}
 	t.Cleanup(func() {
@@ -353,7 +353,7 @@ func TestRecords_RejectsFollowTheirOwnersToo(t *testing.T) {
 		t.Fatalf("save reject: %v", err)
 	}
 	var newCustomer int64
-	if err := env.pool.QueryRow(ctx, `INSERT INTO customers (name) VALUES ($1) RETURNING id`, "rej-"+device).Scan(&newCustomer); err != nil {
+	if err := env.pool.QueryRow(ctx, `INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`, "rej-"+device).Scan(&newCustomer); err != nil {
 		t.Fatalf("create customer: %v", err)
 	}
 	t.Cleanup(func() {

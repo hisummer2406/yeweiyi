@@ -101,3 +101,42 @@ func TestLatestSnapshot_AllowsBoundaryTankCount(t *testing.T) {
 		})
 	}
 }
+
+// A device that has never reported: this ThingsBoard answers the latest-values query with one entry
+// per requested key whose value is null (observed on the dev compose stack, device created through
+// the public API and never connected), not with an empty object. That has to read as "no data", not
+// as an unparsable tankCount — which used to surface as a 503 "platform unavailable" and so made a
+// freshly installed replacement device look like an outage (cloud#61, B has no data yet).
+func TestLatestSnapshot_NullValuesMeanNeverReported(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/auth/login":
+			w.Write([]byte(`{"token":"stub-token","refreshToken":"r"}`))
+		case r.URL.Query().Get("startTs") != "":
+			t.Errorf("history must not be queried when there is no anchor")
+			w.Write([]byte(`{}`))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{%q:[{"ts":1791908831160,"value":null}],%q:[{"ts":1791908831160,"value":null}]}`,
+				protocol.KeyTankCount, protocol.KeySnapshotSeq)
+		}
+	}))
+	defer srv.Close()
+
+	c, err := tbclient.New(tbclient.Config{BaseURL: srv.URL, Username: "u@example.com", Password: "p"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	latest, err := c.LatestTimeseries(context.Background(), "dev-1", []string{protocol.KeyTankCount})
+	if err != nil || len(latest) != 0 {
+		t.Fatalf("LatestTimeseries = %v, %v; want an empty map (a null value is no data)", latest, err)
+	}
+	ts, values, err := c.LatestSnapshot(context.Background(), "dev-1")
+	if err != nil {
+		t.Fatalf("LatestSnapshot: %v (a device that never reported is a normal state, and must not look like an outage)", err)
+	}
+	if ts != 0 || len(values) != 0 {
+		t.Errorf("LatestSnapshot = %d, %v; want nothing", ts, values)
+	}
+}

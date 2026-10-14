@@ -92,6 +92,26 @@ type Config struct {
 	Stock       Stock       `yaml:"stock"`
 	Telemetry   Telemetry   `yaml:"telemetry"`
 	Pairing     Pairing     `yaml:"pairing"`
+	WeChat      WeChat      `yaml:"wechat"`
+}
+
+// WeChat configures the mini-program login (#59). It is off by default and optional: with it off,
+// the two /api/auth/wechat/* routes answer 503 wechat_unavailable and nothing else changes, so an
+// offline deployment's password login and startup never depend on it.
+type WeChat struct {
+	Enabled bool   `yaml:"enabled"`
+	AppID   string `yaml:"appId"`
+	// AppSecret may only come from the WECHAT_APP_SECRET environment variable. Load rejects a file
+	// that sets it: config files go into backups and sometimes git, and this is a credential for
+	// WeChat's API, not a tunable.
+	AppSecret string `yaml:"appSecret"`
+	// BaseURL is for tests and proxies; empty means https://api.weixin.qq.com.
+	BaseURL string   `yaml:"baseUrl"`
+	Timeout Duration `yaml:"timeout"`
+	// CodePage is the mini-program page a device code opens; CodeEnvVersion is release, trial or
+	// develop (an unpublished mini program only accepts the latter two).
+	CodePage       string `yaml:"codePage"`
+	CodeEnvVersion string `yaml:"codeEnvVersion"`
 }
 
 // Pairing configures QR-code (short-code) binding.
@@ -229,6 +249,7 @@ func Defaults() Config {
 		Database: Database{URL: "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"},
 		Redis:    Redis{Addr: "localhost:6379"},
 		Pairing:  Pairing{CodePrefixes: []string{"ZCT"}},
+		WeChat:   WeChat{Timeout: Duration(5 * time.Second), CodePage: "pages/device-detail/device-detail", CodeEnvVersion: "release"},
 		Auth:     Auth{TokenTTL: Duration(24 * time.Hour), MaxSessionAge: Duration(30 * 24 * time.Hour)},
 		Control: Control{
 			CommandTTL:            Duration(60 * time.Second),
@@ -271,6 +292,11 @@ func Load(path string) (Config, error) {
 		}
 	}
 
+	if cfg.WeChat.AppSecret != "" {
+		return Config{}, errors.New("wechat.appSecret must not be set in the config file: " +
+			"supply it through the WECHAT_APP_SECRET environment variable")
+	}
+
 	if err := cfg.applyEnv(); err != nil {
 		return Config{}, err
 	}
@@ -298,6 +324,8 @@ func (c *Config) applyEnv() error {
 	str("TB_BASE_URL", &c.ThingsBoard.BaseURL)
 	str("TB_USERNAME", &c.ThingsBoard.Username)
 	str("TB_PASSWORD", &c.ThingsBoard.Password)
+	str("WECHAT_APP_ID", &c.WeChat.AppID)
+	str("WECHAT_APP_SECRET", &c.WeChat.AppSecret)
 
 	for _, d := range []struct {
 		env string
@@ -353,6 +381,17 @@ func (c *Config) applyEnv() error {
 		}
 	}
 
+	if v, ok := os.LookupEnv("WECHAT_ENABLED"); ok && v != "" {
+		switch strings.ToLower(v) {
+		case "true", "1":
+			c.WeChat.Enabled = true
+		case "false", "0":
+			c.WeChat.Enabled = false
+		default:
+			return fmt.Errorf("WECHAT_ENABLED=%q: want true/false (or 1/0)", v)
+		}
+	}
+
 	if v, ok := os.LookupEnv("ALLOW_PHYSICAL_COMMANDS"); ok && v != "" {
 		switch strings.ToLower(v) {
 		case "true", "1":
@@ -400,6 +439,17 @@ func (c *Config) Validate() error {
 	} {
 		if d.v <= 0 {
 			return fmt.Errorf("%s must be positive, got %s", d.name, d.v)
+		}
+	}
+
+	// Misconfiguration is a startup error, not a silent downgrade: turning WeChat login on without
+	// credentials would otherwise look enabled and fail on every first login.
+	if c.WeChat.Enabled {
+		if c.WeChat.AppID == "" || c.WeChat.AppSecret == "" {
+			return errors.New("wechat.enabled requires wechat.appId (WECHAT_APP_ID) and WECHAT_APP_SECRET")
+		}
+		if c.WeChat.Timeout <= 0 {
+			return fmt.Errorf("wechat.timeout must be positive, got %s", c.WeChat.Timeout)
 		}
 	}
 

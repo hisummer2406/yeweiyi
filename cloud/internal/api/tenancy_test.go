@@ -17,7 +17,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"golang.org/x/crypto/bcrypt"
 
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/protocol"
@@ -81,7 +80,7 @@ func newTenancy(t *testing.T) *tenancy {
 func (tn *tenancy) bind(t *testing.T, userID int64, device string) {
 	t.Helper()
 	if _, err := tn.env.pool.Exec(context.Background(),
-		`INSERT INTO user_devices (user_id, device_name) VALUES ($1, $2)`, userID, device); err != nil {
+		`INSERT INTO user_tank_grants (user_id, device_name, tank) SELECT $1, $2, g FROM generate_series(1, 16) g`, userID, device); err != nil {
 		t.Fatalf("bind %d to %s: %v", userID, device, err)
 	}
 }
@@ -301,28 +300,38 @@ type routeCase struct {
 // exemptRoutes are the routes that take no device and therefore have no cross-customer case here.
 // Each needs a reason: a route that is merely forgotten must fail the test, not slip through.
 var exemptRoutes = map[string]string{
-	"GET /healthz":             "no device",
-	"POST /api/login":          "no device",
-	"GET /api/devices":         "scoped to the caller; see TestTenancy_ListDevicesByRole",
-	"GET /api/stations":        "no device in the path; scoped to the caller in SQL, see TestStations_ListScope",
-	"POST /api/stations":       "no device; customer admin limited to their own customer, see TestStations_Create",
-	"PUT /api/stations/:id":    "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
-	"DELETE /api/stations/:id": "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
-	"POST /api/devices":        "no device in the path; role-gated to platform admin, see TestRegisterDevice_*",
-	"POST /api/devices/bind":   "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
-	"POST /api/devices/unbind": "deletes only the caller's own binding row",
+	"GET /healthz":    "no device",
+	"POST /api/login": "no device",
+	"GET /api/me":     "no device; returns only the caller's own row",
+
+	"GET /api/customers/:id/onboarding":           "no device; platform admin only, see TestOnboarding_*",
+	"POST /api/customers/:id/onboarding/complete": "no device; platform admin only, see TestOnboarding_*",
+
+	"POST /api/auth/wechat/login":           "no device, no session yet; see TestWeChat_*",
+	"POST /api/auth/wechat/phone-login":     "no device, no session yet; binds only to the account of the WeChat-verified phone, see TestWeChat_*",
+	"GET /api/devices":                      "scoped to the caller; see TestTenancy_ListDevicesByRole",
+	"GET /api/stations":                     "no device in the path; scoped to the caller in SQL, see TestStations_ListScope",
+	"POST /api/stations":                    "no device; customer admin limited to their own customer, see TestStations_Create",
+	"PUT /api/stations/:id":                 "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
+	"DELETE /api/stations/:id":              "no device; station must belong to the caller's customer, see TestStations_UpdateAndDelete",
+	"POST /api/stations/:id/replace-device": "device comes from the body, authorized before it is read and required to be in the station's customer, see TestStationReplace_*",
+	"POST /api/devices":                     "no device in the path; role-gated to platform admin, see TestRegisterDevice_*",
+	"POST /api/devices/bind":                "device comes from the body and is checked against the pairing secret; see TestTenancy_Bind*",
+	"POST /api/devices/unbind":              "deletes only the caller's own binding row",
+	"POST /api/devices/resolve":             "device comes from the body; never 403 — a device the caller may not open is the same 404 as a missing one and nothing is written, see TestResolve_*",
+	"GET /api/users/:id/tank-grants":        "no device; platform admin only, see TestTankGrants_*",
 
 	"POST /api/customers":         "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"PUT /api/customers/:id":      "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"DELETE /api/customers/:id":   "no device; role-gated to platform admin, see TestAdmin_Customers",
-	"POST /api/users":             "no device; scoped to the caller's customer, see TestAdmin_UserLifecycle",
-	"GET /api/users":              "no device; scoped to the caller's customer, see TestAdmin_UserLifecycle",
-	"PUT /api/users/:id":          "no device; target must be in the caller's customer, see TestAdmin_DisableAndResetPassword",
+	"POST /api/users":             "no device; role-gated to platform admin, see TestAdmin_UserLifecycle",
+	"GET /api/users":              "no device; a customer admin sees only their customer's staff, see TestAdmin_UserLifecycle",
+	"PUT /api/users/:id":          "no device; role-gated to platform admin, see TestAdmin_DisableAndResetPassword",
 	"PUT /api/users/:id/customer": "no device; role-gated to platform admin, see TestAdmin_MoveUser",
 }
 
-func deviceScopedRoutes(t *testing.T) map[string]routeCase {
+func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 	cmdBody := jsonBody(t, map[string]any{"method": protocol.MethodAlarmMute, "reason": "tenancy walk"})
 	query := func(prefix string) func(string, string) (string, []byte) {
 		return func(device, _ string) (string, []byte) { return prefix + device, nil }
@@ -334,10 +343,11 @@ func deviceScopedRoutes(t *testing.T) map[string]routeCase {
 		"GET /api/alarms":                            {build: query("/api/alarms?device=")},
 		"GET /api/oil-in-out":                        {build: query("/api/oil-in-out?device=")},
 		"GET /api/audit":                             {build: query("/api/audit?device=")},
+		"GET /api/devices/:device/mini-code":         {adminOnly: true, build: path("/mini-code")},
 		"GET /api/devices/:device/telemetry/latest":  {build: path("/telemetry/latest")},
 		"GET /api/devices/:device/telemetry/history": {build: path("/telemetry/history?tank=1&fields=oilLevelMm&interval=1h")},
 		"GET /api/devices/:device/commands":          {build: path("/commands")},
-		"POST /api/devices/:device/commands": {build: func(device, _ string) (string, []byte) {
+		"POST /api/devices/:device/commands": {customerUserDenied: true, build: func(device, _ string) (string, []byte) {
 			return "/api/devices/" + device + "/commands", cmdBody
 		}},
 		"POST /api/devices/:device/pairing-secret": {
@@ -359,6 +369,15 @@ func deviceScopedRoutes(t *testing.T) map[string]routeCase {
 				return "/api/devices/" + device + "/station", []byte(`{"stationId":null}`)
 			},
 		},
+		"GET /api/devices/:device/tanks": {build: path("/tanks")},
+		// userAID is an employee of customer A. Only a platform administrator writes grants, so every
+		// customer-side caller (admin or employee, own customer or not) is refused by role.
+		"PUT /api/users/:id/tank-grants/:device": {
+			adminOnly: true,
+			build: func(device, _ string) (string, []byte) {
+				return fmt.Sprintf("/api/users/%d/tank-grants/%s", tn.userAID, device), []byte(`{"tanks":[]}`)
+			},
+		},
 		"GET /ws/alarms": {build: func(device, token string) (string, []byte) {
 			return "/ws/alarms?device=" + device + "&token=" + token, nil
 		}},
@@ -377,7 +396,7 @@ func TestTenancy_EveryDeviceScopedRouteDeniesCrossCustomer(t *testing.T) {
 		t.Fatalf("router is %T, want *gin.Engine", tn.env.router)
 	}
 
-	scoped := deviceScopedRoutes(t)
+	scoped := deviceScopedRoutes(t, tn)
 	seen := map[string]bool{}
 
 	for _, r := range engine.Routes() {
@@ -535,49 +554,6 @@ func (tn *tenancy) bindAs(token, device, secret string) *httptest.ResponseRecord
 	return tn.env.do("POST", "/api/devices/bind", []byte(token), body)
 }
 
-// TestTenancy_BindChecksTheCustomer: a valid QR code is proof of possession, not of being the right
-// customer. A foreign customer's code, an unassigned device and a wrong secret must be answered
-// identically, or bind becomes a way to learn which devices exist and who owns them.
-func TestTenancy_BindChecksTheCustomer(t *testing.T) {
-	tn := newTenancy(t)
-	secretA2 := tn.secretFrom(t, tn.mint(tn.platform, tn.devA2, fmt.Sprintf(`{"customerId":%d}`, tn.custA)))
-
-	// A secret for a device that is unassigned (claiming it via mint would assign it, so write the
-	// secret row directly).
-	hash, err := bcrypt.GenerateFromPassword([]byte("unassigned-secret"), bcrypt.MinCost)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tn.env.pool.Exec(context.Background(),
-		`INSERT INTO device_pairing_secrets (device_name, secret_hash) VALUES ($1, $2)`, tn.devUnassigned, string(hash)); err != nil {
-		t.Fatalf("seed secret: %v", err)
-	}
-
-	wrong := tn.bindAs(tn.userB, tn.devA2, "not-the-secret")
-	if wrong.Code != http.StatusUnauthorized {
-		t.Fatalf("wrong secret: got %d, want 401", wrong.Code)
-	}
-	foreign := tn.bindAs(tn.userB, tn.devA2, secretA2) // customer B's user, customer A's valid code
-	unassigned := tn.bindAs(tn.userB, tn.devUnassigned, "unassigned-secret")
-	for name, rec := range map[string]*httptest.ResponseRecorder{"foreign customer": foreign, "unassigned device": unassigned} {
-		if rec.Code != wrong.Code || rec.Body.String() != wrong.Body.String() {
-			t.Errorf("%s answered %d %s, but a wrong secret answers %d %s", name, rec.Code, rec.Body.String(), wrong.Code, wrong.Body.String())
-		}
-	}
-	var n int
-	tn.env.pool.QueryRow(context.Background(),
-		`SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_name IN ($2, $3)`,
-		tn.userBID, tn.devA2, tn.devUnassigned).Scan(&n)
-	if n != 0 {
-		t.Errorf("a refused bind still created %d binding(s)", n)
-	}
-
-	// The same code works for a user of the right customer.
-	if rec := tn.bindAs(tn.userA, tn.devA2, secretA2); rec.Code != http.StatusOK {
-		t.Errorf("same-customer bind: got %d %s", rec.Code, rec.Body.String())
-	}
-}
-
 // --- commands and audit -----------------------------------------------------------------------
 
 func (tn *tenancy) issue(t *testing.T, token, device string) *httptest.ResponseRecorder {
@@ -705,9 +681,11 @@ func TestTenancy_AuditScope(t *testing.T) {
 			t.Errorf("customer A sees B's refused attempt against A's device: %+v", e)
 		}
 	}
+	var platformName string
+	tn.env.pool.QueryRow(context.Background(), `SELECT username FROM users WHERE id = $1`, tn.platformID).Scan(&platformName)
 	var sawPlatform bool
 	for _, e := range a {
-		if strings.HasPrefix(e.Actor, "api-test-other-") && e.Outcome == "allowed" {
+		if e.Actor == platformName && e.Outcome == "allowed" {
 			sawPlatform = true
 		}
 	}
@@ -752,12 +730,47 @@ func TestTenancy_SchemaInvariants(t *testing.T) {
 	}
 	name := func(s string) string { return fmt.Sprintf("schema-%s-%d", s, time.Now().UnixNano()) }
 
+	// Each row below is valid in every respect but the one invariant it names, so the rejection
+	// cannot come from an unrelated CHECK.
 	if err := exec(`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x','platform_admin',$2)`,
 		name("pa"), tn.custA); err == nil {
 		t.Error("a platform admin with a customer must be rejected")
 	}
-	if err := exec(`INSERT INTO users (username, password_hash, role) VALUES ($1,'x','customer_user')`, name("cu")); err == nil {
+	ph := testPhone()
+	if err := exec(`INSERT INTO users (username, phone, role) VALUES ($1,$1,'customer_user')`, ph); err == nil {
 		t.Error("a customer user without a customer must be rejected")
+	}
+	ph = testPhone()
+	if err := exec(`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,$1,'x','customer_user',$2)`,
+		ph, tn.custA); err == nil {
+		t.Error("staff (customer_user) with a password hash must be rejected")
+	}
+	ph = testPhone()
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,$1,'customer_admin',$2)`,
+		ph, tn.custA); err == nil {
+		t.Error("a customer admin without a password hash must be rejected")
+	}
+	if err := exec(`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1,'x','customer_admin',$2)`,
+		testPhone(), tn.custA); err == nil {
+		t.Error("a customer account without a phone must be rejected")
+	}
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,'12345678901','customer_user',$2)`,
+		"12345678901", tn.custA); err == nil {
+		t.Error("a malformed phone must be rejected")
+	}
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ('someone-else',$1,'customer_user',$2)`,
+		testPhone(), tn.custA); err == nil {
+		t.Error("a customer account whose username differs from its phone must be rejected")
+	}
+	dup := testPhone()
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,$1,'customer_user',$2)`,
+		dup, tn.custA); err != nil {
+		t.Fatalf("seed for the duplicate-phone check: %v", err)
+	}
+	t.Cleanup(func() { tn.env.pool.Exec(context.Background(), `DELETE FROM users WHERE phone = $1`, dup) })
+	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ('dup-'||$1,$1,'customer_user',$2)`,
+		dup, tn.custA); err == nil {
+		t.Error("a second account with the same phone must be rejected")
 	}
 	if err := exec(`INSERT INTO customers (name) VALUES ('default')`); err == nil {
 		t.Error("a duplicate customer name must be rejected")
@@ -786,7 +799,7 @@ func TestTenancy_MintUsesTheCurrentDatabaseRole(t *testing.T) {
 	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, disabledID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET role = 'customer_user', customer_id = $2 WHERE id = $1`, demotedID, tn.custA); err != nil {
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET role = 'customer_user', customer_id = $2, phone = username, password_hash = NULL WHERE id = $1`, demotedID, tn.custA); err != nil {
 		t.Fatal(err)
 	}
 
@@ -819,7 +832,7 @@ func TestTenancy_DisabledOrDeletedUserIsRefusedEverywhere(t *testing.T) {
 	}
 	bound := func() int {
 		var n int
-		tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM user_devices WHERE user_id = $1`, id).Scan(&n)
+		tn.env.pool.QueryRow(ctx, `SELECT count(DISTINCT device_name) FROM user_tank_grants WHERE user_id = $1`, id).Scan(&n)
 		return n
 	}
 
@@ -847,8 +860,10 @@ func TestTenancy_DisabledOrDeletedUserIsRefusedEverywhere(t *testing.T) {
 	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = NULL WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if code := unbind(); code != http.StatusOK || bound() != 0 {
-		t.Errorf("re-enabled unbind: %d, bindings=%d (want 200 and 0)", code, bound())
+	// unbind is a retired no-op (cloud#63): access is the administrator's grants, which an employee
+	// cannot edit — so it answers 200 and leaves the grants alone.
+	if code := unbind(); code != http.StatusOK || bound() != 1 {
+		t.Errorf("re-enabled unbind: %d, grants on %d device(s) (want 200 and the grant untouched)", code, bound())
 	}
 
 	// A deleted user's token is refused too.
@@ -951,14 +966,15 @@ func TestTenancy_DemotedAdminLosesAdminMethodsImmediately(t *testing.T) {
 	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusAccepted {
 		t.Fatalf("precondition: a customer admin may issue %s, got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
 	}
-	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user' WHERE id = $1`, tn.adminAID); err != nil {
+	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user', password_hash = NULL WHERE id = $1`, tn.adminAID); err != nil {
 		t.Fatal(err)
 	}
 	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusForbidden {
 		t.Errorf("a demoted admin issuing an admin-level method with an old token: got %d, want 403", rec.Code)
 	}
-	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodAlarmMute); rec.Code != http.StatusAccepted {
-		t.Errorf("the control-level method should still work for the bound user: got %d %s", rec.Code, rec.Body.String())
+	// Demoted to an employee: view-only, so not even the control tier (cloud#63).
+	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodAlarmMute); rec.Code != http.StatusForbidden {
+		t.Errorf("an employee muting: got %d %s, want 403", rec.Code, rec.Body.String())
 	}
 }
 
@@ -1094,40 +1110,6 @@ func TestTenancy_UnauthorizedCallerGetsTheSame403ForPhysicalMethods(t *testing.T
 	}
 }
 
-// TestTenancy_BindRacesATransfer: the customer check and the insert are one statement that locks the
-// device row, so a bind that arrives while a transfer is in progress queues behind it and is judged
-// against the post-transfer state. Without that, the bind could pass its check, the transfer could
-// delete the bindings and commit, and the insert would then land *behind* the cleanup.
-func TestTenancy_BindRacesATransfer(t *testing.T) {
-	tn := newTenancy(t)
-	ctx := context.Background()
-	secret := tn.secretFrom(t, tn.mint(tn.platform, tn.devA2, fmt.Sprintf(`{"customerId":%d}`, tn.custA)))
-	token, id := tn.env.userIn(control.RoleCustomerUser, tn.custA)
-
-	rec, elapsed := holdLockThen(t, tn, `SELECT 1 FROM devices WHERE device_name = $1 FOR UPDATE`, tn.devA2,
-		func() *httptest.ResponseRecorder { return tn.bindAs(token, tn.devA2, secret) },
-		func(tx pgx.Tx) {
-			// What assignDeviceHandler does: move the device, then clear its bindings, atomically.
-			if _, err := tx.Exec(ctx, `UPDATE devices SET customer_id = $1 WHERE device_name = $2`, tn.custB, tn.devA2); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := tx.Exec(ctx, `DELETE FROM user_devices WHERE device_name = $1`, tn.devA2); err != nil {
-				t.Fatal(err)
-			}
-		})
-	if elapsed < 400*time.Millisecond {
-		t.Errorf("the bind finished in %v: it did not wait for the transfer", elapsed)
-	}
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("a bind racing a transfer to another customer: got %d %s, want the same 401 as a wrong secret", rec.Code, rec.Body.String())
-	}
-	var n int
-	tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM user_devices WHERE user_id = $1 AND device_name = $2`, id, tn.devA2).Scan(&n)
-	if n != 0 {
-		t.Errorf("a binding survived behind the transfer's cleanup (%d row)", n)
-	}
-}
-
 // TestTenancy_UnauthorizedCallerIsRefusedBeforeTheMethodIsExamined: a caller who may not touch the
 // device gets 403 even for a method that does not exist; only someone allowed to send the request is
 // told what is wrong with it.
@@ -1235,13 +1217,13 @@ func TestTenancy_ReadsDecideAccessAndScopeInOneStatement(t *testing.T) {
 		user int64
 		want []string
 	}{
-		"admin of A: its own history only":      {tn.adminAID, []string{"history-of-A"}},
-		"bound user of A: its own history only": {tn.userAID, []string{"history-of-A"}},
-		"admin of B: no access to D, nothing":   {tn.adminBID, nil},
-		"user of B: no access to D, nothing":    {tn.userBID, nil},
-		"disabled admin of A: nothing":          {disabledID, nil},
-		"platform admin: both periods":          {tn.platformID, []string{"history-of-A", "history-of-B"}},
-		"user that does not exist: nothing":     {999999999, nil},
+		"admin of A: its own history only":     {tn.adminAID, []string{"history-of-A"}},
+		"bound user of A: nothing (view-only)": {tn.userAID, nil},
+		"admin of B: no access to D, nothing":  {tn.adminBID, nil},
+		"user of B: no access to D, nothing":   {tn.userBID, nil},
+		"disabled admin of A: nothing":         {disabledID, nil},
+		"platform admin: both periods":         {tn.platformID, []string{"history-of-A", "history-of-B"}},
+		"user that does not exist: nothing":    {999999999, nil},
 	} {
 		if got := commandOperators(tc.user); !only(got, tc.want...) {
 			t.Errorf("commands, %s: got %v, want %v", name, got, tc.want)
@@ -1254,7 +1236,7 @@ func TestTenancy_ReadsDecideAccessAndScopeInOneStatement(t *testing.T) {
 		want []string
 	}{
 		"admin of A naming D": {tn.adminAID, []string{"history-of-A"}},
-		"user of A naming D":  {tn.userAID, []string{"history-of-A"}},
+		"user of A naming D":  {tn.userAID, nil},
 		"admin of B naming D": {tn.adminBID, nil},
 		"user of B naming D":  {tn.userBID, nil},
 		"disabled admin":      {disabledID, nil},

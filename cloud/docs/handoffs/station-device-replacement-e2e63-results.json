@@ -1,0 +1,410 @@
+[
+ {
+  "step": "1.1 未授权员工设备列表不含A/B",
+  "expect": "不含",
+  "result": "PASS",
+  "evidence": {
+   "devices": []
+  }
+ },
+ {
+  "step": "1.2 未授权员工读A",
+  "expect": "403 for this device",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "1.3 扫码定位未授权设备",
+  "expect": "404 device_not_found，与不存在相同",
+  "result": "PASS",
+  "evidence": {
+   "status": 404,
+   "body": {
+    "code": "device_not_found",
+    "error": "device not found"
+   }
+  }
+ },
+ {
+  "step": "1.4 扫码不存在的码",
+  "expect": "与1.3相同",
+  "result": "PASS",
+  "evidence": {
+   "status": 404,
+   "body": {
+    "code": "device_not_found",
+    "error": "device not found"
+   }
+  }
+ },
+ {
+  "step": "2.1 管理员读设备罐列表",
+  "expect": "罐1,2",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "deviceName": "ZCT930001",
+    "reported": true,
+    "tanks": [
+     {
+      "index": 1
+     },
+     {
+      "index": 2
+     }
+    ]
+   }
+  }
+ },
+ {
+  "step": "2.2 客户管理员授权 A/1",
+  "expect": "200 changed",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": true,
+    "deviceName": "ZCT930001",
+    "tanks": [
+     1
+    ],
+    "userId": 4
+   }
+  }
+ },
+ {
+  "step": "2.3 重复授权幂等",
+  "expect": "changed=false",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": false,
+    "deviceName": "ZCT930001",
+    "tanks": [
+     1
+    ],
+    "userId": 4
+   }
+  }
+ },
+ {
+  "step": "2.4 授权设备没有的罐",
+  "expect": "400 invalid_tank",
+  "result": "PASS",
+  "evidence": {
+   "status": 400,
+   "body": {
+    "code": "invalid_tank",
+    "error": "tank 7 is not reported by this device"
+   }
+  }
+ },
+ {
+  "step": "2.5 员工设备列表只含A，granted_tanks=[1]",
+  "expect": "仅A",
+  "result": "PASS",
+  "evidence": {
+   "devices": {
+    "ZCT930001": [
+     1
+    ]
+   }
+  }
+ },
+ {
+  "step": "2.6 员工读A最新值只含罐1",
+  "expect": "tanks=[1]",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "tanks": [
+    1
+   ]
+  }
+ },
+ {
+  "step": "2.7 管理员读A最新值含全部罐",
+  "expect": "tanks=[1,2]",
+  "result": "PASS",
+  "evidence": {
+   "tanks": [
+    1,
+    2
+   ]
+  }
+ },
+ {
+  "step": "2.8 员工读罐1历史",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200
+  }
+ },
+ {
+  "step": "2.9 员工读罐2(未授权)与罐9(不存在)",
+  "expect": "同一403 tank_not_authorized",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "code": "tank_not_authorized",
+    "error": "not authorized for this tank"
+   }
+  }
+ },
+ {
+  "step": "2.10 员工读B",
+  "expect": "403 for this device",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "2.11 员工读A报警(过滤)",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "n": 0
+  }
+ },
+ {
+  "step": "2.12 员工读审计",
+  "expect": "不返回审计行",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "audit": []
+   }
+  }
+ },
+ {
+  "step": "3.1 扫短码定位已授权设备",
+  "expect": "200 deviceName=A",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "deviceName": "ZCT930001"
+   }
+  }
+ },
+ {
+  "step": "3.2 重复扫码/扫B 不增加授权",
+  "expect": "授权列表不变",
+  "result": "PASS",
+  "evidence": {
+   "grants": {
+    "userId": 4,
+    "grants": [
+     {
+      "deviceName": "ZCT930001",
+      "tanks": [
+       1
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "step": "3.3 旧bind入口",
+  "expect": "410 bind_removed",
+  "result": "PASS",
+  "evidence": {
+   "status": 410,
+   "body": "…"
+  }
+ },
+ {
+  "step": "3.4 bind后仍读不到B",
+  "expect": "403",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "4.1 A换B",
+  "expect": "200 changed",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": true,
+    "deviceName": "ZCT930002",
+    "previousDeviceName": "ZCT930001",
+    "stationId": 5
+   }
+  }
+ },
+ {
+  "step": "4.2 员工油站列表不含该站(B未授权)",
+  "expect": "不含",
+  "result": "PASS",
+  "evidence": {
+   "stations": []
+  }
+ },
+ {
+  "step": "4.3 员工读B(同罐号1，不继承)",
+  "expect": "403",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "4.4 A上授权未删未复制",
+  "expect": "A:[1]，无B",
+  "result": "PASS",
+  "evidence": {
+   "ZCT930001": [
+    1
+   ]
+  }
+ },
+ {
+  "step": "4.5 管理员在B上重新分配罐1",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": true,
+    "deviceName": "ZCT930002",
+    "tanks": [
+     1
+    ],
+    "userId": 4
+   }
+  }
+ },
+ {
+  "step": "4.6 重新分配后员工读B",
+  "expect": "tanks=[1]",
+  "result": "PASS",
+  "evidence": {
+   "status": 200
+  }
+ },
+ {
+  "step": "4.7 员工油站列表含该站",
+  "expect": "含",
+  "result": "PASS",
+  "evidence": {
+   "stations": [
+    5
+   ]
+  }
+ },
+ {
+  "step": "4.8 旧设备A数据仍在(管理员)",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200
+  }
+ },
+ {
+  "step": "5.1 撤销B授权",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": true,
+    "deviceName": "ZCT930002",
+    "tanks": [],
+    "userId": 4
+   }
+  }
+ },
+ {
+  "step": "5.2 撤销后同一令牌立即失效",
+  "expect": "403",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "5.3 别客户管理员授权本客户员工",
+  "expect": "404 user_not_found",
+  "result": "PASS",
+  "evidence": {
+   "status": 404,
+   "body": {
+    "code": "user_not_found",
+    "error": "user not found"
+   }
+  }
+ },
+ {
+  "step": "5.4 员工自行授权",
+  "expect": "403 not authorized",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized"
+   }
+  }
+ },
+ {
+  "step": "5.5 授权别客户员工",
+  "expect": "404",
+  "result": "PASS",
+  "evidence": {
+   "status": 404,
+   "body": {
+    "code": "user_not_found",
+    "error": "user not found"
+   }
+  }
+ },
+ {
+  "step": "5.6 别客户员工读A",
+  "expect": "403",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "5.7 员工发控制命令(只读)",
+  "expect": "403",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device or method"
+   }
+  }
+ }
+]

@@ -518,7 +518,10 @@ func roleAllows(role string, need protocol.PermissionLevel) bool {
 	case RolePlatformAdmin, RoleCustomerAdmin:
 		return true // both tiers
 	case RoleCustomerUser:
-		return need == protocol.PermControl
+		// Viewing is granted per tank (cloud#63); a command acts on the whole device, so a grant on one
+		// tank must not let an employee mute or restart anything for the others. Employees are
+		// view-only until the product defines a per-tank command permission.
+		return false
 	default:
 		return false
 	}

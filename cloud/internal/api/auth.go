@@ -1,16 +1,23 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
+
+	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/store/db"
 )
 
 // defaultTokenTTL is used when Deps.TokenTTL is left zero (tests, and any caller that does not
@@ -27,68 +34,192 @@ const defaultMaxSessionAge = 30 * 24 * time.Hour
 // response: clients that do not know about it are unaffected.
 const renewedTokenHeader = "X-Renewed-Token"
 
+// loginRequest: exactly one of Username (platform admin) and Phone (customer admin). The server does
+// not guess which one a bare string is; the client decides and says so (contract §4.1).
 type loginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username string `json:"username"`
+	Phone    string `json:"phone"`
+	Password string `json:"password"`
 }
+
+// Machine-readable codes for the `code` field of auth responses. Clients branch on these, not on the
+// message and not on the status alone: the same 401 can mean "wrong password" or "no such binding".
+const (
+	codeInvalidRequest     = "invalid_request"
+	codeInvalidCredentials = "invalid_credentials"
+	codeInvalidPhone       = "invalid_phone"
+	// codeCustomerNotOnboarded: the user's customer is still being configured (cloud#60). It is a
+	// business notice, deliberately not the bare "not authorized" that clients read as a revoked account.
+	codeCustomerNotOnboarded = "customer_not_onboarded"
+)
+
+// amr values: how the session's authAt was earned.
+const (
+	amrPassword = "pwd"
+	amrWeChat   = "wx"
+)
 
 // apiClaims carries the user's id alongside the standard claims. The Role claim is still issued, but
 // nothing trusts it any more: authMiddleware loads the user row on every request and puts *that*
 // role into the request context. It used to be trusted (to save a query), which meant a demoted
 // administrator kept administrator-level control methods until their token expired.
+//
+// Subject is the user's id as a decimal string. It used to be the username; customer-side accounts
+// have no username of their own any more (their "username" is the phone number, which we do not
+// want sitting in every token), so clients must read identity from the login response or
+// GET /api/me, never from this claim.
 type apiClaims struct {
 	UserID int64  `json:"uid"`
 	Role   string `json:"role"`
-	// AuthAt is when the user last typed their password (unix seconds). Renewal carries it forward
-	// unchanged, which is what lets MaxSessionAge bound a sliding session. Tokens issued before this
-	// claim existed lack it; sessionStart falls back to their iat.
+	// AuthAt is when the user last authenticated in full — typed their password, or had a WeChat
+	// code verified (unix seconds). Renewal carries it forward unchanged, which is what lets
+	// MaxSessionAge bound a sliding session. Tokens issued before this claim existed lack it;
+	// sessionStart falls back to their iat.
 	AuthAt int64 `json:"authAt,omitempty"`
+	// AMR is how that authentication happened ("pwd" or "wx"). Informational: nothing authorizes on it.
+	AMR string `json:"amr,omitempty"`
 	jwt.RegisteredClaims
+}
+
+// dummyHash is compared against when there is no usable password hash, so that "no such account",
+// "wrong role" and "wrong password" cost the same bcrypt and cannot be told apart by timing.
+var (
+	dummyHashOnce sync.Once
+	dummyHash     []byte
+)
+
+func timingDummyHash() []byte {
+	dummyHashOnce.Do(func() {
+		dummyHash, _ = bcrypt.GenerateFromPassword([]byte("timing-equalizer"), bcrypt.DefaultCost)
+	})
+	return dummyHash
+}
+
+// customerNotOnboarded reports whether user belongs to a customer that has not completed onboarding.
+// Platform admins have no customer and are never blocked. Callers must have authenticated the user
+// first, so the answer cannot be used to probe which accounts or customers exist.
+func customerNotOnboarded(ctx context.Context, q *db.Queries, user db.User) (bool, error) {
+	if user.Role == control.RolePlatformAdmin || !user.CustomerID.Valid {
+		return false, nil
+	}
+	cust, err := q.GetCustomer(ctx, user.CustomerID.Int64)
+	if err != nil {
+		return false, err // fail closed: an unreadable status must not become a login
+	}
+	return cust.OnboardingStatus != customerActive, nil
+}
+
+const customerActive = "active"
+
+func abortNotOnboarded(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "customer not onboarded", "code": codeCustomerNotOnboarded})
+}
+
+// apiError writes {"error": msg, "code": code}. New auth responses carry a code; older endpoints keep
+// their error-only body.
+func apiError(c *gin.Context, status int, code, msg string) {
+	c.JSON(status, gin.H{"error": msg, "code": code})
 }
 
 func loginHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req loginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, err.Error())
+			return
+		}
+		byUsername := strings.TrimSpace(req.Username) != ""
+		byPhone := strings.TrimSpace(req.Phone) != ""
+		if byUsername == byPhone || req.Password == "" {
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "send password and exactly one of username (platform admin) or phone (customer admin)")
 			return
 		}
 
-		user, err := deps.Queries.GetUserByUsername(c.Request.Context(), req.Username)
+		ctx := c.Request.Context()
+		var (
+			user  db.User
+			found bool
+			// wantRole is the only role this field may log in as. A staff account (customer_user) has
+			// no web password at all and matches neither.
+			wantRole string
+			err      error
+		)
+		if byPhone {
+			phone, ok := normalizePhone(req.Phone)
+			if !ok {
+				apiError(c, http.StatusBadRequest, codeInvalidPhone, "invalid phone number")
+				return
+			}
+			wantRole = control.RoleCustomerAdmin
+			user, err = deps.Queries.GetUserByPhone(ctx, pgtype.Text{String: phone, Valid: true})
+		} else {
+			wantRole = control.RolePlatformAdmin
+			user, err = deps.Queries.GetUserByUsername(ctx, strings.TrimSpace(req.Username))
+		}
+		switch {
+		case err == nil:
+			found = true
+		case errors.Is(err, pgx.ErrNoRows):
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		hash := timingDummyHash()
+		usable := found && user.Role == wantRole && user.PasswordHash.Valid
+		if usable {
+			hash = []byte(user.PasswordHash.String)
+		}
+		// Always one bcrypt, whatever the account. Disabled and wrong-role accounts get the same
+		// answer as a wrong password, and only after the comparison, so the response does not reveal
+		// which accounts exist, are staff, or are disabled.
+		if bcrypt.CompareHashAndPassword(hash, []byte(req.Password)) != nil || !usable || user.DisabledAt.Valid {
+			apiError(c, http.StatusUnauthorized, codeInvalidCredentials, "invalid username or password")
+			return
+		}
+
+		// After the credentials are proven, so this answer is only ever given to the account's owner.
+		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if blocked {
+			abortNotOnboarded(c)
+			return
+		}
+
+		now := time.Now()
+		token, _, err := issueToken(deps, user.ID, user.Role, amrPassword, now, now)
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": token, "user": toUserResponse(user, true)})
+	}
+}
+
+// meHandler returns the caller's own record. It exists because the token no longer says who the user
+// is in a form clients may show or key local storage by (see apiClaims.Subject).
+func meHandler(deps Deps) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, _ := c.Get("userID")
+		user, err := deps.Queries.GetUserByID(c.Request.Context(), id.(int64))
+		if err != nil {
+			// authMiddleware has just loaded this row; a miss here means it was deleted in between.
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-
-		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
-			return
-		}
-		// A disabled user gets the same answer as a wrong password, and only after the password was
-		// checked, so the response does not reveal which accounts exist or are disabled.
-		if user.DisabledAt.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
-			return
-		}
-
-		now := time.Now()
-		token, _, err := issueToken(deps, user.ID, user.Username, user.Role, now, now)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"token": token})
+		c.JSON(http.StatusOK, toUserResponse(user, true))
 	}
 }
 
 // issueToken signs a token for a user whose session began at authAt. The expiry is a full tokenTTL
 // from now, but never past authAt+MaxSessionAge: that cap is what makes "renew while in use" safe.
-func issueToken(deps Deps, userID int64, username, role string, authAt, now time.Time) (string, time.Time, error) {
+func issueToken(deps Deps, userID int64, role, amr string, authAt, now time.Time) (string, time.Time, error) {
 	exp := now.Add(deps.tokenTTL())
 	if limit := authAt.Add(deps.maxSessionAge()); limit.Before(exp) {
 		exp = limit
@@ -97,8 +228,9 @@ func issueToken(deps Deps, userID int64, username, role string, authAt, now time
 		UserID: userID,
 		Role:   role,
 		AuthAt: authAt.Unix(),
+		AMR:    amr,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
+			Subject:   strconv.FormatInt(userID, 10),
 			ExpiresAt: jwt.NewNumericDate(exp),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
@@ -110,7 +242,7 @@ func issueToken(deps Deps, userID int64, username, role string, authAt, now time
 // renewToken returns a replacement for a still-valid token that is in the last half of its life, or
 // "" when no renewal is due. Callers must already have checked that the user exists and is enabled.
 // It never extends a session past authAt+MaxSessionAge: a token that cannot gain time is not renewed.
-func renewToken(deps Deps, claims *apiClaims, userID int64, username, role string, now time.Time) string {
+func renewToken(deps Deps, claims *apiClaims, userID int64, role string, now time.Time) string {
 	if claims.ExpiresAt == nil {
 		return ""
 	}
@@ -122,7 +254,7 @@ func renewToken(deps Deps, claims *apiClaims, userID int64, username, role strin
 	if !ok {
 		return ""
 	}
-	token, newExp, err := issueToken(deps, userID, username, role, authAt, now)
+	token, newExp, err := issueToken(deps, userID, role, claims.AMR, authAt, now)
 	if err != nil {
 		// Renewal is a convenience; the request itself was authorized and should still succeed.
 		log.Printf("auth: renew token for user %d: %v", userID, err)
@@ -134,7 +266,7 @@ func renewToken(deps Deps, claims *apiClaims, userID int64, username, role strin
 	return token
 }
 
-// sessionStart is when the password login behind this token happened.
+// sessionStart is when the full authentication (password or WeChat) behind this token happened.
 func (c *apiClaims) sessionStart() (time.Time, bool) {
 	if c.AuthAt > 0 {
 		return time.Unix(c.AuthAt, 0), true
@@ -182,8 +314,16 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		if blocked, err := customerNotOnboarded(c.Request.Context(), deps.Queries, user); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if blocked {
+			abortNotOnboarded(c)
+			return
+		}
+
 		// Only after the user checks above: a disabled or deleted user never gets a fresh token.
-		if renewed := renewToken(deps, claims, user.ID, user.Username, user.Role, time.Now()); renewed != "" {
+		if renewed := renewToken(deps, claims, user.ID, user.Role, time.Now()); renewed != "" {
 			c.Header(renewedTokenHeader, renewed)
 		}
 

@@ -378,8 +378,13 @@ func TestStations_AssignDevice(t *testing.T) {
 	}](t, assign(tn.adminA, tn.devA1, map[string]any{"stationId": sA.ID})); res.Changed {
 		t.Errorf("assigning the station it is already on reported changed=true")
 	}
-	if rec := assign(tn.platform, tn.devA2, map[string]any{"stationId": sA.ID}); rec.Code != http.StatusOK {
-		t.Errorf("platform admin assign: %d", rec.Code)
+	// One device per station (cloud#61): a second device is refused, not slipped in next to the first.
+	if rec := assign(tn.platform, tn.devA2, map[string]any{"stationId": sA.ID}); rec.Code != http.StatusConflict ||
+		!strings.Contains(rec.Body.String(), `"station_occupied"`) || !strings.Contains(rec.Body.String(), tn.devA1) {
+		t.Errorf("second device on an occupied station: %d %s, want 409 station_occupied naming %s", rec.Code, rec.Body.String(), tn.devA1)
+	}
+	if got := stationOf(tn.devA2); got != nil {
+		t.Errorf("a refused assignment left the device on station %d", *got)
 	}
 
 	// The request must say what it wants: a missing key is not a null.

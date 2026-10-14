@@ -278,9 +278,16 @@ func TestListOilInOut_RealDeviceFormatIsNotSilentlyReportedAsEmpty(t *testing.T)
 		t.Errorf("parsed = %d / %d records, want 0 — nothing in this window is parseable",
 			body.Parsed, len(body.Rows))
 	}
-	// The sample is what makes the 502 actionable rather than merely honest: it names the format.
-	if !strings.Contains(body.Sample, "DetailInoutRecord") {
-		t.Errorf("sample = %q, want the offending raw value", body.Sample)
+	// An employee (tank-level view access, cloud#63) is told the window is broken, but the raw text
+	// of an unreadable record may describe a tank they were not granted, so it is withheld.
+	if body.Sample != "" {
+		t.Errorf("sample = %q for an employee, want it withheld", body.Sample)
+	}
+	// An administrator gets the sample: it is what makes the 502 actionable rather than merely honest.
+	env.setRole("customer_admin")
+	adminBody := decodeStock(t, env.authed("GET", path, nil).Body.Bytes())
+	if !strings.Contains(adminBody.Sample, "DetailInoutRecord") {
+		t.Errorf("sample = %q for an administrator, want the offending raw value", adminBody.Sample)
 	}
 	if body.Rows == nil {
 		t.Error("records must be an array even when empty, so a client can render it unconditionally")

@@ -22,28 +22,6 @@ type Querier interface {
 	// The statement start is guaranteed not to be later than the snapshot, so the cap is never later
 	// than what the decision saw.
 	AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error)
-	// Short-code variant of BindUserDeviceIfAllowed: the QR code carries only "000001", not a pairing
-	// secret, so the customer boundary is the authorization. Resolution, check and insert are still one
-	// statement with the user and device rows locked FOR SHARE (same transfer-race guarantee).
-	//
-	// `candidates` is ordered: the scanned text first (exact match wins), then prefix||text. Only the
-	// caller's own customer's devices are considered, so another customer's device is
-	// indistinguishable from a nonexistent one. Equality only — no LIKE. platform_admin has no customer
-	// and is refused here (use the pairing-secret path). Never creates a devices row.
-	// Returns the resolved device_name; no row means refused.
-	BindUserDeviceByCodeIfAllowed(ctx context.Context, arg BindUserDeviceByCodeIfAllowedParams) (string, error)
-	// Pairing-time tenant check AND the insert, in one statement, with the user and device rows locked
-	// FOR SHARE. Checking first and inserting later leaves a window in which a device or user transfer
-	// can run: the transfer locks the row FOR UPDATE, deletes the bindings and commits, and a bind that
-	// passed its check earlier then inserts a binding *behind* that cleanup. Here the bind queues behind
-	// the transfer's lock and is evaluated against the post-transfer state (Postgres re-reads the locked
-	// row after the wait), so it is refused — or, if it went first, the transfer's cleanup removes it.
-	//
-	// A platform admin may bind anything (as before); everyone else only a device of their own
-	// customer, and a disabled user nothing. Idempotent: binding an already-bound device is a success.
-	// `bound` is false when the bind was refused; the handler reports that exactly like a wrong pairing
-	// secret so the endpoint cannot be used to learn which devices exist or who owns them.
-	BindUserDeviceIfAllowed(ctx context.Context, arg BindUserDeviceIfAllowedParams) (bool, error)
 	// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
 	// from the SAME clock. Letting the column default to the database's now() while the application
 	// computes expires_at from its own clock means the two can disagree by however long the round trip
@@ -69,6 +47,12 @@ type Querier interface {
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
 	CreateStation(ctx context.Context, arg CreateStationParams) (Station, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// A concurrent bind of the same openid or the same user trips a UNIQUE constraint (23505); the caller
+	// re-reads and decides, so two requests can never produce two rows or move an identity.
+	CreateWechatIdentity(ctx context.Context, arg CreateWechatIdentityParams) (UserWechatIdentity, error)
+	// The three minimum conditions for onboarding (cloud#60). A device only counts when it sits in a
+	// station of the same customer; the composite FK already guarantees that, the join keeps it explicit.
+	CustomerOnboardingCounts(ctx context.Context, customerID pgtype.Int8) (CustomerOnboardingCountsRow, error)
 	// Run in the same transaction as a device changing customer: bindings made under the old customer
 	// must not survive into the new one.
 	DeleteBindingsForDevice(ctx context.Context, deviceName string) (int64, error)
@@ -80,6 +64,12 @@ type Querier interface {
 	// A station that still has devices fails with 23503 (devices_station_customer_fk); the handler turns
 	// that into 409.
 	DeleteStation(ctx context.Context, id int64) (int64, error)
+	DeleteTankGrant(ctx context.Context, arg DeleteTankGrantParams) (int64, error)
+	// 与设备换客户同一个事务。返回被清除授权涉及的用户数。
+	DeleteTankGrantsForDevice(ctx context.Context, deviceName string) (int32, error)
+	// 与用户换客户同一个事务：旧客户下的授权不能带进新客户。返回被清除授权涉及的设备数。
+	DeleteTankGrantsForUser(ctx context.Context, userID int64) (int32, error)
+	DeleteTankGrantsForUserDevice(ctx context.Context, arg DeleteTankGrantsForUserDeviceParams) (int64, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
@@ -96,25 +86,44 @@ type Querier interface {
 	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
 	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
+	// Completing onboarding locks the row so the readiness check and the status write see one state.
+	GetCustomerForUpdate(ctx context.Context, id int64) (Customer, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
 	// Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
 	// both win.
 	GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error)
 	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
 	GetStation(ctx context.Context, id int64) (Station, error)
+	// The one device currently on a station, if any (at most one: devices_station_id_key).
+	GetStationDevice(ctx context.Context, stationID pgtype.Int8) (Device, error)
+	// Serializes everything that changes which device is on a station (ordinary assignment and device
+	// replacement). Lock order is always station first, then device rows by device_name, so the two
+	// paths cannot deadlock. The partial unique index devices_station_id_key is the actual guarantee;
+	// this lock only lets a handler see the occupant and answer with a precise conflict.
+	GetStationForUpdate(ctx context.Context, id int64) (Station, error)
 	// Used where a decision must reflect the user's *current* role and customer rather than what their
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, error)
+	// WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
+	// second sees the first's identity row instead of racing it.
+	GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
 	GetUserForShare(ctx context.Context, id int64) (User, error)
 	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
 	// again, so a concurrent move or disable cannot slip in between the first check and the write.
 	GetUserForUpdate(ctx context.Context, id int64) (User, error)
+	GetWechatIdentity(ctx context.Context, arg GetWechatIdentityParams) (UserWechatIdentity, error)
+	GetWechatIdentityByUser(ctx context.Context, userID int64) (UserWechatIdentity, error)
 	HasRecordBackfill(ctx context.Context, deviceName string) (bool, error)
 	// 同一份重放不改变已有行。
 	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
 	InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error
+	// 判定与写入是同一条语句：被授权者必须是 customer_user，且设备与其同属一个客户。重复授权是 no-op
+	// （ON CONFLICT），返回 0 行 = 已存在或被拒绝；调用方在同一事务里先用 GetUserForUpdate /
+	// GetDeviceForUpdate 复核并区分这两种情况。
+	InsertTankGrantIfAllowed(ctx context.Context, arg InsertTankGrantIfAllowedParams) (int64, error)
 	// 该设备已汇总到的最后一个小时（毫秒）；从未汇总过返回 0。
 	LatestTelemetryHourStart(ctx context.Context, deviceName string) (int64, error)
 	ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAscParams) ([]ListAlarmEventsAscRow, error)
@@ -131,7 +140,9 @@ type Querier interface {
 	// it (see ListControlCommandsVisibleToUser for why):
 	//   * a disabled or unknown user reads nothing;
 	//   * naming a device requires access to it (user_may_access_device);
-	//   * a customer user must name a device;
+	//   * a customer user reads nothing (tank-level view access only, cloud#63; audit rows are device-wide);
+	//   * a customer still being configured (cloud#60) reads nothing for its non-platform accounts, with or
+	//     without a device named (user_may_access_device only covers the named case);
 	//   * a platform admin sees every customer's rows, optionally narrowed by customer_id;
 	//   * everyone else is pinned to their own customer's rows, even when a device is named, so a device
 	//     that changed hands never shows its previous owner's history to the new one.
@@ -145,12 +156,18 @@ type Querier interface {
 	// lets a user move between them — and then get history snapshotted under the customer they just
 	// joined for a device they can no longer reach.
 	//
+	// A customer user (tank-level view access only, cloud#63) sees no command history: commands are
+	// whole-device and carry other tanks' operators and arguments.
 	// A platform admin sees every command for the device. Anyone else sees only commands filed under
 	// their own customer, so a device that changed hands never shows its previous owner's commands
 	// (operator, reason, arguments, results) to the new one.
 	ListControlCommandsVisibleToUser(ctx context.Context, arg ListControlCommandsVisibleToUserParams) ([]ControlCommand, error)
 	ListCustomers(ctx context.Context) ([]Customer, error)
-	// Same three-way rule as UserMayAccessDevice, expressed as a list.
+	// Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on
+	// which they hold at least one tank grant (cloud#63); the tanks themselves are listed separately.
+	// A customer still being configured (cloud#60) lists nothing for its non-platform accounts, exactly
+	// as user_may_access_device answers, so the list and the decision agree even for a caller that does
+	// not go through the HTTP middleware.
 	ListDevicesForUser(ctx context.Context, id int64) ([]Device, error)
 	// INTERNAL: no authorization and no customer scoping — only ingest's command reconcile may call it.
 	// One row per device that still has a command a result could close, with the oldest such command's
@@ -158,6 +175,8 @@ type Querier interface {
 	// excluded because it is terminal (MarkControlCommandFinished refuses to rewrite it), and a command
 	// already past its window can no longer be repaired.
 	ListDevicesWithOpenControlCommandsUnscoped(ctx context.Context) ([]ListDevicesWithOpenControlCommandsUnscopedRow, error)
+	// 用户在某设备上被授权的罐号（升序）。调用方用它过滤整机快照；管理员不走这条，他们看全部。
+	ListGrantedTanks(ctx context.Context, arg ListGrantedTanksParams) ([]int32, error)
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
@@ -165,13 +184,18 @@ type Querier interface {
 	//   platform_admin  every station;
 	//   customer_admin  every station of their own customer — including ones with no devices yet, or a
 	//                   newly created station could never be seen and so never be given a device;
-	//   customer_user   only the stations of devices they are bound to, within their own customer. A
+	//   customer_user   only the stations of devices on which they hold a tank grant, within their own customer. A
 	//                   station none of their devices is on is invisible, and so is how many other
 	//                   devices it has.
 	ListStationsForUser(ctx context.Context, id int64) ([]Station, error)
+	// 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
+	// （payload 无罐号，tank=0）只有管理员可见。
 	// 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
 	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
 	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
+	// 员工-油罐查看授权（迁移 000024，cloud#63）。授权判定本身在 SQL 函数 user_may_access_device /
+	// user_may_access_tank 里，这里只是授权关系的读写。
+	ListTankGrantsForUser(ctx context.Context, userID int64) ([]UserTankGrant, error)
 	// [begin, end) 内每个字段的小时汇总，按时间升序。
 	ListTelemetryHourly(ctx context.Context, arg ListTelemetryHourlyParams) ([]ListTelemetryHourlyRow, error)
 	// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
@@ -207,6 +231,7 @@ type Querier interface {
 	// Each of these returns 0 rows when the guard rejects the move, which callers treat as "already
 	// moved on", not as an error.
 	MarkControlCommandSent(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	MarkCustomerOnboarded(ctx context.Context, id int64) (Customer, error)
 	// ThingsBoard 里已经不存在的设备（被删除）不会再出现在列表里，只靠 SyncDeviceOnlineStatus 它们会
 	// 永远停在在线。传入本轮在 ThingsBoard 看到的全部设备名，其余仍标记在线的一律置为离线。
 	MarkDevicesOfflineExcept(ctx context.Context, seenNames []string) (int64, error)
@@ -232,6 +257,10 @@ type Querier interface {
 	// This is for deciding early (and for auditing denials under the right customer). It is NOT what
 	// keeps a command honest: CreateControlCommand re-checks the rule inside the INSERT itself.
 	ResolveDeviceAccess(ctx context.Context, arg ResolveDeviceAccessParams) (ResolveDeviceAccessRow, error)
+	// 扫码/短码只做定位：不写任何东西。只在调用者所属客户的设备里找（精确匹配优先，再按前缀顺序），
+	// 且只返回调用者本来就能定位的设备（客户管理员：本客户设备；员工：至少有一个被授权罐的设备）。
+	// 无权、不存在、别的客户的设备一律无行，与不存在不可区分。平台管理员不走这里。
+	ResolveDeviceForNavigation(ctx context.Context, arg ResolveDeviceForNavigationParams) (string, error)
 	// The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
 	// would otherwise refuse the change.
 	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
@@ -244,10 +273,17 @@ type Querier interface {
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
+	// invalid_source 是合法 JSON，能识别罐号：只计入调用者可见的罐（user_may_access_tank，整机级无罐号
+	// 记录只对管理员可见），否则员工能借计数得知未授权罐有被拒记录（#63）。unparsable 无法归属到罐，
+	// 作为整机格式故障照常计数。
 	SummarizeStockRejects(ctx context.Context, arg SummarizeStockRejectsParams) (SummarizeStockRejectsRow, error)
 	// 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
 	// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
 	SyncDeviceOnlineStatus(ctx context.Context, arg SyncDeviceOnlineStatusParams) (int64, error)
+	TouchWechatLogin(ctx context.Context, id int64) error
+	// 旧的设备级绑定查询（BindUserDeviceIfAllowed / BindUserDeviceByCodeIfAllowed）已在 cloud#63 中移除：
+	// 扫码不再创建任何授权，授权只来自 user_tank_grants（db/queries/tank_grants.sql）。user_devices 表保留为
+	// 只读历史，不再被任何授权判定引用。
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	UpdateStation(ctx context.Context, arg UpdateStationParams) (Station, error)
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
@@ -286,6 +322,8 @@ type Querier interface {
 	// An unassigned device never matches a customer; a user that no longer exists, or that has been
 	// disabled, matches nothing.
 	UserMayAccessDevice(ctx context.Context, arg UserMayAccessDeviceParams) (bool, error)
+	// Tank-level decision for one (device, tank), by the same SQL function the record queries use.
+	UserMayAccessTank(ctx context.Context, arg UserMayAccessTankParams) (bool, error)
 	WriteAuditLog(ctx context.Context, arg WriteAuditLogParams) (AuditLog, error)
 }
 

@@ -66,11 +66,28 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 
+		tanks := snap.Tanks
+		if isEmployee(c) {
+			// The device is reachable because of at least one grant; the snapshot is whole-device, so
+			// it is cut down to the granted tanks here, on the server (cloud#63).
+			granted, err := grantedTankSet(c, deps, device)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			tanks = tanks[:0:0]
+			for _, t := range snap.Tanks {
+				if granted[t.Index] {
+					tanks = append(tanks, t)
+				}
+			}
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"deviceName":  device,
 			"ts":          time.UnixMilli(snap.TS).UTC(),
 			"snapshotSeq": snap.SnapshotSeq,
-			"tanks":       snap.Tanks,
+			"tanks":       tanks,
 		})
 	}
 }

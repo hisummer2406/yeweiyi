@@ -106,12 +106,16 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 	if len(suffix) > 60 {
 		suffix = suffix[len(suffix)-60:]
 	}
-	username := "ctl-" + suffix
+	// Customer-side usernames are their phone numbers (users_phone_role_check), so a valid-looking
+	// number that no other test range uses.
+	username := fmt.Sprintf("170%08d", time.Now().UnixNano()%100_000_000)
 	deviceName := "ctl-dev-" + suffix
 
 	var userID int64
 	err := pool.QueryRow(ctx,
-		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, 'x', $2::text,
+		`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,
+			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE $1 END,
+			CASE WHEN $2::text = 'customer_user' THEN NULL ELSE 'x' END, $2::text,
 			CASE WHEN $2::text = 'platform_admin' THEN NULL ELSE (SELECT id FROM customers WHERE name = 'default') END) RETURNING id`,
 		username, role).Scan(&userID)
 	if err != nil {
@@ -124,7 +128,7 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 		t.Fatalf("assign device to default customer: %v", err)
 	}
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO user_devices (user_id, device_name) VALUES ($1, $2)`, userID, deviceName); err != nil {
+		`INSERT INTO user_tank_grants (user_id, device_name, tank) SELECT $1, $2, g FROM generate_series(1, 16) g`, userID, deviceName); err != nil {
 		t.Fatalf("bind device: %v", err)
 	}
 
@@ -132,7 +136,7 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 		c := context.Background()
 		pool.Exec(c, `DELETE FROM audit_log WHERE device_name = $1 OR actor = $2`, deviceName, username)
 		pool.Exec(c, `DELETE FROM control_commands WHERE device_name = $1`, deviceName)
-		pool.Exec(c, `DELETE FROM user_devices WHERE user_id = $1`, userID)
+		pool.Exec(c, `DELETE FROM user_tank_grants WHERE user_id = $1`, userID)
 		pool.Exec(c, `DELETE FROM devices WHERE device_name = $1`, deviceName)
 		pool.Exec(c, `DELETE FROM users WHERE id = $1`, userID)
 	})
@@ -180,8 +184,20 @@ func TestIssue_PhysicalCommandsBlockedByDefault(t *testing.T) {
 	assertAudit(t, f, "control.issue", "denied")
 }
 
-func TestIssue_NonPhysicalCommandAllowedByDefault(t *testing.T) {
+// An employee is view-only: per-tank view access never becomes a whole-device command (cloud#63).
+func TestIssue_CustomerUserCannotIssueAnyCommand(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerUser, control.Config{})
+	_, err := f.svc.Issue(context.Background(), issueReq(f, protocol.MethodAlarmMute))
+	if !errors.Is(err, control.ErrForbidden) {
+		t.Fatalf("Issue as customer_user: %v, want ErrForbidden", err)
+	}
+	if f.sender.lastMeth != "" {
+		t.Errorf("a refused command reached the device: %q", f.sender.lastMeth)
+	}
+}
+
+func TestIssue_NonPhysicalCommandAllowedByDefault(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
 
 	cmd, err := f.svc.Issue(context.Background(), issueReq(f, protocol.MethodAlarmMute))
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
+	"yeweiyi-cloud/internal/wechat"
 )
 
 type Deps struct {
@@ -28,6 +29,12 @@ type Deps struct {
 	// MaxSessionAge caps how long sliding renewal can keep a login alive, counted from the password
 	// login (the token's authAt). Zero means defaultMaxSessionAge.
 	MaxSessionAge time.Duration
+
+	// WeChat verifies mini-program login codes. Nil means the feature is off (config wechat.enabled);
+	// the WeChat routes then answer 503 wechat_unavailable and nothing else is affected.
+	WeChat wechat.Client
+	// MiniCodePage / MiniCodeEnv configure the device mini-program code (GET /devices/:device/mini-code).
+	MiniCodePage, MiniCodeEnv string
 
 	// TB and Control belong to the ThingsBoard single stack. Both are optional so the server can
 	// still boot without ThingsBoard configured — the routes that need them answer 503 rather than
@@ -61,6 +68,8 @@ func NewRouter(deps Deps) *gin.Engine {
 
 	r.GET("/healthz", healthzHandler(deps))
 	r.POST("/api/login", loginHandler(deps))
+	r.POST("/api/auth/wechat/login", wechatLoginHandler(deps))
+	r.POST("/api/auth/wechat/phone-login", wechatPhoneLoginHandler(deps))
 	// Not in the authorized group: gin's JWT middleware only checks the Authorization header, but
 	// this endpoint also accepts the token as a query param (see wsAuthToken) since browser/mini-
 	// program WebSocket clients can't set that header on the handshake request.
@@ -75,12 +84,17 @@ func NewRouter(deps Deps) *gin.Engine {
 		// /api/oilcan/latest (replaced by /api/devices/:device/telemetry/latest below) and
 		// /api/shifts (设备协议 V1 has no 交班 uplink on either side, so it could only return
 		// an empty list — see docs/protocol-v1-reconciliation.md).
+		authorized.GET("/me", meHandler(deps))
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.GET("/stations", listStationsHandler(deps))
 		authorized.POST("/devices", registerDeviceHandler(deps))
-		authorized.POST("/devices/bind", bindDeviceHandler(deps))
+		authorized.POST("/devices/bind", bindDeviceHandler(deps)) // retired (410), cloud#63
+		authorized.POST("/devices/resolve", resolveDeviceHandler(deps))
+		authorized.GET("/devices/:device/tanks", listDeviceTanksHandler(deps))
+		authorized.GET("/users/:id/tank-grants", listUserTankGrantsHandler(deps))
+		authorized.PUT("/users/:id/tank-grants/:device", putUserTankGrantsHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
 		// Provisioning-time only (platform_admin), not part of the mini-program's own pairing
 		// flow — see mintPairingSecretHandler's doc comment.
@@ -102,6 +116,8 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/customers", listCustomersHandler(deps))
 		authorized.PUT("/customers/:id", renameCustomerHandler(deps))
 		authorized.DELETE("/customers/:id", deleteCustomerHandler(deps))
+		authorized.GET("/customers/:id/onboarding", getOnboardingHandler(deps))
+		authorized.POST("/customers/:id/onboarding/complete", completeOnboardingHandler(deps))
 		authorized.POST("/users", createUserHandler(deps))
 		authorized.GET("/users", listUsersHandler(deps))
 		authorized.PUT("/users/:id", updateUserHandler(deps))
@@ -110,7 +126,9 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.POST("/stations", createStationHandler(deps))
 		authorized.PUT("/stations/:id", updateStationHandler(deps))
 		authorized.DELETE("/stations/:id", deleteStationHandler(deps))
+		authorized.GET("/devices/:device/mini-code", deviceMiniCodeHandler(deps))
 		authorized.PUT("/devices/:device/station", assignDeviceStationHandler(deps))
+		authorized.POST("/stations/:id/replace-device", replaceStationDeviceHandler(deps))
 	}
 
 	return r

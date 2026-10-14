@@ -13,9 +13,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -52,12 +55,29 @@ type testEnv struct {
 	queries  *db.Queries
 	username string
 	token    string
+	// tokenTTL is how long a token from tokenFor lives: the Deps' TokenTTL, so a test that shortens
+	// it gets short-lived tokens just as it would from /api/login.
+	tokenTTL time.Duration
 	// ing is set by newStockEnv: the live ingester feeding the business records the record
 	// endpoints read.
 	ing *ingest.Ingester
 }
 
 const testUserPasswordHash = "$2a$10$meNXe5U2v9ec5cW0fIv2teBFiwN88qoxXndhnk.WZd.h/MimCSZ5u" // bcrypt("e2e-test-pass")
+
+// phoneSeq makes test phone numbers unique within one `go test` run; phoneBase makes them unlikely to
+// collide with another run's leftovers (an interrupted test can leave a row behind).
+var (
+	phoneSeq  atomic.Int64
+	phoneBase = time.Now().UnixNano() % 90_000_000
+)
+
+// testPhone returns a valid, unique mainland number. Customer-side users' usernames are their phone
+// numbers (users_phone_role_check), so this is also what a test user is called.
+func testPhone() string {
+	n := (phoneBase + phoneSeq.Add(1)) % 90_000_000
+	return "13" + fmt.Sprintf("%09d", n+1_000_000)
+}
 
 func newTestEnv(t *testing.T) *testEnv {
 	return newTestEnvWith(t, nil)
@@ -91,8 +111,10 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 	}
 	router := api.NewRouter(deps)
 
-	username := "api-test-user-" + t.Name()
-	if _, err := pool.Exec(ctx, `INSERT INTO users (username, password_hash, customer_id) VALUES ($1, $2, `+defaultCustomerSQL+`) ON CONFLICT DO NOTHING`, username, testUserPasswordHash); err != nil {
+	// The seeded user is a customer_user, which has a phone and no password (users_*_role_check).
+	// Tests that need a password-capable role promote it with setRole.
+	username := testPhone()
+	if _, err := pool.Exec(ctx, `INSERT INTO users (username, phone, customer_id) VALUES ($1, $1, `+defaultCustomerSQL+`)`, username); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
 	t.Cleanup(func() {
@@ -101,9 +123,35 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 		}
 	})
 
-	env := &testEnv{t: t, router: router, pool: pool, rdb: rdb, queries: queries, username: username}
+	ttl := deps.TokenTTL
+	if ttl == 0 {
+		ttl = 24 * time.Hour
+	}
+	env := &testEnv{t: t, router: router, pool: pool, rdb: rdb, queries: queries, username: username, tokenTTL: ttl}
 	env.token = env.login(username, "e2e-test-pass")
 	return env
+}
+
+// tokenFor signs a token for an existing user by hand, the way /api/login would. Staff accounts
+// (customer_user) have no password, so tests cannot reach them through /api/login — in production
+// they get their token from the WeChat login.
+func (e *testEnv) tokenFor(username string) string {
+	e.t.Helper()
+	var id int64
+	var role string
+	if err := e.pool.QueryRow(context.Background(),
+		`SELECT id, role FROM users WHERE username = $1`, username).Scan(&id, &role); err != nil {
+		e.t.Fatalf("look up %s: %v", username, err)
+	}
+	now := time.Now()
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"uid": id, "role": role, "sub": strconv.FormatInt(id, 10), "amr": "wx",
+		"authAt": now.Unix(), "iat": now.Unix(), "exp": now.Add(e.tokenTTL).Unix(),
+	}).SignedString([]byte("api-test-secret"))
+	if err != nil {
+		e.t.Fatalf("sign token: %v", err)
+	}
+	return signed
 }
 
 // defaultCustomerSQL selects the customer the migration backfills everything into. Tests that do
@@ -119,8 +167,10 @@ func (e *testEnv) setRole(role string) {
 	if _, err := e.pool.Exec(context.Background(),
 		`UPDATE users SET role = $1::text,
 		        customer_id = CASE WHEN $1::text = 'platform_admin' THEN NULL
-		                           ELSE COALESCE(customer_id, `+defaultCustomerSQL+`) END
-		 WHERE username = $2`, role, e.username); err != nil {
+		                           ELSE COALESCE(customer_id, `+defaultCustomerSQL+`) END,
+		        phone = CASE WHEN $1::text = 'platform_admin' THEN NULL ELSE username END,
+		        password_hash = CASE WHEN $1::text = 'customer_user' THEN NULL ELSE $3::text END
+		 WHERE username = $2`, role, e.username, testUserPasswordHash); err != nil {
 		e.t.Fatalf("set role: %v", err)
 	}
 	e.token = e.login(e.username, "e2e-test-pass")
@@ -153,7 +203,7 @@ func (e *testEnv) newCustomer(label string) int64 {
 	var id int64
 	name := fmt.Sprintf("api-test-%s-%s-%d", label, e.t.Name(), time.Now().UnixNano())
 	if err := e.pool.QueryRow(context.Background(),
-		`INSERT INTO customers (name) VALUES ($1) RETURNING id`, name).Scan(&id); err != nil {
+		`INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`, name).Scan(&id); err != nil {
 		e.t.Fatalf("seed customer: %v", err)
 	}
 	e.t.Cleanup(func() {
@@ -174,16 +224,20 @@ func (e *testEnv) userIn(role string, customerID int64) (string, int64) {
 	if role == "" {
 		role = control.RoleCustomerUser
 	}
-	username := fmt.Sprintf("api-test-other-%s-%d", e.t.Name(), time.Now().UnixNano())
+	username := testPhone()
 
-	var customer any = customerID
+	// Platform admins have no phone and no customer; staff have a phone and no password.
+	var customer, phone, hash any = customerID, username, testUserPasswordHash
 	if role == control.RolePlatformAdmin {
-		customer = nil
+		customer, phone = nil, nil
+	}
+	if role == control.RoleCustomerUser {
+		hash = nil
 	}
 	var id int64
 	if err := e.pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, $4) RETURNING id`,
-		username, testUserPasswordHash, role, customer).Scan(&id); err != nil {
+		`INSERT INTO users (username, password_hash, role, customer_id, phone) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+		username, hash, role, customer, phone).Scan(&id); err != nil {
 		e.t.Fatalf("seed other user: %v", err)
 	}
 	e.t.Cleanup(func() {
@@ -228,9 +282,23 @@ func (e *testEnv) mintPairingSecret(deviceName string) string {
 	return resp.PairingSecret
 }
 
+// login returns a token for username. Platform and customer admins go through the real /api/login
+// (username and phone respectively); staff have no password, so theirs is signed by tokenFor.
 func (e *testEnv) login(username, password string) string {
 	e.t.Helper()
-	body, _ := json.Marshal(map[string]string{"username": username, "password": password})
+	var role string
+	if err := e.pool.QueryRow(context.Background(),
+		`SELECT role FROM users WHERE username = $1`, username).Scan(&role); err != nil {
+		e.t.Fatalf("login: look up %s: %v", username, err)
+	}
+	if role == control.RoleCustomerUser {
+		return e.tokenFor(username)
+	}
+	field := "username"
+	if role == control.RoleCustomerAdmin {
+		field = "phone"
+	}
+	body, _ := json.Marshal(map[string]string{field: username, "password": password})
 	rec := e.do("POST", "/api/login", nil, body)
 	if rec.Code != http.StatusOK {
 		e.t.Fatalf("login: expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -294,8 +362,8 @@ func (e *testEnv) seedDeviceIn(deviceName string, customerID int64) {
 func (e *testEnv) bindDevice(deviceName string) {
 	e.t.Helper()
 	if _, err := e.pool.Exec(context.Background(), `
-		INSERT INTO user_devices (user_id, device_name)
-		SELECT id, $2 FROM users WHERE username = $1
+		INSERT INTO user_tank_grants (user_id, device_name, tank)
+		SELECT id, $2, g FROM users, generate_series(1, 16) g WHERE username = $1
 		ON CONFLICT DO NOTHING`, e.username, deviceName); err != nil {
 		e.t.Fatalf("bind device %s: %v", deviceName, err)
 	}

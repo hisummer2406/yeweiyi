@@ -7,16 +7,49 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createCustomer = `-- name: CreateCustomer :one
-INSERT INTO customers (name) VALUES ($1) RETURNING id, name, created_at
+INSERT INTO customers (name) VALUES ($1) RETURNING id, name, created_at, onboarding_status, onboarded_at
 `
 
 func (q *Queries) CreateCustomer(ctx context.Context, name string) (Customer, error) {
 	row := q.db.QueryRow(ctx, createCustomer, name)
 	var i Customer
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.OnboardingStatus,
+		&i.OnboardedAt,
+	)
+	return i, err
+}
+
+const customerOnboardingCounts = `-- name: CustomerOnboardingCounts :one
+SELECT
+    (SELECT count(*) FROM users u
+      WHERE u.customer_id = $1 AND u.role = 'customer_admin'
+        AND u.disabled_at IS NULL AND u.phone IS NOT NULL AND u.password_hash IS NOT NULL)::bigint AS customer_admins,
+    (SELECT count(*) FROM stations s WHERE s.customer_id = $1)::bigint AS stations,
+    (SELECT count(*) FROM devices d JOIN stations s ON s.id = d.station_id AND s.customer_id = d.customer_id
+      WHERE d.customer_id = $1)::bigint AS devices_in_station
+`
+
+type CustomerOnboardingCountsRow struct {
+	CustomerAdmins   int64 `json:"customer_admins"`
+	Stations         int64 `json:"stations"`
+	DevicesInStation int64 `json:"devices_in_station"`
+}
+
+// The three minimum conditions for onboarding (cloud#60). A device only counts when it sits in a
+// station of the same customer; the composite FK already guarantees that, the join keeps it explicit.
+func (q *Queries) CustomerOnboardingCounts(ctx context.Context, customerID pgtype.Int8) (CustomerOnboardingCountsRow, error) {
+	row := q.db.QueryRow(ctx, customerOnboardingCounts, customerID)
+	var i CustomerOnboardingCountsRow
+	err := row.Scan(&i.CustomerAdmins, &i.Stations, &i.DevicesInStation)
 	return i, err
 }
 
@@ -35,18 +68,42 @@ func (q *Queries) DeleteCustomer(ctx context.Context, id int64) (int64, error) {
 }
 
 const getCustomer = `-- name: GetCustomer :one
-SELECT id, name, created_at FROM customers WHERE id = $1
+SELECT id, name, created_at, onboarding_status, onboarded_at FROM customers WHERE id = $1
 `
 
 func (q *Queries) GetCustomer(ctx context.Context, id int64) (Customer, error) {
 	row := q.db.QueryRow(ctx, getCustomer, id)
 	var i Customer
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.OnboardingStatus,
+		&i.OnboardedAt,
+	)
+	return i, err
+}
+
+const getCustomerForUpdate = `-- name: GetCustomerForUpdate :one
+SELECT id, name, created_at, onboarding_status, onboarded_at FROM customers WHERE id = $1 FOR UPDATE
+`
+
+// Completing onboarding locks the row so the readiness check and the status write see one state.
+func (q *Queries) GetCustomerForUpdate(ctx context.Context, id int64) (Customer, error) {
+	row := q.db.QueryRow(ctx, getCustomerForUpdate, id)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.OnboardingStatus,
+		&i.OnboardedAt,
+	)
 	return i, err
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, name, created_at FROM customers ORDER BY id
+SELECT id, name, created_at, onboarding_status, onboarded_at FROM customers ORDER BY id
 `
 
 func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
@@ -58,7 +115,13 @@ func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
 	var items []Customer
 	for rows.Next() {
 		var i Customer
-		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.OnboardingStatus,
+			&i.OnboardedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -69,8 +132,26 @@ func (q *Queries) ListCustomers(ctx context.Context) ([]Customer, error) {
 	return items, nil
 }
 
+const markCustomerOnboarded = `-- name: MarkCustomerOnboarded :one
+UPDATE customers SET onboarding_status = 'active', onboarded_at = now()
+WHERE id = $1 AND onboarding_status = 'configuring' RETURNING id, name, created_at, onboarding_status, onboarded_at
+`
+
+func (q *Queries) MarkCustomerOnboarded(ctx context.Context, id int64) (Customer, error) {
+	row := q.db.QueryRow(ctx, markCustomerOnboarded, id)
+	var i Customer
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.OnboardingStatus,
+		&i.OnboardedAt,
+	)
+	return i, err
+}
+
 const renameCustomer = `-- name: RenameCustomer :one
-UPDATE customers SET name = $2 WHERE id = $1 AND name <> 'default' RETURNING id, name, created_at
+UPDATE customers SET name = $2 WHERE id = $1 AND name <> 'default' RETURNING id, name, created_at, onboarding_status, onboarded_at
 `
 
 type RenameCustomerParams struct {
@@ -82,6 +163,12 @@ type RenameCustomerParams struct {
 func (q *Queries) RenameCustomer(ctx context.Context, arg RenameCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, renameCustomer, arg.ID, arg.Name)
 	var i Customer
-	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.OnboardingStatus,
+		&i.OnboardedAt,
+	)
 	return i, err
 }

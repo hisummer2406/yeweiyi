@@ -205,9 +205,15 @@ func TestIssueCommand_RoleGatesAdminMethods(t *testing.T) {
 		t.Fatalf("expected 403 for a customer_user, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// The same user may still issue a control-tier method.
+	// An employee is view-only (cloud#63): a grant on one tank must not let them act on the whole
+	// device, so even a control-tier method is refused.
+	if rec := env.authed("POST", "/api/devices/"+device+"/commands", issueBody(t, protocol.MethodAlarmMute, "消音")); rec.Code != http.StatusForbidden {
+		t.Errorf("customer_user muting: got %d: %s, want 403", rec.Code, rec.Body.String())
+	}
+	// A customer admin still can.
+	env.setRole(control.RoleCustomerAdmin)
 	if ok := env.authed("POST", "/api/devices/"+device+"/commands", issueBody(t, protocol.MethodAlarmMute, "消音")); ok.Code != http.StatusAccepted {
-		t.Errorf("customer_user should be allowed to mute: got %d: %s", ok.Code, ok.Body.String())
+		t.Errorf("customer_admin should be allowed to mute: got %d: %s", ok.Code, ok.Body.String())
 	}
 }
 

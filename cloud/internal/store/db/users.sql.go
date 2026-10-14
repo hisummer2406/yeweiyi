@@ -12,14 +12,17 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, role, customer_id) VALUES ($1, $2, $3, $4) RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at
+INSERT INTO users (username, password_hash, role, customer_id, phone)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
 `
 
 type CreateUserParams struct {
 	Username     string      `json:"username"`
-	PasswordHash string      `json:"password_hash"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 	Role         string      `json:"role"`
 	CustomerID   pgtype.Int8 `json:"customer_id"`
+	Phone        pgtype.Text `json:"phone"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -28,6 +31,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.PasswordHash,
 		arg.Role,
 		arg.CustomerID,
+		arg.Phone,
 	)
 	var i User
 	err := row.Scan(
@@ -38,12 +42,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE id = $1
 `
 
 // Used where a decision must reflect the user's *current* role and customer rather than what their
@@ -59,12 +64,55 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
+	)
+	return i, err
+}
+
+const getUserByPhone = `-- name: GetUserByPhone :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE phone = $1
+`
+
+func (q *Queries) GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByPhone, phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+		&i.Phone,
+	)
+	return i, err
+}
+
+const getUserByPhoneForUpdate = `-- name: GetUserByPhoneForUpdate :one
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE phone = $1 FOR UPDATE
+`
+
+// WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
+// second sees the first's identity row instead of racing it.
+func (q *Queries) GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByPhoneForUpdate, phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE username = $1
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -78,12 +126,13 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
 
 const getUserForShare = `-- name: GetUserForShare :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1 FOR SHARE
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE id = $1 FOR SHARE
 `
 
 // Locks the acting administrator against being demoted, moved or disabled mid-transaction.
@@ -98,12 +147,13 @@ func (q *Queries) GetUserForShare(ctx context.Context, id int64) (User, error) {
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
 
 const getUserForUpdate = `-- name: GetUserForUpdate :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users WHERE id = $1 FOR UPDATE
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE id = $1 FOR UPDATE
 `
 
 // Locks the row for the rest of the transaction. Administration re-reads its target here and decides
@@ -119,12 +169,13 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, id int64) (User, error) 
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at FROM users
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users
 WHERE ($1::BIGINT IS NULL OR customer_id = $1::BIGINT)
 ORDER BY id
 `
@@ -148,6 +199,7 @@ func (q *Queries) ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User
 			&i.Role,
 			&i.CustomerID,
 			&i.DisabledAt,
+			&i.Phone,
 		); err != nil {
 			return nil, err
 		}
@@ -160,7 +212,7 @@ func (q *Queries) ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User
 }
 
 const moveUserToCustomer = `-- name: MoveUserToCustomer :one
-UPDATE users SET customer_id = $2 WHERE id = $1 AND role <> 'platform_admin' RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at
+UPDATE users SET customer_id = $2 WHERE id = $1 AND role <> 'platform_admin' RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
 `
 
 type MoveUserToCustomerParams struct {
@@ -180,6 +232,7 @@ func (q *Queries) MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomer
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
@@ -188,7 +241,7 @@ const setUserDisabled = `-- name: SetUserDisabled :one
 UPDATE users
 SET disabled_at = CASE WHEN $1::bool THEN COALESCE(disabled_at, now()) ELSE NULL END
 WHERE id = $2
-RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at
+RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
 `
 
 type SetUserDisabledParams struct {
@@ -208,6 +261,7 @@ func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams
 		&i.Role,
 		&i.CustomerID,
 		&i.DisabledAt,
+		&i.Phone,
 	)
 	return i, err
 }
@@ -217,8 +271,8 @@ UPDATE users SET password_hash = $2 WHERE id = $1
 `
 
 type SetUserPasswordParams struct {
-	ID           int64  `json:"id"`
-	PasswordHash string `json:"password_hash"`
+	ID           int64       `json:"id"`
+	PasswordHash pgtype.Text `json:"password_hash"`
 }
 
 func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error) {

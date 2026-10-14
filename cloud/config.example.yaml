@@ -140,6 +140,18 @@ stock:
   # 设置成车队完成固件升级的时刻，例如：
   # legacyFormatBefore: "2026-10-01T00:00:00+08:00"
 
+# 微信小程序登录（#59）。默认关闭，且是可选能力：关闭时两个 /api/auth/wechat/* 接口返回
+# 503 wechat_unavailable，管理员网页密码登录与服务启动完全不受影响（完全离线部署保持关闭即可）。
+# 开启需要联网访问 api.weixin.qq.com，并先核实目标小程序的手机号能力资格与费用。
+# AppSecret **只能**用环境变量 WECHAT_APP_SECRET 传入；写进本文件会让服务拒绝启动。
+wechat:
+  enabled: false
+  appId: ""        # 或环境变量 WECHAT_APP_ID
+  timeout: "5s"
+  codePage: "pages/device-detail/device-detail"  # 设备小程序码打开的页面
+  codeEnvVersion: "release"                     # release|trial|develop；未发布版本只能 trial/develop
+  # baseUrl: ""    # 仅测试/代理用，默认 https://api.weixin.qq.com
+
 # ---------------------------------------------------------------------------
 # 环境变量对照（覆盖本文件对应项）
 #
@@ -163,6 +175,9 @@ stock:
 #   TELEMETRY_RETENTION              telemetry.retention
 #   TELEMETRY_ROLLUP_INTERVAL        telemetry.rollupInterval
 #   TELEMETRY_ROLLUP_RECOMPUTE       telemetry.rollupRecompute
+#   WECHAT_ENABLED                   wechat.enabled  (true/false/1/0)
+#   WECHAT_APP_ID                    wechat.appId
+#   WECHAT_APP_SECRET                （仅环境变量，不得写进配置文件）
 #   STOCK_LEGACY_FORMAT_BEFORE       stock.legacyFormatBefore
 #   PAIRING_CODE_PREFIXES            pairing.codePrefixes（逗号分隔；"-" 表示清空）
 #
