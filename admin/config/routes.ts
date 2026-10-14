@@ -170,9 +170,10 @@ export default [
         component: './console/assets/devices',
       },
       {
-        // 员工按罐授权（#17）：平台管理员与客户管理员；账号本身的管理仍只在 /ops/users
+        // 员工按罐授权（#17）：云端 2026-10-14 起仅平台管理员可读写授权（客户管理员 403），入口随之收窄
         name: 'staff',
         icon: 'team',
+        access: 'canPlatformAdmin',
         path: '/console/assets/staff',
         component: './console/assets/staff',
       },

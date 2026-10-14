@@ -70,7 +70,7 @@
   客户管理员=手机号+密码+客户；员工=手机号+客户，**没有密码框，请求体也不带 `password`**（带了 400 `password_not_allowed`），
   员工行没有"重置密码"（云端 409 `no_password_for_role`）。`buildCreateUserParams` 按角色挑字段，别让残留表单值漏进请求。
 - 云端新接口带机器码 `code`（`phone_exists` 等），`ApiError.code` 承载；`describeUserError` 先按 code 再按状态码。
-  重复手机号的提示不说明在哪个客户。客户管理员列员工（给油罐分配选人，#17/cloud#63）手机号是脱敏的；#17 的油罐分配本批未做。
+  重复手机号的提示不说明在哪个客户。客户管理员列员工的手机号是脱敏的；油罐分配（#17/cloud#63）自云端 2026-10-14 起仅平台管理员，见下文「员工按罐授权」。
 - 微信登录与客户开通（#60）、油罐授权（#63）不在本仓库这一批；网页只走手机号/用户名 + 密码，离线可用。
 
 **`/console` 只读页已接**（OpenSpec 变更 `console-readonly-records-and-detail`）：设备详情
@@ -140,8 +140,8 @@
   `tab`/`station`），页签按设备编号 key 整体重建，A 的数据/缓存/定时器清掉。记录页的 `DevicePicker` 选定油站时同理：当前设备由 A 变 B 且
   正在看 A 才自动切，用户手动选了别的不动；多台（历史冲突）或暂无设备不据此切换。不带 `?station=` 的独立入口按设备编码直接看 A，保留。
   云端不推送换机事件，只能靠轮询得知，所以切换最长有一个轮询周期的延迟。
-- **员工按罐授权（#17，云端契约 `docs/tank-grants-contract.md` v1.0，SHA256 `abb1b1dd…fccdb`，cloud#63）**：「资产管理 → 员工授权」
-  （`/console/assets/staff`，平台管理员与客户管理员）。列出员工（`GET /api/users` 过滤 `customer_user`；客户管理员看本客户员工，手机号脱敏），
+- **员工按罐授权（#17，云端契约 `docs/tank-grants-contract.md` v1.1，cloud#63；v1.1 起**仅平台管理员**读写授权，客户管理员 `GET/PUT tank-grants` 一律 403，SHA256 待按 v1.1 重算）**：「资产管理 → 员工授权」
+  （`/console/assets/staff`，仅平台管理员，路由 `access: canPlatformAdmin`）。列出员工（`GET /api/users` 过滤 `customer_user`，全部客户），
   行内「分配油罐」弹窗按 **油站 → 设备 → 罐** 勾选：罐号来自 `GET /api/devices/:device/tanks`（设备已上报的罐），已授权来自
   `GET /api/users/:id/tank-grants`，保存是对**单台设备**的整组替换 `PUT /api/users/:id/tank-grants/:device {tanks:[...]}`；空选择 = 撤销，
   不自动全选；设备从未上报时只能撤销（否则 409 `tanks_unknown`）；授权键是 `(员工, device_name, 罐号)`，没有按油站/整机授权。错误按 `code`

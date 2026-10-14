@@ -152,7 +152,7 @@ export default {
   'pages.ops.users.form.username.max': '用户名最多 64 个字符',
   'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
   'pages.ops.users.form.staff.hint':
-    '员工没有网页密码，只能通过小程序微信手机号授权登录。创建后由客户管理员为其分配油罐。',
+    '员工没有网页密码，只能通过小程序微信手机号授权登录。创建后由平台管理员在「资产管理 → 员工授权」为其分配油罐。',
   'pages.ops.users.form.password.label': '初始密码',
   'pages.ops.users.form.password.new': '新密码',
   'pages.ops.users.form.password.required': '请输入密码',
