@@ -66,6 +66,18 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
         }
     }
 
+    /**
+     * 盘上有 token 密文，但解不开（Keystore 密钥不在了）。典型来源：配置被备份恢复/复制到另一台硬件，
+     * 或应用重装后恢复了备份——编码还在，密钥没跟过来。这种身份不能被静默地拿编码去重新领取，
+     * 见 {@code ThingsBoardManager.attemptConnect}。刚保存的空 token 不算（空串也是可解的密文）。
+     */
+    public boolean hasUnreadableToken() {
+        synchronized (LOCK) {
+            String stored = SharePrefUtil.getString(context, SharePrefUtil.TB_ACCESS_TOKEN, "");
+            return stored != null && !stored.isEmpty() && decodeOrNull(stored) == null;
+        }
+    }
+
     @Override
     public void save(DeviceCredentials credentials) {
         String encoded = encode(credentials.getAccessToken());
@@ -125,6 +137,12 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
     }
 
     private String decode(String stored) {
+        String decoded = decodeOrNull(stored);
+        return decoded == null ? "" : decoded;
+    }
+
+    /** @return 明文；解不开返回 null，空输入返回空串。 */
+    private String decodeOrNull(String stored) {
         if (stored == null || stored.isEmpty()) {
             return "";
         }
@@ -140,7 +158,7 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
             // "enc:" 前缀只可能是 API 23+ 的 encode() 写的；系统被降级到这个版本以下
             // 不应该发生，但真出现时解不开也不能崩溃，当未配网处理。
             Log.e(TAG, "系统版本低于 Android 6.0，无法解密已加密的 access token，视为未配网");
-            return "";
+            return null;
         }
         try {
             byte[] combined = Base64.decode(stored.substring(ENCRYPTED_PREFIX.length()), Base64.NO_WRAP);
@@ -159,7 +177,7 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
             // Keystore 密钥丢失（比如恢复出厂设置后 Keystore 被清空但 SharedPreferences
             // 备份还在）或数据损坏时，宁可当作"未配网"处理，也不能抛异常崩溃整个连接流程。
             Log.e(TAG, "解密 access token 失败，视为未配网", e);
-            return "";
+            return null;
         }
     }
 

@@ -5,7 +5,6 @@ import android.content.Context;
 import com.google.gson.reflect.TypeToken;
 import com.sansen.yeweiyi.logic.thingsboard.ActiveAlarmTracker;
 
-import java.io.File;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,8 +20,9 @@ public final class ActiveAlarmFilePersistence implements ActiveAlarmTracker.Pers
 
     private final AtomicJsonFile file;
 
-    public ActiveAlarmFilePersistence(Context context) {
-        this.file = new AtomicJsonFile(new File(context.getFilesDir(), "thingsboard_active_alarms.json"),
+    /** @param deviceId 当前设备身份（出厂编码）；按身份分文件，见 {@link IdentityScopedFile}。 */
+    public ActiveAlarmFilePersistence(Context context, String deviceId) {
+        this.file = new AtomicJsonFile(IdentityScopedFile.resolve(context, "thingsboard_active_alarms", deviceId),
                 LIST_TYPE, "TBActiveAlarms");
     }
 

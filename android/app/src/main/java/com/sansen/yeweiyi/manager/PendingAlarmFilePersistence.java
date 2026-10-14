@@ -5,7 +5,6 @@ import android.content.Context;
 import com.google.gson.reflect.TypeToken;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
 
-import java.io.File;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,8 +19,9 @@ public final class PendingAlarmFilePersistence implements PendingAlarmStore.Pers
 
     private final AtomicJsonFile file;
 
-    public PendingAlarmFilePersistence(Context context) {
-        this.file = new AtomicJsonFile(new File(context.getFilesDir(), "thingsboard_pending_alarms.json"),
+    /** @param deviceId 当前设备身份（出厂编码）；队列按身份分文件，换身份不会读到旧身份的待补投事件。 */
+    public PendingAlarmFilePersistence(Context context, String deviceId) {
+        this.file = new AtomicJsonFile(IdentityScopedFile.resolve(context, "thingsboard_pending_alarms", deviceId),
                 LIST_TYPE, "TBPendingAlarms");
     }
 
