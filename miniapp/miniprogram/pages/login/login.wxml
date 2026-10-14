@@ -4,15 +4,18 @@
   <view class="brand-subtitle">登录查看设备数据、下发控制命令</view>
 
   <view class="card center-card">
-    <view class="field">
-      <text class="field-label">账号</text>
-      <input class="field-input" value="{{username}}" bindinput="onUsernameInput" placeholder="请输入账号" />
-    </view>
-    <view class="field">
-      <text class="field-label">密码</text>
-      <input class="field-input" password value="{{password}}" bindinput="onPasswordInput" placeholder="请输入密码" />
-    </view>
-    <button class="btn-primary" loading="{{loading}}" bindtap="onSubmit">登录</button>
+    <block wx:if="{{stage === 'restoring'}}">
+      <view class="muted" style="text-align:center;padding:24rpx 0;">正在登录…</view>
+    </block>
+    <block wx:elif="{{stage === 'needPhone'}}">
+      <view class="muted" style="text-align:center;margin-bottom:16rpx;">首次使用，请授权手机号以确认您的账号</view>
+      <button class="btn-primary" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber" loading="{{busy}}">
+        微信手机号快捷登录
+      </button>
+    </block>
+    <block wx:else>
+      <button class="btn-primary" bindtap="onWechatLogin" loading="{{busy}}">微信登录</button>
+    </block>
     <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;text-align:center;">{{errorMsg}}</view>
   </view>
 </view>

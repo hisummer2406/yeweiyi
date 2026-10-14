@@ -4,7 +4,7 @@
   <view class="menu-row" bindtap="onAccountTap">
     <image class="avatar" style="margin-right:19rpx;" src="/assets/icons/avatar-logo.png" mode="aspectFit" />
     <view class="menu-title">
-      <text>{{username || '--'}}</text>
+      <text>{{account || '--'}}</text>
       <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>
     </view>
     <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />

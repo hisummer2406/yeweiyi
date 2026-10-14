@@ -37,7 +37,7 @@ Page({
       .then((res) => {
         const devices = res.rows;
         if (devices.length === 0) {
-          wx.showToast({ title: '还没有绑定设备，请先在首页扫码绑定', icon: 'none', duration: 3000 });
+          wx.showToast({ title: '暂无可查看的设备，请联系客户管理员分配油罐', icon: 'none', duration: 3000 });
           return;
         }
         if (devices.length === 1) {

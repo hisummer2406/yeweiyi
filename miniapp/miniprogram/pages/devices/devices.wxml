@@ -1,11 +1,11 @@
 <view wx:if="{{!devicesLoaded}}" class="empty">加载中…</view>
 
-<!-- 还没有任何已绑定设备：首次使用的空状态 -->
+<!-- 没有任何可查看的设备（员工尚未被分配油罐，或账号下确实没有设备）：首次使用的空状态 -->
 <view wx:elif="{{deviceTotal === 0 && !listError}}" class="center-page">
   <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
-  <view class="brand-title">还没有绑定设备</view>
-  <view class="brand-subtitle">设备上贴有二维码和设备编号，扫码即可绑定</view>
-  <button class="btn-primary center-card" bindtap="onScanBind">扫码绑定设备</button>
+  <view class="brand-title">暂无可查看的设备</view>
+  <view class="brand-subtitle">可查看的油罐由客户管理员分配，请联系客户管理员。扫描设备二维码只会定位设备，不会授予查看权限</view>
+  <button class="btn-primary center-card" bindtap="onScanDevice">扫码查看设备</button>
 </view>
 
 <view wx:elif="{{deviceTotal === 0 && listError}}" class="empty">
@@ -35,6 +35,7 @@
   </view>
 
   <view class="home-list">
+    <view wx:if="{{stationNotice}}" class="empty">{{stationNotice}}</view>
     <view wx:if="{{groups.length === 0}}" class="empty">该油站下还没有设备</view>
     <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
       <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
@@ -54,7 +55,7 @@
       <view
         wx:for="{{g.tanks}}"
         wx:for-item="t"
-        wx:key="index"
+        wx:key="key"
         class="tank-row"
         data-device="{{g.deviceName}}"
         bindtap="onTapTank"

@@ -1,4 +1,5 @@
 import { BASE_URL } from '../config/env';
+import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
 interface RequestOptions {
@@ -61,7 +62,7 @@ function endSession() {
   loggingOut = true;
   clearToken();
   wx.reLaunch({
-    url: '/pages/login/login',
+    url: loginUrlForSession(),
     complete: () => {
       loggingOut = false;
     },
@@ -91,8 +92,9 @@ export function request<T>(options: RequestOptions): Promise<T> {
           resolve(res.data as T);
           return;
         }
-        // Not for /api/login: there a 401 is just "wrong username or password", and bouncing to the
-        // login page would reload it and wipe what the user typed instead of showing the message.
+        // Not for the login calls (/api/auth/wechat/*, needAuth=false): there is no session to end.
+        // A 401 there is "code spent / not bound" and a 403 is "disabled" — bouncing to the login page
+        // would reload it and replace the message with a retry loop, so they are shown instead.
         const body = res.data as { error?: string } | undefined;
         if (
           needAuth &&
