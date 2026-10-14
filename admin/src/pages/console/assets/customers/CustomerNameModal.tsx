@@ -3,6 +3,11 @@ import { Form, Input, Modal, message } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
+import {
+  CUSTOMER_NAME_MAX,
+  customerNameCount,
+  customerNameLength,
+} from '@/utils/customerName';
 import type { ErrorMessage } from '../devices/errors';
 
 type Props = {
@@ -96,10 +101,23 @@ const CustomerNameModal: React.FC<Props> = ({
               whitespace: true,
               message: t('pages.ops.customers.form.name.required'),
             },
+            {
+              validator: (_: unknown, value?: string) =>
+                customerNameLength((value ?? '').trim()) <= CUSTOMER_NAME_MAX
+                  ? Promise.resolve()
+                  : Promise.reject(
+                      new Error(
+                        t('pages.ops.customers.form.name.max', {
+                          max: String(CUSTOMER_NAME_MAX),
+                        }),
+                      ),
+                    ),
+            },
           ]}
         >
           <Input
             autoFocus
+            count={customerNameCount}
             placeholder={t('pages.ops.devices.form.customer.new.placeholder')}
           />
         </Form.Item>

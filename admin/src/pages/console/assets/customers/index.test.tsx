@@ -14,6 +14,7 @@ const listCustomers = vi.fn();
 const createCustomer = vi.fn();
 const renameCustomer = vi.fn();
 const deleteCustomer = vi.fn();
+const createUser = vi.fn();
 
 const push = vi.fn();
 vi.mock('@umijs/max', () => ({
@@ -33,6 +34,8 @@ vi.mock('@/services/ant-design-pro/customers', () => ({
   deleteCustomer,
 }));
 
+vi.mock('@/services/ant-design-pro/users', () => ({ createUser }));
+
 const { default: AdminCustomers } = await import('./index');
 const { ApiError } = await import('@/services/ant-design-pro/apiError');
 
@@ -50,9 +53,29 @@ const openModal = async () => {
   return screen.findByPlaceholderText('新客户名称');
 };
 
+/** 填写新建客户弹窗：名称 + 客户管理员手机号 + 初始密码 */
+const fill = (
+  nameInput: HTMLElement,
+  name: string,
+  phone = '13800138000',
+  password = 'password123',
+) => {
+  fireEvent.change(nameInput, { target: { value: name } });
+  fireEvent.change(screen.getByLabelText('客户管理员手机号'), {
+    target: { value: phone },
+  });
+  fireEvent.change(screen.getByLabelText('初始密码'), {
+    target: { value: password },
+  });
+};
+const submitCreate = () =>
+  fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
+
 describe('AdminCustomers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    createUser.mockResolvedValue({ id: 10 });
+    deleteCustomer.mockResolvedValue(undefined);
     listCustomers.mockResolvedValue(rows);
     vi.spyOn(message, 'success').mockImplementation((() => {}) as never);
     vi.spyOn(message, 'error').mockImplementation((() => {}) as never);
@@ -72,10 +95,18 @@ describe('AdminCustomers', () => {
       onboardingStatus: 'configuring',
     });
     const input = await openModal();
-    fireEvent.change(input, { target: { value: '  A 油站  ' } });
-    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
+    fill(input, '  A 油站  ');
+    submitCreate();
     await waitFor(() =>
       expect(createCustomer).toHaveBeenCalledWith({ name: 'A 油站' }),
+    );
+    await waitFor(() =>
+      expect(createUser).toHaveBeenCalledWith({
+        role: 'customer_admin',
+        phone: '13800138000',
+        password: 'password123',
+        customerId: 2,
+      }),
     );
     await waitFor(() =>
       expect(push).toHaveBeenCalledWith('/assets/customers/2/onboarding'),
@@ -87,9 +118,9 @@ describe('AdminCustomers', () => {
     createCustomer.mockResolvedValue({ id: 2, name: 'A 油站', createdAt: '' });
     const input = await openModal();
     const before = listCustomers.mock.calls.length;
-    fireEvent.change(input, { target: { value: 'A 油站' } });
-    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
-    await waitFor(() => expect(createCustomer).toHaveBeenCalled());
+    fill(input, 'A 油站');
+    submitCreate();
+    await waitFor(() => expect(createUser).toHaveBeenCalled());
     await waitFor(() =>
       expect(listCustomers.mock.calls.length).toBeGreaterThan(before),
     );
@@ -126,21 +157,68 @@ describe('AdminCustomers', () => {
   it('409 shows the name-exists message and keeps the dialog open', async () => {
     createCustomer.mockRejectedValue(new ApiError(409, 'exists'));
     const input = await openModal();
-    fireEvent.change(input, { target: { value: 'default' } });
-    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
+    fill(input, 'default');
+    submitCreate();
     await waitFor(() =>
       expect(message.error).toHaveBeenCalledWith('客户名称已存在'),
     );
     expect(screen.getByPlaceholderText('新客户名称')).toBeTruthy();
+    expect(createUser).not.toHaveBeenCalled();
   });
 
   it('stays silent when the auth failure was already handled', async () => {
     createCustomer.mockRejectedValue(new ApiError(401, undefined, true));
     const input = await openModal();
-    fireEvent.change(input, { target: { value: 'X' } });
-    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
+    fill(input, 'X');
+    submitCreate();
     await waitFor(() => expect(createCustomer).toHaveBeenCalled());
     expect(message.error).not.toHaveBeenCalled();
+  });
+
+  it('rolls the new customer back when the admin cannot be created, keeping the form', async () => {
+    createCustomer.mockResolvedValue({
+      id: 7,
+      name: 'Z',
+      createdAt: '',
+      onboardingStatus: 'configuring',
+    });
+    createUser.mockRejectedValue(
+      new ApiError(409, 'dup', false, 'phone_exists'),
+    );
+    const input = await openModal();
+    fill(input, 'Z');
+    submitCreate();
+    await waitFor(() => expect(deleteCustomer).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(message.error).toHaveBeenCalled());
+    expect(push).not.toHaveBeenCalled();
+    // 弹窗保留、已填内容不丢，改完手机号可直接重试
+    expect(
+      (screen.getByLabelText('客户管理员手机号') as HTMLInputElement).value,
+    ).toBe('13800138000');
+  });
+
+  it('warns when rollback fails too, leaving a customer without an admin', async () => {
+    const warn = vi
+      .spyOn(message, 'warning')
+      .mockImplementation((() => {}) as never);
+    createCustomer.mockResolvedValue({ id: 7, name: 'Z', createdAt: '' });
+    createUser.mockRejectedValue(new ApiError(500, 'boom'));
+    deleteCustomer.mockRejectedValue(new ApiError(500, 'boom'));
+    const input = await openModal();
+    fill(input, 'Z');
+    submitCreate();
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid admin phone without calling the API', async () => {
+    const input = await openModal();
+    fill(input, 'Z', '123');
+    submitCreate();
+    expect(
+      await screen.findByText('请输入有效的 11 位大陆手机号'),
+    ).toBeTruthy();
+    expect(createCustomer).not.toHaveBeenCalled();
   });
 
   it('the built-in default customer has no rename or delete', async () => {
@@ -217,7 +295,7 @@ describe('AdminCustomers', () => {
     let resolve: (v: unknown) => void = () => {};
     createCustomer.mockReturnValue(new Promise((r) => (resolve = r)));
     const input = await openModal();
-    fireEvent.change(input, { target: { value: 'Z' } });
+    fill(input, 'Z');
     const form = input.closest('form') as HTMLElement;
     fireEvent.submit(form);
     await waitFor(() => expect(createCustomer).toHaveBeenCalledTimes(1));
@@ -226,5 +304,6 @@ describe('AdminCustomers', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(createCustomer).toHaveBeenCalledTimes(1);
     resolve({ id: 9, name: 'Z', createdAt: '' });
+    await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
   });
 });

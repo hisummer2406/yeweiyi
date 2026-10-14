@@ -30,35 +30,57 @@ export default [
     ],
   },
   {
-    path: '/ops',
-    name: 'ops',
-    icon: 'safetyCertificate',
-    access: 'canPlatformAdmin',
+    // 资产管理：客户 → 油站 → 设备三级，按层级排列。与「设备监控」并列的顶层菜单，URL 是 /assets/*
+    // （原因同记录查询：不能放在 /console/ 下）。它不在 /ops 下，所以客户管理员不会碰到 /ops 的拦截。
+    // 整组对平台管理员和客户管理员开放，客户项只对平台管理员。
+    path: '/assets',
+    name: 'assets',
+    icon: 'database',
+    access: 'canManageAssets',
     routes: [
       {
-        path: '/ops',
-        redirect: '/ops/users',
-      },
-      // 设备登记与客户管理已并入「资产管理」，旧地址保留重定向
-      {
-        path: '/ops/devices',
-        redirect: '/assets/devices',
+        // 落到第一个可见项：平台管理员 → 客户，客户管理员 → 油站（按角色分流，见 pages/console/assets/index.tsx）
+        path: '/assets',
+        component: './console/assets',
       },
       {
-        path: '/ops/customers',
-        redirect: '/assets/customers',
+        name: 'customers',
+        icon: 'shop',
+        path: '/assets/customers',
+        component: './console/assets/customers',
+        access: 'canPlatformAdmin',
       },
       {
-        name: 'users',
+        // 客户开通向导（#14）：从客户页进入，不进菜单
+        path: '/assets/customers/:id/onboarding',
+        component: './console/assets/customers/onboarding',
+        access: 'canPlatformAdmin',
+      },
+      {
+        // 客户下的账号（管理员与员工）：从客户页进入，不进菜单
+        path: '/assets/customers/:id/accounts',
+        component: './console/assets/customers/accounts',
+        access: 'canPlatformAdmin',
+      },
+      {
+        name: 'stations',
+        icon: 'environment',
+        path: '/assets/stations',
+        component: './console/assets/stations',
+      },
+      {
+        name: 'devices',
+        icon: 'cluster',
+        path: '/assets/devices',
+        component: './console/assets/devices',
+      },
+      {
+        // 员工按罐授权（#17）：云端 2026-10-14 起仅平台管理员可读写授权（客户管理员 403），入口随之收窄
+        name: 'staff',
         icon: 'team',
-        path: '/ops/users',
-        component: './ops/users',
-      },
-      {
-        name: 'audit',
-        icon: 'fileSearch',
-        path: '/ops/audit',
-        component: './ops/audit',
+        access: 'canPlatformAdmin',
+        path: '/assets/staff',
+        component: './console/assets/staff',
       },
     ],
   },
@@ -171,51 +193,43 @@ export default [
     ],
   },
   {
-    // 资产管理：客户 → 油站 → 设备三级，按层级排列。与「设备监控」并列的顶层菜单，URL 是 /assets/*
-    // （原因同记录查询：不能放在 /console/ 下）。它不在 /ops 下，所以客户管理员不会碰到 /ops 的拦截。
-    // 整组对平台管理员和客户管理员开放，客户项只对平台管理员。
-    path: '/assets',
-    name: 'assets',
-    icon: 'database',
-    access: 'canManageAssets',
+    path: '/ops',
+    name: 'ops',
+    icon: 'safetyCertificate',
+    access: 'canPlatformAdmin',
     routes: [
       {
-        // 落到第一个可见项：平台管理员 → 客户，客户管理员 → 油站（按角色分流，见 pages/console/assets/index.tsx）
-        path: '/assets',
-        component: './console/assets',
+        path: '/ops',
+        redirect: '/ops/users',
+      },
+      // 设备登记与客户管理已并入「资产管理」，旧地址保留重定向
+      {
+        path: '/ops/devices',
+        redirect: '/assets/devices',
       },
       {
-        name: 'customers',
-        icon: 'shop',
-        path: '/assets/customers',
-        component: './console/assets/customers',
-        access: 'canPlatformAdmin',
+        path: '/ops/customers',
+        redirect: '/assets/customers',
       },
       {
-        // 客户开通向导（#14）：从客户页进入，不进菜单
-        path: '/assets/customers/:id/onboarding',
-        component: './console/assets/customers/onboarding',
-        access: 'canPlatformAdmin',
-      },
-      {
-        name: 'stations',
-        icon: 'environment',
-        path: '/assets/stations',
-        component: './console/assets/stations',
-      },
-      {
-        name: 'devices',
-        icon: 'cluster',
-        path: '/assets/devices',
-        component: './console/assets/devices',
-      },
-      {
-        // 员工按罐授权（#17）：云端 2026-10-14 起仅平台管理员可读写授权（客户管理员 403），入口随之收窄
-        name: 'staff',
+        // 账号管理：客户侧账号（客户管理员、员工），跨客户搜索与新建员工
+        name: 'users',
         icon: 'team',
-        access: 'canPlatformAdmin',
-        path: '/assets/staff',
-        component: './console/assets/staff',
+        path: '/ops/users',
+        component: './ops/users',
+      },
+      {
+        // 平台管理员账号：入口在右上角账号菜单（仅平台管理员），不进侧边栏
+        name: 'platform-admins',
+        hideInMenu: true,
+        path: '/ops/platform-admins',
+        component: './ops/platform-admins',
+      },
+      {
+        name: 'audit',
+        icon: 'fileSearch',
+        path: '/ops/audit',
+        component: './ops/audit',
       },
     ],
   },

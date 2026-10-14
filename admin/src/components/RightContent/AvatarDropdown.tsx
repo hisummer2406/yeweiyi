@@ -2,6 +2,7 @@ import {
   LogoutOutlined,
   SettingOutlined,
   SkinOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { history, useModel } from '@umijs/max';
 import type { MenuProps } from 'antd';
@@ -34,6 +35,16 @@ const buildMenuItems = (user: API.CurrentUser): MenuProps['items'] => [
     icon: <SettingOutlined />,
     label: '个人设置',
   },
+  // 平台管理员账号管理的入口（只有平台管理员看得到）
+  ...(user.access === 'platform_admin'
+    ? [
+        {
+          key: 'platform-admins',
+          icon: <TeamOutlined />,
+          label: '平台管理员账号',
+        },
+      ]
+    : []),
   ...(process.env.NODE_ENV === 'development'
     ? [{ key: 'theme', icon: <SkinOutlined />, label: '主题设置' }]
     : []),
@@ -69,6 +80,10 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({
     }
     if (key === 'theme' && process.env.NODE_ENV === 'development') {
       setInitialState((s) => ({ ...s, settingDrawerOpen: true }));
+      return;
+    }
+    if (key === 'platform-admins') {
+      history.push('/ops/platform-admins');
       return;
     }
     history.push(`/account/${key}`);

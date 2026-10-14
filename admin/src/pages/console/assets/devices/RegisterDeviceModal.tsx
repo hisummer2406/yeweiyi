@@ -21,6 +21,11 @@ import {
   listCustomers,
 } from '@/services/ant-design-pro/customers';
 import { registerDevice } from '@/services/ant-design-pro/devices';
+import {
+  CUSTOMER_NAME_MAX,
+  customerNameCount,
+  customerNameLength,
+} from '@/utils/customerName';
 import { normalizeDeviceCode } from '@/utils/deviceCode';
 import {
   describeCustomerError,
@@ -109,6 +114,7 @@ const RegisterForm: React.FC<Omit<Props, 'open'>> = ({
   const onCreateCustomer = async () => {
     const name = newName.trim();
     if (!name || creatingRef.current) return;
+    if (customerNameLength(name) > CUSTOMER_NAME_MAX) return;
     creatingRef.current = true;
     setCreating(true);
     try {
@@ -315,7 +321,7 @@ const RegisterForm: React.FC<Omit<Props, 'open'>> = ({
               <Divider style={{ margin: '8px 0' }} />
               <Space style={{ padding: '0 8px 4px' }}>
                 <Input
-                  maxLength={100}
+                  count={customerNameCount}
                   value={newName}
                   placeholder={text(
                     'pages.ops.devices.form.customer.new.placeholder',

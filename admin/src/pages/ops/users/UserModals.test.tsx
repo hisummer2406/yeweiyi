@@ -71,6 +71,7 @@ describe('CreateUserModal', () => {
       <CreateUserModal
         open
         customers={customers}
+        allowedRoles={['platform_admin', 'customer_admin', 'customer_user']}
         onClose={onClose}
         onDone={onDone}
       />,
@@ -95,6 +96,8 @@ describe('CreateUserModal', () => {
     expect(screen.queryByLabelText('手机号')).toBeNull();
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
+    // 页面据新账号决定是否跳转（员工 → 员工授权）
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith({ id: 9 }));
     expect(createUser).toHaveBeenCalledWith({
       role: 'platform_admin',
       username: 'root',
@@ -260,6 +263,65 @@ describe('CreateUserModal', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(createUser).toHaveBeenCalledTimes(1);
     resolve({ id: 1 });
+  });
+});
+
+describe('新建账号的角色', () => {
+  const renderModal = (allowedRoles?: API.UserRole[]) =>
+    render(
+      <CreateUserModal
+        open
+        customers={customers}
+        allowedRoles={allowedRoles}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+
+  it('does not offer 客户管理员 by default (it is created with the customer)', async () => {
+    renderModal();
+    fireEvent.mouseDown(await screen.findByLabelText('角色'));
+    expect(await screen.findByText('平台管理员')).toBeTruthy();
+    expect(screen.getByText('客户用户')).toBeTruthy();
+    expect(screen.queryByText('客户管理员')).toBeNull();
+  });
+
+  it('a single allowed role is used directly, with no role dropdown', async () => {
+    renderModal(['customer_user']);
+    expect(screen.queryByLabelText('角色')).toBeNull();
+    // 员工只要手机号和客户，没有密码框
+    expect(await screen.findByLabelText('手机号')).toBeTruthy();
+    expect(screen.queryByLabelText('初始密码')).toBeNull();
+  });
+});
+
+describe('一客户一管理员（换客户）', () => {
+  it('moving a customer admin into a customer that already has one is disabled', async () => {
+    render(
+      <MoveUserModal
+        open
+        user={
+          {
+            id: 5,
+            username: null,
+            phone: '13800138000',
+            role: 'customer_admin',
+            customerId: 1,
+            disabled: false,
+            createdAt: '',
+          } as API.AdminUser
+        }
+        customers={customers}
+        adminCustomerIds={[2]}
+        onClose={vi.fn()}
+        onDone={vi.fn()}
+      />,
+    );
+    fireEvent.mouseDown(await screen.findByLabelText('换到客户'));
+    const taken = await screen.findByText('B 油站（已有管理员）');
+    expect(
+      taken.closest('.ant-select-item')?.getAttribute('aria-disabled'),
+    ).toBe('true');
   });
 });
 

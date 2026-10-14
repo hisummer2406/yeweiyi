@@ -1,6 +1,6 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { useIntl } from '@umijs/max';
+import { history, useIntl } from '@umijs/max';
 import { Tag } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
@@ -16,7 +16,7 @@ type Row = API.AdminUser & { customerName?: string };
  * 资产管理 · 员工授权（/assets/staff，yeweiyi-admin#17，云端契约 tank-grants-contract v1.1）：
  * 列出可见的员工（customer_user），给选中的员工按 油站 → 设备 → 罐 分配/撤销查看权限。
  * - 仅平台管理员（云端 v1.1：客户管理员读写授权一律 403，路由已按 canPlatformAdmin 收窄）；看到全部客户的员工。
- * - 这里**不创建、停用、改客户**员工账号：账号管理仍只归平台管理员（/ops/users，#13）。
+ * - 这里**不创建、停用、改客户**员工账号：在「运维管理 → 账号管理」（/ops/users，#13）里建；建好后自动跳到这里并打开该员工的分配弹窗。
  * - 员工没有网页入口，授权只影响小程序与云端接口；没有分配的员工看不到任何罐。
  */
 const StaffGrants: React.FC = () => {
@@ -26,6 +26,13 @@ const StaffGrants: React.FC = () => {
   const [devices, setDevices] = useState<API.DeviceRow[]>([]);
   const [stations, setStations] = useState<API.Station[]>([]);
   const [target, setTarget] = useState<Row>();
+  // ?user=<id>：刚建好员工后从账号管理跳来，列表加载完自动打开该员工的分配弹窗（只一次）
+  const pendingUser = useRef<number | undefined>(
+    (() => {
+      const v = new URLSearchParams(window.location.search).get('user');
+      return v && /^\d+$/.test(v) ? Number(v) : undefined;
+    })(),
+  );
 
   const columns: ProColumns<Row>[] = [
     {
@@ -80,15 +87,23 @@ const StaffGrants: React.FC = () => {
           setDevices(ds);
           setStations(ss);
           const names = new Map(cs.map((c) => [c.id, c.name]));
+          const staff = users
+            .filter((u) => u.role === 'customer_user')
+            .map((u) => ({
+              ...u,
+              customerName:
+                u.customerId == null ? undefined : names.get(u.customerId),
+            }));
+          const pending = pendingUser.current;
+          if (pending != null) {
+            pendingUser.current = undefined;
+            history.replace(window.location.pathname);
+            const row = staff.find((u) => u.id === pending);
+            if (row) setTarget(row);
+          }
           return {
             // 只列员工：管理员账号不属于油罐授权（云端对管理员目标 409 grant_not_applicable）
-            data: users
-              .filter((u) => u.role === 'customer_user')
-              .map((u) => ({
-                ...u,
-                customerName:
-                  u.customerId == null ? undefined : names.get(u.customerId),
-              })),
+            data: staff,
             success: true,
           };
         }}

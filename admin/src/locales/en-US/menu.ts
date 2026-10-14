@@ -1,6 +1,7 @@
 export default {
   'menu.ops': 'Operations',
   'menu.ops.users': 'Accounts',
+  'menu.ops.platform-admins': 'Platform Admin Accounts',
   'menu.ops.audit': 'Audit Log',
   'menu.console': 'Monitoring',
   'menu.console.devices': 'Devices',

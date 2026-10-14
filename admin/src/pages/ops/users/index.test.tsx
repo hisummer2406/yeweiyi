@@ -32,7 +32,11 @@ vi.mock('@/services/ant-design-pro/users', () => ({
 }));
 vi.mock('@/services/ant-design-pro/customers', () => ({ listCustomers }));
 
+const { default: UsersPanel } = await import('./UsersPanel');
 const { default: AdminUsers } = await import('./index');
+const { default: PlatformAdmins } = await import('../platform-admins');
+// 面板的通用行为（搜索、层级、操作）直接测面板；平台管理员账号页只管平台管理员，见末尾
+const Panel = () => <UsersPanel />;
 
 const users = [
   {
@@ -78,7 +82,7 @@ afterEach(cleanup);
 
 describe('AdminUsers', () => {
   it('shows role labels and the customer name', async () => {
-    render(<AdminUsers />);
+    render(<Panel />);
     const row = await rowOf('13800138000');
     expect(within(row).getByText('客户管理员')).toBeTruthy();
     expect(within(row).getByText('A 油站')).toBeTruthy();
@@ -86,21 +90,12 @@ describe('AdminUsers', () => {
 
   it('falls back to #id when the customer list cannot load', async () => {
     listCustomers.mockRejectedValue(new Error('boom'));
-    render(<AdminUsers />);
+    render(<Panel />);
     expect(within(await rowOf('13800138000')).getByText('#5')).toBeTruthy();
   });
 
-  it('the signed-in user cannot disable themselves; platform admins cannot be moved', async () => {
-    render(<AdminUsers />);
-    const self = await rowOf('root');
-    expect(within(self).queryByText('停用')).toBeNull();
-    expect(within(self).queryByText('启用')).toBeNull();
-    expect(within(self).queryByText('换客户')).toBeNull();
-    expect(within(self).getByText('重置密码')).toBeTruthy();
-  });
-
   it('staff have no password to reset; admins do', async () => {
-    render(<AdminUsers />);
+    render(<Panel />);
     const staff = await rowOf('13900139000');
     expect(within(staff).queryByText('重置密码')).toBeNull();
     const admin = await rowOf('13800138000');
@@ -108,7 +103,7 @@ describe('AdminUsers', () => {
   });
 
   it('customer-side accounts are shown by phone, never by a username', async () => {
-    render(<AdminUsers />);
+    render(<Panel />);
     const row = await rowOf('13800138000');
     expect(within(row).getByText('13800138000')).toBeTruthy();
     expect(screen.queryByText('null')).toBeNull();
@@ -116,7 +111,7 @@ describe('AdminUsers', () => {
 
   it('disabling asks for confirmation, then calls updateUser', async () => {
     updateUser.mockResolvedValue({});
-    render(<AdminUsers />);
+    render(<Panel />);
     fireEvent.click(within(await rowOf('13800138000')).getByText('停用'));
     expect(updateUser).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
@@ -128,10 +123,93 @@ describe('AdminUsers', () => {
 
   it('a disabled account can be enabled', async () => {
     updateUser.mockResolvedValue({});
-    render(<AdminUsers />);
+    render(<Panel />);
     fireEvent.click(within(await rowOf('13900139000')).getByText('启用'));
     await waitFor(() =>
       expect(updateUser).toHaveBeenCalledWith(3, { disabled: false }),
     );
+  });
+
+  it('searching by a phone fragment narrows the list without refetching', async () => {
+    render(<Panel />);
+    await rowOf('13800138000');
+    const box = screen.getByPlaceholderText('搜索手机号/用户名');
+    fireEvent.change(box, { target: { value: '9000' } });
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 });
+    await waitFor(() => expect(screen.queryByText('13800138000')).toBeNull());
+    expect(screen.getByText('13900139000')).toBeTruthy();
+    expect(listUsers).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ?customer= URL parameter preselects the customer filter', async () => {
+    window.history.replaceState(null, '', '/ops/users?customer=5');
+    render(<Panel />);
+    await rowOf('13800138000');
+    expect(screen.queryByText('root')).toBeNull();
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('staff are listed flat next to their admin, not hidden inside the admin row', async () => {
+    render(<Panel />);
+    expect(await screen.findByText('13800138000')).toBeTruthy();
+    expect(screen.getByText('13900139000')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /展开行/ })).toBeNull();
+  });
+
+  it('within a customer the admin comes before its staff', async () => {
+    render(<Panel />);
+    await screen.findByText('13900139000');
+    const order = screen
+      .getAllByText(/^1[3-9]\d{9}$/)
+      .map((n) => n.textContent);
+    expect(order.indexOf('13800138000')).toBeLessThan(
+      order.indexOf('13900139000'),
+    );
+  });
+});
+
+describe('账号管理页（客户侧）', () => {
+  it('lists customer-side accounts only, never platform admins', async () => {
+    render(<AdminUsers />);
+    expect(await screen.findByText('13800138000')).toBeTruthy();
+    expect(screen.queryByText('root')).toBeNull();
+  });
+
+  it('new accounts are staff: phone and a customer, no role dropdown', async () => {
+    render(<AdminUsers />);
+    await screen.findByText('13800138000');
+    fireEvent.click(screen.getByRole('button', { name: /新建账号/ }));
+    expect(await screen.findByLabelText('手机号')).toBeTruthy();
+    expect(screen.getByLabelText('所属客户')).toBeTruthy();
+    expect(screen.queryByLabelText('角色')).toBeNull();
+    expect(screen.queryByLabelText('初始密码')).toBeNull();
+  });
+});
+
+describe('平台管理员账号页', () => {
+  it('only lists platform admins, with no customer or role columns/filters', async () => {
+    render(<PlatformAdmins />);
+    expect(await screen.findByText('root')).toBeTruthy();
+    expect(screen.queryByText('13800138000')).toBeNull();
+    expect(screen.queryByText('所属客户')).toBeNull();
+    expect(screen.queryByText('按客户筛选')).toBeNull();
+  });
+
+  it('the signed-in user cannot disable themselves or be moved', async () => {
+    render(<PlatformAdmins />);
+    const self = await rowOf('root');
+    expect(within(self).queryByText('停用')).toBeNull();
+    expect(within(self).queryByText('启用')).toBeNull();
+    expect(within(self).queryByText('换客户')).toBeNull();
+    expect(within(self).getByText('重置密码')).toBeTruthy();
+  });
+
+  it('creating an account offers only platform admin fields', async () => {
+    render(<PlatformAdmins />);
+    await screen.findByText('root');
+    fireEvent.click(screen.getByRole('button', { name: /新建账号/ }));
+    expect(await screen.findByLabelText('用户名')).toBeTruthy();
+    expect(screen.queryByLabelText('角色')).toBeNull();
+    expect(screen.queryByLabelText('手机号')).toBeNull();
   });
 });

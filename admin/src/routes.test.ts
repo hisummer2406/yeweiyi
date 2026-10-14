@@ -7,6 +7,7 @@ type Route = {
   path?: string;
   name?: string;
   access?: string;
+  hideInMenu?: boolean;
   redirect?: string;
   component?: string;
   routes?: Route[];
@@ -17,7 +18,7 @@ const group = (path: string) => top.find((r) => r.path === path) as Route;
 const child = (g: Route, path: string) =>
   g.routes?.find((r) => r.path === path) as Route;
 const menuNames = (g: Route) =>
-  (g.routes ?? []).filter((r) => r.name).map((r) => r.name);
+  (g.routes ?? []).filter((r) => r.name && !r.hideInMenu).map((r) => r.name);
 
 describe('资产管理菜单组', () => {
   const assets = group('/assets');
@@ -25,7 +26,7 @@ describe('资产管理菜单组', () => {
   it('是与设备监控并列的顶层菜单，整组要求 canManageAssets', () => {
     expect(assets.name).toBe('assets');
     expect(assets.access).toBe('canManageAssets');
-    expect(top.indexOf(assets)).toBeGreaterThan(top.indexOf(group('/console')));
+    expect(top.indexOf(assets)).toBeLessThan(top.indexOf(group('/console')));
   });
 
   it('按 客户 → 油站 → 设备 → 员工授权 排列，客户项只对平台管理员', () => {
@@ -62,20 +63,32 @@ describe('记录查询菜单', () => {
     expect(child(records, '/records/stock-in').path).toBe('/records/stock-in');
   });
 
-  it('顺序是 设备监控 → 记录查询 → 资产管理', () => {
-    const order = [group('/console'), records, group('/assets')].map((g) =>
-      top.indexOf(g),
-    );
+  it('顺序是 资产管理 → 设备监控 → 记录查询 → 运维管理', () => {
+    const order = [
+      group('/assets'),
+      group('/console'),
+      records,
+      group('/ops'),
+    ].map((g) => top.indexOf(g));
     expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+});
+
+describe('客户下的账号页', () => {
+  it('在资产管理下、仅平台管理员、不进菜单', () => {
+    const r = child(group('/assets'), '/assets/customers/:id/accounts');
+    expect(r.access).toBe('canPlatformAdmin');
+    expect(r.name).toBeUndefined();
   });
 });
 
 describe('运维管理菜单', () => {
   const ops = group('/ops');
 
-  it('仍仅平台管理员，只剩 账号管理、审计日志', () => {
+  it('仍仅平台管理员，侧边栏是 账号管理、审计日志；平台管理员账号收进右上角账号菜单', () => {
     expect(ops.access).toBe('canPlatformAdmin');
     expect(menuNames(ops)).toEqual(['users', 'audit']);
+    expect(child(ops, '/ops/platform-admins').hideInMenu).toBe(true);
   });
 
   it('默认落点是账号管理', () => {
@@ -142,6 +155,8 @@ describe('菜单高亮', () => {
     ['/console/devices/ZCT000001', ['/console', '/console/devices']],
     ['/console/issue-command', ['/console', '/console/issue-command']],
     ['/ops/users', ['/ops', '/ops/users']],
+    // 平台管理员账号不在侧边栏，只点亮所在分组
+    ['/ops/platform-admins', ['/ops']],
   ])('%s 只点亮自己所在的分组', (pathname, expected) => {
     expect(selected(pathname)).toEqual(expected);
   });

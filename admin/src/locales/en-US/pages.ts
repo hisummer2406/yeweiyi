@@ -138,9 +138,19 @@ export default {
   'pages.ops.customers.empty': 'No customers yet',
   'pages.ops.customers.form.name.label': 'Customer name',
   'pages.ops.customers.form.name.required': 'Enter a customer name',
+  'pages.ops.customers.form.name.max':
+    'Customer name can be at most {max} characters',
+  'pages.ops.customers.form.adminPhone.label': 'Customer admin phone',
+  'pages.ops.customers.create.success':
+    'Customer "{name}" and its admin were created',
+  'pages.ops.customers.create.partial':
+    'Customer "{name}" was created but its admin could not be, and the rollback failed; handle it in the customer list.',
   'pages.ops.customers.form.submit': 'Create',
   'pages.ops.users.create': 'New account',
   'pages.ops.users.empty': 'No accounts yet',
+  'pages.ops.users.empty.filtered': 'No accounts match the filters',
+  'pages.ops.users.filter.keyword': 'Search phone / username',
+  'pages.ops.users.filter.customer': 'Filter by customer',
   'pages.ops.users.col.username': 'Username',
   'pages.ops.users.col.account': 'Account (phone / username)',
   'pages.ops.users.col.phone': 'Phone number',
@@ -173,6 +183,8 @@ export default {
     'Password must be 8-72 bytes (CJK characters take 3 bytes each)',
   'pages.ops.users.form.role.required': 'Select a role',
   'pages.ops.users.form.customer.required': 'Select a customer',
+  'pages.ops.users.form.customer.hasAdmin':
+    'This customer already has an admin; one admin per customer',
   'pages.ops.users.form.submit': 'Create',
   'pages.ops.users.form.submit.reset': 'Reset',
   'pages.ops.users.form.submit.move': 'Move',
@@ -216,6 +228,9 @@ export default {
     'The device already belongs to {customer}; nothing changed',
   'pages.ops.devices.error.notFound': 'Device not found, refresh the list.',
   'pages.ops.customers.col.actions': 'Actions',
+  'pages.ops.customers.action.users': 'Accounts',
+  'pages.ops.customers.accounts.title': 'Accounts of {name}',
+  'pages.ops.customers.accounts.notFound': 'Customer not found',
   'pages.ops.customers.action.rename': 'Rename',
   'pages.ops.customers.action.delete': 'Delete',
   'pages.ops.customers.form.submit.rename': 'Save',

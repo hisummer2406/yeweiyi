@@ -17,11 +17,11 @@ import {
   userLabel,
 } from './errors';
 
-const ROLES: API.UserRole[] = [
-  'platform_admin',
-  'customer_admin',
-  'customer_user',
-];
+/**
+ * 创建账号可选的角色。客户管理员不在这里建：它和客户一一对应，随「新建客户」一起创建（CreateCustomerModal），
+ * 旧数据里缺管理员的客户走开通向导补。云端接口本身仍接受 customer_admin。
+ */
+const ROLES: API.UserRole[] = ['platform_admin', 'customer_user'];
 
 /** 创建表单的字段：每个角色只用其中一部分（cloud 契约 §4.5），提交时按角色挑。 */
 type CreateUserValues = {
@@ -62,27 +62,31 @@ export function buildCreateUserParams(
 type ModalProps = {
   open: boolean;
   onClose: () => void;
-  /** 成功后调用（页面据此刷新列表） */
-  onDone: () => void;
+  /** 成功后调用（页面据此刷新列表）；创建账号时带上新账号，页面可据此跳转（员工 → 员工授权） */
+  onDone: (created?: API.AdminUser) => void;
   customers: API.Customer[];
+  /** 列表已按某个客户筛选时带入并锁定，不再让人在下拉里找 */
+  defaultCustomerId?: number;
+  /** 限定可建的角色：只剩一个时直接用它、不再显示角色下拉。默认 平台管理员 / 员工 */
+  allowedRoles?: API.UserRole[];
 };
 
 /**
  * 三个弹窗共用的提交流程：防重（ref，同一帧连点 state 来不及更新）、失败提示按状态码归类、
  * 鉴权失败（已转交全局回登录页）时不再提示。失败时弹窗保持打开，方便改完重试。
  */
-function useSubmit(onSuccess: () => void) {
+function useSubmit<R = unknown>(onSuccess: (result: R) => void) {
   const intl = useIntl();
   const [submitting, setSubmitting] = useState(false);
   const busy = useRef(false);
-  const run = async (action: () => Promise<unknown>, successId: string) => {
+  const run = async (action: () => Promise<R>, successId: string) => {
     if (busy.current) return;
     busy.current = true;
     setSubmitting(true);
     try {
-      await action();
+      const result = await action();
       message.success(intl.formatMessage({ id: successId }));
-      onSuccess();
+      onSuccess(result);
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
       if (apiErr?.authHandled) return;
@@ -124,14 +128,21 @@ const useRules = () => {
   };
 };
 
-const customerOptions = (customers: API.Customer[]) =>
-  customers.map((c) => ({ value: c.id, label: c.name }));
+/** `taken`：已有客户管理员的客户 id。一个客户只设一个管理员，选管理员的客户时这些客户置灰。 */
+const customerOptions = (customers: API.Customer[], taken: number[] = []) =>
+  customers.map((c) => ({
+    value: c.id,
+    label: taken.includes(c.id) ? `${c.name}（已有管理员）` : c.name,
+    disabled: taken.includes(c.id),
+  }));
 
 export const CreateUserModal: React.FC<ModalProps> = ({
   open,
   onClose,
   onDone,
   customers,
+  defaultCustomerId,
+  allowedRoles = ROLES,
 }) => {
   const [form] = Form.useForm<CreateUserValues>();
   const { t, passwordRules } = useRules();
@@ -140,9 +151,9 @@ export const CreateUserModal: React.FC<ModalProps> = ({
     onClose();
     form.resetFields();
   };
-  const { submitting, run } = useSubmit(() => {
+  const { submitting, run } = useSubmit<API.AdminUser>((created) => {
     close();
-    onDone();
+    onDone(created);
   });
 
   return (
@@ -160,6 +171,10 @@ export const CreateUserModal: React.FC<ModalProps> = ({
         form={form}
         layout="vertical"
         autoComplete="off"
+        initialValues={{
+          customerId: defaultCustomerId,
+          role: allowedRoles.length === 1 ? allowedRoles[0] : undefined,
+        }}
         onFinish={(v) =>
           run(
             () => createUser(buildCreateUserParams(v)),
@@ -167,24 +182,29 @@ export const CreateUserModal: React.FC<ModalProps> = ({
           )
         }
       >
-        <Form.Item
-          name="role"
-          label={t('pages.ops.users.col.role')}
-          rules={[
-            {
-              required: true,
-              message: t('pages.ops.users.form.role.required'),
-            },
-          ]}
-        >
-          <Select
-            autoFocus
-            options={ROLES.map((r) => ({
-              value: r,
-              label: t(`pages.ops.users.role.${r}`),
-            }))}
-          />
-        </Form.Item>
+        {allowedRoles.length === 1 ? (
+          // 只允许一种角色：值来自 initialValues，不显示下拉
+          <Form.Item name="role" hidden />
+        ) : (
+          <Form.Item
+            name="role"
+            label={t('pages.ops.users.col.role')}
+            rules={[
+              {
+                required: true,
+                message: t('pages.ops.users.form.role.required'),
+              },
+            ]}
+          >
+            <Select
+              autoFocus
+              options={allowedRoles.map((r) => ({
+                value: r,
+                label: t(`pages.ops.users.role.${r}`),
+              }))}
+            />
+          </Form.Item>
+        )}
         {role === 'platform_admin' && (
           <Form.Item
             name="username"
@@ -250,6 +270,7 @@ export const CreateUserModal: React.FC<ModalProps> = ({
           >
             <Select
               showSearch
+              disabled={defaultCustomerId != null}
               optionFilterProp="label"
               placeholder={t('pages.ops.devices.form.customer.placeholder')}
               options={customerOptions(customers)}
@@ -318,8 +339,8 @@ export const ResetPasswordModal: React.FC<TargetProps> = ({
 };
 
 export const MoveUserModal: React.FC<
-  TargetProps & { customers: API.Customer[] }
-> = ({ open, onClose, onDone, user, customers }) => {
+  TargetProps & { customers: API.Customer[]; adminCustomerIds?: number[] }
+> = ({ open, onClose, onDone, user, customers, adminCustomerIds = [] }) => {
   const [form] = Form.useForm<{ customerId: number }>();
   const { t } = useRules();
   const close = () => {
@@ -375,6 +396,7 @@ export const MoveUserModal: React.FC<
             placeholder={t('pages.ops.devices.form.customer.placeholder')}
             options={customerOptions(
               customers.filter((c) => c.id !== user?.customerId),
+              user?.role === 'customer_admin' ? adminCustomerIds : [],
             )}
           />
         </Form.Item>
