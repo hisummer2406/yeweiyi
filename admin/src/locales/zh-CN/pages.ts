@@ -371,6 +371,7 @@ export default {
   'pages.console.staff.save': '保存',
   'pages.console.staff.save.success': '设备 {device} 的油罐授权已保存。',
   'pages.console.staff.save.unchanged': '设备 {device} 的授权没有变化。',
+  'pages.console.staff.revokeAll': '撤销该设备全部授权',
   'pages.console.staff.emptyMeansNone':
     '未选择任何罐：保存后该员工看不到此设备。',
   'pages.console.staff.tanks.label': '{n}号罐',

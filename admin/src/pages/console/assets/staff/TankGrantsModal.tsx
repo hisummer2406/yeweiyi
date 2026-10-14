@@ -109,7 +109,11 @@ const DevicePanel: React.FC<{
           apiErr?.code === 'grant_not_applicable'
         )
           onUserGone();
-        else void load(); // 罐/设备已变化：刷新真实可选罐，丢弃页面上过期的勾选
+        else {
+          // 罐/设备已变化：刷新真实可选罐，并丢弃页面上过期的勾选（否则被拒的罐不再渲染，无法取消）
+          setSelected(saved);
+          void load();
+        }
       }
     } finally {
       busy.current = false;
@@ -156,8 +160,9 @@ const DevicePanel: React.FC<{
               (reportedIdx.includes(n)
                 ? ''
                 : t('pages.console.staff.tanks.gone')),
-            // 设备从未上报时只能撤销：不能勾选新的罐（云端会 409 tanks_unknown）
-            disabled: !reported && !saved.includes(n),
+            // 设备从未上报时只能整组撤销（云端只接受空集合，否则 409 tanks_unknown）：
+            // 复选框全部禁用，由「撤销全部」清空，避免提交必然失败的非空子集
+            disabled: !reported,
           }))}
         />
       )}
@@ -171,6 +176,16 @@ const DevicePanel: React.FC<{
         >
           {t('pages.console.staff.save')}
         </Button>
+        {!reported && saved.length > 0 && (
+          <Button
+            size="small"
+            danger
+            disabled={selected.length === 0}
+            onClick={() => setSelected([])}
+          >
+            {t('pages.console.staff.revokeAll')}
+          </Button>
+        )}
         {selected.length === 0 && (
           <Typography.Text type="secondary">
             {t('pages.console.staff.emptyMeansNone')}
@@ -223,6 +238,11 @@ const TankGrantsModal: React.FC<Props> = ({
         apiErr?.error,
       );
       message.error(t(m.id, { detail: m.detail ?? '' }));
+      // 员工已不存在：重试必然失败，和保存时一致地关闭弹窗
+      if (apiErr?.code === 'user_not_found') {
+        onClose();
+        return;
+      }
       setFailed(true);
     }
   }, [userId]);

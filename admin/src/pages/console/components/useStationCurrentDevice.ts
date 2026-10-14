@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { currentDeviceOf } from '@/utils/stationOccupancy';
 import { REFRESH_MS } from './useRecordsQuery';
@@ -13,15 +13,19 @@ export function useStationCurrentDevice(
   stationId: number | undefined,
 ): string | null | undefined {
   const [current, setCurrent] = useState<string | null | undefined>();
+  // 轮询可能重叠、乱序返回：只采用最后发出的那次请求，迟到的旧快照丢弃（否则 A 会盖掉 B 并把页面导回 A）
+  const seq = useRef(0);
 
   useEffect(() => {
     setCurrent(undefined); // 换油站：不沿用上一个油站的结果
     if (stationId === undefined) return;
     let alive = true;
     const load = async () => {
+      const mine = ++seq.current;
       try {
         const rows = await listDevices();
-        if (alive) setCurrent(currentDeviceOf(rows, stationId));
+        if (alive && mine === seq.current)
+          setCurrent(currentDeviceOf(rows, stationId));
       } catch {
         // 保留上一次结果；鉴权失败由全局处理
       }

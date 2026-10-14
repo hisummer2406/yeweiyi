@@ -199,6 +199,28 @@ describe('DevicePicker station filter', () => {
       }
     });
 
+    it('a slow poll that resolves after a newer one is discarded', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        params = new URLSearchParams('device=D2');
+        render(<DevicePicker>{child}</DevicePicker>);
+        expect(await screen.findByText('records-of-D2')).toBeTruthy();
+        let releaseSlow: (rows: API.DeviceRow[]) => void = () => {};
+        listDevices.mockImplementationOnce(
+          () => new Promise<API.DeviceRow[]>((r) => (releaseSlow = r)),
+        );
+        await vi.advanceTimersByTimeAsync(30_000); // 慢请求发出
+        listDevices.mockResolvedValueOnce([dev('D1'), dev('D2')]);
+        await vi.advanceTimersByTimeAsync(30_000); // 较新的请求先返回
+        releaseSlow([dev('D1')]); // 迟到的旧快照里已没有 D2
+        await new Promise((r) => setTimeout(r, 0));
+        expect(screen.getByText('records-of-D2')).toBeTruthy();
+        expect(screen.queryByText(/设备 D2 不可见或不存在/)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('does not switch when the user had picked another device, or no station is selected', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {

@@ -39,17 +39,24 @@ const DevicePicker: React.FC<Props> = ({ children }) => {
   const [failed, setFailed] = useState(false);
   const sf = useStationFilter(devices);
 
+  // 轮询可能重叠、乱序返回：只采用最后发出的请求，迟到的旧快照丢弃
+  const seq = useRef(0);
+
   const load = useCallback(async (silent = false) => {
+    const mine = ++seq.current;
     if (!silent) setLoading(true);
     try {
-      setDevices(await listDevices());
+      const rows = await listDevices();
+      if (mine !== seq.current) return;
+      setDevices(rows);
       setFailed(false);
     } catch {
+      if (mine !== seq.current) return;
       // 全局错误处理已提示；这里只标记，不把失败当成「没有设备」。
       // 后台轮询失败保留已有列表，不闪成失败态
       if (!silent) setFailed(true);
     } finally {
-      if (!silent) setLoading(false);
+      if (mine === seq.current) setLoading(false);
     }
   }, []);
 

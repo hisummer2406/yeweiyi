@@ -185,6 +185,71 @@ describe('TankGrantsModal', () => {
     );
   });
 
+  it('after invalid_tank the rejected tick is dropped, so the user is not stuck resubmitting it', async () => {
+    setUserTankGrants.mockRejectedValue(
+      new ApiError(400, 'x', false, 'invalid_tank'),
+    );
+    renderModal();
+    const boxes = await screen.findAllByRole('checkbox');
+    fireEvent.click(boxes[1]); // 勾选罐2
+    expect((saveBtn() as HTMLButtonElement).disabled).toBe(false);
+    // 刷新后罐2 已不再上报
+    getDeviceTanks.mockResolvedValue({
+      deviceName: 'ZCT930001',
+      reported: true,
+      tanks: [{ index: 1 }],
+    });
+    fireEvent.click(saveBtn());
+    await waitFor(() =>
+      expect(message.error).toHaveBeenCalledWith(
+        zhPages['pages.console.staff.error.invalidTank'],
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('checkbox')).toHaveLength(1),
+    );
+    expect((saveBtn() as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('user_not_found while loading the grants closes the dialog instead of offering a doomed retry', async () => {
+    listUserTankGrants.mockRejectedValue(
+      new ApiError(404, 'x', false, 'user_not_found'),
+    );
+    const { onClose } = renderModal();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(
+      screen.queryByText(zhPages['pages.console.staff.grants.loadFailed']),
+    ).toBeNull();
+  });
+
+  it('a never-reported device with several grants can only be revoked as a whole', async () => {
+    listUserTankGrants.mockResolvedValue({
+      userId: 4,
+      grants: [{ deviceName: 'ZCT930002', tanks: [1, 2] }],
+    });
+    setUserTankGrants.mockResolvedValue({
+      userId: 4,
+      deviceName: 'ZCT930002',
+      tanks: [],
+      changed: true,
+    });
+    renderModal();
+    const boxes = await screen.findAllByRole('checkbox');
+    expect(boxes).toHaveLength(2);
+    for (const b of boxes) expect((b as HTMLInputElement).disabled).toBe(true);
+    expect((saveBtn() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: zhPages['pages.console.staff.revokeAll'],
+      }),
+    );
+    expect((saveBtn() as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(saveBtn());
+    await waitFor(() =>
+      expect(setUserTankGrants).toHaveBeenCalledWith(4, 'ZCT930002', []),
+    );
+  });
+
   it('user_not_found closes the dialog (staff was removed or moved)', async () => {
     setUserTankGrants.mockRejectedValue(
       new ApiError(404, 'x', false, 'user_not_found'),

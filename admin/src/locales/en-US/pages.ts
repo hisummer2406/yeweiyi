@@ -411,6 +411,7 @@ export default {
   'pages.console.staff.save.success': 'Tank access for device {device} saved.',
   'pages.console.staff.save.unchanged':
     'Tank access for device {device} is unchanged.',
+  'pages.console.staff.revokeAll': 'Revoke all on this device',
   'pages.console.staff.emptyMeansNone':
     'No tank selected: after saving, this staff member cannot see this device.',
   'pages.console.staff.tanks.label': 'Tank {n}',
