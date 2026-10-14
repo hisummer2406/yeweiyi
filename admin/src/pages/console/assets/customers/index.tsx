@@ -137,7 +137,11 @@ const AdminCustomers: React.FC = () => {
         okText={t('pages.ops.customers.form.submit')}
         onSubmit={async (name) => {
           const created = await createCustomer({ name });
-          createdId.current = created?.id;
+          // 只有云端明确回报「配置中」才进向导；旧版云端（无 onboardingStatus）没有向导接口，进去只会 404
+          createdId.current =
+            created?.onboardingStatus === 'configuring'
+              ? created.id
+              : undefined;
           return created;
         }}
         describeError={describeCustomerError}

@@ -78,25 +78,49 @@ const CustomerOnboarding: React.FC = () => {
     message.error(describe(apiErr));
   };
 
-  const load = useCallback(async () => {
+  const loaded = useRef(false);
+
+  const load = useCallback(async (): Promise<
+    API.CustomerOnboarding | undefined
+  > => {
     try {
+      let stationsFailed = false;
       const [p, customers, sts] = await Promise.all([
         getCustomerOnboarding(customerId),
         listCustomers(),
-        listStations({ silent: true }).catch(() => [] as API.Station[]),
+        // 油站是向导的必需数据：取不到不能当成「没有油站」（否则会误导用户重复建站）。
+        // 单独标记失败，避免旧版云端 /api/stations 的 404 被下面当成「客户不存在」
+        listStations({ silent: true }).catch(() => {
+          stationsFailed = true;
+          return [] as API.Station[];
+        }),
       ]);
+      if (stationsFailed) {
+        if (loaded.current)
+          message.error(t('pages.ops.customers.onboarding.loadFailed'));
+        else setLoadError('failed');
+        return undefined;
+      }
+      loaded.current = true;
       setProgress(p);
       setCustomer(customers.find((c) => c.id === customerId));
       setStations(sts.filter((s) => s.customerId === customerId));
       setLoadError(undefined);
+      return p;
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
-      if (apiErr?.authHandled) return;
+      if (apiErr?.authHandled) return undefined;
+      // 已有进度时（保存某一步后的刷新失败）保留页面和表单，只提示，不把整页换成错误页
+      if (loaded.current) {
+        message.error(t('pages.ops.customers.onboarding.loadFailed'));
+        return undefined;
+      }
       setLoadError(
         apiErr?.status === 404 || apiErr?.code === 'customer_not_found'
           ? 'notFound'
           : 'failed',
       );
+      return undefined;
     } finally {
       setLoading(false);
     }
@@ -562,7 +586,7 @@ const CompleteButton: React.FC<{
   customerId: number;
   name: string;
   enabled: boolean;
-  onChanged: () => void;
+  onChanged: () => Promise<API.CustomerOnboarding | undefined>;
   fail: StepFail;
 }> = ({ customerId, name, enabled, onChanged, fail }) => {
   const intl = useIntl();
@@ -584,13 +608,13 @@ const CompleteButton: React.FC<{
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : undefined;
       if (apiErr?.code === 'onboarding_incomplete') {
-        // 页面上的进度过期了（别人删了油站、停用了管理员…）：刷新进度，并提示缺什么
+        // 页面上的进度过期了（别人删了油站、停用了管理员…）：刷新进度（一次请求），并提示缺什么
+        const fresh = await onChanged();
         message.error(
           t('pages.ops.customers.onboarding.complete.incomplete', {
-            items: missingLabels(await refreshedMissing(customerId), t),
+            items: missingLabels(fresh?.missing ?? [], t),
           }),
         );
-        onChanged();
       } else {
         fail(err, (e) => {
           const m = describeOnboardingError(
@@ -618,16 +642,6 @@ const CompleteButton: React.FC<{
       {t('pages.ops.customers.onboarding.complete')}
     </Button>
   );
-};
-
-const refreshedMissing = async (
-  id: number,
-): Promise<API.OnboardingMissing[]> => {
-  try {
-    return (await getCustomerOnboarding(id)).missing;
-  } catch {
-    return [];
-  }
 };
 
 const missingLabels = (

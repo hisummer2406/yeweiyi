@@ -65,7 +65,12 @@ describe('AdminCustomers', () => {
   });
 
   it('creates a trimmed customer name and opens its onboarding wizard', async () => {
-    createCustomer.mockResolvedValue({ id: 2, name: 'A 油站', createdAt: '' });
+    createCustomer.mockResolvedValue({
+      id: 2,
+      name: 'A 油站',
+      createdAt: '',
+      onboardingStatus: 'configuring',
+    });
     const input = await openModal();
     fireEvent.change(input, { target: { value: '  A 油站  ' } });
     fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
@@ -78,6 +83,19 @@ describe('AdminCustomers', () => {
       ),
     );
     expect(message.success).toHaveBeenCalled();
+  });
+
+  it('legacy cloud (no onboardingStatus) does not open the wizard, just reloads the list', async () => {
+    createCustomer.mockResolvedValue({ id: 2, name: 'A 油站', createdAt: '' });
+    const input = await openModal();
+    const before = listCustomers.mock.calls.length;
+    fireEvent.change(input, { target: { value: 'A 油站' } });
+    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
+    await waitFor(() => expect(createCustomer).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(listCustomers.mock.calls.length).toBeGreaterThan(before),
+    );
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('shows onboarding status and the wizard entry only for configuring customers', async () => {

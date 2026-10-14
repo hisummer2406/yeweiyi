@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { message } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -124,6 +125,74 @@ describe('CustomerOnboarding wizard', () => {
     await waitFor(() =>
       expect(message.error).toHaveBeenCalledWith('还不能开通，请先完成：油站'),
     );
+  });
+
+  it('409 onboarding_incomplete re-reads progress only once', async () => {
+    getCustomerOnboarding
+      .mockResolvedValueOnce(
+        progress({
+          complete: true,
+          missing: [],
+          counts: { customerAdmins: 1, stations: 1, devicesInStation: 1 },
+        }),
+      )
+      .mockResolvedValue(progress({ missing: ['station'] }));
+    completeCustomerOnboarding.mockRejectedValue(
+      new ApiError(409, 'incomplete', false, 'onboarding_incomplete'),
+    );
+    render(<Wizard />);
+    fireEvent.click(await screen.findByRole('button', { name: /完成开通/ }));
+    await waitFor(() => expect(message.error).toHaveBeenCalled());
+    expect(getCustomerOnboarding).toHaveBeenCalledTimes(2); // 初次加载 + 一次刷新
+  });
+
+  it('a failed stations request is a retryable load error, not "no stations"', async () => {
+    getCustomerOnboarding.mockResolvedValue(
+      progress({
+        missing: ['device_in_station'],
+        counts: { customerAdmins: 1, stations: 1, devicesInStation: 0 },
+      }),
+    );
+    listStations.mockRejectedValueOnce(new ApiError(404, 'not found'));
+    render(<Wizard />);
+    expect(
+      await screen.findByText(
+        zhPages['pages.ops.customers.onboarding.loadFailed'],
+      ),
+    ).toBeTruthy();
+    // 旧版云端 /api/stations 的 404 不能被当成「客户不存在」
+    expect(screen.queryByText('客户不存在，请刷新列表。')).toBeNull();
+    expect(
+      screen.queryByText(
+        zhPages['pages.ops.customers.onboarding.device.noStation'],
+      ),
+    ).toBeNull();
+    // 重试后恢复
+    listStations.mockResolvedValue([{ id: 3, customerId: 7, name: '一号站' }]);
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
+    expect(await screen.findByText(/已有 1 个油站/)).toBeTruthy();
+  });
+
+  it('a failed refresh after loading keeps the page instead of replacing it with an error', async () => {
+    render(<Wizard />);
+    await screen.findByRole('button', { name: /完成开通/ });
+    createStation.mockResolvedValue({ id: 9, customerId: 7, name: 'X' });
+    getCustomerOnboarding.mockRejectedValue(new ApiError(500, 'boom'));
+    fireEvent.click(screen.getByRole('button', { name: /新建油站/ }));
+    const name = await screen.findByRole('textbox', { name: /名称/ });
+    fireEvent.change(name, { target: { value: 'X' } });
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: /创\s*建/,
+      }),
+    );
+    await waitFor(() => expect(createStation).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(message.error).toHaveBeenCalledWith(
+        zhPages['pages.ops.customers.onboarding.loadFailed'],
+      ),
+    );
+    expect(screen.getByRole('button', { name: /完成开通/ })).toBeTruthy();
   });
 
   it('shows an active customer without the complete button', async () => {
