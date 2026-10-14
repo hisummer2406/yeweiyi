@@ -185,6 +185,7 @@ Page({
   // the device is still in this user's scope.
   stationId: undefined as number | null | undefined,
   associationBusy: false,
+  unloaded: false,
   // Set while the entry has not yet produced a device (see retryEntry). `scene` is the code to locate.
   entryPending: null as 'scene' | 'station' | null,
   scene: '',
@@ -372,6 +373,7 @@ Page({
   // for it are invalidated, before anything is asked for the new one. `device` '' = show the notice and
   // query nothing. Nothing is migrated: the new device's view starts empty and says so.
   switchDevice(device: string, notice: string) {
+    if (this.unloaded) return;
     this.deviceGen++;
     this.snapshotSeq++;
     this.commandsSeq++;
@@ -431,6 +433,14 @@ Page({
 
   onUnload() {
     setActiveScene(null);
+    // Invalidate everything still in flight: a scene/station resolution that comes back after the page
+    // is gone must not switchDevice (which would start requests and a reconnecting socket nobody closes).
+    this.unloaded = true;
+    this.deviceGen++;
+    this.snapshotSeq++;
+    this.commandsSeq++;
+    this.alarmsSeq++;
+    this.stockSeq++;
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
