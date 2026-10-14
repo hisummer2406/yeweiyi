@@ -165,4 +165,85 @@ describe('DevicePicker station filter', () => {
     await screen.findByText('请先选择设备');
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
   });
+
+  describe('station entry follows a screen replacement (contract §8.1)', () => {
+    const inStation = (name: string, station_id: number | null) => ({
+      ...dev(name),
+      station_id,
+    });
+    const stations = [
+      { id: 5, customerId: 1, name: '五号站', address: '', createdAt: '' },
+    ];
+
+    it('station 5 changes from A to B while A is selected: switches ?device= to B', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        listStations.mockResolvedValue(stations);
+        listDevices.mockResolvedValue([
+          inStation('A', 5),
+          inStation('B', null),
+        ]);
+        params = new URLSearchParams('station=5&device=A');
+        render(<DevicePicker>{child}</DevicePicker>);
+        expect(await screen.findByText('records-of-A')).toBeTruthy();
+        // 换机：A 解除，B 进站（下一次轮询得知）
+        listDevices.mockResolvedValue([
+          inStation('A', null),
+          inStation('B', 5),
+        ]);
+        await vi.advanceTimersByTimeAsync(30_000);
+        await waitFor(() => expect(params.get('device')).toBe('B'));
+        expect(params.get('station')).toBe('5');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('a slow poll that resolves after a newer one is discarded', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        params = new URLSearchParams('device=D2');
+        render(<DevicePicker>{child}</DevicePicker>);
+        expect(await screen.findByText('records-of-D2')).toBeTruthy();
+        let releaseSlow: (rows: API.DeviceRow[]) => void = () => {};
+        listDevices.mockImplementationOnce(
+          () => new Promise<API.DeviceRow[]>((r) => (releaseSlow = r)),
+        );
+        await vi.advanceTimersByTimeAsync(30_000); // 慢请求发出
+        listDevices.mockResolvedValueOnce([dev('D1'), dev('D2')]);
+        await vi.advanceTimersByTimeAsync(30_000); // 较新的请求先返回
+        releaseSlow([dev('D1')]); // 迟到的旧快照里已没有 D2
+        await new Promise((r) => setTimeout(r, 0));
+        expect(screen.getByText('records-of-D2')).toBeTruthy();
+        expect(screen.queryByText(/设备 D2 不可见或不存在/)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not switch when the user had picked another device, or no station is selected', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        listStations.mockResolvedValue(stations);
+        listDevices.mockResolvedValue([
+          inStation('A', 5),
+          inStation('B', null),
+          inStation('C', null),
+        ]);
+        params = new URLSearchParams('station=5&device=C');
+        render(<DevicePicker>{child}</DevicePicker>);
+        await screen.findByText('records-of-C');
+        listDevices.mockResolvedValue([
+          inStation('A', null),
+          inStation('B', 5),
+          inStation('C', null),
+        ]);
+        await vi.advanceTimersByTimeAsync(30_000);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(params.get('device')).toBe('C');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

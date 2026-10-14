@@ -10,6 +10,19 @@ describe('classifyLoginError', () => {
     );
   });
 
+  it('403 customer_not_onboarded is its own kind, other 403 stays generic', () => {
+    expect(
+      classifyLoginError({
+        response: { status: 403, data: { code: 'customer_not_onboarded' } },
+      }),
+    ).toBe('notOnboarded');
+    expect(
+      classifyLoginError({
+        response: { status: 403, data: { error: 'not authorized' } },
+      }),
+    ).toBe('failure');
+  });
+
   it.each([400, 500, 503])('%i is a generic failure', (status) => {
     expect(classifyLoginError({ response: { status } })).toBe('failure');
   });

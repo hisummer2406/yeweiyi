@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeDeleteError,
+  describeOnboardingError,
   describeRenameError,
   isDefaultCustomer,
 } from './errors';
@@ -40,6 +41,22 @@ describe('isDefaultCustomer', () => {
     );
     expect(isDefaultCustomer({ id: 2, name: 'Default', createdAt: '' })).toBe(
       false,
+    );
+  });
+});
+
+describe('describeOnboardingError', () => {
+  it('customer_not_found and 404 mean the customer is gone', () => {
+    expect(describeOnboardingError(404, '', 'customer_not_found').id).toBe(
+      'pages.ops.customers.error.notFound',
+    );
+    expect(describeOnboardingError(404).id).toBe(
+      'pages.ops.customers.error.notFound',
+    );
+  });
+  it('other statuses fall back to the generic messages', () => {
+    expect(describeOnboardingError(0).id).toBe(
+      'pages.ops.devices.error.network',
     );
   });
 });

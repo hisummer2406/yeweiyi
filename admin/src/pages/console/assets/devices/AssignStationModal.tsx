@@ -4,12 +4,18 @@ import type React from 'react';
 import { useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import { assignDeviceStation } from '@/services/ant-design-pro/stations';
+import { occupantOf } from '@/utils/stationOccupancy';
 import { describeAssignStationError } from '../stations/errors';
 
 type Props = {
   /** 要分配油站的设备；undefined 时弹窗关闭 */
   device?: API.DeviceRow;
   stations: API.Station[];
+  /**
+   * 当前可见的设备行，用来预提示「油站已有设备」（一个油站同时只有一台大屏，yeweiyi-admin#15）。
+   * 这只是预提示，列表可能已过期：占用冲突与并发失败仍以云端的响应为准。缺省则不预提示。
+   */
+  devices?: API.DeviceRow[];
   onClose: () => void;
   onDone: () => void;
 };
@@ -22,6 +28,7 @@ type Props = {
 const AssignStationModalInner: React.FC<Props> = ({
   device,
   stations,
+  devices,
   onClose,
   onDone,
 }) => {
@@ -37,7 +44,23 @@ const AssignStationModalInner: React.FC<Props> = ({
     .filter(
       (s) => typeof customerId !== 'number' || s.customerId === customerId,
     )
-    .map((s) => ({ value: s.id, label: s.name }));
+    .map((s) => {
+      // 已被别的设备占用的油站不能静默覆盖：禁用并标出占用者；设备自己所在的油站不算占用
+      const occupant = devices
+        ? occupantOf(devices, s.id, device?.device_name)
+        : undefined;
+      return {
+        value: s.id,
+        label: occupant
+          ? t('pages.console.stations.assign.occupied', {
+              station: s.name,
+              device: occupant,
+            })
+          : s.name,
+        disabled: !!occupant,
+      };
+    });
+  const hasOccupied = options.some((o) => o.disabled);
 
   const close = () => {
     onClose();
@@ -77,8 +100,16 @@ const AssignStationModalInner: React.FC<Props> = ({
       const m = describeAssignStationError(
         apiErr?.status ?? -1,
         apiErr?.error ?? (err as Error)?.message,
+        apiErr?.code,
+        apiErr?.occupiedBy,
       );
       message.error(t(m.id, { detail: m.detail ?? '' }));
+      // 400/404/409 说明页面上的设备、油站或占用关系已过期（别的管理员刚改过，或并发分配落败）：
+      // 关掉弹窗并刷新，让用户看到真实状态再决定，而不是在过期选项上反复重试
+      if (apiErr && [400, 404, 409].includes(apiErr.status)) {
+        close();
+        onDone();
+      }
     } finally {
       busy.current = false;
       setSubmitting(false);
@@ -104,6 +135,14 @@ const AssignStationModalInner: React.FC<Props> = ({
           showIcon
           style={{ marginBottom: 16 }}
           title={t('pages.console.stations.assign.noStations')}
+        />
+      )}
+      {hasOccupied && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={t('pages.console.stations.assign.occupiedHint')}
         />
       )}
       <Form

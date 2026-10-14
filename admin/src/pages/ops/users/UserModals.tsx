@@ -10,9 +10,11 @@ import {
 } from '@/services/ant-design-pro/users';
 import {
   describeUserError,
+  normalizePhone,
   PASSWORD_MAX_BYTES,
   PASSWORD_MIN_BYTES,
   passwordByteLength,
+  userLabel,
 } from './errors';
 
 const ROLES: API.UserRole[] = [
@@ -20,6 +22,42 @@ const ROLES: API.UserRole[] = [
   'customer_admin',
   'customer_user',
 ];
+
+/** 创建表单的字段：每个角色只用其中一部分（cloud 契约 §4.5），提交时按角色挑。 */
+type CreateUserValues = {
+  role: API.UserRole;
+  username?: string;
+  phone?: string;
+  password?: string;
+  customerId?: number;
+};
+
+/** 按角色组出云端要的请求体：员工不带密码，客户侧不带用户名，平台管理员不带手机号和客户。 */
+export function buildCreateUserParams(
+  v: CreateUserValues,
+): API.CreateUserParams {
+  switch (v.role) {
+    case 'platform_admin':
+      return {
+        role: v.role,
+        username: (v.username ?? '').trim(),
+        password: v.password ?? '',
+      };
+    case 'customer_admin':
+      return {
+        role: v.role,
+        phone: normalizePhone(v.phone ?? '') ?? (v.phone ?? '').trim(),
+        password: v.password ?? '',
+        customerId: v.customerId as number,
+      };
+    default:
+      return {
+        role: 'customer_user',
+        phone: normalizePhone(v.phone ?? '') ?? (v.phone ?? '').trim(),
+        customerId: v.customerId as number,
+      };
+  }
+}
 
 type ModalProps = {
   open: boolean;
@@ -51,6 +89,7 @@ function useSubmit(onSuccess: () => void) {
       const m = describeUserError(
         apiErr?.status ?? -1,
         apiErr?.error ?? (err as Error)?.message,
+        apiErr?.code,
       );
       message.error(
         intl.formatMessage({ id: m.id }, { detail: m.detail ?? '' }),
@@ -94,7 +133,7 @@ export const CreateUserModal: React.FC<ModalProps> = ({
   onDone,
   customers,
 }) => {
-  const [form] = Form.useForm<API.CreateUserParams>();
+  const [form] = Form.useForm<CreateUserValues>();
   const { t, passwordRules } = useRules();
   const role = Form.useWatch('role', form);
   const close = () => {
@@ -123,41 +162,11 @@ export const CreateUserModal: React.FC<ModalProps> = ({
         autoComplete="off"
         onFinish={(v) =>
           run(
-            () =>
-              createUser({
-                username: v.username.trim(),
-                password: v.password,
-                role: v.role,
-                // 平台管理员不属于任何客户，带了 customerId 后端会拒绝
-                ...(v.role === 'platform_admin'
-                  ? {}
-                  : { customerId: v.customerId }),
-              }),
+            () => createUser(buildCreateUserParams(v)),
             'pages.ops.users.success.created',
           )
         }
       >
-        <Form.Item
-          name="username"
-          label={t('pages.ops.users.col.username')}
-          rules={[
-            {
-              required: true,
-              whitespace: true,
-              message: t('pages.ops.users.form.username.required'),
-            },
-            { max: 64, message: t('pages.ops.users.form.username.max') },
-          ]}
-        >
-          <Input autoFocus autoComplete="off" />
-        </Form.Item>
-        <Form.Item
-          name="password"
-          label={t('pages.ops.users.form.password.label')}
-          rules={passwordRules}
-        >
-          <Input.Password autoComplete="new-password" />
-        </Form.Item>
         <Form.Item
           name="role"
           label={t('pages.ops.users.col.role')}
@@ -169,12 +178,65 @@ export const CreateUserModal: React.FC<ModalProps> = ({
           ]}
         >
           <Select
+            autoFocus
             options={ROLES.map((r) => ({
               value: r,
               label: t(`pages.ops.users.role.${r}`),
             }))}
           />
         </Form.Item>
+        {role === 'platform_admin' && (
+          <Form.Item
+            name="username"
+            label={t('pages.ops.users.col.username')}
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: t('pages.ops.users.form.username.required'),
+              },
+              { max: 64, message: t('pages.ops.users.form.username.max') },
+            ]}
+          >
+            <Input autoComplete="off" />
+          </Form.Item>
+        )}
+        {(role === 'customer_admin' || role === 'customer_user') && (
+          <Form.Item
+            name="phone"
+            label={t('pages.ops.users.col.phone')}
+            rules={[
+              {
+                validator: (_: unknown, value?: string) =>
+                  value && normalizePhone(value)
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(t('pages.ops.users.form.phone.invalid')),
+                      ),
+              },
+            ]}
+          >
+            <Input autoComplete="off" inputMode="tel" />
+          </Form.Item>
+        )}
+        {/* 员工没有网页密码：表单里不出现密码框，也不会提交密码。 */}
+        {(role === 'platform_admin' || role === 'customer_admin') && (
+          <Form.Item
+            name="password"
+            label={t('pages.ops.users.form.password.label')}
+            rules={passwordRules}
+          >
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+        )}
+        {role === 'customer_user' && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('pages.ops.users.form.staff.hint')}
+          />
+        )}
         {role && role !== 'platform_admin' && (
           <Form.Item
             name="customerId"
@@ -223,7 +285,7 @@ export const ResetPasswordModal: React.FC<TargetProps> = ({
   return (
     <Modal
       open={open}
-      title={`${t('pages.ops.users.action.resetPassword')}：${user?.username ?? ''}`}
+      title={`${t('pages.ops.users.action.resetPassword')}：${user ? userLabel(user) : ''}`}
       okText={t('pages.ops.users.form.submit.reset')}
       cancelText={t('pages.ops.devices.form.cancel')}
       confirmLoading={submitting}
@@ -272,7 +334,7 @@ export const MoveUserModal: React.FC<
   return (
     <Modal
       open={open}
-      title={`${t('pages.ops.users.action.move')}：${user?.username ?? ''}`}
+      title={`${t('pages.ops.users.action.move')}：${user ? userLabel(user) : ''}`}
       okText={t('pages.ops.users.form.submit.move')}
       cancelText={t('pages.ops.devices.form.cancel')}
       confirmLoading={submitting}

@@ -27,6 +27,7 @@ export function setToken(token: string): void {
 }
 
 export function clearToken(): void {
+  clearProfile();
   memoryToken = undefined;
   try {
     window.localStorage.removeItem(TOKEN_KEY);
@@ -35,7 +36,48 @@ export function clearToken(): void {
   }
 }
 
-/** 解码 JWT payload；claim 缺失、已过期或不是 JWT 时返回 undefined。role 原样保留，由 access.ts 判定。 */
+const PROFILE_KEY = 'yeweiyi_admin_profile';
+
+/**
+ * 登录响应里的 user 才带得出可显示的标识（令牌 sub 现在只是用户 ID）。存 {userId, label}，
+ * 取用时核对 userId，换账号后不会串显示。只是显示用，不是身份依据。
+ */
+export function setProfile(userId: number, label: string): void {
+  try {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify({ userId, label }));
+  } catch {
+    // 无法持久化时退化为不显示标识
+  }
+}
+
+function getProfileLabel(userId: number): string {
+  try {
+    const raw = window.localStorage.getItem(PROFILE_KEY);
+    const p = raw ? JSON.parse(raw) : undefined;
+    return p?.userId === userId && typeof p.label === 'string' ? p.label : '';
+  } catch {
+    return '';
+  }
+}
+
+function clearProfile(): void {
+  try {
+    window.localStorage.removeItem(PROFILE_KEY);
+  } catch {
+    // 无可清理
+  }
+}
+
+/** 登录响应的 user 对应的显示标签：平台管理员=用户名，客户侧=手机号（本人看到完整号码）。 */
+export function sessionLabel(user: API.SessionUser): string {
+  return user.username ?? user.phone ?? '';
+}
+
+/**
+ * 解码 JWT payload；uid / role / exp 缺失、已过期或不是 JWT 时返回 undefined。role 原样保留，由
+ * access.ts 判定。sub 在 yeweiyi-cloud#59 之后是用户 ID 的字符串，不当用户名用；旧令牌里是用户名，
+ * 仍可作为显示标签。
+ */
 export function decodeToken(
   token: string | undefined,
   now: number = Date.now(),
@@ -50,8 +92,6 @@ export function decodeToken(
     const { uid, sub, role, exp } = claims ?? {};
     if (
       typeof uid !== 'number' ||
-      typeof sub !== 'string' ||
-      !sub ||
       typeof role !== 'string' ||
       !role ||
       typeof exp !== 'number'
@@ -59,7 +99,9 @@ export function decodeToken(
       return undefined;
     }
     if (exp * 1000 <= now) return undefined;
-    return { userId: uid, username: sub, access: role as API.Role };
+    const legacyName =
+      typeof sub === 'string' && sub && !/^\d+$/.test(sub) ? sub : '';
+    return { userId: uid, username: legacyName, access: role as API.Role };
   } catch {
     return undefined;
   }
@@ -70,8 +112,17 @@ export function getCurrentUser(): API.CurrentUser | undefined {
   const token = getToken();
   if (!token) return undefined;
   const user = decodeToken(token);
-  if (!user) clearToken();
-  return user;
+  if (!user) {
+    clearToken();
+    return undefined;
+  }
+  // 员工（customer_user）没有网页后台：令牌可能来自小程序登录或旧的本地状态，都不能进入。
+  // 云端对员工的密码登录本来就拒绝，这里挡的是"手里已经有一个员工令牌"的情形。
+  if (user.access === 'customer_user') {
+    clearToken();
+    return undefined;
+  }
+  return { ...user, username: user.username || getProfileLabel(user.userId) };
 }
 
 export function loginRedirectUrl(): string {
@@ -79,6 +130,16 @@ export function loginRedirectUrl(): string {
   return `/user/login?redirect=${encodeURIComponent(pathname + search + hash)}`;
 }
 
-/** 401（账号或密码错误，含账号被停用）与其余失败（400 / 5xx / 网络）分开提示。 */
-export const classifyLoginError = (error: any): 'credentials' | 'failure' =>
-  error?.response?.status === 401 ? 'credentials' : 'failure';
+/**
+ * 401（账号或密码错误，含账号被停用）、403 customer_not_onboarded（所在客户尚在配置中，cloud#60，只在身份
+ * 验证通过后才返回）与其余失败（400 / 5xx / 网络）分开提示。notOnboarded 是业务提示，不是账号失效。
+ */
+export const classifyLoginError = (
+  error: any,
+): 'credentials' | 'notOnboarded' | 'failure' => {
+  const status = error?.response?.status;
+  if (status === 401) return 'credentials';
+  if (status === 403 && error.response.data?.code === 'customer_not_onboarded')
+    return 'notOnboarded';
+  return 'failure';
+};

@@ -53,6 +53,16 @@ export const handleRequestError = (error: any, opts: any) => {
   if (error.response) {
     const { status, data } = error.response;
     if (forwardAuthFailure(error)) return;
+    // 客户尚在配置中（cloud#60）：业务提示，不清 token，不当作账号失效
+    if (status === 403 && data?.code === 'customer_not_onboarded') {
+      message.error(
+        getIntl().formatMessage({
+          id: 'pages.login.customerNotOnboarded',
+          defaultMessage: '所在客户尚未完成开通，请联系平台管理员。',
+        }),
+      );
+      return;
+    }
     // 其它 403：展示后端给出的原因，不清 token。
     message.error(data?.error || `Response status:${status}`);
   } else if (typeof navigator !== 'undefined' && !navigator.onLine) {

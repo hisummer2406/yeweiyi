@@ -28,9 +28,12 @@ vi.mock('@/services/ant-design-pro/users', () => ({
   moveUser,
 }));
 
-const { CreateUserModal, ResetPasswordModal, MoveUserModal } = await import(
-  './UserModals'
-);
+const {
+  CreateUserModal,
+  ResetPasswordModal,
+  MoveUserModal,
+  buildCreateUserParams,
+} = await import('./UserModals');
 const { ApiError } = await import('@/services/ant-design-pro/apiError');
 
 const customers = [
@@ -40,7 +43,8 @@ const customers = [
 
 const user = {
   id: 7,
-  username: 'zhang',
+  username: null,
+  phone: '13800138000',
   role: 'customer_admin' as const,
   customerId: 1,
   disabled: false,
@@ -73,39 +77,39 @@ describe('CreateUserModal', () => {
     );
     return { onDone, onClose };
   };
-  const fill = (username: string, password: string) => {
-    fireEvent.change(screen.getByLabelText('用户名'), {
-      target: { value: username },
+  // 字段按角色出现，选角色后要等它们渲染出来再填。
+  const type = async (label: string, value: string) =>
+    fireEvent.change(await screen.findByLabelText(label), {
+      target: { value },
     });
-    fireEvent.change(screen.getByLabelText('初始密码'), {
-      target: { value: password },
-    });
-  };
   const submit = () =>
     fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
 
-  it('platform_admin is created without a customerId', async () => {
+  it('platform_admin is created with a username and password, nothing else', async () => {
     createUser.mockResolvedValue({ id: 9 });
     const { onDone } = setup();
-    fill('  root  ', 'password1');
     await pickOption('角色', '平台管理员');
+    await type('用户名', '  root  ');
+    await type('初始密码', 'password1');
     expect(screen.queryByLabelText('所属客户')).toBeNull();
+    expect(screen.queryByLabelText('手机号')).toBeNull();
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
     expect(createUser).toHaveBeenCalledWith({
+      role: 'platform_admin',
       username: 'root',
       password: 'password1',
-      role: 'platform_admin',
     });
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 
-  it('customer roles require a customer and send its id', async () => {
+  it('customer_admin needs a phone, a password and a customer; the phone is sent normalized', async () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
-    fill('zhang', 'password1');
     await pickOption('角色', '客户管理员');
-    await screen.findByLabelText('所属客户');
+    await type('手机号', '+86 138 0013 8000');
+    expect(screen.queryByLabelText('用户名')).toBeNull();
+    await type('初始密码', 'password1');
     submit();
     expect(await screen.findByText('请选择客户')).toBeTruthy();
     expect(createUser).not.toHaveBeenCalled();
@@ -113,58 +117,129 @@ describe('CreateUserModal', () => {
     submit();
     await waitFor(() =>
       expect(createUser).toHaveBeenCalledWith({
-        username: 'zhang',
-        password: 'password1',
         role: 'customer_admin',
+        phone: '13800138000',
+        password: 'password1',
         customerId: 2,
       }),
     );
   });
 
-  it('switching back to platform_admin drops a customer picked earlier', async () => {
+  it('staff are created from a phone and a customer, with no password field at all', async () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
-    fill('root', 'password1');
-    await pickOption('角色', '客户管理员');
-    await screen.findByLabelText('所属客户');
-    await pickOption('所属客户', 'B 油站');
-    await pickOption('角色', '平台管理员');
+    await pickOption('角色', '客户用户');
+    await type('手机号', '13900139000');
+    expect(screen.queryByLabelText('初始密码')).toBeNull();
+    expect(screen.getByText(/没有网页密码/)).toBeTruthy();
+    await pickOption('所属客户', 'A 油站');
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
-    expect(createUser.mock.calls[0][0]).not.toHaveProperty('customerId');
+    const body = createUser.mock.calls[0][0];
+    expect(body).toEqual({
+      role: 'customer_user',
+      phone: '13900139000',
+      customerId: 1,
+    });
+    expect(body).not.toHaveProperty('password');
+  });
+
+  it('a password typed for a customer admin is not sent after switching to staff', async () => {
+    createUser.mockResolvedValue({ id: 9 });
+    setup();
+    await pickOption('角色', '客户管理员');
+    await type('初始密码', 'password1');
+    await pickOption('角色', '客户用户');
+    await type('手机号', '13900139000');
+    await waitFor(() => expect(screen.queryByLabelText('初始密码')).toBeNull());
+    await pickOption('所属客户', 'A 油站');
+    submit();
+    await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
+    expect(createUser.mock.calls[0][0]).not.toHaveProperty('password');
+    expect(createUser.mock.calls[0][0]).not.toHaveProperty('username');
+  });
+
+  it('rejects a malformed phone before sending anything', async () => {
+    setup();
+    await pickOption('角色', '客户用户');
+    await type('手机号', '12345');
+    await pickOption('所属客户', 'A 油站');
+    submit();
+    expect(await screen.findByText(/11 位大陆手机号/)).toBeTruthy();
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('switching to platform_admin drops a customer and a phone picked earlier', async () => {
+    createUser.mockResolvedValue({ id: 9 });
+    setup();
+    await pickOption('角色', '客户管理员');
+    await type('手机号', '13800138000');
+    await pickOption('所属客户', 'B 油站');
+    await pickOption('角色', '平台管理员');
+    await type('用户名', 'root');
+    await type('初始密码', 'password1');
+    await waitFor(() => expect(screen.queryByLabelText('手机号')).toBeNull());
+    submit();
+    await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
+    expect(createUser.mock.calls[0][0]).toEqual({
+      role: 'platform_admin',
+      username: 'root',
+      password: 'password1',
+    });
   });
 
   it('rejects a password shorter than 8 bytes and one over 72 bytes', async () => {
     setup();
     await pickOption('角色', '平台管理员');
-    fill('root', 'short');
+    await type('用户名', 'root');
+    await type('初始密码', 'short');
     submit();
     expect(await screen.findByText(/8-72 字节/)).toBeTruthy();
     // 25 个汉字 = 75 字节，字符数不到 72 但字节数超限
-    fill('root', '密'.repeat(25));
+    await type('初始密码', '密'.repeat(25));
     submit();
     await waitFor(() => expect(screen.getByText(/8-72 字节/)).toBeTruthy());
     expect(createUser).not.toHaveBeenCalled();
   });
 
-  it('409 shows the username-exists message and keeps the dialog open', async () => {
-    createUser.mockRejectedValue(new ApiError(409, 'username already exists'));
+  it('a duplicate phone says so without naming a customer, and keeps the dialog open', async () => {
+    const err = new ApiError(
+      409,
+      'phone number already registered',
+      false,
+      'phone_exists',
+    );
+    createUser.mockRejectedValue(err);
     const { onDone, onClose } = setup();
-    fill('root', 'password1');
-    await pickOption('角色', '平台管理员');
+    await pickOption('角色', '客户用户');
+    await type('手机号', '13900139000');
+    await pickOption('所属客户', 'A 油站');
     submit();
     await waitFor(() =>
-      expect(message.error).toHaveBeenCalledWith('用户名已存在'),
+      expect(message.error).toHaveBeenCalledWith('该手机号已被注册。'),
     );
     expect(onDone).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('a duplicate platform username keeps the old username message', async () => {
+    createUser.mockRejectedValue(new ApiError(409, 'username already exists'));
+    setup();
+    await pickOption('角色', '平台管理员');
+    await type('用户名', 'root');
+    await type('初始密码', 'password1');
+    submit();
+    await waitFor(() =>
+      expect(message.error).toHaveBeenCalledWith('用户名已存在'),
+    );
+  });
+
   it('stays silent when the auth failure was already handled', async () => {
     createUser.mockRejectedValue(new ApiError(401, undefined, true));
     setup();
-    fill('root', 'password1');
     await pickOption('角色', '平台管理员');
+    await type('用户名', 'root');
+    await type('初始密码', 'password1');
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalled());
     expect(message.error).not.toHaveBeenCalled();
@@ -174,8 +249,9 @@ describe('CreateUserModal', () => {
     let resolve: (v: unknown) => void = () => {};
     createUser.mockReturnValue(new Promise((r) => (resolve = r)));
     setup();
-    fill('root', 'password1');
     await pickOption('角色', '平台管理员');
+    await type('用户名', 'root');
+    await type('初始密码', 'password1');
     const form = screen.getByLabelText('用户名').closest('form') as HTMLElement;
     fireEvent.submit(form);
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
@@ -184,6 +260,23 @@ describe('CreateUserModal', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(createUser).toHaveBeenCalledTimes(1);
     resolve({ id: 1 });
+  });
+});
+
+describe('buildCreateUserParams', () => {
+  it('never lets a staff request carry a password, a username or a stray field', () => {
+    const body = buildCreateUserParams({
+      role: 'customer_user',
+      phone: '139 0013 9000',
+      customerId: 3,
+      password: 'leftover',
+      username: 'leftover',
+    });
+    expect(body).toEqual({
+      role: 'customer_user',
+      phone: '13900139000',
+      customerId: 3,
+    });
   });
 });
 

@@ -3,8 +3,10 @@ export default {
   'pages.login.accountLogin.errorMessage': 'Incorrect username or password',
   'pages.login.failure': 'Login failed, please try again!',
   'pages.login.success': 'Login successful!',
-  'pages.login.username.placeholder': 'Username',
-  'pages.login.username.required': 'Please input your username!',
+  'pages.login.username.placeholder': 'Phone number / username',
+  'pages.login.username.required':
+    'Please input your phone number or username!',
+  'pages.login.staffNoWeb': 'Staff accounts sign in through the mini program.',
   'pages.login.password.placeholder': 'Password',
   'pages.login.password.required': 'Please input your password!',
   'pages.login.submit': 'Login',
@@ -138,6 +140,8 @@ export default {
   'pages.ops.users.create': 'New account',
   'pages.ops.users.empty': 'No accounts yet',
   'pages.ops.users.col.username': 'Username',
+  'pages.ops.users.col.account': 'Account (phone / username)',
+  'pages.ops.users.col.phone': 'Phone number',
   'pages.ops.users.col.role': 'Role',
   'pages.ops.users.col.customer': 'Customer',
   'pages.ops.users.col.status': 'Status',
@@ -156,6 +160,10 @@ export default {
     'A disabled account cannot log in. Disable it?',
   'pages.ops.users.form.username.required': 'Enter a username',
   'pages.ops.users.form.username.max': 'Username is at most 64 characters',
+  'pages.ops.users.form.phone.invalid':
+    'Enter a valid 11-digit mainland China mobile number',
+  'pages.ops.users.form.staff.hint':
+    'Staff have no web password and sign in only through the mini program with WeChat phone authorization. A platform admin assigns their tanks afterwards under Assets → Staff grants.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',
@@ -175,6 +183,14 @@ export default {
   'pages.ops.users.success.disabled': 'Account disabled',
   'pages.ops.users.success.enabled': 'Account enabled',
   'pages.ops.users.error.exists': 'Username already exists',
+  'pages.ops.users.error.phoneExists':
+    'This phone number is already registered.',
+  'pages.ops.users.error.invalidPhone':
+    'Invalid phone number. Only 11-digit mainland China numbers are supported.',
+  'pages.ops.users.error.passwordNotAllowed':
+    'Staff accounts have no password.',
+  'pages.ops.users.error.noPasswordForRole':
+    'Staff accounts have no password to reset.',
   'pages.ops.users.error.invalid': 'Invalid input: {detail}',
   'pages.ops.users.error.forbidden': 'You are not allowed to do this.',
   'pages.ops.users.error.notFound': 'Account not found, refresh the list.',
@@ -267,6 +283,7 @@ export default {
   'pages.console.stations.col.customer': 'Customer',
   'pages.console.stations.col.createdAt': 'Created at',
   'pages.console.stations.col.actions': 'Actions',
+  'pages.console.stations.action.monitor': 'Monitor',
   'pages.console.stations.action.edit': 'Edit',
   'pages.console.stations.action.delete': 'Delete',
   'pages.console.stations.form.name.label': 'Station name',
@@ -316,10 +333,111 @@ export default {
     'The device is already in this station; nothing changed.',
   'pages.console.stations.assign.error.badStation':
     "This station does not belong to the device's customer. Please refresh and retry.",
-  'pages.console.stations.assign.error.noCustomer':
-    'The device has no customer yet, or the device/station was just modified. Please refresh and retry; if the device has no customer, assign a customer first.',
+  'pages.console.stations.assign.error.conflict':
+    'Assignment rejected: the station may already have another device, the device/station was just modified, or the device has no customer. The list was refreshed; please check and retry.',
+  'pages.console.stations.assign.occupied':
+    '{station} (already has device {device})',
+  'pages.console.stations.assign.occupiedHint':
+    'A station has exactly one screen at a time, so an occupied station cannot be assigned directly. Use "Replace" on the current device instead.',
+  'pages.console.miniCode.action': 'Mini-program code',
+  'pages.console.miniCode.error.notFound':
+    'Device not found; please refresh the list.',
+  'pages.console.miniCode.error.unavailable':
+    'WeChat is not enabled on the cloud; cannot generate the code.',
+  'pages.console.miniCode.error.upstream':
+    'WeChat service failed; please retry later.',
+  'pages.console.miniCode.error.unknown':
+    'Failed to download the code: {detail}',
+  'pages.console.stations.devices.action.replace': 'Replace',
+  'pages.console.stations.replace.title': 'Replace device: {station}',
+  'pages.console.stations.replace.station': 'Station',
+  'pages.console.stations.replace.old': 'Old device code',
+  'pages.console.stations.replace.new': 'New device code',
+  'pages.console.stations.replace.newPlaceholder':
+    'Pick a registered device of the same customer with no station',
+  'pages.console.stations.replace.notice':
+    'The new device collects data from scratch and does not continue the old device history. Old records stay under the old device and are neither deleted nor merged; user authorizations are not copied and must be granted again for the new device.',
+  'pages.console.stations.replace.noCandidates':
+    'No device can be swapped in. The new device must first be registered separately with its full factory code (platform admin, "Register device"), belong to the same customer and have no station.',
+  'pages.console.stations.replace.submit': 'Confirm replacement',
+  'pages.console.stations.replace.unchanged':
+    'Device {newDevice} is already the current device of station {station}; nothing changed.',
+  'pages.console.stations.replace.success':
+    'Station {station}: {oldDevice} replaced by {newDevice}. The new device now collects data from scratch.',
+  'pages.console.stations.col.device': 'Current screen',
+  'pages.console.stations.device.none': 'Not installed',
+  'pages.console.stations.device.unknown': 'Unknown',
+  'pages.console.stations.device.conflict':
+    'Anomaly: {count} devices linked (should be 1)',
   'pages.console.stations.assign.error.notFound':
     'Device not found. Please refresh the list.',
+  'pages.console.stations.assign.error.occupiedBy':
+    'This station is already occupied by device {detail} and cannot be assigned directly; use "Replace" on that device. The list was refreshed.',
+  'pages.console.stations.assign.error.noCustomer':
+    'The device has no customer yet. Assign a customer first.',
+  'pages.console.stations.replace.error.changed':
+    "The station's current device has changed (now {detail}); this page is stale. The list was refreshed; please check and replace again.",
+  'pages.console.stations.replace.error.otherStation':
+    'The new device is already in another station and will not be moved silently; remove it from that station first.',
+  'pages.console.stations.replace.error.customerMismatch':
+    'The new device belongs to another customer and cannot be put into this station.',
+  'pages.console.stations.replace.error.notFound':
+    'The station or the new device does not exist. The new device must first be registered with its full factory code; the list was refreshed.',
+  'pages.console.stations.replace.error.deviceNotFound':
+    'The new device does not exist: register it separately with its full factory code first, under this customer. The list was refreshed.',
+  'pages.console.stations.replace.error.sameDevice':
+    'The new device must differ from the old device.',
+  'pages.console.stations.replace.error.invalid':
+    'The request was invalid; please choose again.',
+  'pages.console.staff.col.phone': 'Phone',
+  'pages.console.staff.col.customer': 'Customer',
+  'pages.console.staff.col.status': 'Status',
+  'pages.console.staff.col.actions': 'Actions',
+  'pages.console.staff.status.enabled': 'Active',
+  'pages.console.staff.status.disabled': 'Disabled',
+  'pages.console.staff.action.assign': 'Assign tanks',
+  'pages.console.staff.empty':
+    'No staff accounts. Staff accounts are created by a platform admin.',
+  'pages.console.staff.modal.title': 'Assign tanks: {phone}',
+  'pages.console.staff.modal.hint':
+    'Access is granted per device + tank. No tank selected = no access; nothing is selected automatically. Saving replaces the whole set for that device; only tanks the device has reported can be added, granted tanks can always be revoked.',
+  'pages.console.staff.modal.close': 'Close',
+  'pages.console.staff.noDevices': 'No devices available to assign.',
+  'pages.console.staff.granted': '{n} tank(s) granted',
+  'pages.console.staff.orphans':
+    'Existing grants on other devices (no longer in the list)',
+  'pages.console.staff.revoke': 'Revoke',
+  'pages.console.staff.save': 'Save',
+  'pages.console.staff.save.success': 'Tank access for device {device} saved.',
+  'pages.console.staff.save.unchanged':
+    'Tank access for device {device} is unchanged.',
+  'pages.console.staff.revokeAll': 'Revoke all on this device',
+  'pages.console.staff.emptyMeansNone':
+    'No tank selected: after saving, this staff member cannot see this device.',
+  'pages.console.staff.tanks.label': 'Tank {n}',
+  'pages.console.staff.tanks.gone': ' (no longer reported)',
+  'pages.console.staff.tanks.none': 'The device has no reported tanks.',
+  'pages.console.staff.tanks.notReported':
+    'The device has never reported, so grants cannot be added (existing ones can be revoked). Assign after it reports.',
+  'pages.console.staff.tanks.loadFailed': 'Failed to read the device tanks.',
+  'pages.console.staff.grants.loadFailed': 'Failed to read existing grants.',
+  'pages.console.staff.error.tanksUnknown':
+    'The device has never reported, so grants cannot be added. Refreshed; try again after it reports.',
+  'pages.console.staff.error.invalidTank':
+    'The selected tank is not among the device reported tanks (it may have changed). Refreshed; please choose again.',
+  'pages.console.staff.error.invalid': 'Invalid request; please choose again.',
+  'pages.console.staff.error.customerMismatch':
+    'The device and the staff member belong to different customers.',
+  'pages.console.staff.error.notApplicable':
+    'This account is not a staff account; tanks cannot be assigned.',
+  'pages.console.staff.error.userNotFound':
+    'The staff account no longer exists (removed or moved). Closed; please refresh the list.',
+  'pages.console.staff.error.deviceNotFound':
+    'The device does not exist or is out of your scope. Refreshed.',
+  'pages.console.staff.error.unavailable':
+    'The device platform is temporarily unavailable; try again shortly.',
+  'pages.console.staff.error.network': 'Network error; please try again.',
+  'pages.console.staff.error.unknown': 'Operation failed: {detail}',
   'pages.console.stationFilter.label': 'Station',
   'pages.console.stationFilter.all': 'All stations',
   'pages.console.stationFilter.none': 'Ungrouped',

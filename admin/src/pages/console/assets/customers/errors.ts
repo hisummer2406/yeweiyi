@@ -40,3 +40,17 @@ export function describeDeleteError(
 
 /** 云端把名为 default 的客户当作内置客户：不能改名也不能删。 */
 export const isDefaultCustomer = (c: API.Customer) => c.name === 'default';
+
+/**
+ * 开通向导里的完成开通（POST /api/customers/:id/onboarding/complete）与读进度：按机器码分支，不解析文案。
+ * onboarding_incomplete 由页面单独处理（需要 missing 列表）；这里的 404 customer_not_found 是客户已被删除。
+ */
+export function describeOnboardingError(
+  status: number,
+  error?: string,
+  code?: string,
+): ErrorMessage {
+  if (code === 'customer_not_found' || status === 404)
+    return { id: 'pages.ops.customers.error.notFound' };
+  return describeRegisterError(status, error);
+}

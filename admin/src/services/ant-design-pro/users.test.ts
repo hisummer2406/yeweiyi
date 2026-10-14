@@ -17,7 +17,7 @@ describe('users service', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('listUsers returns the users of GET /api/users', async () => {
-    const users = [{ id: 1, username: 'a', role: 'platform_admin' }];
+    const users = [{ id: 1, username: 'a', phone: null, role: 'platform_admin' }];
     request.mockResolvedValue({ users });
     await expect(listUsers()).resolves.toEqual(users);
     expect(request).toHaveBeenCalledWith('/api/users', { method: 'GET' });
@@ -26,7 +26,7 @@ describe('users service', () => {
   it('createUser posts the body and skips the global error handler', async () => {
     request.mockResolvedValue({ id: 2 });
     const body = {
-      username: 'u',
+      phone: '13800138000',
       password: 'password1',
       role: 'customer_admin' as const,
       customerId: 1,

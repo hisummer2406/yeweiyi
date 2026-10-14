@@ -38,6 +38,7 @@ const users = [
   {
     id: 1,
     username: 'root',
+    phone: null,
     role: 'platform_admin',
     customerId: null,
     disabled: false,
@@ -45,7 +46,8 @@ const users = [
   },
   {
     id: 2,
-    username: 'zhang',
+    username: null,
+    phone: '13800138000',
     role: 'customer_admin',
     customerId: 5,
     disabled: false,
@@ -53,7 +55,8 @@ const users = [
   },
   {
     id: 3,
-    username: 'li',
+    username: null,
+    phone: '13900139000',
     role: 'customer_user',
     customerId: 5,
     disabled: true,
@@ -76,7 +79,7 @@ afterEach(cleanup);
 describe('AdminUsers', () => {
   it('shows role labels and the customer name', async () => {
     render(<AdminUsers />);
-    const row = await rowOf('zhang');
+    const row = await rowOf('13800138000');
     expect(within(row).getByText('客户管理员')).toBeTruthy();
     expect(within(row).getByText('A 油站')).toBeTruthy();
   });
@@ -84,7 +87,7 @@ describe('AdminUsers', () => {
   it('falls back to #id when the customer list cannot load', async () => {
     listCustomers.mockRejectedValue(new Error('boom'));
     render(<AdminUsers />);
-    expect(within(await rowOf('zhang')).getByText('#5')).toBeTruthy();
+    expect(within(await rowOf('13800138000')).getByText('#5')).toBeTruthy();
   });
 
   it('the signed-in user cannot disable themselves; platform admins cannot be moved', async () => {
@@ -96,10 +99,25 @@ describe('AdminUsers', () => {
     expect(within(self).getByText('重置密码')).toBeTruthy();
   });
 
+  it('staff have no password to reset; admins do', async () => {
+    render(<AdminUsers />);
+    const staff = await rowOf('13900139000');
+    expect(within(staff).queryByText('重置密码')).toBeNull();
+    const admin = await rowOf('13800138000');
+    expect(within(admin).getByText('重置密码')).toBeTruthy();
+  });
+
+  it('customer-side accounts are shown by phone, never by a username', async () => {
+    render(<AdminUsers />);
+    const row = await rowOf('13800138000');
+    expect(within(row).getByText('13800138000')).toBeTruthy();
+    expect(screen.queryByText('null')).toBeNull();
+  });
+
   it('disabling asks for confirmation, then calls updateUser', async () => {
     updateUser.mockResolvedValue({});
     render(<AdminUsers />);
-    fireEvent.click(within(await rowOf('zhang')).getByText('停用'));
+    fireEvent.click(within(await rowOf('13800138000')).getByText('停用'));
     expect(updateUser).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: /确\s*定/ }));
     await waitFor(() =>
@@ -111,7 +129,7 @@ describe('AdminUsers', () => {
   it('a disabled account can be enabled', async () => {
     updateUser.mockResolvedValue({});
     render(<AdminUsers />);
-    fireEvent.click(within(await rowOf('li')).getByText('启用'));
+    fireEvent.click(within(await rowOf('13900139000')).getByText('启用'));
     await waitFor(() =>
       expect(updateUser).toHaveBeenCalledWith(3, { disabled: false }),
     );

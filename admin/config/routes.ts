@@ -131,6 +131,10 @@ export default [
         path: '/console/assets/devices',
         redirect: '/assets/devices',
       },
+      {
+        path: '/console/assets/staff',
+        redirect: '/assets/staff',
+      },
     ],
   },
   {
@@ -188,6 +192,12 @@ export default [
         access: 'canPlatformAdmin',
       },
       {
+        // 客户开通向导（#14）：从客户页进入，不进菜单
+        path: '/assets/customers/:id/onboarding',
+        component: './console/assets/customers/onboarding',
+        access: 'canPlatformAdmin',
+      },
+      {
         name: 'stations',
         icon: 'environment',
         path: '/assets/stations',
@@ -198,6 +208,14 @@ export default [
         icon: 'cluster',
         path: '/assets/devices',
         component: './console/assets/devices',
+      },
+      {
+        // 员工按罐授权（#17）：云端 2026-10-14 起仅平台管理员可读写授权（客户管理员 403），入口随之收窄
+        name: 'staff',
+        icon: 'team',
+        access: 'canPlatformAdmin',
+        path: '/assets/staff',
+        component: './console/assets/staff',
       },
     ],
   },

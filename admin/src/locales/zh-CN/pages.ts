@@ -3,8 +3,11 @@ export default {
   'pages.login.accountLogin.errorMessage': '账号或密码错误',
   'pages.login.failure': '登录失败，请重试！',
   'pages.login.success': '登录成功！',
-  'pages.login.username.placeholder': '用户名',
-  'pages.login.username.required': '用户名是必填项！',
+  'pages.login.username.placeholder': '手机号 / 用户名',
+  'pages.login.username.required': '请输入手机号或用户名！',
+  'pages.login.staffNoWeb': '员工账号请使用小程序登录。',
+  'pages.login.customerNotOnboarded':
+    '所在客户尚未完成开通，请联系平台管理员。',
   'pages.login.password.placeholder': '密码',
   'pages.login.password.required': '密码是必填项！',
   'pages.login.submit': '登录',
@@ -128,6 +131,8 @@ export default {
   'pages.ops.users.create': '新建账号',
   'pages.ops.users.empty': '还没有账号',
   'pages.ops.users.col.username': '用户名',
+  'pages.ops.users.col.account': '账号（手机号/用户名）',
+  'pages.ops.users.col.phone': '手机号',
   'pages.ops.users.col.role': '角色',
   'pages.ops.users.col.customer': '所属客户',
   'pages.ops.users.col.status': '状态',
@@ -145,6 +150,9 @@ export default {
   'pages.ops.users.disable.confirm': '停用后该账号无法登录，确定停用？',
   'pages.ops.users.form.username.required': '请输入用户名',
   'pages.ops.users.form.username.max': '用户名最多 64 个字符',
+  'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
+  'pages.ops.users.form.staff.hint':
+    '员工没有网页密码，只能通过小程序微信手机号授权登录。创建后由平台管理员在「资产管理 → 员工授权」为其分配油罐。',
   'pages.ops.users.form.password.label': '初始密码',
   'pages.ops.users.form.password.new': '新密码',
   'pages.ops.users.form.password.required': '请输入密码',
@@ -164,6 +172,11 @@ export default {
   'pages.ops.users.success.disabled': '账号已停用',
   'pages.ops.users.success.enabled': '账号已启用',
   'pages.ops.users.error.exists': '用户名已存在',
+  'pages.ops.users.error.phoneExists': '该手机号已被注册。',
+  'pages.ops.users.error.invalidPhone': '手机号无效，仅支持 11 位大陆手机号。',
+  'pages.ops.users.error.passwordNotAllowed':
+    '员工账号没有密码，请不要填写密码。',
+  'pages.ops.users.error.noPasswordForRole': '员工账号没有密码，无需重置。',
   'pages.ops.users.error.invalid': '提交内容无效：{detail}',
   'pages.ops.users.error.forbidden': '没有权限执行此操作。',
   'pages.ops.users.error.notFound': '账号不存在，请刷新列表。',
@@ -187,6 +200,65 @@ export default {
   'pages.ops.devices.error.notFound': '设备不存在，请刷新列表。',
   'pages.ops.customers.col.actions': '操作',
   'pages.ops.customers.action.rename': '重命名',
+  'pages.ops.customers.col.status': '开通状态',
+  'pages.ops.customers.status.configuring': '配置中',
+  'pages.ops.customers.status.active': '已开通',
+  'pages.ops.customers.status.unknown': '未知',
+  'pages.ops.customers.action.onboarding': '开通向导',
+  'pages.ops.customers.onboarding.title': '客户开通：{name}',
+  'pages.ops.customers.onboarding.back': '返回客户列表',
+  'pages.ops.customers.onboarding.intro':
+    '配置中的客户，其客户管理员和员工不能登录小程序或网页。依次完成下面三步后点击「完成开通」；每一步都即时保存，刷新页面会恢复进度。',
+  'pages.ops.customers.onboarding.active':
+    '该客户已开通。后续增减油站、设备或账号请到对应的管理页，不会退回配置中。',
+  'pages.ops.customers.onboarding.step.done': '已完成',
+  'pages.ops.customers.onboarding.step.todo': '待完成',
+  'pages.ops.customers.onboarding.step.admin': '1. 客户管理员',
+  'pages.ops.customers.onboarding.step.admin.done':
+    '已有 {count} 个未停用的客户管理员。更多账号请到账号管理。',
+  'pages.ops.customers.onboarding.step.admin.hint':
+    '创建该客户的第一个管理员账号（手机号 + 密码）。',
+  'pages.ops.customers.onboarding.admin.phone': '手机号',
+  'pages.ops.customers.onboarding.admin.phone.invalid': '请输入有效的手机号',
+  'pages.ops.customers.onboarding.admin.password': '初始密码',
+  'pages.ops.customers.onboarding.admin.password.required': '请输入初始密码',
+  'pages.ops.customers.onboarding.admin.password.length':
+    '密码需 8-72 个字节（一个汉字占 3 个字节）',
+  'pages.ops.customers.onboarding.admin.submit': '创建管理员',
+  'pages.ops.customers.onboarding.admin.created': '已创建客户管理员',
+  'pages.ops.customers.onboarding.step.station': '2. 油站',
+  'pages.ops.customers.onboarding.step.station.done': '已有 {count} 个油站。',
+  'pages.ops.customers.onboarding.step.station.hint':
+    '至少新建一个油站，大屏设备要挂在油站下。',
+  'pages.ops.customers.onboarding.station.create': '新建油站',
+  'pages.ops.customers.onboarding.station.title': '为 {name} 新建油站',
+  'pages.ops.customers.onboarding.step.device': '3. 设备',
+  'pages.ops.customers.onboarding.step.device.done':
+    '已有 {count} 台设备分配到该客户的油站。',
+  'pages.ops.customers.onboarding.step.device.hint':
+    '登记一台大屏设备并分配到上面的油站。一个油站同时只有一台大屏。',
+  'pages.ops.customers.onboarding.device.code': '设备出厂编号',
+  'pages.ops.customers.onboarding.device.code.placeholder':
+    '完整出厂编号，如 ZCT000001',
+  'pages.ops.customers.onboarding.device.code.invalid':
+    '请输入完整的出厂编号（3 位字母 + 数字，如 ZCT000001）',
+  'pages.ops.customers.onboarding.device.station': '所属油站',
+  'pages.ops.customers.onboarding.device.station.required': '请选择油站',
+  'pages.ops.customers.onboarding.device.noStation': '请先完成第 2 步新建油站',
+  'pages.ops.customers.onboarding.device.submit': '登记并分配',
+  'pages.ops.customers.onboarding.device.success':
+    '设备 {device} 已登记并分配到油站 {station}',
+  'pages.ops.customers.onboarding.device.assignFailed':
+    '设备 {device} 已登记，但分配油站失败：{detail}。刷新后可在设备页重新分配。',
+  'pages.ops.customers.onboarding.complete': '完成开通',
+  'pages.ops.customers.onboarding.complete.success': '客户 {name} 已开通',
+  'pages.ops.customers.onboarding.complete.incomplete':
+    '还不能开通，请先完成：{items}',
+  'pages.ops.customers.onboarding.missing.customer_admin': '客户管理员',
+  'pages.ops.customers.onboarding.missing.station': '油站',
+  'pages.ops.customers.onboarding.missing.device_in_station': '油站下的设备',
+  'pages.ops.customers.onboarding.loadFailed': '无法读取开通进度，请重试。',
+  'pages.ops.customers.onboarding.retry': '重试',
   'pages.ops.customers.action.delete': '删除',
   'pages.ops.customers.form.submit.rename': '保存',
   'pages.ops.customers.delete.confirm':
@@ -250,6 +322,7 @@ export default {
   'pages.console.stations.col.customer': '所属客户',
   'pages.console.stations.col.createdAt': '创建时间',
   'pages.console.stations.col.actions': '操作',
+  'pages.console.stations.action.monitor': '查看监控',
   'pages.console.stations.action.edit': '编辑',
   'pages.console.stations.action.delete': '删除',
   'pages.console.stations.form.name.label': '油站名称',
@@ -291,9 +364,99 @@ export default {
   'pages.console.stations.assign.unchanged': '设备已在该油站，无需更改。',
   'pages.console.stations.assign.error.badStation':
     '该油站不属于设备所属客户，请刷新后重试。',
-  'pages.console.stations.assign.error.noCustomer':
-    '设备还没有客户，或设备/油站刚被修改。请刷新后重试；如设备还没有客户，请先分配客户。',
+  'pages.console.stations.assign.error.conflict':
+    '分配被拒绝：该油站可能已有其他设备，或设备/油站刚被修改，或设备还没有客户。列表已刷新，请确认后重试。',
+  'pages.console.stations.assign.occupied': '{station}（已有设备 {device}）',
+  'pages.console.stations.assign.occupiedHint':
+    '已有设备的油站不能直接分配，一个油站同时只有一台大屏；需要更换请在原设备行使用「换机」。',
+  'pages.console.miniCode.action': '下载小程序码',
+  'pages.console.miniCode.error.notFound': '设备不存在，请刷新列表。',
+  'pages.console.miniCode.error.unavailable':
+    '云端未启用微信，无法生成小程序码。',
+  'pages.console.miniCode.error.upstream': '微信服务返回失败，请稍后重试。',
+  'pages.console.miniCode.error.unknown': '下载小程序码失败：{detail}',
+  'pages.console.stations.devices.action.replace': '换机',
+  'pages.console.stations.replace.title': '换机：{station}',
+  'pages.console.stations.replace.station': '油站',
+  'pages.console.stations.replace.old': '旧设备编码',
+  'pages.console.stations.replace.new': '新设备编码',
+  'pages.console.stations.replace.newPlaceholder':
+    '选择已登记、同一客户且未分配油站的新设备',
+  'pages.console.stations.replace.notice':
+    '新设备重新采集，不接续旧设备历史。旧设备的历史记录仍保留在旧设备名下，不会被删除或合并；旧设备的用户授权不会自动复制到新设备，需要按新设备重新授权/扫码。',
+  'pages.console.stations.replace.noCandidates':
+    '没有可换入的设备。新设备必须先按完整出厂编码独立登记（平台管理员在「登记设备」中操作），属于同一客户且未分配油站。',
+  'pages.console.stations.replace.submit': '确认换机',
+  'pages.console.stations.replace.unchanged':
+    '新设备 {newDevice} 本来就是油站 {station} 的当前设备，无需更改。',
+  'pages.console.stations.replace.success':
+    '油站 {station} 已由 {oldDevice} 换为 {newDevice}，新设备从现在起重新采集。',
+  'pages.console.stations.col.device': '当前大屏',
+  'pages.console.stations.device.none': '未安装',
+  'pages.console.stations.device.unknown': '未知',
+  'pages.console.stations.device.conflict':
+    '异常：关联了 {count} 台设备（应只有 1 台）',
   'pages.console.stations.assign.error.notFound': '设备不存在，请刷新列表。',
+  'pages.console.stations.assign.error.occupiedBy':
+    '该油站已被设备 {detail} 占用，不能直接分配；需要更换请在原设备行使用「换机」。列表已刷新。',
+  'pages.console.stations.assign.error.noCustomer':
+    '设备还没有客户，请先分配客户。',
+  'pages.console.stations.replace.error.changed':
+    '油站的当前设备已变化（现为 {detail}），页面已过期。列表已刷新，请确认后重新换机。',
+  'pages.console.stations.replace.error.otherStation':
+    '新设备已在另一个油站，不会被静默搬走；请先在设备页把它移出原油站。',
+  'pages.console.stations.replace.error.customerMismatch':
+    '新设备属于另一个客户，不能换入该油站。',
+  'pages.console.stations.replace.error.notFound':
+    '油站或新设备不存在。新设备需先按完整出厂编码独立登记；列表已刷新。',
+  'pages.console.stations.replace.error.deviceNotFound':
+    '新设备不存在：必须先按完整出厂编码独立登记，且属于本客户。列表已刷新。',
+  'pages.console.stations.replace.error.sameDevice': '新设备不能与旧设备相同。',
+  'pages.console.stations.replace.error.invalid': '新设备不能与旧设备相同。',
+  'pages.console.staff.col.phone': '手机号',
+  'pages.console.staff.col.customer': '所属客户',
+  'pages.console.staff.col.status': '状态',
+  'pages.console.staff.col.actions': '操作',
+  'pages.console.staff.status.enabled': '正常',
+  'pages.console.staff.status.disabled': '已停用',
+  'pages.console.staff.action.assign': '分配油罐',
+  'pages.console.staff.empty': '没有员工账号。员工账号由平台管理员创建。',
+  'pages.console.staff.modal.title': '分配油罐：{phone}',
+  'pages.console.staff.modal.hint':
+    '授权按「设备 + 罐号」逐罐生效；未选择任何罐 = 无查看权限，不会自动全选。保存是对该设备的整组替换，只有设备已上报的罐可新增，已授权的罐随时可撤销。',
+  'pages.console.staff.modal.close': '关闭',
+  'pages.console.staff.noDevices': '没有可分配的设备。',
+  'pages.console.staff.granted': '已授权 {n} 个罐',
+  'pages.console.staff.orphans': '其它设备上的既有授权（设备已不在当前列表）',
+  'pages.console.staff.revoke': '撤销',
+  'pages.console.staff.save': '保存',
+  'pages.console.staff.save.success': '设备 {device} 的油罐授权已保存。',
+  'pages.console.staff.save.unchanged': '设备 {device} 的授权没有变化。',
+  'pages.console.staff.revokeAll': '撤销该设备全部授权',
+  'pages.console.staff.emptyMeansNone':
+    '未选择任何罐：保存后该员工看不到此设备。',
+  'pages.console.staff.tanks.label': '{n}号罐',
+  'pages.console.staff.tanks.gone': '（设备已不再上报）',
+  'pages.console.staff.tanks.none': '设备没有已上报的罐。',
+  'pages.console.staff.tanks.notReported':
+    '设备还没有上报过，不能新增授权（已有授权仍可撤销）。设备上报后再来分配。',
+  'pages.console.staff.tanks.loadFailed': '读取设备的罐失败。',
+  'pages.console.staff.grants.loadFailed': '读取员工已有授权失败。',
+  'pages.console.staff.error.tanksUnknown':
+    '设备还没有上报过，不能新增授权。已刷新，请等设备上报后再分配。',
+  'pages.console.staff.error.invalidTank':
+    '所选罐不在设备已上报的罐里（可能已变化）。已刷新可选罐，请重新选择。',
+  'pages.console.staff.error.invalid': '提交内容无效，请重新选择。',
+  'pages.console.staff.error.customerMismatch':
+    '设备与员工不属于同一客户，不能授权。',
+  'pages.console.staff.error.notApplicable': '该账号不是员工，不能分配油罐。',
+  'pages.console.staff.error.userNotFound':
+    '员工不存在（可能已被移除或换了客户）。已关闭，请刷新员工列表。',
+  'pages.console.staff.error.deviceNotFound':
+    '设备不存在或不在你的范围内，已刷新。',
+  'pages.console.staff.error.unavailable': '设备平台暂时不可用，请稍后重试。',
+  'pages.console.staff.error.network': '网络不通，请稍后重试。',
+  'pages.console.staff.error.unknown': '操作失败：{detail}',
   'pages.console.stationFilter.label': '油站',
   'pages.console.stationFilter.all': '全部油站',
   'pages.console.stationFilter.none': '未分组',
