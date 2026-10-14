@@ -102,7 +102,7 @@ func wechatLoginHandler(deps Deps) gin.HandlerFunc {
 			apiError(c, http.StatusForbidden, codeAccountDisabled, "this account has been disabled")
 			return
 		}
-		if blocked, err := customerNotOnboarded(ctx, deps, user); err != nil {
+		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		} else if blocked {
@@ -195,7 +195,7 @@ func wechatPhoneLoginHandler(deps Deps) gin.HandlerFunc {
 			}
 			// Nothing is bound for a customer still being configured: the user binds on their first
 			// login after onboarding completes.
-			if blocked, err := customerNotOnboarded(ctx, deps, user); err != nil {
+			if blocked, err := customerNotOnboarded(ctx, q, user); err != nil {
 				return err
 			} else if blocked {
 				res.outcome = bindNotOnboarded

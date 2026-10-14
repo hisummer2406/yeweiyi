@@ -85,7 +85,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 		// Same status gate as authMiddleware: a token minted before its customer was put back into
 		// configuring (or for a customer never onboarded) must not open a stream.
 		if u, err := deps.Queries.GetUserByID(c.Request.Context(), claims.UserID); err == nil && !u.DisabledAt.Valid {
-			if blocked, err := customerNotOnboarded(c.Request.Context(), deps, u); err != nil {
+			if blocked, err := customerNotOnboarded(c.Request.Context(), deps.Queries, u); err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			} else if blocked {

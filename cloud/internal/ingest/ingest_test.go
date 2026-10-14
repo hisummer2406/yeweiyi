@@ -324,7 +324,7 @@ func TestControl_CrossTenantAccessIsRejected(t *testing.T) {
 
 	var customerID int64
 	if err := s.pool.QueryRow(ctx,
-		`INSERT INTO customers (name) VALUES ($1) RETURNING id`,
+		`INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`,
 		fmt.Sprintf("intruder-co-%d", time.Now().UnixNano())).Scan(&customerID); err != nil {
 		t.Fatalf("seed customer: %v", err)
 	}

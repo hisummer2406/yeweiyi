@@ -95,16 +95,14 @@ func timingDummyHash() []byte {
 	return dummyHash
 }
 
-// apiError writes {"error": msg, "code": code}. New auth responses carry a code; older endpoints keep
-// their error-only body.
 // customerNotOnboarded reports whether user belongs to a customer that has not completed onboarding.
 // Platform admins have no customer and are never blocked. Callers must have authenticated the user
 // first, so the answer cannot be used to probe which accounts or customers exist.
-func customerNotOnboarded(ctx context.Context, deps Deps, user db.User) (bool, error) {
+func customerNotOnboarded(ctx context.Context, q *db.Queries, user db.User) (bool, error) {
 	if user.Role == control.RolePlatformAdmin || !user.CustomerID.Valid {
 		return false, nil
 	}
-	cust, err := deps.Queries.GetCustomer(ctx, user.CustomerID.Int64)
+	cust, err := q.GetCustomer(ctx, user.CustomerID.Int64)
 	if err != nil {
 		return false, err // fail closed: an unreadable status must not become a login
 	}
@@ -117,6 +115,8 @@ func abortNotOnboarded(c *gin.Context) {
 	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "customer not onboarded", "code": codeCustomerNotOnboarded})
 }
 
+// apiError writes {"error": msg, "code": code}. New auth responses carry a code; older endpoints keep
+// their error-only body.
 func apiError(c *gin.Context, status int, code, msg string) {
 	c.JSON(status, gin.H{"error": msg, "code": code})
 }
@@ -179,7 +179,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		// After the credentials are proven, so this answer is only ever given to the account's owner.
-		if blocked, err := customerNotOnboarded(ctx, deps, user); err != nil {
+		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		} else if blocked {
@@ -314,7 +314,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 			return
 		}
 
-		if blocked, err := customerNotOnboarded(c.Request.Context(), deps, user); err != nil {
+		if blocked, err := customerNotOnboarded(c.Request.Context(), deps.Queries, user); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		} else if blocked {
