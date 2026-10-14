@@ -1,6 +1,6 @@
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { useAccess, useIntl } from '@umijs/max';
+import { useIntl } from '@umijs/max';
 import { Tag } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
@@ -13,16 +13,15 @@ import TankGrantsModal from './TankGrantsModal';
 type Row = API.AdminUser & { customerName?: string };
 
 /**
- * 资产管理 · 员工授权（/console/assets/staff，yeweiyi-admin#17，云端契约 tank-grants-contract v1.0）：
+ * 资产管理 · 员工授权（/console/assets/staff，yeweiyi-admin#17，云端契约 tank-grants-contract v1.1）：
  * 列出可见的员工（customer_user），给选中的员工按 油站 → 设备 → 罐 分配/撤销查看权限。
- * - 平台管理员看到全部客户的员工；客户管理员只看到本客户员工，手机号是脱敏的（138****0000）。
+ * - 仅平台管理员（云端 v1.1：客户管理员读写授权一律 403，路由已按 canPlatformAdmin 收窄）；看到全部客户的员工。
  * - 这里**不创建、停用、改客户**员工账号：账号管理仍只归平台管理员（/ops/users，#13）。
  * - 员工没有网页入口，授权只影响小程序与云端接口；没有分配的员工看不到任何罐。
  */
 const StaffGrants: React.FC = () => {
   const intl = useIntl();
   const t = (id: string) => intl.formatMessage({ id });
-  const { canPlatformAdmin } = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const [devices, setDevices] = useState<API.DeviceRow[]>([]);
   const [stations, setStations] = useState<API.Station[]>([]);
@@ -34,16 +33,12 @@ const StaffGrants: React.FC = () => {
       dataIndex: 'phone',
       render: (_, row) => row.phone ?? `#${row.id}`,
     },
-    ...(canPlatformAdmin
-      ? [
-          {
-            title: t('pages.console.staff.col.customer'),
-            dataIndex: 'customerName',
-            render: (_: unknown, row: Row) =>
-              row.customerName ?? (row.customerId ? `#${row.customerId}` : '-'),
-          } as ProColumns<Row>,
-        ]
-      : []),
+    {
+      title: t('pages.console.staff.col.customer'),
+      dataIndex: 'customerName',
+      render: (_, row) =>
+        row.customerName ?? (row.customerId ? `#${row.customerId}` : '-'),
+    },
     {
       title: t('pages.console.staff.col.status'),
       dataIndex: 'disabled',
@@ -80,9 +75,7 @@ const StaffGrants: React.FC = () => {
             listDevices(),
             // 油站/客户名只是显示用，失败退化，不拖垮员工列表
             listStations({ silent: true }).catch(() => [] as API.Station[]),
-            canPlatformAdmin
-              ? listCustomers().catch(() => [] as API.Customer[])
-              : Promise.resolve([] as API.Customer[]),
+            listCustomers().catch(() => [] as API.Customer[]),
           ]);
           setDevices(ds);
           setStations(ss);

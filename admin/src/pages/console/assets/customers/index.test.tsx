@@ -15,7 +15,9 @@ const createCustomer = vi.fn();
 const renameCustomer = vi.fn();
 const deleteCustomer = vi.fn();
 
+const push = vi.fn();
 vi.mock('@umijs/max', () => ({
+  history: { push },
   useIntl: () => ({
     formatMessage: ({ id }: { id: string }, values?: Record<string, string>) =>
       ((zhPages as Record<string, string>)[id] ?? id).replace(
@@ -62,16 +64,57 @@ describe('AdminCustomers', () => {
     expect(await screen.findByText('default')).toBeTruthy();
   });
 
-  it('creates a trimmed customer name and reloads the list', async () => {
-    createCustomer.mockResolvedValue({ id: 2, name: 'A 油站', createdAt: '' });
+  it('creates a trimmed customer name and opens its onboarding wizard', async () => {
+    createCustomer.mockResolvedValue({
+      id: 2,
+      name: 'A 油站',
+      createdAt: '',
+      onboardingStatus: 'configuring',
+    });
     const input = await openModal();
     fireEvent.change(input, { target: { value: '  A 油站  ' } });
     fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
     await waitFor(() =>
       expect(createCustomer).toHaveBeenCalledWith({ name: 'A 油站' }),
     );
-    await waitFor(() => expect(listCustomers).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(push).toHaveBeenCalledWith(
+        '/console/assets/customers/2/onboarding',
+      ),
+    );
     expect(message.success).toHaveBeenCalled();
+  });
+
+  it('legacy cloud (no onboardingStatus) does not open the wizard, just reloads the list', async () => {
+    createCustomer.mockResolvedValue({ id: 2, name: 'A 油站', createdAt: '' });
+    const input = await openModal();
+    const before = listCustomers.mock.calls.length;
+    fireEvent.change(input, { target: { value: 'A 油站' } });
+    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }));
+    await waitFor(() => expect(createCustomer).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(listCustomers.mock.calls.length).toBeGreaterThan(before),
+    );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('shows onboarding status and the wizard entry only for configuring customers', async () => {
+    listCustomers.mockResolvedValue([
+      { id: 1, name: 'default', createdAt: '', onboardingStatus: 'active' },
+      { id: 2, name: 'A 油站', createdAt: '', onboardingStatus: 'configuring' },
+      { id: 3, name: 'B 油站', createdAt: '', onboardingStatus: 'active' },
+      { id: 4, name: 'C 油站', createdAt: '' },
+    ]);
+    render(<AdminCustomers />);
+    const a = await rowOf('A 油站');
+    expect(within(a).getByText('配置中')).toBeTruthy();
+    fireEvent.click(within(a).getByText('开通向导'));
+    expect(push).toHaveBeenCalledWith('/console/assets/customers/2/onboarding');
+    const b = await rowOf('B 油站');
+    expect(within(b).getByText('已开通')).toBeTruthy();
+    expect(within(b).queryByText('开通向导')).toBeNull();
+    // 旧版云端没有该字段：显示「未知」，不当成已开通
+    expect(within(await rowOf('C 油站')).getByText('未知')).toBeTruthy();
   });
 
   it('blank name is rejected without calling the API', async () => {

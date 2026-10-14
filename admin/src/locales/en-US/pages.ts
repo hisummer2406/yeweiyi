@@ -163,7 +163,7 @@ export default {
   'pages.ops.users.form.phone.invalid':
     'Enter a valid 11-digit mainland China mobile number',
   'pages.ops.users.form.staff.hint':
-    'Staff have no web password and sign in only through the mini program with WeChat phone authorization. A customer admin assigns their tanks afterwards.',
+    'Staff have no web password and sign in only through the mini program with WeChat phone authorization. A platform admin assigns their tanks afterwards under Assets → Staff grants.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',

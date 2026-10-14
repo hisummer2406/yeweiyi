@@ -75,6 +75,25 @@ declare namespace API {
     id: number;
     name: string;
     createdAt: string;
+    /** 开通状态（cloud#60）：configuring 配置中 | active 已开通；旧版云端没有该字段 */
+    onboardingStatus?: 'configuring' | 'active';
+    onboardedAt?: string | null;
+  };
+
+  /** 开通还缺的条件（customer-onboarding-contract §2） */
+  type OnboardingMissing = 'customer_admin' | 'station' | 'device_in_station';
+
+  /** GET/POST /api/customers/:id/onboarding(/complete) 的响应 */
+  type CustomerOnboarding = {
+    customerId: number;
+    status: 'configuring' | 'active';
+    complete: boolean;
+    missing: OnboardingMissing[];
+    counts: {
+      customerAdmins: number;
+      stations: number;
+      devicesInStation: number;
+    };
   };
 
   /** GET /api/stations 的油站（internal/api/stations.go stationResponse） */

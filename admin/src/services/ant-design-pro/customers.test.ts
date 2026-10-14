@@ -11,8 +11,14 @@ const forwardAuthFailure = vi.fn(
 vi.mock('@umijs/max', () => ({ request }));
 vi.mock('@/requestErrorConfig', () => ({ forwardAuthFailure }));
 
-const { listCustomers, createCustomer, renameCustomer, deleteCustomer } =
-  await import('./customers');
+const {
+  listCustomers,
+  createCustomer,
+  renameCustomer,
+  deleteCustomer,
+  getCustomerOnboarding,
+  completeCustomerOnboarding,
+} = await import('./customers');
 const { ApiError } = await import('./apiError');
 
 describe('listCustomers', () => {
@@ -137,5 +143,49 @@ describe('deleteCustomer', () => {
     request.mockRejectedValue({ response: { status: 403, data: { error: 'not authorized' } } });
     const err = await deleteCustomer(7).catch((e) => e);
     expect(err.authHandled).toBe(true);
+  });
+});
+
+describe('customer onboarding', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const progress = {
+    customerId: 7,
+    status: 'configuring',
+    complete: false,
+    missing: ['customer_admin', 'station', 'device_in_station'],
+    counts: { customerAdmins: 0, stations: 0, devicesInStation: 0 },
+  };
+
+  it('reads progress from GET /api/customers/:id/onboarding', async () => {
+    request.mockResolvedValue(progress);
+    await expect(getCustomerOnboarding(7)).resolves.toEqual(progress);
+    expect(request).toHaveBeenCalledWith(
+      '/api/customers/7/onboarding',
+      expect.objectContaining({ method: 'GET', skipErrorHandler: true }),
+    );
+  });
+
+  it('completes with a bodyless POST', async () => {
+    request.mockResolvedValue({ ...progress, status: 'active', complete: true });
+    await completeCustomerOnboarding(7);
+    const [url, opts] = request.mock.calls[0];
+    expect(url).toBe('/api/customers/7/onboarding/complete');
+    expect(opts).toMatchObject({ method: 'POST', skipErrorHandler: true });
+    expect(opts.data).toBeUndefined();
+  });
+
+  it('409 onboarding_incomplete carries the machine code', async () => {
+    request.mockRejectedValue({
+      response: {
+        status: 409,
+        data: { code: 'onboarding_incomplete', missing: ['station'] },
+      },
+    });
+    const err = await completeCustomerOnboarding(7).catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(err.code).toBe('onboarding_incomplete');
+    expect(err.authHandled).toBe(false);
   });
 });

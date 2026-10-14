@@ -60,3 +60,37 @@ export async function deleteCustomer(id: number): Promise<void> {
     throw toApiError(err);
   }
 }
+
+/**
+ * GET /api/customers/:id/onboarding：开通进度（仅平台管理员，yeweiyi-cloud docs/customer-onboarding-contract.md §2）。
+ * 客户不存在 404 customer_not_found。向导刷新后靠它恢复进度，失败抛 ApiError（401 在 toApiError 里转交）。
+ */
+export async function getCustomerOnboarding(
+  id: number,
+): Promise<API.CustomerOnboarding> {
+  try {
+    return await request<API.CustomerOnboarding>(
+      `/api/customers/${id}/onboarding`,
+      { method: 'GET', skipErrorHandler: true },
+    );
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+/**
+ * POST /api/customers/:id/onboarding/complete：完成开通，无请求体，幂等（已开通也是 200）。条件不全
+ * 409 onboarding_incomplete，body 带 missing，客户保持配置中；客户不存在 404 customer_not_found。
+ */
+export async function completeCustomerOnboarding(
+  id: number,
+): Promise<API.CustomerOnboarding> {
+  try {
+    return await request<API.CustomerOnboarding>(
+      `/api/customers/${id}/onboarding/complete`,
+      { method: 'POST', skipErrorHandler: true },
+    );
+  } catch (err) {
+    throw toApiError(err);
+  }
+}

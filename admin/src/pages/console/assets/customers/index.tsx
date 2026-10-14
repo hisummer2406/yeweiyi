@@ -1,8 +1,8 @@
 import { PlusOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
-import { useIntl } from '@umijs/max';
-import { Button, message, Popconfirm, Space } from 'antd';
+import { history, useIntl } from '@umijs/max';
+import { Button, message, Popconfirm, Space, Tag } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
@@ -32,6 +32,10 @@ const AdminCustomers: React.FC = () => {
   const actionRef = useRef<ActionType>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<API.Customer>();
+  // 新建成功后直接进入该客户的开通向导（新客户一定是配置中，cloud#60）
+  const createdId = useRef<number>(undefined);
+  const openOnboarding = (id: number) =>
+    history.push(`/console/assets/customers/${id}/onboarding`);
   const reload = () => actionRef.current?.reload();
 
   const remove = async (customer: API.Customer) => {
@@ -56,6 +60,21 @@ const AdminCustomers: React.FC = () => {
     { title: t('pages.ops.customers.col.id'), dataIndex: 'id' },
     { title: t('pages.ops.customers.col.name'), dataIndex: 'name' },
     {
+      title: t('pages.ops.customers.col.status'),
+      dataIndex: 'onboardingStatus',
+      render: (_, row) =>
+        row.onboardingStatus === 'configuring' ? (
+          <Tag color="warning">
+            {t('pages.ops.customers.status.configuring')}
+          </Tag>
+        ) : row.onboardingStatus === 'active' ? (
+          <Tag color="success">{t('pages.ops.customers.status.active')}</Tag>
+        ) : (
+          // 旧版云端没有该字段：显示「未知」，不当成已开通
+          <Tag>{t('pages.ops.customers.status.unknown')}</Tag>
+        ),
+    },
+    {
       title: t('pages.ops.customers.col.createdAt'),
       dataIndex: 'createdAt',
       valueType: 'dateTime',
@@ -66,6 +85,11 @@ const AdminCustomers: React.FC = () => {
       render: (_, row) =>
         isDefaultCustomer(row) ? null : (
           <Space>
+            {row.onboardingStatus === 'configuring' && (
+              <a onClick={() => openOnboarding(row.id)}>
+                {t('pages.ops.customers.action.onboarding')}
+              </a>
+            )}
             <a onClick={() => setRenameTarget(row)}>
               {t('pages.ops.customers.action.rename')}
             </a>
@@ -111,11 +135,24 @@ const AdminCustomers: React.FC = () => {
         open={createOpen}
         title={t('pages.ops.customers.create')}
         okText={t('pages.ops.customers.form.submit')}
-        onSubmit={(name) => createCustomer({ name })}
+        onSubmit={async (name) => {
+          const created = await createCustomer({ name });
+          // 只有云端明确回报「配置中」才进向导；旧版云端（无 onboardingStatus）没有向导接口，进去只会 404
+          createdId.current =
+            created?.onboardingStatus === 'configuring'
+              ? created.id
+              : undefined;
+          return created;
+        }}
         describeError={describeCustomerError}
         successId="pages.ops.devices.customer.created"
         onClose={() => setCreateOpen(false)}
-        onDone={reload}
+        onDone={() => {
+          const id = createdId.current;
+          createdId.current = undefined;
+          if (typeof id === 'number') openOnboarding(id);
+          else reload();
+        }}
       />
       <CustomerNameModal
         open={!!renameTarget}

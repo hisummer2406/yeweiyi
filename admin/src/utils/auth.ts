@@ -130,6 +130,16 @@ export function loginRedirectUrl(): string {
   return `/user/login?redirect=${encodeURIComponent(pathname + search + hash)}`;
 }
 
-/** 401（账号或密码错误，含账号被停用）与其余失败（400 / 5xx / 网络）分开提示。 */
-export const classifyLoginError = (error: any): 'credentials' | 'failure' =>
-  error?.response?.status === 401 ? 'credentials' : 'failure';
+/**
+ * 401（账号或密码错误，含账号被停用）、403 customer_not_onboarded（所在客户尚在配置中，cloud#60，只在身份
+ * 验证通过后才返回）与其余失败（400 / 5xx / 网络）分开提示。notOnboarded 是业务提示，不是账号失效。
+ */
+export const classifyLoginError = (
+  error: any,
+): 'credentials' | 'notOnboarded' | 'failure' => {
+  const status = error?.response?.status;
+  if (status === 401) return 'credentials';
+  if (status === 403 && error.response.data?.code === 'customer_not_onboarded')
+    return 'notOnboarded';
+  return 'failure';
+};

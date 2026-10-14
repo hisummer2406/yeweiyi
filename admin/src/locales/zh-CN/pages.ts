@@ -6,6 +6,8 @@ export default {
   'pages.login.username.placeholder': '手机号 / 用户名',
   'pages.login.username.required': '请输入手机号或用户名！',
   'pages.login.staffNoWeb': '员工账号请使用小程序登录。',
+  'pages.login.customerNotOnboarded':
+    '所在客户尚未完成开通，请联系平台管理员。',
   'pages.login.password.placeholder': '密码',
   'pages.login.password.required': '密码是必填项！',
   'pages.login.submit': '登录',
@@ -150,7 +152,7 @@ export default {
   'pages.ops.users.form.username.max': '用户名最多 64 个字符',
   'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
   'pages.ops.users.form.staff.hint':
-    '员工没有网页密码，只能通过小程序微信手机号授权登录。创建后由客户管理员为其分配油罐。',
+    '员工没有网页密码，只能通过小程序微信手机号授权登录。创建后由平台管理员在「资产管理 → 员工授权」为其分配油罐。',
   'pages.ops.users.form.password.label': '初始密码',
   'pages.ops.users.form.password.new': '新密码',
   'pages.ops.users.form.password.required': '请输入密码',
@@ -198,6 +200,65 @@ export default {
   'pages.ops.devices.error.notFound': '设备不存在，请刷新列表。',
   'pages.ops.customers.col.actions': '操作',
   'pages.ops.customers.action.rename': '重命名',
+  'pages.ops.customers.col.status': '开通状态',
+  'pages.ops.customers.status.configuring': '配置中',
+  'pages.ops.customers.status.active': '已开通',
+  'pages.ops.customers.status.unknown': '未知',
+  'pages.ops.customers.action.onboarding': '开通向导',
+  'pages.ops.customers.onboarding.title': '客户开通：{name}',
+  'pages.ops.customers.onboarding.back': '返回客户列表',
+  'pages.ops.customers.onboarding.intro':
+    '配置中的客户，其客户管理员和员工不能登录小程序或网页。依次完成下面三步后点击「完成开通」；每一步都即时保存，刷新页面会恢复进度。',
+  'pages.ops.customers.onboarding.active':
+    '该客户已开通。后续增减油站、设备或账号请到对应的管理页，不会退回配置中。',
+  'pages.ops.customers.onboarding.step.done': '已完成',
+  'pages.ops.customers.onboarding.step.todo': '待完成',
+  'pages.ops.customers.onboarding.step.admin': '1. 客户管理员',
+  'pages.ops.customers.onboarding.step.admin.done':
+    '已有 {count} 个未停用的客户管理员。更多账号请到账号管理。',
+  'pages.ops.customers.onboarding.step.admin.hint':
+    '创建该客户的第一个管理员账号（手机号 + 密码）。',
+  'pages.ops.customers.onboarding.admin.phone': '手机号',
+  'pages.ops.customers.onboarding.admin.phone.invalid': '请输入有效的手机号',
+  'pages.ops.customers.onboarding.admin.password': '初始密码',
+  'pages.ops.customers.onboarding.admin.password.required': '请输入初始密码',
+  'pages.ops.customers.onboarding.admin.password.length':
+    '密码需 8-72 个字节（一个汉字占 3 个字节）',
+  'pages.ops.customers.onboarding.admin.submit': '创建管理员',
+  'pages.ops.customers.onboarding.admin.created': '已创建客户管理员',
+  'pages.ops.customers.onboarding.step.station': '2. 油站',
+  'pages.ops.customers.onboarding.step.station.done': '已有 {count} 个油站。',
+  'pages.ops.customers.onboarding.step.station.hint':
+    '至少新建一个油站，大屏设备要挂在油站下。',
+  'pages.ops.customers.onboarding.station.create': '新建油站',
+  'pages.ops.customers.onboarding.station.title': '为 {name} 新建油站',
+  'pages.ops.customers.onboarding.step.device': '3. 设备',
+  'pages.ops.customers.onboarding.step.device.done':
+    '已有 {count} 台设备分配到该客户的油站。',
+  'pages.ops.customers.onboarding.step.device.hint':
+    '登记一台大屏设备并分配到上面的油站。一个油站同时只有一台大屏。',
+  'pages.ops.customers.onboarding.device.code': '设备出厂编号',
+  'pages.ops.customers.onboarding.device.code.placeholder':
+    '完整出厂编号，如 ZCT000001',
+  'pages.ops.customers.onboarding.device.code.invalid':
+    '请输入完整的出厂编号（3 位字母 + 数字，如 ZCT000001）',
+  'pages.ops.customers.onboarding.device.station': '所属油站',
+  'pages.ops.customers.onboarding.device.station.required': '请选择油站',
+  'pages.ops.customers.onboarding.device.noStation': '请先完成第 2 步新建油站',
+  'pages.ops.customers.onboarding.device.submit': '登记并分配',
+  'pages.ops.customers.onboarding.device.success':
+    '设备 {device} 已登记并分配到油站 {station}',
+  'pages.ops.customers.onboarding.device.assignFailed':
+    '设备 {device} 已登记，但分配油站失败：{detail}。刷新后可在设备页重新分配。',
+  'pages.ops.customers.onboarding.complete': '完成开通',
+  'pages.ops.customers.onboarding.complete.success': '客户 {name} 已开通',
+  'pages.ops.customers.onboarding.complete.incomplete':
+    '还不能开通，请先完成：{items}',
+  'pages.ops.customers.onboarding.missing.customer_admin': '客户管理员',
+  'pages.ops.customers.onboarding.missing.station': '油站',
+  'pages.ops.customers.onboarding.missing.device_in_station': '油站下的设备',
+  'pages.ops.customers.onboarding.loadFailed': '无法读取开通进度，请重试。',
+  'pages.ops.customers.onboarding.retry': '重试',
   'pages.ops.customers.action.delete': '删除',
   'pages.ops.customers.form.submit.rename': '保存',
   'pages.ops.customers.delete.confirm':
