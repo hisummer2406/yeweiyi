@@ -1,0 +1,326 @@
+[
+ {
+  "step": "1.1 分配A到站1",
+  "expect": "200 changed",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": true,
+    "deviceName": "ZCT920001",
+    "stationId": 3
+   }
+  }
+ },
+ {
+  "step": "1.2 第二台设备分配同站",
+  "expect": "409 station_occupied occupiedBy=A",
+  "result": "PASS",
+  "evidence": {
+   "status": 409,
+   "body": {
+    "code": "station_occupied",
+    "error": "the station already has a device; release it or replace it first",
+    "occupiedBy": "ZCT920001"
+   }
+  }
+ },
+ {
+  "step": "1.3 重复分配幂等",
+  "expect": "200 changed=false",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": false,
+    "deviceName": "ZCT920001",
+    "stationId": 3
+   }
+  }
+ },
+ {
+  "step": "1.4 B 未被挂上站",
+  "expect": "B.station_id=None",
+  "result": "PASS",
+  "evidence": {
+   "B.station_id": null
+  }
+ },
+ {
+  "step": "2.1 6路并发分配同一空站",
+  "expect": "恰好1个200，其余409，库中仅1台",
+  "result": "PASS",
+  "evidence": {
+   "codes": [
+    409,
+    409,
+    200,
+    409,
+    409,
+    409
+   ],
+   "on_station": [
+    "ZCT910003"
+   ]
+  }
+ },
+ {
+  "step": "3.1 一台大屏多罐(最新值)",
+  "expect": "200，罐 1,2,3",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "tanks": [
+    1,
+    2,
+    3
+   ]
+  }
+ },
+ {
+  "step": "3.2 单罐历史按设备+罐号",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200
+  }
+ },
+ {
+  "step": "3.3 报警落业务库并按设备读取",
+  "expect": "200 且 ≥1 条",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "alarms": 1
+  }
+ },
+ {
+  "step": "4.1 员工初始看不到A/B",
+  "expect": "不含A、B",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "devices": [
+    "ZCT900001"
+   ]
+  }
+ },
+ {
+  "step": "4.2 扫码(bind)只导航不授权",
+  "expect": "不新增授权(目标，依赖#63)",
+  "result": "FAIL",
+  "evidence": {
+   "observed": {
+    "status": 200,
+    "body": {
+     "bound": true,
+     "deviceName": "ZCT920001"
+    }
+   },
+   "note": "bind 仍创建 user_devices：阻塞于 #63，不算通过"
+  }
+ },
+ {
+  "step": "4.3 员工经过渡绑定可读 A",
+  "expect": "200(过渡行为)",
+  "result": "PASS",
+  "evidence": {
+   "status": 200
+  }
+ },
+ {
+  "step": "5.1 A换B",
+  "expect": "200 changed previous=A",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": true,
+    "deviceName": "ZCT920002",
+    "previousDeviceName": "ZCT920001",
+    "stationId": 3
+   }
+  }
+ },
+ {
+  "step": "5.2 设备列表反映关联",
+  "expect": "A.station_id=None, B.station_id=站1",
+  "result": "PASS",
+  "evidence": {
+   "A": null,
+   "B": 3
+  }
+ },
+ {
+  "step": "5.3 B 无数据返回空状态且不回退A",
+  "expect": "404 has not reported",
+  "result": "PASS",
+  "evidence": {
+   "status": 404,
+   "body": {
+    "error": "this device has not reported any telemetry yet"
+   }
+  }
+ },
+ {
+  "step": "5.4 B 无A的报警",
+  "expect": "200 []",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "n": 0
+  }
+ },
+ {
+  "step": "5.5 B 历史无A数据",
+  "expect": "200 空",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "agg": "avg",
+    "beginTime": "2026-10-12T16:00:00Z",
+    "device": "ZCT920002",
+    "endTime": "2026-10-13T17:00:00Z",
+    "interval": "1h",
+    "series": {
+     "oilLevelMm": []
+    },
+    "tank": 1
+   }
+  }
+ },
+ {
+  "step": "5.6 A 仍按自身名读到自己的数据",
+  "expect": "200",
+  "result": "PASS",
+  "evidence": {
+   "status": 200
+  }
+ },
+ {
+  "step": "5.7 A 的报警未删除",
+  "expect": "≥1",
+  "result": "PASS",
+  "evidence": {
+   "n": 1
+  }
+ },
+ {
+  "step": "5.8 员工设备列表不含B",
+  "expect": "含A不含B",
+  "result": "PASS",
+  "evidence": {
+   "devices": [
+    "ZCT900001",
+    "ZCT920001"
+   ]
+  }
+ },
+ {
+  "step": "5.9 员工读B被拒(设备级403)",
+  "expect": "403 not authorized for this device",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized for this device"
+   }
+  }
+ },
+ {
+  "step": "5.10 员工看不到站1(其设备已不在站上)",
+  "expect": "站列表不含站1",
+  "result": "PASS",
+  "evidence": {
+   "stations": []
+  }
+ },
+ {
+  "step": "6.1 新=旧",
+  "expect": "400 same_device",
+  "result": "PASS",
+  "evidence": {
+   "status": 400,
+   "body": {
+    "code": "same_device",
+    "error": "the new device is the device already on the station"
+   }
+  }
+ },
+ {
+  "step": "6.2 过期页面(以为空站)换回A",
+  "expect": "409 station_device_changed current=B",
+  "result": "PASS",
+  "evidence": {
+   "status": 409,
+   "body": {
+    "code": "station_device_changed",
+    "currentDeviceName": "ZCT920002",
+    "error": "the station's device changed; reload and try again"
+   }
+  }
+ },
+ {
+  "step": "6.3 重试同一换机请求",
+  "expect": "200 changed=false",
+  "result": "PASS",
+  "evidence": {
+   "status": 200,
+   "body": {
+    "changed": false,
+    "deviceName": "ZCT920002",
+    "previousDeviceName": null,
+    "stationId": 3
+   }
+  }
+ },
+ {
+  "step": "6.4 客户管理员换入别客户设备",
+  "expect": "404 device_not_found",
+  "result": "PASS",
+  "evidence": {
+   "status": 404,
+   "body": {
+    "code": "device_not_found",
+    "error": "device not found"
+   }
+  }
+ },
+ {
+  "step": "6.5 平台管理员换入别客户设备",
+  "expect": "409 device_customer_mismatch",
+  "result": "PASS",
+  "evidence": {
+   "status": 409,
+   "body": {
+    "code": "device_customer_mismatch",
+    "error": "the device belongs to another customer"
+   }
+  }
+ },
+ {
+  "step": "6.6 员工调用换机",
+  "expect": "403 not authorized",
+  "result": "PASS",
+  "evidence": {
+   "status": 403,
+   "body": {
+    "error": "not authorized"
+   }
+  }
+ },
+ {
+  "step": "6.7 普通分配不能顶替(A回站1)",
+  "expect": "409 station_occupied occupiedBy=B",
+  "result": "PASS",
+  "evidence": {
+   "status": 409,
+   "body": {
+    "code": "station_occupied",
+    "error": "the station already has a device; release it or replace it first",
+    "occupiedBy": "ZCT920002"
+   }
+  }
+ }
+]
