@@ -50,6 +50,9 @@ type Client interface {
 	OpenID(ctx context.Context, loginCode string) (string, error)
 	// PhoneNumber exchanges a getPhoneNumber code and verifies the number was issued to our AppID.
 	PhoneNumber(ctx context.Context, phoneCode string) (Phone, error)
+	// MiniCode renders the unlimited mini-program code (getwxacodeunlimit) that opens page with the
+	// given scene. envVersion is release, trial or develop. Returns the image bytes.
+	MiniCode(ctx context.Context, scene, page, envVersion string) ([]byte, error)
 }
 
 // Config configures the HTTP client.
@@ -241,4 +244,55 @@ func (c *httpClient) do(ctx context.Context, method, path string, body []byte, o
 		return fmt.Errorf("%w: undecodable response", ErrUpstream)
 	}
 	return nil
+}
+
+// MiniCode asks WeChat for a mini-program code image. WeChat answers with the raw image on success
+// and with a JSON errcode body on failure, so this does not go through do().
+func (c *httpClient) MiniCode(ctx context.Context, scene, page, envVersion string) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		token, err := c.accessToken(ctx, attempt > 0)
+		if err != nil {
+			return nil, err
+		}
+		body, _ := json.Marshal(map[string]any{
+			"scene": scene, "page": page, "env_version": envVersion,
+			// check_path stays on: a page missing from the published version must fail loudly here
+			// rather than print a code that opens nothing.
+			"check_path": true, "width": 430,
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			c.cfg.BaseURL+"/wxa/getwxacodeunlimit?access_token="+url.QueryEscape(token), bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("%w: build request", ErrUpstream)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		res, err := c.http.Do(req)
+		if err != nil {
+			var ue *url.Error
+			if errors.As(err, &ue) {
+				err = ue.Err
+			}
+			return nil, fmt.Errorf("%w: %v", ErrUpstream, err)
+		}
+		data, rerr := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+		res.Body.Close()
+		if rerr != nil || res.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("%w: getwxacodeunlimit http %d", ErrUpstream, res.StatusCode)
+		}
+		if !strings.HasPrefix(res.Header.Get("Content-Type"), "application/json") && len(data) > 0 &&
+			!bytes.HasPrefix(bytes.TrimSpace(data), []byte("{")) {
+			return data, nil
+		}
+		var st apiStatus
+		if json.Unmarshal(data, &st) != nil {
+			return nil, fmt.Errorf("%w: undecodable response", ErrUpstream)
+		}
+		switch st.ErrCode {
+		case errCodeToken, errCodeExpired, errCodeIllegal:
+			if attempt == 0 {
+				continue
+			}
+		}
+		return nil, fmt.Errorf("%w: getwxacodeunlimit errcode %d", ErrUpstream, st.ErrCode)
+	}
 }

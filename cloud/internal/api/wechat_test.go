@@ -24,6 +24,7 @@ type fakeWX struct {
 	phones   map[string]wechat.Phone // phone code -> verified phone
 	failWith map[string]error        // code -> error to return
 	used     map[string]bool         // codes are single-use, like WeChat's
+	lastCode [3]string               // scene, page, env of the last MiniCode call
 }
 
 func newFakeWX() *fakeWX {
@@ -32,6 +33,14 @@ func newFakeWX() *fakeWX {
 }
 
 func (f *fakeWX) AppID() string { return f.appid }
+
+// MiniCode returns a recognisable payload and records what it was asked for.
+func (f *fakeWX) MiniCode(_ context.Context, scene, page, env string) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.lastCode = [3]string{scene, page, env}
+	return []byte("\x89PNG-fake:" + scene), nil
+}
 
 func (f *fakeWX) consume(code string) error {
 	if err, ok := f.failWith[code]; ok {
@@ -401,4 +410,50 @@ func TestWeChat_TokenIsAFullAuthentication(t *testing.T) {
 	_, body := env.wxPost("/api/auth/wechat/phone-login", map[string]any{"loginCode": "L", "phoneCode": "P"})
 	claims := parseTestToken(t, body["token"].(string))
 	within(t, "authAt", claimTime(t, claims, "authAt"), time.Now(), 5*time.Second)
+}
+
+func TestMiniCode_PlatformAdminOnlyAndNoGrant(t *testing.T) {
+	env, fx := wxEnv(t)
+	const dev = "ZCT9MINI01"
+	env.seedDevice(dev)
+	url := "/api/devices/" + dev + "/mini-code"
+
+	// Default role is customer_user: refused, and nothing is rendered.
+	if rec := env.authed("GET", url, nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("customer_user: %d, want 403", rec.Code)
+	}
+	env.setRole(control.RoleCustomerAdmin)
+	if rec := env.authed("GET", url, nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("customer_admin: %d, want 403", rec.Code)
+	}
+	if fx.lastCode[0] != "" {
+		t.Fatalf("a refused caller reached WeChat: %v", fx.lastCode)
+	}
+
+	env.setRole(control.RolePlatformAdmin)
+	rec := env.authed("GET", url, nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), dev) {
+		t.Fatalf("platform admin: %d %q", rec.Code, rec.Body.String())
+	}
+	if fx.lastCode[0] != dev {
+		t.Errorf("scene = %q, want the device name", fx.lastCode[0])
+	}
+	if rec := env.authed("GET", "/api/devices/NOPE-DEVICE/mini-code", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown device: %d, want 404", rec.Code)
+	}
+	var grants int
+	env.pool.QueryRow(context.Background(), `SELECT count(*) FROM user_tank_grants`).Scan(&grants)
+	if grants != 0 {
+		t.Errorf("rendering a code wrote %d grants", grants)
+	}
+}
+
+func TestMiniCode_WeChatOffIs503(t *testing.T) {
+	env := newTestEnv(t)
+	env.setRole(control.RolePlatformAdmin)
+	env.seedDevice("ZCT9MINI02")
+	rec := env.authed("GET", "/api/devices/ZCT9MINI02/mini-code", nil)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("WeChat off: %d, want 503", rec.Code)
+	}
 }

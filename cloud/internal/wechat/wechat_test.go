@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -176,5 +177,37 @@ func TestErrorsDoNotLeakSecrets(t *testing.T) {
 	}
 	if !errors.Is(err, wechat.ErrUpstream) {
 		t.Errorf("error = %v, want ErrUpstream", err)
+	}
+}
+
+func TestMiniCode(t *testing.T) {
+	f := newFake(t)
+	var gotBody string
+	f.srv.Config.Handler.(*http.ServeMux).HandleFunc("/wxa/getwxacodeunlimit", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		if r.URL.Query().Get("access_token") == "" {
+			t.Error("no access_token")
+		}
+		if strings.Contains(gotBody, `"scene":"BAD"`) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"errcode":41030,"errmsg":"invalid page"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Write([]byte("\x89PNG-data"))
+	})
+	c := f.client(t)
+	img, err := c.MiniCode(context.Background(), "ZCT000001", "pages/device-detail/device-detail", "trial")
+	if err != nil || string(img) != "\x89PNG-data" {
+		t.Fatalf("MiniCode = %q, %v", img, err)
+	}
+	for _, want := range []string{`"scene":"ZCT000001"`, `"page":"pages/device-detail/device-detail"`, `"env_version":"trial"`} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("request body %s lacks %s", gotBody, want)
+		}
+	}
+	if _, err := c.MiniCode(context.Background(), "BAD", "p", "release"); !errors.Is(err, wechat.ErrUpstream) {
+		t.Errorf("errcode body: %v, want ErrUpstream", err)
 	}
 }

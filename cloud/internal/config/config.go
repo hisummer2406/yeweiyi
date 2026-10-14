@@ -108,6 +108,10 @@ type WeChat struct {
 	// BaseURL is for tests and proxies; empty means https://api.weixin.qq.com.
 	BaseURL string   `yaml:"baseUrl"`
 	Timeout Duration `yaml:"timeout"`
+	// CodePage is the mini-program page a device code opens; CodeEnvVersion is release, trial or
+	// develop (an unpublished mini program only accepts the latter two).
+	CodePage       string `yaml:"codePage"`
+	CodeEnvVersion string `yaml:"codeEnvVersion"`
 }
 
 // Pairing configures QR-code (short-code) binding.
@@ -245,7 +249,7 @@ func Defaults() Config {
 		Database: Database{URL: "postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable"},
 		Redis:    Redis{Addr: "localhost:6379"},
 		Pairing:  Pairing{CodePrefixes: []string{"ZCT"}},
-		WeChat:   WeChat{Timeout: Duration(5 * time.Second)},
+		WeChat:   WeChat{Timeout: Duration(5 * time.Second), CodePage: "pages/device-detail/device-detail", CodeEnvVersion: "release"},
 		Auth:     Auth{TokenTTL: Duration(24 * time.Hour), MaxSessionAge: Duration(30 * 24 * time.Hour)},
 		Control: Control{
 			CommandTTL:            Duration(60 * time.Second),

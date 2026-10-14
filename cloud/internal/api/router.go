@@ -33,6 +33,8 @@ type Deps struct {
 	// WeChat verifies mini-program login codes. Nil means the feature is off (config wechat.enabled);
 	// the WeChat routes then answer 503 wechat_unavailable and nothing else is affected.
 	WeChat wechat.Client
+	// MiniCodePage / MiniCodeEnv configure the device mini-program code (GET /devices/:device/mini-code).
+	MiniCodePage, MiniCodeEnv string
 
 	// TB and Control belong to the ThingsBoard single stack. Both are optional so the server can
 	// still boot without ThingsBoard configured — the routes that need them answer 503 rather than
@@ -122,6 +124,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.POST("/stations", createStationHandler(deps))
 		authorized.PUT("/stations/:id", updateStationHandler(deps))
 		authorized.DELETE("/stations/:id", deleteStationHandler(deps))
+		authorized.GET("/devices/:device/mini-code", deviceMiniCodeHandler(deps))
 		authorized.PUT("/devices/:device/station", assignDeviceStationHandler(deps))
 		authorized.POST("/stations/:id/replace-device", replaceStationDeviceHandler(deps))
 	}

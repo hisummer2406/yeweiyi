@@ -130,6 +130,8 @@ func main() {
 
 	router := api.NewRouter(api.Deps{
 		WeChat:        wx,
+		MiniCodePage:  cfg.WeChat.CodePage,
+		MiniCodeEnv:   cfg.WeChat.CodeEnvVersion,
 		Queries:       queries,
 		Redis:         rdb,
 		Pool:          pool,

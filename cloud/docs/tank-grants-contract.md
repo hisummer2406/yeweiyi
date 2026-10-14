@@ -111,3 +111,12 @@
 ## 9. 版本记录
 
 - v1.0（2026-10-14）：初稿，云端已实现；基于 `08c0524` 之上的未提交改动。§2 命令历史/审计措辞澄清为“发起 403、列表 200 空”（小程序提问），接口不变。
+
+## 设备小程序码（#63 补充）
+
+- `GET /api/devices/:device/mini-code`：**仅平台管理员**（其余角色 `403 not authorized`，写 `denied` 审计）。返回 PNG/JPEG
+  二进制（`Content-Type` 由内容判定，`Cache-Control: no-store`），需 `Authorization` 头。设备不存在 `404 code=device_not_found`；
+  `wechat.enabled=false` → `503 wechat_unavailable`；微信失败 `502`。
+- 码内容：`scene` = 设备名原文（≤32 字符），`page` = `wechat.codePage`（默认 `pages/device-detail/device-detail`），
+  `env_version` = `wechat.codeEnvVersion`。生成不写库、不授予任何权限；扫码后由小程序走 `POST /api/devices/resolve`。
+- 只用假微信服务器测过；真实 getwxacodeunlimit（含 check_path、版本、额度）未验证。
