@@ -2,10 +2,12 @@ package api_test
 
 import (
 	"context"
+	"github.com/jackc/pgx/v5/pgtype"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 	"yeweiyi-cloud/internal/wechat"
 
 	"yeweiyi-cloud/internal/control"
@@ -245,6 +247,78 @@ func TestOnboarding_DeviceListAgreesWithAccessFunction(t *testing.T) {
 	}
 	tn.setOnboarding(t, tn.custA, "active")
 	if list(tn.adminAID) == 0 {
+		t.Errorf("after completion the admin lists nothing")
+	}
+}
+
+// Stations and the audit log are two more hand-written copies of the access rule. Called without the
+// HTTP middleware they must agree with user_may_access_device too: nothing for a configuring
+// customer's admin (the audit query without a device filter is the case the function alone misses),
+// everything again once it is active, and a platform administrator is never affected.
+func TestOnboarding_StationAndAuditListsAgreeWithAccessFunction(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	q := db.New(tn.env.pool)
+	if _, err := tn.env.pool.Exec(ctx, `INSERT INTO stations (customer_id, name) VALUES ($1, $2)`,
+		tn.custA, uniqueName("onb-station")); err != nil {
+		t.Fatalf("seed station: %v", err)
+	}
+	if _, err := tn.env.pool.Exec(ctx,
+		`INSERT INTO audit_log (actor, action, device_name, outcome, customer_id) VALUES ('onb-test', 'onb.test', $1, 'allowed', $2)`,
+		tn.devA1, tn.custA); err != nil {
+		t.Fatalf("seed audit row: %v", err)
+	}
+	t.Cleanup(func() {
+		tn.env.pool.Exec(context.Background(), `DELETE FROM audit_log WHERE actor = 'onb-test'`)
+		tn.env.pool.Exec(context.Background(), `DELETE FROM stations WHERE customer_id = $1`, tn.custA)
+	})
+	stations := func(userID int64) int {
+		rows, err := q.ListStationsForUser(ctx, userID)
+		if err != nil {
+			t.Fatalf("ListStationsForUser: %v", err)
+		}
+		n := 0
+		for _, r := range rows {
+			if r.CustomerID == tn.custA {
+				n++
+			}
+		}
+		return n
+	}
+	audit := func(userID int64) int {
+		rows, err := q.ListAuditLogVisibleToUser(ctx, db.ListAuditLogVisibleToUserParams{
+			UserID:    userID,
+			BeginTime: pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+			EndTime:   pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+			Lim:       100,
+		})
+		if err != nil {
+			t.Fatalf("ListAuditLogVisibleToUser: %v", err)
+		}
+		n := 0
+		for _, r := range rows {
+			if r.CustomerID.Valid && r.CustomerID.Int64 == tn.custA && r.Action == "onb.test" {
+				n++
+			}
+		}
+		return n
+	}
+
+	if stations(tn.adminAID) == 0 || audit(tn.adminAID) == 0 {
+		t.Fatalf("fixture: an active customer's admin sees %d stations, %d audit rows", stations(tn.adminAID), audit(tn.adminAID))
+	}
+	tn.setOnboarding(t, tn.custA, "configuring")
+	if n := stations(tn.adminAID); n != 0 {
+		t.Errorf("configuring customer's admin lists %d stations, want 0", n)
+	}
+	if n := audit(tn.adminAID); n != 0 {
+		t.Errorf("configuring customer's admin reads %d audit rows, want 0", n)
+	}
+	if stations(tn.platformID) == 0 || audit(tn.platformID) == 0 {
+		t.Errorf("a platform administrator must keep seeing a configuring customer's stations and audit rows")
+	}
+	tn.setOnboarding(t, tn.custA, "active")
+	if stations(tn.adminAID) == 0 || audit(tn.adminAID) == 0 {
 		t.Errorf("after completion the admin lists nothing")
 	}
 }

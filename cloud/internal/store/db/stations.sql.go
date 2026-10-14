@@ -114,6 +114,9 @@ JOIN users u ON u.id = $1 AND u.disabled_at IS NULL
 WHERE u.role = 'platform_admin'
    OR (
        s.customer_id = u.customer_id
+       -- a customer still being configured (cloud#60) lists nothing for its non-platform accounts,
+       -- exactly as user_may_access_device answers
+       AND EXISTS (SELECT 1 FROM customers c WHERE c.id = u.customer_id AND c.onboarding_status = 'active')
        AND (
            u.role = 'customer_admin'
            OR EXISTS (
