@@ -26,8 +26,13 @@ describe('资产管理菜单组', () => {
     expect(top.indexOf(assets)).toBeGreaterThan(top.indexOf(group('/console')));
   });
 
-  it('按 客户 → 油站 → 设备 排列，客户项只对平台管理员', () => {
-    expect(menuNames(assets)).toEqual(['customers', 'stations', 'devices']);
+  it('按 客户 → 油站 → 设备 → 员工授权 排列，客户项只对平台管理员', () => {
+    expect(menuNames(assets)).toEqual([
+      'customers',
+      'stations',
+      'devices',
+      'staff',
+    ]);
     expect(child(assets, '/console/assets/customers').access).toBe(
       'canPlatformAdmin',
     );

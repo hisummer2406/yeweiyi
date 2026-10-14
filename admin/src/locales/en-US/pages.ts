@@ -380,6 +380,54 @@ export default {
     'The new device must differ from the old device.',
   'pages.console.stations.replace.error.invalid':
     'The request was invalid; please choose again.',
+  'pages.console.staff.col.phone': 'Phone',
+  'pages.console.staff.col.customer': 'Customer',
+  'pages.console.staff.col.status': 'Status',
+  'pages.console.staff.col.actions': 'Actions',
+  'pages.console.staff.status.enabled': 'Active',
+  'pages.console.staff.status.disabled': 'Disabled',
+  'pages.console.staff.action.assign': 'Assign tanks',
+  'pages.console.staff.empty':
+    'No staff accounts. Staff accounts are created by a platform admin.',
+  'pages.console.staff.modal.title': 'Assign tanks: {phone}',
+  'pages.console.staff.modal.hint':
+    'Access is granted per device + tank. No tank selected = no access; nothing is selected automatically. Saving replaces the whole set for that device; only tanks the device has reported can be added, granted tanks can always be revoked.',
+  'pages.console.staff.modal.close': 'Close',
+  'pages.console.staff.noDevices': 'No devices available to assign.',
+  'pages.console.staff.granted': '{n} tank(s) granted',
+  'pages.console.staff.orphans':
+    'Existing grants on other devices (no longer in the list)',
+  'pages.console.staff.revoke': 'Revoke',
+  'pages.console.staff.save': 'Save',
+  'pages.console.staff.save.success': 'Tank access for device {device} saved.',
+  'pages.console.staff.save.unchanged':
+    'Tank access for device {device} is unchanged.',
+  'pages.console.staff.emptyMeansNone':
+    'No tank selected: after saving, this staff member cannot see this device.',
+  'pages.console.staff.tanks.label': 'Tank {n}',
+  'pages.console.staff.tanks.gone': ' (no longer reported)',
+  'pages.console.staff.tanks.none': 'The device has no reported tanks.',
+  'pages.console.staff.tanks.notReported':
+    'The device has never reported, so grants cannot be added (existing ones can be revoked). Assign after it reports.',
+  'pages.console.staff.tanks.loadFailed': 'Failed to read the device tanks.',
+  'pages.console.staff.grants.loadFailed': 'Failed to read existing grants.',
+  'pages.console.staff.error.tanksUnknown':
+    'The device has never reported, so grants cannot be added. Refreshed; try again after it reports.',
+  'pages.console.staff.error.invalidTank':
+    'The selected tank is not among the device reported tanks (it may have changed). Refreshed; please choose again.',
+  'pages.console.staff.error.invalid': 'Invalid request; please choose again.',
+  'pages.console.staff.error.customerMismatch':
+    'The device and the staff member belong to different customers.',
+  'pages.console.staff.error.notApplicable':
+    'This account is not a staff account; tanks cannot be assigned.',
+  'pages.console.staff.error.userNotFound':
+    'The staff account no longer exists (removed or moved). Closed; please refresh the list.',
+  'pages.console.staff.error.deviceNotFound':
+    'The device does not exist or is out of your scope. Refreshed.',
+  'pages.console.staff.error.unavailable':
+    'The device platform is temporarily unavailable; try again shortly.',
+  'pages.console.staff.error.network': 'Network error; please try again.',
+  'pages.console.staff.error.unknown': 'Operation failed: {detail}',
   'pages.console.stationFilter.label': 'Station',
   'pages.console.stationFilter.all': 'All stations',
   'pages.console.stationFilter.none': 'Ungrouped',

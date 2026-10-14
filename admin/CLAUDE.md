@@ -140,6 +140,14 @@
   `tab`/`station`），页签按设备编号 key 整体重建，A 的数据/缓存/定时器清掉。记录页的 `DevicePicker` 选定油站时同理：当前设备由 A 变 B 且
   正在看 A 才自动切，用户手动选了别的不动；多台（历史冲突）或暂无设备不据此切换。不带 `?station=` 的独立入口按设备编码直接看 A，保留。
   云端不推送换机事件，只能靠轮询得知，所以切换最长有一个轮询周期的延迟。
+- **员工按罐授权（#17，云端契约 `docs/tank-grants-contract.md` v1.0，SHA256 `abb1b1dd…fccdb`，cloud#63）**：「资产管理 → 员工授权」
+  （`/console/assets/staff`，平台管理员与客户管理员）。列出员工（`GET /api/users` 过滤 `customer_user`；客户管理员看本客户员工，手机号脱敏），
+  行内「分配油罐」弹窗按 **油站 → 设备 → 罐** 勾选：罐号来自 `GET /api/devices/:device/tanks`（设备已上报的罐），已授权来自
+  `GET /api/users/:id/tank-grants`，保存是对**单台设备**的整组替换 `PUT /api/users/:id/tank-grants/:device {tanks:[...]}`；空选择 = 撤销，
+  不自动全选；设备从未上报时只能撤销（否则 409 `tanks_unknown`）；授权键是 `(员工, device_name, 罐号)`，没有按油站/整机授权。错误按 `code`
+  （`invalid_tank`/`tanks_unknown`/`device_customer_mismatch`/`grant_not_applicable`/`user_not_found`/`device_not_found`），过期结果刷新可选罐，
+  `user_not_found` 关闭弹窗。设备列表里看不到但仍有授权的设备在「其它设备上的既有授权」下可撤销。本页**不创建/停用/改客户**员工（仍只在 `/ops/users`，平台管理员）。
+  旧 `user_devices` 绑定不转换（P2）：升级后员工在被明确分配前什么都看不到。后台不调 `POST /api/devices/bind`（已停用 410，扫码用 resolve，归小程序）。
 - 没做：客户开通向导（#14，依赖 cloud#60，仓库里还不存在；落地时向导里的设备选择要遵守同一套
   「已占用不可选」与换机规则）、扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
 

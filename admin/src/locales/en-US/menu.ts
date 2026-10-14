@@ -14,6 +14,7 @@ export default {
   'menu.assets.customers': 'Customers',
   'menu.assets.stations': 'Stations',
   'menu.assets.devices': 'Devices',
+  'menu.assets.staff': 'Staff access',
   'menu.welcome': 'Welcome',
   'menu.more-blocks': 'More Blocks',
   'menu.home': 'Home',

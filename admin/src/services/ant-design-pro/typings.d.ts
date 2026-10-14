@@ -101,6 +101,27 @@ declare namespace API {
     changed: boolean;
   };
 
+  /** GET /api/devices/:device/tanks（tank-grants-contract §4）：设备已上报的罐；reported:false = 从未上报 */
+  type DeviceTanks = {
+    deviceName: string;
+    reported: boolean;
+    tanks: { index: number }[];
+  };
+
+  /** GET /api/users/:id/tank-grants：员工在各设备上被授予的罐 */
+  type UserTankGrants = {
+    userId: number;
+    grants: { deviceName: string; tanks: number[] }[];
+  };
+
+  /** PUT /api/users/:id/tank-grants/:device 响应：changed=false 表示集合未变（幂等） */
+  type SetTankGrantsResult = {
+    userId: number;
+    deviceName: string;
+    tanks: number[];
+    changed: boolean;
+  };
+
   type UserRole = 'platform_admin' | 'customer_admin' | 'customer_user';
 
   /** GET /api/users 的账号（internal/api/admin.go userResponse，不含密码） */
