@@ -92,7 +92,7 @@ const LoginMessage: React.FC<{
 
 const Login: React.FC = () => {
   const [errorKind, setErrorKind] = useState<
-    'credentials' | 'failure' | 'staff'
+    'credentials' | 'failure' | 'staff' | 'notOnboarded'
   >();
   const { initialState, setInitialState } = useModel('@@initialState');
   const { styles } = useStyles();
@@ -189,6 +189,14 @@ const Login: React.FC = () => {
               content={intl.formatMessage({
                 id: 'pages.login.accountLogin.errorMessage',
                 defaultMessage: '账号或密码错误',
+              })}
+            />
+          )}
+          {errorKind === 'notOnboarded' && (
+            <LoginMessage
+              content={intl.formatMessage({
+                id: 'pages.login.customerNotOnboarded',
+                defaultMessage: '所在客户尚未完成开通，请联系平台管理员。',
               })}
             />
           )}

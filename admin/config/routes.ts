@@ -152,6 +152,12 @@ export default [
         access: 'canPlatformAdmin',
       },
       {
+        // 客户开通向导（#14）：从客户页进入，不进菜单
+        path: '/console/assets/customers/:id/onboarding',
+        component: './console/assets/customers/onboarding',
+        access: 'canPlatformAdmin',
+      },
+      {
         name: 'stations',
         icon: 'environment',
         path: '/console/assets/stations',

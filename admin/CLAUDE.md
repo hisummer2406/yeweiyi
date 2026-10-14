@@ -148,8 +148,14 @@
   （`invalid_tank`/`tanks_unknown`/`device_customer_mismatch`/`grant_not_applicable`/`user_not_found`/`device_not_found`），过期结果刷新可选罐，
   `user_not_found` 关闭弹窗。设备列表里看不到但仍有授权的设备在「其它设备上的既有授权」下可撤销。本页**不创建/停用/改客户**员工（仍只在 `/ops/users`，平台管理员）。
   旧 `user_devices` 绑定不转换（P2）：升级后员工在被明确分配前什么都看不到。后台不调 `POST /api/devices/bind`（已停用 410，扫码用 resolve，归小程序）。
-- 没做：客户开通向导（#14，依赖 cloud#60，仓库里还不存在；落地时向导里的设备选择要遵守同一套
-  「已占用不可选」与换机规则）、扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
+- **客户开通向导（#14，云端契约 `docs/customer-onboarding-contract.md`，cloud#60；云端未联调前只有 mock 测试）**：客户有
+  `onboardingStatus`（`configuring`|`active`，字段缺失是旧版云端，列表显示「未知」不当成已开通）。配置中客户下**所有**账号不能登录/续期
+  （`403 customer_not_onboarded`）：这是业务提示不是账号失效，登录页和全局错误处理单独提示、不清 token。向导页
+  `/console/assets/customers/:id/onboarding`（仅平台管理员，不进菜单）串起现有接口：客户管理员（手机号+密码）→ 油站 → 登记设备并分配油站，
+  每步即时保存，进度一律以 `GET /api/customers/:id/onboarding` 为准（刷新恢复），「完成开通」按钮仅在 `complete` 时可点，
+  `409 onboarding_incomplete` 刷新并按 `missing` 提示。新建客户成功后自动进入向导；客户列表对配置中的客户给「开通向导」入口。
+  向导只收完整出厂编号（不做短码补全），设备登记与分配油站是两次请求，分配失败时设备留在该客户下，提示去设备页重试。
+- 没做：扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的
 `internal/api/router.go`。
