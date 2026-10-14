@@ -1,6 +1,7 @@
 // Run with: npm run check   (node --experimental-strip-types; pure logic only, no wx)
 import assert from 'node:assert/strict';
 import {
+  commandGuard,
   followStationDevice,
   stationIdFromKey,
   stationIdOf,
@@ -83,6 +84,29 @@ test('station key / query value round trip', () => {
   assert.equal(stationParam(12), '12');
   assert.equal(stationParam(null), 'none');
   assert.equal(stationParam(undefined), '');
+});
+
+test('commandGuard: only the station\'s current device may receive a command', () => {
+  const devices = [dev('B', 1), dev('A', 2)];
+  assert.deepEqual(commandGuard(devices, 'B', 1), { ok: true });
+  // A was replaced by B in station 1: A is no longer that station's device, even if still visible
+  const replaced = [dev('B', 1), dev('A', null)];
+  const r = commandGuard(replaced, 'A', 1);
+  assert.equal(r.ok, false);
+  assert.match(r.message, /已更换.*命令未发送/);
+  // never redirected: the message must not name or accept the new device
+  assert.equal(commandGuard(replaced, 'B', 1).ok, true);
+});
+
+test('commandGuard: no device for the station, ambiguous, or out of scope all block', () => {
+  assert.equal(commandGuard([], 'A', 1).ok, false);
+  assert.equal(commandGuard([dev('A', 1), dev('B', 1)], 'C', 1).ok, false);
+  assert.match(commandGuard([dev('B', 1)], 'A', undefined).message, /命令未发送/);
+});
+
+test('commandGuard: opened by device name alone only needs the device still in scope', () => {
+  assert.deepEqual(commandGuard([dev('A', 3)], 'A', undefined), { ok: true });
+  assert.deepEqual(commandGuard([dev('A', null)], 'A', null), { ok: true });
 });
 
 console.log(`${n} passed`);

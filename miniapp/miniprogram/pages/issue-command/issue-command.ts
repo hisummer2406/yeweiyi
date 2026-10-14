@@ -1,8 +1,9 @@
-import { post } from '../../utils/request';
+import { get, post } from '../../utils/request';
+import { commandGuard, stationIdFromKey } from '../../utils/stationDevice';
 import { CONTROL_METHODS, type ControlMethodSpec } from '../../utils/labels';
 import { roleFromToken } from '../../utils/auth';
 import { getToken } from '../../utils/storage';
-import type { ControlCommand } from '../../types/api';
+import type { ControlCommand, Device } from '../../types/api';
 
 // customer_user may only issue PermControl methods (yeweiyi-cloud internal/protocol.PermControl);
 // everything flagged adminOnly here needs customer_admin or platform_admin. Filtering client-side
@@ -17,6 +18,10 @@ function methodsForRole(role: string): ControlMethodSpec[] {
 }
 
 Page({
+  // Station the detail page was opened under (see device-detail onIssueCommand); undefined when it was
+  // opened by device name alone.
+  stationId: undefined as number | null | undefined,
+
   data: {
     device: '',
     methods: [] as ControlMethodSpec[],
@@ -35,6 +40,7 @@ Page({
   onLoad(query: Record<string, string>) {
     const token = getToken();
     const role = token ? roleFromToken(token) : '';
+    this.stationId = stationIdFromKey(query.station);
     this.setData({ device: query.device || '', methods: methodsForRole(role) });
   },
 
@@ -74,12 +80,22 @@ Page({
       }
     }
 
+    if (this.data.submitting) return;
     this.setData({ submitting: true, errorMsg: '' });
-    post<ControlCommand>(`/api/devices/${encodeURIComponent(this.data.device)}/commands`, {
-      method: method.method,
-      reason,
-      args,
-    })
+    const device = this.data.device as string;
+    // Re-read the device list first: the station's device may have been replaced while this form was
+    // open, and the replaced device can still be visible to this user. If it cannot be confirmed, the
+    // command is not sent (a control command is not something to send on a guess).
+    get<{ rows: Device[] }>('/api/devices')
+      .then((res) => {
+        const guard = commandGuard(res.rows, device, this.stationId);
+        if (!guard.ok) throw new Error(guard.message);
+        return post<ControlCommand>(`/api/devices/${encodeURIComponent(device)}/commands`, {
+          method: method.method,
+          reason,
+          args,
+        });
+      })
       .then((cmd) => {
         // 202 Accepted server-side (yeweiyi-cloud CLAUDE.md: "202, never 200" — this only reports
         // how far the command got synchronously, not that it finished). Report that state honestly

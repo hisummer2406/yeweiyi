@@ -72,3 +72,24 @@ export function stationParam(stationId: number | null | undefined): string {
   if (typeof stationId === 'number') return String(stationId);
   return stationId === null ? 'none' : '';
 }
+
+// Last check before a control command leaves the phone (miniapp#7, review of the station-scoped command
+// form). `devices` is a fresh GET /api/devices, `deviceName` the device the form was opened for and
+// `stationId` the station the detail page was opened under (undefined = opened by device name alone:
+// then only "still in this user's scope" can be checked). Anything but "same" blocks the command — it is
+// never redirected to the station's new device, because the user confirmed this one, not that one.
+// A check that cannot be made (the read failed) must block too; the caller does that.
+export type CommandGuard = { ok: true } | { ok: false; message: string };
+
+export const COMMAND_REPLACED_NOTICE = '该油站的设备已更换，命令未发送。请返回设备详情刷新后再操作。';
+
+export function commandGuard(
+  devices: Device[],
+  deviceName: string,
+  stationId: number | null | undefined,
+): CommandGuard {
+  const decision = followStationDevice(devices, deviceName, stationId);
+  if (decision.kind === 'same') return { ok: true };
+  if (decision.kind === 'switch') return { ok: false, message: COMMAND_REPLACED_NOTICE };
+  return { ok: false, message: `${FOLLOW_NOTICES[decision.reason]}命令未发送。` };
+}

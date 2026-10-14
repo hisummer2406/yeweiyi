@@ -786,8 +786,11 @@ Page({
   },
 
   onIssueCommand() {
+    // Carry the station this page follows, so the form can check the device is still the station's
+    // current one right before it sends (a replacement may happen while the form is open).
+    const station = typeof this.stationId === 'number' ? `&station=${this.stationId}` : '';
     wx.navigateTo({
-      url: `/pages/issue-command/issue-command?device=${encodeURIComponent(this.data.device)}`,
+      url: `/pages/issue-command/issue-command?device=${encodeURIComponent(this.data.device)}${station}`,
     });
   },
 });

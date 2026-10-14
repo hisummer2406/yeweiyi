@@ -257,7 +257,8 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   contract `docs/station-device-replacement-contract.md` v1.3: no read-by-station endpoint; one device
   per station; data never merged by station/tank number), `tankKey` (device_name + tank = data/cache
   identity), and the follow decision `device-detail` uses after a replacement (A→B: drop A's data,
-  socket, poll and in-flight requests, load B; B not visible to this user → notice, no fallback to A).
+  socket, poll and in-flight requests, load B; B not visible to this user → notice, no fallback to A). `commandGuard` is the last check before `issue-command` sends: it re-reads `GET /api/devices` and
+  blocks (never redirects) unless the device is still the station's current one; a failed read blocks too.
   Pure, Node-checked (contract v1.3).
 - `utils/recordsRange.ts` — the time range and paging of device-detail's 报警记录 / 出入库记录 tabs:
   presets (最近24小时/近7天/近30天, rolling from "now") and custom whole local days → `beginTime`/
