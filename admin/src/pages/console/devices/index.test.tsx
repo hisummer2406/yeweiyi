@@ -226,3 +226,139 @@ describe('ConsoleDevices (overview) station filter', () => {
     expect(listCustomers).not.toHaveBeenCalled();
   });
 });
+
+describe('ConsoleDevices (overview) paging and request control', () => {
+  const many = (n: number, station?: (i: number) => number | null) =>
+    Array.from({ length: n }, (_, i) => ({
+      ...device(`D${String(i + 1).padStart(3, '0')}`),
+      ...(station ? { station_id: station(i) } : {}),
+    }));
+
+  beforeEach(() => {
+    getLatestTelemetry.mockImplementation((n: string) =>
+      Promise.resolve(telemetry(n)),
+    );
+  });
+
+  it('renders and requests telemetry for the first page only', async () => {
+    listDevices.mockResolvedValue(many(30));
+    render(<ConsoleDevices />);
+    expect(await screen.findByText('D012')).toBeTruthy();
+    expect(screen.queryByText('D013')).toBeNull();
+    await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(12));
+    const asked = getLatestTelemetry.mock.calls.map((c) => c[0]);
+    expect(asked).not.toContain('D013');
+  });
+
+  it('fetches telemetry for a page only when it is opened', async () => {
+    listDevices.mockResolvedValue(many(30));
+    render(<ConsoleDevices />);
+    await screen.findByText('D012');
+    fireEvent.click(screen.getByTitle('2'));
+    expect(await screen.findByText('D013')).toBeTruthy();
+    expect(screen.queryByText('D001')).toBeNull();
+    await waitFor(() =>
+      expect(getLatestTelemetry).toHaveBeenCalledWith('D024'),
+    );
+    expect(getLatestTelemetry).not.toHaveBeenCalledWith('D025');
+  });
+
+  it('shows no pager for a single page of devices', async () => {
+    listDevices.mockResolvedValue(many(3));
+    render(<ConsoleDevices />);
+    await screen.findByText('D003');
+    expect(screen.queryByTitle('2')).toBeNull();
+  });
+
+  it('keeps at most 5 telemetry requests in flight', async () => {
+    let running = 0;
+    let peak = 0;
+    getLatestTelemetry.mockImplementation(async (n: string) => {
+      running++;
+      peak = Math.max(peak, running);
+      await new Promise((r) => setTimeout(r, 10));
+      running--;
+      return telemetry(n);
+    });
+    listDevices.mockResolvedValue(many(12));
+    render(<ConsoleDevices />);
+    await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(12));
+    await waitFor(() => expect(running).toBe(0));
+    expect(peak).toBeLessThanOrEqual(5);
+    expect(peak).toBeGreaterThan(1);
+  });
+
+  it('never splits a station across pages when sectioned', async () => {
+    listStations.mockResolvedValue([
+      { id: 1, customerId: 7, name: '甲站', address: '', createdAt: '' },
+      { id: 2, customerId: 7, name: '乙站', address: '', createdAt: '' },
+    ]);
+    listDevices.mockResolvedValue(many(16, (i) => (i < 8 ? 1 : 2)));
+    render(<ConsoleDevices />);
+    expect(await screen.findByRole('heading', { name: '甲站' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: '乙站' })).toBeNull();
+    expect(screen.getByText('D008')).toBeTruthy();
+    fireEvent.click(screen.getByTitle('2'));
+    expect(await screen.findByRole('heading', { name: '乙站' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: '甲站' })).toBeNull();
+  });
+
+  it('returns to page 1 when the station filter changes', async () => {
+    listStations.mockResolvedValue([
+      { id: 1, customerId: 7, name: '甲站', address: '', createdAt: '' },
+    ]);
+    listDevices.mockResolvedValue(many(30, () => 1));
+    render(<ConsoleDevices />);
+    await screen.findByText('D012');
+    fireEvent.click(screen.getByTitle('3'));
+    await screen.findByText('D025');
+    fireEvent.mouseDown(
+      await screen.findByRole('combobox', {
+        name: zhPages['pages.console.stationFilter.label'],
+      }),
+    );
+    fireEvent.click(await screen.findByTitle('甲站'));
+    expect(await screen.findByText('D001')).toBeTruthy();
+  });
+
+  describe('polling', () => {
+    afterEach(() => {
+      Object.defineProperty(document, 'hidden', {
+        configurable: true,
+        value: false,
+      });
+      vi.useRealTimers();
+    });
+
+    const setHidden = (hidden: boolean) =>
+      Object.defineProperty(document, 'hidden', {
+        configurable: true,
+        value: hidden,
+      });
+
+    it('pauses while the tab is hidden and refreshes when it comes back', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(2));
+      render(<ConsoleDevices />);
+      await screen.findByText('D002');
+      expect(listDevices).toHaveBeenCalledTimes(1);
+
+      setHidden(true);
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(listDevices).toHaveBeenCalledTimes(1);
+
+      setHidden(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await waitFor(() => expect(listDevices).toHaveBeenCalledTimes(2));
+    });
+
+    it('keeps polling while the tab is visible', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(2));
+      render(<ConsoleDevices />);
+      await screen.findByText('D002');
+      await vi.advanceTimersByTimeAsync(30_000);
+      await waitFor(() => expect(listDevices).toHaveBeenCalledTimes(2));
+    });
+  });
+});
