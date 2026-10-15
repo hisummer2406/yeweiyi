@@ -31,7 +31,8 @@ public final class CloudAlarmReporter {
 
     private CloudAlarmReporter(Context context) {
         this.context = context.getApplicationContext();
-        this.tracker = new ActiveAlarmTracker(new ActiveAlarmFilePersistence(this.context));
+        this.tracker = new ActiveAlarmTracker(new ActiveAlarmFilePersistence(this.context,
+                new ThingsBoardCredentialStore(this.context).load().getDeviceId()));
     }
 
     public static CloudAlarmReporter getInstance() {
@@ -89,6 +90,13 @@ public final class CloudAlarmReporter {
                     tracker.recoverTanksNotIn(enabledTanks, System.currentTimeMillis())) {
                 report(transition);
             }
+        }
+    }
+
+    /** 设备身份换了：ACTIVE 报警状态改读新身份名下的存储，见 {@link ActiveAlarmTracker#switchPersistence}。 */
+    public void rebindIdentity(String deviceId) {
+        synchronized (this) {
+            tracker.switchPersistence(new ActiveAlarmFilePersistence(context, deviceId));
         }
     }
 

@@ -118,6 +118,8 @@ public class ThingsBoardSetFragment extends BaseFragment {
                 return SystemUtils.getRsStr(R.string.tb_provision_network_error);
             case NOT_CONFIGURED:
                 return SystemUtils.getRsStr(R.string.tb_provision_not_configured);
+            case TOKEN_UNREADABLE:
+                return SystemUtils.getRsStr(R.string.tb_provision_token_unreadable);
             default:
                 return null;
         }

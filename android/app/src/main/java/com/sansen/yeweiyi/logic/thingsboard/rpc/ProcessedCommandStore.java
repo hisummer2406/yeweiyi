@@ -44,7 +44,7 @@ public final class ProcessedCommandStore {
         }
     }
 
-    private final Persistence persistence;
+    private Persistence persistence;
     private final long retentionMillis;
     private final Map<String, Record> records;
 
@@ -52,6 +52,13 @@ public final class ProcessedCommandStore {
         this.persistence = persistence;
         this.retentionMillis = retentionMillis;
         this.records = new LinkedHashMap<>(persistence.loadAll());
+    }
+
+    /** 设备身份换了：命令去重记录改读新身份名下的存储，旧存储原样留在盘上。 */
+    public synchronized void switchPersistence(Persistence newPersistence) {
+        this.persistence = newPersistence;
+        records.clear();
+        records.putAll(newPersistence.loadAll());
     }
 
     public synchronized Record find(String commandId) {

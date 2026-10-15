@@ -5,7 +5,6 @@ import android.content.Context;
 import com.google.gson.reflect.TypeToken;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.ProcessedCommandStore;
 
-import java.io.File;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,8 +25,9 @@ public final class ProcessedCommandFilePersistence implements ProcessedCommandSt
 
     private final AtomicJsonFile file;
 
-    public ProcessedCommandFilePersistence(Context context) {
-        this.file = new AtomicJsonFile(new File(context.getFilesDir(), "thingsboard_processed_commands.json"),
+    /** @param deviceId 当前设备身份（出厂编码）；按身份分文件，见 {@link IdentityScopedFile}。 */
+    public ProcessedCommandFilePersistence(Context context, String deviceId) {
+        this.file = new AtomicJsonFile(IdentityScopedFile.resolve(context, "thingsboard_processed_commands", deviceId),
                 MAP_TYPE, "TBCommandStore");
     }
 

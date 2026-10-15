@@ -15,6 +15,7 @@ import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.logic.thingsboard.ClientAttributesBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceSettingsAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.DeviceCredentials;
+import com.sansen.yeweiyi.logic.thingsboard.IdentityScope;
 import com.sansen.yeweiyi.logic.thingsboard.PendingAlarmStore;
 import com.sansen.yeweiyi.logic.thingsboard.ProvisionMessages;
 import com.sansen.yeweiyi.logic.thingsboard.ProvisionResult;
@@ -85,7 +86,14 @@ public final class ThingsBoardManager {
         return instance;
     }
 
+    private final Context appContext;
     private final ThingsBoardCredentialStore credentialStore;
+    /**
+     * 待补投队列、ACTIVE 报警、命令去重记录当前绑定的设备身份（出厂编码）。这些状态按身份分文件，
+     * 身份一换（新编码）就切到新身份名下的存储，旧身份的原样留在盘上、不发送——见 {@link IdentityScope}。
+     */
+    private final Object identityLock = new Object();
+    private String boundDeviceId;
     private final ThingsBoardMqttConnection connection;
     private final TelemetryScheduler telemetryScheduler;
     private final PendingAlarmStore pendingAlarmStore;
@@ -153,7 +161,9 @@ public final class ThingsBoardManager {
             new java.util.concurrent.atomic.AtomicInteger(0);
 
     private ThingsBoardManager(Context context) {
+        this.appContext = context;
         this.credentialStore = new ThingsBoardCredentialStore(context);
+        this.boundDeviceId = IdentityScope.normalize(credentialStore.load().getDeviceId());
 
         String brokerUri = buildBrokerUri(SharePreManager.getIpBean().getIp(), SharePreManager.getIpBean().getPort());
         this.connection = new ThingsBoardMqttConnection(brokerUri,
@@ -161,9 +171,9 @@ public final class ThingsBoardManager {
                 this::onRpcRequest, new SharedAttributesListener(), this::onConnectionLost);
 
         // 队列满时先成对丢报警（"产生"连同它的"恢复"），"恢复"从不单独丢；保住出入库和命令结果
-        this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context), MAX_PENDING_ALARMS,
+        this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context, boundDeviceId), MAX_PENDING_ALARMS,
                 AlarmEventBuilder.EVICTION_POLICY);
-        this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context),
+        this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context, boundDeviceId),
                 COMMAND_RETENTION_MILLIS);
         this.reconnectBackoff = new ReconnectBackoff(RECONNECT_INITIAL_DELAY_MILLIS, RECONNECT_MAX_DELAY_MILLIS, 2.0);
 
@@ -292,7 +302,9 @@ public final class ThingsBoardManager {
         // 重新保存即解除"云端拒绝后停止注册"的状态
         setProvisionStatus(ProvisionState.NONE, null);
         connection.updateBrokerUri(brokerUri);
+        // 先断开再切身份：连接还挂着旧身份时，新身份名下的队列不能被它发出去
         connection.disconnect();
+        bindIdentity(credentialStore.load().getDeviceId());
         reconnectBackoff.reset();
         if (started.get()) {
             reconnectNow();
@@ -625,6 +637,16 @@ public final class ThingsBoardManager {
             return;
         }
         DeviceCredentials credentials = credentialStore.load();
+        // 连接和补投之前必须先对齐身份：恢复备份/复制配置/改编号后，队列要落在当前编码名下
+        bindIdentity(credentials.getDeviceId());
+        if (!credentials.isValid() && notEmpty(credentials.getDeviceId())
+                && credentialStore.hasUnreadableToken()) {
+            // 编码在、token 密文在但解不开：配置是从别的硬件/备份带过来的。不拿这个编码自动重新领取，
+            // 否则新硬件会冒用旧编码的身份；等现场在配网页重新保存（回显确认）后再继续。
+            Log.w(TAG, "已保存的 token 无法解密，不自动领取，需在配网页重新确认编号: " + credentials.getDeviceId());
+            setProvisionStatus(ProvisionState.TOKEN_UNREADABLE, null);
+            return;
+        }
         if (!credentials.isValid() && notEmpty(credentials.getDeviceId())) {
             credentials = provisionAccessToken(credentials.getDeviceId());
             if (credentials == null) {
@@ -683,6 +705,25 @@ public final class ThingsBoardManager {
         }
     }
 
+    /**
+     * 把待补投队列、ACTIVE 报警、命令去重记录切到 {@code deviceId} 名下。编码没变（同一设备重装、
+     * 断网重连、重复保存）什么都不做；变了就换文件，旧身份的文件不删不发，也不并入新身份。
+     */
+    private void bindIdentity(String deviceId) {
+        String id = IdentityScope.normalize(deviceId);
+        synchronized (identityLock) {
+            if (id.equals(boundDeviceId)) {
+                return;
+            }
+            Log.w(TAG, "设备身份变更: " + (boundDeviceId.isEmpty() ? "(未配置)" : boundDeviceId) + " -> "
+                    + (id.isEmpty() ? "(未配置)" : id) + "，待补投/报警状态切换到新身份名下，旧身份数据保留不发送");
+            pendingAlarmStore.switchPersistence(new PendingAlarmFilePersistence(appContext, id));
+            commandStore.switchPersistence(new ProcessedCommandFilePersistence(appContext, id));
+            CloudAlarmReporter.getInstance().rebindIdentity(id);
+            boundDeviceId = id;
+        }
+    }
+
     private void setProvisionStatus(ProvisionState state, String errorMessage) {
         provisionStatus = new ProvisionStatus(state, errorMessage);
     }
@@ -693,7 +734,7 @@ public final class ThingsBoardManager {
     }
 
     public enum ProvisionState {
-        NONE, IN_PROGRESS, SUCCESS, REJECTED, NETWORK_ERROR, NOT_CONFIGURED
+        NONE, IN_PROGRESS, SUCCESS, REJECTED, NETWORK_ERROR, NOT_CONFIGURED, TOKEN_UNREADABLE
     }
 
     public static final class ProvisionStatus {

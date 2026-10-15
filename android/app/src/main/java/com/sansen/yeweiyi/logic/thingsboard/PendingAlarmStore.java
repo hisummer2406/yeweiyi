@@ -74,7 +74,7 @@ public final class PendingAlarmStore {
         }
     };
 
-    private final Persistence persistence;
+    private Persistence persistence;
     private final int maxEntries;
     private final EvictionPolicy evictionPolicy;
     private final LinkedList<String> entries;
@@ -93,6 +93,18 @@ public final class PendingAlarmStore {
         this.maxEntries = maxEntries;
         this.evictionPolicy = evictionPolicy;
         this.entries = new LinkedList<>(persistence.loadAll());
+        trimToCapacity();
+    }
+
+    /**
+     * 设备身份换了：改读写新身份名下的存储，内存队列换成它里面的内容。旧身份的存储原样留在盘上，
+     * 不删除、不发送，也不会并入新身份的队列——旧设备没发出去的事件不能以新设备身份上报。
+     * 调用方负责保证此时没有连接还在用旧身份发送。
+     */
+    public synchronized void switchPersistence(Persistence newPersistence) {
+        this.persistence = newPersistence;
+        entries.clear();
+        entries.addAll(newPersistence.loadAll());
         trimToCapacity();
     }
 

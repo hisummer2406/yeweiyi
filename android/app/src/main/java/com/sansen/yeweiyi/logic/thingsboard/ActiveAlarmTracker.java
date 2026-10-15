@@ -69,12 +69,26 @@ public final class ActiveAlarmTracker {
         void saveAll(List<Entry> entries);
     }
 
-    private final Persistence persistence;
+    private Persistence persistence;
     private final Map<String, Entry> active = new LinkedHashMap<>();
 
     public ActiveAlarmTracker(Persistence persistence) {
         this.persistence = persistence;
-        for (Entry entry : persistence.loadAll()) {
+        loadFrom(persistence);
+    }
+
+    /**
+     * 设备身份换了：ACTIVE 状态改读新身份名下的存储。旧身份的 ACTIVE 报警不会在新身份下补发"恢复"，
+     * 新身份从自己的状态重新开始；旧存储原样留在盘上。
+     */
+    public synchronized void switchPersistence(Persistence newPersistence) {
+        this.persistence = newPersistence;
+        active.clear();
+        loadFrom(newPersistence);
+    }
+
+    private void loadFrom(Persistence source) {
+        for (Entry entry : source.loadAll()) {
             if (entry != null && entry.alarmId != null && AlarmEventBuilder.isReportable(entry.type)) {
                 active.put(key(entry.tank, entry.type), entry);
             }
