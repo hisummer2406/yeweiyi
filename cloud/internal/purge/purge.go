@@ -291,6 +291,7 @@ func (r *Runner) business(ctx context.Context, task db.DevicePurge) (db.DevicePu
 	got["userDevices"] = cascades.UserDevices
 	got["pairingSecrets"] = cascades.PairingSecrets
 	got["tankSettings"] = cascades.TankSettings
+	got["tankCalibration"] = cascades.TankCalibration
 	if got["devices"], err = q.PurgeDeviceRow(ctx, name); err != nil {
 		return task, fmt.Errorf("devices: %w", err)
 	}

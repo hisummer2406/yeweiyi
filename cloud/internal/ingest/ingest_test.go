@@ -577,7 +577,8 @@ func TestTankSettings_MirrorsDeviceReportedAttributes(t *testing.T) {
 	for {
 		s.ing.SyncTankSettingsForTest(ctx, s.device, s.tbDevID)
 		rows, _ = s.q.ListTankSettings(ctx, s.device)
-		if len(rows) > 0 && rows[0].TankShape.Valid || time.Now().After(deadline) {
+		// The simulator already reports every key on connect; wait for the values this test sent.
+		if len(rows) > 0 && rows[0].TankHeightMm.Int32 == 2500 || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -604,5 +605,46 @@ func TestTankSettings_MirrorsDeviceReportedAttributes(t *testing.T) {
 	again, _ := s.q.ListTankSettings(ctx, s.device)
 	if !again[0].UpdatedAt.Time.Equal(r.UpdatedAt.Time) {
 		t.Error("an unchanged report rewrote the row")
+	}
+}
+
+// TestTankCalibration_MirrorsDeviceReportedCurve is cloud#14: the calibration arrays reported as client
+// attributes land in tank_calibration; a corrupt curve is ignored and never replaces a good one.
+func TestTankCalibration_MirrorsDeviceReportedCurve(t *testing.T) {
+	s := newStack(t, control.Config{})
+	ctx := context.Background()
+
+	if err := s.sim.PublishRawAttributes(map[string]any{
+		"tank1.calibrationHeightMm": []float64{10, 20, 30},
+		"tank1.calibrationVolumeL":  []float64{100, 200, 300.5},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var cal db.TankCalibration
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		s.ing.SyncTankSettingsForTest(ctx, s.device, s.tbDevID)
+		var err error
+		if cal, err = s.q.GetTankCalibration(ctx, db.GetTankCalibrationParams{DeviceName: s.device, Tank: 1}); err == nil || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
+	if len(cal.HeightMm) != 3 || cal.VolumeL[2] != 300.5 {
+		t.Fatalf("mirror = %+v", cal)
+	}
+
+	// A decreasing volume is a corrupt curve: the good mirror stays.
+	if err := s.sim.PublishRawAttributes(map[string]any{
+		"tank1.calibrationHeightMm": []float64{10, 20, 30},
+		"tank1.calibrationVolumeL":  []float64{300, 200, 100},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	s.ing.SyncTankSettingsForTest(ctx, s.device, s.tbDevID)
+	again, _ := s.q.GetTankCalibration(ctx, db.GetTankCalibrationParams{DeviceName: s.device, Tank: 1})
+	if again.VolumeL[0] != 100 {
+		t.Errorf("a corrupt curve replaced the good one: %v", again.VolumeL)
 	}
 }

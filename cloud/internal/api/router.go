@@ -109,6 +109,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.POST("/devices/resolve", resolveDeviceHandler(deps))
 		authorized.GET("/devices/:device/tanks", listDeviceTanksHandler(deps))
 		authorized.GET("/devices/:device/tank-settings", listTankSettingsHandler(deps))
+		authorized.GET("/devices/:device/tanks/:tank/calibration", tankCalibrationHandler(deps))
 		authorized.GET("/users/:id/tank-grants", listUserTankGrantsHandler(deps))
 		authorized.PUT("/users/:id/tank-grants/:device", putUserTankGrantsHandler(deps))
 		authorized.POST("/devices/unbind", unbindDeviceHandler(deps))
