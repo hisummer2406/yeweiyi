@@ -41,6 +41,7 @@ import com.lidroid.xutils.http.RequestParams;
 import com.lidroid.xutils.http.callback.RequestCallBack;
 import com.lidroid.xutils.http.client.HttpRequest;
 import com.lidroid.xutils.util.LogUtils;
+import com.sansen.yeweiyi.vendor.BrandLogo;
 import com.sansen.yeweiyi.BuildConfig;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
@@ -170,6 +171,8 @@ public abstract class BaseActivity extends FragmentActivity implements
             }
 
         }
+        // 标题栏中间 logo：厂家页面设置过自定义图片就用它
+        BrandLogo.applyTo((ImageView) findViewById(R.id.bar_iv_center_logo));
         TextView versionView = (TextView) findViewById(R.id.bar_tv_version);
         if (versionView != null) {
             versionView.setText("v" + BuildConfig.VERSION_NAME);

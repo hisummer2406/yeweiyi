@@ -623,4 +623,20 @@
     <string name="log_clear">清空日志</string>
     <string name="log_cleared">日志已清空</string>
     <string name="log_op_failed">操作失败，详情已写入日志</string>
+
+    <!-- VendorSettingsFragment 厂家设置页：只有中文，不做多语言（用户 2026-10-17 确认） -->
+    <string name="vendor_title" tools:ignore="MissingTranslation">厂家设置</string>
+    <string name="vendor_taps_left" tools:ignore="MissingTranslation">再点 %1$d 次进入厂家设置</string>
+    <string name="vendor_logo_change" tools:ignore="MissingTranslation">更换标题栏中间 logo</string>
+    <string name="vendor_logo_change_summary" tools:ignore="MissingTranslation">建议透明背景 PNG，宽高比约 4:1（如 280×69）。当前：%1$s</string>
+    <string name="vendor_logo_custom" tools:ignore="MissingTranslation">自定义</string>
+    <string name="vendor_logo_default" tools:ignore="MissingTranslation">默认</string>
+    <string name="vendor_logo_reset" tools:ignore="MissingTranslation">恢复默认 logo</string>
+    <string name="vendor_logo_reset_summary" tools:ignore="MissingTranslation">删除自定义 logo，恢复程序自带的 logo</string>
+    <string name="vendor_logo_saved" tools:ignore="MissingTranslation">已更换 logo</string>
+    <string name="vendor_logo_failed" tools:ignore="MissingTranslation">图片读取失败，请换一张</string>
+    <string name="vendor_no_picker" tools:ignore="MissingTranslation">找不到图片选择器，无法选择图片</string>
+    <string name="vendor_logo_reset_done" tools:ignore="MissingTranslation">已恢复默认 logo</string>
+    <string name="vendor_log_diag" tools:ignore="MissingTranslation">日志诊断</string>
+    <string name="vendor_log_diag_summary" tools:ignore="MissingTranslation">查看、修改日志级别，清空日志</string>
 </resources>

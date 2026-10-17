@@ -109,10 +109,7 @@ public class SetSeniorFragment extends BaseFragment {
         ly_export_log.setOnClickListener(this);
         // 长按进入日志诊断页（改级别、清空），给技术支持用；现场人员只需要点按导出
         ly_export_log.setOnLongClickListener(v -> {
-            if (main.logSetFragment == null) {
-                main.logSetFragment = new LogSetFragment();
-            }
-            main.switchContent(main.mContent, main.logSetFragment);
+            LogSetFragment.open(main);
             return true;
         });
         ly_mima.setOnClickListener(this);

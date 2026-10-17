@@ -8,11 +8,16 @@
             type="com.sansen.yeweiyi.bean.SerialPortEntrity" />
 
     </data>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 背景（sansen_top_title）和中间 logo（bar_iv_center_logo）分开：换品牌 logo 只换中间这张图，背景不动 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/title_bar"
     android:layout_width="match_parent"
     android:layout_height="@dimen/dp_80"
-    android:background="@drawable/sansen_top_title"
+    android:background="@drawable/sansen_top_title">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
     android:orientation="horizontal" >
 
     <!-- 左侧ICON -->
@@ -26,12 +31,13 @@
         android:layout_gravity="center_vertical"
         android:layout_marginLeft="30dp"/>
 
+    <!-- 连点 7 次进厂家设置：高度铺满标题栏、右侧加 padding 放大点击区域，文字位置不变 -->
     <TextView
         android:id="@+id/bar_tv_version"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
-        android:layout_marginLeft="@dimen/dp_5"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="@dimen/dp_5"
         android:textColor="@android:color/black"
         android:textSize="@dimen/sp_16"
         android:hint="v1.0.0-A"/>
@@ -135,4 +141,15 @@
         android:paddingRight="@dimen/sp_21"
         android:textSize="@dimen/sp_24" />
 </LinearLayout>
+
+    <!-- 中间 logo：高度跟随标题栏，按原图比例居中 -->
+    <ImageView
+        android:id="@+id/bar_iv_center_logo"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:src="@drawable/top_title_logo" />
+</FrameLayout>
 </layout>

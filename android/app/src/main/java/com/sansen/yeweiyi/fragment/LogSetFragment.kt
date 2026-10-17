@@ -12,6 +12,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import com.sansen.yeweiyi.R
+import com.sansen.yeweiyi.activity.MainActivity
 import com.sansen.yeweiyi.base.BaseFragment
 import com.sansen.yeweiyi.bean.SerialPortEntrity
 import com.sansen.yeweiyi.logic.applog.LevelPolicy
@@ -151,11 +152,22 @@ class LogSetFragment : BaseFragment() {
             .show()
     }
 
+    /** 从哪个页面进来就返回哪个（高级设置 / 厂家设置），由 [open] 记录。 */
+    private var returnTo: BaseFragment? = null
+
     private fun goBack() {
-        if (main.setSeniorFragment == null) {
-            main.setSeniorFragment = SetSeniorFragment()
+        val target = returnTo ?: main.setSeniorFragment ?: SetSeniorFragment().also { main.setSeniorFragment = it }
+        main.switchContent(main.mContent, target)
+    }
+
+    companion object {
+        /** 进入日志诊断页，返回时回到当前页面。 */
+        @JvmStatic
+        fun open(main: MainActivity) {
+            val page = main.logSetFragment ?: LogSetFragment().also { main.logSetFragment = it }
+            page.returnTo = main.mContent
+            main.switchContent(main.mContent, page)
         }
-        main.switchContent(main.mContent, main.setSeniorFragment)
     }
 
     /** 实例被复用（见 MainActivity.logSetFragment）：隐藏时停掉时钟回调，再显示时刷新状态和占用空间。 */
