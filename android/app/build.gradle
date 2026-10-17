@@ -1,4 +1,6 @@
 apply plugin: 'com.android.application'
+// 新增类一律用 Kotlin，已有 Java 代码不改写
+apply plugin: 'kotlin-android'
 
 // ---------------------------------------------------------------------------
 // 敏感配置：构建期从 local.properties 注入，不再硬编码进源码。
@@ -45,6 +47,14 @@ if (!releaseSigningReady) {
 }
 
 android {
+    // Java 与 Kotlin 的编译目标保持一致；AGP 4.2 默认就是 1.8，这里写明，升级 AGP 时不会悄悄改变
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.sansen.yeweiyi"

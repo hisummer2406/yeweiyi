@@ -29,6 +29,8 @@ context: |
   AndroidX (22 local jars in app/libs/ compile against support-lib, no
   Maven-hosted upgrade path), replacing the xUtils ORM or rewriting as
   MVVM/Compose/Kotlin.
+  (Rewriting existing Java as Kotlin is still rejected, but since 2026-10-17
+  every NEW class, including tests, is written in Kotlin — see CLAUDE.md.)
 
   Toolchain: JDK 11 + Android SDK are present on this dev machine as of
   2026-08-07 (see CLAUDE.md "Toolchain is present" section) — `./gradlew
