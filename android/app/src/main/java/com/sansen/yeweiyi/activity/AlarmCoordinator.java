@@ -4,6 +4,7 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.applog.AlarmLog;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.logic.Const;
@@ -88,6 +89,7 @@ public class AlarmCoordinator {
     }
 
     public void btn_jieJing(View v) {
+        AlarmLog.onManualSilence();
         for (int i = 0; i < 14; i++) {
             OilCan oilCan = main.myApplication.getmOilcanDataManager().getData(i);
             if (main.myApplication.getmOilcanDataManager().getData(i) != null && main.myApplication.getmOilcanDataManager().getData(i).getAlarmState() != 0) {

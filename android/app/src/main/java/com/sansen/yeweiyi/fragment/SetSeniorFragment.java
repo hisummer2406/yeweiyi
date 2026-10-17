@@ -14,6 +14,7 @@ import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.LogExportUi;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
@@ -21,7 +22,7 @@ import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 
 public class SetSeniorFragment extends BaseFragment {
 
-    private LinearLayout ly_mima, ly_baobiao, ly_bulu, ly_chuankou, ly_yanshi, ly_thingsboard, ly_upper_page;
+    private LinearLayout ly_mima, ly_baobiao, ly_bulu, ly_chuankou, ly_yanshi, ly_thingsboard, ly_export_log, ly_upper_page;
 
 
     @Override
@@ -70,6 +71,9 @@ public class SetSeniorFragment extends BaseFragment {
                 ThingsBoardSetFragment thingsBoardSetFragment = new ThingsBoardSetFragment();
                 main.switchContent(main.mContent, thingsBoardSetFragment);
                 break;
+            case R.id.ly_export_log:
+                LogExportUi.exportAndToast();
+                break;
             case R.id.ly_upper_page:
                 if (main.setFragment == null) {
                     main.setFragment = new SetFragment();
@@ -101,6 +105,16 @@ public class SetSeniorFragment extends BaseFragment {
         // 云平台设置页（ThingsBoardSetFragment）的文案目前写死中文、还没有多语言版本，
         // 暂时只在中文界面下开放入口；GONE 让同行其余按钮按权重重新铺满，非中文界面布局和加这个入口之前一致
         ly_thingsboard.setVisibility(LanguageUtil.isChinese(MyApplication.getInstance().getApplicationContext()) ? View.VISIBLE : View.GONE);
+        ly_export_log = rootView.findViewById(R.id.ly_export_log);
+        ly_export_log.setOnClickListener(this);
+        // 长按进入日志诊断页（改级别、清空），给技术支持用；现场人员只需要点按导出
+        ly_export_log.setOnLongClickListener(v -> {
+            if (main.logSetFragment == null) {
+                main.logSetFragment = new LogSetFragment();
+            }
+            main.switchContent(main.mContent, main.logSetFragment);
+            return true;
+        });
         ly_mima.setOnClickListener(this);
 
         View headerView = rootView.findViewById(R.id.title_bar);

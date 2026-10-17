@@ -46,6 +46,7 @@ import com.sansen.yeweiyi.fragment.SetFragment;
 import com.sansen.yeweiyi.fragment.SetPawFragment;
 import com.sansen.yeweiyi.fragment.SetSeniorFragment;
 import com.sansen.yeweiyi.fragment.StockFragment;
+import com.sansen.yeweiyi.fragment.LogSetFragment;
 import com.sansen.yeweiyi.fragment.ThingsBoardSetFragment;
 import com.sansen.yeweiyi.listener.SimpleWinCallback;
 import com.sansen.yeweiyi.logic.Const;
@@ -103,6 +104,8 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public ColorFragment colorFragment;
     public SetSeniorFragment setSeniorFragment;
     public ThingsBoardSetFragment thingsBoardSetFragment;
+    // 页面切换只 hide 不移除，日志诊断页必须复用同一个实例，否则每进一次就泄漏一个
+    public LogSetFragment logSetFragment;
     public CommitWorkRecortFragment commitWorkRecortFragment;
     public TextView tempButton;
     private ServerManager mServerManager;

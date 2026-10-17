@@ -12,6 +12,8 @@ import com.nostra13.universalimageloader.core.ImageLoader;
 import com.nostra13.universalimageloader.core.ImageLoaderConfiguration;
 import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.LevelmeterInfo;
+import com.sansen.yeweiyi.applog.AppLog;
+import com.sansen.yeweiyi.applog.ProbeLog;
 import com.sansen.yeweiyi.crashAppLog.CrashApphandler;
 import com.sansen.yeweiyi.db.Authorization;
 import com.sansen.yeweiyi.db.User;
@@ -86,6 +88,9 @@ public class MyApplication extends Application {
 		super.onCreate();
 
 		instance = this;
+		// 日志体系最先初始化，后面各模块初始化时的日志才能落盘
+		AppLog.init(this);
+		ProbeLog.start();
 //
 // LeakCanary.install(instance);
 

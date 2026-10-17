@@ -4,6 +4,7 @@ import android.content.Context;
 import android.util.Log;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.ProbeLog;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.utils.CRCheck;
@@ -216,6 +217,10 @@ public class ZhongChengCompany implements AbstractCompany {
                 OilCan can = MyApplication.getInstance().getmOilcanDataManager().getDataByProbeAddress(address);
                 if (can != null) {
                     can.setTemper(BigDecimal.valueOf(temp).add(BigDecimal.valueOf(can.getTempCorrection())).doubleValue());
+                }
+                // 只记日志不改值；can 为 null 时记"地址匹配不到罐"
+                ProbeLog.onTemperatureFrame(address, can, bytes1[1], bytes1[2], temp, bytes);
+                if (can != null) {
                     return true;
                 }
             }
