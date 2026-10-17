@@ -369,7 +369,8 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 				return "/api/devices/" + device + "/station", []byte(`{"stationId":null}`)
 			},
 		},
-		"GET /api/devices/:device/tanks": {build: path("/tanks")},
+		"GET /api/devices/:device/tanks":         {build: path("/tanks")},
+		"GET /api/devices/:device/tank-settings": {build: path("/tank-settings")},
 		// userAID is an employee of customer A. Only a platform administrator writes grants, so every
 		// customer-side caller (admin or employee, own customer or not) is refused by role.
 		"PUT /api/users/:id/tank-grants/:device": {

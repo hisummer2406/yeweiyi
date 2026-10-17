@@ -526,3 +526,62 @@ func TestCommandStatusReflectsAsynchronousResult(t *testing.T) {
 	}
 	_ = db.ControlCommand{}
 }
+
+func configBody(t *testing.T, method string, args map[string]any) []byte {
+	t.Helper()
+	return jsonBody(t, map[string]any{"method": method, "args": args, "reason": "调整配置"})
+}
+
+// cloud#71: config.setTankSettings is open to customer administrators, config.setDeviceSettings only to
+// platform administrators, bad args are a precise 400 and never reach ThingsBoard.
+func TestIssueCommand_ConfigSettings(t *testing.T) {
+	env, sender := newControlEnv(t, control.Config{})
+	device := "ctl-api-config"
+	env.ownDevice(device)
+	url := "/api/devices/" + device + "/commands"
+
+	env.setRole(control.RoleCustomerAdmin)
+	rec := env.authed("POST", url, configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "alarmHighLevelMm": 650}))
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("customer admin setTankSettings: %d %s", rec.Code, rec.Body.String())
+	}
+	calls := sender.calls
+
+	// Device-wide settings are platform-only: the customer administrator gets the usual 403.
+	rec = env.authed("POST", url, configBody(t, protocol.MethodConfigDeviceSettings, map[string]any{"outStockHeightThresholdMm": 30}))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("customer admin setDeviceSettings: %d %s, want 403", rec.Code, rec.Body.String())
+	}
+
+	// Bad args: 400 with a machine-readable code and per-field errors, nothing sent.
+	rec = env.authed("POST", url, configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "tankShape": 1, "density": 0}))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad args: %d %s, want 400", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Code   string `json:"code"`
+		Fields []struct {
+			Field string `json:"field"`
+			Code  string `json:"code"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Code != "invalid_args" || len(body.Fields) != 2 {
+		t.Errorf("400 body = %s (%v)", rec.Body.String(), err)
+	}
+	if sender.calls != calls {
+		t.Error("invalid args must never reach ThingsBoard")
+	}
+
+	// An employee is refused by role before the args are looked at.
+	env.setRole(control.RoleCustomerUser)
+	rec = env.authed("POST", url, configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "tankShape": 1}))
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("customer_user: %d %s, want 403 (not 400: arg problems are not shown to the unauthorized)", rec.Code, rec.Body.String())
+	}
+
+	env.setRole(control.RolePlatformAdmin)
+	rec = env.authed("POST", url, configBody(t, protocol.MethodConfigDeviceSettings, map[string]any{"outStockHeightThresholdMm": 30}))
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("platform admin setDeviceSettings: %d %s", rec.Code, rec.Body.String())
+	}
+}

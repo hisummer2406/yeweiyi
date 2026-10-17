@@ -1,0 +1,198 @@
+package ingest_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"testing"
+	"time"
+
+	"yeweiyi-cloud/internal/control"
+	"yeweiyi-cloud/internal/protocol"
+	"yeweiyi-cloud/internal/store/db"
+)
+
+// cloud#71: remote tank configuration against the device simulator that implements the device's
+// config.setTankSettings / config.setDeviceSettings rules (internal/devicesim/settings.go). The whole
+// loop runs on real ThingsBoard: issue -> RPC -> ACK -> cmdResult -> command row, and the device's
+// re-published client attributes -> tank_settings mirror.
+
+func (s *stack) issue(t *testing.T, actor control.Actor, method, args string) (db.ControlCommand, error) {
+	t.Helper()
+	return s.ctl.Issue(context.Background(), control.IssueRequest{
+		DeviceName: s.device, Method: method, Args: json.RawMessage(args), Reason: "端到端验证", Actor: actor,
+	})
+}
+
+func (s *stack) mirror(t *testing.T) db.TankSetting {
+	t.Helper()
+	// The device's attributes reach ThingsBoard asynchronously after it connects.
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		s.ing.SyncTankSettingsForTest(context.Background(), s.device, s.tbDevID)
+		rows, err := s.q.ListTankSettings(context.Background(), s.device)
+		if err == nil && len(rows) == 1 {
+			return rows[0]
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("mirror rows = %d, err = %v", len(rows), err)
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+func (s *stack) platformActor(t *testing.T) control.Actor {
+	t.Helper()
+	name := fmt.Sprintf("plat-%d", time.Now().UnixNano())
+	var id int64
+	if err := s.pool.QueryRow(context.Background(),
+		`INSERT INTO users (username, password_hash, role) VALUES ($1,'x','platform_admin') RETURNING id`, name).Scan(&id); err != nil {
+		t.Fatalf("seed platform admin: %v", err)
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		s.pool.Exec(c, `DELETE FROM audit_log WHERE actor_id = $1`, id)
+		s.pool.Exec(c, `DELETE FROM control_commands WHERE operator_id = $1`, id)
+		s.pool.Exec(c, `DELETE FROM users WHERE id = $1`, id)
+	})
+	return control.Actor{UserID: id, Username: name, Role: control.RolePlatformAdmin}
+}
+
+func (s *stack) countCommands(t *testing.T) int {
+	t.Helper()
+	var n int
+	if err := s.pool.QueryRow(context.Background(), `SELECT count(*) FROM control_commands WHERE device_name = $1`, s.device).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T) {
+	s := newStack(t, control.Config{})
+	ctx := context.Background()
+
+	before := s.mirror(t)
+	if before.AlarmHighLevelMm.Int32 != 2600 || before.Density.Float64 != 0.56 {
+		t.Fatalf("initial mirror = %+v", before)
+	}
+
+	cmd, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings,
+		`{"tank":1,"alarmHighLevelMm":2700,"density":0.7,"capacityL":40000}`)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusReceived {
+		t.Fatalf("after ACK status = %q, want received (an ACK is not success)", cmd.Status)
+	}
+
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
+	final := awaitStatus(t, s, uuidText(cmd.CommandID.Bytes), 25*time.Second, protocol.CmdStatusSucceeded)
+	var detail struct {
+		Tank    int      `json:"tank"`
+		Updated []string `json:"updated"`
+		Ignored []string `json:"ignored"`
+	}
+	if err := json.Unmarshal(final.ResultDetail, &detail); err != nil || detail.Tank != 1 || len(detail.Updated) != 3 {
+		t.Errorf("result detail = %s (%v)", final.ResultDetail, err)
+	}
+	if got, _ := s.sim.TankSettings(1); got.High != 2700 || got.Density != 0.7 || got.CapacityL != 40000 {
+		t.Errorf("device state = %+v", got)
+	}
+
+	// The mirror follows the device's re-published attributes (about 2 s after the write), never the
+	// command: wait for them.
+	deadline := time.Now().Add(20 * time.Second)
+	var after db.TankSetting
+	for {
+		after = s.mirror(t)
+		if after.AlarmHighLevelMm.Int32 == 2700 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if after.AlarmHighLevelMm.Int32 != 2700 || after.Density.Float64 != 0.7 || after.CapacityL.Float64 != 40000 {
+		t.Fatalf("mirror never caught up with the device: %+v", after)
+	}
+	if !after.ReportedAt.Time.After(before.ReportedAt.Time) {
+		t.Errorf("reported_at did not advance: %v -> %v", before.ReportedAt.Time, after.ReportedAt.Time)
+	}
+	if after.AlarmLowLevelMm.Int32 != before.AlarmLowLevelMm.Int32 {
+		t.Error("a partial update must leave the other fields as they were")
+	}
+}
+
+func TestConfigTankSettings_DeviceRefusalsSurfaceAsRejected(t *testing.T) {
+	s := newStack(t, control.Config{})
+
+	// The cloud only sees the levels it is sent; the device merges them with its stored ones. Low 2700
+	// against a stored High of 2600 passes the cloud's check and the device refuses it.
+	cmd, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings, `{"tank":1,"alarmLowLevelMm":2700}`)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusRejected || cmd.ErrorCode.String != protocol.ErrInvalidParams || cmd.ErrorReason.String == "" {
+		t.Errorf("order violation: status=%q code=%q reason=%q", cmd.Status, cmd.ErrorCode.String, cmd.ErrorReason.String)
+	}
+	if got, _ := s.sim.TankSettings(1); got.Low != 300 {
+		t.Errorf("a refused command wrote %d to the device", got.Low)
+	}
+
+	// 现场手动模式.
+	s.sim.SetLocalControlMode(true)
+	cmd, err = s.issue(t, s.actor, protocol.MethodConfigTankSettings, `{"tank":1,"density":0.8}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cmd.Status != protocol.CmdStatusRejected || cmd.ErrorCode.String != protocol.ErrLocalModeLocked {
+		t.Errorf("local mode: status=%q code=%q", cmd.Status, cmd.ErrorCode.String)
+	}
+}
+
+func TestConfigTankSettings_CloudRejectsBadArgsBeforeAnythingIsSent(t *testing.T) {
+	s := newStack(t, control.Config{})
+	before := s.countCommands(t)
+
+	for name, args := range map[string]string{
+		"closed field":   `{"tank":1,"tankShape":1}`,
+		"unknown field":  `{"tank":1,"densty":0.5}`,
+		"out of range":   `{"tank":1,"tempCorrectionC":11}`,
+		"density zero":   `{"tank":1,"density":0}`,
+		"fractional int": `{"tank":1,"alarmHighLevelMm":650.5}`,
+		"string number":  `{"tank":1,"alarmHighLevelMm":"650"}`,
+		"no tank":        `{"density":0.5}`,
+		"tank 17":        `{"tank":17,"density":0.5}`,
+		"nothing to set": `{"tank":1}`,
+		"level order":    `{"tank":1,"alarmLowLevelMm":900,"alarmHighLevelMm":800}`,
+	} {
+		_, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings, args)
+		var ae *protocol.ArgsError
+		if !errors.Is(err, control.ErrInvalidArgs) || !errors.As(err, &ae) || len(ae.Fields) == 0 {
+			t.Errorf("%s: err = %v, want ErrInvalidArgs with field errors", name, err)
+		}
+	}
+	if n := s.countCommands(t); n != before {
+		t.Errorf("rejected args left %d command rows behind", n-before)
+	}
+}
+
+func TestConfigDeviceSettings_PlatformAdminOnly(t *testing.T) {
+	s := newStack(t, control.Config{})
+	args := `{"outStockHeightThresholdMm":30,"outStockTimeThresholdSec":90}`
+
+	if _, err := s.issue(t, s.actor, protocol.MethodConfigDeviceSettings, args); !errors.Is(err, control.ErrForbidden) {
+		t.Fatalf("customer admin: err = %v, want ErrForbidden", err)
+	}
+
+	cmd, err := s.issue(t, s.platformActor(t), protocol.MethodConfigDeviceSettings, args)
+	if err != nil {
+		t.Fatalf("platform admin: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusReceived {
+		t.Fatalf("status = %q", cmd.Status)
+	}
+	if got := s.sim.DeviceThresholds(); got.OutHeightMm != 30 || got.OutTimeSec != 90 || got.InHeightMm != 20 {
+		t.Errorf("device thresholds = %+v", got)
+	}
+}

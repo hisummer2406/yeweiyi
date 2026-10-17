@@ -534,3 +534,54 @@ func TestCommandReconcile_RecoversAResultTheLiveSubscriptionNeverSaw(t *testing.
 		t.Errorf("control.result audited %d times, want exactly 1", results)
 	}
 }
+
+// TestTankSettings_MirrorsDeviceReportedAttributes is cloud#70 end to end: the device reports its tank
+// configuration as MQTT client attributes, one sync pass copies it into tank_settings, and the mirror
+// carries the attribute's own update time. A wrong-typed value is skipped without losing the others.
+func TestTankSettings_MirrorsDeviceReportedAttributes(t *testing.T) {
+	s := newStack(t, control.Config{})
+	ctx := context.Background()
+
+	if err := s.sim.PublishRawAttributes(map[string]any{
+		"tank1.tankHeightMm": 2500, "tank1.tankShape": 1, "tank1.oilType": "92#", "tank1.oilTypeIndex": 3,
+		"tank1.alarmHighLevelMm": 2200, "tank1.alarmLowLowLevelMm": 0, "tank1.density": 0.56,
+		"tank1.levelCorrectionMm": -1.5,
+		"tank1.sensorLengthMm":    "not a number",
+	}); err != nil {
+		t.Fatalf("publish attributes: %v", err)
+	}
+
+	var rows []db.TankSetting
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		s.ing.SyncTankSettingsForTest(ctx, s.device, s.tbDevID)
+		rows, _ = s.q.ListTankSettings(ctx, s.device)
+		if len(rows) > 0 && rows[0].TankShape.Valid || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if len(rows) != 1 || rows[0].Tank != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	r := rows[0]
+	if r.TankHeightMm.Int32 != 2500 || r.TankShape.Int32 != 1 || r.OilType.String != "92#" || r.OilTypeIndex.Int32 != 3 ||
+		!r.AlarmLowLowLevelMm.Valid || r.AlarmLowLowLevelMm.Int32 != 0 || r.Density.Float64 != 0.56 ||
+		r.LevelCorrectionMm.Float64 != -1.5 {
+		t.Errorf("mirror = %+v", r)
+	}
+	if r.SensorLengthMm.Valid {
+		t.Error("a wrong-typed value must be skipped, not stored")
+	}
+	if age := time.Since(r.ReportedAt.Time); age < 0 || age > time.Minute {
+		t.Errorf("reported_at %v should be the attribute's update time (just now)", r.ReportedAt.Time)
+	}
+
+	// Syncing again with nothing new must not touch the row.
+	time.Sleep(1100 * time.Millisecond)
+	s.ing.SyncTankSettingsForTest(ctx, s.device, s.tbDevID)
+	again, _ := s.q.ListTankSettings(ctx, s.device)
+	if !again[0].UpdatedAt.Time.Equal(r.UpdatedAt.Time) {
+		t.Error("an unchanged report rewrote the row")
+	}
+}

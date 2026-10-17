@@ -321,6 +321,8 @@ ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttrib
 | `config.setAlarmThresholds` | admin | | 修改报警阈值 |
 | `config.setTank` | admin | | 修改油罐配置 |
 | `config.setProbe` | admin | | 修改探针配置 |
+| `config.setTankSettings` | admin | | 修改单个罐的设置（cloud#71，args 见 tank-settings-contract.md） |
+| `config.setDeviceSettings` | platform | | 修改整机出入库判定阈值（仅平台管理员，cloud#71） |
 
 > **"物理动作"这一列是安全闸门。** 按 issue #1，设备端联锁尚未补齐、未经真机验证的动作**不得开放到
 > 生产环境**。配置写错还能改回来，意外启泵不能。这一列由

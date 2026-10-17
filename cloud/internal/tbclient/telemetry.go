@@ -223,6 +223,20 @@ type AttributeKV struct {
 // Attributes reads a device's attributes in one scope. Passing no keys returns every attribute in
 // that scope, which is safe here (unlike telemetry) because attributes are a small, bounded set.
 func (c *Client) Attributes(ctx context.Context, deviceID, scope string, keys []string) (map[string]any, error) {
+	kvs, err := c.AttributesWithTS(ctx, deviceID, scope, keys)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]any, len(kvs))
+	for _, kv := range kvs {
+		out[kv.Key] = kv.Value
+	}
+	return out, nil
+}
+
+// AttributesWithTS is Attributes keeping each attribute's lastUpdateTs, for callers that need to say
+// when the device last reported a value (the tank settings mirror's reportedAt).
+func (c *Client) AttributesWithTS(ctx context.Context, deviceID, scope string, keys []string) ([]AttributeKV, error) {
 	q := url.Values{}
 	if len(keys) > 0 {
 		q.Set("keys", strings.Join(keys, ","))
@@ -233,12 +247,7 @@ func (c *Client) Attributes(ctx context.Context, deviceID, scope string, keys []
 	if err := c.do(ctx, http.MethodGet, path, nil, &raw); err != nil {
 		return nil, fmt.Errorf("attributes(%s) for %s: %w", scope, deviceID, err)
 	}
-
-	out := make(map[string]any, len(raw))
-	for _, kv := range raw {
-		out[kv.Key] = kv.Value
-	}
-	return out, nil
+	return raw, nil
 }
 
 // SetSharedAttributes writes cloud-owned attributes that ThingsBoard pushes down to the device —

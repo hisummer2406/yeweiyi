@@ -118,6 +118,9 @@ ingest:
   # active 表示"不活动超时内有过活动"，设备掉线后要等 ThingsBoard 的不活动超时（默认 10 分钟，可在
   # 设备配置文件里改）才变为离线；这里只决定在那之上再多等多久，调小不能让离线判定比超时更快。
   onlineStatusInterval: "30s"
+  # 设备上报的油罐配置（客户端属性 tank{N}.*）定时重读进 tank_settings（cloud#70），小程序只读展示。
+  # 每次建立订阅时也会立即读一次。默认 "1m"。调小 = 设备改配置后云端更快看到，代价是更多 ThingsBoard 读取。
+  tankSettingsInterval: "1m"
 
 pairing:
   # 扫码绑定只携带 6 位短码（二维码内容 `000001`，设备登记名 `ZCT000001`）。云端先按原文精确匹配
@@ -172,6 +175,7 @@ wechat:
 #   INGEST_RECORD_RECONCILE_INTERVAL ingest.recordReconcileInterval
 #   INGEST_RECORD_RECONCILE_LOOKBACK ingest.recordReconcileLookback
 #   INGEST_ONLINE_STATUS_INTERVAL    ingest.onlineStatusInterval
+#   INGEST_TANK_SETTINGS_INTERVAL    ingest.tankSettingsInterval
 #   TELEMETRY_RETENTION              telemetry.retention
 #   TELEMETRY_ROLLUP_INTERVAL        telemetry.rollupInterval
 #   TELEMETRY_ROLLUP_RECOMPUTE       telemetry.rollupRecompute

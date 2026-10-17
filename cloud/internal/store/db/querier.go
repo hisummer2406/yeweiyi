@@ -196,6 +196,8 @@ type Querier interface {
 	// 员工-油罐查看授权（迁移 000024，cloud#63）。授权判定本身在 SQL 函数 user_may_access_device /
 	// user_may_access_tank 里，这里只是授权关系的读写。
 	ListTankGrantsForUser(ctx context.Context, userID int64) ([]UserTankGrant, error)
+	// 一台设备的全部罐镜像（罐号升序）。员工只能看被授权的罐，由调用方按 ListGrantedTanks 过滤。
+	ListTankSettings(ctx context.Context, deviceName string) ([]TankSetting, error)
 	// [begin, end) 内每个字段的小时汇总，按时间升序。
 	ListTelemetryHourly(ctx context.Context, arg ListTelemetryHourlyParams) ([]ListTelemetryHourlyRow, error)
 	// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
@@ -302,6 +304,9 @@ type Querier interface {
 	// 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
+	// 设备上报的油罐配置镜像（迁移 000026，cloud#70）。只由 internal/ingest 写入，API 只读。
+	// 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
+	UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error
 	// 小时级汇总（迁移 000018，issue #30）。
 	// 幂等；只在样本数不少于已存值时覆盖（迟到的补投会增加样本，TTL 会减少样本，后者不能顶掉完整值）。
 	UpsertTelemetryHourly(ctx context.Context, arg UpsertTelemetryHourlyParams) error

@@ -267,6 +267,52 @@ type StockEvent struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 设备上报的油罐配置镜像：(设备名, 罐号) 一行，由 internal/ingest 从 ThingsBoard 客户端属性写入；云端不改配置值。设备停用某个罐后旧行保留。
+type TankSetting struct {
+	// 设备名，关联 devices.device_name；设备被删除时镜像一并删除。换机用新设备名，天然没有旧机镜像。
+	DeviceName string `json:"device_name"`
+	// 罐号 1..16（设备端上限）。
+	Tank int32 `json:"tank"`
+	// 罐高，mm。NULL = 设备未上报该键（或类型不对）。以下各列同理，云端不补默认值。
+	TankHeightMm pgtype.Int4 `json:"tank_height_mm"`
+	// 传感器长度，mm。
+	SensorLengthMm pgtype.Float8 `json:"sensor_length_mm"`
+	// 0 卧罐 / 1 立罐。
+	TankShape pgtype.Int4 `json:"tank_shape"`
+	// 油品名称，随设备界面语言变化，仅供展示；以 oil_type_index 为准。
+	OilType pgtype.Text `json:"oil_type"`
+	// 油品序号：0 未设置，1–17 内置，18–25 自定义。
+	OilTypeIndex pgtype.Int4 `json:"oil_type_index"`
+	// 高高液位报警阈值，mm；0 = 不启用。
+	AlarmHighHighLevelMm pgtype.Int4 `json:"alarm_high_high_level_mm"`
+	// 高液位报警阈值，mm；0 = 不启用。
+	AlarmHighLevelMm pgtype.Int4 `json:"alarm_high_level_mm"`
+	// 低液位报警阈值，mm；0 = 不启用。
+	AlarmLowLevelMm pgtype.Int4 `json:"alarm_low_level_mm"`
+	// 低低液位报警阈值，mm；0 = 不启用。
+	AlarmLowLowLevelMm pgtype.Int4 `json:"alarm_low_low_level_mm"`
+	// 高水位报警阈值，mm；0 = 不启用。设备端没有低水位报警。
+	AlarmHighWaterMm pgtype.Int4 `json:"alarm_high_water_mm"`
+	// 高温报警阈值，℃；0 = 不启用。
+	AlarmHighTempC pgtype.Int4 `json:"alarm_high_temp_c"`
+	// 低温报警阈值，℃。设备端低温检测从未被调用，改了不生效。
+	AlarmLowTempC pgtype.Int4 `json:"alarm_low_temp_c"`
+	// 液位修正值，mm。
+	LevelCorrectionMm pgtype.Float8 `json:"level_correction_mm"`
+	// 水位修正值，mm。
+	WaterCorrectionMm pgtype.Float8 `json:"water_correction_mm"`
+	// 温度修正值，℃。
+	TempCorrectionC pgtype.Float8 `json:"temp_correction_c"`
+	// 密度，原样透传，单位未与设备端对齐（设置页标 kg/m³，实际存 0.56 这类值）。
+	Density pgtype.Float8 `json:"density"`
+	// 该罐各配置属性在 ThingsBoard 中最近一次更新的时间（设备上报时刻）。
+	ReportedAt pgtype.Timestamptz `json:"reported_at"`
+	// 云端最后一次改动这一行的时间。
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 油罐公称容积，L（客户端属性 capacityL）。NULL = 设备未上报。
+	CapacityL pgtype.Float8 `json:"capacity_l"`
+}
+
 // 罐内数值型遥测的小时级汇总，由 internal/rollup 以 ThingsBoard 的聚合结果幂等写入，只含已结束的整点小时。无样本的小时没有行（离线不是 0）。业务库是长期来源，非必要不删除。原始 30 秒数据不入业务库。
 type TelemetryHourly struct {
 	// 设备名，与 devices.device_name 对应但不设外键。

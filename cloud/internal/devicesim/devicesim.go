@@ -59,6 +59,9 @@ type Config struct {
 	SnapshotInterval time.Duration
 	// OnCommand decides how the device answers a control request. When nil, DefaultPolicy is used.
 	OnCommand Policy
+	// AttributeEchoDelay is how long after a successful config write the device re-publishes its client
+	// attributes (the real device debounces by about 2 s). Defaults to 2s; tests may shorten it.
+	AttributeEchoDelay time.Duration
 	// Logf receives a line per protocol event; nil silences the device.
 	Logf func(format string, args ...any)
 }
@@ -142,7 +145,14 @@ type Device struct {
 	mu       sync.Mutex
 	seq      int64
 	tanks    []protocol.Tank
-	commands map[string]protocol.Ack // commandId -> the ACK originally returned, for idempotency
+	cfgTanks []tankConfig // remotely configurable settings, same order as tanks (cloud#71)
+
+	thresholds deviceThresholds
+	localMode  bool
+	// customPolicy is true when the caller supplied Config.OnCommand; the built-in config handlers
+	// only answer when it did not, so tests that script a policy keep full control.
+	customPolicy bool
+	commands     map[string]protocol.Ack // commandId -> the ACK originally returned, for idempotency
 }
 
 // New builds a device. It does not connect; call Connect.
@@ -153,8 +163,12 @@ func New(cfg Config) *Device {
 	if cfg.SnapshotInterval <= 0 {
 		cfg.SnapshotInterval = protocol.SnapshotIntervalSec * time.Second
 	}
+	custom := cfg.OnCommand != nil
 	if cfg.OnCommand == nil {
 		cfg.OnCommand = DefaultPolicy
+	}
+	if cfg.AttributeEchoDelay <= 0 {
+		cfg.AttributeEchoDelay = 2 * time.Second
 	}
 	if cfg.ClientID == "" {
 		cfg.ClientID = fmt.Sprintf("devicesim-%d", time.Now().UnixNano())
@@ -163,10 +177,12 @@ func New(cfg Config) *Device {
 		cfg.Logf = func(string, ...any) {}
 	}
 
-	d := &Device{cfg: cfg, commands: map[string]protocol.Ack{}}
+	d := &Device{cfg: cfg, commands: map[string]protocol.Ack{}, customPolicy: custom, thresholds: defaultDeviceThresholds()}
 	d.tanks = make([]protocol.Tank, cfg.Tanks)
+	d.cfgTanks = make([]tankConfig, cfg.Tanks)
 	for i := range d.tanks {
 		d.tanks[i] = newTank(i + 1)
+		d.cfgTanks[i] = defaultTankConfig()
 	}
 	return d
 }
@@ -288,21 +304,37 @@ func (d *Device) publish(topic string, payload []byte) error {
 // PublishAttributes reports the device's client attributes — what it is, as opposed to what it is
 // measuring.
 func (d *Device) PublishAttributes() error {
+	d.mu.Lock()
 	attrs := map[string]any{
 		protocol.AttrProtocolVersion:    protocol.Version,
 		protocol.AttrDeviceModel:        "SANSEN-YWY-SIM",
 		protocol.AttrHardwareVersion:    "sim-1.0",
 		protocol.AttrTankCount:          d.cfg.Tanks,
-		protocol.AttrLocalControlMode:   false,
+		protocol.AttrLocalControlMode:   d.localMode,
 		protocol.ClientCurrentFwTitle:   "yeweiyi-android",
 		protocol.ClientCurrentFwVersion: "1.4.2",
 	}
-	for i := 1; i <= d.cfg.Tanks; i++ {
-		attrs[protocol.TankKey(i, protocol.AttrProbeAddress)] = fmt.Sprintf("%02d", i)
-		attrs[protocol.TankKey(i, protocol.AttrProbeType)] = "磁致伸缩"
-		attrs[protocol.TankKey(i, protocol.AttrCapacityL)] = 30000.0
+	for k, v := range d.thresholds.attributes() {
+		attrs[k] = v
 	}
+	for i, c := range d.cfgTanks {
+		for k, v := range c.attributes(i + 1) {
+			attrs[k] = v
+		}
+	}
+	d.mu.Unlock()
 
+	payload, err := json.Marshal(attrs)
+	if err != nil {
+		return err
+	}
+	d.cfg.Logf("→ attributes: %s", payload)
+	return d.publish(protocol.AttributesTopic, payload)
+}
+
+// PublishRawAttributes reports arbitrary client attributes, for tests that need the device to
+// report configuration (tank{N}.tankShape and friends) the simulator does not model.
+func (d *Device) PublishRawAttributes(attrs map[string]any) error {
 	payload, err := json.Marshal(attrs)
 	if err != nil {
 		return err
@@ -450,7 +482,11 @@ func (d *Device) handleRPC(_ paho.Client, msg paho.Message) {
 		return
 	}
 
-	ack, result, execDelay := d.cfg.OnCommand(req.Method, req.Params)
+	policy := d.cfg.OnCommand
+	if !d.customPolicy && isConfigMethod(req.Method) {
+		policy = d.configPolicy
+	}
+	ack, result, execDelay := policy(req.Method, req.Params)
 	if ack.CommandID == "" {
 		ack.CommandID = req.Params.CommandID
 	}

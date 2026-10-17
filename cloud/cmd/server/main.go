@@ -85,6 +85,7 @@ func main() {
 			RecordReconcileInterval: cfg.Ingest.RecordReconcileInterval.Std(),
 			RecordReconcileLookback: cfg.Ingest.RecordReconcileLookback.Std(),
 			OnlineStatusInterval:    cfg.Ingest.OnlineStatusInterval.Std(),
+			TankSettingsInterval:    cfg.Ingest.TankSettingsInterval.Std(),
 			Logf:                    log.Printf,
 		})
 		go ingester.Run(ctx)

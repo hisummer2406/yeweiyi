@@ -57,6 +57,10 @@ type Config struct {
 	// flag. Defaults to 30s. It cannot make detection faster than ThingsBoard's own inactivity
 	// timeout, only shorten the extra delay on top of it.
 	OnlineStatusInterval time.Duration
+	// TankSettingsInterval is how often each device's reported tank configuration (client attributes)
+	// is re-read into tank_settings (cloud#70). Defaults to 1m; a read also happens on every
+	// (re)subscription, which is when a device that just reconnected republishes its attributes.
+	TankSettingsInterval time.Duration
 	// CommandReconcileInterval is how often open commands' results are re-read from ThingsBoard
 	// (see commands.go). Defaults to 10s; it needs to be well inside the command validity window.
 	CommandReconcileInterval time.Duration
@@ -88,6 +92,9 @@ func New(cfg Config) *Ingester {
 	}
 	if cfg.OnlineStatusInterval <= 0 {
 		cfg.OnlineStatusInterval = 30 * time.Second
+	}
+	if cfg.TankSettingsInterval <= 0 {
+		cfg.TankSettingsInterval = time.Minute
 	}
 	if cfg.CommandReconcileInterval <= 0 {
 		cfg.CommandReconcileInterval = defaultCommandReconcileInterval
@@ -199,6 +206,7 @@ func (i *Ingester) subscribeOnce(ctx context.Context, deviceName string) error {
 	rctx, stopReconcile := context.WithCancel(ctx)
 	defer stopReconcile()
 	go i.reconcileLoop(rctx, deviceName, dev.ID.ID)
+	go i.tankSettingsLoop(rctx, deviceName, dev.ID.ID)
 
 	for {
 		select {
