@@ -1,6 +1,7 @@
 import { roleFromToken } from '../../utils/auth';
 import { maskPhone } from '../../utils/loginFlow';
 import { getProfile, getToken } from '../../utils/storage';
+import { showComingSoon } from '../../utils/comingSoon';
 
 const ROLE_LABELS: Record<string, string> = {
   platform_admin: '平台管理员',
@@ -75,12 +76,11 @@ Page({
 
   onItemTap(e: WechatMiniprogram.BaseEvent) {
     const page = e.currentTarget.dataset.page as string;
-    const reason = e.currentTarget.dataset.reason as string;
     if (page) {
       wx.navigateTo({ url: page });
       return;
     }
-    wx.showToast({ title: reason, icon: 'none', duration: 3000 });
+    showComingSoon(); // reason 是开发备注，不展示
   },
 
   onAccountTap() {

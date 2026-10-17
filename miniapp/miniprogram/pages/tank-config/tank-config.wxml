@@ -26,6 +26,10 @@
   </view>
 
   <view class="fr fr-b" style="margin-top:5rpx;">
+    <text class="fl">介质类型</text>
+    <input class="fi-text" type="text" maxlength="20" placeholder="如：汽油、柴油、大豆油" placeholder-class="fv-ph" value="{{mediumType}}" bindinput="onMediumTypeInput" />
+  </view>
+  <view class="fr fr-b">
     <text class="fl">介质密度</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{density}}" bindinput="onDensityInput" />
     <text class="fu">kg/m³</text>

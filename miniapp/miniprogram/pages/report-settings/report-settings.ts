@@ -1,3 +1,4 @@
+import { showComingSoon } from '../../utils/comingSoon';
 type ExportItem = { key: string; label: string; on: boolean };
 
 const ITEMS: ExportItem[] = [
@@ -19,7 +20,7 @@ Page({
       i.key === key ? { ...i, on: !i.on } : i,
     );
     this.setData({ items });
-    wx.showToast({ title: '云端没有导出接口，仅展示交互', icon: 'none' });
+    showComingSoon(); // 云端没有导出接口
   },
 });
 

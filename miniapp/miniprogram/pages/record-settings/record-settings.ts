@@ -1,3 +1,4 @@
+import { showComingSoon } from '../../utils/comingSoon';
 type RecordGroup = {
   key: string;
   label: string;
@@ -27,7 +28,7 @@ Page({
       g.key === key ? { ...g, [field]: !g[field] } : g,
     );
     this.setData({ groups });
-    wx.showToast({ title: '云端没有对应接口，仅展示交互', icon: 'none' });
+    showComingSoon(); // 云端没有对应接口
   },
 
   onIntervalInput(e: WechatMiniprogram.Input) {
@@ -49,7 +50,7 @@ Page({
   onDialogOk() {
     const group = this.data.groups.find((g: RecordGroup) => g.key === this.data.dialogKey);
     this.setData({ dialogShow: false });
-    wx.showToast({ title: `云端没有清空${group?.label || ''}的接口`, icon: 'none', duration: 3000 });
+    showComingSoon(); // 云端没有清空接口
   },
 
   noop() {},

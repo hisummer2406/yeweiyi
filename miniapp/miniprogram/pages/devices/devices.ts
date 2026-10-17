@@ -1,6 +1,7 @@
 import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndLocate } from '../../utils/scan';
+import { showComingSoon } from '../../utils/comingSoon';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -222,7 +223,7 @@ Page({
         if (res.tapIndex === 0) {
           wx.navigateTo({ url: '/pages/device-add/device-add' });
         } else {
-          wx.showToast({ title: '油站管理暂未开放', icon: 'none' });
+          showComingSoon();
         }
       },
     });

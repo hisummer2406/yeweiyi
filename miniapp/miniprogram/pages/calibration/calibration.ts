@@ -1,3 +1,4 @@
+import { showComingSoon } from '../../utils/comingSoon';
 const STORAGE_KEY = 'calibration-draft';
 
 Page({
@@ -51,7 +52,7 @@ Page({
   },
 
   onSaveDevice() {
-    wx.showToast({ title: '协议里没有校准类下发方法，暂不支持', icon: 'none', duration: 3000 });
+    showComingSoon(); // 协议里没有校准类下发方法
   },
 });
 

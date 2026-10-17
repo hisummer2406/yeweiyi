@@ -78,6 +78,18 @@ page {
   font-size: 26rpx;
 }
 
+/* 空状态配图：.empty 之上的一张示意图（目前用在实时数据页没有上报过数据时） */
+.empty-art {
+  padding-top: 120rpx;
+}
+
+.empty-art-img {
+  display: block;
+  width: 360rpx;
+  height: 270rpx;
+  margin: 0 auto 24rpx;
+}
+
 .text-danger {
   color: #b23b3b;
 }

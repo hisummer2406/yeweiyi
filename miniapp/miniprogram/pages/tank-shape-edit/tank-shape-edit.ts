@@ -2,6 +2,7 @@
 // 卧罐 H（罐体直径）、L（中段长度）、R（封头半径）；立罐 H（高）、R（图上标在顶面整个宽度上，
 // 是半径还是直径设计稿没说清）；长方体 H（高）、L（长）、R（图上标在进深方向，应为宽，设计稿用 R）。
 // 这几处含义需要设计/工程确认，在此之前页面只显示字母，不替设计稿编含义。
+import { showComingSoon } from '../../utils/comingSoon';
 type Dim = { key: string; value: string };
 
 const SHAPE_TITLES: Record<string, string> = { horizontal: '卧罐', vertical: '立罐', cuboid: '长方体' };
@@ -53,7 +54,7 @@ Page({
   },
   onPickTank(e: WechatMiniprogram.CustomEvent<{ index: number }>) {
     this.setData({ tankIndex: e.detail.index, pickerShow: false });
-    wx.showToast({ title: '协议里没有生成/下发罐表的方法，暂不支持', icon: 'none', duration: 3000 });
+    showComingSoon(); // 协议里没有生成/下发罐表的方法
   },
   onClosePicker() {
     this.setData({ pickerShow: false });
@@ -72,7 +73,7 @@ Page({
   },
 
   onSaveDevice() {
-    wx.showToast({ title: '协议里没有下发罐表的方法，暂不支持', icon: 'none', duration: 3000 });
+    showComingSoon(); // 协议里没有下发罐表的方法
   },
 });
 
