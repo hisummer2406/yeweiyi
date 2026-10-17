@@ -1,3 +1,4 @@
+import { showComingSoon } from '../../utils/comingSoon';
 type Threshold = {
   key: string;
   label: string;
@@ -37,6 +38,8 @@ Page({
       '#0bb179', '#ff5b26', '#54c64d', '#fd8536', '#dff453', '#fde344',
     ],
     colorIndex: -1,
+    // 手动输入的自由文本（汽油、柴油、大豆油…），不是枚举：云端没有介质类型的字段，参数结构定下来之前只在本页
+    mediumType: '',
     density: '',
     height: '',
     capacity: '',
@@ -71,6 +74,9 @@ Page({
     this.setData({ gridShow: false, sideShow: false });
   },
 
+  onMediumTypeInput(e: WechatMiniprogram.Input) {
+    this.setData({ mediumType: e.detail.value });
+  },
   onDensityInput(e: WechatMiniprogram.Input) {
     this.setData({ density: e.detail.value });
   },
@@ -89,15 +95,12 @@ Page({
   },
 
   onSave() {
-    wx.showToast({
-      title: 'config.setTank / config.setAlarmThresholds 参数结构未定义，暂不能真的下发',
-      icon: 'none',
-      duration: 3000,
-    });
+    showComingSoon(); // config.setTank / config.setAlarmThresholds 参数结构未定义
   },
 
   onReset() {
     this.setData({
+      mediumType: '',
       density: '',
       height: '',
       capacity: '',

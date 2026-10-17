@@ -20,16 +20,15 @@
   <view class="container" wx:if="{{deviceActive}}">
     <!-- 实时数据：GET /api/devices/:device/telemetry/latest -->
     <view wx:if="{{activeTab === 'snapshot'}}">
-      <view wx:if="{{!loading && snapshotLoaded && tanks.length === 0}}" class="empty">
-        该设备还没有上报过遥测数据
+      <view wx:if="{{!loading && snapshotLoaded && tanks.length === 0}}" class="empty empty-art">
+        <image class="empty-art-img" src="/assets/illustrations/empty-data.png" mode="aspectFit" />
+        <view>该设备还没有上报过遥测数据</view>
       </view>
       <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">上报时间 {{snapshotTs}}</view>
       <view wx:for="{{tanks}}" wx:key="key" class="card">
         <view class="row" style="margin-bottom:16rpx;">
           <text class="tag">{{item.index}} 号罐　{{item.oilType || '--'}}</text>
-          <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">
-            {{item.alarmStateLabel}}
-          </text>
+          <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel}}</text>
         </view>
         <view class="tank-card-head">
           <image class="tank-illustration" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
@@ -145,9 +144,7 @@
       <view wx:for="{{commands}}" wx:key="commandId" class="card">
         <view class="row">
           <text>{{item.methodLabel}}</text>
-          <text class="badge {{item.status === 'succeeded' ? 'badge-online' : (item.status === 'failed' || item.status === 'rejected' || item.status === 'expired' ? 'badge-failed' : (item.terminal ? 'badge-offline' : 'badge-pending'))}}">
-            {{item.status}}
-          </text>
+          <text class="badge {{item.status === 'succeeded' ? 'badge-online' : (item.status === 'failed' || item.status === 'rejected' || item.status === 'expired' ? 'badge-failed' : (item.terminal ? 'badge-offline' : 'badge-pending'))}}">{{item.status}}</text>
         </view>
         <view class="muted" style="margin-top:8rpx;">原因：{{item.reason}}</view>
         <view class="muted tabular-nums">操作人 {{item.operator}}　{{item.issuedAt}}</view>

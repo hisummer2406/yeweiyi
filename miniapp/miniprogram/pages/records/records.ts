@@ -1,5 +1,6 @@
 import { get } from '../../utils/request';
 import { devicePage } from '../../utils/devicePicker';
+import { showComingSoon } from '../../utils/comingSoon';
 import type { Device } from '../../types/api';
 
 type RecordTab = 'alarms' | 'oilInOut';
@@ -26,7 +27,7 @@ Page({
     const index = Number(e.currentTarget.dataset.index);
     const item = ITEMS[index];
     if (!item.tab) {
-      wx.showToast({ title: item.reason || '暂不支持', icon: 'none', duration: 3000 });
+      showComingSoon(); // item.reason 是开发备注，不展示
       return;
     }
     this.pickDeviceThenOpen(item.tab, item.direction);

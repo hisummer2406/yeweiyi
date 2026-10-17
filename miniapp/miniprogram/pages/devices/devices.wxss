@@ -116,14 +116,14 @@ page {
   height: 176rpx;
 }
 
-/* 罐身区域（不含顶部人孔和底座），按 tank-horizontal-home.png 实测；填充只在这一块内 */
+/* 填充只在罐身中间两道箍之间的那一列（不铺满整个罐、不含顶部人孔和底座），按 tank-horizontal-home.png 实测：
+   左箍外沿 x=45–53、右箍 x=107–115，所以这一列是 x=54–106（宽 52），上下沿与罐身一致（y=26–165） */
 .home-tank-body {
   position: absolute;
-  left: 2rpx;
-  right: 2rpx;
+  left: 54rpx;
+  width: 52rpx;
   top: 26rpx;
   height: 139rpx;
-  border-radius: 28rpx;
   overflow: hidden;
 }
 

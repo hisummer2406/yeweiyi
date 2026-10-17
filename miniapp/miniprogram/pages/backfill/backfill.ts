@@ -1,3 +1,4 @@
+import { showComingSoon } from '../../utils/comingSoon';
 type Entry = {
   tankIndex: number;
   date: string;
@@ -63,8 +64,7 @@ Page({
   },
 
   onSave(e: WechatMiniprogram.BaseEvent) {
-    const kind = e.currentTarget.dataset.kind as string;
-    wx.showToast({ title: `云端没有${kind}补录接口，暂不能保存`, icon: 'none', duration: 3000 });
+    showComingSoon(); // 云端没有补录接口（yeweiyi-cloud#69）
   },
 
   onPreview(e: WechatMiniprogram.BaseEvent) {

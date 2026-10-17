@@ -48,7 +48,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'snapshot', label: '实时数据' },
   { key: 'alarms', label: '报警记录' },
   { key: 'oilInOut', label: '出入库记录' },
-  { key: 'commands', label: '控制命令' },
+  // 控制命令 tab 入口已于 2026-10-17 关闭（页面、轮询和 issue-command 都保留，没有别的入口能进）。
+  // 想起来再开时把下面这项加回 TABS：
+  // { key: 'commands', label: '控制命令' },
 ];
 
 // View-model types add pre-computed Chinese labels so WXML never has to embed a lookup — wx:for

@@ -10,3 +10,12 @@
   height: 40rpx;
   border-radius: 8rpx;
 }
+
+/* 介质类型：手输文字，和数字行不同，输入框占满剩余宽度 */
+.fi-text {
+  flex: 1;
+  min-width: 0;
+  height: 60rpx;
+  font-size: 28rpx;
+  color: #131313;
+}
