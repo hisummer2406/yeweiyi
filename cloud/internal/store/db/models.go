@@ -265,6 +265,14 @@ type StockEvent struct {
 	CustomerID pgtype.Int8        `json:"customer_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	// device = 设备经 ThingsBoard 上报（含设备端补录 BuLuFragment）；cloud = 小程序用户经云端接口补录。只有 cloud 的行可被撤销。
+	Origin string `json:"origin"`
+	// 云端补录的操作人；设备上报的行为 NULL。用户被删除后置空，审计日志仍保留操作人名称。
+	CreatedBy pgtype.Int8 `json:"created_by"`
+	// 撤销时间（软删除）。非 NULL 的行不出现在任何读路径里。
+	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
+	// 撤销操作人。
+	DeletedBy pgtype.Int8 `json:"deleted_by"`
 }
 
 // 设备上报的油罐配置镜像：(设备名, 罐号) 一行，由 internal/ingest 从 ThingsBoard 客户端属性写入；云端不改配置值。设备停用某个罐后旧行保留。

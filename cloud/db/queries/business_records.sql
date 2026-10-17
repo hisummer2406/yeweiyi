@@ -42,9 +42,10 @@ ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING;
 -- 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
 -- （payload 无罐号，tank=0）只有管理员可见。
 -- 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
-SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
+SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count, origin
 FROM stock_events s
 WHERE s.device_name = sqlc.arg('device_name')
+  AND s.deleted_at IS NULL
   AND occurred_at >= sqlc.arg('begin_time') AND occurred_at < sqlc.arg('end_time')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
   AND user_may_access_tank(sqlc.arg('user_id'), s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
@@ -52,9 +53,10 @@ ORDER BY occurred_at ASC, event_id ASC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
 -- name: ListStockEventsDesc :many
-SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
+SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count, origin
 FROM stock_events s
 WHERE s.device_name = sqlc.arg('device_name')
+  AND s.deleted_at IS NULL
   AND occurred_at >= sqlc.arg('begin_time') AND occurred_at < sqlc.arg('end_time')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
   AND user_may_access_tank(sqlc.arg('user_id'), s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
@@ -114,3 +116,26 @@ SELECT EXISTS (SELECT 1 FROM record_backfills WHERE device_name = $1)::BOOLEAN A
 
 -- name: MarkRecordBackfill :exec
 INSERT INTO record_backfills (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING;
+
+-- name: InsertManualStockEvent :execrows
+-- 云端补录（cloud#69）：event_id 由调用方生成（manual- 前缀），与设备的 id 不会冲突；同一 event_id 再来是 no-op
+-- （客户端用同一 requestId 重试），返回 0 行。env_ts 取写入时刻，仅用于排序/折叠语义，补录行不会被设备报告覆盖。
+INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload, customer_id, origin, created_by)
+VALUES (
+    sqlc.arg('device_name'), sqlc.arg('event_id'), FALSE,
+    to_timestamp(sqlc.arg('occurred_ms')::BIGINT / 1000.0), sqlc.arg('env_ts'),
+    ARRAY[sqlc.arg('env_ts')::BIGINT], sqlc.arg('payload'),
+    (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT),
+    'cloud', sqlc.arg('created_by')
+)
+ON CONFLICT (device_name, event_id) DO NOTHING;
+
+-- name: GetStockEventForManage :one
+SELECT payload, synthetic_id, occurred_at, origin, deleted_at, customer_id
+FROM stock_events WHERE device_name = $1 AND event_id = $2;
+
+-- name: SoftDeleteCloudStockEvent :execrows
+-- 只撤销云端补录且尚未撤销的行；设备上报的行（origin = 'device'）这条语句碰不到。
+UPDATE stock_events SET deleted_at = now(), deleted_by = sqlc.arg('deleted_by'), updated_at = now()
+WHERE device_name = sqlc.arg('device_name') AND event_id = sqlc.arg('event_id')
+  AND origin = 'cloud' AND deleted_at IS NULL;

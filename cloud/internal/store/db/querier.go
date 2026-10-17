@@ -101,6 +101,7 @@ type Querier interface {
 	// paths cannot deadlock. The partial unique index devices_station_id_key is the actual guarantee;
 	// this lock only lets a handler see the occupant and answer with a precise conflict.
 	GetStationForUpdate(ctx context.Context, id int64) (Station, error)
+	GetStockEventForManage(ctx context.Context, arg GetStockEventForManageParams) (GetStockEventForManageRow, error)
 	// Used where a decision must reflect the user's *current* role and customer rather than what their
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -119,6 +120,9 @@ type Querier interface {
 	HasRecordBackfill(ctx context.Context, deviceName string) (bool, error)
 	// 同一份重放不改变已有行。
 	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
+	// 云端补录（cloud#69）：event_id 由调用方生成（manual- 前缀），与设备的 id 不会冲突；同一 event_id 再来是 no-op
+	// （客户端用同一 requestId 重试），返回 0 行。env_ts 取写入时刻，仅用于排序/折叠语义，补录行不会被设备报告覆盖。
+	InsertManualStockEvent(ctx context.Context, arg InsertManualStockEventParams) (int64, error)
 	InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error
 	// 判定与写入是同一条语句：被授权者必须是 customer_user，且设备与其同属一个客户。重复授权是 no-op
 	// （ON CONFLICT），返回 0 行 = 已存在或被拒绝；调用方在同一事务里先用 GetUserForUpdate /
@@ -273,6 +277,8 @@ type Querier interface {
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
+	// 只撤销云端补录且尚未撤销的行；设备上报的行（origin = 'device'）这条语句碰不到。
+	SoftDeleteCloudStockEvent(ctx context.Context, arg SoftDeleteCloudStockEventParams) (int64, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
 	// invalid_source 是合法 JSON，能识别罐号：只计入调用者可见的罐（user_may_access_tank，整机级无罐号

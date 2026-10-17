@@ -371,6 +371,12 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 		},
 		"GET /api/devices/:device/tanks":         {build: path("/tanks")},
 		"GET /api/devices/:device/tank-settings": {build: path("/tank-settings")},
+		"POST /api/devices/:device/stock-events": {customerUserDenied: true, build: func(device, _ string) (string, []byte) {
+			return "/api/devices/" + device + "/stock-events", []byte(`{"direction":"IN","tank":1,"time":"2026-01-01T00:00:00Z","beforeLevelMm":1,"volumeL":1,"reason":"x"}`)
+		}},
+		"DELETE /api/devices/:device/stock-events/:eventId": {customerUserDenied: true, build: func(device, _ string) (string, []byte) {
+			return "/api/devices/" + device + "/stock-events/manual-none", nil
+		}},
 		// userAID is an employee of customer A. Only a platform administrator writes grants, so every
 		// customer-side caller (admin or employee, own customer or not) is refused by role.
 		"PUT /api/users/:id/tank-grants/:device": {

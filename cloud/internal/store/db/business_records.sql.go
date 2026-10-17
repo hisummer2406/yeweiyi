@@ -11,6 +11,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getStockEventForManage = `-- name: GetStockEventForManage :one
+SELECT payload, synthetic_id, occurred_at, origin, deleted_at, customer_id
+FROM stock_events WHERE device_name = $1 AND event_id = $2
+`
+
+type GetStockEventForManageParams struct {
+	DeviceName string `json:"device_name"`
+	EventID    string `json:"event_id"`
+}
+
+type GetStockEventForManageRow struct {
+	Payload     []byte             `json:"payload"`
+	SyntheticID bool               `json:"synthetic_id"`
+	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
+	Origin      string             `json:"origin"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	CustomerID  pgtype.Int8        `json:"customer_id"`
+}
+
+func (q *Queries) GetStockEventForManage(ctx context.Context, arg GetStockEventForManageParams) (GetStockEventForManageRow, error) {
+	row := q.db.QueryRow(ctx, getStockEventForManage, arg.DeviceName, arg.EventID)
+	var i GetStockEventForManageRow
+	err := row.Scan(
+		&i.Payload,
+		&i.SyntheticID,
+		&i.OccurredAt,
+		&i.Origin,
+		&i.DeletedAt,
+		&i.CustomerID,
+	)
+	return i, err
+}
+
 const hasRecordBackfill = `-- name: HasRecordBackfill :one
 SELECT EXISTS (SELECT 1 FROM record_backfills WHERE device_name = $1)::BOOLEAN AS done
 `
@@ -54,6 +87,44 @@ func (q *Queries) InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventPara
 		arg.Payload,
 	)
 	return err
+}
+
+const insertManualStockEvent = `-- name: InsertManualStockEvent :execrows
+INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload, customer_id, origin, created_by)
+VALUES (
+    $1, $2, FALSE,
+    to_timestamp($3::BIGINT / 1000.0), $4,
+    ARRAY[$4::BIGINT], $5,
+    (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT),
+    'cloud', $6
+)
+ON CONFLICT (device_name, event_id) DO NOTHING
+`
+
+type InsertManualStockEventParams struct {
+	DeviceName string      `json:"device_name"`
+	EventID    string      `json:"event_id"`
+	OccurredMs int64       `json:"occurred_ms"`
+	EnvTs      int64       `json:"env_ts"`
+	Payload    []byte      `json:"payload"`
+	CreatedBy  pgtype.Int8 `json:"created_by"`
+}
+
+// 云端补录（cloud#69）：event_id 由调用方生成（manual- 前缀），与设备的 id 不会冲突；同一 event_id 再来是 no-op
+// （客户端用同一 requestId 重试），返回 0 行。env_ts 取写入时刻，仅用于排序/折叠语义，补录行不会被设备报告覆盖。
+func (q *Queries) InsertManualStockEvent(ctx context.Context, arg InsertManualStockEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertManualStockEvent,
+		arg.DeviceName,
+		arg.EventID,
+		arg.OccurredMs,
+		arg.EnvTs,
+		arg.Payload,
+		arg.CreatedBy,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertRecordReject = `-- name: InsertRecordReject :exec
@@ -189,9 +260,10 @@ func (q *Queries) ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDe
 }
 
 const listStockEventsAsc = `-- name: ListStockEventsAsc :many
-SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
+SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count, origin
 FROM stock_events s
 WHERE s.device_name = $1
+  AND s.deleted_at IS NULL
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
   AND user_may_access_tank($4, s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
@@ -213,6 +285,7 @@ type ListStockEventsAscRow struct {
 	SyntheticID bool               `json:"synthetic_id"`
 	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
 	ReportCount int32              `json:"report_count"`
+	Origin      string             `json:"origin"`
 }
 
 // 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
@@ -239,6 +312,7 @@ func (q *Queries) ListStockEventsAsc(ctx context.Context, arg ListStockEventsAsc
 			&i.SyntheticID,
 			&i.OccurredAt,
 			&i.ReportCount,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -251,9 +325,10 @@ func (q *Queries) ListStockEventsAsc(ctx context.Context, arg ListStockEventsAsc
 }
 
 const listStockEventsDesc = `-- name: ListStockEventsDesc :many
-SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
+SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count, origin
 FROM stock_events s
 WHERE s.device_name = $1
+  AND s.deleted_at IS NULL
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
   AND user_may_access_tank($4, s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
@@ -275,6 +350,7 @@ type ListStockEventsDescRow struct {
 	SyntheticID bool               `json:"synthetic_id"`
 	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
 	ReportCount int32              `json:"report_count"`
+	Origin      string             `json:"origin"`
 }
 
 func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error) {
@@ -298,6 +374,7 @@ func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDe
 			&i.SyntheticID,
 			&i.OccurredAt,
 			&i.ReportCount,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -316,6 +393,27 @@ INSERT INTO record_backfills (device_name) VALUES ($1) ON CONFLICT (device_name)
 func (q *Queries) MarkRecordBackfill(ctx context.Context, deviceName string) error {
 	_, err := q.db.Exec(ctx, markRecordBackfill, deviceName)
 	return err
+}
+
+const softDeleteCloudStockEvent = `-- name: SoftDeleteCloudStockEvent :execrows
+UPDATE stock_events SET deleted_at = now(), deleted_by = $1, updated_at = now()
+WHERE device_name = $2 AND event_id = $3
+  AND origin = 'cloud' AND deleted_at IS NULL
+`
+
+type SoftDeleteCloudStockEventParams struct {
+	DeletedBy  pgtype.Int8 `json:"deleted_by"`
+	DeviceName string      `json:"device_name"`
+	EventID    string      `json:"event_id"`
+}
+
+// 只撤销云端补录且尚未撤销的行；设备上报的行（origin = 'device'）这条语句碰不到。
+func (q *Queries) SoftDeleteCloudStockEvent(ctx context.Context, arg SoftDeleteCloudStockEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteCloudStockEvent, arg.DeletedBy, arg.DeviceName, arg.EventID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const summarizeStockRejects = `-- name: SummarizeStockRejects :one
