@@ -56,11 +56,12 @@ const (
 	codeSessionInvalid = "session_invalid"
 )
 
-// Codes that tell the three outcomes of a telemetry read apart (cloud#79). All three are only reachable
+// Codes that tell the outcomes of a telemetry read apart (cloud#79, cloud#28). All three are only reachable
 // after the ownership check, so they reveal nothing to a caller who may not touch the device. The
 // statuses are unchanged; clients that ignore `code` keep working.
 const (
 	codeTelemetryNotReported      = "telemetry_not_reported"      // authorized, provisioned, never reported
+	codeTelemetryExpired          = "telemetry_expired"           // reported once, but longer ago than ThingsBoard keeps the snapshot (cloud#28); body carries lastReportedAt
 	codeDeviceNotProvisioned      = "device_not_provisioned"      // registered here, absent from ThingsBoard
 	codeDevicePlatformUnavailable = "device_platform_unavailable" // ThingsBoard unreachable
 )
