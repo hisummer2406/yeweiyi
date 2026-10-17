@@ -391,3 +391,7 @@ openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶�
 args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、`cmd_result_set_tank_settings.json`，同样待设备端同步
 并让其测试读取。另：设备端字段清单把结果载荷写成 `data`，但 `RpcWirePayloads.cmdResult` 和云端协议都是 `detail`——请设备端
 订正文档。真机验证清单见 [tank-settings-device-verification.md](tank-settings-device-verification.md)。
+
+**#14 追加（标定表）：** 云端已消费 `tank{N}.calibrationHeightMm` / `calibrationVolumeL`（镜像表 `tank_calibration`，
+`GET /api/devices/:device/tanks/:tank/calibration`，见 [tank-settings-contract.md](tank-settings-contract.md)）。仍待设备端确认：
+数组形状/单位；设备只在 MQTT 重连时重发（现场改表后云端滞后到下次重连）；是否需要变更时主动重发。

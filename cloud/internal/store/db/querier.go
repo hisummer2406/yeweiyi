@@ -102,6 +102,7 @@ type Querier interface {
 	// this lock only lets a handler see the occupant and answer with a precise conflict.
 	GetStationForUpdate(ctx context.Context, id int64) (Station, error)
 	GetStockEventForManage(ctx context.Context, arg GetStockEventForManageParams) (GetStockEventForManageRow, error)
+	GetTankCalibration(ctx context.Context, arg GetTankCalibrationParams) (TankCalibration, error)
 	// Used where a decision must reflect the user's *current* role and customer rather than what their
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -310,6 +311,9 @@ type Querier interface {
 	// 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
+	// 设备上报的罐体标定表镜像（迁移 000029，cloud#14）。只由 internal/ingest 写入，API 只读。
+	// reported_at 没变就不写（设备每次重连都会重发，lastUpdateTs 随之前进）。
+	UpsertTankCalibration(ctx context.Context, arg UpsertTankCalibrationParams) error
 	// 设备上报的油罐配置镜像（迁移 000026，cloud#70）。只由 internal/ingest 写入，API 只读。
 	// 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
 	UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error

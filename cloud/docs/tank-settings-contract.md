@@ -69,7 +69,7 @@
 | `density` | **原样透传，单位未与设备端对齐**（设置页标 kg/m³，实际存 0.56 这类值）；不要据此换算 |
 | 任一字段 `null` | 设备未上报该键 |
 
-不提供：低水位报警、物料颜色（设备端没有，也不上报）、标定表（#14，不在本接口）。
+不提供：低水位报警、物料颜色（设备端没有，也不上报）。标定表见下一节，不在本接口。
 
 ## 授权与错误
 
@@ -158,3 +158,25 @@
 `protocol.ValidateArgs`，两份实现互相对照）。端到端测试：`internal/ingest/config_commands_test.go`。
 共享 fixture：`rpc_request_set_tank_settings.json`、`cmd_result_set_tank_settings.json`。
 **真机验证清单**见 [tank-settings-device-verification.md](tank-settings-device-verification.md)。
+
+---
+
+# 罐体标定表（cloud#14）
+
+设备把每个启用罐的标定表（高度→体积，1cm 步长）作为客户端属性 `tank{N}.calibrationHeightMm` /
+`calibrationVolumeL`（两个等长数组）**只在 MQTT 连接建立时**发布一次。云端与罐配置同一套机制镜像（`tank_calibration`
+表，迁移 000029）：`internal/ingest` 在读客户端属性时一并解析，`protocol.ParseTankCalibration` 校验（严格升序、体积不减、
+至少 2 点）后才落库；校验失败的曲线记日志并忽略，**不会覆盖已有的好镜像**。
+
+`GET /api/devices/:device/tanks/:tank/calibration`
+
+```json
+{ "deviceName": "ZCT000001", "tank": 2, "reportedAt": "2026-10-17T08:21:05.123Z",
+  "pointCount": 3, "heightMm": [10, 20, 30], "volumeL": [100, 200, 300.5] }
+```
+
+- 可见范围：设备级检查 → 罐级检查（`customer_user` 无该罐授权、或罐号越界 → `403 tank_not_authorized`）→ 管理员罐号越界
+  `400 tank_invalid`。未上报 `404 calibration_not_reported`。读业务库，设备离线照常返回。
+- **滞后**：设备保持在线时不会重发，现场改了标定表后云端要等设备下次重连才更新；`reportedAt` 是这份曲线被设备发布的时间。
+- 不含罐型分类/尺寸（设备端不持久化）；写（小程序生成罐表并下发）无协议支持，不在此范围。
+- 键名与数组形状仍待设备端确认（#14）；共享 fixture `client_attributes.json` 已含这两个键并有契约测试。
