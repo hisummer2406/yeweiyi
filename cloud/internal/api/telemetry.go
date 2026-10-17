@@ -23,6 +23,13 @@ import (
 // locally — is what the legacy `oilcan:latest:{device}` Redis key did, and it is exactly the
 // duplicate-storage pattern being retired.
 
+// Codes of the two 404s of GET /api/devices/:device/telemetry/latest. A client can tell "never reported"
+// from "reported once, too long ago for the platform to still hold the snapshot".
+const (
+	CodeTelemetryNotReported = "telemetry_not_reported"
+	CodeTelemetryExpired     = "telemetry_expired"
+)
+
 // latestTelemetryHandler is GET /api/devices/:device/telemetry/latest.
 func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -55,8 +62,24 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if len(values) == 0 {
+			if ts > 0 {
+				// The device did report, but longer ago than ThingsBoard keeps raw telemetry: its latest
+				// cache still names the instant while the rows of that snapshot were deleted by the TTL.
+				// Telemetry is not copied into the business database (CLAUDE.md constraint 5), so there is
+				// no older value to fall back on, and rebuilding one from per-key latest values could
+				// resurrect tanks the device no longer has (cloud#28).
+				c.JSON(http.StatusNotFound, gin.H{
+					"error":          "this device has not reported within the telemetry retention period",
+					"code":           CodeTelemetryExpired,
+					"lastReportedAt": time.UnixMilli(ts).UTC(),
+				})
+				return
+			}
 			// Authorized, provisioned, but has never reported. A real state, not an error.
-			c.JSON(http.StatusNotFound, gin.H{"error": "this device has not reported any telemetry yet"})
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "this device has not reported any telemetry yet",
+				"code":  CodeTelemetryNotReported,
+			})
 			return
 		}
 
