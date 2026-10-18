@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 俄语数组：来源 temp/new_strings/中成系统多语言文案对照表_2026-09-23 (1).xlsx「数组文案对照」。
+         只放可达的数组（同 values-es）；数组按整组替换，条数必须与 values/array.xml 一致。
+         language 是 translatable="false"，不在这里覆盖。 -->
+    <string-array name="set_array">
+        <item>Настр. резервуара</item>
+        <item>Настр. таблицы</item>
+        <item>Настр. пароля</item>
+        <item>Базовые настройки</item>
+        <item>Настр. записей</item>
+        <item>Расш. настройки</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>Гориз. резервуар</item>
+        <item>Вертик. резервуар</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>мм</item>
+        <item>м</item>
+    </string-array>
+    <!-- 下标 2（加仑）工作簿原缺失，AI 补「гал.」待 review，已补回在线表格并标红 -->
+    <string-array name="rongji_unit">
+        <item>л</item>
+        <item>м³</item>
+        <item>гал.</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>кг</item>
+        <item>т</item>
+    </string-array>
+    <string-array name="oilcanArray">
+        <item>Бак №1</item>
+        <item>Бак №2</item>
+        <item>Бак №3</item>
+        <item>Бак №4</item>
+        <item>Бак №5</item>
+        <item>Бак №6</item>
+        <item>Бак №7</item>
+        <item>Бак №8</item>
+        <item>Бак №9</item>
+        <item>Бак №10</item>
+        <item>Бак №11</item>
+        <item>Бак №12</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>Нефть</item>
+        <item>Уровень</item>
+        <item>Объем</item>
+        <item>Вес</item>
+        <item>Пусто</item>
+        <item>Вода (ур.)</item>
+        <item>Вода (об.)</item>
+        <item>Темп.</item>
+    </string-array>
+    <string-array name="oiltypeArray">
+        <item>Не зад.</item>
+        <item>0#</item>
+        <item>-10#</item>
+        <item>-20#</item>
+        <item>-35#</item>
+        <item>92#</item>
+        <item>95#</item>
+        <item>98#</item>
+        <item>Метанол</item>
+        <item>Толуол</item>
+        <item>Рис. масло</item>
+        <item>H₂SO₄</item>
+        <item>Ксилол</item>
+        <item>н-Бутилацетат</item>
+        <item>втор-Бутилацетат</item>
+        <item>Метилацетат</item>
+        <item>Диметилацетат</item>
+        <item>Растворитель</item>
+        <item>Пусто</item>
+    </string-array>
+</resources>

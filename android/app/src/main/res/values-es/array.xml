@@ -11,12 +11,6 @@
          value==5/6/7 分支，全仓库没有调用方传这三个值，已在 strings.xml 那边的清理里确认不可达）。
          详细的可达性判断和对照表见 temp/Android_strings/多语言文案对照表_2026-09-23.xlsx
          「数组文案对照」sheet。 -->
-    <string-array name="language">
-        <item>Chino</item>
-        <item>Inglés</item>
-        <item>Español</item>
-    </string-array>
-
     <!-- [已翻译-2026-09-24] SetFragment 左侧设置菜单（SetAdapter 读取），全仓库唯一读取点，可达。
          6 项分别跟 strings.xml 的 oilcanset/oilcantableset/password_settings/base_set_title/
          record_settings/advanced_settings 同义，直接复用那几个已核实的译文，不用再 review。 -->
