@@ -9,7 +9,7 @@ import static org.junit.Assert.assertNull;
 
 /**
  * 探针ID（十进制输入）→ 中成协议地址字节。期望帧取自
- * temp/液位仪全部串口协议/协议探针长度查询.doc 的"地址1-12的探针查询码"。
+ * docs/协议/协议探针长度查询.doc 的"地址1-12的探针查询码"。
  * 只调用拼帧方法，不触发 android.* 调用，可直接在 JVM 上运行。
  */
 public class ZhongChengAddressTest {
