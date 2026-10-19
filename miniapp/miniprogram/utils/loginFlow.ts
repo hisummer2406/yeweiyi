@@ -35,6 +35,9 @@ const BY_CODE: Record<string, LoginFailure> = {
   // POST /api/login. One answer for wrong password, unknown account, disabled account and a role
   // that has no password (customer_user), by design: it must not reveal which of those it was.
   invalid_credentials: { messageKey: 'loginErr.invalid_credentials', offerPhone: false },
+  // 429 (contract §11.4): too many failures for this account or source; a correct password is refused too
+  // until the window ends or a platform administrator resets the password.
+  login_rate_limited: { messageKey: 'loginErr.login_rate_limited', offerPhone: false },
 };
 
 export function describeLoginFailure(status: number, code?: string): LoginFailure {
