@@ -27,6 +27,7 @@
 
 <view class="menu-list" style="margin-top:20rpx;">
   <view class="menu-row" bindtap="onLanguageTap">
+    <image class="menu-icon" src="/assets/icons/settings-language.png" mode="aspectFit" />
     <text class="menu-title">{{langLabel}}</text>
     <text class="muted" style="margin-right:12rpx;">{{langName}}</text>
     <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
