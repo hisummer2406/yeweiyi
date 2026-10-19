@@ -2,58 +2,58 @@
      所以"保存"不会下发，点击时说明（见 tank-config.ts）。 -->
 <view class="fc" style="margin-top:18rpx;padding:19rpx 0 25rpx;">
   <view class="fr fr-b" id="row-tank" data-pick="tank" bindtap="onOpenPicker">
-    <text class="fl">罐号</text>
-    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? '请选择' : tankOptions[tankIndex]}}</text>
+    <text class="fl">{{form.tankNo}}</text>
+    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? form.select : tankOptions[tankIndex]}}</text>
     <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
   <view class="fr fr-b" id="row-sensor" data-pick="sensor" bindtap="onOpenPicker">
-    <text class="fl">传感器ID</text>
-    <text class="fv {{sensorIndex < 0 ? 'fv-ph' : ''}}">{{sensorIndex < 0 ? '请选择' : sensorOptions[sensorIndex]}}</text>
+    <text class="fl">{{text.sensor}}</text>
+    <text class="fv {{sensorIndex < 0 ? 'fv-ph' : ''}}">{{sensorIndex < 0 ? form.select : sensorOptions[sensorIndex]}}</text>
     <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
   <view class="fr fr-b" id="row-type" data-pick="type" bindtap="onOpenPicker">
-    <text class="fl">储罐类型</text>
-    <text class="fv {{typeIndex < 0 ? 'fv-ph' : ''}}">{{typeIndex < 0 ? '请选择' : typeOptions[typeIndex]}}</text>
+    <text class="fl">{{text.type}}</text>
+    <text class="fv {{typeIndex < 0 ? 'fv-ph' : ''}}">{{typeIndex < 0 ? form.select : typeOptions[typeIndex]}}</text>
     <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
   <view class="fr fr-b" id="row-color" data-pick="color" bindtap="onOpenPicker">
-    <text class="fl">物料颜色</text>
+    <text class="fl">{{text.color}}</text>
     <view class="fv {{colorIndex < 0 ? 'fv-ph' : ''}}">
-      <text wx:if="{{colorIndex < 0}}">请选择</text>
+      <text wx:if="{{colorIndex < 0}}">{{form.select}}</text>
       <view wx:else class="tc-color-dot" style="background-color:{{colorOptions[colorIndex]}};"></view>
     </view>
     <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
 
   <view class="fr fr-b" style="margin-top:5rpx;">
-    <text class="fl">介质类型</text>
-    <input class="fi-text" type="text" maxlength="20" placeholder="如：汽油、柴油、大豆油" placeholder-class="fv-ph" value="{{mediumType}}" bindinput="onMediumTypeInput" />
+    <text class="fl">{{text.medium}}</text>
+    <input class="fi-text" type="text" maxlength="20" placeholder="{{text.mediumPlaceholder}}" placeholder-class="fv-ph" value="{{mediumType}}" bindinput="onMediumTypeInput" />
   </view>
   <view class="fr fr-b">
-    <text class="fl">介质密度</text>
+    <text class="fl">{{text.density}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{density}}" bindinput="onDensityInput" />
     <text class="fu">kg/m³</text>
   </view>
   <view class="fr fr-b">
-    <text class="fl">储罐高度</text>
+    <text class="fl">{{text.height}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{height}}" bindinput="onHeightInput" />
-    <text class="fu">毫米</text>
+    <text class="fu">{{form.mm}}</text>
   </view>
   <view class="fr fr-b">
-    <text class="fl">储罐容量</text>
+    <text class="fl">{{text.capacity}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{capacity}}" bindinput="onCapacityInput" />
-    <text class="fu">升</text>
+    <text class="fu">{{form.liter}}</text>
   </view>
   <view class="fr fr-b" wx:for="{{thresholds}}" wx:key="key">
-    <text class="fl">{{item.label}}</text>
+    <text class="fl">{{text[item.key]}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{item.value}}" data-key="{{item.key}}" bindinput="onThresholdInput" />
-    <text class="fu">{{item.unit}}</text>
+    <text class="fu">{{item.unitKey === 'mm' ? form.mm : '℃'}}</text>
   </view>
 </view>
 
 <view class="pill-row" style="margin:57rpx 0 38rpx;">
-  <button class="pill pill-lite" bindtap="onSave">保存</button>
-  <button class="pill pill-main" bindtap="onReset">恢复默认</button>
+  <button class="pill pill-lite" bindtap="onSave">{{form.save}}</button>
+  <button class="pill pill-main" bindtap="onReset">{{text.reset}}</button>
 </view>
 
 <grid-picker show="{{gridShow}}" top="{{pickerTop}}" options="{{pickerKind === 'sensor' ? sensorOptions : tankOptions}}" value="{{pickerKind === 'sensor' ? sensorIndex : tankIndex}}" bind:pick="onPickGrid" bind:close="onClosePicker" />

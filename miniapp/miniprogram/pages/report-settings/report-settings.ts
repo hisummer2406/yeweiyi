@@ -1,17 +1,27 @@
 import { showComingSoon } from '../../utils/comingSoon';
-type ExportItem = { key: string; label: string; on: boolean };
+import { setNavTitle, t, texts } from '../../utils/i18n';
+
+// `label` is filled in the current language when the page is shown.
+type ExportItem = { key: string; on: boolean; label: string };
 
 const ITEMS: ExportItem[] = [
-  { key: 'alarm', label: '报警记录导出', on: true },
-  { key: 'outbound', label: '出库记录导出', on: false },
-  { key: 'inbound', label: '入库记录导出', on: false },
-  { key: 'shift', label: '交班记录导出', on: false },
-  { key: 'stock', label: '库存记录导出', on: false },
+  { key: 'alarm', on: true, label: '' },
+  { key: 'outbound', on: false, label: '' },
+  { key: 'inbound', on: false, label: '' },
+  { key: 'shift', on: false, label: '' },
+  { key: 'stock', on: false, label: '' },
 ];
 
 Page({
   data: {
     items: ITEMS,
+  },
+
+  onShow() {
+    setNavTitle('repSet.navTitle');
+    this.setData({
+      items: this.data.items.map((i: ExportItem) => ({ ...i, label: t(`repSet.export_${i.key}`) })),
+    });
   },
 
   onToggle(e: WechatMiniprogram.BaseEvent) {

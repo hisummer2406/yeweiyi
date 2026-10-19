@@ -9,5 +9,5 @@
     </view>
   </view>
 
-  <button class="btn-secondary" bindtap="onLogout">退出登录</button>
+  <button class="btn-secondary" bindtap="onLogout">{{text.logout}}</button>
 </view>

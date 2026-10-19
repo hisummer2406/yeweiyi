@@ -19,7 +19,7 @@
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",
-    "navigationBarTitleText": "液位仪远程监控",
+    "navigationBarTitleText": "Level monitor",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#edf0f7"
   },
@@ -30,19 +30,19 @@
     "list": [
       {
         "pagePath": "pages/devices/devices",
-        "text": "首页",
+        "text": "Home",
         "iconPath": "assets/tabbar/home.png",
         "selectedIconPath": "assets/tabbar/home-active.png"
       },
       {
         "pagePath": "pages/records/records",
-        "text": "我的记录",
+        "text": "Records",
         "iconPath": "assets/tabbar/record.png",
         "selectedIconPath": "assets/tabbar/record-active.png"
       },
       {
         "pagePath": "pages/more/more",
-        "text": "设置",
+        "text": "Settings",
         "iconPath": "assets/tabbar/settings.png",
         "selectedIconPath": "assets/tabbar/settings-active.png"
       }

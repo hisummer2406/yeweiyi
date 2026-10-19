@@ -16,7 +16,12 @@ function wxLoginCode(): Promise<string> {
 function adopt(res: LoginResponse): LoginResponse {
   setToken(res.token);
   setAutoLogin(true);
-  setProfile({ userId: res.user.id, phone: res.user.phone ?? '', role: res.user.role });
+  setProfile({
+    userId: res.user.id,
+    phone: res.user.phone ?? '',
+    username: res.user.username ?? '',
+    role: res.user.role,
+  });
   return res;
 }
 

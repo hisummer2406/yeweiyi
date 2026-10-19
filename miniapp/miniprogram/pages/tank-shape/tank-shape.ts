@@ -1,11 +1,14 @@
-const SHAPES = [
-  { key: 'horizontal', label: '卧罐' },
-  { key: 'vertical', label: '立罐' },
-  { key: 'cuboid', label: '长方体' },
-];
+import { setNavTitle, t } from '../../utils/i18n';
+
+const SHAPE_KEYS = ['horizontal', 'vertical', 'cuboid'];
 
 Page({
-  data: { shapes: SHAPES },
+  data: { shapes: SHAPE_KEYS.map((key) => ({ key, label: '' })) },
+
+  onShow() {
+    setNavTitle('tankShape.navTitle');
+    this.setData({ shapes: SHAPE_KEYS.map((key) => ({ key, label: t(`tankShape.${key}`) })) });
+  },
 
   onShapeTap(e: WechatMiniprogram.BaseEvent) {
     const key = e.currentTarget.dataset.key as string;

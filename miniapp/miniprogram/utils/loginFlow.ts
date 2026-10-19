@@ -3,8 +3,10 @@
 // single-use codes and never a phone number or openid; every failure comes back with a machine
 // `code` that decides what the user is told and whether the phone-authorization button is offered.
 
+// Texts are i18n keys (locales/*.ts, group `loginErr`), not strings: this module stays pure so Node can
+// check it, and the page turns a key into the current language with `t()`. '' = nothing to show.
 export interface LoginFailure {
-  message: string;
+  messageKey: string;
   // true only for "this WeChat is not bound yet": the next step is the phone authorization.
   offerPhone: boolean;
 }
@@ -12,36 +14,33 @@ export interface LoginFailure {
 // customer-onboarding-contract §3/§4 (miniapp#5): the customer is still being configured, so no
 // account under it can sign in or renew. A business notice — not a dead account, not a wrong password.
 export const NOT_ONBOARDED_CODE = 'customer_not_onboarded';
-export const NOT_ONBOARDED_MESSAGE = '所在客户尚未完成开通，请联系平台管理员';
+export const NOT_ONBOARDED_MESSAGE_KEY = 'loginErr.customer_not_onboarded';
 
-const UNKNOWN: LoginFailure = { message: '登录失败，请稍后重试', offerPhone: false };
+const UNKNOWN: LoginFailure = { messageKey: 'loginErr.unknown', offerPhone: false };
 
 // Keyed by the cloud's `code`. None of these is the generic 403 "not authorized" that request.ts
 // treats as a dead account: these calls go out without a session (needAuth=false), so a rejected
 // login can never log the user out of, or bounce, a session they do not have.
 const BY_CODE: Record<string, LoginFailure> = {
-  wechat_not_bound: { message: '', offerPhone: true },
-  phone_not_provisioned: { message: '该手机号尚未开通，请联系管理员', offerPhone: false },
-  account_disabled: { message: '账号已停用，请联系管理员', offerPhone: false },
-  [NOT_ONBOARDED_CODE]: { message: NOT_ONBOARDED_MESSAGE, offerPhone: false },
-  wechat_identity_conflict: {
-    message: '该微信或该账号已绑定其他身份，请联系管理员处理',
-    offerPhone: false,
-  },
-  wechat_code_invalid: { message: '授权已过期，请重新点击登录', offerPhone: false },
-  wechat_unavailable: { message: '微信登录暂未开启，请联系管理员', offerPhone: false },
-  wechat_upstream_error: { message: '微信服务暂时不可用，请稍后重试', offerPhone: false },
-  phone_unsupported: { message: '仅支持中国大陆手机号', offerPhone: false },
-  invalid_request: { message: '登录请求不完整，请重试', offerPhone: false },
+  wechat_not_bound: { messageKey: '', offerPhone: true },
+  phone_not_provisioned: { messageKey: 'loginErr.phone_not_provisioned', offerPhone: false },
+  account_disabled: { messageKey: 'loginErr.account_disabled', offerPhone: false },
+  [NOT_ONBOARDED_CODE]: { messageKey: NOT_ONBOARDED_MESSAGE_KEY, offerPhone: false },
+  wechat_identity_conflict: { messageKey: 'loginErr.wechat_identity_conflict', offerPhone: false },
+  wechat_code_invalid: { messageKey: 'loginErr.wechat_code_invalid', offerPhone: false },
+  wechat_unavailable: { messageKey: 'loginErr.wechat_unavailable', offerPhone: false },
+  wechat_upstream_error: { messageKey: 'loginErr.wechat_upstream_error', offerPhone: false },
+  phone_unsupported: { messageKey: 'loginErr.phone_unsupported', offerPhone: false },
+  invalid_request: { messageKey: 'loginErr.invalid_request', offerPhone: false },
   // POST /api/login. One answer for wrong password, unknown account, disabled account and a role
   // that has no password (customer_user), by design: it must not reveal which of those it was.
-  invalid_credentials: { message: '账号或密码错误', offerPhone: false },
+  invalid_credentials: { messageKey: 'loginErr.invalid_credentials', offerPhone: false },
 };
 
 export function describeLoginFailure(status: number, code?: string): LoginFailure {
-  if (status === 0) return { message: '网络不可用，请检查网络后重试', offerPhone: false };
+  if (status === 0) return { messageKey: 'loginErr.offline', offerPhone: false };
   if (code && BY_CODE[code]) return BY_CODE[code];
-  if (status >= 500) return { message: '服务暂时不可用，请稍后重试', offerPhone: false };
+  if (status >= 500) return { messageKey: 'loginErr.server', offerPhone: false };
   return UNKNOWN;
 }
 
@@ -57,15 +56,15 @@ export function isNotOnboarded(status: number, body: unknown): boolean {
   return status === 403 && codeOfBody(body) === NOT_ONBOARDED_CODE;
 }
 
-// The notice a login page is asked to show (`?notice=` on its URL), or '' for none / unknown.
+// The notice (an i18n key) a login page is asked to show (`?notice=` on its URL), or '' for none / unknown.
 export function noticeFromQuery(query: Record<string, string | undefined> | undefined): string {
-  return query?.notice === NOT_ONBOARDED_CODE ? NOT_ONBOARDED_MESSAGE : '';
+  return query?.notice === NOT_ONBOARDED_CODE ? NOT_ONBOARDED_MESSAGE_KEY : '';
 }
 
 export type PhoneAuthResult =
   | { kind: 'ok'; code: string }
   | { kind: 'denied' }
-  | { kind: 'failed'; message: string };
+  | { kind: 'failed'; messageKey: string };
 
 // Result of <button open-type="getPhoneNumber">. `code` is the phoneCode to send; WeChat only fills
 // it on success. A refusal is a normal outcome, not an error, and must leave the user free to retry.
@@ -75,13 +74,13 @@ export function classifyPhoneAuth(detail: { code?: string; errMsg?: string } | u
   const errMsg = detail?.errMsg ?? '';
   if (/deny|cancel/i.test(errMsg)) return { kind: 'denied' };
   if (/no permission|privacy|not.*(supported|enabled)/i.test(errMsg)) {
-    return { kind: 'failed', message: '当前小程序未开通手机号授权能力，请联系管理员' };
+    return { kind: 'failed', messageKey: 'loginErr.phoneNoPermission' };
   }
-  return { kind: 'failed', message: '获取手机号授权失败，请重试' };
+  return { kind: 'failed', messageKey: 'loginErr.phoneFailed' };
 }
 
 // The password login form (POST /api/login takes exactly one of phone / username, plus password).
-// Same rule as yeweiyi-admin src/utils/loginIdentifier.ts: ONE input, "手机号 / 用户名", and the
+// Same rule as yeweiyi-admin src/utils/loginIdentifier.ts: ONE input (phone number / username), and the
 // client decides which field it is — the cloud does not guess. After stripping spaces and hyphens
 // and a +86 / 0086 / 86 prefix, a mainland number (1[3-9] + 9 digits, same as the cloud's
 // phone.go) goes out as `phone`; anything else is a `username`.
@@ -97,14 +96,14 @@ export function normalizePhone(raw: string): string | undefined {
 
 export type PasswordForm =
   | { ok: true; body: { phone: string; password: string } | { username: string; password: string } }
-  | { ok: false; message: string };
+  | { ok: false; messageKey: string };
 
 // Only what the cloud would reject as a 400 anyway is checked here, so an empty field is told apart
 // from a wrong password. The password is never trimmed: spaces in it are the user's.
 export function buildPasswordLogin(identifier: string, password: string): PasswordForm {
   const id = identifier.trim();
-  if (!id) return { ok: false, message: '请输入手机号或用户名' };
-  if (!password) return { ok: false, message: '请输入密码' };
+  if (!id) return { ok: false, messageKey: 'loginErr.needAccount' };
+  if (!password) return { ok: false, messageKey: 'loginErr.needPassword' };
   const phone = normalizePhone(id);
   return { ok: true, body: phone ? { phone, password } : { username: id, password } };
 }

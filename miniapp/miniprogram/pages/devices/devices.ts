@@ -1,3 +1,7 @@
+import { describeError } from '../../utils/errors';
+import { formatLocalTime } from '../../utils/format';
+import { applyTabBar, currentLocale, t, texts } from '../../utils/i18n';
+import { onNetworkBack } from '../../utils/network';
 import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndLocate } from '../../utils/scan';
@@ -22,20 +26,30 @@ type DeviceGroup = {
   deviceName: string;
   state: GroupState;
   ts: string;
+  // Phone clock at the last successful read of this device; '' = never read in this run.
+  fetchedAt: string;
   tanks: TankView[];
   error: string;
+  // Set when the last refresh failed but an earlier one succeeded: the tanks on screen are kept and the
+  // card says they may be out of date, and since when (the phone's clock at the last success).
+  staleText: string;
 };
 
 const emptyGroup = (deviceName: string): DeviceGroup => ({
   deviceName,
   state: 'loading',
   ts: '',
+  fetchedAt: '',
   tanks: [],
   error: '',
+  staleText: '',
 });
+
+const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale());
 
 Page({
   data: {
+    text: texts('home'),
     groups: [] as DeviceGroup[],
     // Distinguishes "still asking which devices I have" from "I have none", so the first-run empty
     // state does not flash while /api/devices is in flight.
@@ -69,7 +83,15 @@ Page({
   // reLaunch, which destroys the page, so this cannot leak between accounts.
   chosenStationKey: undefined as string | undefined,
 
+  // Stops listening for the network coming back.
+  stopNet: null as (() => void) | null,
+
   onLoad() {
+    // Network back (airplane mode off, wifi to mobile data ...): read again at once instead of waiting for
+    // the user to pull down. onShow only fires when the page comes into view.
+    this.stopNet = onNetworkBack(() => {
+      if (getToken()) this.loadHome();
+    });
     try {
       const info = wx.getWindowInfo();
       this.setData({ statusBarRpx: Math.round((info.statusBarHeight * 750) / info.windowWidth) });
@@ -83,7 +105,14 @@ Page({
       wx.reLaunch({ url: '/pages/login/login' });
       return;
     }
+    applyTabBar();
+    this.setData({ text: texts('home') });
     this.loadHome();
+  },
+
+  onUnload() {
+    this.stopNet?.();
+    this.stopNet = null;
   },
 
   onPullDownRefresh() {
@@ -104,13 +133,14 @@ Page({
         if (seq !== this.loadSeq) return;
         this.allDevices = devRes.rows;
         this.allStations = stRes.rows;
-        this.stationOptions = buildStationOptions(stRes.rows, devRes.rows);
+        this.stationOptions = buildStationOptions(stRes.rows, devRes.rows, t('station.ungrouped'));
         return this.showStation(seq, this.chosenStationKey || getRememberedStation(this.currentUserKey()));
       })
       .catch((err: Error) => {
         if (seq !== this.loadSeq) return;
-        this.setData({ devicesLoaded: true, listError: err.message });
-        wx.showToast({ title: err.message, icon: 'none' });
+        const message = describeError(err);
+        this.setData({ devicesLoaded: true, listError: message });
+        wx.showToast({ title: message, icon: 'none' });
       });
   },
 
@@ -129,7 +159,13 @@ Page({
     const lostStation =
       typeof stationIdFromKey(preferredKey) === 'number' && !options.some((o) => o.key === preferredKey);
     const visible = current ? devicesOfStation(this.allDevices, this.allStations, current.key) : this.allDevices;
-    const groups = visible.map((d: Device) => emptyGroup(d.device_name));
+    // A device that was already on screen keeps its last good readings while it is read again, so a failed
+    // refresh can show them as out of date instead of showing nothing.
+    const before = new Map((this.data.groups as DeviceGroup[]).map((g) => [g.deviceName, g]));
+    const groups = visible.map((d: Device) => {
+      const prev = before.get(d.device_name);
+      return prev && prev.state === 'ok' && prev.tanks.length > 0 ? { ...prev, staleText: '' } : emptyGroup(d.device_name);
+    });
     this.setData({
       groups,
       devicesLoaded: true,
@@ -139,9 +175,7 @@ Page({
       stationName: current ? current.name : '',
       stationKey: current ? current.key : '',
       deviceTotal: this.allDevices.length,
-      stationNotice: lostStation
-        ? '上次查看的油站当前没有你可查看的设备。若已更换设备，请联系平台管理员重新分配油罐。'
-        : '',
+      stationNotice: lostStation ? t('home.lostStation') : '',
     });
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
   },
@@ -169,13 +203,28 @@ Page({
     return get<LatestTelemetryResponse>(
       `/api/devices/${encodeURIComponent(deviceName)}/telemetry/latest`,
     )
-      .then((res) => this.patchGroup(deviceName, seq, { state: 'ok', ts: res.ts, tanks: toTankViews(res, deviceName), error: '' }))
+      .then((res) =>
+        this.patchGroup(deviceName, seq, {
+          state: 'ok',
+          ts: res.ts,
+          tanks: toTankViews(res, deviceName),
+          error: '',
+          staleText: '',
+          fetchedAt: nowText(),
+        }),
+      )
       .catch((err: ApiError) => {
         if (isNeverReported(err)) {
           // Authorized and provisioned, but has never reported — a real state, not an error.
-          this.patchGroup(deviceName, seq, { state: 'never', ts: '', tanks: [], error: '' });
+          this.patchGroup(deviceName, seq, { state: 'never', ts: '', tanks: [], error: '', staleText: '' });
         } else {
-          this.patchGroup(deviceName, seq, { state: 'error', ts: '', tanks: [], error: err.message });
+          const shown = (this.data.groups as DeviceGroup[]).find((g) => g.deviceName === deviceName);
+          if (shown && shown.fetchedAt && shown.tanks.length > 0) {
+            // Keep what was shown and say how old it is, rather than replacing readings with an error.
+            this.patchGroup(deviceName, seq, { state: 'ok', staleText: t('home.stale', { time: shown.fetchedAt }) });
+          } else {
+            this.patchGroup(deviceName, seq, { state: 'error', ts: '', tanks: [], error: describeError(err), staleText: '' });
+          }
         }
       });
   },
@@ -218,7 +267,7 @@ Page({
   // 设计稿「首页-添加」：+ 号菜单（扫码只定位设备，不创建绑定或授权）。邀请加入本阶段不做（账号只在后台创建），油站管理暂未开放。
   onMoreActions() {
     wx.showActionSheet({
-      itemList: ['扫码查看设备', '油站管理'],
+      itemList: [t('home.scan'), t('home.stationMgmt')],
       success: (res) => {
         if (res.tapIndex === 0) {
           wx.navigateTo({ url: '/pages/device-add/device-add' });

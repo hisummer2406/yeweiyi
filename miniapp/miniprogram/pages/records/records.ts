@@ -1,3 +1,5 @@
+import { describeError } from '../../utils/errors';
+import { applyTabBar, setNavTitle, t, texts } from '../../utils/i18n';
 import { get } from '../../utils/request';
 import { devicePage } from '../../utils/devicePicker';
 import { showComingSoon } from '../../utils/comingSoon';
@@ -5,29 +7,36 @@ import type { Device } from '../../types/api';
 
 type RecordTab = 'alarms' | 'oilInOut';
 type RecordItem = {
-  title: string;
+  titleKey: string;
   icon: string; // /assets/icons/{icon}.png，从设计稿 PSD 的「组59」画板抠出来的切图
   tab?: RecordTab;
   direction?: 'IN' | 'OUT';
-  reason?: string;
 };
 
+// Shift handover has no uplink in device protocol V1, and stock records are a new record type the cloud
+// has no endpoint for: those two only answer "coming soon" (the reason is a developer note, never shown).
 const ITEMS: RecordItem[] = [
-  { title: '报警记录', icon: 'records-alarm', tab: 'alarms' },
-  { title: '出库记录', icon: 'records-stockout', tab: 'oilInOut', direction: 'OUT' },
-  { title: '入库记录', icon: 'records-stockin', tab: 'oilInOut', direction: 'IN' },
-  { title: '交班记录', icon: 'records-shift', reason: '设备协议 V1 没有交班上行数据，非协议范围' },
-  { title: '库存记录', icon: 'records-stock', reason: '全新记录类型，云端没有对应接口' },
+  { titleKey: 'records.alarm', icon: 'records-alarm', tab: 'alarms' },
+  { titleKey: 'records.stockOut', icon: 'records-stockout', tab: 'oilInOut', direction: 'OUT' },
+  { titleKey: 'records.stockIn', icon: 'records-stockin', tab: 'oilInOut', direction: 'IN' },
+  { titleKey: 'records.shift', icon: 'records-shift' },
+  { titleKey: 'records.inventory', icon: 'records-stock' },
 ];
 
 Page({
-  data: { items: ITEMS },
+  data: { items: [] as { title: string; icon: string }[] },
+
+  onShow() {
+    applyTabBar();
+    setNavTitle('records.navTitle');
+    this.setData({ items: ITEMS.map((i) => ({ title: t(i.titleKey), icon: i.icon })) });
+  },
 
   onItemTap(e: WechatMiniprogram.BaseEvent) {
     const index = Number(e.currentTarget.dataset.index);
     const item = ITEMS[index];
     if (!item.tab) {
-      showComingSoon(); // item.reason 是开发备注，不展示
+      showComingSoon();
       return;
     }
     this.pickDeviceThenOpen(item.tab, item.direction);
@@ -38,7 +47,7 @@ Page({
       .then((res) => {
         const devices = res.rows;
         if (devices.length === 0) {
-          wx.showToast({ title: '暂无可查看的设备，请联系平台管理员分配油罐', icon: 'none', duration: 3000 });
+          wx.showToast({ title: t('records.noDevices'), icon: 'none', duration: 3000 });
           return;
         }
         if (devices.length === 1) {
@@ -47,14 +56,14 @@ Page({
         }
         this.chooseDevice(devices.map((d) => d.device_name), 0, tab, direction);
       })
-      .catch((err: Error) => wx.showToast({ title: err.message, icon: 'none' }));
+      .catch((err: Error) => wx.showToast({ title: describeError(err), icon: 'none' }));
   },
 
   // wx.showActionSheet takes at most 6 items and fails beyond that, and a customer admin or platform
   // admin can have far more devices — so a long list is paged through the sheet, 5 at a time plus a
-  // "更多…" row. Dismissing the sheet also lands in `fail`; that needs no message.
+  // "more…" row. Dismissing the sheet also lands in `fail`; that needs no message.
   chooseDevice(names: string[], offset: number, tab: RecordTab, direction?: 'IN' | 'OUT') {
-    const page = devicePage(names, offset);
+    const page = devicePage(names, offset, t('common.more'));
     wx.showActionSheet({
       itemList: page.items,
       success: (r) => {

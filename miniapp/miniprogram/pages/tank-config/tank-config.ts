@@ -1,36 +1,39 @@
 import { showComingSoon } from '../../utils/comingSoon';
+import { setNavTitle, t, texts } from '../../utils/i18n';
+
 type Threshold = {
   key: string;
-  label: string;
-  unit: string;
+  unitKey: 'mm' | 'degC';
   value: string;
 };
 
 // 初值留空：输入框用占位 "0"，与设计稿的灰色 0 一致
 const DEFAULT_THRESHOLDS: Threshold[] = [
-  { key: 'highHigh', label: '高高液位报警', unit: '毫米', value: '' },
-  { key: 'high', label: '高液位报警', unit: '毫米', value: '' },
-  { key: 'lowLow', label: '低低液位报警', unit: '毫米', value: '' },
-  { key: 'low', label: '低液位报警', unit: '毫米', value: '' },
-  { key: 'waterHigh', label: '高水位报警', unit: '毫米', value: '' },
-  { key: 'waterLow', label: '低水位报警', unit: '毫米', value: '' },
-  { key: 'tempHigh', label: '高温报警', unit: '℃', value: '' },
-  { key: 'tempLow', label: '低温报警', unit: '℃', value: '' },
+  { key: 'highHigh', unitKey: 'mm', value: '' },
+  { key: 'high', unitKey: 'mm', value: '' },
+  { key: 'lowLow', unitKey: 'mm', value: '' },
+  { key: 'low', unitKey: 'mm', value: '' },
+  { key: 'waterHigh', unitKey: 'mm', value: '' },
+  { key: 'waterLow', unitKey: 'mm', value: '' },
+  { key: 'tempHigh', unitKey: 'degC', value: '' },
+  { key: 'tempLow', unitKey: 'degC', value: '' },
 ];
 
 type PickKind = 'tank' | 'sensor' | 'type' | 'color';
 
-const numbered = (n: number) => Array.from({ length: n }, (_, i) => `${i + 1}号`);
+const numbered = (n: number) => Array.from({ length: n }, (_, i) => t('form.numbered', { n: i + 1 }));
 
 Page({
   data: {
+    text: texts('tankCfg'),
+    form: texts('form'),
     // 设计稿的罐号、传感器 ID 都是 1–12 号的面板
-    tankOptions: numbered(12),
+    tankOptions: [] as string[],
     tankIndex: -1,
-    sensorOptions: numbered(12),
+    sensorOptions: [] as string[],
     sensorIndex: -1,
     // 设备端 OilCanSet.gunType 只有卧罐/立罐两种（0 卧 / 1 立），设计稿的下拉也是这两项
-    typeOptions: ['立罐', '卧罐'],
+    typeOptions: [] as string[],
     typeIndex: -1,
     // 设计稿「物料颜色」的 12 色色板，行优先
     colorOptions: [
@@ -48,6 +51,17 @@ Page({
     pickerTop: 0,
     gridShow: false,
     sideShow: false,
+  },
+
+  onShow() {
+    setNavTitle('tankCfg.navTitle');
+    this.setData({
+      text: texts('tankCfg'),
+      form: texts('form'),
+      tankOptions: numbered(12),
+      sensorOptions: numbered(12),
+      typeOptions: [t('tankCfg.typeVertical'), t('tankCfg.typeHorizontal')],
+    });
   },
 
   // 点选择行：量出该行 bottom，把对应的面板贴在它下面

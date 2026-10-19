@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "罐表设置",
+  "navigationBarTitleText": "",
   "usingComponents": {
     "grid-picker": "/components/grid-picker/grid-picker"
   }

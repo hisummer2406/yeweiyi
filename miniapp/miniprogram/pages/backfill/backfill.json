@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "补录记录",
+  "navigationBarTitleText": "",
   "usingComponents": {
     "grid-picker": "/components/grid-picker/grid-picker"
   }

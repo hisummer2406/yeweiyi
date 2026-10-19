@@ -19,13 +19,17 @@ export function roundFields<T extends object>(row: T, keys: readonly (keyof T)[]
 // "records of October 7th" look like they run from the 6th 16:00 to the 7th 15:59 once records can be
 // queried by local day, so render the phone's local wall clock instead. Anything that is not a valid
 // time is returned unchanged rather than hidden or shown as "Invalid Date".
-export function formatLocalTime(iso: string): string {
+//
+// The layout follows the language: year-month-day for Chinese and English (read the same in both), and
+// day/month/year for Spanish. 24-hour clock everywhere. `locale` is a plain string so this stays pure.
+export function formatLocalTime(iso: string, locale = 'zh'): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const pad = (n: number) => String(n).padStart(2, '0');
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  );
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  if (locale === 'es') {
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${time}`;
+  }
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${time}`;
 }

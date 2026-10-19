@@ -32,6 +32,40 @@ about the design draft are easy to get wrong:
 
 Stations (cloud main 1d9d0be, yeweiyi-cloud#53): `/api/stations` returns all of the customer's stations (including empty ones) to `customer_admin`, and only the stations holding the user's bound devices to `customer_user`. A missing `station_id` on a device row means an old cloud; `customerId` on a station is not used.
 
+## Android App (Donut) and languages (2026-10-19, openspec change `donut-android-app`, issue #12)
+
+The same code is built twice: as the WeChat mini-program and, through Donut (小程序多端框架), as an Android
+app for users **without WeChat** (overseas). Requirements and decisions live in
+`openspec/changes/donut-android-app/`; the cloud dependency (customer-side usernames, staff passwords,
+first-login password change) is `yeweiyi-cloud#77` — until it lands, staff cannot sign in on the app.
+
+- **One platform switch, one place**: `utils/platform.ts` `WECHAT_LOGIN`, true only in the mini-program
+  build (`// #if MP`). The login page shows the WeChat tab/button only when it is true; the app shows the
+  account + password form alone and never calls `wx.login` / `getPhoneNumber`. The conditional-compilation
+  switch must be on in WeChat DevTools (详情 → 本地设置 → 启用条件编译). Everything else is shared code.
+- **Languages: zh / en / es.** Texts live in `miniprogram/locales/{zh,en,es}.ts` (flat keys `group.name`,
+  `{placeholder}` values). Pages read `texts('group')` into `data.text` and use `{{text.name}}`; code uses
+  `t('group.name', params)`. Missing text falls back to English, then to the key. The language is the
+  user's saved choice, else the phone's, else English (`utils/i18n.ts`, pure rules in `utils/i18nCore.ts`).
+  The switcher is `components/lang-switch` (login page and settings page); on settings it `reLaunch`es so
+  every page is rebuilt in the new language. `app.json` and page `.json` titles cannot be translated: the
+  tab bar and titles are set at runtime (`applyTabBar`, `setNavTitle`) and `app.json` carries English.
+- **Pure modules return keys, not text** (they must stay `wx`-free for `npm run check`): `loginFlow.ts`,
+  `pairing.ts`, `stationDevice.ts`, `oilInOut.ts`, `recordsRange.ts` hand back i18n keys / `{key, params}`
+  and the page renders them with `t()`. `labels.ts` maps cloud enums to keys.
+- **Cloud errors are never shown as the cloud wrote them**: `utils/errorKey.ts` (pure) picks the key from
+  the cloud `code`, then the HTTP status; `utils/errors.ts` `describeError(err)` renders it. Device- or
+  cloud-generated content (alarm `msg`, command `errorReason`) is data and is shown as is.
+- `npm run check` now includes `scripts/i18n.check.mjs`: the three tables must have the same keys and
+  placeholders, and every `group.name` string literal in the code must exist. Spanish is machine-translated
+  and unreviewed (`openspec/changes/donut-android-app/i18n-glossary.md`).
+- **Network (the cloud is in mainland China)**: requests time out after 20s; a failed refresh keeps the last
+  data and shows "may be out of date, last updated …" (home cards, device-detail tabs); a first-load failure
+  is an error with a retry, never an empty list; `AlarmSocket` reports `down`, `reconnectNow()` is called when
+  the page comes back to the foreground or the network returns (`utils/network.ts`), and the page says live
+  alarms are unavailable while it is down. Local drafts of the static settings pages are cleared at logout.
+- Not verified on a device: nothing of this has run in DevTools, in the app, or without WeChat installed.
+
 ## What this project is
 
 The WeChat mini-program (微信小程序) frontend for **需求B（PC 端 / 小程序远程数据监控）** of
@@ -212,7 +246,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts` and `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts` (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts` and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of

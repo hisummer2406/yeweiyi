@@ -1,25 +1,48 @@
 import { showComingSoon } from '../../utils/comingSoon';
+import { setNavTitle, t, texts } from '../../utils/i18n';
+
 type RecordGroup = {
   key: string;
-  label: string;
   generate: boolean;
   deleteOn: boolean;
   intervalMin?: string;
 };
 
 const GROUPS: RecordGroup[] = [
-  { key: 'alarm', label: '报警记录', generate: true, deleteOn: false },
-  { key: 'inbound', label: '入库记录', generate: true, deleteOn: false },
-  { key: 'outbound', label: '出库记录', generate: true, deleteOn: false },
-  { key: 'shift', label: '交班记录', generate: true, deleteOn: false },
-  { key: 'stock', label: '库存记录', generate: true, deleteOn: false, intervalMin: '' },
+  { key: 'alarm', generate: true, deleteOn: false },
+  { key: 'inbound', generate: true, deleteOn: false },
+  { key: 'outbound', generate: true, deleteOn: false },
+  { key: 'shift', generate: true, deleteOn: false },
+  { key: 'stock', generate: true, deleteOn: false, intervalMin: '' },
 ];
+
+// "Generate / Delete / Clear <records>" per group, in the current language.
+function groupLabels(): Record<string, { generate: string; del: string; clear: string }> {
+  const out: Record<string, { generate: string; del: string; clear: string }> = {};
+  for (const g of GROUPS) {
+    const name = t(`recSet.name_${g.key}`);
+    out[g.key] = {
+      generate: t('recSet.generate', { name }),
+      del: t('recSet.delete', { name }),
+      clear: t('recSet.clear', { name }),
+    };
+  }
+  return out;
+}
 
 Page({
   data: {
+    text: texts('recSet'),
+    form: texts('form'),
+    labels: {} as Record<string, { generate: string; del: string; clear: string }>,
     groups: GROUPS,
     dialogShow: false,
     dialogKey: '',
+  },
+
+  onShow() {
+    setNavTitle('recSet.navTitle');
+    this.setData({ text: texts('recSet'), form: texts('form'), labels: groupLabels() });
   },
 
   onToggle(e: WechatMiniprogram.BaseEvent) {

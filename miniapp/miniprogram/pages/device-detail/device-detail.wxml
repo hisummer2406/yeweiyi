@@ -1,9 +1,14 @@
 <view>
   <view wx:if="{{liveAlarm}}" class="card banner-danger">
-    <text class="text-danger">实时报警：{{liveAlarm}}</text>
+    <text class="text-danger">{{text.liveAlarm}}: {{liveAlarm}}</text>
   </view>
 
   <view wx:if="{{notice}}" class="empty">{{notice}}</view>
+
+  <!-- Live alarms are not arriving (the connection is down and being retried): silence is not "no alarms". -->
+  <view wx:if="{{deviceActive && socketDown}}" class="card banner-warning">
+    <text class="text-warning">{{text.socketDown}}</text>
+  </view>
 
   <view class="tabs" wx:if="{{deviceActive}}">
     <view
@@ -18,54 +23,63 @@
   </view>
 
   <view class="container" wx:if="{{deviceActive}}">
+    <!-- The last refresh of this tab failed; what is below is the previous read. -->
+    <view wx:if="{{stale[activeTab]}}" class="card banner-warning">
+      <text class="text-warning">{{stale[activeTab]}}</text>
+    </view>
+
     <!-- 实时数据：GET /api/devices/:device/telemetry/latest -->
     <view wx:if="{{activeTab === 'snapshot'}}">
+      <view wx:if="{{snapshotError}}" class="empty">
+        <view class="text-danger">{{snapshotError}}</view>
+        <button class="btn-primary" size="mini" bindtap="refreshActiveTab" style="margin-top:24rpx;">{{text.retry}}</button>
+      </view>
       <view wx:if="{{!loading && snapshotLoaded && tanks.length === 0}}" class="empty empty-art">
         <image class="empty-art-img" src="/assets/illustrations/empty-data.png" mode="aspectFit" />
-        <view>该设备还没有上报过遥测数据</view>
+        <view>{{text.neverReported}}</view>
       </view>
-      <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">上报时间 {{snapshotTs}}</view>
+      <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">{{text.reportedAt}} {{snapshotTs}}</view>
       <view wx:for="{{tanks}}" wx:key="key" class="card">
         <view class="row" style="margin-bottom:16rpx;">
-          <text class="tag">{{item.index}} 号罐　{{item.oilType || '--'}}</text>
+          <text class="tag">{{item.tankNoLabel}}　{{item.oilType || '--'}}</text>
           <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel}}</text>
         </view>
         <view class="tank-card-head">
           <image class="tank-illustration" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
           <view class="tank-card-body">
             <view class="stat-row">
-              <text class="stat-row-label">液位</text>
+              <text class="stat-row-label">{{text.level}}</text>
               <text class="stat-row-value">{{item.oilLevelMm}}</text>
-              <text class="stat-row-unit">毫米</text>
+              <text class="stat-row-unit">{{text.unitMm}}</text>
             </view>
             <view class="stat-row">
-              <text class="stat-row-label">容积</text>
+              <text class="stat-row-label">{{text.volume}}</text>
               <text class="stat-row-value">{{item.oilVolumeL}}</text>
-              <text class="stat-row-unit">升</text>
+              <text class="stat-row-unit">{{text.unitL}}</text>
             </view>
             <view class="stat-row">
-              <text class="stat-row-label">水高</text>
+              <text class="stat-row-label">{{text.water}}</text>
               <text class="stat-row-value">{{item.waterLevelMm}}</text>
-              <text class="stat-row-unit">毫米</text>
+              <text class="stat-row-unit">{{text.unitMm}}</text>
             </view>
             <view class="stat-row">
-              <text class="stat-row-label">温度</text>
+              <text class="stat-row-label">{{text.temp}}</text>
               <text class="stat-row-value">{{item.tempC}}</text>
               <text class="stat-row-unit">℃</text>
             </view>
             <view class="stat-row">
-              <text class="stat-row-label">质量</text>
+              <text class="stat-row-label">{{text.mass}}</text>
               <text class="stat-row-value">{{item.oilWeightKg}}</text>
-              <text class="stat-row-unit">千克</text>
+              <text class="stat-row-unit">{{text.unitKg}}</text>
             </view>
             <view class="stat-row">
-              <text class="stat-row-label">空高</text>
+              <text class="stat-row-label">{{text.ullage}}</text>
               <text class="stat-row-value">{{item.nullVolumeL}}</text>
-              <text class="stat-row-unit">升</text>
+              <text class="stat-row-unit">{{text.unitL}}</text>
             </view>
           </view>
         </view>
-        <view class="muted text-danger" wx:if="{{!item.probeConnected}}" style="margin-top:8rpx;">探针未连接</view>
+        <view class="muted text-danger" wx:if="{{!item.probeConnected}}" style="margin-top:8rpx;">{{text.probeOff}}</view>
       </view>
     </view>
 
@@ -79,15 +93,15 @@
           data-key="{{item.key}}"
           bindtap="onPickRange"
         >{{item.label}}</view>
-        <view class="range-chip {{rangeKey === 'custom' ? 'range-chip-on' : ''}}" data-key="custom" bindtap="onPickRange">自定义</view>
+        <view class="range-chip {{rangeKey === 'custom' ? 'range-chip-on' : ''}}" data-key="custom" bindtap="onPickRange">{{text.custom}}</view>
       </view>
       <view wx:if="{{rangeKey === 'custom'}}" class="range-custom">
         <picker mode="date" value="{{customStart}}" end="{{customEnd || today}}" bindchange="onStartDate">
-          <view class="range-date">{{customStart || '开始日期'}}</view>
+          <view class="range-date">{{customStart || text.startDate}}</view>
         </picker>
-        <text class="range-sep">至</text>
+        <text class="range-sep">{{text.to}}</text>
         <picker mode="date" value="{{customEnd}}" start="{{customStart}}" end="{{today}}" bindchange="onEndDate">
-          <view class="range-date">{{customEnd || '结束日期'}}</view>
+          <view class="range-date">{{customEnd || text.endDate}}</view>
         </picker>
       </view>
       <view wx:if="{{rangeHint}}" class="muted range-hint">{{rangeHint}}</view>
@@ -95,19 +109,23 @@
 
     <!-- 报警记录：GET /api/alarms（裸数组，见 types/api.d.ts），触底加载下一页 -->
     <view wx:if="{{activeTab === 'alarms'}}">
+      <view wx:if="{{alarmsError}}" class="empty">
+        <view class="text-danger">{{alarmsError}}</view>
+        <button class="btn-primary" size="mini" bindtap="loadAlarms" style="margin-top:24rpx;">{{text.retry}}</button>
+      </view>
       <view wx:if="{{!rangeHint && !loading && alarmsLoaded && alarms.length === 0 && alarmsFooter === 'end'}}" class="empty">
-        {{rangeKey === '24h' ? '最近 24 小时没有报警记录' : '所选范围内没有报警记录（设备分配给当前客户之前的记录不可见）'}}
+        {{rangeKey === '24h' ? text.alarmsEmpty24h : text.alarmsEmptyRange}}
       </view>
       <view wx:for="{{alarms}}" wx:key="rowKey" class="card">
         <view class="row">
-          <text>{{item.tank}} 号罐　{{item.typeLabel}}</text>
+          <text>{{item.tankLabel}}　{{item.typeLabel}}</text>
           <text class="badge {{item.status === 'ACTIVE' ? 'badge-failed' : 'badge-online'}}">{{item.statusLabel}}</text>
         </view>
         <view class="muted" style="margin-top:8rpx;">{{item.text}}</view>
         <view class="muted tabular-nums">{{item.severityLabel}}　{{item.timeText}}</view>
       </view>
       <view wx:if="{{alarmsFooter && (alarms.length > 0 || alarmsFooter !== 'end')}}" class="list-footer" bindtap="onRetryMore">
-        {{alarmsFooter === 'loading' ? '加载中…' : (alarmsFooter === 'end' ? '没有更多了' : (alarmsFooter === 'error' ? '加载失败，点击重试' : '上滑或点击加载更多'))}}
+        {{alarmsFooter === 'loading' ? text.footerLoading : (alarmsFooter === 'end' ? text.footerEnd : (alarmsFooter === 'error' ? text.footerError : text.footerMore))}}
       </view>
     </view>
 
@@ -117,39 +135,39 @@
         <text style="color:#d48806;">{{oilInOutNote}}</text>
       </view>
       <view wx:if="{{!rangeHint && !loading && oilInOutLoaded && oilInOut.length === 0 && !oilInOutNote && oilInOutFooter === 'end'}}" class="empty">
-        {{rangeKey === '24h' ? '最近 24 小时没有出入库记录' : '所选范围内没有出入库记录（设备分配给当前客户之前的记录不可见）'}}
+        {{rangeKey === '24h' ? text.oilEmpty24h : text.oilEmptyRange}}
       </view>
       <view wx:for="{{oilInOut}}" wx:key="rowKey" class="card">
         <view class="row">
-          <text>{{item.tank}} 号罐　{{item.directionLabel}}　{{item.oilType || ''}}</text>
+          <text>{{item.tankLabel}}　{{item.directionLabel}}　{{item.oilType || ''}}</text>
           <text class="muted">{{item.timeText}}</text>
         </view>
         <view class="muted tabular-nums" style="margin-top:8rpx;">
-          液位 {{item.beginLevelMm}} → {{item.endLevelMm}}mm　容积 {{item.beginVolumeL}} → {{item.endVolumeL}}L
+          {{text.level}} {{item.beginLevelMm}} → {{item.endLevelMm}}mm　{{text.volume}} {{item.beginVolumeL}} → {{item.endVolumeL}}L
         </view>
         <view class="muted tabular-nums">
-          净变化 {{item.netVolumeL}}L　实际到货/发出 {{item.deliveredVolumeL}}L
+          {{text.net}} {{item.netVolumeL}}L　{{text.delivered}} {{item.deliveredVolumeL}}L
         </view>
         <view class="muted tabular-nums">{{item.beginTimeText}} - {{item.endTimeText}}</view>
       </view>
       <view wx:if="{{oilInOutFooter && (oilInOut.length > 0 || oilInOutFooter !== 'end')}}" class="list-footer" bindtap="onRetryMore">
-        {{oilInOutFooter === 'loading' ? '加载中…' : (oilInOutFooter === 'end' ? '没有更多了' : (oilInOutFooter === 'error' ? '加载失败，点击重试' : '上滑或点击加载更多'))}}
+        {{oilInOutFooter === 'loading' ? text.footerLoading : (oilInOutFooter === 'end' ? text.footerEnd : (oilInOutFooter === 'error' ? text.footerError : text.footerMore))}}
       </view>
     </view>
 
     <!-- 控制命令：POST /api/devices/:device/commands 下发，GET 轮询结果 -->
     <view wx:if="{{activeTab === 'commands'}}">
-      <button class="btn-primary" size="mini" bindtap="onIssueCommand" style="margin-bottom:16rpx;">发送控制命令</button>
-      <view wx:if="{{!loading && commandsLoaded && commands.length === 0}}" class="empty">暂无控制命令记录</view>
+      <button class="btn-primary" size="mini" bindtap="onIssueCommand" style="margin-bottom:16rpx;">{{text.cmdIssue}}</button>
+      <view wx:if="{{!loading && commandsLoaded && commands.length === 0}}" class="empty">{{text.cmdNone}}</view>
       <view wx:for="{{commands}}" wx:key="commandId" class="card">
         <view class="row">
           <text>{{item.methodLabel}}</text>
-          <text class="badge {{item.status === 'succeeded' ? 'badge-online' : (item.status === 'failed' || item.status === 'rejected' || item.status === 'expired' ? 'badge-failed' : (item.terminal ? 'badge-offline' : 'badge-pending'))}}">{{item.status}}</text>
+          <text class="badge {{item.status === 'succeeded' ? 'badge-online' : (item.status === 'failed' || item.status === 'rejected' || item.status === 'expired' ? 'badge-failed' : (item.terminal ? 'badge-offline' : 'badge-pending'))}}">{{item.statusLabel}}</text>
         </view>
-        <view class="muted" style="margin-top:8rpx;">原因：{{item.reason}}</view>
-        <view class="muted tabular-nums">操作人 {{item.operator}}　{{item.issuedAt}}</view>
+        <view class="muted" style="margin-top:8rpx;">{{text.cmdReason}}: {{item.reason}}</view>
+        <view class="muted tabular-nums">{{text.cmdOperator}} {{item.operator}}　{{item.issuedAt}}</view>
         <view class="muted text-danger" wx:if="{{item.errorReason}}">{{item.errorReason}}</view>
-        <view class="muted" wx:if="{{!item.terminal}}">未收到终态前请勿重复下发——ACK 不代表执行成功，仅代表设备已受理</view>
+        <view class="muted" wx:if="{{!item.terminal}}">{{text.cmdNotTerminal}}</view>
       </view>
     </view>
   </view>

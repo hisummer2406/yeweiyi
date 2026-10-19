@@ -1,6 +1,7 @@
 const TOKEN_KEY = 'token';
 const PROFILE_KEY = 'profile';
 const AUTO_LOGIN_KEY = 'autoLogin';
+const LOCALE_KEY = 'locale';
 
 export function getToken(): string {
   try {
@@ -18,6 +19,7 @@ export function setToken(token: string): void {
 // shown under another's login.
 export function clearToken(): void {
   wx.removeStorageSync(TOKEN_KEY);
+  clearLocalDrafts();
   try {
     wx.removeStorageSync(PROFILE_KEY);
   } catch {
@@ -25,10 +27,28 @@ export function clearToken(): void {
   }
 }
 
+// The static settings pages keep a draft on the phone (calibration offsets, tank-chart dimensions). They
+// are not tied to an account, so they must not outlive the session or the next account would open the
+// previous account's numbers.
+const DRAFT_KEYS = ['calibration-draft', 'tankshape-draft-horizontal', 'tankshape-draft-vertical', 'tankshape-draft-cuboid'];
+
+function clearLocalDrafts(): void {
+  for (const key of DRAFT_KEYS) {
+    try {
+      wx.removeStorageSync(key);
+    } catch {
+      // nothing to clear
+    }
+  }
+}
+
 // What login returned about the user, for display only. Identity for keys is the token's uid.
 export interface StoredProfile {
   userId: number;
   phone: string;
+  // Set for accounts that sign in by a username (platform admins today; customer-side ones once the cloud
+  // gives them one, cloud#77). Empty otherwise.
+  username?: string;
   role: string;
 }
 
@@ -65,5 +85,24 @@ export function setAutoLogin(on: boolean): void {
     wx.setStorageSync(AUTO_LOGIN_KEY, on);
   } catch {
     // worst case the user is signed in again silently
+  }
+}
+
+// The language the user picked, or undefined when they never did (the phone's language is used then).
+// Not part of a session: it survives logout, so the login page still speaks the language chosen.
+export function getLocalePref(): string | undefined {
+  try {
+    const v = wx.getStorageSync<string>(LOCALE_KEY);
+    return typeof v === 'string' && v ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function setLocalePref(locale: string): void {
+  try {
+    wx.setStorageSync(LOCALE_KEY, locale);
+  } catch {
+    // the choice then only lasts for this run
   }
 }

@@ -8,14 +8,14 @@
   <view class="te-field" wx:for="{{dims}}" wx:key="key">
     <text class="te-field-label">{{item.key}}</text>
     <input class="te-field-input" type="digit" placeholder="0" placeholder-class="te-ph" value="{{item.value}}" data-key="{{item.key}}" bindinput="onDimInput" />
-    <text class="te-field-unit">毫米</text>
+    <text class="te-field-unit">{{form.mm}}</text>
   </view>
 
   <view class="te-buttons">
-    <button class="te-btn te-btn-main" bindtap="onGenerate">生成罐表</button>
-    <button class="te-btn te-btn-lite" bindtap="onSaveLocal">保存到手机</button>
-    <button class="te-btn te-btn-deep" bindtap="onSaveDevice">保存到控制器</button>
+    <button class="te-btn te-btn-main" bindtap="onGenerate">{{text.generate}}</button>
+    <button class="te-btn te-btn-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
+    <button class="te-btn te-btn-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
   </view>
 </view>
 
-<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="罐号选择" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />
+<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="{{text.tankPickerTitle}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />

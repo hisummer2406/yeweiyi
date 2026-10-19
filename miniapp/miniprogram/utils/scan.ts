@@ -1,3 +1,5 @@
+import { describeError } from './errors';
+import { t } from './i18n';
 import { ApiError, post } from './request';
 import { describeResolveFailure, parseDeviceCodeQr } from './pairing';
 import type { ResolveDeviceRequest, ResolveDeviceResponse } from '../types/api';
@@ -13,7 +15,7 @@ export function resolveDevice(code: string): Promise<string> {
   const body: ResolveDeviceRequest = { code };
   return post<ResolveDeviceResponse>('/api/devices/resolve', { ...body }).then((r) => {
     if (!r || typeof r.deviceName !== 'string' || !r.deviceName) {
-      throw new Error('设备定位的响应格式不符合预期，请联系管理员');
+      throw new Error('unexpected response shape from /api/devices/resolve');
     }
     return r.deviceName;
   });
@@ -24,10 +26,11 @@ export function describeResolveError(err: Error): string {
   const code = e && e.body && typeof (e.body as { code?: unknown }).code === 'string'
     ? (e.body as { code: string }).code
     : '';
-  return describeResolveFailure(e ? e.status : -1, code, err.message);
+  const key = describeResolveFailure(e ? e.status : -1, code);
+  return key ? t(key) : describeError(err);
 }
 
-// wx.scanCode → resolveDevice. Shared by the home page and the 设备添加 page.
+// wx.scanCode → resolveDevice. Shared by the home page and the device-add page.
 // `onResolved` receives the actual device name.
 export function scanAndLocate(onResolved: (deviceName: string) => void): void {
   wx.scanCode({
@@ -35,7 +38,7 @@ export function scanAndLocate(onResolved: (deviceName: string) => void): void {
     success: (res) => {
       const code = parseDeviceCodeQr(res.result);
       if (!code) {
-        wx.showToast({ title: '二维码格式不正确，请联系管理员确认设备标签', icon: 'none' });
+        wx.showToast({ title: t('scanErr.badQr'), icon: 'none' });
         return;
       }
       resolveDevice(code)

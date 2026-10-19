@@ -1,64 +1,64 @@
 <!-- 设计稿「补录记录」：手工新增一条历史上漏报的出入库记录，和"修正已有记录"是两件事。
      云端没有对应的新增接口，保存/预览不会提交，保存时说明（见 backfill.ts）。 -->
 <view style="padding-top:45rpx;">
-  <view class="bf-title">入库记录补录</view>
+  <view class="bf-title">{{text.inTitle}}</view>
   <view class="fc" style="margin-top:0;padding:19rpx 0 18rpx;">
     <view class="fr" id="row-inbound-tank" data-kind="inbound" bindtap="onOpenTank">
-      <text class="fl">罐号</text>
-      <text class="fv {{inbound.tankIndex < 0 ? 'fv-ph' : ''}}">{{inbound.tankIndex < 0 ? '请选择' : tankOptions[inbound.tankIndex]}}</text>
+      <text class="fl">{{form.tankNo}}</text>
+      <text class="fv {{inbound.tankIndex < 0 ? 'fv-ph' : ''}}">{{inbound.tankIndex < 0 ? form.select : tankOptions[inbound.tankIndex]}}</text>
       <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
     </view>
     <picker mode="date" value="{{inbound.date}}" bindchange="onInboundDateChange">
       <view class="fr">
-        <text class="fl">入库时间</text>
-        <text class="fv {{inbound.date ? '' : 'fv-ph'}}">{{inbound.date || '请选择'}}</text>
+        <text class="fl">{{text.inTime}}</text>
+        <text class="fv {{inbound.date ? '' : 'fv-ph'}}">{{inbound.date || form.select}}</text>
         <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
     </picker>
     <view class="fr">
-      <text class="fl">入库前高度</text>
+      <text class="fl">{{text.inBefore}}</text>
       <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{inbound.beforeLevel}}" bindinput="onInboundLevelInput" />
-      <text class="fu">毫米</text>
+      <text class="fu">{{form.mm}}</text>
     </view>
     <view class="fr">
-      <text class="fl">入库升数</text>
+      <text class="fl">{{text.inVolume}}</text>
       <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{inbound.volume}}" bindinput="onInboundVolumeInput" />
-      <text class="fu">升</text>
+      <text class="fu">{{form.liter}}</text>
     </view>
   </view>
   <view class="pill-row" style="margin-top:55rpx;">
-    <button class="pill pill-green" data-kind="入库" bindtap="onSave">保存</button>
-    <button class="pill pill-indigo" data-kind="入库" bindtap="onPreview">点击预览</button>
+    <button class="pill pill-green" data-kind="inbound" bindtap="onSave">{{form.save}}</button>
+    <button class="pill pill-indigo" data-kind="inbound" bindtap="onPreview">{{text.preview}}</button>
   </view>
   <view style="height:102rpx;"></view>
-  <view class="bf-title">出库记录补录</view>
+  <view class="bf-title">{{text.outTitle}}</view>
   <view class="fc" style="margin-top:0;padding:19rpx 0 18rpx;">
     <view class="fr" id="row-outbound-tank" data-kind="outbound" bindtap="onOpenTank">
-      <text class="fl">罐号</text>
-      <text class="fv {{outbound.tankIndex < 0 ? 'fv-ph' : ''}}">{{outbound.tankIndex < 0 ? '请选择' : tankOptions[outbound.tankIndex]}}</text>
+      <text class="fl">{{form.tankNo}}</text>
+      <text class="fv {{outbound.tankIndex < 0 ? 'fv-ph' : ''}}">{{outbound.tankIndex < 0 ? form.select : tankOptions[outbound.tankIndex]}}</text>
       <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
     </view>
     <picker mode="date" value="{{outbound.date}}" bindchange="onOutboundDateChange">
       <view class="fr">
-        <text class="fl">出库时间</text>
-        <text class="fv {{outbound.date ? '' : 'fv-ph'}}">{{outbound.date || '请选择'}}</text>
+        <text class="fl">{{text.outTime}}</text>
+        <text class="fv {{outbound.date ? '' : 'fv-ph'}}">{{outbound.date || form.select}}</text>
         <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
     </picker>
     <view class="fr">
-      <text class="fl">出库前高度</text>
+      <text class="fl">{{text.outBefore}}</text>
       <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{outbound.beforeLevel}}" bindinput="onOutboundLevelInput" />
-      <text class="fu">毫米</text>
+      <text class="fu">{{form.mm}}</text>
     </view>
     <view class="fr">
-      <text class="fl">出库升数</text>
+      <text class="fl">{{text.outVolume}}</text>
       <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{outbound.volume}}" bindinput="onOutboundVolumeInput" />
-      <text class="fu">升</text>
+      <text class="fu">{{form.liter}}</text>
     </view>
   </view>
   <view class="pill-row" style="margin-top:55rpx;">
-    <button class="pill pill-green" data-kind="出库" bindtap="onSave">保存</button>
-    <button class="pill pill-indigo" data-kind="出库" bindtap="onPreview">点击预览</button>
+    <button class="pill pill-green" data-kind="outbound" bindtap="onSave">{{form.save}}</button>
+    <button class="pill pill-indigo" data-kind="outbound" bindtap="onPreview">{{text.preview}}</button>
   </view>
 </view>
 

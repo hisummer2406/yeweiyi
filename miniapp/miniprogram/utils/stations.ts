@@ -26,7 +26,12 @@ function keyOfDevice(device: Device, known: Set<number>): string {
 // Options for the home-page dropdown. An EMPTY result means "do not show a dropdown": there are no
 // stations, or no device sits in a known station (older cloud, or a customer admin whose stations are
 // all still empty). That is the degraded, flat view the home page had before stations existed.
-export function buildStationOptions(stations: Station[], devices: Device[]): StationOption[] {
+// `ungroupedName` is the display name of the "no station" entry (language of the page).
+export function buildStationOptions(
+  stations: Station[],
+  devices: Device[],
+  ungroupedName = 'Ungrouped',
+): StationOption[] {
   const known = knownIds(stations);
   const counts = new Map<string, number>();
   for (const d of devices) {
@@ -44,7 +49,7 @@ export function buildStationOptions(stations: Station[], devices: Device[]): Sta
   }));
   const ungrouped = counts.get(UNGROUPED_KEY) || 0;
   if (ungrouped > 0) {
-    options.push({ key: UNGROUPED_KEY, name: '未分组', address: '', deviceCount: ungrouped });
+    options.push({ key: UNGROUPED_KEY, name: ungroupedName, address: '', deviceCount: ungrouped });
   }
   return options;
 }

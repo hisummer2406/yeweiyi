@@ -1,16 +1,16 @@
-<view wx:if="{{!devicesLoaded}}" class="empty">加载中…</view>
+<view wx:if="{{!devicesLoaded}}" class="empty">{{text.loading}}</view>
 
 <!-- 没有任何可查看的设备（员工尚未被分配油罐，或账号下确实没有设备）：首次使用的空状态 -->
 <view wx:elif="{{deviceTotal === 0 && !listError}}" class="center-page">
   <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
-  <view class="brand-title">暂无可查看的设备</view>
-  <view class="brand-subtitle">可查看的油罐由平台管理员分配，请联系平台管理员。扫描设备二维码只会定位设备，不会授予查看权限</view>
-  <button class="btn-primary center-card" bindtap="onScanDevice">扫码查看设备</button>
+  <view class="brand-title">{{text.emptyTitle}}</view>
+  <view class="brand-subtitle">{{text.emptySubtitle}}</view>
+  <button class="btn-primary center-card" bindtap="onScanDevice">{{text.scan}}</button>
 </view>
 
 <view wx:elif="{{deviceTotal === 0 && listError}}" class="empty">
   <view>{{listError}}</view>
-  <button class="btn-primary" size="mini" bindtap="loadHome" style="margin-top:24rpx;">重试</button>
+  <button class="btn-primary" size="mini" bindtap="loadHome" style="margin-top:24rpx;">{{text.retry}}</button>
 </view>
 
 <view wx:else>
@@ -20,14 +20,14 @@
   <view class="home-header" style="padding-top:{{statusBarRpx}}rpx;">
     <view class="home-brand">
       <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
-      <text class="home-brand-title">智能液位管理系统</text>
+      <text class="home-brand-title">{{text.title}}</text>
     </view>
     <view class="home-station">
       <view wx:if="{{hasStations}}" class="home-station-pick" bindtap="onPickStation">
         <text class="home-station-name">{{stationName}}</text>
         <view class="home-station-arrow"></view>
       </view>
-      <text wx:else class="home-station-name">我的设备</text>
+      <text wx:else class="home-station-name">{{text.myDevices}}</text>
       <view class="home-plus" bindtap="onMoreActions">
         <image src="/assets/icons/add.png" mode="aspectFit" style="width:42rpx;height:42rpx;" />
       </view>
@@ -36,19 +36,23 @@
 
   <view class="home-list">
     <view wx:if="{{stationNotice}}" class="empty">{{stationNotice}}</view>
-    <view wx:if="{{groups.length === 0}}" class="empty">该油站下还没有设备</view>
+    <view wx:if="{{groups.length === 0}}" class="empty">{{text.noDevicesInStation}}</view>
     <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
       <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
       <view class="group-head" wx:if="{{showSingleDeviceHeader || g.ts}}">
         <text class="group-name" wx:if="{{showSingleDeviceHeader}}">{{g.deviceName}}</text>
-        <text class="muted tabular-nums" wx:if="{{g.ts}}">上报时间 {{g.ts}}</text>
+        <text class="muted tabular-nums" wx:if="{{g.ts}}">{{text.reportedAt}} {{g.ts}}</text>
       </view>
 
-      <view wx:if="{{g.state === 'loading'}}" class="group-note">加载中…</view>
-      <view wx:elif="{{g.state === 'never'}}" class="group-note">该设备还没有上报过数据</view>
+      <view wx:if="{{g.staleText}}" class="card banner-warning" style="margin:0 20rpx 12rpx;">
+        <text class="text-warning">{{g.staleText}}</text>
+      </view>
+
+      <view wx:if="{{g.state === 'loading'}}" class="group-note">{{text.loading}}</view>
+      <view wx:elif="{{g.state === 'never'}}" class="group-note">{{text.neverReported}}</view>
       <view wx:elif="{{g.state === 'error'}}" class="group-note">
         <view class="text-danger">{{g.error}}</view>
-        <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">重试</button>
+        <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">{{text.retry}}</button>
       </view>
 
       <!-- 罐形状来自设备配置（设备端 gunType），云端尚未透出，见 yeweiyi-cloud#45；在此之前一律卧罐图 -->
@@ -70,16 +74,16 @@
         </view>
         <view class="tank-info">
           <view class="tank-tag-row">
-            <text class="tank-tag">{{t.index}}号 {{t.oilType || '--'}}</text>
+            <text class="tank-tag">{{t.tankNoLabel}} {{t.oilType || '--'}}</text>
             <text class="badge badge-failed" wx:if="{{t.alarmState === 'ALARM'}}">{{t.alarmStateLabel}}</text>
             <text class="badge badge-offline" wx:elif="{{t.alarmState === 'FAULT'}}">{{t.alarmStateLabel}}</text>
           </view>
-          <view class="hs-row"><text class="hs-label">液位</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">毫米</text></view>
-          <view class="hs-row"><text class="hs-label">容积</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">升</text></view>
-          <view class="hs-row"><text class="hs-label">水高</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">毫米</text></view>
-          <view class="hs-row"><text class="hs-label">温度</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
-          <view class="hs-row"><text class="hs-label">质量</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">千克</text></view>
-          <view class="text-danger muted" wx:if="{{!t.probeConnected}}">探针未连接</view>
+          <view class="hs-row"><text class="hs-label">{{text.level}}</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.volume}}</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">{{text.unitL}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
+          <view class="text-danger muted" wx:if="{{!t.probeConnected}}">{{text.probeOff}}</view>
         </view>
       </view>
     </view>

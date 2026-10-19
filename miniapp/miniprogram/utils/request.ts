@@ -3,6 +3,11 @@ import { sessionDecision } from './loginFlow';
 import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
+// A phone on a slow or lossy link (the cloud is in mainland China, the users are not) can hang a request
+// for minutes. Cut it off and say "network problem" instead of leaving a spinner: wx.request's default
+// is 60s, which reads as a frozen app. A timeout answers like any other transport failure (status 0).
+const REQUEST_TIMEOUT_MS = 20000;
+
 interface RequestOptions {
   url: string;
   method?: 'GET' | 'POST';
@@ -96,6 +101,7 @@ export function request<T>(options: RequestOptions): Promise<T> {
       method,
       data,
       header,
+      timeout: REQUEST_TIMEOUT_MS,
       success: (res) => {
         const status = res.statusCode;
         if (status >= 200 && status < 300) {
@@ -121,10 +127,11 @@ export function request<T>(options: RequestOptions): Promise<T> {
           currentToken: getToken(),
         });
         if (decision.end) endSession(decision.notice);
-        reject(new ApiError(body?.error || `请求失败 (${status})`, status, res.data));
+        // `message` is for logs; what the user reads is decided by describeError (errors.ts) from status/code.
+        reject(new ApiError(body?.error || `Request failed (${status})`, status, res.data));
       },
       fail: (err) => {
-        reject(new ApiError(err.errMsg || '网络请求失败', 0));
+        reject(new ApiError(err.errMsg || 'Network request failed', 0));
       },
     });
   });
