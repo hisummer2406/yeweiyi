@@ -30,15 +30,16 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `authAt + auth.maxSessionAge`（默认 30 天，到点必须重新登录）。`/ws/alarms` 不受影响：连接仍在**原令牌**
   到期时以 `token expired` 关闭，客户端需用新令牌重连。续期不写 `audit_log`。
 - 用户名账号（#77，契约见该文档 §11）：国外用户无微信，客户侧账号也可以是**独立用户名 + 密码**账号（`phone` 为 NULL，三种
-  角色包括 `customer_user` 都必须有密码，用户名全局唯一不区分大小写，不得形如手机号）；与手机号账号二选一、不互转。`POST /api/login`
-  的 `username` 现接受任何无手机号的账号。管理员设置/重置的密码使 `mustChangePassword=true`（仅提示，服务端不拦截）；本人用
-  `POST /api/me/password` 改密（旧密码错是 `400 wrong_password`，**不是 401**）。登录/改密失败按账号标识与来源地址限流，超限
-  `429 login_rate_limited`（Redis，管理员重置密码可解锁）。下面这条手机号账号的规则对手机号账号仍然成立。
+  角色包括 `customer_user` 都必须有密码，用户名全局唯一不区分大小写，不得形如手机号）；与手机号账号二选一、不互转。手机号员工
+  也可由平台管理员设置密码（之后 `phone` + 密码可登录）。`POST /api/login` 的 `username` 接受任何无手机号的账号。**没有自助改密、
+  没有强制改密标记**（产品决定）：改密一律平台管理员重置。登录失败按账号标识与来源地址限流，超限 `429 login_rate_limited`
+  （Redis，重置密码可解锁）。员工令牌调任何管理类接口一律 403，按库内当前角色判定。下面这条手机号账号的规则中"员工没有密码"一句已被
+  放宽：员工密码可选。
 - 账号（#59，契约见 [docs/account-phone-wechat-contract.md](docs/account-phone-wechat-contract.md)）：客户侧账号以手机号
-  标识（`users.phone`，11 位大陆号，全局唯一，客户角色的 `username` 等于手机号）；员工（`customer_user`）**没有网页密码**
-  （`password_hash` 必须为 NULL，由 CHECK 保证），只能经微信登录。**只有平台管理员能创建/停用/启用/重置账号**，客户管理员
+  标识（`users.phone`，11 位大陆号，全局唯一，客户角色的 `username` 等于手机号）；手机号员工（`customer_user`）默认**没有密码**
+  （`password_hash` 为 NULL），只能经微信登录；平台管理员可为其设置密码（#77）。**只有平台管理员能创建/停用/启用/重置账号**，客户管理员
   调用这些接口一律 `403 not authorized`（在解析请求体之前，写 `denied` 审计）；客户管理员只能列出本客户员工（手机号脱敏）。
-  `POST /api/login` 的 `username`（平台管理员）与 `phone`（客户管理员）二选一；员工以任何方式密码登录都与密码错误同样
+  `POST /api/login` 的 `username`（平台管理员）与 `phone`（客户管理员）二选一；没有密码的员工以任何方式密码登录都与密码错误同样
   `401 invalid_credentials`。令牌 `sub` 是用户 ID，不是用户名；客户端用登录响应的 `user` 或 `GET /api/me` 取身份。
   新增的认证/账号响应带 `code` 字段，客户端按 `code` 分支。开发库里升级前的旧客户账号不迁移，需重建。
   微信登录：`POST /api/auth/wechat/login`（已绑定身份恢复）与 `/phone-login`（首次手机号授权并绑定，只收 `loginCode`

@@ -271,7 +271,6 @@ type Querier interface {
 	SetDeviceStation(ctx context.Context, arg SetDeviceStationParams) error
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
-	// must_change_password is true when an administrator set the password, false when the owner did.
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。

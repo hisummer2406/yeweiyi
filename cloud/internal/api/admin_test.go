@@ -287,7 +287,7 @@ func TestAdmin_UserLifecycle(t *testing.T) {
 		mutate func(map[string]any)
 		code   string
 	}{
-		"password sent for staff":          {func(b map[string]any) { b["password"] = testPassword }, "password_not_allowed"},
+		"short password for staff":         {func(b map[string]any) { b["password"] = "abc" }, "invalid_password"},
 		"unknown role":                     {func(b map[string]any) { b["role"] = "root" }, "invalid_request"},
 		"blank phone":                      {func(b map[string]any) { b["phone"] = "  " }, "invalid_phone"},
 		"malformed phone":                  {func(b map[string]any) { b["phone"] = "12345" }, "invalid_phone"},
@@ -489,18 +489,18 @@ func TestAdmin_DisableAndResetPassword(t *testing.T) {
 	if n := tn.auditCount(t, `action = 'user.reset-password' AND detail::text LIKE '%brand-new%'`); n != 0 {
 		t.Error("the new password must never be written to the audit log")
 	}
-	// ... staff have none to reset, and none is invented.
+	// ... and a platform admin can give phone staff a password (cloud#77): they then log in with their phone.
 	rec = tn.send(t, "PUT", userPath, tn.platform, map[string]any{"password": "brand-new-pass-2"})
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"no_password_for_role"`) {
-		t.Errorf("resetting staff's password: got %d %s, want 409 no_password_for_role", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Errorf("setting staff's password: got %d %s, want 200", rec.Code, rec.Body.String())
 	}
-	var stillNull bool
-	tn.env.pool.QueryRow(context.Background(), `SELECT password_hash IS NULL FROM users WHERE id = $1`, cu.ID).Scan(&stillNull)
-	if !stillNull {
-		t.Error("the refused reset gave staff a password")
+	var hasHash bool
+	tn.env.pool.QueryRow(context.Background(), `SELECT password_hash IS NOT NULL FROM users WHERE id = $1`, cu.ID).Scan(&hasHash)
+	if !hasHash {
+		t.Error("the staff member has no password after it was set")
 	}
-	if code := tn.loginCode(cu, "brand-new-pass-2"); code == http.StatusOK {
-		t.Error("staff logged in with a password after a refused reset")
+	if code := tn.loginCode(cu, "brand-new-pass-2"); code != http.StatusOK {
+		t.Errorf("staff with a password set by the platform admin: login got %d, want 200", code)
 	}
 
 	// Unknown id, as the platform admin, is a plain 404.

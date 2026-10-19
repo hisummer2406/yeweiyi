@@ -383,9 +383,6 @@ type userResponse struct {
 	Disabled   bool       `json:"disabled"`
 	DisabledAt *time.Time `json:"disabledAt,omitempty"`
 	CreatedAt  time.Time  `json:"createdAt"`
-	// MustChangePassword is true while the password is the one an administrator set. A hint for the
-	// client; the server does not block anything because of it (cloud#77).
-	MustChangePassword bool `json:"mustChangePassword"`
 }
 
 // toUserResponse renders a user. fullPhone is true for the user themselves and for platform admins;
@@ -394,7 +391,6 @@ func toUserResponse(u db.User, fullPhone bool) userResponse {
 	r := userResponse{
 		ID: u.ID, Role: u.Role, CustomerID: int8Ptr(u.CustomerID),
 		Disabled: u.DisabledAt.Valid, CreatedAt: u.CreatedAt.Time,
-		MustChangePassword: u.MustChangePassword,
 	}
 	// A phone account's username column only mirrors its number, so it stays null there (contract §3.1);
 	// platform admins and username accounts are identified by it.
@@ -505,8 +501,6 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 			if created, err = q.CreateUser(ctx, db.CreateUserParams{
 				Username: plan.username, PasswordHash: hash, Role: req.Role,
 				CustomerID: plan.customerID, Phone: plan.phone,
-				// A password an administrator typed is an initial one: the owner is asked to change it.
-				MustChangePassword: plan.password != "",
 			}); err != nil {
 				return err
 			}
@@ -536,7 +530,6 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 
 const (
 	codePhoneExists       = "phone_exists"
-	codePasswordNotAllow  = "password_not_allowed"
 	codeNoPasswordForRole = "no_password_for_role"
 	codeInvalidUsername   = "invalid_username"
 	codeInvalidPassword   = "invalid_password"
@@ -600,14 +593,15 @@ func planUserCreation(req createUserRequest) (userPlan, *planError) {
 		plan := userPlan{
 			username: phone, phone: pgtype.Text{String: phone, Valid: true}, customerID: int8(*req.CustomerID),
 		}
-		if req.Role == control.RoleCustomerUser {
-			if req.Password != nil {
-				return bad(codePasswordNotAllow, "staff accounts have no password")
-			}
-			return plan, nil
+		if req.Role == control.RoleCustomerUser && req.Password == nil {
+			return plan, nil // WeChat only, as before
 		}
 		if req.Password == nil || !validPassword(*req.Password) {
-			return bad(codeInvalidRequest, "password must be 8-72 bytes")
+			// customer_admin keeps the code it always had; the newer paths use the stable weak-password code.
+			if req.Role == control.RoleCustomerAdmin {
+				return bad(codeInvalidRequest, "password must be 8-72 bytes")
+			}
+			return bad(codeInvalidPassword, "password must be 8-72 bytes")
 		}
 		plan.password = *req.Password
 		return plan, nil
@@ -775,12 +769,9 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 				}
 			}
 			if req.Password != nil {
-				if _, err := q.SetUserPassword(ctx, db.SetUserPasswordParams{
-					ID: id, PasswordHash: pgtype.Text{String: string(hash), Valid: true}, MustChangePassword: true,
-				}); err != nil {
+				if _, err := q.SetUserPassword(ctx, db.SetUserPasswordParams{ID: id, PasswordHash: pgtype.Text{String: string(hash), Valid: true}}); err != nil {
 					return err
 				}
-				updated.MustChangePassword = true
 				resetTarget = target
 				// The new password is never written down — only that it was reset.
 				if err := auditAdmin(ctx, q, actorNow, "user.reset-password", "", snapshot, "allowed",
@@ -802,13 +793,11 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 		if req.Password != nil {
 			// The documented way out of a login lockout: the owner now has a password nobody has been
 			// guessing at.
-			keys := []string{userIDLoginKey(resetTarget.ID)}
+			key := usernameLoginKey(resetTarget.Username)
 			if resetTarget.Phone.Valid {
-				keys = append(keys, phoneLoginKey(resetTarget.Phone.String))
-			} else {
-				keys = append(keys, usernameLoginKey(resetTarget.Username))
+				key = phoneLoginKey(resetTarget.Phone.String)
 			}
-			clearLoginFailures(ctx, deps, keys...)
+			clearLoginFailures(ctx, deps, key)
 		}
 		c.JSON(http.StatusOK, toUserResponse(updated, true))
 	}
@@ -830,16 +819,13 @@ func (e verdictError) Error() string { return e.msg }
 
 // decideUserUpdate is the rule for an administrator changing a user. Only a platform admin gets this
 // far (the handler refuses everyone else first); the actor argument is re-checked here because this
-// runs again on the locked row. Nobody may disable themselves, and staff have no password to reset.
+// runs again on the locked row. Nobody may disable themselves. Setting a password is allowed for every account, phone staff included.
 func decideUserUpdate(actor, target db.User, disabling, settingPassword bool) userVerdict {
 	if actor.Role != control.RolePlatformAdmin {
 		return userVerdict{status: http.StatusForbidden, audit: true, msg: "not authorized"}
 	}
 	if disabling && target.ID == actor.ID {
 		return userVerdict{status: http.StatusBadRequest, msg: "you cannot disable yourself"}
-	}
-	if settingPassword && !target.PasswordHash.Valid {
-		return userVerdict{status: http.StatusConflict, msg: "staff accounts have no password to reset", code: codeNoPasswordForRole}
 	}
 	return userVerdict{}
 }

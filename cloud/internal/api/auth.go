@@ -160,8 +160,8 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		var (
 			user  db.User
 			found bool
-			// phoneLogin selects which accounts this field may log in as. phone: a customer admin with a
-			// mainland number. username: any account that has no phone (platform admins and username
+			// phoneLogin selects which accounts this field may log in as. phone: a customer admin or staff member
+			// with a mainland number and a password. username: any account that has no phone (platform admins and username
 			// accounts, cloud#77) — never a phone account, whose username column merely mirrors its number.
 			phoneLogin bool
 			acctKey    string
@@ -199,7 +199,8 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		hash := timingDummyHash()
 		var roleOK bool
 		if phoneLogin {
-			roleOK = found && user.Role == control.RoleCustomerAdmin
+			// A phone staff member only gets here once an administrator has set a password (cloud#77).
+			roleOK = found && (user.Role == control.RoleCustomerAdmin || user.Role == control.RoleCustomerUser)
 		} else {
 			roleOK = found && !user.Phone.Valid
 		}

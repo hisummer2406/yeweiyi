@@ -304,8 +304,6 @@ var exemptRoutes = map[string]string{
 	"POST /api/login": "no device",
 	"GET /api/me":     "no device; returns only the caller's own row",
 
-	"POST /api/me/password": "no device; changes only the caller's own password, see TestUsernameAccounts_*",
-
 	"GET /api/customers/:id/onboarding":           "no device; platform admin only, see TestOnboarding_*",
 	"POST /api/customers/:id/onboarding/complete": "no device; platform admin only, see TestOnboarding_*",
 
@@ -743,9 +741,16 @@ func TestTenancy_SchemaInvariants(t *testing.T) {
 		t.Error("a customer user without a customer must be rejected")
 	}
 	ph = testPhone()
+	// Phone staff may have a password (000031); a username account may not go without one.
 	if err := exec(`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,$1,'x','customer_user',$2)`,
-		ph, tn.custA); err == nil {
-		t.Error("staff (customer_user) with a password hash must be rejected")
+		ph, tn.custA); err != nil {
+		t.Errorf("phone staff with a password hash must be accepted: %v", err)
+	}
+	// It was accepted, so it exists: remove it, or the customers cleaned up afterwards stay referenced.
+	exec(`DELETE FROM users WHERE username = $1`, ph)
+	if err := exec(`INSERT INTO users (username, role, customer_id) VALUES ($1,'customer_user',$2)`,
+		name("nopw"), tn.custA); err == nil {
+		t.Error("a username staff account without a password hash must be rejected")
 	}
 	ph = testPhone()
 	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,$1,'customer_admin',$2)`,
