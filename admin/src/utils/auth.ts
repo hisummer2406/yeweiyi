@@ -148,9 +148,11 @@ export function loginRedirectUrl(): string {
  */
 export const classifyLoginError = (
   error: any,
-): 'credentials' | 'notOnboarded' | 'failure' => {
+): 'credentials' | 'notOnboarded' | 'rateLimited' | 'failure' => {
   const status = error?.response?.status;
   if (status === 401) return 'credentials';
+  // 连续失败被限流（cloud §11.4）：正确密码在窗口内也不放行，提示等待或联系平台管理员重置
+  if (status === 429) return 'rateLimited';
   if (status === 403 && error.response.data?.code === 'customer_not_onboarded')
     return 'notOnboarded';
   return 'failure';

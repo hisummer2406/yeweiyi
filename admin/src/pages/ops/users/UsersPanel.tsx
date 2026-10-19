@@ -179,12 +179,10 @@ const UsersPanel: React.FC<Props> = ({
       valueType: 'option',
       render: (_, row) => (
         <Space>
-          {/* 员工没有密码可重置（云端对员工重置密码返回 409） */}
-          {row.role !== 'customer_user' && (
-            <a onClick={() => setResetTarget(row)}>
-              {t('pages.ops.users.action.resetPassword')}
-            </a>
-          )}
+          {/* 重置是唯一的改密途径（没有自助改密）；云端对任何账号开放，含员工和尚无密码的手机号员工 */}
+          <a onClick={() => setResetTarget(row)}>
+            {t('pages.ops.users.action.resetPassword')}
+          </a>
           {row.role !== 'platform_admin' && (
             <a onClick={() => setMoveTarget(row)}>
               {t('pages.ops.users.action.move')}

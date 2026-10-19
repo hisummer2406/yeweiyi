@@ -1,5 +1,5 @@
 import { useIntl } from '@umijs/max';
-import { Alert, Form, Input, Modal, message, Select } from 'antd';
+import { Alert, Form, Input, Modal, message, Radio, Select } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
@@ -10,6 +10,7 @@ import {
 } from '@/services/ant-design-pro/users';
 import {
   describeUserError,
+  isValidCustomerUsername,
   normalizePhone,
   PASSWORD_MAX_BYTES,
   PASSWORD_MIN_BYTES,
@@ -23,40 +24,53 @@ import {
  */
 const ROLES: API.UserRole[] = ['platform_admin', 'customer_user'];
 
-/** 创建表单的字段：每个角色只用其中一部分（cloud 契约 §4.5），提交时按角色挑。 */
+/** 客户侧账号二选一（cloud 契约 §11.1）：手机号账号或用户名账号，创建后不能互相转换。 */
+type AccountType = 'phone' | 'username';
+
+/** 创建表单的字段：每个角色只用其中一部分（cloud 契约 §4.5、§11.3），提交时按角色挑。 */
 type CreateUserValues = {
   role: API.UserRole;
+  accountType?: AccountType;
   username?: string;
   phone?: string;
   password?: string;
   customerId?: number;
 };
 
-/** 按角色组出云端要的请求体：员工不带密码，客户侧不带用户名，平台管理员不带手机号和客户。 */
+/**
+ * 按角色组出云端要的请求体：平台管理员=用户名+密码；客户侧账号 phone 与 username 恰好给一个，
+ * 用户名账号密码必填，手机号账号管理员必填、员工可选（空串不发，不设则员工只能微信）。
+ */
 export function buildCreateUserParams(
   v: CreateUserValues,
 ): API.CreateUserParams {
-  switch (v.role) {
-    case 'platform_admin':
-      return {
-        role: v.role,
-        username: (v.username ?? '').trim(),
-        password: v.password ?? '',
-      };
-    case 'customer_admin':
-      return {
-        role: v.role,
-        phone: normalizePhone(v.phone ?? '') ?? (v.phone ?? '').trim(),
-        password: v.password ?? '',
-        customerId: v.customerId as number,
-      };
-    default:
-      return {
-        role: 'customer_user',
-        phone: normalizePhone(v.phone ?? '') ?? (v.phone ?? '').trim(),
-        customerId: v.customerId as number,
-      };
+  if (v.role === 'platform_admin') {
+    return {
+      role: v.role,
+      username: (v.username ?? '').trim(),
+      password: v.password ?? '',
+    };
   }
+  const role = v.role === 'customer_admin' ? 'customer_admin' : 'customer_user';
+  const customerId = v.customerId as number;
+  if (v.accountType === 'username') {
+    return {
+      role,
+      username: (v.username ?? '').trim(),
+      password: v.password ?? '',
+      customerId,
+    };
+  }
+  const phone = normalizePhone(v.phone ?? '') ?? (v.phone ?? '').trim();
+  if (role === 'customer_admin') {
+    return { role, phone, password: v.password ?? '', customerId };
+  }
+  return {
+    role,
+    phone,
+    customerId,
+    ...(v.password ? { password: v.password } : {}),
+  };
 }
 
 type ModalProps = {
@@ -109,22 +123,23 @@ function useSubmit<R = unknown>(onSuccess: (result: R) => void) {
 const useRules = () => {
   const intl = useIntl();
   const t = (id: string) => intl.formatMessage({ id });
+  const lengthRule = {
+    validator: (_: unknown, value?: string) => {
+      if (!value) return Promise.resolve();
+      const n = passwordByteLength(value);
+      return n >= PASSWORD_MIN_BYTES && n <= PASSWORD_MAX_BYTES
+        ? Promise.resolve()
+        : Promise.reject(new Error(t('pages.ops.users.form.password.length')));
+    },
+  };
   return {
     t,
     passwordRules: [
       { required: true, message: t('pages.ops.users.form.password.required') },
-      {
-        validator: (_: unknown, value?: string) => {
-          if (!value) return Promise.resolve();
-          const n = passwordByteLength(value);
-          return n >= PASSWORD_MIN_BYTES && n <= PASSWORD_MAX_BYTES
-            ? Promise.resolve()
-            : Promise.reject(
-                new Error(t('pages.ops.users.form.password.length')),
-              );
-        },
-      },
+      lengthRule,
     ],
+    /** 手机号员工的密码可不填，填了才校验长度 */
+    optionalPasswordRules: [lengthRule],
   };
 };
 
@@ -145,8 +160,10 @@ export const CreateUserModal: React.FC<ModalProps> = ({
   allowedRoles = ROLES,
 }) => {
   const [form] = Form.useForm<CreateUserValues>();
-  const { t, passwordRules } = useRules();
+  const { t, passwordRules, optionalPasswordRules } = useRules();
   const role = Form.useWatch('role', form);
+  const accountType = Form.useWatch('accountType', form) ?? 'phone';
+  const customerSide = role === 'customer_admin' || role === 'customer_user';
   const close = () => {
     onClose();
     form.resetFields();
@@ -174,6 +191,7 @@ export const CreateUserModal: React.FC<ModalProps> = ({
         initialValues={{
           customerId: defaultCustomerId,
           role: allowedRoles.length === 1 ? allowedRoles[0] : undefined,
+          accountType: 'phone',
         }}
         onFinish={(v) =>
           run(
@@ -205,6 +223,25 @@ export const CreateUserModal: React.FC<ModalProps> = ({
             />
           </Form.Item>
         )}
+        {customerSide && (
+          <Form.Item
+            name="accountType"
+            label={t('pages.ops.users.form.accountType.label')}
+          >
+            <Radio.Group
+              options={[
+                {
+                  value: 'phone',
+                  label: t('pages.ops.users.form.accountType.phone'),
+                },
+                {
+                  value: 'username',
+                  label: t('pages.ops.users.form.accountType.username'),
+                },
+              ]}
+            />
+          </Form.Item>
+        )}
         {role === 'platform_admin' && (
           <Form.Item
             name="username"
@@ -221,7 +258,26 @@ export const CreateUserModal: React.FC<ModalProps> = ({
             <Input autoComplete="off" />
           </Form.Item>
         )}
-        {(role === 'customer_admin' || role === 'customer_user') && (
+        {customerSide && accountType === 'username' && (
+          <Form.Item
+            name="username"
+            label={t('pages.ops.users.col.username')}
+            extra={t('pages.ops.users.form.username.hint')}
+            rules={[
+              {
+                validator: (_: unknown, value?: string) =>
+                  value && isValidCustomerUsername(value.trim())
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(t('pages.ops.users.form.username.invalid')),
+                      ),
+              },
+            ]}
+          >
+            <Input autoComplete="off" />
+          </Form.Item>
+        )}
+        {customerSide && accountType === 'phone' && (
           <Form.Item
             name="phone"
             label={t('pages.ops.users.col.phone')}
@@ -239,12 +295,20 @@ export const CreateUserModal: React.FC<ModalProps> = ({
             <Input autoComplete="off" inputMode="tel" />
           </Form.Item>
         )}
-        {/* 员工没有网页密码：表单里不出现密码框，也不会提交密码。 */}
-        {(role === 'platform_admin' || role === 'customer_admin') && (
+        {/* 初始密码由管理员输入，只出现在请求里，不回显。手机号员工可不设（只能微信登录）。 */}
+        {role && (
           <Form.Item
             name="password"
-            label={t('pages.ops.users.form.password.label')}
-            rules={passwordRules}
+            label={t(
+              role === 'customer_user' && accountType === 'phone'
+                ? 'pages.ops.users.form.password.optional'
+                : 'pages.ops.users.form.password.label',
+            )}
+            rules={
+              role === 'customer_user' && accountType === 'phone'
+                ? optionalPasswordRules
+                : passwordRules
+            }
           >
             <Input.Password autoComplete="new-password" />
           </Form.Item>

@@ -93,7 +93,7 @@ const LoginMessage: React.FC<{
 
 const Login: React.FC = () => {
   const [errorKind, setErrorKind] = useState<
-    'credentials' | 'failure' | 'staff' | 'notOnboarded'
+    'credentials' | 'failure' | 'staff' | 'notOnboarded' | 'rateLimited'
   >();
   const { initialState, setInitialState } = useModel('@@initialState');
   const { styles } = useStyles();
@@ -199,6 +199,15 @@ const Login: React.FC = () => {
               content={intl.formatMessage({
                 id: 'pages.login.customerNotOnboarded',
                 defaultMessage: '所在客户尚未完成开通，请联系平台管理员。',
+              })}
+            />
+          )}
+          {errorKind === 'rateLimited' && (
+            <LoginMessage
+              content={intl.formatMessage({
+                id: 'pages.login.rateLimited',
+                defaultMessage:
+                  '登录失败次数过多，请 15 分钟后再试，或联系平台管理员重置密码。',
               })}
             />
           )}

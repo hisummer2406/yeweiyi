@@ -32,9 +32,9 @@ declare namespace API {
     id: number;
     role: Role;
     customerId: number | null;
-    /** 仅平台管理员有；客户侧账号为 null */
+    /** 平台管理员与客户侧用户名账号有值（#77）；手机号账号为 null */
     username: string | null;
-    /** 本人与平台管理员看到完整号码，其余为 138****0000 */
+    /** 手机号账号有值；用户名账号为 null。本人与平台管理员看到完整号码，其余为 138****0000 */
     phone: string | null;
     disabled: boolean;
   };
@@ -146,7 +146,7 @@ declare namespace API {
   /** GET /api/users 的账号（internal/api/admin.go userResponse，不含密码） */
   type AdminUser = {
     id: number;
-    /** 仅平台管理员有；客户侧账号以手机号标识，此处为 null */
+    /** 平台管理员与客户侧用户名账号有值；手机号账号为 null */
     username: string | null;
     phone: string | null;
     role: UserRole;
@@ -157,10 +157,11 @@ declare namespace API {
   };
 
   /**
-   * POST /api/users 请求体，按角色（cloud 契约 §4.5），只有平台管理员能调：
+   * POST /api/users 请求体，按角色（cloud 契约 §4.5、§11.3），只有平台管理员能调：
    * - platform_admin：username + password，不带 phone / customerId；
-   * - customer_admin：phone + password + customerId，不带 username；
-   * - customer_user（员工）：phone + customerId，**不带 password**（带了 400 password_not_allowed）。
+   * - 客户侧账号（customer_admin / customer_user）：customerId，**phone 与 username 恰好给一个**：
+   *   - username 账号：password 必填；
+   *   - phone 账号：customer_admin 必填 password，customer_user 的 password 可选（不设则只能微信）。
    */
   type CreateUserParams =
     | { role: 'platform_admin'; username: string; password: string }
@@ -170,7 +171,18 @@ declare namespace API {
         password: string;
         customerId: number;
       }
-    | { role: 'customer_user'; phone: string; customerId: number };
+    | {
+        role: 'customer_user';
+        phone: string;
+        password?: string;
+        customerId: number;
+      }
+    | {
+        role: 'customer_admin' | 'customer_user';
+        username: string;
+        password: string;
+        customerId: number;
+      };
 
   /** PUT /api/users/:id 请求体：disabled 和 password 至少给一个 */
   type UpdateUserParams = {

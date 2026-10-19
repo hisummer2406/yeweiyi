@@ -128,38 +128,86 @@ describe('CreateUserModal', () => {
     );
   });
 
-  it('staff are created from a phone and a customer, with no password field at all', async () => {
+  it('a phone staff account may be created without a password, and none is sent', async () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
     await pickOption('角色', '客户用户');
     await type('手机号', '13900139000');
-    expect(screen.queryByLabelText('初始密码')).toBeNull();
-    expect(screen.getByText(/没有网页密码/)).toBeTruthy();
+    expect(screen.getByLabelText('初始密码（可选）')).toBeTruthy();
+    expect(screen.getByText(/不能登录网页后台/)).toBeTruthy();
+    await pickOption('所属客户', 'A 油站');
+    submit();
+    await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
+    expect(createUser.mock.calls[0][0]).toEqual({
+      role: 'customer_user',
+      phone: '13900139000',
+      customerId: 1,
+    });
+  });
+
+  it('a phone staff account can be given an initial password', async () => {
+    createUser.mockResolvedValue({ id: 9 });
+    setup();
+    await pickOption('角色', '客户用户');
+    await type('手机号', '13900139000');
+    await type('初始密码（可选）', 'password1');
+    await pickOption('所属客户', 'A 油站');
+    submit();
+    await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
+    expect(createUser.mock.calls[0][0]).toEqual({
+      role: 'customer_user',
+      phone: '13900139000',
+      password: 'password1',
+      customerId: 1,
+    });
+  });
+
+  it('a username staff account needs a username and a password, and sends no phone', async () => {
+    createUser.mockResolvedValue({ id: 9 });
+    setup();
+    await pickOption('角色', '客户用户');
+    fireEvent.click(await screen.findByRole('radio', { name: '用户名账号' }));
+    await type('用户名', 'Staff.One');
+    await type('初始密码', 'password1');
     await pickOption('所属客户', 'A 油站');
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
     const body = createUser.mock.calls[0][0];
     expect(body).toEqual({
       role: 'customer_user',
-      phone: '13900139000',
+      username: 'Staff.One',
+      password: 'password1',
       customerId: 1,
     });
-    expect(body).not.toHaveProperty('password');
+    expect(body).not.toHaveProperty('phone');
   });
 
-  it('a password typed for a customer admin is not sent after switching to staff', async () => {
-    createUser.mockResolvedValue({ id: 9 });
+  it('rejects a username that looks like a phone number before sending', async () => {
     setup();
-    await pickOption('角色', '客户管理员');
-    await type('初始密码', 'password1');
     await pickOption('角色', '客户用户');
-    await type('手机号', '13900139000');
-    await waitFor(() => expect(screen.queryByLabelText('初始密码')).toBeNull());
+    fireEvent.click(await screen.findByRole('radio', { name: '用户名账号' }));
+    await type('用户名', '13900139000');
+    await type('初始密码', 'password1');
     await pickOption('所属客户', 'A 油站');
     submit();
-    await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
-    expect(createUser.mock.calls[0][0]).not.toHaveProperty('password');
-    expect(createUser.mock.calls[0][0]).not.toHaveProperty('username');
+    expect(await screen.findByText(/用户名需 3-32 位字母、数字/)).toBeTruthy();
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it('a taken username says so without naming any other account', async () => {
+    createUser.mockRejectedValue(
+      new ApiError(409, 'username taken', false, 'username_taken'),
+    );
+    setup();
+    await pickOption('角色', '客户用户');
+    fireEvent.click(await screen.findByRole('radio', { name: '用户名账号' }));
+    await type('用户名', 'staff.one');
+    await type('初始密码', 'password1');
+    await pickOption('所属客户', 'A 油站');
+    submit();
+    await waitFor(() =>
+      expect(message.error).toHaveBeenCalledWith('该用户名已被使用。'),
+    );
   });
 
   it('rejects a malformed phone before sending anything', async () => {
@@ -326,17 +374,49 @@ describe('一客户一管理员（换客户）', () => {
 });
 
 describe('buildCreateUserParams', () => {
-  it('never lets a staff request carry a password, a username or a stray field', () => {
-    const body = buildCreateUserParams({
+  it('a phone staff request carries no username and no empty password', () => {
+    expect(
+      buildCreateUserParams({
+        role: 'customer_user',
+        accountType: 'phone',
+        phone: '139 0013 9000',
+        customerId: 3,
+        password: '',
+        username: 'leftover',
+      }),
+    ).toEqual({ role: 'customer_user', phone: '13900139000', customerId: 3 });
+  });
+
+  it('a username request carries no phone, whatever was typed before', () => {
+    expect(
+      buildCreateUserParams({
+        role: 'customer_user',
+        accountType: 'username',
+        username: ' staff.one ',
+        phone: '13900139000',
+        password: 'password1',
+        customerId: 3,
+      }),
+    ).toEqual({
       role: 'customer_user',
-      phone: '139 0013 9000',
+      username: 'staff.one',
+      password: 'password1',
       customerId: 3,
-      password: 'leftover',
-      username: 'leftover',
     });
-    expect(body).toEqual({
-      role: 'customer_user',
-      phone: '13900139000',
+  });
+
+  it('a phone customer admin always carries its password', () => {
+    expect(
+      buildCreateUserParams({
+        role: 'customer_admin',
+        phone: '13800138000',
+        password: 'password1',
+        customerId: 3,
+      }),
+    ).toEqual({
+      role: 'customer_admin',
+      phone: '13800138000',
+      password: 'password1',
       customerId: 3,
     });
   });

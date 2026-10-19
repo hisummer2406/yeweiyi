@@ -8,6 +8,8 @@ export default {
     'Please input your phone number or username!',
   'pages.login.staffNoWeb':
     'Staff accounts must sign in through the mini program or the app.',
+  'pages.login.rateLimited':
+    'Too many failed attempts. Try again in 15 minutes, or ask a platform administrator to reset your password.',
   'pages.login.password.placeholder': 'Password',
   'pages.login.password.required': 'Please input your password!',
   'pages.login.submit': 'Login',
@@ -177,8 +179,16 @@ export default {
   'pages.ops.users.form.username.max': 'Username is at most 64 characters',
   'pages.ops.users.form.phone.invalid':
     'Enter a valid 11-digit mainland China mobile number',
+  'pages.ops.users.form.accountType.label': 'Account type',
+  'pages.ops.users.form.accountType.phone': 'Phone account',
+  'pages.ops.users.form.accountType.username': 'Username account',
+  'pages.ops.users.form.username.hint':
+    '3-32 characters: letters, digits, . _ -; must start with a letter or digit and must not look like a phone number. Unique across all customers, case-insensitive.',
+  'pages.ops.users.form.username.invalid':
+    'Use 3-32 letters, digits, . _ - (starting with a letter or digit), and not a phone number',
+  'pages.ops.users.form.password.optional': 'Initial password (optional)',
   'pages.ops.users.form.staff.hint':
-    'Staff have no web password and sign in only through the mini program with WeChat phone authorization. A platform admin assigns their tanks afterwards under Assets → Staff grants.',
+    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (WeChat sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',
@@ -204,10 +214,10 @@ export default {
     'This phone number is already registered.',
   'pages.ops.users.error.invalidPhone':
     'Invalid phone number. Only 11-digit mainland China numbers are supported.',
-  'pages.ops.users.error.passwordNotAllowed':
-    'Staff accounts have no password.',
-  'pages.ops.users.error.noPasswordForRole':
-    'Staff accounts have no password to reset.',
+  'pages.ops.users.error.invalidUsername':
+    'Invalid username: 3-32 letters, digits, . _ -, starting with a letter or digit, not a phone number.',
+  'pages.ops.users.error.usernameTaken': 'That username is already taken.',
+  'pages.ops.users.error.invalidPassword': 'The password must be 8-72 bytes.',
   'pages.ops.users.error.invalid': 'Invalid input: {detail}',
   'pages.ops.users.error.forbidden': 'You are not allowed to do this.',
   'pages.ops.users.error.notFound': 'Account not found, refresh the list.',

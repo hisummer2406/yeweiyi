@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { describeUserError, passwordByteLength } from './errors';
+import {
+  describeUserError,
+  isValidCustomerUsername,
+  passwordByteLength,
+} from './errors';
 
 describe('describeUserError', () => {
   it.each([
@@ -25,4 +29,31 @@ describe('passwordByteLength', () => {
     expect(passwordByteLength('abcdefgh')).toBe(8);
     expect(passwordByteLength('密码密码')).toBe(12);
   });
+});
+
+describe('describeUserError by code', () => {
+  it.each([
+    [400, 'invalid_username', 'pages.ops.users.error.invalidUsername'],
+    [409, 'username_taken', 'pages.ops.users.error.usernameTaken'],
+    [400, 'invalid_password', 'pages.ops.users.error.invalidPassword'],
+    [409, 'phone_exists', 'pages.ops.users.error.phoneExists'],
+  ])('%i %s maps to %s', (status, code, id) => {
+    expect(describeUserError(status, 'x', code).id).toBe(id);
+  });
+});
+
+describe('isValidCustomerUsername', () => {
+  it.each(['abc', 'Staff.One', 'a_b-c', 'u'.repeat(32), '1abc'])(
+    'accepts %s',
+    (v) => expect(isValidCustomerUsername(v)).toBe(true),
+  );
+  it.each([
+    'ab',
+    'u'.repeat(33),
+    '.abc',
+    '-abc',
+    'a b c',
+    '张三三',
+    '13900139000',
+  ])('rejects %s', (v) => expect(isValidCustomerUsername(v)).toBe(false));
 });

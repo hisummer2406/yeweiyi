@@ -94,10 +94,10 @@ describe('AdminUsers', () => {
     expect(within(await rowOf('13800138000')).getByText('#5')).toBeTruthy();
   });
 
-  it('staff have no password to reset; admins do', async () => {
+  it('every account, staff included, can be reset (the only way to change a password)', async () => {
     render(<Panel />);
     const staff = await rowOf('13900139000');
-    expect(within(staff).queryByText('重置密码')).toBeNull();
+    expect(within(staff).getByText('重置密码')).toBeTruthy();
     const admin = await rowOf('13800138000');
     expect(within(admin).getByText('重置密码')).toBeTruthy();
   });

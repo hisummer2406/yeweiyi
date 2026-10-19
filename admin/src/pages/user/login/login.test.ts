@@ -23,6 +23,14 @@ describe('classifyLoginError', () => {
     ).toBe('failure');
   });
 
+  it('429 login_rate_limited is its own kind, not wrong credentials', () => {
+    expect(
+      classifyLoginError({
+        response: { status: 429, data: { code: 'login_rate_limited' } },
+      }),
+    ).toBe('rateLimited');
+  });
+
   it.each([400, 500, 503])('%i is a generic failure', (status) => {
     expect(classifyLoginError({ response: { status } })).toBe('failure');
   });

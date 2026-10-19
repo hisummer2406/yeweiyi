@@ -4,6 +4,7 @@ import { history, useIntl } from '@umijs/max';
 import { Tag } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
+import { userLabel } from '@/pages/ops/users/errors';
 import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
@@ -38,7 +39,7 @@ const StaffGrants: React.FC = () => {
     {
       title: t('pages.console.staff.col.phone'),
       dataIndex: 'phone',
-      render: (_, row) => row.phone ?? `#${row.id}`,
+      render: (_, row) => userLabel(row),
     },
     {
       title: t('pages.console.staff.col.customer'),

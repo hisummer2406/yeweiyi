@@ -14,6 +14,7 @@ import {
 } from 'antd';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { userLabel } from '@/pages/ops/users/errors';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import {
   getDeviceTanks,
@@ -285,7 +286,7 @@ const TankGrantsModal: React.FC<Props> = ({
     <Modal
       open={!!user}
       title={t('pages.console.staff.modal.title', {
-        phone: user?.phone ?? `#${user?.id}`,
+        phone: user ? userLabel(user) : '',
       })}
       footer={
         <Button onClick={onClose}>

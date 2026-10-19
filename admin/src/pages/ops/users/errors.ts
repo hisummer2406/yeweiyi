@@ -15,10 +15,12 @@ export function describeUserError(
       return { id: 'pages.ops.users.error.phoneExists' };
     case 'invalid_phone':
       return { id: 'pages.ops.users.error.invalidPhone' };
-    case 'password_not_allowed':
-      return { id: 'pages.ops.users.error.passwordNotAllowed' };
-    case 'no_password_for_role':
-      return { id: 'pages.ops.users.error.noPasswordForRole' };
+    case 'invalid_username':
+      return { id: 'pages.ops.users.error.invalidUsername' };
+    case 'username_taken':
+      return { id: 'pages.ops.users.error.usernameTaken' };
+    case 'invalid_password':
+      return { id: 'pages.ops.users.error.invalidPassword' };
   }
   switch (status) {
     case 409:
@@ -39,7 +41,18 @@ export function describeUserError(
 /** 大陆手机号（与云端规范化后的 11 位一致；输入时的空格、连字符、+86 由 normalizePhone 处理）。 */
 export { normalizePhone } from '@/utils/loginIdentifier';
 
-/** 账号的显示标识：客户侧是手机号，平台管理员是用户名。 */
+/**
+ * 客户侧用户名规则（cloud 契约 §11.2）：3–32 位 [A-Za-z0-9._-]，首字符字母或数字，不得形如大陆手机号。
+ * 只是预检，云端 `invalid_username` 才是裁决（平台管理员用户名规则不同，不走这里）。
+ */
+export function isValidCustomerUsername(value: string): boolean {
+  return (
+    /^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$/.test(value) &&
+    !/^1[3-9]\d{9}$/.test(value)
+  );
+}
+
+/** 账号的显示标识：用户名账号（平台管理员、客户侧用户名账号）是用户名，手机号账号是手机号。 */
 export function userLabel(u: Pick<API.AdminUser, 'username' | 'phone' | 'id'>) {
   return u.username ?? u.phone ?? `#${u.id}`;
 }

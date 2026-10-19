@@ -6,6 +6,8 @@ export default {
   'pages.login.username.placeholder': '手机号 / 用户名',
   'pages.login.username.required': '请输入手机号或用户名！',
   'pages.login.staffNoWeb': '员工账号请使用小程序或 App 登录。',
+  'pages.login.rateLimited':
+    '登录失败次数过多，请 15 分钟后再试，或联系平台管理员重置密码。',
   'pages.login.customerNotOnboarded':
     '所在客户尚未完成开通，请联系平台管理员。',
   'pages.login.password.placeholder': '密码',
@@ -164,8 +166,16 @@ export default {
   'pages.ops.users.form.username.required': '请输入用户名',
   'pages.ops.users.form.username.max': '用户名最多 64 个字符',
   'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
+  'pages.ops.users.form.accountType.label': '账号类型',
+  'pages.ops.users.form.accountType.phone': '手机号账号',
+  'pages.ops.users.form.accountType.username': '用户名账号',
+  'pages.ops.users.form.username.hint':
+    '3-32 位，字母、数字、. _ -，首位为字母或数字，不能是手机号；全局唯一，不区分大小写。',
+  'pages.ops.users.form.username.invalid':
+    '用户名需 3-32 位字母、数字、. _ -（首位为字母或数字），且不能是手机号',
+  'pages.ops.users.form.password.optional': '初始密码（可选）',
   'pages.ops.users.form.staff.hint':
-    '员工没有网页密码，只能通过小程序微信手机号授权登录。创建后由平台管理员在「资产管理 → 员工授权」为其分配油罐。',
+    '员工不能登录网页后台，密码仅用于小程序／App；手机号员工可不设密码（只能微信登录）。忘记密码请由平台管理员重置。创建后在「资产管理 → 员工授权」为其分配油罐。',
   'pages.ops.users.form.password.label': '初始密码',
   'pages.ops.users.form.password.new': '新密码',
   'pages.ops.users.form.password.required': '请输入密码',
@@ -189,9 +199,10 @@ export default {
   'pages.ops.users.error.exists': '用户名已存在',
   'pages.ops.users.error.phoneExists': '该手机号已被注册。',
   'pages.ops.users.error.invalidPhone': '手机号无效，仅支持 11 位大陆手机号。',
-  'pages.ops.users.error.passwordNotAllowed':
-    '员工账号没有密码，请不要填写密码。',
-  'pages.ops.users.error.noPasswordForRole': '员工账号没有密码，无需重置。',
+  'pages.ops.users.error.invalidUsername':
+    '用户名无效：需 3-32 位字母、数字、. _ -，首位为字母或数字，且不能是手机号。',
+  'pages.ops.users.error.usernameTaken': '该用户名已被使用。',
+  'pages.ops.users.error.invalidPassword': '密码需要 8-72 字节。',
   'pages.ops.users.error.invalid': '提交内容无效：{detail}',
   'pages.ops.users.error.forbidden': '没有权限执行此操作。',
   'pages.ops.users.error.notFound': '账号不存在，请刷新列表。',
