@@ -175,17 +175,15 @@ export default {
   'pages.ops.users.action.enable': 'Enable',
   'pages.ops.users.disable.confirm':
     'A disabled account cannot log in. Disable it?',
+  'pages.ops.users.form.account.placeholder': 'Phone number or username',
+  'pages.ops.users.form.account.hint':
+    'An 11-digit mainland China number makes a phone account; anything else is a username account: 3-32 letters, digits, . _ -, starting with a letter or digit, unique across customers, case-insensitive.',
+  'pages.ops.users.form.account.invalid':
+    'Enter an 11-digit mainland China mobile number, or a username of 3-32 letters, digits, . _ - (starting with a letter or digit)',
   'pages.ops.users.form.username.required': 'Enter a username',
   'pages.ops.users.form.username.max': 'Username is at most 64 characters',
   'pages.ops.users.form.phone.invalid':
     'Enter a valid 11-digit mainland China mobile number',
-  'pages.ops.users.form.accountType.label': 'Account type',
-  'pages.ops.users.form.accountType.phone': 'Phone account',
-  'pages.ops.users.form.accountType.username': 'Username account',
-  'pages.ops.users.form.username.hint':
-    '3-32 characters: letters, digits, . _ -; must start with a letter or digit and must not look like a phone number. Unique across all customers, case-insensitive.',
-  'pages.ops.users.form.username.invalid':
-    'Use 3-32 letters, digits, . _ - (starting with a letter or digit), and not a phone number',
   'pages.ops.users.form.password.optional': 'Initial password (optional)',
   'pages.ops.users.form.staff.hint':
     'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (WeChat sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',

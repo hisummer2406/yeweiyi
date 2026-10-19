@@ -114,7 +114,7 @@ const CreateCustomerModal: React.FC<Props> = ({
         await createUser(
           buildCreateUserParams({
             role: 'customer_admin',
-            phone: v.phone,
+            account: v.phone,
             password: v.password,
             customerId: created.id,
           }),

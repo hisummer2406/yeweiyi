@@ -163,16 +163,14 @@ export default {
   'pages.ops.users.action.disable': '停用',
   'pages.ops.users.action.enable': '启用',
   'pages.ops.users.disable.confirm': '停用后该账号无法登录，确定停用？',
+  'pages.ops.users.form.account.placeholder': '手机号或用户名',
+  'pages.ops.users.form.account.hint':
+    '填大陆手机号即手机号账号；否则按用户名账号：3-32 位字母、数字、. _ -，首位为字母或数字，全局唯一、不区分大小写。',
+  'pages.ops.users.form.account.invalid':
+    '请输入 11 位大陆手机号，或 3-32 位字母、数字、. _ - 组成的用户名（首位为字母或数字）',
   'pages.ops.users.form.username.required': '请输入用户名',
   'pages.ops.users.form.username.max': '用户名最多 64 个字符',
   'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
-  'pages.ops.users.form.accountType.label': '账号类型',
-  'pages.ops.users.form.accountType.phone': '手机号账号',
-  'pages.ops.users.form.accountType.username': '用户名账号',
-  'pages.ops.users.form.username.hint':
-    '3-32 位，字母、数字、. _ -，首位为字母或数字，不能是手机号；全局唯一，不区分大小写。',
-  'pages.ops.users.form.username.invalid':
-    '用户名需 3-32 位字母、数字、. _ -（首位为字母或数字），且不能是手机号',
   'pages.ops.users.form.password.optional': '初始密码（可选）',
   'pages.ops.users.form.staff.hint':
     '员工不能登录网页后台，密码仅用于小程序／App；手机号员工可不设密码（只能微信登录）。忘记密码请由平台管理员重置。创建后在「资产管理 → 员工授权」为其分配油罐。',

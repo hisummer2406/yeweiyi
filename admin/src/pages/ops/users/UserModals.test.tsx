@@ -93,7 +93,7 @@ describe('CreateUserModal', () => {
     await type('用户名', '  root  ');
     await type('初始密码', 'password1');
     expect(screen.queryByLabelText('所属客户')).toBeNull();
-    expect(screen.queryByLabelText('手机号')).toBeNull();
+    expect(screen.queryByLabelText('账号（手机号/用户名）')).toBeNull();
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
     // 页面据新账号决定是否跳转（员工 → 员工授权）
@@ -110,7 +110,7 @@ describe('CreateUserModal', () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
     await pickOption('角色', '客户管理员');
-    await type('手机号', '+86 138 0013 8000');
+    await type('账号（手机号/用户名）', '+86 138 0013 8000');
     expect(screen.queryByLabelText('用户名')).toBeNull();
     await type('初始密码', 'password1');
     submit();
@@ -132,8 +132,8 @@ describe('CreateUserModal', () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
     await pickOption('角色', '客户用户');
-    await type('手机号', '13900139000');
-    expect(screen.getByLabelText('初始密码（可选）')).toBeTruthy();
+    await type('账号（手机号/用户名）', '13900139000');
+    expect(await screen.findByLabelText('初始密码（可选）')).toBeTruthy();
     expect(screen.getByText(/不能登录网页后台/)).toBeTruthy();
     await pickOption('所属客户', 'A 油站');
     submit();
@@ -149,7 +149,7 @@ describe('CreateUserModal', () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
     await pickOption('角色', '客户用户');
-    await type('手机号', '13900139000');
+    await type('账号（手机号/用户名）', '13900139000');
     await type('初始密码（可选）', 'password1');
     await pickOption('所属客户', 'A 油站');
     submit();
@@ -166,8 +166,7 @@ describe('CreateUserModal', () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
     await pickOption('角色', '客户用户');
-    fireEvent.click(await screen.findByRole('radio', { name: '用户名账号' }));
-    await type('用户名', 'Staff.One');
+    await type('账号（手机号/用户名）', 'Staff.One');
     await type('初始密码', 'password1');
     await pickOption('所属客户', 'A 油站');
     submit();
@@ -182,15 +181,16 @@ describe('CreateUserModal', () => {
     expect(body).not.toHaveProperty('phone');
   });
 
-  it('rejects a username that looks like a phone number before sending', async () => {
+  it('rejects a username with illegal characters before sending', async () => {
     setup();
     await pickOption('角色', '客户用户');
-    fireEvent.click(await screen.findByRole('radio', { name: '用户名账号' }));
-    await type('用户名', '13900139000');
+    await type('账号（手机号/用户名）', 'bad name!');
     await type('初始密码', 'password1');
     await pickOption('所属客户', 'A 油站');
     submit();
-    expect(await screen.findByText(/用户名需 3-32 位字母、数字/)).toBeTruthy();
+    expect(
+      await screen.findByText(/请输入 11 位大陆手机号，或 3-32 位/),
+    ).toBeTruthy();
     expect(createUser).not.toHaveBeenCalled();
   });
 
@@ -200,8 +200,7 @@ describe('CreateUserModal', () => {
     );
     setup();
     await pickOption('角色', '客户用户');
-    fireEvent.click(await screen.findByRole('radio', { name: '用户名账号' }));
-    await type('用户名', 'staff.one');
+    await type('账号（手机号/用户名）', 'staff.one');
     await type('初始密码', 'password1');
     await pickOption('所属客户', 'A 油站');
     submit();
@@ -210,13 +209,15 @@ describe('CreateUserModal', () => {
     );
   });
 
-  it('rejects a malformed phone before sending anything', async () => {
+  it('rejects a malformed account before sending anything', async () => {
     setup();
     await pickOption('角色', '客户用户');
-    await type('手机号', '12345');
+    await type('账号（手机号/用户名）', 'ab');
     await pickOption('所属客户', 'A 油站');
     submit();
-    expect(await screen.findByText(/11 位大陆手机号/)).toBeTruthy();
+    expect(
+      await screen.findByText(/请输入 11 位大陆手机号，或 3-32 位/),
+    ).toBeTruthy();
     expect(createUser).not.toHaveBeenCalled();
   });
 
@@ -224,12 +225,14 @@ describe('CreateUserModal', () => {
     createUser.mockResolvedValue({ id: 9 });
     setup();
     await pickOption('角色', '客户管理员');
-    await type('手机号', '13800138000');
+    await type('账号（手机号/用户名）', '13800138000');
     await pickOption('所属客户', 'B 油站');
     await pickOption('角色', '平台管理员');
     await type('用户名', 'root');
     await type('初始密码', 'password1');
-    await waitFor(() => expect(screen.queryByLabelText('手机号')).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByLabelText('账号（手机号/用户名）')).toBeNull(),
+    );
     submit();
     await waitFor(() => expect(createUser).toHaveBeenCalledTimes(1));
     expect(createUser.mock.calls[0][0]).toEqual({
@@ -263,7 +266,7 @@ describe('CreateUserModal', () => {
     createUser.mockRejectedValue(err);
     const { onDone, onClose } = setup();
     await pickOption('角色', '客户用户');
-    await type('手机号', '13900139000');
+    await type('账号（手机号/用户名）', '13900139000');
     await pickOption('所属客户', 'A 油站');
     submit();
     await waitFor(() =>
@@ -337,9 +340,9 @@ describe('新建账号的角色', () => {
   it('a single allowed role is used directly, with no role dropdown', async () => {
     renderModal(['customer_user']);
     expect(screen.queryByLabelText('角色')).toBeNull();
-    // 员工只要手机号和客户，没有密码框
-    expect(await screen.findByLabelText('手机号')).toBeTruthy();
-    expect(screen.queryByLabelText('初始密码')).toBeNull();
+    // 员工：一个“手机号或用户名”输入框；密码在输入手机号时可选
+    expect(await screen.findByLabelText('账号（手机号/用户名）')).toBeTruthy();
+    expect(screen.getByPlaceholderText('手机号或用户名')).toBeTruthy();
   });
 });
 
@@ -378,8 +381,7 @@ describe('buildCreateUserParams', () => {
     expect(
       buildCreateUserParams({
         role: 'customer_user',
-        accountType: 'phone',
-        phone: '139 0013 9000',
+        account: '139 0013 9000',
         customerId: 3,
         password: '',
         username: 'leftover',
@@ -391,9 +393,8 @@ describe('buildCreateUserParams', () => {
     expect(
       buildCreateUserParams({
         role: 'customer_user',
-        accountType: 'username',
-        username: ' staff.one ',
-        phone: '13900139000',
+        account: ' staff.one ',
+        username: 'leftover',
         password: 'password1',
         customerId: 3,
       }),
@@ -409,7 +410,7 @@ describe('buildCreateUserParams', () => {
     expect(
       buildCreateUserParams({
         role: 'customer_admin',
-        phone: '13800138000',
+        account: '13800138000',
         password: 'password1',
         customerId: 3,
       }),

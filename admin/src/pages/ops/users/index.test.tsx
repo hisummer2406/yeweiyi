@@ -175,14 +175,14 @@ describe('账号管理页（客户侧）', () => {
     expect(screen.queryByText('root')).toBeNull();
   });
 
-  it('new accounts are staff: phone and a customer, no role dropdown', async () => {
+  it('new accounts are staff: one phone-or-username input and a customer, no role dropdown', async () => {
     render(<AdminUsers />);
     await screen.findByText('13800138000');
     fireEvent.click(screen.getByRole('button', { name: /新建账号/ }));
-    expect(await screen.findByLabelText('手机号')).toBeTruthy();
+    expect(await screen.findByLabelText('账号（手机号/用户名）')).toBeTruthy();
+    expect(screen.getByPlaceholderText('手机号或用户名')).toBeTruthy();
     expect(screen.getByLabelText('所属客户')).toBeTruthy();
     expect(screen.queryByLabelText('角色')).toBeNull();
-    expect(screen.queryByLabelText('初始密码')).toBeNull();
   });
 });
 
