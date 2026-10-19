@@ -5,7 +5,7 @@ export default {
   'pages.login.success': '登录成功！',
   'pages.login.username.placeholder': '手机号 / 用户名',
   'pages.login.username.required': '请输入手机号或用户名！',
-  'pages.login.staffNoWeb': '员工账号请使用小程序登录。',
+  'pages.login.staffNoWeb': '员工账号请使用小程序或 App 登录。',
   'pages.login.customerNotOnboarded':
     '所在客户尚未完成开通，请联系平台管理员。',
   'pages.login.password.placeholder': '密码',

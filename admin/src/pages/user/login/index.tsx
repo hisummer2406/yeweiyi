@@ -15,6 +15,7 @@ import { login } from '@/services/ant-design-pro/api';
 import {
   classifyLoginError,
   clearToken,
+  isStaffLogin,
   sessionLabel,
   setProfile,
   setToken,
@@ -108,8 +109,9 @@ const Login: React.FC = () => {
       const { token, user } = await login(
         buildLoginParams(values.username, values.password),
       );
-      // 员工没有网页后台。云端本就不让员工密码登录，这里是对"拿到的是员工令牌"的兜底。
-      if (user?.role === 'customer_user') {
+      // 员工没有网页后台，但可以有密码（用于小程序／App），登录会成功：在这里拒绝，不保存令牌，
+      // 并给明确提示，不能让人以为是密码错。
+      if (isStaffLogin(token, user)) {
         clearToken();
         setErrorKind('staff');
         return;
@@ -204,7 +206,7 @@ const Login: React.FC = () => {
             <LoginMessage
               content={intl.formatMessage({
                 id: 'pages.login.staffNoWeb',
-                defaultMessage: '员工账号请使用小程序登录。',
+                defaultMessage: '员工账号请使用小程序或 App 登录。',
               })}
             />
           )}

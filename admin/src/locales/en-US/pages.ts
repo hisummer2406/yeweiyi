@@ -6,7 +6,8 @@ export default {
   'pages.login.username.placeholder': 'Phone number / username',
   'pages.login.username.required':
     'Please input your phone number or username!',
-  'pages.login.staffNoWeb': 'Staff accounts sign in through the mini program.',
+  'pages.login.staffNoWeb':
+    'Staff accounts must sign in through the mini program or the app.',
   'pages.login.password.placeholder': 'Password',
   'pages.login.password.required': 'Please input your password!',
   'pages.login.submit': 'Login',

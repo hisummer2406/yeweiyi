@@ -4,6 +4,7 @@ import {
   decodeToken,
   getCurrentUser,
   getToken,
+  isStaffLogin,
   setProfile,
   setToken,
 } from './auth';
@@ -168,5 +169,34 @@ describe('token storage', () => {
     setToken('garbage');
     expect(getCurrentUser()).toBeUndefined();
     expect(getToken()).toBeUndefined();
+  });
+});
+
+describe('isStaffLogin', () => {
+  const staffToken = makeToken({
+    uid: 5,
+    sub: '5',
+    role: 'customer_user',
+    exp: 4_000_000_000,
+  });
+  const adminToken = makeToken({
+    uid: 1,
+    sub: '1',
+    role: 'customer_admin',
+    exp: 4_000_000_000,
+  });
+  const user = (role: API.Role) => ({ id: 5, role }) as API.SessionUser;
+
+  it('rejects when the response user is staff', () => {
+    expect(isStaffLogin(adminToken, user('customer_user'))).toBe(true);
+  });
+
+  it('rejects a staff token even when the response has no user (older cloud)', () => {
+    expect(isStaffLogin(staffToken, undefined)).toBe(true);
+  });
+
+  it('lets administrators through', () => {
+    expect(isStaffLogin(adminToken, user('customer_admin'))).toBe(false);
+    expect(isStaffLogin(adminToken, undefined)).toBe(false);
   });
 });

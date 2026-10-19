@@ -107,6 +107,18 @@ export function decodeToken(
   }
 }
 
+/**
+ * 登录成功的响应是不是员工（customer_user）。员工从 #24 起可以有密码（仅用于小程序／App），所以云端
+ * 会给他们签发令牌，网页必须自己拒绝。响应里的 user 和令牌 claims 任一表明是员工即拒绝：旧版云端
+ * 可能不带 user，令牌里的 role 兜底。只是界面边界，服务端对管理接口的角色校验才是安全边界。
+ */
+export function isStaffLogin(token: string, user?: API.SessionUser): boolean {
+  return (
+    user?.role === 'customer_user' ||
+    decodeToken(token)?.access === 'customer_user'
+  );
+}
+
 /** 当前登录用户；token 无效或过期时顺便清掉，避免反复带着坏 token 请求。 */
 export function getCurrentUser(): API.CurrentUser | undefined {
   const token = getToken();
