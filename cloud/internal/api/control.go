@@ -86,7 +86,7 @@ func toCommandResponse(c db.ControlCommand) commandResponse {
 func issueCommandHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if deps.Control == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "remote control is not configured on this deployment"})
+			apiError(c, http.StatusServiceUnavailable, "control_unavailable", "remote control is not configured on this deployment")
 			return
 		}
 
@@ -135,7 +135,7 @@ func writeControlError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, control.ErrAuditUnavailable):
 		// 503 for the same reason: nothing was sent, and trying again is the right response.
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the audit trail is unavailable, so the command was not sent; try again"})
+		apiError(c, http.StatusServiceUnavailable, "audit_unavailable", "the audit trail is unavailable, so the command was not sent; try again")
 	case errors.Is(err, control.ErrPlatformUnavailable):
 		// 503, and explicitly not 500: this says "the device platform is down, retry later",
 		// which is the degradation behaviour issue #10 asks to be well-defined.
@@ -226,7 +226,7 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 			if raw := c.Query("customerId"); raw != "" {
 				id, perr := strconv.ParseInt(raw, 10, 64)
 				if perr != nil || id <= 0 {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "customerId must be a positive integer"})
+					apiError(c, http.StatusBadRequest, "invalid_request", "customerId must be a positive integer")
 					return
 				}
 				customerFilter = pgtype.Int8{Int64: id, Valid: true}
@@ -330,7 +330,7 @@ func timeRange(c *gin.Context) (time.Time, time.Time, bool) {
 	if v := c.Query("beginTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "beginTime must be RFC3339"})
+			apiError(c, http.StatusBadRequest, "invalid_time_format", "beginTime must be RFC3339")
 			return time.Time{}, time.Time{}, false
 		}
 		begin = t
@@ -338,7 +338,7 @@ func timeRange(c *gin.Context) (time.Time, time.Time, bool) {
 	if v := c.Query("endTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "endTime must be RFC3339"})
+			apiError(c, http.StatusBadRequest, "invalid_time_format", "endTime must be RFC3339")
 			return time.Time{}, time.Time{}, false
 		}
 		end = t

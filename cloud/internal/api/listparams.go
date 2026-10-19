@@ -36,7 +36,7 @@ type listParams struct {
 func parseListParams(c *gin.Context) (listParams, bool) {
 	device := c.Query("device")
 	if device == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device query param is required"})
+		apiError(c, http.StatusBadRequest, "device_required", "device query param is required")
 		return listParams{}, false
 	}
 
@@ -49,7 +49,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("beginTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "beginTime must be RFC3339"})
+			apiError(c, http.StatusBadRequest, "invalid_time_format", "beginTime must be RFC3339")
 			return listParams{}, false
 		}
 		begin = t
@@ -59,7 +59,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("endTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "endTime must be RFC3339"})
+			apiError(c, http.StatusBadRequest, "invalid_time_format", "endTime must be RFC3339")
 			return listParams{}, false
 		}
 		end = t
@@ -69,7 +69,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 || n > maxLimit {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be an integer between 1 and 500"})
+			apiError(c, http.StatusBadRequest, "invalid_paging", "limit must be an integer between 1 and 500")
 			return listParams{}, false
 		}
 		limit = int32(n)
@@ -79,7 +79,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("offset"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be a non-negative integer"})
+			apiError(c, http.StatusBadRequest, "invalid_paging", "offset must be a non-negative integer")
 			return listParams{}, false
 		}
 		offset = int32(n)
@@ -89,7 +89,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("sort"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "sort must be a boolean"})
+			apiError(c, http.StatusBadRequest, "invalid_paging", "sort must be a boolean")
 			return listParams{}, false
 		}
 		asc = b

@@ -294,7 +294,7 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 
 		if _, err := deps.Queries.GetCustomer(ctx, req.CustomerID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -310,7 +310,7 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if !owner.Valid || owner.Int64 != req.CustomerID {
-			c.JSON(http.StatusConflict, gin.H{"error": "device already belongs to a different customer"})
+			apiError(c, http.StatusConflict, "device_customer_mismatch", "device already belongs to a different customer")
 			return
 		}
 
@@ -335,7 +335,7 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			SecretHash: string(hash),
 		}); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusConflict, gin.H{"error": "device already belongs to a different customer"})
+				apiError(c, http.StatusConflict, "device_customer_mismatch", "device already belongs to a different customer")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -478,14 +478,14 @@ func registerDeviceHandler(deps Deps) gin.HandlerFunc {
 		// The name later appears in URL paths (/api/devices/:device/...), so a slash could never be
 		// addressed again; reject it up front rather than register an unreachable device.
 		if name == "" || strings.ContainsAny(name, "/?#\\") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "deviceName must be non-empty and must not contain / ? # or \\"})
+			apiError(c, http.StatusBadRequest, "invalid_device_name", "deviceName must be non-empty and must not contain / ? # or \\")
 			return
 		}
 
 		ctx := c.Request.Context()
 		if _, err := deps.Queries.GetCustomer(ctx, req.CustomerID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -501,7 +501,7 @@ func registerDeviceHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if !res.CustomerID.Valid || res.CustomerID.Int64 != req.CustomerID {
-			c.JSON(http.StatusConflict, gin.H{"error": "device already belongs to a different customer"})
+			apiError(c, http.StatusConflict, "device_customer_mismatch", "device already belongs to a different customer")
 			return
 		}
 

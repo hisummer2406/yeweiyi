@@ -51,7 +51,28 @@ const (
 	// codeCustomerNotOnboarded: the user's customer is still being configured (cloud#60). It is a
 	// business notice, deliberately not the bare "not authorized" that clients read as a revoked account.
 	codeCustomerNotOnboarded = "customer_not_onboarded"
+	// codeSessionInvalid: the bearer token is missing, malformed, tampered with or expired (cloud#78).
+	// Distinct from invalid_credentials / wechat_code_invalid, which are login attempts.
+	codeSessionInvalid = "session_invalid"
 )
+
+// Codes that tell the three outcomes of a telemetry read apart (cloud#79). All three are only reachable
+// after the ownership check, so they reveal nothing to a caller who may not touch the device. The
+// statuses are unchanged; clients that ignore `code` keep working.
+const (
+	codeTelemetryNotReported      = "telemetry_not_reported"      // authorized, provisioned, never reported
+	codeDeviceNotProvisioned      = "device_not_provisioned"      // registered here, absent from ThingsBoard
+	codeDevicePlatformUnavailable = "device_platform_unavailable" // ThingsBoard unreachable
+)
+
+// msgSessionInvalid is the one text for every token-caused 401, on HTTP routes and /ws/alarms alike.
+const msgSessionInvalid = "登录失效，请重新登录"
+
+// abortSessionInvalid ends a request whose token cannot be used. The 401 status stays: clients treat a
+// 401 on a protected route as "session over".
+func abortSessionInvalid(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msgSessionInvalid, "code": codeSessionInvalid})
+}
 
 // amr values: how the session's authAt was earned.
 const (
@@ -131,7 +152,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		byUsername := strings.TrimSpace(req.Username) != ""
 		byPhone := strings.TrimSpace(req.Phone) != ""
 		if byUsername == byPhone || req.Password == "" {
-			apiError(c, http.StatusBadRequest, codeInvalidRequest, "send password and exactly one of username (platform admin) or phone (customer admin)")
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "send password and exactly one of username or phone")
 			return
 		}
 
@@ -139,10 +160,12 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		var (
 			user  db.User
 			found bool
-			// wantRole is the only role this field may log in as. A staff account (customer_user) has
-			// no web password at all and matches neither.
-			wantRole string
-			err      error
+			// phoneLogin selects which accounts this field may log in as. phone: a customer admin with a
+			// mainland number. username: any account that has no phone (platform admins and username
+			// accounts, cloud#77) — never a phone account, whose username column merely mirrors its number.
+			phoneLogin bool
+			acctKey    string
+			err        error
 		)
 		if byPhone {
 			phone, ok := normalizePhone(req.Phone)
@@ -150,11 +173,19 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, codeInvalidPhone, "invalid phone number")
 				return
 			}
-			wantRole = control.RoleCustomerAdmin
+			phoneLogin = true
+			acctKey = phoneLoginKey(phone)
 			user, err = deps.Queries.GetUserByPhone(ctx, pgtype.Text{String: phone, Valid: true})
 		} else {
-			wantRole = control.RolePlatformAdmin
+			acctKey = usernameLoginKey(req.Username)
 			user, err = deps.Queries.GetUserByUsername(ctx, strings.TrimSpace(req.Username))
+		}
+		acctCounter, ipCounter := loginKeys(c, acctKey)
+		// Before the credentials are looked at, and for unknown identifiers too (see loginlimit.go).
+		if wait := loginBlocked(ctx, deps, acctCounter, ipCounter); wait > 0 {
+			c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			apiError(c, http.StatusTooManyRequests, codeLoginRateLimited, "too many failed attempts; try again later")
+			return
 		}
 		switch {
 		case err == nil:
@@ -166,7 +197,14 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		hash := timingDummyHash()
-		usable := found && user.Role == wantRole && user.PasswordHash.Valid
+		var roleOK bool
+		if phoneLogin {
+			roleOK = found && user.Role == control.RoleCustomerAdmin
+		} else {
+			roleOK = found && !user.Phone.Valid
+		}
+		// A staff account without a password (phone-based, WeChat only) has no hash and is never usable.
+		usable := roleOK && user.PasswordHash.Valid
 		if usable {
 			hash = []byte(user.PasswordHash.String)
 		}
@@ -174,9 +212,11 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		// answer as a wrong password, and only after the comparison, so the response does not reveal
 		// which accounts exist, are staff, or are disabled.
 		if bcrypt.CompareHashAndPassword(hash, []byte(req.Password)) != nil || !usable || user.DisabledAt.Valid {
+			loginFailed(ctx, deps, acctCounter, ipCounter)
 			apiError(c, http.StatusUnauthorized, codeInvalidCredentials, "invalid username or password")
 			return
 		}
+		loginSucceeded(ctx, deps, acctCounter)
 
 		// After the credentials are proven, so this answer is only ever given to the account's owner.
 		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {
@@ -287,7 +327,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 		header := c.GetHeader("Authorization")
 		raw, ok := strings.CutPrefix(header, "Bearer ")
 		if !ok || raw == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			abortSessionInvalid(c)
 			return
 		}
 
@@ -296,7 +336,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 			return deps.JWTSecret, nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			abortSessionInvalid(c)
 			return
 		}
 

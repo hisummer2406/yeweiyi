@@ -12,17 +12,18 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, password_hash, role, customer_id, phone)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
+INSERT INTO users (username, password_hash, role, customer_id, phone, must_change_password)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password
 `
 
 type CreateUserParams struct {
-	Username     string      `json:"username"`
-	PasswordHash pgtype.Text `json:"password_hash"`
-	Role         string      `json:"role"`
-	CustomerID   pgtype.Int8 `json:"customer_id"`
-	Phone        pgtype.Text `json:"phone"`
+	Username           string      `json:"username"`
+	PasswordHash       pgtype.Text `json:"password_hash"`
+	Role               string      `json:"role"`
+	CustomerID         pgtype.Int8 `json:"customer_id"`
+	Phone              pgtype.Text `json:"phone"`
+	MustChangePassword bool        `json:"must_change_password"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -32,6 +33,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Role,
 		arg.CustomerID,
 		arg.Phone,
+		arg.MustChangePassword,
 	)
 	var i User
 	err := row.Scan(
@@ -43,12 +45,13 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE id = $1
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users WHERE id = $1
 `
 
 // Used where a decision must reflect the user's *current* role and customer rather than what their
@@ -65,12 +68,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE phone = $1
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users WHERE phone = $1
 `
 
 func (q *Queries) GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, error) {
@@ -85,12 +89,13 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone pgtype.Text) (User, 
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByPhoneForUpdate = `-- name: GetUserByPhoneForUpdate :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE phone = $1 FOR UPDATE
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users WHERE phone = $1 FOR UPDATE
 `
 
 // WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
@@ -107,16 +112,18 @@ func (q *Queries) GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE username = $1
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users WHERE lower(username) = lower($1)
 `
 
-func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByUsername, username)
+// Case-insensitive, matching the lower(username) unique index (#77).
+func (q *Queries) GetUserByUsername(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByUsername, lower)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -127,12 +134,13 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserForShare = `-- name: GetUserForShare :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE id = $1 FOR SHARE
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users WHERE id = $1 FOR SHARE
 `
 
 // Locks the acting administrator against being demoted, moved or disabled mid-transaction.
@@ -148,12 +156,13 @@ func (q *Queries) GetUserForShare(ctx context.Context, id int64) (User, error) {
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserForUpdate = `-- name: GetUserForUpdate :one
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users WHERE id = $1 FOR UPDATE
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users WHERE id = $1 FOR UPDATE
 `
 
 // Locks the row for the rest of the transaction. Administration re-reads its target here and decides
@@ -170,12 +179,13 @@ func (q *Queries) GetUserForUpdate(ctx context.Context, id int64) (User, error) 
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone FROM users
+SELECT id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password FROM users
 WHERE ($1::BIGINT IS NULL OR customer_id = $1::BIGINT)
 ORDER BY id
 `
@@ -200,6 +210,7 @@ func (q *Queries) ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User
 			&i.CustomerID,
 			&i.DisabledAt,
 			&i.Phone,
+			&i.MustChangePassword,
 		); err != nil {
 			return nil, err
 		}
@@ -212,7 +223,7 @@ func (q *Queries) ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User
 }
 
 const moveUserToCustomer = `-- name: MoveUserToCustomer :one
-UPDATE users SET customer_id = $2 WHERE id = $1 AND role <> 'platform_admin' RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
+UPDATE users SET customer_id = $2 WHERE id = $1 AND role <> 'platform_admin' RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password
 `
 
 type MoveUserToCustomerParams struct {
@@ -233,6 +244,7 @@ func (q *Queries) MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomer
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
@@ -241,7 +253,7 @@ const setUserDisabled = `-- name: SetUserDisabled :one
 UPDATE users
 SET disabled_at = CASE WHEN $1::bool THEN COALESCE(disabled_at, now()) ELSE NULL END
 WHERE id = $2
-RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
+RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone, must_change_password
 `
 
 type SetUserDisabledParams struct {
@@ -262,21 +274,25 @@ func (q *Queries) SetUserDisabled(ctx context.Context, arg SetUserDisabledParams
 		&i.CustomerID,
 		&i.DisabledAt,
 		&i.Phone,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const setUserPassword = `-- name: SetUserPassword :execrows
-UPDATE users SET password_hash = $2 WHERE id = $1
+UPDATE users SET password_hash = $1, must_change_password = $2
+WHERE id = $3
 `
 
 type SetUserPasswordParams struct {
-	ID           int64       `json:"id"`
-	PasswordHash pgtype.Text `json:"password_hash"`
+	PasswordHash       pgtype.Text `json:"password_hash"`
+	MustChangePassword bool        `json:"must_change_password"`
+	ID                 int64       `json:"id"`
 }
 
+// must_change_password is true when an administrator set the password, false when the owner did.
 func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setUserPassword, arg.ID, arg.PasswordHash)
+	result, err := q.db.Exec(ctx, setUserPassword, arg.PasswordHash, arg.MustChangePassword, arg.ID)
 	if err != nil {
 		return 0, err
 	}

@@ -30,6 +30,11 @@ type Deps struct {
 	// login (the token's authAt). Zero means defaultMaxSessionAge.
 	MaxSessionAge time.Duration
 
+	// LoginMaxFailures / LoginLockout bound password guessing (loginlimit.go). Zero means 5 failures
+	// per 15 minutes per account, six times that per client address.
+	LoginMaxFailures int
+	LoginLockout     time.Duration
+
 	// WeChat verifies mini-program login codes. Nil means the feature is off (config wechat.enabled);
 	// the WeChat routes then answer 503 wechat_unavailable and nothing else is affected.
 	WeChat wechat.Client
@@ -85,6 +90,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		// /api/shifts (设备协议 V1 has no 交班 uplink on either side, so it could only return
 		// an empty list — see docs/protocol-v1-reconciliation.md).
 		authorized.GET("/me", meHandler(deps))
+		authorized.POST("/me/password", changePasswordHandler(deps))
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
