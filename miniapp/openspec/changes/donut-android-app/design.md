@@ -114,8 +114,8 @@ App 与小程序共用同一代码库。只在"登录入口"这一处出现平�
 ## Open Questions
 
 1. 云端客户侧用户名的唯一范围（全局／客户内）、管理员设置／重置员工密码的接口、首次改密的标记与接口——均待 yeweiyi-cloud 契约。
-2. App 的包名与 keystore 保管方式。
-3. 线上 HTTPS／WSS 域名的具体值，以及国外网络下的可达性。
+2. App 包名已定：`com.zhongchengelec.yeweiyi`（2026-10-19，由人确认，在多端控制台填写）。keystore 保管方式仍待人决定。
+3. 线上域名已定：`https://api.zhongchengelec.com`（WSS 同域，2026-10-19，由人确认）。国外网络下的可达性与证书在真机上仍待验证。
 4. `project.config.json` 的 AppID 是否可用于多端、是否需要企业认证。
 5. 没装微信的手机上 Donut App 的行为（真机验证）。
 6. ~~Donut"多语言适配"章节的内容是否改变 D3。~~ 已核实：只是构建期配置，不改变 D3（见 Context）。

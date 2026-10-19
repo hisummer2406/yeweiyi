@@ -1,7 +1,7 @@
 ## 1. 前置核实与云端依赖
 
 - [x] 1.1 在 yeweiyi-cloud 开关联 issue：客户侧账号需要独立于手机号的用户名、管理员设置／重置员工密码、`customer_user` 允许密码登录、首次改密的标记与接口（依据 `docs/account-phone-wechat-contract.md` §2、§4.5，说明与现契约的冲突点）；把 issue 链接写回 #12。验收：issue 已建并关联；本仓库不定义契约。
-- [ ] 1.2 向人确认并记录：App 包名（不得为 `com.sansen.yeweiyi`）、keystore 保管方式、线上 HTTPS／WSS 域名。验收：三项写入 design.md 的 Open Questions 答案。
+- [ ] 1.2 （包名 `com.zhongchengelec.yeweiyi` 与域名 `api.zhongchengelec.com` 已确认并写入 design.md，keystore 保管方式仍待确认）向人确认并记录：App 包名（不得为 `com.sansen.yeweiyi`）、keystore 保管方式、线上 HTTPS／WSS 域名。验收：三项写入 design.md 的 Open Questions 答案。
 - [x] 1.3 核实 Donut 官方文档中仍缺的部分：条件编译写法、`project.miniapp.json` 字段、"多语言适配"章节、系统语言接口、AppID／认证要求、`wx.getSystemInfo` 变化。验收：结论写入 design.md；与 D1／D3 冲突时先修订设计再继续。
 - [x] 1.4 对照云端 main 重新核对 `types/api.d.ts` 中与登录相关的类型（登录请求／响应、`code` 取值），记录核对的云端提交。验收：design.md 注明提交号；`npm run typecheck` 通过。
 
@@ -15,7 +15,7 @@
 
 ## 3. 线上地址与加密传输
 
-- [ ] 3.1 把线上 `BASE_URL`／`WS_BASE_URL` 改为 HTTPS／WSS 域名（域名取自 1.2），保持 `DEBUG_MODE` 的用户本地改动不被覆盖或提交。验收：`npm run typecheck` 通过；构建配置中无明文 HTTP／裸 IP。
+- [x] 3.1 把线上 `BASE_URL`／`WS_BASE_URL` 改为 HTTPS／WSS 域名（域名取自 1.2），保持 `DEBUG_MODE` 的用户本地改动不被覆盖或提交。验收：`npm run typecheck` 通过；构建配置中无明文 HTTP／裸 IP。
 - [ ] 3.2 在真机上手动验证 App 连接线上域名（登录、列表、报警连接）。验收：记录结果。
 
 ## 4. 登录：App 仅账号密码
