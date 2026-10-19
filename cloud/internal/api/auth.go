@@ -152,7 +152,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		byUsername := strings.TrimSpace(req.Username) != ""
 		byPhone := strings.TrimSpace(req.Phone) != ""
 		if byUsername == byPhone || req.Password == "" {
-			apiError(c, http.StatusBadRequest, codeInvalidRequest, "send password and exactly one of username (platform admin) or phone (customer admin)")
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "send password and exactly one of username or phone")
 			return
 		}
 
@@ -160,10 +160,12 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		var (
 			user  db.User
 			found bool
-			// wantRole is the only role this field may log in as. A staff account (customer_user) has
-			// no web password at all and matches neither.
-			wantRole string
-			err      error
+			// phoneLogin selects which accounts this field may log in as. phone: a customer admin with a
+			// mainland number. username: any account that has no phone (platform admins and username
+			// accounts, cloud#77) — never a phone account, whose username column merely mirrors its number.
+			phoneLogin bool
+			acctKey    string
+			err        error
 		)
 		if byPhone {
 			phone, ok := normalizePhone(req.Phone)
@@ -171,11 +173,19 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, codeInvalidPhone, "invalid phone number")
 				return
 			}
-			wantRole = control.RoleCustomerAdmin
+			phoneLogin = true
+			acctKey = phoneLoginKey(phone)
 			user, err = deps.Queries.GetUserByPhone(ctx, pgtype.Text{String: phone, Valid: true})
 		} else {
-			wantRole = control.RolePlatformAdmin
+			acctKey = usernameLoginKey(req.Username)
 			user, err = deps.Queries.GetUserByUsername(ctx, strings.TrimSpace(req.Username))
+		}
+		acctCounter, ipCounter := loginKeys(c, acctKey)
+		// Before the credentials are looked at, and for unknown identifiers too (see loginlimit.go).
+		if wait := loginBlocked(ctx, deps, acctCounter, ipCounter); wait > 0 {
+			c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			apiError(c, http.StatusTooManyRequests, codeLoginRateLimited, "too many failed attempts; try again later")
+			return
 		}
 		switch {
 		case err == nil:
@@ -187,7 +197,14 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		}
 
 		hash := timingDummyHash()
-		usable := found && user.Role == wantRole && user.PasswordHash.Valid
+		var roleOK bool
+		if phoneLogin {
+			roleOK = found && user.Role == control.RoleCustomerAdmin
+		} else {
+			roleOK = found && !user.Phone.Valid
+		}
+		// A staff account without a password (phone-based, WeChat only) has no hash and is never usable.
+		usable := roleOK && user.PasswordHash.Valid
 		if usable {
 			hash = []byte(user.PasswordHash.String)
 		}
@@ -195,9 +212,11 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		// answer as a wrong password, and only after the comparison, so the response does not reveal
 		// which accounts exist, are staff, or are disabled.
 		if bcrypt.CompareHashAndPassword(hash, []byte(req.Password)) != nil || !usable || user.DisabledAt.Valid {
+			loginFailed(ctx, deps, acctCounter, ipCounter)
 			apiError(c, http.StatusUnauthorized, codeInvalidCredentials, "invalid username or password")
 			return
 		}
+		loginSucceeded(ctx, deps, acctCounter)
 
 		// After the credentials are proven, so this answer is only ever given to the account's owner.
 		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {

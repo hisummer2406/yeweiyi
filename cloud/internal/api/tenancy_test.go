@@ -304,6 +304,8 @@ var exemptRoutes = map[string]string{
 	"POST /api/login": "no device",
 	"GET /api/me":     "no device; returns only the caller's own row",
 
+	"POST /api/me/password": "no device; changes only the caller's own password, see TestUsernameAccounts_*",
+
 	"GET /api/customers/:id/onboarding":           "no device; platform admin only, see TestOnboarding_*",
 	"POST /api/customers/:id/onboarding/complete": "no device; platform admin only, see TestOnboarding_*",
 

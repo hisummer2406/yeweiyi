@@ -41,3 +41,15 @@
 既有的 `station_occupied`、`station_device_changed`、`device_without_customer` 等码不变。
 **未动**：所有 `403 {"error":"not authorized"}`（账号失效 vs 角色不足的拆分需先确认兼容方案，客户端据此回登录页）、
 500 的原文错误体、出入库/报警"不完整"信封、命令结果未确认的状态语义。
+
+## 账号与登录（#77）
+
+| code | HTTP | 场景 |
+| --- | --- | --- |
+| `login_rate_limited` | 429 | 登录或改密失败次数过多；带 `Retry-After`（秒）。见 account 契约 §11.4 |
+| `invalid_username` | 400 | 创建用户名账号时用户名格式不合规 |
+| `wrong_password` | 400 | `POST /api/me/password` 旧密码错误（**不是 401**，不应结束会话） |
+| `password_unchanged` | 400 | 新旧密码相同 |
+| `password_changed` | 409 | 改密期间密码被别处改过，重新登录 |
+
+`username_taken`、`invalid_password`、`no_password_for_role` 沿用，现也适用于用户名账号。

@@ -108,7 +108,8 @@ type Querier interface {
 	// WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
 	// second sees the first's identity row instead of racing it.
 	GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text) (User, error)
-	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Case-insensitive, matching the lower(username) unique index (#77).
+	GetUserByUsername(ctx context.Context, lower string) (User, error)
 	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
 	GetUserForShare(ctx context.Context, id int64) (User, error)
 	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
@@ -270,6 +271,7 @@ type Querier interface {
 	SetDeviceStation(ctx context.Context, arg SetDeviceStationParams) error
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
+	// must_change_password is true when an administrator set the password, false when the owner did.
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。

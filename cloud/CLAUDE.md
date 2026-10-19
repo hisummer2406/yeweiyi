@@ -29,6 +29,11 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   （403）不续期。令牌带 `authAt`（上次输入密码的时间），续期时沿用，且新令牌的 `exp` 不会超过
   `authAt + auth.maxSessionAge`（默认 30 天，到点必须重新登录）。`/ws/alarms` 不受影响：连接仍在**原令牌**
   到期时以 `token expired` 关闭，客户端需用新令牌重连。续期不写 `audit_log`。
+- 用户名账号（#77，契约见该文档 §11）：国外用户无微信，客户侧账号也可以是**独立用户名 + 密码**账号（`phone` 为 NULL，三种
+  角色包括 `customer_user` 都必须有密码，用户名全局唯一不区分大小写，不得形如手机号）；与手机号账号二选一、不互转。`POST /api/login`
+  的 `username` 现接受任何无手机号的账号。管理员设置/重置的密码使 `mustChangePassword=true`（仅提示，服务端不拦截）；本人用
+  `POST /api/me/password` 改密（旧密码错是 `400 wrong_password`，**不是 401**）。登录/改密失败按账号标识与来源地址限流，超限
+  `429 login_rate_limited`（Redis，管理员重置密码可解锁）。下面这条手机号账号的规则对手机号账号仍然成立。
 - 账号（#59，契约见 [docs/account-phone-wechat-contract.md](docs/account-phone-wechat-contract.md)）：客户侧账号以手机号
   标识（`users.phone`，11 位大陆号，全局唯一，客户角色的 `username` 等于手机号）；员工（`customer_user`）**没有网页密码**
   （`password_hash` 必须为 NULL，由 CHECK 保证），只能经微信登录。**只有平台管理员能创建/停用/启用/重置账号**，客户管理员

@@ -76,8 +76,10 @@
 请求：`{"password": "...", "username": "..."}`（平台管理员）或 `{"password": "...", "phone": "138..."}`
 （客户管理员）。**两字段必须恰好给一个**，服务端不猜测输入含义，否则 `400 invalid_request`。
 
-- `username` 路径只接受 `platform_admin`；`phone` 路径只接受 `customer_admin`。`customer_user` 以任何方式都得到
-  与"密码错误"完全相同的 `401 invalid_credentials`，且执行等价的哈希比较以避免计时差异。
+- `phone` 路径只接受 `customer_admin`（手机号账号）。`username` 路径接受**任何没有手机号的账号**：平台管理员与
+  用户名账号（§11，含 `customer_user`）。手机号账号（`username` 列只是号码的镜像）不能走 `username` 字段。
+  没有密码的手机号员工以任何方式都得到与"密码错误"完全相同的 `401 invalid_credentials`，且执行等价的哈希比较
+  以避免计时差异。连续失败会被限制，见 §11.4（`429 login_rate_limited`）。
 - 密码错、账号不存在、角色不允许、已停用：`401 invalid_credentials`（沿用现有"不泄露账号是否存在/停用"）。
 - 密码正确但所属客户未开通：`403 customer_not_onboarded`（**#60 落地后启用**，见 §9）。
 - 成功：`200 {"token": "...", "user": {...}}`（`token` 字段位置不变，旧客户端不受影响）。
@@ -131,8 +133,9 @@
 - 非平台管理员（含客户管理员、`customer_user`）：在**解析请求体之前**返回 `403 {"error":"not authorized"}`
   并写 `denied` 审计；伪造 `role`/`customerId` 得不到不同的错误。写入事务内再按库内当前角色复核（既有做法保留）。
 - `role=platform_admin`：`username`+`password`，不得带 `phone`/`customerId`（现状不变）。
-- `role=customer_admin`：`phone`+`password`+`customerId` 必填，不接受 `username`。
-- `role=customer_user`：`phone`+`customerId` 必填；**出现 `password` 字段即 `400 password_not_allowed`**，不静默忽略。
+- `role=customer_admin`：`customerId` 必填，**`phone` 与 `username` 恰好给一个**，`password` 必填（§11 起可用 `username`）。
+- `role=customer_user`：`customerId` 必填，`phone` 与 `username` 恰好给一个。给 `phone`：**出现 `password` 字段即
+  `400 password_not_allowed`**，不静默忽略；给 `username`：`password` 必填（§11）。
 - 错误：`400 invalid_phone`、`400 unknown customerId`（沿用）、`409 phone_exists`（不含客户信息）。
 - 响应 `201`：`user` 对象（§3.1，平台管理员看到完整手机号）。
 
@@ -141,7 +144,7 @@
 | 接口 | 变化 |
 | --- | --- |
 | `GET /api/users` | 平台管理员不变；客户管理员仍可列**本客户员工**（只读，手机号脱敏；油罐分配已改为仅平台管理员，此入口不再用于分配）；`customer_user` 仍 403 |
-| `PUT /api/users/:id`（停用/启用/重置密码） | **仅平台管理员**。客户管理员 → `403 not authorized`。对 `customer_user` 重置密码 → `409 no_password_for_role` |
+| `PUT /api/users/:id`（停用/启用/重置密码） | **仅平台管理员**。客户管理员 → `403 not authorized`。对**没有密码**的账号（手机号员工）重置密码 → `409 no_password_for_role`；对有密码的账号（含用户名员工）可重置，并置 `mustChangePassword=true`、清除该账号的登录失败计数 |
 | `PUT /api/users/:id/customer` | 已仅平台管理员，不变 |
 | 删除账号 | 当前**没有**删除接口，本期不新增（停用即可）；不得为此引入 |
 
@@ -208,3 +211,52 @@ wechat:
 3. admin：登录表单、`access.ts`、员工/管理员创建表单、`customer_admin` 去除员工管理入口。
 4. miniapp：登录页重做、身份键迁移到 `id`、错误分支。
 5. 联合验收：必须用真实微信小程序与真实后端，模拟不算通过。
+
+## 11. 用户名账号与自助改密（#77，国外用户无微信）
+
+> 以下是云端对 #77 "请云端定"各项的决定。旧章节与此冲突处以本节为准。
+
+### 11.1 两种客户侧账号
+
+客户侧账号（`customer_admin`、`customer_user`）**二选一**，创建后不能互相转换：
+
+| | 手机号账号（#59，原样） | 用户名账号（#77） |
+| --- | --- | --- |
+| 标识 | `phone`（`username` 列镜像之，对外为 `null`） | `username`（`phone` 为 `null`） |
+| 登录 | 管理员：`phone`+密码；任何人：微信 | `username`+密码（三种角色一致） |
+| 密码 | 管理员必填；员工必须没有 | 必填（包括 `customer_user`） |
+| 微信 | 可绑定 | 不可（微信手机号授权按手机号找账号，用户名账号没有手机号 → `phone_not_provisioned`） |
+
+决定：同一账号不同时拥有手机号与用户名（避免绑定冲突规则变复杂；日后确需再扩）。迁移 `000030`。
+
+### 11.2 用户名规则
+
+- 3–32 位，`[A-Za-z0-9._-]`，首字符为字母或数字；**不得形如大陆手机号**（`^1[3-9]\d{9}$`），以免与 `phone` 字段混淆。
+  违反 → `400 invalid_username`。
+- **全局唯一、不区分大小写**（唯一索引 `lower(username)`；登录也忽略大小写），保留创建时的写法。撞名 →
+  `409 username_taken`（响应不含任何别的账号信息）。
+- 平台管理员的用户名规则不变（1–64 字符），但同样参与上述大小写不敏感的唯一性。
+
+### 11.3 初始密码与改密
+
+- 平台管理员创建/重置账号时设置密码，**该密码只出现在请求里**：响应、日志、审计都不含。
+- 管理员设置的密码使 `user.mustChangePassword = true`（登录响应、`GET /api/me`、`GET /api/users` 都带该字段）。
+  **只是给客户端的标记，服务端不据此拦截任何请求**（决定：不强制，避免旧客户端被锁死）。
+- `POST /api/me/password`（受保护）`{"oldPassword","newPassword"}`：
+  - 成功 `200 user`（`mustChangePassword=false`），旧密码立即失效；已签发的令牌仍可用到过期（不吊销，沿用现有会话模型）。
+  - `400 wrong_password`（旧密码错。**故意不用 401**：客户端把受保护路由上的 401 当作"会话结束"）；
+    `400 password_unchanged`；`400 invalid_password`（8–72 字节）；`409 no_password_for_role`（手机号员工没有密码）；
+    `429 login_rate_limited`（旧密码被连续猜错）。
+
+### 11.4 爆破防护
+
+Redis 计数：同一**提交的账号标识**（用户名折成小写，或规范化手机号；改密按用户 ID）连续失败 5 次、同一来源地址
+失败 30 次，则在窗口内（15 分钟，自首次失败起，不被后续失败延长）一律 `429 login_rate_limited` 并带 `Retry-After`，
+**先于**校验凭据（正确密码也不放行）。不存在的账号标识同样计数，所以锁定本身不泄露账号是否存在。
+成功登录清除该账号的计数；平台管理员重置密码清除该账号的计数（这是"被锁的合法用户"的恢复路径之一，另一个是等待）。
+已知代价：知道用户名的人可以让该用户短暂登录不了；对停用与未开通账号，失败照常计数，应答不变。
+Redis 不可用时放行（不因缓存故障锁死全部用户）。阈值目前是代码常量（`Deps.LoginMaxFailures/LoginLockout`），未接配置。
+
+### 11.5 审计
+
+`user.create`、`user.reset-password`（既有）与新增 `user.change-password`（`detail` 只含 `userId`）；均不含密码、完整手机号。

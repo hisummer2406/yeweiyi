@@ -16,7 +16,14 @@ func TestSessionInvalid_SameCodeOnHTTPAndWebSocket(t *testing.T) {
 	now := time.Now()
 	expired := env.mintToken(now.Add(-2*time.Hour), now.Add(-time.Hour), nil)
 	valid := env.mintToken(now, now.Add(time.Hour), nil)
-	tampered := valid[:len(valid)-2] + "xx"
+	// Change a character in the middle of the signature. (The last characters of a base64 signature
+	// carry unused bits, so editing them can leave the decoded signature unchanged.)
+	dot := strings.LastIndex(valid, ".") + 1
+	swap := byte('A')
+	if valid[dot] == swap {
+		swap = 'B'
+	}
+	tampered := valid[:dot] + string(swap) + valid[dot+1:]
 
 	cases := []struct {
 		name  string
