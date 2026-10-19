@@ -87,7 +87,8 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		bad := func(msg string) { c.JSON(http.StatusBadRequest, gin.H{"error": msg}) }
+		bad := func(msg string) { apiError(c, http.StatusBadRequest, codeInvalidRequest, msg) }
+		badCode := func(code, msg string) { apiError(c, http.StatusBadRequest, code, msg) }
 
 		tank, err := strconv.Atoi(c.Query("tank"))
 		if err != nil || tank < 1 || tank > protocol.MaxTankCount {
@@ -135,19 +136,19 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		end := time.Now().UTC()
 		if v := c.Query("endTime"); v != "" {
 			if end, err = time.Parse(time.RFC3339, v); err != nil {
-				bad("endTime must be RFC3339")
+				badCode("invalid_time_format", "endTime must be RFC3339")
 				return
 			}
 		}
 		begin := end.Add(-24 * time.Hour)
 		if v := c.Query("beginTime"); v != "" {
 			if begin, err = time.Parse(time.RFC3339, v); err != nil {
-				bad("beginTime must be RFC3339")
+				badCode("invalid_time_format", "beginTime must be RFC3339")
 				return
 			}
 		}
 		if !begin.Before(end) {
-			bad("beginTime must be before endTime")
+			badCode("invalid_time_range", "beginTime must be before endTime")
 			return
 		}
 		// Align to bucket boundaries so the same instant lands in the same bucket however the
@@ -207,7 +208,7 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// was asked for — one that predates the assignment or the raw retention included — not a 200
 		// with no data. (The device record outlives its telemetry; only the points expire.)
 		if deps.TB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
+			apiError(c, http.StatusServiceUnavailable, "device_platform_unavailable", "ThingsBoard is not configured on this deployment")
 			return
 		}
 		dev, err := deps.TB.GetDeviceByName(ctx, device)

@@ -51,7 +51,28 @@ const (
 	// codeCustomerNotOnboarded: the user's customer is still being configured (cloud#60). It is a
 	// business notice, deliberately not the bare "not authorized" that clients read as a revoked account.
 	codeCustomerNotOnboarded = "customer_not_onboarded"
+	// codeSessionInvalid: the bearer token is missing, malformed, tampered with or expired (cloud#78).
+	// Distinct from invalid_credentials / wechat_code_invalid, which are login attempts.
+	codeSessionInvalid = "session_invalid"
 )
+
+// Codes that tell the three outcomes of a telemetry read apart (cloud#79). All three are only reachable
+// after the ownership check, so they reveal nothing to a caller who may not touch the device. The
+// statuses are unchanged; clients that ignore `code` keep working.
+const (
+	codeTelemetryNotReported      = "telemetry_not_reported"      // authorized, provisioned, never reported
+	codeDeviceNotProvisioned      = "device_not_provisioned"      // registered here, absent from ThingsBoard
+	codeDevicePlatformUnavailable = "device_platform_unavailable" // ThingsBoard unreachable
+)
+
+// msgSessionInvalid is the one text for every token-caused 401, on HTTP routes and /ws/alarms alike.
+const msgSessionInvalid = "登录失效，请重新登录"
+
+// abortSessionInvalid ends a request whose token cannot be used. The 401 status stays: clients treat a
+// 401 on a protected route as "session over".
+func abortSessionInvalid(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msgSessionInvalid, "code": codeSessionInvalid})
+}
 
 // amr values: how the session's authAt was earned.
 const (
@@ -287,7 +308,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 		header := c.GetHeader("Authorization")
 		raw, ok := strings.CutPrefix(header, "Bearer ")
 		if !ok || raw == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			abortSessionInvalid(c)
 			return
 		}
 
@@ -296,7 +317,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 			return deps.JWTSecret, nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			abortSessionInvalid(c)
 			return
 		}
 
