@@ -572,7 +572,7 @@ Page({
     return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
         if (seq !== this.snapshotSeq) return;
-        this.setData({ snapshotTs: res.ts, tanks: toTankViews(res, device), snapshotLoaded: true, snapshotError: '' });
+        this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), tanks: toTankViews(res, device), snapshotLoaded: true, snapshotError: '' });
         this.markFresh('snapshot');
       })
       .catch((err: ApiError) => {

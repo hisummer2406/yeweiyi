@@ -1,6 +1,7 @@
 {
   "pages": [
     "pages/login/login",
+    "pages/language/language",
     "pages/devices/devices",
     "pages/records/records",
     "pages/more/more",

@@ -20,16 +20,37 @@ export function roundFields<T extends object>(row: T, keys: readonly (keyof T)[]
 // queried by local day, so render the phone's local wall clock instead. Anything that is not a valid
 // time is returned unchanged rather than hidden or shown as "Invalid Date".
 //
-// The layout follows the language: year-month-day for Chinese and English (read the same in both), and
-// day/month/year for Spanish. 24-hour clock everywhere. `locale` is a plain string so this stays pure.
-export function formatLocalTime(iso: string, locale = 'zh'): string {
+// Written the way a person would say it: "today 14:05", "yesterday 09:30", "Oct 7 14:05", and the year
+// only when it is not this year. No seconds, 24-hour clock. There is no "5 minutes ago": a page keeps
+// its text while it stays open, so a relative age would go stale on screen. An instant ahead of `now`
+// (the phone clock behind the cloud) is shown by date like any other, never as "tomorrow".
+// `locale` is a plain string and `now` a parameter so this stays pure and checkable.
+const WORDS: Record<string, { today: string; yesterday: string }> = {
+  zh: { today: '今天', yesterday: '昨天' },
+  en: { today: 'Today', yesterday: 'Yesterday' },
+  es: { today: 'Hoy', yesterday: 'Ayer' },
+};
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+export function formatLocalTime(iso: string, locale = 'zh', now: Date = new Date()): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const pad = (n: number) => String(n).padStart(2, '0');
-  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  if (locale === 'es') {
-    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${time}`;
-  }
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${time}`;
+  const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const words = WORDS[locale] || WORDS.en;
+
+  const dayStart = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const daysAgo = Math.round((dayStart(now) - dayStart(d)) / 86400000);
+  if (daysAgo === 0) return `${words.today} ${clock}`;
+  if (daysAgo === 1) return `${words.yesterday} ${clock}`;
+
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const day = d.getDate();
+  const withYear = y !== now.getFullYear();
+  if (locale === 'zh') return `${withYear ? `${y}年` : ''}${m + 1}月${day}日 ${clock}`;
+  if (locale === 'es') return `${day} ${MONTHS_ES[m]}${withYear ? ` ${y}` : ''} ${clock}`;
+  return `${MONTHS_EN[m]} ${day}${withYear ? `, ${y}` : ''} ${clock}`;
 }

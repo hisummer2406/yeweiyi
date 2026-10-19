@@ -1,9 +1,9 @@
 import { en } from '../locales/en';
 import { es } from '../locales/es';
 import { zh } from '../locales/zh';
-import { LOCALES, pickLocale, scope, translate } from './i18nCore';
+import { LOCALES, isLocale, pickLocale, scope, translate } from './i18nCore';
 import type { Locale, Tables } from './i18nCore';
-import { getLocalePref, setLocalePref } from './storage';
+import { clearLocalePref, getLocalePref, setLocalePref } from './storage';
 
 export type { Locale };
 export { LOCALES };
@@ -12,7 +12,7 @@ const TABLES: Tables = { zh, en, es };
 
 // Shown in the language switcher, each in its own language so a user can find theirs.
 export const LOCALE_NAMES: Record<Locale, string> = {
-  zh: '中文',
+  zh: '简体中文',
   en: 'English',
   es: 'Español',
 };
@@ -42,8 +42,25 @@ export function currentLocale(): Locale {
   return current;
 }
 
+// The language the user chose themselves, or undefined while the app follows the phone.
+export function chosenLocale(): Locale | undefined {
+  const saved = getLocalePref();
+  return isLocale(saved) ? saved : undefined;
+}
+
+// The language the phone itself asks for (English when it is not one we have).
+export function systemLocale(): Locale {
+  return pickLocale(systemLanguage(), undefined);
+}
+
 // Remembers the choice on this phone; if storage is unavailable the language still changes for this run.
-export function setLocale(locale: Locale): void {
+// 'system' drops the choice and goes back to following the phone.
+export function setLocale(locale: Locale | 'system'): void {
+  if (locale === 'system') {
+    clearLocalePref();
+    current = systemLocale();
+    return;
+  }
   current = locale;
   setLocalePref(locale);
 }
