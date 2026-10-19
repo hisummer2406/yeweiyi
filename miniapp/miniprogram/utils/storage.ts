@@ -99,6 +99,15 @@ export function getLocalePref(): string | undefined {
   }
 }
 
+// Back to following the phone's language.
+export function clearLocalePref(): void {
+  try {
+    wx.removeStorageSync(LOCALE_KEY);
+  } catch {
+    // nothing to clear
+  }
+}
+
 export function setLocalePref(locale: string): void {
   try {
     wx.setStorageSync(LOCALE_KEY, locale);

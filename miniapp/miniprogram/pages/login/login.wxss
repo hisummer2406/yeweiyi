@@ -22,3 +22,10 @@
   font-weight: 600;
   border-bottom-color: #05507c;
 }
+
+.lang-entry {
+  margin-top: 32rpx;
+  padding: 12rpx 24rpx;
+  font-size: 26rpx;
+  color: #05507c;
+}

@@ -206,7 +206,7 @@ Page({
       .then((res) =>
         this.patchGroup(deviceName, seq, {
           state: 'ok',
-          ts: res.ts,
+          ts: formatLocalTime(res.ts, currentLocale()),
           tanks: toTankViews(res, deviceName),
           error: '',
           staleText: '',

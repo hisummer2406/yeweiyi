@@ -103,6 +103,8 @@ export const es: Record<string, string> = {
   "login.submit": "Iniciar sesión",
   "login.staffHint": "Cuentas de personal: inicie sesión con WeChat.",
   "lang.label": "Idioma",
+  "lang.navTitle": "Idioma",
+  "lang.system": "Seguir el sistema",
   "tab.home": "Inicio",
   "tab.records": "Registros",
   "tab.settings": "Ajustes",

@@ -34,7 +34,7 @@
 - [x] 5.3 `utils/storage.ts` 增加语言偏好的读写（读写失败不抛错）；首次启动读系统语言，不支持则英文。验收：纯逻辑部分 Node 检查通过。
 - [x] 5.4 `utils/labels.ts`、`utils/loginFlow.ts`、`utils/oilInOut.ts` 等纯函数中的中文改为词表键；调整 `scripts/*.check.mjs` 使其仍通过。验收：`npm run check`、`npm run typecheck` 通过。
 - [ ] 5.5 语言切换入口：登录页与设置页各一处，切换后保存偏好、`wx.reLaunch` 到首页，并用 `wx.setTabBarItem`、`wx.setNavigationBarTitle` 更新标签栏与标题。手动验证：未登录切换、登录后切换、杀进程重开仍保持。
-  - 状态（2026-10-19）：代码已完成——`components/lang-switch`（登录页、设置页），保存偏好；设置页切换后 `reLaunch`；各页 `onShow` 用 `setNavTitle`／`applyTabBar` 设置标题与标签栏。**待手动验证**：未登录切换、登录后切换、杀进程重开仍保持，以及标签栏文字确实被 `wx.setTabBarItem` 改掉。未勾选。
+  - 状态（2026-10-19）：代码已完成——`pages/language` 独立语言页（设置页一行入口、登录页一个小链接；含「跟随系统」），保存偏好；从设置页切换后 `reLaunch`；各页 `onShow` 用 `setNavTitle`／`applyTabBar` 设置标题与标签栏。**待手动验证**：未登录切换、登录后切换、杀进程重开仍保持，以及标签栏文字确实被 `wx.setTabBarItem` 改掉。未勾选。
 - [x] 5.6 时间格式随语言（保持本地时区）；数字显示保持现状（待人确认）。验收：`format.ts` 相关检查通过。
 
 ## 6. 多语言：逐页替换文案

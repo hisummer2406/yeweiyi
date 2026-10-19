@@ -103,6 +103,8 @@ export const zh: Record<string, string> = {
   "login.submit": "登录",
   "login.staffHint": "员工账号请使用微信登录",
   "lang.label": "语言",
+  "lang.navTitle": "语言",
+  "lang.system": "跟随系统",
   "tab.home": "首页",
   "tab.records": "我的记录",
   "tab.settings": "设置",

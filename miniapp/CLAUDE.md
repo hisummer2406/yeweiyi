@@ -47,7 +47,7 @@ first-login password change) is `yeweiyi-cloud#77` — until it lands, staff can
   `{placeholder}` values). Pages read `texts('group')` into `data.text` and use `{{text.name}}`; code uses
   `t('group.name', params)`. Missing text falls back to English, then to the key. The language is the
   user's saved choice, else the phone's, else English (`utils/i18n.ts`, pure rules in `utils/i18nCore.ts`).
-  The switcher is `components/lang-switch` (login page and settings page); on settings it `reLaunch`es so
+  The picker is its own page, `pages/language` (opened from a row on the settings page and a small link on the login page; each language in its own name, plus 「跟随系统」 which clears the saved choice); from settings it `reLaunch`es so
   every page is rebuilt in the new language. `app.json` and page `.json` titles cannot be translated: the
   tab bar and titles are set at runtime (`applyTabBar`, `setNavTitle`) and `app.json` carries English.
 - **Pure modules return keys, not text** (they must stay `wx`-free for `npm run check`): `loginFlow.ts`,

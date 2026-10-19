@@ -1,5 +1,5 @@
 import { passwordLogin, wechatPhoneLogin, wechatRestore } from '../../utils/auth';
-import { setNavTitle, t, texts } from '../../utils/i18n';
+import { LOCALE_NAMES, currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
 import { WECHAT_LOGIN } from '../../utils/platform';
 import {
   buildPasswordLogin,
@@ -43,6 +43,8 @@ Page({
     errorMsg: '',
     account: '',
     password: '',
+    langLabel: '',
+    langName: '',
   },
 
   onShow() {
@@ -51,7 +53,12 @@ Page({
 
   renderTexts() {
     setNavTitle('login.navTitle');
-    this.setData({ text: texts('login'), errorMsg: this.errorKey ? t(this.errorKey) : '' });
+    this.setData({
+      text: texts('login'),
+      errorMsg: this.errorKey ? t(this.errorKey) : '',
+      langLabel: t('lang.label'),
+      langName: LOCALE_NAMES[currentLocale()],
+    });
   },
 
   // Shows a message by key (or clears it with ''), in the language of the moment.
@@ -60,8 +67,8 @@ Page({
     this.setData({ errorMsg: key ? t(key) : '' });
   },
 
-  onLanguageChange() {
-    this.renderTexts();
+  onLanguageTap() {
+    wx.navigateTo({ url: '/pages/language/language?from=login' });
   },
 
   onLoad(query: Record<string, string>) {

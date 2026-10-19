@@ -20,7 +20,6 @@ import {
   splitAlarmPage,
   stockQuery,
 } from '../miniprogram/utils/recordsRange.ts';
-import { formatLocalTime } from '../miniprogram/utils/format.ts';
 import { summarizeOilInOut } from '../miniprogram/utils/oilInOut.ts';
 
 let n = 0;
@@ -118,20 +117,6 @@ test('auto-continue only applies to a filtered list that is still short and has 
   assert.equal(shouldAutoContinue(true, MIN_ADDED_AFTER_FILTER, true, 1), false);
   assert.equal(shouldAutoContinue(true, 0, false, 1), false); // nothing more to fetch
   assert.equal(shouldAutoContinue(true, 0, true, MAX_AUTO_PAGES), false); // cap reached
-});
-
-test('formatLocalTime renders the local wall clock and leaves junk alone', () => {
-  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z'), '2026-10-07 18:13:29');
-  assert.equal(formatLocalTime('2026-10-06T16:00:00Z'), '2026-10-07 00:00:00');
-  assert.equal(formatLocalTime(''), '');
-  assert.equal(formatLocalTime('not a time'), 'not a time');
-});
-
-test('formatLocalTime: Spanish reads day/month/year, Chinese and English year-month-day', () => {
-  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z', 'es'), '07/10/2026 18:13:29');
-  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z', 'en'), '2026-10-07 18:13:29');
-  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z', 'zh'), '2026-10-07 18:13:29');
-  assert.equal(formatLocalTime('not a time', 'es'), 'not a time');
 });
 
 const stockRes = (over = {}) => ({

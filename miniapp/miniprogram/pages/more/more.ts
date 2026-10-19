@@ -2,7 +2,7 @@ import { roleFromToken } from '../../utils/auth';
 import { maskPhone } from '../../utils/loginFlow';
 import { getProfile, getToken } from '../../utils/storage';
 import { showComingSoon } from '../../utils/comingSoon';
-import { applyTabBar, setNavTitle, t, texts } from '../../utils/i18n';
+import { LOCALE_NAMES, applyTabBar, currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
 import { ROLE_KEYS, label } from '../../utils/labels';
 
 type MoreItem = {
@@ -31,6 +31,8 @@ Page({
     items: [] as { titleKey: string; title: string; icon: string; page?: string }[],
     account: '',
     roleLabel: '',
+    langLabel: '',
+    langName: '',
   },
 
   onShow() {
@@ -44,6 +46,8 @@ Page({
       items: ITEMS.map((i) => ({ titleKey: i.titleKey, title: t(i.titleKey), icon: i.icon, page: i.page })),
       account: maskPhone(profile?.phone) || profile?.username || '',
       roleLabel: role ? label(ROLE_KEYS, role) : '',
+      langLabel: t('lang.label'),
+      langName: LOCALE_NAMES[currentLocale()],
     });
   },
 
@@ -60,10 +64,8 @@ Page({
     wx.navigateTo({ url: '/pages/profile/profile' });
   },
 
-  // The language was saved by the switcher. Every page reads its texts when it is shown, but pages that
-  // are already open hold texts in their data, so start over from this page in the new language.
-  onLanguageChange() {
-    wx.reLaunch({ url: '/pages/more/more' });
+  onLanguageTap() {
+    wx.navigateTo({ url: '/pages/language/language?from=more' });
   },
 });
 
