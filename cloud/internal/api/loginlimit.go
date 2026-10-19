@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -53,7 +52,6 @@ func usernameLoginKey(username string) string {
 	return "u:" + strings.ToLower(strings.TrimSpace(username))
 }
 func phoneLoginKey(phone string) string { return "p:" + phone }
-func userIDLoginKey(id int64) string    { return "id:" + strconv.FormatInt(id, 10) }
 
 // loginBlocked reports how long the caller must wait, or 0 when it may try. Redis trouble fails open:
 // an outage must not lock every user out, and bcrypt cost still bounds guessing.

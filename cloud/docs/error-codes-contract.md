@@ -46,10 +46,9 @@
 
 | code | HTTP | 场景 |
 | --- | --- | --- |
-| `login_rate_limited` | 429 | 登录或改密失败次数过多；带 `Retry-After`（秒）。见 account 契约 §11.4 |
+| `login_rate_limited` | 429 | 登录失败次数过多；带 `Retry-After`（秒）。见 account 契约 §11.4 |
 | `invalid_username` | 400 | 创建用户名账号时用户名格式不合规 |
-| `wrong_password` | 400 | `POST /api/me/password` 旧密码错误（**不是 401**，不应结束会话） |
-| `password_unchanged` | 400 | 新旧密码相同 |
-| `password_changed` | 409 | 改密期间密码被别处改过，重新登录 |
+| `invalid_password` | 400 | 密码不是 8–72 字节（用户名账号、手机号员工的创建，以及重置密码） |
 
-`username_taken`、`invalid_password`、`no_password_for_role` 沿用，现也适用于用户名账号。
+`username_taken` 沿用，现也适用于用户名账号。`password_not_allowed`、`no_password_for_role` 不再返回（员工可以有密码）。
+没有自助改密，也就没有 `wrong_password`/`password_unchanged`。

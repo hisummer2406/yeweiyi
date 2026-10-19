@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 
 	"yeweiyi-cloud/internal/api"
 	"yeweiyi-cloud/internal/control"
@@ -60,11 +63,11 @@ func TestUsernameAccounts_CreateAndLogin(t *testing.T) {
 	for _, role := range []string{control.RoleCustomerUser, control.RoleCustomerAdmin} {
 		name := "Maria." + strings.ReplaceAll(role, "_", "-") + "-" + testPhone()[4:]
 		_, out := env.usernameAccount(role, name)
-		if out["username"] != name || out["phone"] != nil || out["mustChangePassword"] != true {
+		if out["username"] != name || out["phone"] != nil {
 			t.Fatalf("%s: created = %v", role, out)
 		}
 
-		// Case does not matter when logging in; the response says the password is an initial one.
+		// Case does not matter when logging in.
 		code, body := env.loginRaw(map[string]any{"username": strings.ToUpper(name), "password": accountPassword})
 		if code != http.StatusOK {
 			t.Fatalf("%s login: %d %s", role, code, body)
@@ -73,7 +76,7 @@ func TestUsernameAccounts_CreateAndLogin(t *testing.T) {
 			User map[string]any `json:"user"`
 		}
 		json.Unmarshal([]byte(body), &resp)
-		if resp.User["mustChangePassword"] != true || resp.User["role"] != role {
+		if resp.User["role"] != role || resp.User["username"] != name {
 			t.Fatalf("%s login user = %v", role, resp.User)
 		}
 	}
@@ -106,10 +109,38 @@ func TestUsernameAccounts_CreateRules(t *testing.T) {
 		}
 	}
 
-	// Phone accounts are unchanged: staff still take no password.
-	code, out := env.createAccount(map[string]any{"role": control.RoleCustomerUser, "phone": testPhone(), "password": accountPassword, "customerId": cust})
-	if code != 400 || out["code"] != "password_not_allowed" {
-		t.Errorf("phone staff with password: %d %v", code, out)
+}
+
+// Phone staff may be given a password at creation or later (cloud#77): without one they are WeChat only,
+// with one they can also sign in with phone + password.
+func TestUsernameAccounts_PhoneStaffMayHaveAPassword(t *testing.T) {
+	env := platformEnv(t, nil)
+	cust := env.defaultCustomerID()
+
+	phone := testPhone()
+	code, out := env.createAccount(map[string]any{"role": control.RoleCustomerUser, "phone": phone, "password": accountPassword, "customerId": cust})
+	if code != http.StatusCreated {
+		t.Fatalf("phone staff with password: %d %v", code, out)
+	}
+	if c, body := env.loginRaw(map[string]any{"phone": phone, "password": accountPassword}); c != http.StatusOK {
+		t.Fatalf("phone staff login: %d %s", c, body)
+	}
+	// Still not reachable through the username field.
+	if c, _ := env.loginRaw(map[string]any{"username": phone, "password": accountPassword}); c != http.StatusUnauthorized {
+		t.Errorf("phone staff via username: %d", c)
+	}
+
+	// Without a password: unchanged, WeChat only and no password login.
+	bare := testPhone()
+	if code, out := env.createAccount(map[string]any{"role": control.RoleCustomerUser, "phone": bare, "customerId": cust}); code != http.StatusCreated {
+		t.Fatalf("phone staff without password: %d %v", code, out)
+	}
+	if c, _ := env.loginRaw(map[string]any{"phone": bare, "password": accountPassword}); c != http.StatusUnauthorized {
+		t.Errorf("passwordless staff logged in: %d", c)
+	}
+	// A weak one is refused with the stable code.
+	if code, out := env.createAccount(map[string]any{"role": control.RoleCustomerUser, "phone": testPhone(), "password": "abc", "customerId": cust}); code != 400 || out["code"] != "invalid_password" {
+		t.Errorf("weak password: %d %v", code, out)
 	}
 }
 
@@ -148,91 +179,22 @@ func TestUsernameAccounts_PhoneAccountsStayOnTheirField(t *testing.T) {
 	}
 }
 
-func TestUsernameAccounts_ChangeOwnPassword(t *testing.T) {
-	env := platformEnv(t, nil)
-	name := "change-" + testPhone()[4:]
-	id, _ := env.usernameAccount(control.RoleCustomerUser, name)
-	tok := env.login(name, accountPassword)
-	post := func(old, new string) (int, map[string]any) {
-		raw, _ := json.Marshal(map[string]string{"oldPassword": old, "newPassword": new})
-		rec := env.do("POST", "/api/me/password", []byte(tok), raw)
-		var out map[string]any
-		json.Unmarshal(rec.Body.Bytes(), &out)
-		return rec.Code, out
-	}
-
-	// A wrong old password is a 400, never a 401: a 401 would read as "session over" to the client.
-	if code, out := post("not-the-password", "brand-new-pass"); code != 400 || out["code"] != "wrong_password" {
-		t.Fatalf("wrong old: %d %v", code, out)
-	}
-	if code, out := post(accountPassword, accountPassword); code != 400 || out["code"] != "password_unchanged" {
-		t.Fatalf("same password: %d %v", code, out)
-	}
-	if code, out := post(accountPassword, "short"); code != 400 || out["code"] != "invalid_password" {
-		t.Fatalf("short: %d %v", code, out)
-	}
-
-	code, out := post(accountPassword, "brand-new-pass")
-	if code != 200 || out["mustChangePassword"] != false {
-		t.Fatalf("change: %d %v", code, out)
-	}
-	if c, _ := env.loginRaw(map[string]any{"username": name, "password": accountPassword}); c != http.StatusUnauthorized {
-		t.Errorf("the old password still works: %d", c)
-	}
-	code, body := env.loginRaw(map[string]any{"username": name, "password": "brand-new-pass"})
-	if code != 200 || !strings.Contains(body, `"mustChangePassword":false`) {
-		t.Errorf("new password login: %d %s", code, body)
-	}
-
-	// Audited, without either password.
-	var detail string
-	err := env.pool.QueryRow(context.Background(),
-		`SELECT detail::text FROM audit_log WHERE action = 'user.change-password' AND actor = $1 ORDER BY id DESC LIMIT 1`, name).Scan(&detail)
-	if err != nil {
-		t.Fatalf("no audit row for the password change: %v", err)
-	}
-	if strings.Contains(detail, "brand-new-pass") || strings.Contains(detail, accountPassword) || !strings.Contains(detail, itoa(id)) {
-		t.Errorf("audit detail = %s", detail)
-	}
-}
-
-func TestUsernameAccounts_PhoneStaffHaveNoPasswordToChange(t *testing.T) {
-	env := newTestEnv(t) // the seeded user is phone staff: no password hash
-	raw, _ := json.Marshal(map[string]string{"oldPassword": "whatever-old", "newPassword": "whatever-new"})
-	rec := env.authed("POST", "/api/me/password", raw)
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "no_password_for_role") {
-		t.Fatalf("%d %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestUsernameAccounts_AdminResetSetsInitialPasswordAgain(t *testing.T) {
+func TestUsernameAccounts_AdminResetReplacesThePassword(t *testing.T) {
 	env := platformEnv(t, nil)
 	name := "reset-" + testPhone()[4:]
 	id, _ := env.usernameAccount(control.RoleCustomerUser, name)
 
-	tok := env.login(name, accountPassword)
-	raw, _ := json.Marshal(map[string]string{"oldPassword": accountPassword, "newPassword": "owner-chosen-pw"})
-	if rec := env.do("POST", "/api/me/password", []byte(tok), raw); rec.Code != 200 {
-		t.Fatalf("owner change: %d %s", rec.Code, rec.Body.String())
-	}
-
 	rec := env.authed("PUT", "/api/users/"+itoa(id), []byte(`{"password":"admin-reset-pw1"}`))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"mustChangePassword":true`) {
+	if rec.Code != 200 {
 		t.Fatalf("reset: %d %s", rec.Code, rec.Body.String())
 	}
-	if c, _ := env.loginRaw(map[string]any{"username": name, "password": "owner-chosen-pw"}); c != http.StatusUnauthorized {
+	if c, _ := env.loginRaw(map[string]any{"username": name, "password": accountPassword}); c != http.StatusUnauthorized {
 		t.Errorf("the replaced password still works")
 	}
 	if c, _ := env.loginRaw(map[string]any{"username": name, "password": "admin-reset-pw1"}); c != http.StatusOK {
 		t.Errorf("the reset password does not work")
 	}
 
-	// Phone staff still have none to reset.
-	_, otherID := env.userIn(control.RoleCustomerUser, env.defaultCustomerID())
-	rec = env.authed("PUT", "/api/users/"+itoa(otherID), []byte(`{"password":"admin-reset-pw1"}`))
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "no_password_for_role") {
-		t.Errorf("reset of phone staff: %d %s", rec.Code, rec.Body.String())
-	}
 }
 
 func TestUsernameAccounts_ResetNeverRecordsPassword(t *testing.T) {
@@ -313,6 +275,54 @@ func TestLoginLimit_SuccessForgetsFailures(t *testing.T) {
 		env.loginRaw(map[string]any{"username": name, "password": "wrong-password"})
 		if c, body := env.loginRaw(map[string]any{"username": name, "password": accountPassword}); c != 200 {
 			t.Fatalf("round %d: %d %s", round, c, body)
+		}
+	}
+}
+
+// Staff passwords are for the mini program and the app, not for administration: a staff token, even one
+// that claims a higher role, is refused by every management route because the role is read from the
+// database (cloud#77). Read access stays limited to granted tanks, which is tested in tank_grants_test.go.
+func TestUsernameAccounts_StaffTokenCannotAdminister(t *testing.T) {
+	env := platformEnv(t, nil)
+	name := "staff-" + testPhone()[4:]
+	staffID, _ := env.usernameAccount(control.RoleCustomerUser, name)
+	honest := env.login(name, accountPassword)
+
+	// A token that lies about the role. Only the database row decides.
+	forged, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"uid": staffID, "sub": itoa(staffID), "role": control.RolePlatformAdmin,
+		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Hour).Unix(),
+	}).SignedString([]byte("api-test-secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cust := itoa(env.defaultCustomerID())
+	routes := []struct{ method, path, body string }{
+		{"POST", "/api/users", `{"role":"customer_user","phone":"13800138000","customerId":` + cust + `}`},
+		{"GET", "/api/users", ``},
+		{"PUT", "/api/users/" + itoa(staffID), `{"disabled":true}`},
+		{"PUT", "/api/users/" + itoa(staffID) + "/customer", `{"customerId":` + cust + `}`},
+		{"PUT", "/api/users/" + itoa(staffID) + "/tank-grants/any-device", `{"tanks":[1]}`},
+		{"POST", "/api/customers", `{"name":"x"}`},
+		{"PUT", "/api/customers/" + cust, `{"name":"x"}`},
+		{"POST", "/api/customers/" + cust + "/onboarding/complete", ``},
+		{"POST", "/api/stations", `{"customerId":` + cust + `,"name":"x"}`},
+		{"PUT", "/api/devices/any-device/customer", `{"customerId":` + cust + `}`},
+		{"POST", "/api/devices", `{"deviceName":"any-device","customerId":` + cust + `}`},
+		{"POST", "/api/devices/any-device/pairing-secret", `{"customerId":` + cust + `}`},
+		{"GET", "/api/audit", ``},
+	}
+	for label, tok := range map[string]string{"honest": honest, "forged-role": forged} {
+		for _, r := range routes {
+			var body []byte
+			if r.body != "" {
+				body = []byte(r.body)
+			}
+			rec := env.do(r.method, r.path, []byte(tok), body)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("%s staff token: %s %s = %d %s, want 403", label, r.method, r.path, rec.Code, rec.Body.String())
+			}
 		}
 	}
 }

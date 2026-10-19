@@ -292,7 +292,7 @@ type User struct {
 	ID int64 `json:"id"`
 	// 登录用户名，唯一。
 	Username string `json:"username"`
-	// bcrypt 哈希。平台管理员、客户管理员、用户名账号必填；手机号员工必须为 NULL，只能经微信登录。
+	// bcrypt 哈希。平台管理员、客户管理员、用户名账号必填；手机号员工可空（空则只能经微信登录），由平台管理员设置后也可用手机号 + 密码登录。
 	PasswordHash pgtype.Text `json:"password_hash"`
 	// 账号创建时间。
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -304,8 +304,6 @@ type User struct {
 	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
 	// 规范化手机号（中国大陆 11 位）。平台管理员为 NULL；客户侧账号要么有手机号（username 与之相等），要么是用户名账号（phone 为 NULL）；全局唯一。
 	Phone pgtype.Text `json:"phone"`
-	// 密码由管理员设置或重置后为 true（初始密码），本人改密后清除。只是给客户端的提示，服务端不据此拦截请求。
-	MustChangePassword bool `json:"must_change_password"`
 }
 
 // 用户-设备绑定关系（多对多），小程序端通过扫描设备物理二维码建立绑定（CLAUDE.md 2026-08-29 authorization pass）。
