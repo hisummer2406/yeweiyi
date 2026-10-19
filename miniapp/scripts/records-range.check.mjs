@@ -3,6 +3,9 @@
 process.env.TZ = 'Asia/Shanghai';
 
 import assert from 'node:assert/strict';
+import { en } from '../miniprogram/locales/en.ts';
+import { es } from '../miniprogram/locales/es.ts';
+import { zh } from '../miniprogram/locales/zh.ts';
 import {
   FILTERED_PAGE_SIZE,
   MAX_AUTO_PAGES,
@@ -124,6 +127,13 @@ test('formatLocalTime renders the local wall clock and leaves junk alone', () =>
   assert.equal(formatLocalTime('not a time'), 'not a time');
 });
 
+test('formatLocalTime: Spanish reads day/month/year, Chinese and English year-month-day', () => {
+  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z', 'es'), '07/10/2026 18:13:29');
+  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z', 'en'), '2026-10-07 18:13:29');
+  assert.equal(formatLocalTime('2026-10-07T10:13:29.788Z', 'zh'), '2026-10-07 18:13:29');
+  assert.equal(formatLocalTime('not a time', 'es'), 'not a time');
+});
+
 const stockRes = (over = {}) => ({
   rows: [{ direction: 'IN' }, { direction: 'OUT' }],
   parsed: 2, unparsable: 0, legacySkipped: 0, invalidSource: 0, folded: 0, truncated: false, partial: false,
@@ -132,24 +142,23 @@ const stockRes = (over = {}) => ({
 
 test('the "more than one page" note is dropped when the list pages, kept otherwise', () => {
   const res = stockRes({ truncated: true });
-  assert.match(summarizeOilInOut(res, '').note, /超过单页上限/);
-  assert.equal(summarizeOilInOut(res, '', { paged: true }).note, '');
+  assert.deepEqual(summarizeOilInOut(res, '').notes, [{ key: 'oilNote.truncated' }]);
+  assert.deepEqual(summarizeOilInOut(res, '', { paged: true }).notes, []);
 });
 
 test('the unreadable-records note does not quote a per-page count when paging', () => {
   const res = stockRes({ unparsable: 2, parsed: 37 });
-  assert.match(summarizeOilInOut(res, '').note, /仅展示可读取的 37 条/);
-  const paged = summarizeOilInOut(res, '', { paged: true }).note;
-  assert.doesNotMatch(paged, /37/);
-  assert.match(paged, /可能不完整/);
+  assert.deepEqual(summarizeOilInOut(res, '').notes, [{ key: 'oilNote.unparsableShown', params: { n: 2, parsed: 37 } }]);
+  const paged = summarizeOilInOut(res, '', { paged: true }).notes;
+  assert.deepEqual(paged, [{ key: 'oilNote.unparsableMaybe', params: { n: 2 } }]);
+  // the paged wording must not quote the per-page count, in any language
+  for (const table of [zh, en, es]) assert.doesNotMatch(table['oilNote.unparsableMaybe'], /\{parsed\}/);
 });
 
 test('window-level notes survive paging', () => {
   const res = stockRes({ truncated: true, unparsable: 2, partial: true });
-  const note = summarizeOilInOut(res, '', { paged: true }).note;
-  assert.match(note, /无法解析/);
-  assert.match(note, /仍在同步/);
-  assert.doesNotMatch(note, /超过单页上限/);
+  const keys = summarizeOilInOut(res, '', { paged: true }).notes.map((m) => m.key);
+  assert.deepEqual(keys, ['oilNote.unparsableMaybe', 'oilNote.partial']);
 });
 
 console.log(`${n} checks passed`);

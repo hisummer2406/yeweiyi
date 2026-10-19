@@ -1,16 +1,14 @@
 import { roleFromToken } from '../../utils/auth';
 import { maskPhone } from '../../utils/loginFlow';
+import { setNavTitle, texts } from '../../utils/i18n';
+import { ROLE_KEYS, label } from '../../utils/labels';
 import { clearToken, getProfile, getToken, setAutoLogin } from '../../utils/storage';
-
-const ROLE_LABELS: Record<string, string> = {
-  platform_admin: '平台管理员',
-  customer_admin: '客户管理员',
-  customer_user: '客户普通用户',
-};
 
 Page({
   data: {
-    // The account is shown by its masked phone number: the full number is not needed on screen.
+    text: texts('profile'),
+    // The account is shown by its masked phone number (the full number is not needed on screen), or by its
+    // username when it has no phone number.
     account: '',
     roleLabel: '',
   },
@@ -18,9 +16,12 @@ Page({
   onShow() {
     const token = getToken();
     const role = token ? roleFromToken(token) : '';
+    setNavTitle('profile.navTitle');
+    const profile = getProfile();
     this.setData({
-      account: maskPhone(getProfile()?.phone),
-      roleLabel: ROLE_LABELS[role] || role,
+      text: texts('profile'),
+      account: maskPhone(profile?.phone) || profile?.username || '',
+      roleLabel: role ? label(ROLE_KEYS, role) : '',
     });
   },
 

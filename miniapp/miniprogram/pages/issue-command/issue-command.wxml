@@ -1,26 +1,26 @@
 <view class="container">
   <view class="card" wx:if="{{methods.length === 0}}">
-    <text class="muted">当前账号没有可下发的控制命令权限</text>
+    <text class="muted">{{text.noPermission}}</text>
   </view>
 
   <view class="card" wx:else>
     <view class="field">
-      <text class="field-label">命令</text>
+      <text class="field-label">{{text.command}}</text>
       <picker mode="selector" range="{{methods}}" range-key="label" value="{{methodIndex}}" bindchange="onMethodChange">
         <view class="field-input">{{methods[methodIndex].label}}</view>
       </picker>
       <view class="muted text-warning" wx:if="{{methods[methodIndex].physical}}" style="margin-top:8rpx;">
-        物理动作：默认关闭，设备端联锁验证完成前会被拒绝（返回 409），并非本应用的故障。
+        {{text.physicalWarning}}
       </view>
     </view>
 
     <view class="field">
-      <text class="field-label">操作原因（二次确认，必填）</text>
-      <input class="field-input" value="{{reason}}" bindinput="onReasonInput" placeholder="例如：值班室二次确认" />
+      <text class="field-label">{{text.reasonLabel}}</text>
+      <input class="field-input" value="{{reason}}" bindinput="onReasonInput" placeholder="{{text.reasonPlaceholder}}" />
     </view>
 
     <view class="field">
-      <text class="field-label">参数（JSON，可留空）</text>
+      <text class="field-label">{{text.argsLabel}}</text>
       <textarea
         class="field-input"
         style="width:100%;height:200rpx;"
@@ -29,12 +29,11 @@
       />
     </view>
 
-    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">提交</button>
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">{{text.submit}}</button>
     <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;">{{errorMsg}}</view>
   </view>
 
   <view class="card muted">
-    提交后返回的是"已接受"，不是"已完成"——ACK 只代表设备已受理，真正的执行结果会异步到达，
-    请回到控制命令列表查看最终状态（succeeded/failed/rejected/expired 等）。
+    {{text.note}}
   </view>
 </view>

@@ -1,4 +1,6 @@
 import { passwordLogin, wechatPhoneLogin, wechatRestore } from '../../utils/auth';
+import { setNavTitle, t, texts } from '../../utils/i18n';
+import { WECHAT_LOGIN } from '../../utils/platform';
 import {
   buildPasswordLogin,
   classifyPhoneAuth,
@@ -17,9 +19,10 @@ import { detailUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
 //               administrator provisioned for that number
 type Stage = 'restoring' | 'ready' | 'needPhone';
 
-// Which way in the page offers: WeChat is the default; 账号密码登录 is the same single form as the
-// web back office (POST /api/login) — one 手机号 / 用户名 input, for administrators. Staff have no
-// password.
+// Which way in the page offers: in the mini-program WeChat is the default and the password form is a
+// second tab; in the app there is no WeChat (utils/platform.ts) and the password form is all there is.
+// The password form is the same single input as the web back office (POST /api/login): the account
+// (phone number or username) plus the password.
 type Mode = 'wechat' | 'password';
 
 const HOME = '/pages/devices/devices';
@@ -28,13 +31,37 @@ Page({
   // Set when the login was started by a device mini-program code: after signing in, go to that device.
   scene: null as string | null,
 
+  // The i18n key of the message on screen, kept so it can be worded again when the language changes.
+  errorKey: '',
+
   data: {
-    mode: 'wechat' as Mode,
+    text: {} as Record<string, string>,
+    wechatLogin: WECHAT_LOGIN,
+    mode: (WECHAT_LOGIN ? 'wechat' : 'password') as Mode,
     stage: 'ready' as Stage,
     busy: false,
     errorMsg: '',
     account: '',
     password: '',
+  },
+
+  onShow() {
+    this.renderTexts();
+  },
+
+  renderTexts() {
+    setNavTitle('login.navTitle');
+    this.setData({ text: texts('login'), errorMsg: this.errorKey ? t(this.errorKey) : '' });
+  },
+
+  // Shows a message by key (or clears it with ''), in the language of the moment.
+  showError(key: string) {
+    this.errorKey = key;
+    this.setData({ errorMsg: key ? t(key) : '' });
+  },
+
+  onLanguageChange() {
+    this.renderTexts();
   },
 
   onLoad(query: Record<string, string>) {
@@ -43,7 +70,7 @@ Page({
     // wait for the user, rather than silently re-asking the cloud the same question.
     const notice = noticeFromQuery(query);
     if (notice) {
-      this.setData({ errorMsg: notice });
+      this.showError(notice);
       return;
     }
     if (getToken()) {
@@ -51,8 +78,8 @@ Page({
       return;
     }
     // After an explicit logout the same WeChat must not be signed straight back in, or logging out
-    // would do nothing. The user taps 微信登录 instead.
-    if (autoLoginEnabled()) {
+    // would do nothing. The user taps the WeChat button instead. Never in the app: no WeChat there.
+    if (WECHAT_LOGIN && autoLoginEnabled()) {
       this.restore();
     }
   },
@@ -69,6 +96,7 @@ Page({
     if (this.data.busy) return;
     const mode = e.currentTarget.dataset.mode as Mode;
     if (mode === this.data.mode) return;
+    this.errorKey = '';
     this.setData({ mode, errorMsg: '', account: '', password: '' });
   },
 
@@ -84,10 +112,11 @@ Page({
     if (this.data.busy) return;
     const form = buildPasswordLogin(this.data.account, this.data.password);
     if (!form.ok) {
-      this.setData({ errorMsg: form.message });
+      this.showError(form.messageKey);
       return;
     }
-    this.setData({ busy: true, errorMsg: '' });
+    this.showError('');
+    this.setData({ busy: true });
     passwordLogin(form.body)
       .then(() => {
         // Do not keep the password around once it has been used.
@@ -97,18 +126,19 @@ Page({
       .catch((err: Error) => {
         const status = err instanceof ApiError ? err.status : 0;
         const code = err instanceof ApiError ? codeOfBody(err.body) : undefined;
-        this.setData({ errorMsg: describeLoginFailure(status, code).message });
+        this.showError(describeLoginFailure(status, code).messageKey || 'loginErr.unknown');
       })
       .finally(() => this.setData({ busy: false }));
   },
 
   onWechatLogin() {
-    if (this.data.busy) return;
+    if (!WECHAT_LOGIN || this.data.busy) return;
     this.restore();
   },
 
   restore() {
-    this.setData({ stage: 'restoring', busy: true, errorMsg: '' });
+    this.showError('');
+    this.setData({ stage: 'restoring', busy: true });
     wechatRestore()
       .then(() => this.enter())
       .catch((err: Error) => this.fail(err, 'restore'))
@@ -117,18 +147,19 @@ Page({
 
   // <button open-type="getPhoneNumber">. The authorization code arrives in e.detail.code, valid once.
   onGetPhoneNumber(e: WechatMiniprogram.CustomEvent) {
-    if (this.data.busy) return;
+    if (!WECHAT_LOGIN || this.data.busy) return;
     const result = classifyPhoneAuth(e.detail);
     if (result.kind === 'denied') {
       // Declining is a normal answer: stay here, no error, free to try again.
-      this.setData({ errorMsg: '需要授权手机号才能登录' });
+      this.showError('loginErr.phoneDenied');
       return;
     }
     if (result.kind === 'failed') {
-      this.setData({ errorMsg: result.message });
+      this.showError(result.messageKey);
       return;
     }
-    this.setData({ busy: true, errorMsg: '' });
+    this.showError('');
+    this.setData({ busy: true });
     wechatPhoneLogin(result.code)
       .then(() => this.enter())
       .catch((err: Error) => this.fail(err, 'phone'))
@@ -141,11 +172,13 @@ Page({
     const failure = describeLoginFailure(status, code);
     if (failure.offerPhone) {
       // Not bound yet: show the phone button. Not an error to display.
-      this.setData({ stage: 'needPhone', errorMsg: '' });
+      this.showError('');
+      this.setData({ stage: 'needPhone' });
       return;
     }
     // Stay on this page and let the user decide to retry; nothing retries by itself, so a broken
     // WeChat or cloud can never turn into a request loop.
-    this.setData({ stage: from === 'phone' ? 'needPhone' : 'ready', errorMsg: failure.message });
+    this.showError(failure.messageKey || 'loginErr.unknown');
+    this.setData({ stage: from === 'phone' ? 'needPhone' : 'ready' });
   },
 });

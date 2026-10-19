@@ -1,3 +1,4 @@
+import { setNavTitle, texts } from '../../utils/i18n';
 import { filterStations, type StationOption } from '../../utils/stations';
 
 // Opened from the home page (pages/devices onPickStation). The home page hands over the options and the
@@ -5,10 +6,15 @@ import { filterStations, type StationOption } from '../../utils/stations';
 // loading, so there is nothing to fail here.
 Page({
   data: {
+    text: texts('stationSelect'),
     query: '',
     all: [] as StationOption[],
     shown: [] as StationOption[],
     current: '',
+  },
+
+  onShow() {
+    setNavTitle('stationSelect.navTitle');
   },
 
   onLoad() {

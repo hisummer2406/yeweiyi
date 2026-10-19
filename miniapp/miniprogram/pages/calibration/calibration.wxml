@@ -2,30 +2,30 @@
      "保存到手机"是纯本地存储；"保存到控制器"协议里没有对应方法，点击时说明（见 calibration.ts）。 -->
 <view class="fc" style="padding:20rpx 0 18rpx;">
   <view class="fr" id="row-tank" bindtap="onOpenTank">
-    <text class="fl">罐号</text>
-    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? '请选择' : tankOptions[tankIndex]}}</text>
+    <text class="fl">{{form.tankNo}}</text>
+    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? form.select : tankOptions[tankIndex]}}</text>
     <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
   </view>
   <view class="fr">
-    <text class="fl">液位修正</text>
+    <text class="fl">{{text.levelOffset}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{levelOffset}}" bindinput="onLevelInput" />
-    <text class="fu">毫米</text>
+    <text class="fu">{{form.mm}}</text>
   </view>
   <view class="fr">
-    <text class="fl">水位修正</text>
+    <text class="fl">{{text.waterOffset}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{waterOffset}}" bindinput="onWaterInput" />
-    <text class="fu">毫米</text>
+    <text class="fu">{{form.mm}}</text>
   </view>
   <view class="fr">
-    <text class="fl">温度修正</text>
+    <text class="fl">{{text.tempOffset}}</text>
     <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{tempOffset}}" bindinput="onTempInput" />
     <text class="fu">℃</text>
   </view>
 </view>
 
 <view class="pill-row" style="margin-top:134rpx;">
-  <button class="pill pill-lite" bindtap="onSaveLocal">保存到手机</button>
-  <button class="pill pill-deep" bindtap="onSaveDevice">保存到控制器</button>
+  <button class="pill pill-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
+  <button class="pill pill-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
 </view>
 
 <grid-picker show="{{pickerShow}}" top="{{pickerTop}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />

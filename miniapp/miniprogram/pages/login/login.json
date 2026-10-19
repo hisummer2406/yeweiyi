@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "登录"
+  "navigationBarTitleText": "",
+  "usingComponents": {
+    "lang-switch": "/components/lang-switch/lang-switch"
+  }
 }

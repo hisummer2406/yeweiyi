@@ -3,9 +3,10 @@
 // 是半径还是直径设计稿没说清）；长方体 H（高）、L（长）、R（图上标在进深方向，应为宽，设计稿用 R）。
 // 这几处含义需要设计/工程确认，在此之前页面只显示字母，不替设计稿编含义。
 import { showComingSoon } from '../../utils/comingSoon';
+import { t, texts } from '../../utils/i18n';
+
 type Dim = { key: string; value: string };
 
-const SHAPE_TITLES: Record<string, string> = { horizontal: '卧罐', vertical: '立罐', cuboid: '长方体' };
 const DIM_KEYS: Record<string, string[]> = {
   horizontal: ['H', 'L', 'R'],
   vertical: ['H', 'R'],
@@ -16,10 +17,12 @@ const storageKey = (shape: string) => `tankshape-draft-${shape}`;
 
 Page({
   data: {
+    text: texts('tankEdit'),
+    form: texts('form'),
     shape: 'horizontal',
     dims: [] as Dim[],
     // 设计稿的罐号选择是 1–12 号
-    tankOptions: Array.from({ length: 12 }, (_, i) => `${i + 1}号`),
+    tankOptions: Array.from({ length: 12 }, (_, i) => t('form.numbered', { n: i + 1 })),
     tankIndex: -1,
     pickerShow: false,
     pickerTop: 0,
@@ -27,7 +30,7 @@ Page({
 
   onLoad(query: Record<string, string>) {
     const shape = DIM_KEYS[query.shape] ? query.shape : 'horizontal';
-    wx.setNavigationBarTitle({ title: SHAPE_TITLES[shape] });
+    wx.setNavigationBarTitle({ title: t(`tankShape.${shape}`) });
     let saved: Record<string, string> = {};
     try {
       saved = wx.getStorageSync(storageKey(shape)) || {};
@@ -66,9 +69,9 @@ Page({
     this.data.dims.forEach((d: Dim) => (saved[d.key] = d.value));
     try {
       wx.setStorageSync(storageKey(this.data.shape), saved);
-      wx.showToast({ title: '已保存到本机，不会下发给设备', icon: 'none' });
+      wx.showToast({ title: t('form.savedLocal'), icon: 'none' });
     } catch {
-      wx.showToast({ title: '保存失败', icon: 'none' });
+      wx.showToast({ title: t('tankEdit.saveFailed'), icon: 'none' });
     }
   },
 

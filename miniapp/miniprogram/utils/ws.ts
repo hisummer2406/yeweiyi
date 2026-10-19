@@ -4,6 +4,11 @@ import type { AlarmPushMessage } from '../types/api';
 
 export type { AlarmPushMessage };
 
+// 'connecting' = a socket is being opened (the first time, or a retry); 'open' = connected; 'down' = it
+// dropped or could not be opened and a retry is scheduled. The page uses it to say that live alarms
+// are not coming in: silence must never be mistaken for "no alarms".
+export type SocketState = 'connecting' | 'open' | 'down';
+
 // Backoff, not a fixed delay: the server closes the socket on "token expired"/"access revoked", and
 // reconnecting every 2s forever with a token that will never be accepted again just hammers it.
 const RECONNECT_MIN_MS = 2000;
@@ -19,23 +24,58 @@ export class AlarmSocket {
   private closedByCaller = false;
   private reconnectDelayMs = RECONNECT_MIN_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private state: SocketState = 'connecting';
+  private onState: (state: SocketState) => void;
 
-  constructor(device: string, onMessage: (msg: AlarmPushMessage) => void) {
+  constructor(
+    device: string,
+    onMessage: (msg: AlarmPushMessage) => void,
+    onState: (state: SocketState) => void = () => {},
+  ) {
     this.device = device;
     this.onMessage = onMessage;
+    this.onState = onState;
+  }
+
+  private setState(state: SocketState): void {
+    if (this.state === state) return;
+    this.state = state;
+    this.onState(state);
+  }
+
+  // The app came back to the foreground or the network came back: do not wait out the backoff. Does
+  // nothing unless the socket is down (a connection still being opened is left alone) or after close(). Later failures go back to the normal backoff, so this can
+  // never turn into a reconnect loop on its own — it only runs when the user or the phone changed
+  // something.
+  reconnectNow(): void {
+    if (this.closedByCaller || !this.device || this.state !== 'down') return;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.task) {
+      const stale = this.task;
+      this.task = null;
+      stale.close({});
+    }
+    this.reconnectDelayMs = RECONNECT_MIN_MS;
+    this.connect();
   }
 
   connect(): void {
     // No device, no socket: `?device=` would be refused and retried with backoff forever.
     if (!this.device) return;
     this.closedByCaller = false;
+    this.setState('connecting');
     const token = getToken();
     const url = `${WS_BASE_URL}/ws/alarms?device=${encodeURIComponent(this.device)}&token=${encodeURIComponent(token)}`;
     const task = wx.connectSocket({ url });
     this.task = task;
 
     task.onOpen(() => {
+      if (task !== this.task) return;
       this.reconnectDelayMs = RECONNECT_MIN_MS;
+      this.setState('open');
     });
 
     task.onMessage((res) => {
@@ -59,6 +99,7 @@ export class AlarmSocket {
       return;
     }
     this.task = null;
+    this.setState('down');
     const delay = this.reconnectDelayMs;
     this.reconnectDelayMs = Math.min(delay * 2, RECONNECT_MAX_MS);
     this.reconnectTimer = setTimeout(() => {

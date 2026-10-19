@@ -12,13 +12,13 @@ export function parseDeviceCodeQr(raw: string): string | null {
   return DEVICE_CODE.test(code) ? code : null;
 }
 
-// What to tell the user when POST /api/devices/resolve fails. `status` -1 = not an API error.
+// What to tell the user when POST /api/devices/resolve fails, as an i18n key (locales/*.ts, `scanErr`),
+// or '' when this failure has no scan-specific wording and the generic error text applies.
+// `status` -1 = not an API error.
 // 404 device_not_found is deliberately one answer for "no such device / not yours / no granted tank":
 // the app must not guess which, and must not offer any way to grant access from here.
-export function describeResolveFailure(status: number, code: string, fallback: string): string {
-  if (status === 404 && code === 'device_not_found') {
-    return '未找到该设备，或你暂无该设备油罐的查看权限，请联系平台管理员';
-  }
-  if (status === 410) return '设备绑定已停用，请更新小程序后重试';
-  return fallback;
+export function describeResolveFailure(status: number, code: string): string {
+  if (status === 404 && code === 'device_not_found') return 'scanErr.notFound';
+  if (status === 410) return 'scanErr.bindRemoved';
+  return '';
 }

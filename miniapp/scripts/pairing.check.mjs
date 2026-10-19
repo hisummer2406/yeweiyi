@@ -1,5 +1,8 @@
 // Run with: npm run check   (node --experimental-strip-types; pure logic only, no wx)
 import assert from 'node:assert/strict';
+import { en } from '../miniprogram/locales/en.ts';
+import { es } from '../miniprogram/locales/es.ts';
+import { zh } from '../miniprogram/locales/zh.ts';
 import { describeResolveFailure, parseDeviceCodeQr } from '../miniprogram/utils/pairing.ts';
 import { isReadOnlyRole } from '../miniprogram/utils/roles.ts';
 
@@ -30,15 +33,19 @@ test('anything that is not a bare code is refused before a request is spent', ()
 });
 
 test('device_not_found is one message for unknown / other customer / not granted', () => {
-  const m = describeResolveFailure(404, 'device_not_found', 'device not found');
-  assert.match(m, /未找到该设备/);
-  assert.match(m, /联系平台管理员/);
+  const m = describeResolveFailure(404, 'device_not_found');
+  assert.equal(m, 'scanErr.notFound');
+  // one answer, and it points to the platform administrator in every language
+  assert.match(zh[m], /联系平台管理员/);
+  assert.match(en[m], /platform administrator/i);
+  assert.match(es[m], /administrador de la plataforma/i);
 });
 
 test('410 bind_removed is not shown as a session problem; other failures keep their own text', () => {
-  assert.match(describeResolveFailure(410, 'bind_removed', 'x'), /更新小程序/);
-  assert.equal(describeResolveFailure(500, '', '服务异常'), '服务异常');
-  assert.equal(describeResolveFailure(-1, '', '网络请求失败'), '网络请求失败');
+  assert.equal(describeResolveFailure(410, 'bind_removed'), 'scanErr.bindRemoved');
+  // no scan-specific wording: '' hands over to the generic error text (never the cloud's own)
+  assert.equal(describeResolveFailure(500, ''), '');
+  assert.equal(describeResolveFailure(-1, ''), '');
 });
 
 test('only customer_user is view-only; unknown or empty role is left to the server', () => {

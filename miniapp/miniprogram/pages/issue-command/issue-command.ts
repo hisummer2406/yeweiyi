@@ -1,6 +1,8 @@
-import { get, post } from '../../utils/request';
+import { describeError } from '../../utils/errors';
+import { setNavTitle, t, texts } from '../../utils/i18n';
+import { ApiError, get, post } from '../../utils/request';
 import { commandGuard, stationIdFromKey } from '../../utils/stationDevice';
-import { CONTROL_METHODS, type ControlMethodSpec } from '../../utils/labels';
+import { COMMAND_STATUS_KEYS, CONTROL_METHODS, label, type ControlMethodSpec } from '../../utils/labels';
 import { roleFromToken } from '../../utils/auth';
 import { getToken } from '../../utils/storage';
 import type { ControlCommand, Device } from '../../types/api';
@@ -17,6 +19,19 @@ function methodsForRole(role: string): ControlMethodSpec[] {
   return CONTROL_METHODS.filter((m) => !m.adminOnly);
 }
 
+// The last check before sending refused the command (the station's device changed, or the check itself could
+// not be made): not an API error, so it carries its own i18n key.
+class Blocked extends Error {
+  messageKey: string;
+
+  constructor(messageKey: string) {
+    super(messageKey);
+    this.messageKey = messageKey;
+  }
+}
+
+type MethodRow = ControlMethodSpec & { label: string };
+
 Page({
   // Station the detail page was opened under (see device-detail onIssueCommand); undefined when it was
   // opened by device name alone.
@@ -24,7 +39,8 @@ Page({
 
   data: {
     device: '',
-    methods: [] as ControlMethodSpec[],
+    text: texts('issueCmd'),
+    methods: [] as MethodRow[],
     methodIndex: 0,
     reason: '',
     // Raw JSON textarea for args, same pattern the retired oil-can-set page used for its opaque
@@ -41,7 +57,14 @@ Page({
     const token = getToken();
     const role = token ? roleFromToken(token) : '';
     this.stationId = stationIdFromKey(query.station);
-    this.setData({ device: query.device || '', methods: methodsForRole(role) });
+    this.setData({
+      device: query.device || '',
+      methods: methodsForRole(role).map((m) => ({ ...m, label: t(m.labelKey) })),
+    });
+  },
+
+  onShow() {
+    setNavTitle('issueCmd.navTitle');
   },
 
   onMethodChange(e: WechatMiniprogram.PickerChange) {
@@ -59,14 +82,14 @@ Page({
   onSubmit() {
     const method = this.data.methods[this.data.methodIndex];
     if (!method) {
-      this.setData({ errorMsg: '请选择要下发的命令' });
+      this.setData({ errorMsg: t('issueCmd.errPick') });
       return;
     }
     // Required by the protocol, the database constraint, and internal/control — a whitespace-only
     // reason is rejected server-side too, checked here only so the round trip isn't wasted.
     const reason = this.data.reason.trim();
     if (!reason) {
-      this.setData({ errorMsg: '请填写操作原因（二次确认必填）' });
+      this.setData({ errorMsg: t('issueCmd.errReason') });
       return;
     }
     let args: Record<string, unknown> | undefined;
@@ -75,7 +98,7 @@ Page({
       try {
         args = JSON.parse(text);
       } catch {
-        this.setData({ errorMsg: '参数必须是合法 JSON' });
+        this.setData({ errorMsg: t('issueCmd.errJson') });
         return;
       }
     }
@@ -89,7 +112,7 @@ Page({
     get<{ rows: Device[] }>('/api/devices')
       .then((res) => {
         const guard = commandGuard(res.rows, device, this.stationId);
-        if (!guard.ok) throw new Error(guard.message);
+        if (!guard.ok) throw new Blocked(guard.messageKey);
         return post<ControlCommand>(`/api/devices/${encodeURIComponent(device)}/commands`, {
           method: method.method,
           reason,
@@ -99,12 +122,22 @@ Page({
       .then((cmd) => {
         // 202 Accepted server-side (yeweiyi-cloud CLAUDE.md: "202, never 200" — this only reports
         // how far the command got synchronously, not that it finished). Report that state honestly
-        // rather than a blanket "成功".
-        wx.showToast({ title: `已提交，当前状态：${cmd.status}`, icon: 'none' });
+        // rather than a blanket "success".
+        wx.showToast({
+          title: t('issueCmd.submitted', { status: label(COMMAND_STATUS_KEYS, cmd.status) }),
+          icon: 'none',
+        });
         wx.navigateBack();
       })
       .catch((err: Error) => {
-        this.setData({ errorMsg: err.message });
+        if (err instanceof Blocked) {
+          this.setData({ errorMsg: t(err.messageKey) });
+        } else if (err instanceof ApiError && err.status === 409) {
+          // The cloud refused it in the current state, e.g. a physical action that stays disabled.
+          this.setData({ errorMsg: t('issueCmd.refused') });
+        } else {
+          this.setData({ errorMsg: describeError(err) });
+        }
       })
       .finally(() => this.setData({ submitting: false }));
   },

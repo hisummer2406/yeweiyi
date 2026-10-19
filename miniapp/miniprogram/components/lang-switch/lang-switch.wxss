@@ -1,0 +1,28 @@
+.lang {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.lang-label {
+  font-size: 24rpx;
+  color: #8697a4;
+  margin-right: 16rpx;
+}
+
+.lang-option {
+  font-size: 26rpx;
+  color: #606060;
+  padding: 8rpx 20rpx;
+  margin: 4rpx;
+  border-radius: 28rpx;
+  border: 1rpx solid #ededed;
+  background-color: #ffffff;
+}
+
+.lang-option.active {
+  color: #05507c;
+  border-color: #05507c;
+  font-weight: 600;
+}

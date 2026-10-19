@@ -2,75 +2,48 @@ import { roleFromToken } from '../../utils/auth';
 import { maskPhone } from '../../utils/loginFlow';
 import { getProfile, getToken } from '../../utils/storage';
 import { showComingSoon } from '../../utils/comingSoon';
-
-const ROLE_LABELS: Record<string, string> = {
-  platform_admin: '平台管理员',
-  customer_admin: '客户管理员',
-  customer_user: '客户普通用户',
-};
+import { applyTabBar, setNavTitle, t, texts } from '../../utils/i18n';
+import { ROLE_KEYS, label } from '../../utils/labels';
 
 type MoreItem = {
-  title: string;
+  titleKey: string;
   icon: string; // /assets/icons/{icon}.png，直接从设计稿 PSD 的「组17」画板抠出来的切图
-  reason: string;
   page?: string;
 };
 
 // 对应设计稿「首页-设置05」画板，就这 6 项——交班/库存记录属于「我的记录」画板，
 // 员工管理/邀请加入/油站选择属于首页"+"号的添加菜单，都不在这个列表里。
+// Why each entry is a static page (cloud capability missing) is kept in openspec / the page's own comment,
+// never on screen.
 const ITEMS: MoreItem[] = [
-  {
-    title: '参数修正',
-    icon: 'settings-calibration',
-    reason: '传感器读数校准，协议里没有对应的下发方法',
-    page: '/pages/calibration/calibration',
-  },
-  {
-    title: '储罐设置',
-    icon: 'settings-tank',
-    reason: 'config.setTank / config.setAlarmThresholds 已有方法名，参数结构未定义',
-    page: '/pages/tank-config/tank-config',
-  },
-  {
-    title: '罐表设置',
-    icon: 'settings-tankshape',
-    reason: '下发换算表是全新能力，协议里没有对应方法',
-    page: '/pages/tank-shape/tank-shape',
-  },
-  {
-    title: '记录设置',
-    icon: 'settings-records',
-    reason: '设计稿有画板，云端无对应接口，且涉及不可恢复的清空操作',
-    page: '/pages/record-settings/record-settings',
-  },
-  {
-    title: '报表设置',
-    // 设计稿里报表设置复用的就是罐表设置那个图标，不是我漏抠
-    icon: 'settings-tankshape',
-    reason: '设计稿有画板，云端无导出接口',
-    page: '/pages/report-settings/report-settings',
-  },
-  {
-    title: '补录记录',
-    icon: 'settings-backfill',
-    reason: '新增漏报记录，云端无对应接口（不同于记录修正）',
-    page: '/pages/backfill/backfill',
-  },
+  { titleKey: 'more.calibration', icon: 'settings-calibration', page: '/pages/calibration/calibration' },
+  { titleKey: 'more.tank', icon: 'settings-tank', page: '/pages/tank-config/tank-config' },
+  { titleKey: 'more.tankTable', icon: 'settings-tankshape', page: '/pages/tank-shape/tank-shape' },
+  { titleKey: 'more.recordSettings', icon: 'settings-records', page: '/pages/record-settings/record-settings' },
+  // 设计稿里报表设置复用的就是罐表设置那个图标，不是我漏抠
+  { titleKey: 'more.reportSettings', icon: 'settings-tankshape', page: '/pages/report-settings/report-settings' },
+  { titleKey: 'more.backfill', icon: 'settings-backfill', page: '/pages/backfill/backfill' },
 ];
 
 Page({
   data: {
-    items: ITEMS,
+    text: texts('more'),
+    items: [] as { titleKey: string; title: string; icon: string; page?: string }[],
     account: '',
     roleLabel: '',
   },
 
   onShow() {
+    applyTabBar();
+    setNavTitle('more.navTitle');
     const token = getToken();
     const role = token ? roleFromToken(token) : '';
+    const profile = token ? getProfile() : undefined;
     this.setData({
-      account: token ? maskPhone(getProfile()?.phone) : '',
-      roleLabel: ROLE_LABELS[role] || role,
+      text: texts('more'),
+      items: ITEMS.map((i) => ({ titleKey: i.titleKey, title: t(i.titleKey), icon: i.icon, page: i.page })),
+      account: maskPhone(profile?.phone) || profile?.username || '',
+      roleLabel: role ? label(ROLE_KEYS, role) : '',
     });
   },
 
@@ -80,11 +53,17 @@ Page({
       wx.navigateTo({ url: page });
       return;
     }
-    showComingSoon(); // reason 是开发备注，不展示
+    showComingSoon();
   },
 
   onAccountTap() {
     wx.navigateTo({ url: '/pages/profile/profile' });
+  },
+
+  // The language was saved by the switcher. Every page reads its texts when it is shown, but pages that
+  // are already open hold texts in their data, so start over from this page in the new language.
+  onLanguageChange() {
+    wx.reLaunch({ url: '/pages/more/more' });
   },
 });
 

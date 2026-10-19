@@ -47,7 +47,7 @@ test('options carry device counts and the ungrouped option comes last, only when
   const all = [dev('A', 1), dev('B', 1), dev('C', 2)];
   const opts = buildStationOptions(stations, all);
   assert.deepEqual(opts.map((o) => [o.key, o.deviceCount]), [['1', 2], ['2', 1]]);
-  const withFree = buildStationOptions(stations, [...all, dev('D', null)]);
+  const withFree = buildStationOptions(stations, [...all, dev('D', null)], '未分组');
   assert.deepEqual(withFree.map((o) => [o.key, o.deviceCount]), [['1', 2], ['2', 1], [UNGROUPED_KEY, 1]]);
   assert.equal(withFree.at(-1).name, '未分组');
 });

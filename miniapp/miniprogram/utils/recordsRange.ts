@@ -16,10 +16,11 @@ export interface RecordsRange {
   endDate?: string;
 }
 
-export const RANGE_PRESETS: { key: Exclude<RangeKey, 'custom'>; label: string; hours: number }[] = [
-  { key: '24h', label: '最近24小时', hours: 24 },
-  { key: '7d', label: '近7天', hours: 24 * 7 },
-  { key: '30d', label: '近30天', hours: 24 * 30 },
+// `labelKey` is an i18n key (locales/*.ts, `range`): this module is pure.
+export const RANGE_PRESETS: { key: Exclude<RangeKey, 'custom'>; labelKey: string; hours: number }[] = [
+  { key: '24h', labelKey: 'range.last24h', hours: 24 },
+  { key: '7d', labelKey: 'range.last7d', hours: 24 * 7 },
+  { key: '30d', labelKey: 'range.last30d', hours: 24 * 30 },
 ];
 
 export interface QueryWindow {

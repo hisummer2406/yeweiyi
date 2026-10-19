@@ -1,5 +1,8 @@
 // Run with: npm run check   (node --experimental-strip-types; pure logic only, no wx)
 import assert from 'node:assert/strict';
+import { en } from '../miniprogram/locales/en.ts';
+import { es } from '../miniprogram/locales/es.ts';
+import { zh } from '../miniprogram/locales/zh.ts';
 import {
   commandGuard,
   followStationDevice,
@@ -93,7 +96,10 @@ test('commandGuard: only the station\'s current device may receive a command', (
   const replaced = [dev('B', 1), dev('A', null)];
   const r = commandGuard(replaced, 'A', 1);
   assert.equal(r.ok, false);
-  assert.match(r.message, /已更换.*命令未发送/);
+  assert.equal(r.messageKey, 'follow.cmdReplaced');
+  assert.match(zh[r.messageKey], /已更换.*命令未发送/);
+  assert.match(en[r.messageKey], /replaced.*not sent/i);
+  assert.match(es[r.messageKey], /reemplazado.*no se envió/i);
   // never redirected: the message must not name or accept the new device
   assert.equal(commandGuard(replaced, 'B', 1).ok, true);
 });
@@ -101,7 +107,14 @@ test('commandGuard: only the station\'s current device may receive a command', (
 test('commandGuard: no device for the station, ambiguous, or out of scope all block', () => {
   assert.equal(commandGuard([], 'A', 1).ok, false);
   assert.equal(commandGuard([dev('A', 1), dev('B', 1)], 'C', 1).ok, false);
-  assert.match(commandGuard([dev('B', 1)], 'A', undefined).message, /命令未发送/);
+  // every blocked command says in every language that it was not sent
+  for (const [devices, name, station] of [[[], 'A', 1], [[dev('A', 1), dev('B', 1)], 'C', 1], [[dev('B', 1)], 'A', undefined]]) {
+    const g = commandGuard(devices, name, station);
+    assert.equal(g.ok, false);
+    assert.match(zh[g.messageKey], /命令未发送/);
+    assert.match(en[g.messageKey], /not sent/i);
+    assert.match(es[g.messageKey], /no se envió/i);
+  }
 });
 
 test('commandGuard: opened by device name alone only needs the device still in scope', () => {

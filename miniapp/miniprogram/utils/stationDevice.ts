@@ -46,10 +46,18 @@ export function followStationDevice(
   return { kind: 'none', reason: 'no-device' };
 }
 
+// i18n keys (locales/*.ts, group `follow`): this module is pure, the page renders them with `t()`.
 export const FOLLOW_NOTICES: Record<'no-device' | 'ambiguous' | 'device-gone', string> = {
-  'no-device': '该油站当前没有你可查看的设备。若已更换设备，请联系平台管理员重新分配油罐。',
-  ambiguous: '该油站关联了多台设备，数据不会合并显示，请联系管理员处理。',
-  'device-gone': '该设备已不在你的可查看范围内，请联系平台管理员。',
+  'no-device': 'follow.noDevice',
+  ambiguous: 'follow.ambiguous',
+  'device-gone': 'follow.deviceGone',
+};
+
+// The same three reasons as a command refusal: the notice plus "the command was not sent".
+const COMMAND_BLOCKED: Record<'no-device' | 'ambiguous' | 'device-gone', string> = {
+  'no-device': 'follow.cmdNoDevice',
+  ambiguous: 'follow.cmdAmbiguous',
+  'device-gone': 'follow.cmdDeviceGone',
 };
 
 // Identity of one tank's data and of anything cached for it: the device name AND the tank number.
@@ -79,9 +87,9 @@ export function stationParam(stationId: number | null | undefined): string {
 // then only "still in this user's scope" can be checked). Anything but "same" blocks the command — it is
 // never redirected to the station's new device, because the user confirmed this one, not that one.
 // A check that cannot be made (the read failed) must block too; the caller does that.
-export type CommandGuard = { ok: true } | { ok: false; message: string };
+export type CommandGuard = { ok: true } | { ok: false; messageKey: string };
 
-export const COMMAND_REPLACED_NOTICE = '该油站的设备已更换，命令未发送。请返回设备详情刷新后再操作。';
+export const COMMAND_REPLACED_NOTICE_KEY = 'follow.cmdReplaced';
 
 export function commandGuard(
   devices: Device[],
@@ -90,6 +98,6 @@ export function commandGuard(
 ): CommandGuard {
   const decision = followStationDevice(devices, deviceName, stationId);
   if (decision.kind === 'same') return { ok: true };
-  if (decision.kind === 'switch') return { ok: false, message: COMMAND_REPLACED_NOTICE };
-  return { ok: false, message: `${FOLLOW_NOTICES[decision.reason]}命令未发送。` };
+  if (decision.kind === 'switch') return { ok: false, messageKey: COMMAND_REPLACED_NOTICE_KEY };
+  return { ok: false, messageKey: COMMAND_BLOCKED[decision.reason] };
 }

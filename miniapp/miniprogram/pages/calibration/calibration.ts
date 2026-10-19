@@ -1,16 +1,29 @@
 import { showComingSoon } from '../../utils/comingSoon';
+import { setNavTitle, t, texts } from '../../utils/i18n';
+
 const STORAGE_KEY = 'calibration-draft';
 
 Page({
   data: {
+    text: texts('calibration'),
+    form: texts('form'),
     // 设计稿的罐号选择是 1–12 号
-    tankOptions: Array.from({ length: 12 }, (_, i) => `${i + 1}号`),
+    tankOptions: [] as string[],
     tankIndex: -1,
     levelOffset: '',
     waterOffset: '',
     tempOffset: '',
     pickerShow: false,
     pickerTop: 0,
+  },
+
+  onShow() {
+    setNavTitle('calibration.navTitle');
+    this.setData({
+      text: texts('calibration'),
+      form: texts('form'),
+      tankOptions: Array.from({ length: 12 }, (_, i) => t('form.numbered', { n: i + 1 })),
+    });
   },
 
   onLoad() {
@@ -48,7 +61,7 @@ Page({
   onSaveLocal() {
     const { tankIndex, levelOffset, waterOffset, tempOffset } = this.data;
     wx.setStorageSync(STORAGE_KEY, { tankIndex, levelOffset, waterOffset, tempOffset });
-    wx.showToast({ title: '已保存到本机，不会下发给设备', icon: 'none' });
+    wx.showToast({ title: t('form.savedLocal'), icon: 'none' });
   },
 
   onSaveDevice() {

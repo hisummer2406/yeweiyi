@@ -1,5 +1,8 @@
 // Run with: npm run check   (node --experimental-strip-types; pure logic only, no wx)
 import assert from 'node:assert/strict';
+import { en } from '../miniprogram/locales/en.ts';
+import { es } from '../miniprogram/locales/es.ts';
+import { zh } from '../miniprogram/locales/zh.ts';
 import {
   classifyPhoneAuth,
   codeOfBody,
@@ -21,7 +24,7 @@ const test = (name, fn) => {
 test('an unbound WeChat offers the phone authorization and shows no error', () => {
   const f = describeLoginFailure(401, 'wechat_not_bound');
   assert.equal(f.offerPhone, true);
-  assert.equal(f.message, '');
+  assert.equal(f.messageKey, '');
 });
 
 test('every other failure shows a distinct message and never offers the phone button', () => {
@@ -39,30 +42,44 @@ test('every other failure shows a distinct message and never offers the phone bu
   for (const code of codes) {
     const f = describeLoginFailure(400, code);
     assert.equal(f.offerPhone, false, code);
-    assert.ok(f.message, code);
-    assert.ok(!seen.has(f.message), `${code} shares its message`);
-    seen.add(f.message);
+    assert.ok(f.messageKey, code);
+    assert.ok(en[f.messageKey], `${code} names a text that does not exist`);
+    assert.ok(!seen.has(f.messageKey), `${code} shares its message`);
+    seen.add(f.messageKey);
   }
 });
 
 test('not onboarded, unprovisioned and disabled are never confused with each other or with a bad password', () => {
-  const a = describeLoginFailure(403, 'customer_not_onboarded').message;
-  const b = describeLoginFailure(404, 'phone_not_provisioned').message;
-  const c = describeLoginFailure(403, 'account_disabled').message;
-  assert.match(a, /尚未完成开通/);
-  assert.match(b, /尚未开通/);
-  assert.match(c, /已停用/);
-  for (const m of [a, b, c]) assert.doesNotMatch(m, /密码/);
+  const a = describeLoginFailure(403, 'customer_not_onboarded').messageKey;
+  const b = describeLoginFailure(404, 'phone_not_provisioned').messageKey;
+  const c = describeLoginFailure(403, 'account_disabled').messageKey;
+  const bad = describeLoginFailure(401, 'invalid_credentials').messageKey;
+  assert.equal(a, 'loginErr.customer_not_onboarded');
+  assert.equal(b, 'loginErr.phone_not_provisioned');
+  assert.equal(c, 'loginErr.account_disabled');
+  assert.equal(new Set([a, b, c, bad]).size, 4);
+  // none of the three may be worded as a password problem, in any language
+  for (const key of [a, b, c]) {
+    assert.doesNotMatch(zh[key], /密码/);
+    assert.doesNotMatch(en[key], /password/i);
+    assert.doesNotMatch(es[key], /contraseña/i);
+  }
 });
 
 test('network failure (status 0) and server errors are retryable and say so', () => {
-  assert.match(describeLoginFailure(0).message, /网络/);
-  assert.match(describeLoginFailure(503).message, /稍后/);
+  assert.equal(describeLoginFailure(0).messageKey, 'loginErr.offline');
+  assert.equal(describeLoginFailure(503).messageKey, 'loginErr.server');
+  // retryable: the wording tells the user to try again, in every language
+  for (const key of ['loginErr.offline', 'loginErr.server']) {
+    assert.match(zh[key], /重试/);
+    assert.match(en[key], /try again/i);
+    assert.match(es[key], /inténtelo/i);
+  }
   assert.equal(describeLoginFailure(0).offerPhone, false);
 });
 
 test('an unknown code with a client status falls back to a generic message, not a blank', () => {
-  assert.ok(describeLoginFailure(418, 'something_new').message.length > 0);
+  assert.equal(describeLoginFailure(418, 'something_new').messageKey, 'loginErr.unknown');
   assert.equal(describeLoginFailure(401, undefined).offerPhone, false);
 });
 
@@ -79,7 +96,7 @@ test('getPhoneNumber: a code means go; a refusal is a normal answer; other failu
   assert.deepEqual(classifyPhoneAuth({ errMsg: 'getPhoneNumber:fail cancel' }), { kind: 'denied' });
   const noPerm = classifyPhoneAuth({ errMsg: 'getPhoneNumber:fail no permission' });
   assert.equal(noPerm.kind, 'failed');
-  assert.match(noPerm.message, /未开通手机号授权/);
+  assert.equal(noPerm.messageKey, 'loginErr.phoneNoPermission');
   assert.equal(classifyPhoneAuth(undefined).kind, 'failed');
   assert.equal(classifyPhoneAuth({}).kind, 'failed');
 });
@@ -96,9 +113,9 @@ test('maskPhone keeps 3 + 4 digits and refuses anything that is not a mainland n
   assert.equal(maskPhone(undefined), '');
 });
 
-test('customer_not_onboarded: exact notice, only 403 + that code, not the dead-account 403', () => {
-  const msg = '所在客户尚未完成开通，请联系平台管理员';
-  assert.equal(describeLoginFailure(403, 'customer_not_onboarded').message, msg);
+test('customer_not_onboarded: its own notice key, only 403 + that code, not the dead-account 403', () => {
+  const msg = 'loginErr.customer_not_onboarded';
+  assert.equal(describeLoginFailure(403, 'customer_not_onboarded').messageKey, msg);
   assert.equal(isNotOnboarded(403, { error: 'customer not onboarded', code: 'customer_not_onboarded' }), true);
   assert.equal(isNotOnboarded(403, { error: 'not authorized' }), false);
   assert.equal(isNotOnboarded(403, { error: 'not authorized for this device' }), false);
@@ -149,14 +166,14 @@ test('password login: one identifier, phone or username decided by the input (sa
 });
 
 test('password login: empty fields are told apart from a wrong password', () => {
-  assert.equal(buildPasswordLogin('  ', 'x').message, '请输入手机号或用户名');
-  assert.equal(buildPasswordLogin('admin', '').message, '请输入密码');
+  assert.equal(buildPasswordLogin('  ', 'x').messageKey, 'loginErr.needAccount');
+  assert.equal(buildPasswordLogin('admin', '').messageKey, 'loginErr.needPassword');
 });
 
 test('password login: invalid_credentials is its own message and never offers the phone button', () => {
   const f = describeLoginFailure(401, 'invalid_credentials');
   assert.equal(f.offerPhone, false);
-  assert.equal(f.message, '账号或密码错误');
+  assert.equal(f.messageKey, 'loginErr.invalid_credentials');
 });
 
 console.log(`${n} checks passed`);
