@@ -9,6 +9,7 @@ const BY_CODE: Record<string, string> = {
   customer_not_onboarded: 'err.customerNotOnboarded',
   invalid_credentials: 'err.invalidCredentials',
   account_disabled: 'err.accountDisabled',
+  session_invalid: 'err.sessionExpired', // 401 for a dead token (yeweiyi-cloud#78)
 };
 
 export function errorKey(status: number, code?: string): string {

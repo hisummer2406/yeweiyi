@@ -49,6 +49,13 @@ test('every other failure shows a distinct message and never offers the phone bu
   }
 });
 
+test('a rate-limited login (429) has its own wording, not a password error', () => {
+  const r = describeLoginFailure(429, 'login_rate_limited');
+  assert.equal(r.messageKey, 'loginErr.login_rate_limited');
+  assert.equal(r.offerPhone, false);
+  assert.notEqual(r.messageKey, describeLoginFailure(401, 'invalid_credentials').messageKey);
+});
+
 test('not onboarded, unprovisioned and disabled are never confused with each other or with a bad password', () => {
   const a = describeLoginFailure(403, 'customer_not_onboarded').messageKey;
   const b = describeLoginFailure(404, 'phone_not_provisioned').messageKey;

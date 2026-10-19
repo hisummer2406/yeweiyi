@@ -50,6 +50,7 @@
       </view>
       <button class="btn-primary" bindtap="onPasswordLogin" loading="{{busy}}">{{text.submit}}</button>
       <view wx:if="{{wechatLogin}}" class="muted" style="margin-top:16rpx;text-align:center;">{{text.staffHint}}</view>
+      <view class="muted" style="margin-top:16rpx;text-align:center;">{{text.passwordHint}}</view>
     </block>
 
     <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;text-align:center;">{{errorMsg}}</view>
