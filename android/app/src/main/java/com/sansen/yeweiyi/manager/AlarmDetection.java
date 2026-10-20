@@ -12,6 +12,7 @@ import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.config.ApiConfig;
+import com.sansen.yeweiyi.logic.alarm.HighTempConfirmer;
 import com.sansen.yeweiyi.repository.AlarmRepository;
 import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
@@ -32,6 +33,7 @@ public class AlarmDetection {
     private AlarmRepository alarmRepository;
     AlarmRecord record;
     Map<Integer, AlarmState> alarmStates;
+    private final HighTempConfirmer highTempConfirmer = new HighTempConfirmer();
 
     private AlarmDetection(AlarmManager alarmManager) {
         this.alarmManager = alarmManager;
@@ -106,8 +108,15 @@ public class AlarmDetection {
                     Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]=true;
                 }
             }
-            if (oilCan.getHighTempAlarm() != 0 && oilCan.getTemper() > oilCan.getHighTempAlarm()) {
-                if (Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]) {
+            boolean overTemp = oilCan.getHighTempAlarm() != 0 && oilCan.getTemper() > oilCan.getHighTempAlarm();
+            HighTempConfirmer.Result tempCheck = highTempConfirmer.update(pos, overTemp, oilCan.getTemperReadAt());
+            if (tempCheck.getState() == HighTempConfirmer.State.DISMISSED) {
+                AlarmLog.onHighTempDismissed(oilCan, tempCheck.getOverMs());
+            }
+            if (overTemp) {
+                // 没持续满确认时长时什么都不做，也不走下面的恢复分支
+                if (tempCheck.getState() == HighTempConfirmer.State.CONFIRMED
+                        && Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]) {
                     Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]=false;
                     tempHeightDection(oilCan);
                 }

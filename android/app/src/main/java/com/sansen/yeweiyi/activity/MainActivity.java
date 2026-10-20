@@ -236,7 +236,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
                     oilCan.setOilVolume(DataUtils.doubleFoment(oilVolume));
                     oilCan.setOilWeight(DataUtils.doubleFoment(oilCan
                             .getDensity() * oilCan.getOilVolume()));
-                    oilCan.setTemper(BigDecimal.valueOf(oilTest.getTemp()).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
+                    oilCan.setTemperRead(BigDecimal.valueOf(oilTest.getTemp()).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
                     oilRoate = (int) ((oilCan.getOilLevel() / oilCan
                             .getMaxHeight()) * 100);
 

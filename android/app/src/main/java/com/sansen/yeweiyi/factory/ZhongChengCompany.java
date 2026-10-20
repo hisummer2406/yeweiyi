@@ -7,6 +7,7 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.applog.ProbeLog;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.logic.probe.ZhongChengTemperature;
 import com.sansen.yeweiyi.utils.CRCheck;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
@@ -215,8 +216,14 @@ public class ZhongChengCompany implements AbstractCompany {
                 int address = bytes[2] & 0xFF;
                 double temp = Math.floor(calcTemperature(bytes1[1], bytes1[2]));
                 OilCan can = MyApplication.getInstance().getmOilcanDataManager().getDataByProbeAddress(address);
+                String invalid = ZhongChengTemperature.invalidReason(bytes1[1], bytes1[2]);
+                if (invalid != null) {
+                    // 探针读错的温度：不写入、沿用上次值；帧本身 CRC 正确，仍按通讯成功返回
+                    ProbeLog.onTemperatureRejected(address, can, bytes1[1], bytes1[2], temp, invalid, bytes);
+                    return can != null;
+                }
                 if (can != null) {
-                    can.setTemper(BigDecimal.valueOf(temp).add(BigDecimal.valueOf(can.getTempCorrection())).doubleValue());
+                    can.setTemperRead(BigDecimal.valueOf(temp).add(BigDecimal.valueOf(can.getTempCorrection())).doubleValue());
                 }
                 // 只记日志不改值；can 为 null 时记"地址匹配不到罐"
                 ProbeLog.onTemperatureFrame(address, can, bytes1[1], bytes1[2], temp, bytes);
@@ -250,11 +257,7 @@ public class ZhongChengCompany implements AbstractCompany {
     }
     OilCanSet oilCanSets;
     public  double calcTemperature(byte highByte, byte lowByte) {
-        // 将 byte 转为无符号 int
-        int high = highByte & 0xFF;
-        int low = lowByte & 0xFF;
-        int rawValue = (high << 8) | low;   // 高字节在左，低字节在右
-        return rawValue / 16.0;             // 等价于 rawValue * 0.0625
+        return ZhongChengTemperature.decode(highByte, lowByte);
     }
 
 

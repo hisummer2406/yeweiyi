@@ -110,6 +110,21 @@ object ProbeLog {
         }
 
     /**
+     * 中成 45 帧温度被判无效、已丢弃时调用（[can] 的温度没变）。[reason] 见 ZhongChengTemperature；
+     * 匹配不到罐时 [can] 为 null，不写报文。
+     */
+    @JvmStatic
+    fun onTemperatureRejected(address: Int, can: OilCan?, hi: Byte, lo: Byte, decoded: Double, reason: String,
+                              frame: ByteArray) = logSafely(TAG) {
+        if (!AppLog.isLoggable(LogModule.PROBE, LogLevel.WARN)) return@logSafely
+        val hex = frame.joinToString("") { String.format("%02X", it.toInt() and 0xFF) }
+        AppLog.w(LogModule.PROBE, "温度无效", "pos", can?.oilCanPos ?: "-", "addr", address,
+            "hi", String.format("%02X", hi.toInt() and 0xFF), "lo", String.format("%02X", lo.toInt() and 0xFF),
+            "decoded", decoded, "reason", reason, "kept", can?.temper ?: "-", "frame", hex)
+        if (can != null) dumpRecentFrames(can.oilCanPos, "温度无效")
+    }
+
+    /**
      * 把该罐上次写出之后的新应答写一条 W 日志（最多 30 帧），温度异常和各类报警都会调用。
      * `since` 是上次写到的帧时间，和上一份接着读就是完整时间线；`count=0` 表示和上一份相同；
      * `gap=true` 表示两份之间有帧已被挤出缓冲、没能写出。

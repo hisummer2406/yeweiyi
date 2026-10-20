@@ -140,6 +140,16 @@ public class ZhongChengModbusSlaveTest {
         assertEquals((crc >> 8) & 0xFF, frame[frame.length - 1] & 0xFF);
     }
 
+    @Test
+    public void 负温度按IEEE754发出() {
+        Map<Integer, float[]> tanks = new HashMap<>();
+        tanks.put(1, new float[]{0f, 0f, -5f, 0f, 0f, 0f});
+        // 1 号罐温度：文档 1004 → 线上 0x03EB，2 个寄存器
+        ZhongChengModbusSlave.Request req = new ZhongChengModbusSlave.Request(0x03EB, 2);
+        byte[] resp = ZhongChengModbusSlave.buildResponse(req, tanks, 12);
+        assertEquals("080304C0A00000", toHex(resp).substring(0, 14));
+    }
+
     private static String repeat(String s, int n) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) {

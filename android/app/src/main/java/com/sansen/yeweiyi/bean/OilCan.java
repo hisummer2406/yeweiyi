@@ -1,5 +1,7 @@
 package com.sansen.yeweiyi.bean;
 
+import android.os.SystemClock;
+
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -598,6 +600,22 @@ public class OilCan {
 
 	public double getTemper() {
 		return temper;
+	}
+
+	/** 最近一次解析出温度的时刻（elapsedRealtime），高温持续确认按它计时；transient：不进对外 JSON。 */
+	private transient long temperReadAt;
+
+	public long getTemperReadAt() {
+		return temperReadAt;
+	}
+
+	/**
+	 * 探针解析出一次真实温度时调用，同时记下读到的时刻。界面清零、演示数据、没有温度功能的
+	 * LD/LD2 写补偿值都用 setTemper，计时不前进，不会确认高温报警。
+	 */
+	public void setTemperRead(double temper) {
+		this.temper = temper;
+		this.temperReadAt = SystemClock.elapsedRealtime();
 	}
 
 	public void setTemper(double temper) {

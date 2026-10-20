@@ -156,7 +156,8 @@ public class LD2Company implements AbstractCompany {
                                 oilCan.setOilWeight(DataUtils.doubleFoment(oilCan
                                         .getDensity() * oilCan.getOilVolume()));
 
-                                // 温度+补偿BigDecimal.valueOf(probe.getOilLevel()).add(BigDecimal.valueOf(oilCan.getLevelCorrection())).doubleValue()
+                                // 本协议不读温度，这里只是把温度补偿值当温度显示。用 setTemper 而不是 setTemperRead：
+                                // 不算真实读数，高温持续确认的计时不前进，所以这类探针不会触发高温报警。
                                 oilCan.setTemper(BigDecimal.valueOf(0).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
 
                                 // 油比例
