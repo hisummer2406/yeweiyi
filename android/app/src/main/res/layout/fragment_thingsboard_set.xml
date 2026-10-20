@@ -18,6 +18,11 @@
         android:layout_marginBottom="10dp"
         android:orientation="horizontal">
 
+        <!-- 键盘弹出时 AndroidAdjustResizeBugFix 会压缩内容区，没有 ScrollView 下半部分输入框会被截掉 -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
         <LinearLayout
             android:layout_marginTop="@dimen/dp_40"
             android:id="@+id/left"
@@ -131,6 +136,7 @@
                 android:textColor="#666666"
                 android:text=""/>
         </LinearLayout>
+        </ScrollView>
     </LinearLayout>
     <LinearLayout
         android:layout_marginBottom="@dimen/dp_60"
