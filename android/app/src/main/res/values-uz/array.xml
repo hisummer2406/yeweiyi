@@ -72,6 +72,10 @@
         <item>Metil</item>
         <item>Dimetil</item>
         <item>Solvent</item>
+        <item>" "</item>
+        <item>" "</item>
+        <item>" "</item>
+        <item>" "</item>
         <item>Bo\'sh</item>
     </string-array>
 </resources>

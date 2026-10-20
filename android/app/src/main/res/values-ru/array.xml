@@ -72,6 +72,10 @@
         <item>Метилацетат</item>
         <item>Диметилацетат</item>
         <item>Растворитель</item>
+        <item>" "</item>
+        <item>" "</item>
+        <item>" "</item>
+        <item>" "</item>
         <item>Пусто</item>
     </string-array>
 </resources>
