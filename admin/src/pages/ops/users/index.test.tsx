@@ -7,7 +7,15 @@ import {
   within,
 } from '@testing-library/react';
 import { message } from 'antd';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
 const listUsers = vi.fn();
@@ -23,6 +31,7 @@ vi.mock('@umijs/max', () => ({
       ),
   }),
   useModel: () => ({ initialState: { currentUser: { userId: 1 } } }),
+  history: { replace: vi.fn() },
 }));
 vi.mock('@/services/ant-design-pro/users', () => ({
   listUsers,

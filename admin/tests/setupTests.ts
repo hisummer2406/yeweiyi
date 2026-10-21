@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { vi } from 'vitest';
+import { afterAll, vi } from 'vitest';
 
 const store: Record<string, string> = {};
 
@@ -103,3 +103,7 @@ globalThis.ResizeObserver = class {
   unobserve() {}
   disconnect() {}
 };
+
+// antd 的 Tooltip/Popconfirm 悬停延迟计时器（约 100ms）若在环境拆除后才触发，会抛 `window is not defined`，
+// vitest 把它当未处理错误而使整个命令失败（CI 偶发，哪个测试文件撞上是随机的）；每个文件结束前等它们先触发完。
+afterAll(() => new Promise((resolve) => setTimeout(resolve, 200)));
