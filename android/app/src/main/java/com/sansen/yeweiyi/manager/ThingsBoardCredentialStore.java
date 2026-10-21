@@ -102,6 +102,27 @@ public final class ThingsBoardCredentialStore implements DeviceCredentialStore {
         }
     }
 
+    /** 连接成功后记下编号；只在变化时写盘，重连不反复写。 */
+    public void markConnected(String deviceId) {
+        synchronized (LOCK) {
+            String recorded = SharePrefUtil.getString(context, SharePrefUtil.TB_CONNECTED_DEVICE_ID, "");
+            if (!deviceId.equals(recorded)) {
+                SharePrefUtil.saveString(context, SharePrefUtil.TB_CONNECTED_DEVICE_ID, deviceId);
+            }
+        }
+    }
+
+    /**
+     * 当前保存的编号是否用这台设备连接成功过。不看令牌能否解密，令牌解不开时是否锁定由调用方决定。
+     */
+    public boolean hasConnected() {
+        synchronized (LOCK) {
+            String deviceId = SharePrefUtil.getString(context, SharePrefUtil.TB_DEVICE_ID, "");
+            String recorded = SharePrefUtil.getString(context, SharePrefUtil.TB_CONNECTED_DEVICE_ID, "");
+            return deviceId != null && !deviceId.isEmpty() && deviceId.equals(recorded);
+        }
+    }
+
     @Override
     public void clear() {
         synchronized (LOCK) {

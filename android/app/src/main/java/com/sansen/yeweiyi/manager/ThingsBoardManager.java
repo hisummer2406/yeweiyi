@@ -721,6 +721,7 @@ public final class ThingsBoardManager {
         }
         boolean ok = connection.connect(credentials);
         if (ok) {
+            credentialStore.markConnected(credentials.getDeviceId());
             reconnectBackoff.reset();
             drainPendingAlarms();
             outboundEventExecutor.execute(guarded("交班/库存补发", this::drainRecordOutbox));
