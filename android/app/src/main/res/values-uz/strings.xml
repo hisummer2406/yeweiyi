@@ -26,11 +26,11 @@
     <string name="alarm_info">Signal</string>
     <string name="psdset_hit_againnewpsd">Parolni qayta kiriting</string>
     <string name="confirm">OK</string>
-    <string name="oil_level_language">Suyuqlik darajasi</string>
-    <string name="oil_weight_language">Massa</string>
+    <string name="oil_level_language">Suyuq dar.</string>
+    <string name="oil_weight_language">Mass.</string>
     <string name="oil_volume_language">Sig\'im</string>
-    <string name="temperature_language">Harorat</string>
-    <string name="water_weight_language">Suv balandligi</string>
+    <string name="temperature_language">Har.</string>
+    <string name="water_weight_language">Suv bal.</string>
     <string name="tank_no">Raqam</string>
     <string name="oil_type">Muhit</string>
     <string name="oil_level">Muhit turi</string>
@@ -207,7 +207,7 @@
     <string name="unit_second">s</string>
     <!-- [AI待review-2026-10-17] 原译文占位符损坏（'%1 d−raqamlid−raqamli s'），按中文格式和残留词序重建，需人工确认 -->
     <string name="oilcan_type_format">%1$d-raqamli %2$s</string>
-    <string name="oilcan_short_label_format">%1$d-raqamli</string>
+    <string name="oilcan_short_label_format">%1$d-raq.</string>
 
     <!-- [AI待review-2026-10-18] 以下为 AI 翻译，已同步到在线文案表（docs.qq.com/sheet/DS2trbXdua0JPRWF1）并标红，待人工确认 -->
     <string name="calendar_year_month_format">%1$d-yil %2$d-oy</string>
