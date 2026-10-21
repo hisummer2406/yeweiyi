@@ -76,7 +76,7 @@
 - 云端新接口带机器码 `code`（`phone_exists` 等），`ApiError.code` 承载；`describeUserError` 先按 code 再按状态码。
   重复手机号的提示不说明在哪个客户。客户管理员列员工的手机号是脱敏的；油罐分配（#17/cloud#63）自云端 2026-10-14 起仅平台管理员，见下文「员工按罐授权」。
 - **账号列表筛选**（`/ops/users`）：一次 `GET /api/users` 取全，前端按 手机号/用户名（子串）、客户、角色、状态过滤，条件进 URL（`?q=&customer=&role=&status=`，纯函数 `src/utils/userFilter.ts`）。按客户筛选后「新建账号」自动带入并锁定该客户；**账号入口分工（2026-10-15）**：只有「平台管理员账号」收进右上角账号菜单（仅平台管理员显示，`/ops/platform-admins`，`UsersPanel platformOnly`，不在侧边栏，只列/只建平台管理员）；「运维管理 → 账号管理」（`/ops/users`）仍管**客户侧账号**（客户管理员、员工）的跨客户视图，不含平台管理员。「新建账号」不再有「客户管理员」选项（客户管理员随「新建客户」创建，旧数据缺管理员的客户走开通向导），在账号管理里新建的是员工（手机号+客户，无密码）。**员工建成功后自动跳到 `/assets/staff?user=<id>`，员工授权页加载完自动打开该员工的「分配油罐」弹窗（只一次，随后清掉参数）**——没授权的员工什么都看不到，所以建完就该授权。日常入口是「资产管理 → 客户 → 账号」（`/assets/customers/:id/accounts`，仅平台管理员，不进菜单）：同一个 `UsersPanel` 锁定到该客户，只列该客户的管理员/员工，新建自动带入客户；账号管理（`/ops/users`）保留为跨客户的全局视图和平台管理员的管理入口。云端没有服务端查询，账号上万再让云端加。列表平铺：客户管理员和员工在同一张表里（员工不藏在管理员行下面），按客户分组、同一客户里管理员在前。
-- **修改手机号**（账号管理行内「修改手机号」，仅平台管理员，仅手机号账号；用户名账号和平台管理员不显示）：`PUT /api/users/:id {phone}`。契约见云端 `docs/account-phone-wechat-contract.md` §4.7（`phone_exists` 409 / `invalid_phone` 400 / `phone_not_applicable` 409 含用户名账号，传当前号码是 200 无操作）；改号会同时清掉该用户的微信绑定（需重新微信授权）、已签发令牌不失效。云端分支 `feat/change-user-phone` 合并前只有 mock 测试。
+- **编辑账号**（账号管理行内「编辑账号」一个框，取代原「重置密码」「修改手机号」两个入口；手机号字段仅手机号账号出现，密码留空不改，只发实际改动的字段，一次 `PUT`）：`PUT /api/users/:id {phone}`。契约见云端 `docs/account-phone-wechat-contract.md` §4.7（`phone_exists` 409 / `invalid_phone` 400 / `phone_not_applicable` 409 含用户名账号，传当前号码是 200 无操作）；改号会同时清掉该用户的微信绑定（需重新微信授权）、已签发令牌不失效。云端分支 `feat/change-user-phone` 合并前只有 mock 测试。
 - 微信登录与客户开通（#60）、油罐授权（#63）不在本仓库这一批；网页只走手机号/用户名 + 密码，离线可用。
 
 **`/console` 只读页已接**（OpenSpec 变更 `console-readonly-records-and-detail`）：设备详情

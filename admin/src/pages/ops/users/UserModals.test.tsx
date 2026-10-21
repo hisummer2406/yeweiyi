@@ -30,8 +30,7 @@ vi.mock('@/services/ant-design-pro/users', () => ({
 
 const {
   CreateUserModal,
-  ResetPasswordModal,
-  ChangePhoneModal,
+  EditAccountModal,
   MoveUserModal,
   buildCreateUserParams,
 } = await import('./UserModals');
@@ -60,6 +59,7 @@ const pickOption = async (label: RegExp | string, option: string) => {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(message, 'success').mockImplementation((() => {}) as never);
+  vi.spyOn(message, 'warning').mockImplementation((() => {}) as never);
   vi.spyOn(message, 'error').mockImplementation((() => {}) as never);
 });
 afterEach(cleanup);
@@ -424,72 +424,77 @@ describe('buildCreateUserParams', () => {
   });
 });
 
-describe('ResetPasswordModal', () => {
-  it('sends only the password for the chosen user', async () => {
+describe('EditAccountModal', () => {
+  const save = () =>
+    fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+  const open = (u: API.AdminUser, onDone = vi.fn()) =>
+    render(
+      <EditAccountModal open user={u} onClose={() => {}} onDone={onDone} />,
+    );
+
+  it('sends only the password when the phone is untouched', async () => {
     updateUser.mockResolvedValue({ id: 7 });
     const onDone = vi.fn();
-    render(
-      <ResetPasswordModal
-        open
-        user={user}
-        onClose={() => {}}
-        onDone={onDone}
-      />,
-    );
+    open(user, onDone);
     fireEvent.change(screen.getByLabelText('新密码'), {
       target: { value: 'newpassword1' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /重\s*置/ }));
+    save();
     await waitFor(() =>
       expect(updateUser).toHaveBeenCalledWith(7, { password: 'newpassword1' }),
     );
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
-});
 
-describe('ChangePhoneModal', () => {
-  const phoneUser = { ...user, username: null, phone: '13800000001' };
-
-  it('sends the normalized new phone for the chosen user', async () => {
+  it('sends the normalized phone and the password together in one request', async () => {
     updateUser.mockResolvedValue({ id: 7 });
-    const onDone = vi.fn();
-    render(
-      <ChangePhoneModal
-        open
-        user={phoneUser}
-        onClose={() => {}}
-        onDone={onDone}
-      />,
-    );
-    fireEvent.change(screen.getByLabelText('新手机号'), {
+    open(user);
+    fireEvent.change(screen.getByLabelText('手机号'), {
       target: { value: '+86 138-0000-0002' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /确认修改/ }));
+    fireEvent.change(screen.getByLabelText('新密码'), {
+      target: { value: 'newpassword1' },
+    });
+    save();
+    await waitFor(() =>
+      expect(updateUser).toHaveBeenCalledWith(7, {
+        phone: '13800000002',
+        password: 'newpassword1',
+      }),
+    );
+  });
+
+  it('sends only the phone when the password is blank', async () => {
+    updateUser.mockResolvedValue({ id: 7 });
+    open(user);
+    fireEvent.change(screen.getByLabelText('手机号'), {
+      target: { value: '13800000002' },
+    });
+    save();
     await waitFor(() =>
       expect(updateUser).toHaveBeenCalledWith(7, { phone: '13800000002' }),
     );
-    await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 
-  it('rejects an invalid or unchanged number without calling the API', async () => {
-    render(
-      <ChangePhoneModal
-        open
-        user={phoneUser}
-        onClose={() => {}}
-        onDone={() => {}}
-      />,
-    );
-    fireEvent.change(screen.getByLabelText('新手机号'), {
+  it('rejects an invalid phone and does not call the API when nothing changed', async () => {
+    open(user);
+    fireEvent.change(screen.getByLabelText('手机号'), {
       target: { value: '12345' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /确认修改/ }));
+    save();
     expect(await screen.findByText(/有效的 11 位大陆手机号/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('新手机号'), {
-      target: { value: '13800000001' },
+    fireEvent.change(screen.getByLabelText('手机号'), {
+      target: { value: user.phone },
     });
-    expect(await screen.findByText('新手机号与当前相同')).toBeTruthy();
+    save();
+    await waitFor(() => expect(message.warning).toHaveBeenCalled());
     expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('shows no phone field for username accounts and platform admins', () => {
+    open({ ...user, phone: null, username: 'acme' });
+    expect(screen.queryByLabelText('手机号')).toBeNull();
+    expect(screen.getByLabelText('新密码')).toBeTruthy();
   });
 
   it('shows the duplicate-phone message and keeps the dialog open', async () => {
@@ -497,18 +502,11 @@ describe('ChangePhoneModal', () => {
       new ApiError(409, 'phone exists', false, 'phone_exists'),
     );
     const onDone = vi.fn();
-    render(
-      <ChangePhoneModal
-        open
-        user={phoneUser}
-        onClose={() => {}}
-        onDone={onDone}
-      />,
-    );
-    fireEvent.change(screen.getByLabelText('新手机号'), {
+    open(user, onDone);
+    fireEvent.change(screen.getByLabelText('手机号'), {
       target: { value: '13800000002' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /确认修改/ }));
+    save();
     await waitFor(() =>
       expect(message.error).toHaveBeenCalledWith('该手机号已被注册。'),
     );

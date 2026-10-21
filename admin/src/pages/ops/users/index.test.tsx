@@ -94,12 +94,12 @@ describe('AdminUsers', () => {
     expect(within(await rowOf('13800138000')).getByText('#5')).toBeTruthy();
   });
 
-  it('every account, staff included, can be reset (the only way to change a password)', async () => {
+  it('every account, staff included, can be edited (the only way to change a password)', async () => {
     render(<Panel />);
     const staff = await rowOf('13900139000');
-    expect(within(staff).getByText('重置密码')).toBeTruthy();
+    expect(within(staff).getByText('编辑账号')).toBeTruthy();
     const admin = await rowOf('13800138000');
-    expect(within(admin).getByText('重置密码')).toBeTruthy();
+    expect(within(admin).getByText('编辑账号')).toBeTruthy();
   });
 
   it('customer-side accounts are shown by phone, never by a username', async () => {
@@ -201,7 +201,7 @@ describe('平台管理员账号页', () => {
     expect(within(self).queryByText('停用')).toBeNull();
     expect(within(self).queryByText('启用')).toBeNull();
     expect(within(self).queryByText('换客户')).toBeNull();
-    expect(within(self).getByText('重置密码')).toBeTruthy();
+    expect(within(self).getByText('编辑账号')).toBeTruthy();
   });
 
   it('creating an account offers only platform admin fields', async () => {

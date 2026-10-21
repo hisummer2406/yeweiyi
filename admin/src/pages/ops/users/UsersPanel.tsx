@@ -15,12 +15,7 @@ import {
   type UserFilter,
 } from '@/utils/userFilter';
 import { describeUserError, userLabel } from './errors';
-import {
-  ChangePhoneModal,
-  CreateUserModal,
-  MoveUserModal,
-  ResetPasswordModal,
-} from './UserModals';
+import { CreateUserModal, EditAccountModal, MoveUserModal } from './UserModals';
 
 type Row = API.AdminUser & { customerName?: string };
 
@@ -47,8 +42,7 @@ const UsersPanel: React.FC<Props> = ({
   const selfId = initialState?.currentUser?.userId;
   const [customers, setCustomers] = useState<API.Customer[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [resetTarget, setResetTarget] = useState<API.AdminUser>();
-  const [phoneTarget, setPhoneTarget] = useState<API.AdminUser>();
+  const [editTarget, setEditTarget] = useState<API.AdminUser>();
   const [moveTarget, setMoveTarget] = useState<API.AdminUser>();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -181,16 +175,10 @@ const UsersPanel: React.FC<Props> = ({
       valueType: 'option',
       render: (_, row) => (
         <Space>
-          {/* 重置是唯一的改密途径（没有自助改密）；云端对任何账号开放，含员工和尚无密码的手机号员工 */}
-          <a onClick={() => setResetTarget(row)}>
-            {t('pages.ops.users.action.resetPassword')}
+          {/* 改密码和改手机号合在「编辑账号」里；重置是唯一的改密途径（没有自助改密），云端对任何账号开放，含员工和尚无密码的手机号员工 */}
+          <a onClick={() => setEditTarget(row)}>
+            {t('pages.ops.users.action.edit')}
           </a>
-          {/* 只有手机号账号能改手机号；用户名账号和平台管理员没有手机号 */}
-          {row.role !== 'platform_admin' && row.phone != null && (
-            <a onClick={() => setPhoneTarget(row)}>
-              {t('pages.ops.users.action.changePhone')}
-            </a>
-          )}
           {row.role !== 'platform_admin' && (
             <a onClick={() => setMoveTarget(row)}>
               {t('pages.ops.users.action.move')}
@@ -308,16 +296,10 @@ const UsersPanel: React.FC<Props> = ({
           }
         }}
       />
-      <ResetPasswordModal
-        open={!!resetTarget}
-        user={resetTarget}
-        onClose={() => setResetTarget(undefined)}
-        onDone={reload}
-      />
-      <ChangePhoneModal
-        open={!!phoneTarget}
-        user={phoneTarget}
-        onClose={() => setPhoneTarget(undefined)}
+      <EditAccountModal
+        open={!!editTarget}
+        user={editTarget}
+        onClose={() => setEditTarget(undefined)}
         onDone={reload}
       />
       <MoveUserModal

@@ -311,14 +311,20 @@ type TargetProps = Omit<ModalProps, 'customers'> & {
   user?: API.AdminUser;
 };
 
-export const ResetPasswordModal: React.FC<TargetProps> = ({
+/**
+ * 编辑账号：手机号和密码合在一个框里，都是可选项，只发实际改动的字段（云端 PUT /api/users/:id 一次接收，至少一个）。
+ * 手机号只对手机号账号（客户管理员/员工）出现；密码留空不改。
+ */
+export const EditAccountModal: React.FC<TargetProps> = ({
   open,
   onClose,
   onDone,
   user,
 }) => {
-  const [form] = Form.useForm<{ password: string }>();
-  const { t, passwordRules } = useRules();
+  const [form] = Form.useForm<{ phone?: string; password?: string }>();
+  const { t, optionalPasswordRules } = useRules();
+  const canEditPhone =
+    !!user && user.role !== 'platform_admin' && user.phone != null;
   const close = () => {
     onClose();
     form.resetFields();
@@ -331,8 +337,8 @@ export const ResetPasswordModal: React.FC<TargetProps> = ({
   return (
     <Modal
       open={open}
-      title={`${t('pages.ops.users.action.resetPassword')}：${user ? userLabel(user) : ''}`}
-      okText={t('pages.ops.users.form.submit.reset')}
+      title={`${t('pages.ops.users.action.edit')}：${user ? userLabel(user) : ''}`}
+      okText={t('pages.ops.users.form.submit.save')}
       cancelText={t('pages.ops.devices.form.cancel')}
       confirmLoading={submitting}
       onOk={() => form.submit()}
@@ -343,96 +349,54 @@ export const ResetPasswordModal: React.FC<TargetProps> = ({
         form={form}
         layout="vertical"
         autoComplete="off"
-        onFinish={(v) =>
-          user &&
-          run(
-            () => updateUser(user.id, { password: v.password }),
-            'pages.ops.users.success.reset',
-          )
-        }
-      >
-        <Form.Item
-          name="password"
-          label={t('pages.ops.users.form.password.new')}
-          rules={passwordRules}
-        >
-          <Input.Password autoFocus autoComplete="new-password" />
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-};
-
-export const ChangePhoneModal: React.FC<TargetProps> = ({
-  open,
-  onClose,
-  onDone,
-  user,
-}) => {
-  const [form] = Form.useForm<{ phone: string }>();
-  const { t } = useRules();
-  const close = () => {
-    onClose();
-    form.resetFields();
-  };
-  const { submitting, run } = useSubmit(() => {
-    close();
-    onDone();
-  });
-
-  return (
-    <Modal
-      open={open}
-      title={`${t('pages.ops.users.action.changePhone')}：${user ? userLabel(user) : ''}`}
-      okText={t('pages.ops.users.form.submit.changePhone')}
-      cancelText={t('pages.ops.devices.form.cancel')}
-      confirmLoading={submitting}
-      onOk={() => form.submit()}
-      onCancel={close}
-      destroyOnHidden
-    >
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message={t('pages.ops.users.changePhone.hint')}
-      />
-      <Form
-        form={form}
-        layout="vertical"
-        autoComplete="off"
+        initialValues={{ phone: user?.phone ?? '' }}
         onFinish={(v) => {
-          const phone = normalizePhone(v.phone);
-          if (!user || !phone) return;
+          if (!user) return;
+          const body: API.UpdateUserParams = {};
+          const phone = canEditPhone
+            ? normalizePhone((v.phone ?? '').trim())
+            : '';
+          if (phone && phone !== user.phone) body.phone = phone;
+          if (v.password) body.password = v.password;
+          if (Object.keys(body).length === 0) {
+            message.warning(t('pages.ops.users.edit.nothing'));
+            return;
+          }
           return run(
-            () => updateUser(user.id, { phone }),
-            'pages.ops.users.success.phoneChanged',
+            () => updateUser(user.id, body),
+            'pages.ops.users.success.edited',
           );
         }}
       >
-        <Form.Item
-          name="phone"
-          label={t('pages.ops.users.form.phone.new')}
-          rules={[
-            {
-              validator: (_, value?: string) =>
-                value &&
-                normalizePhone(value.trim()) &&
-                value.trim() !== user?.phone
-                  ? Promise.resolve()
-                  : Promise.reject(
-                      new Error(
-                        t(
-                          value && value.trim() === user?.phone
-                            ? 'pages.ops.users.form.phone.same'
-                            : 'pages.ops.users.form.phone.invalid',
-                        ),
+        {canEditPhone && (
+          <Form.Item
+            name="phone"
+            label={t('pages.ops.users.form.phone.label')}
+            extra={t('pages.ops.users.changePhone.hint')}
+            rules={[
+              {
+                validator: (_, value?: string) =>
+                  value && normalizePhone(value.trim())
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(t('pages.ops.users.form.phone.invalid')),
                       ),
-                    ),
-            },
-          ]}
+              },
+            ]}
+          >
+            <Input autoFocus autoComplete="off" inputMode="tel" />
+          </Form.Item>
+        )}
+        <Form.Item
+          name="password"
+          label={t('pages.ops.users.form.password.new')}
+          extra={t('pages.ops.users.edit.passwordHint')}
+          rules={optionalPasswordRules}
         >
-          <Input autoFocus autoComplete="off" inputMode="tel" />
+          <Input.Password
+            autoFocus={!canEditPhone}
+            autoComplete="new-password"
+          />
         </Form.Item>
       </Form>
     </Modal>
