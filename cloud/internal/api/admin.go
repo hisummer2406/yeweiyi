@@ -655,9 +655,10 @@ func listUsersHandler(deps Deps) gin.HandlerFunc {
 type updateUserRequest struct {
 	Disabled *bool   `json:"disabled"`
 	Password *string `json:"password"`
+	Phone    *string `json:"phone"`
 }
 
-// updateUserHandler disables/enables a user and/or resets their password. A customer admin may only
+// updateUserHandler disables/enables a user, resets their password and/or changes their phone number. A customer admin may only
 // touch customer users of their own customer; a user in another customer, or one that does not
 // exist, gets the same 404 so the endpoint is not a user-id oracle.
 func updateUserHandler(deps Deps) gin.HandlerFunc {
@@ -681,9 +682,17 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if req.Disabled == nil && req.Password == nil {
-			apiError(c, http.StatusBadRequest, "invalid_request", "nothing to change: send disabled and/or password")
+		if req.Disabled == nil && req.Password == nil && req.Phone == nil {
+			apiError(c, http.StatusBadRequest, "invalid_request", "nothing to change: send disabled, password and/or phone")
 			return
+		}
+		var newPhone string
+		if req.Phone != nil {
+			var ok bool
+			if newPhone, ok = normalizePhone(*req.Phone); !ok {
+				apiError(c, http.StatusBadRequest, codeInvalidPhone, "invalid phone number")
+				return
+			}
 		}
 		if req.Password != nil && !validPassword(*req.Password) {
 			apiError(c, http.StatusBadRequest, "invalid_password", "password must be 8-72 bytes")
@@ -715,7 +724,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		if v := decideUserUpdate(actor, pre, disabling, req.Password != nil); v.status != 0 {
+		if v := decideUserUpdate(actor, pre, disabling, req.Phone != nil); v.status != 0 {
 			respondVerdict(c, deps, actor, id, "user.update", v)
 			return
 		}
@@ -744,7 +753,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 				}
 				return err
 			}
-			if v := decideUserUpdate(actorNow, target, disabling, req.Password != nil); v.status != 0 {
+			if v := decideUserUpdate(actorNow, target, disabling, req.Phone != nil); v.status != 0 {
 				return verdictError(v)
 			}
 
@@ -768,6 +777,21 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 					return err
 				}
 			}
+			if req.Phone != nil && !(target.Phone.Valid && target.Phone.String == newPhone) {
+				if updated, err = q.SetUserPhone(ctx, db.SetUserPhoneParams{ID: id, Phone: pgtype.Text{String: newPhone, Valid: true}}); err != nil {
+					return err
+				}
+				// The binding proved the old number; the new one has to be proven again by the next
+				// WeChat phone login. Issued tokens are untouched: sub is the user id.
+				if _, err := q.DeleteWechatIdentityByUser(ctx, id); err != nil {
+					return err
+				}
+				if err := auditAdmin(ctx, q, actorNow, "user.change-phone", "", snapshot, "allowed",
+					map[string]any{"userId": id, "role": target.Role,
+						"oldPhone": maskPhone(target.Phone.String), "newPhone": maskPhone(newPhone)}); err != nil {
+					return err
+				}
+			}
 			if req.Password != nil {
 				if _, err := q.SetUserPassword(ctx, db.SetUserPasswordParams{ID: id, PasswordHash: pgtype.Text{String: string(hash), Valid: true}}); err != nil {
 					return err
@@ -785,6 +809,11 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 			var v verdictError
 			if errors.As(err, &v) {
 				respondVerdict(c, deps, actor, id, "user.update", userVerdict(v))
+				return
+			}
+			if isPgCode(err, "23505") && req.Phone != nil {
+				// Deliberately says nothing about whose number it is or which customer holds it.
+				apiError(c, http.StatusConflict, codePhoneExists, "phone number already registered")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -820,12 +849,17 @@ func (e verdictError) Error() string { return e.msg }
 // decideUserUpdate is the rule for an administrator changing a user. Only a platform admin gets this
 // far (the handler refuses everyone else first); the actor argument is re-checked here because this
 // runs again on the locked row. Nobody may disable themselves. Setting a password is allowed for every account, phone staff included.
-func decideUserUpdate(actor, target db.User, disabling, settingPassword bool) userVerdict {
+// A phone can only be changed on a phone account: platform admins and username accounts have none,
+// and giving them one would convert the account type (contract §11.1: no conversion).
+func decideUserUpdate(actor, target db.User, disabling, settingPhone bool) userVerdict {
 	if actor.Role != control.RolePlatformAdmin {
 		return userVerdict{status: http.StatusForbidden, audit: true, msg: "not authorized"}
 	}
 	if disabling && target.ID == actor.ID {
 		return userVerdict{status: http.StatusBadRequest, msg: "you cannot disable yourself"}
+	}
+	if settingPhone && (target.Role == control.RolePlatformAdmin || !target.Phone.Valid) {
+		return userVerdict{status: http.StatusConflict, code: "phone_not_applicable", msg: "this account has no phone number to change"}
 	}
 	return userVerdict{}
 }

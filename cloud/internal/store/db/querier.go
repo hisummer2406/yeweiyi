@@ -70,6 +70,9 @@ type Querier interface {
 	// 与用户换客户同一个事务：旧客户下的授权不能带进新客户。返回被清除授权涉及的设备数。
 	DeleteTankGrantsForUser(ctx context.Context, userID int64) (int32, error)
 	DeleteTankGrantsForUserDevice(ctx context.Context, arg DeleteTankGrantsForUserDeviceParams) (int64, error)
+	// Changing a phone number drops the WeChat binding: the new number must be proven again through
+	// /api/auth/wechat/phone-login, so a previous holder of the number keeps no way in.
+	DeleteWechatIdentityByUser(ctx context.Context, userID int64) (int64, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
@@ -272,6 +275,9 @@ type Querier interface {
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
+	// A phone account's username mirrors its number (users_phone_role_check), so both move together.
+	// A clash with another account's phone or username trips a UNIQUE constraint (23505).
+	SetUserPhone(ctx context.Context, arg SetUserPhoneParams) (User, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
 	// invalid_source 是合法 JSON，能识别罐号：只计入调用者可见的罐（user_may_access_tank，整机级无罐号

@@ -283,3 +283,30 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 	}
 	return result.RowsAffected(), nil
 }
+
+const setUserPhone = `-- name: SetUserPhone :one
+UPDATE users SET phone = $1, username = $1 WHERE id = $2 RETURNING id, username, password_hash, created_at, role, customer_id, disabled_at, phone
+`
+
+type SetUserPhoneParams struct {
+	Phone pgtype.Text `json:"phone"`
+	ID    int64       `json:"id"`
+}
+
+// A phone account's username mirrors its number (users_phone_role_check), so both move together.
+// A clash with another account's phone or username trips a UNIQUE constraint (23505).
+func (q *Queries) SetUserPhone(ctx context.Context, arg SetUserPhoneParams) (User, error) {
+	row := q.db.QueryRow(ctx, setUserPhone, arg.Phone, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.Role,
+		&i.CustomerID,
+		&i.DisabledAt,
+		&i.Phone,
+	)
+	return i, err
+}
