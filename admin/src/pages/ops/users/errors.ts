@@ -15,6 +15,8 @@ export function describeUserError(
       return { id: 'pages.ops.users.error.phoneExists' };
     case 'invalid_phone':
       return { id: 'pages.ops.users.error.invalidPhone' };
+    case 'phone_not_applicable':
+      return { id: 'pages.ops.users.error.phoneNotApplicable' };
     case 'invalid_username':
       return { id: 'pages.ops.users.error.invalidUsername' };
     case 'username_taken':

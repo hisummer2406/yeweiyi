@@ -28,7 +28,7 @@ export async function createUser(
   }
 }
 
-/** PUT /api/users/:id：停用/启用和/或重置密码。不能停用自己（400），账号不存在 404。 */
+/** PUT /api/users/:id：停用/启用、重置密码和/或修改手机号。不能停用自己（400），账号不存在 404，手机号已被占用 409 `phone_exists`。 */
 export async function updateUser(
   id: number,
   body: API.UpdateUserParams,

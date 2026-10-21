@@ -363,6 +363,82 @@ export const ResetPasswordModal: React.FC<TargetProps> = ({
   );
 };
 
+export const ChangePhoneModal: React.FC<TargetProps> = ({
+  open,
+  onClose,
+  onDone,
+  user,
+}) => {
+  const [form] = Form.useForm<{ phone: string }>();
+  const { t } = useRules();
+  const close = () => {
+    onClose();
+    form.resetFields();
+  };
+  const { submitting, run } = useSubmit(() => {
+    close();
+    onDone();
+  });
+
+  return (
+    <Modal
+      open={open}
+      title={`${t('pages.ops.users.action.changePhone')}：${user ? userLabel(user) : ''}`}
+      okText={t('pages.ops.users.form.submit.changePhone')}
+      cancelText={t('pages.ops.devices.form.cancel')}
+      confirmLoading={submitting}
+      onOk={() => form.submit()}
+      onCancel={close}
+      destroyOnHidden
+    >
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message={t('pages.ops.users.changePhone.hint')}
+      />
+      <Form
+        form={form}
+        layout="vertical"
+        autoComplete="off"
+        onFinish={(v) => {
+          const phone = normalizePhone(v.phone);
+          if (!user || !phone) return;
+          return run(
+            () => updateUser(user.id, { phone }),
+            'pages.ops.users.success.phoneChanged',
+          );
+        }}
+      >
+        <Form.Item
+          name="phone"
+          label={t('pages.ops.users.form.phone.new')}
+          rules={[
+            {
+              validator: (_, value?: string) =>
+                value &&
+                normalizePhone(value.trim()) &&
+                value.trim() !== user?.phone
+                  ? Promise.resolve()
+                  : Promise.reject(
+                      new Error(
+                        t(
+                          value && value.trim() === user?.phone
+                            ? 'pages.ops.users.form.phone.same'
+                            : 'pages.ops.users.form.phone.invalid',
+                        ),
+                      ),
+                    ),
+            },
+          ]}
+        >
+          <Input autoFocus autoComplete="off" inputMode="tel" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+};
+
 export const MoveUserModal: React.FC<
   TargetProps & { customers: API.Customer[]; adminCustomerIds?: number[] }
 > = ({ open, onClose, onDone, user, customers, adminCustomerIds = [] }) => {

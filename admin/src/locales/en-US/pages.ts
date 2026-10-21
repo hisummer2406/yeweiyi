@@ -171,6 +171,7 @@ export default {
   'pages.ops.users.status.disabled': 'Disabled',
   'pages.ops.users.action.resetPassword': 'Reset password',
   'pages.ops.users.action.move': 'Move',
+  'pages.ops.users.action.changePhone': 'Change phone',
   'pages.ops.users.action.disable': 'Disable',
   'pages.ops.users.action.enable': 'Enable',
   'pages.ops.users.disable.confirm':
@@ -198,16 +199,24 @@ export default {
     'This customer already has an admin; one admin per customer',
   'pages.ops.users.form.submit': 'Create',
   'pages.ops.users.form.submit.reset': 'Reset',
+  'pages.ops.users.form.submit.changePhone': 'Change',
+  'pages.ops.users.form.phone.new': 'New phone number',
+  'pages.ops.users.form.phone.same': 'Same as the current number',
+  'pages.ops.users.changePhone.hint':
+    'The account must sign in with the new number afterwards. Its WeChat binding is removed and must be re-authorized; existing sessions are not affected (disable the account to sign it out).',
   'pages.ops.users.form.submit.move': 'Move',
   'pages.ops.users.move.warning':
     'Moving the account also clears its device bindings; they must be bound again.',
   'pages.ops.users.move.target': 'Move to customer',
   'pages.ops.users.success.created': 'Account created',
   'pages.ops.users.success.reset': 'Password reset',
+  'pages.ops.users.success.phoneChanged': 'Phone number changed',
   'pages.ops.users.success.moved': 'Moved; device bindings cleared',
   'pages.ops.users.success.disabled': 'Account disabled',
   'pages.ops.users.success.enabled': 'Account enabled',
   'pages.ops.users.error.exists': 'Username already exists',
+  'pages.ops.users.error.phoneNotApplicable':
+    'This is not a phone-number account; its phone cannot be changed.',
   'pages.ops.users.error.phoneExists':
     'This phone number is already registered.',
   'pages.ops.users.error.invalidPhone':

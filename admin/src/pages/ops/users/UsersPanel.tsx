@@ -16,6 +16,7 @@ import {
 } from '@/utils/userFilter';
 import { describeUserError, userLabel } from './errors';
 import {
+  ChangePhoneModal,
   CreateUserModal,
   MoveUserModal,
   ResetPasswordModal,
@@ -47,6 +48,7 @@ const UsersPanel: React.FC<Props> = ({
   const [customers, setCustomers] = useState<API.Customer[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<API.AdminUser>();
+  const [phoneTarget, setPhoneTarget] = useState<API.AdminUser>();
   const [moveTarget, setMoveTarget] = useState<API.AdminUser>();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -183,6 +185,12 @@ const UsersPanel: React.FC<Props> = ({
           <a onClick={() => setResetTarget(row)}>
             {t('pages.ops.users.action.resetPassword')}
           </a>
+          {/* 只有手机号账号能改手机号；用户名账号和平台管理员没有手机号 */}
+          {row.role !== 'platform_admin' && row.phone != null && (
+            <a onClick={() => setPhoneTarget(row)}>
+              {t('pages.ops.users.action.changePhone')}
+            </a>
+          )}
           {row.role !== 'platform_admin' && (
             <a onClick={() => setMoveTarget(row)}>
               {t('pages.ops.users.action.move')}
@@ -304,6 +312,12 @@ const UsersPanel: React.FC<Props> = ({
         open={!!resetTarget}
         user={resetTarget}
         onClose={() => setResetTarget(undefined)}
+        onDone={reload}
+      />
+      <ChangePhoneModal
+        open={!!phoneTarget}
+        user={phoneTarget}
+        onClose={() => setPhoneTarget(undefined)}
         onDone={reload}
       />
       <MoveUserModal

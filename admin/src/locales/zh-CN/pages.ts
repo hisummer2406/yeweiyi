@@ -160,6 +160,7 @@ export default {
   'pages.ops.users.status.disabled': '已停用',
   'pages.ops.users.action.resetPassword': '重置密码',
   'pages.ops.users.action.move': '换客户',
+  'pages.ops.users.action.changePhone': '修改手机号',
   'pages.ops.users.action.disable': '停用',
   'pages.ops.users.action.enable': '启用',
   'pages.ops.users.disable.confirm': '停用后该账号无法登录，确定停用？',
@@ -185,17 +186,25 @@ export default {
     '该客户已有管理员，一个客户只设一个管理员',
   'pages.ops.users.form.submit': '创建',
   'pages.ops.users.form.submit.reset': '重置',
+  'pages.ops.users.form.submit.changePhone': '确认修改',
+  'pages.ops.users.form.phone.new': '新手机号',
+  'pages.ops.users.form.phone.same': '新手机号与当前相同',
+  'pages.ops.users.changePhone.hint':
+    '修改后该账号须用新手机号登录；已有的微信绑定会被清除，需重新用微信授权登录；已签发的登录状态不受影响（要让其下线请停用账号）。',
   'pages.ops.users.form.submit.move': '确认换客户',
   'pages.ops.users.move.warning':
     '换客户会同时清掉该账号已绑定的设备，需要重新绑定。',
   'pages.ops.users.move.target': '换到客户',
   'pages.ops.users.success.created': '账号已创建',
   'pages.ops.users.success.reset': '密码已重置',
+  'pages.ops.users.success.phoneChanged': '手机号已修改',
   'pages.ops.users.success.moved': '已换客户，设备绑定已清空',
   'pages.ops.users.success.disabled': '账号已停用',
   'pages.ops.users.success.enabled': '账号已启用',
   'pages.ops.users.error.exists': '用户名已存在',
   'pages.ops.users.error.phoneExists': '该手机号已被注册。',
+  'pages.ops.users.error.phoneNotApplicable':
+    '该账号不是手机号账号，不能修改手机号。',
   'pages.ops.users.error.invalidPhone': '手机号无效，仅支持 11 位大陆手机号。',
   'pages.ops.users.error.invalidUsername':
     '用户名无效：需 3-32 位字母、数字、. _ -，首位为字母或数字，且不能是手机号。',

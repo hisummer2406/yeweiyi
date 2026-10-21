@@ -184,10 +184,14 @@ declare namespace API {
         customerId: number;
       };
 
-  /** PUT /api/users/:id 请求体：disabled 和 password 至少给一个 */
+  /**
+   * PUT /api/users/:id 请求体：disabled、password、phone 至少给一个。
+   * phone 仅平台管理员可改，且只对手机号账号（客户管理员/员工）有效；云端接口为 yeweiyi-admin 约定的契约，联调前以 mock 测试为准。
+   */
   type UpdateUserParams = {
     disabled?: boolean;
     password?: string;
+    phone?: string;
   };
 
   /** POST /api/devices 请求体：deviceName 为铭牌完整出厂编号（按字符串，保留前导零） */
