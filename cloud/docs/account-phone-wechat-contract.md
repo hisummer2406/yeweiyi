@@ -143,9 +143,25 @@
 | 接口 | 变化 |
 | --- | --- |
 | `GET /api/users` | 平台管理员不变；客户管理员仍可列**本客户员工**（只读，手机号脱敏；油罐分配已改为仅平台管理员，此入口不再用于分配）；`customer_user` 仍 403 |
-| `PUT /api/users/:id`（停用/启用/重置密码） | **仅平台管理员**。客户管理员 → `403 not authorized`。可为任何账号（含 `customer_user`，包括此前没有密码的手机号员工）设置/重置密码，并清除该账号的登录失败计数（§11.3） |
+| `PUT /api/users/:id`（停用/启用/重置密码/改手机号，§4.7） | **仅平台管理员**。客户管理员 → `403 not authorized`。可为任何账号（含 `customer_user`，包括此前没有密码的手机号员工）设置/重置密码，并清除该账号的登录失败计数（§11.3） |
 | `PUT /api/users/:id/customer` | 已仅平台管理员，不变 |
 | 删除账号 | 当前**没有**删除接口，本期不新增（停用即可）；不得为此引入 |
+
+### 4.7 `PUT /api/users/:id` 的 `phone` 字段（修改手机号）
+
+请求体 `{"disabled"?: bool, "password"?: string, "phone"?: string}`，三者至少一个，可同时传。
+
+- **仅平台管理员**；客户管理员/员工在读请求体之前 `403 not authorized`（写 `denied` 审计）。
+- `phone` 用 §2 的规范化（去空格/连字符与 `+86`/`86`/`0086`），非法 `400 invalid_phone`。
+- 只适用于**手机号账号**（`customer_admin`/`customer_user`，含没有密码的员工）。平台管理员与用户名账号没有手机号，
+  传 `phone` → `409 phone_not_applicable`（不做账号类型互转）。
+- 已被任何账号占用 → `409 phone_exists`，响应不含号码与所属客户。传账号当前的号码是无操作：200，不写审计、不解绑。
+- 同一事务内：`phone` 与镜像它的 `username` 一起改；**删除该用户的微信绑定**（新号码须重新经
+  `/api/auth/wechat/phone-login` 验证，号码的前持有人不能凭旧绑定继续登录）；写审计 `user.change-phone`，
+  `detail` = `userId`、`role`、`oldPhone`、`newPhone`（均脱敏 `138****8000`）。
+- **已签发令牌不受影响**：`sub` 是用户 ID，改号后继续有效，也不触发续期变化；要踢人请停用账号。
+- 响应 `200`：与其他 `PUT /api/users/:id` 相同的 `user` 对象（平台管理员视角，手机号完整）。
+- 其他错误沿用：`404 user_not_found`、`400 invalid_password`、`400 invalid_request`（什么都没传）。
 
 ## 5. 配置与离线边界
 

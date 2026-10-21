@@ -938,3 +938,108 @@ func TestAdmin_ConcurrentMovesAreAuditedFromTheLockedRow(t *testing.T) {
 		t.Errorf("arrival audit = %+v, want customer %d", got["in"], tn.custB)
 	}
 }
+
+func TestAdmin_ChangeUserPhone(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+
+	staff, rec := tn.createUser(t, tn.platform, control.RoleCustomerUser, ptr(tn.custA))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create staff: %d", rec.Code)
+	}
+	admin, _ := tn.createUser(t, tn.platform, control.RoleCustomerAdmin, ptr(tn.custA))
+	other, _ := tn.createUser(t, tn.platform, control.RoleCustomerUser, ptr(tn.custB))
+	staffPath := fmt.Sprintf("/api/users/%d", staff.ID)
+	put := func(token, path string, body map[string]any) *httptest.ResponseRecorder {
+		return tn.send(t, "PUT", path, token, body)
+	}
+	codeOf := func(rec *httptest.ResponseRecorder) string { return decodeAs[struct{ Code string }](t, rec).Code }
+
+	// Only a platform admin: a customer admin and staff get 403 before the body is read.
+	for name, token := range map[string]string{"customer admin": tn.adminA, "staff": tn.userA} {
+		if rec := put(token, staffPath, map[string]any{"phone": testPhone()}); rec.Code != http.StatusForbidden {
+			t.Errorf("%s changing a phone: %d, want 403", name, rec.Code)
+		}
+	}
+
+	// Bad formats, and a body that changes nothing.
+	for _, bad := range []string{"", "12345", "+1 4155550100", "abc"} {
+		if rec := put(tn.platform, staffPath, map[string]any{"phone": bad}); rec.Code != http.StatusBadRequest || codeOf(rec) != "invalid_phone" {
+			t.Errorf("phone %q: %d %s, want 400 invalid_phone", bad, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := put(tn.platform, staffPath, map[string]any{}); rec.Code != http.StatusBadRequest {
+		t.Errorf("empty body: %d, want 400", rec.Code)
+	}
+
+	// A number held by another account, in this or another customer, is the same bare 409.
+	for _, holder := range []adminUser{admin, other} {
+		rec := put(tn.platform, staffPath, map[string]any{"phone": holder.Phone})
+		if rec.Code != http.StatusConflict || codeOf(rec) != "phone_exists" || strings.Contains(rec.Body.String(), holder.Phone) {
+			t.Errorf("duplicate phone: %d %s, want 409 phone_exists without the number", rec.Code, rec.Body.String())
+		}
+	}
+
+	// platform_admin has no phone to change.
+	if rec := put(tn.platform, fmt.Sprintf("/api/users/%d", tn.platformID), map[string]any{"phone": testPhone()}); rec.Code != http.StatusConflict || codeOf(rec) != "phone_not_applicable" {
+		t.Errorf("platform admin: %d %s, want 409 phone_not_applicable", rec.Code, rec.Body.String())
+	}
+	// A username account has none either (no conversion between account types).
+	nameRec := tn.send(t, "POST", "/api/users", tn.platform, map[string]any{
+		"role": control.RoleCustomerAdmin, "customerId": tn.custA, "username": uniqueName("n")[:20], "password": testPassword})
+	if nameRec.Code != http.StatusCreated {
+		t.Fatalf("create username account: %d %s", nameRec.Code, nameRec.Body.String())
+	}
+	nameUser := decodeAs[adminUser](t, nameRec)
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, nameUser.ID) })
+	if rec := put(tn.platform, fmt.Sprintf("/api/users/%d", nameUser.ID), map[string]any{"phone": testPhone()}); rec.Code != http.StatusConflict || codeOf(rec) != "phone_not_applicable" {
+		t.Errorf("username account: %d %s, want 409 phone_not_applicable", rec.Code, rec.Body.String())
+	}
+
+	// The change: a WeChat-bound staff member with a live token. The number (and the mirrored username)
+	// moves, the binding is dropped, the token keeps working, and the audit row has masked numbers only.
+	if _, err := tn.env.pool.Exec(ctx,
+		`INSERT INTO user_wechat_identities (user_id, appid, openid) VALUES ($1, 'wx-test', $2)`, staff.ID, uniqueName("openid")); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM user_wechat_identities WHERE user_id = $1`, staff.ID) })
+	token := tn.env.login(staff.Phone, "")
+	newPhone := testPhone()
+	rec = put(tn.platform, staffPath, map[string]any{"phone": " +86 " + newPhone[:3] + "-" + newPhone[3:], "disabled": false})
+	if rec.Code != http.StatusOK || decodeAs[adminUser](t, rec).Phone != newPhone {
+		t.Fatalf("change phone: %d %s", rec.Code, rec.Body.String())
+	}
+	var username string
+	var bindings int
+	tn.env.pool.QueryRow(ctx, `SELECT username FROM users WHERE id = $1`, staff.ID).Scan(&username)
+	tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM user_wechat_identities WHERE user_id = $1`, staff.ID).Scan(&bindings)
+	if username != newPhone || bindings != 0 {
+		t.Errorf("username=%q (want %q), bindings=%d (want 0)", username, newPhone, bindings)
+	}
+	if rec := tn.send(t, "GET", "/api/me", token, nil); rec.Code != http.StatusOK {
+		t.Errorf("token issued before the change: %d, want 200", rec.Code)
+	}
+	var detail string
+	if err := tn.env.pool.QueryRow(ctx,
+		`SELECT detail::text FROM audit_log WHERE action = 'user.change-phone' AND detail->>'userId' = $1 ORDER BY id DESC LIMIT 1`,
+		fmt.Sprint(staff.ID)).Scan(&detail); err != nil {
+		t.Fatalf("audit row: %v", err)
+	}
+	if strings.Contains(detail, staff.Phone) || strings.Contains(detail, newPhone) || !strings.Contains(detail, "****") {
+		t.Errorf("audit detail %s must hold masked numbers only", detail)
+	}
+
+	// Sending the number the account already has changes nothing, and writes no audit row.
+	if rec := put(tn.platform, staffPath, map[string]any{"phone": newPhone}); rec.Code != http.StatusOK {
+		t.Errorf("same phone: %d, want 200", rec.Code)
+	}
+	var n int
+	tn.env.pool.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'user.change-phone' AND detail->>'userId' = $1`, fmt.Sprint(staff.ID)).Scan(&n)
+	if n != 1 {
+		t.Errorf("audit rows for the user: %d, want 1", n)
+	}
+	// Unknown user.
+	if rec := put(tn.platform, "/api/users/999999999", map[string]any{"phone": testPhone()}); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown user: %d, want 404", rec.Code)
+	}
+}
