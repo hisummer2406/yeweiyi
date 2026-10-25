@@ -21,6 +21,12 @@ vi.mock('@umijs/max', () => ({
   }),
 }));
 vi.mock('@/services/ant-design-pro/alarms', () => ({ listAlarms }));
+const getDeviceTanks = vi.fn(async () => ({
+  deviceName: 'D1',
+  reported: true,
+  tanks: [{ index: 1 }, { index: 2 }],
+}));
+vi.mock('@/services/ant-design-pro/tankGrants', () => ({ getDeviceTanks }));
 
 const { default: AlarmRecords } = await import('./AlarmRecords');
 const { ApiError } = await import('@/services/ant-design-pro/apiError');
@@ -167,5 +173,15 @@ describe('AlarmRecords', () => {
     rerender(<AlarmRecords device="D2" />);
     expect(await screen.findByText('of-D2')).toBeTruthy();
     expect(screen.queryByText('of-D1')).toBeNull();
+  });
+
+  it('a picked tank is asked of the cloud, not filtered from the first page (#84)', async () => {
+    listAlarms.mockResolvedValue({ rows: [alarm(1)], partial: false });
+    render(<AlarmRecords device="D1" />);
+    await waitFor(() => expect(listAlarms).toHaveBeenCalled());
+    expect(listAlarms.mock.calls[0][0].tank).toBeUndefined();
+    fireEvent.mouseDown(await screen.findByLabelText('油罐'));
+    fireEvent.click(await screen.findByText('2号罐'));
+    await waitFor(() => expect(listAlarms.mock.calls.at(-1)?.[0].tank).toBe(2));
   });
 });

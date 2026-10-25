@@ -17,22 +17,41 @@ export const defaultWindow = (now: Date = new Date()): RecordsWindow => ({
   end: now,
 });
 
-/** 窗口转成云端要求的 RFC3339（UTC）查询参数。 */
+/** 罐号与方向筛选（yeweiyi-cloud docs/records-filter-contract.md，#84）；缺省的字段不筛选。 */
+export type RecordsFilter = { tank?: number; direction?: 'IN' | 'OUT' };
+
+/** 窗口转成云端要求的 RFC3339（UTC）查询参数；筛选只带有值的字段。 */
 export const toRecordsQuery = (
   device: string,
   w: RecordsWindow,
+  filter: RecordsFilter = {},
 ): API.RecordsQuery => ({
   device,
   beginTime: w.begin.toISOString(),
   endTime: w.end.toISOString(),
+  ...(filter.tank !== undefined ? { tank: filter.tank } : {}),
+  ...(filter.direction ? { direction: filter.direction } : {}),
 });
 
-/** 出入库方向过滤（云端没有方向过滤）；direction 缺省则不过滤。 */
+/**
+ * 按行再过滤一遍方向与罐号。云端已按 tank/direction 先筛选后分页；这一步只是兜底：
+ * 还没有 #84 的旧云端会忽略这两个参数、返回整机记录，此时不能把别的罐或另一方向显示出来。
+ */
+export const filterRows = <R extends { tank: number; direction?: string }>(
+  rows: R[],
+  filter: RecordsFilter,
+): R[] =>
+  rows.filter(
+    (r) =>
+      (filter.tank === undefined || r.tank === filter.tank) &&
+      (!filter.direction || r.direction === filter.direction),
+  );
+
+/** 出入库方向过滤；direction 缺省则不过滤。 */
 export const filterByDirection = (
   rows: API.StockEvent[],
   direction?: 'IN' | 'OUT',
-): API.StockEvent[] =>
-  direction ? rows.filter((r) => r.direction === direction) : rows;
+): API.StockEvent[] => filterRows(rows, { direction });
 
 /**
  * 一条要展示给用户的提示。组件按 id 取文案（pages.console.records.notice.<id>），values 填占位符。

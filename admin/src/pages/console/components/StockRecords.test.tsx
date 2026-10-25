@@ -20,6 +20,8 @@ vi.mock('@umijs/max', () => ({
   }),
 }));
 vi.mock('@/services/ant-design-pro/stock', () => ({ listStockEvents }));
+const getDeviceTanks = vi.fn();
+vi.mock('@/services/ant-design-pro/tankGrants', () => ({ getDeviceTanks }));
 
 const { default: StockRecords } = await import('./StockRecords');
 const { ApiError } = await import('@/services/ant-design-pro/apiError');
@@ -57,7 +59,14 @@ const result = (p: Partial<API.StockList> = {}): API.StockList => ({
   ...p,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  getDeviceTanks.mockResolvedValue({
+    deviceName: 'D1',
+    reported: true,
+    tanks: [{ index: 1 }, { index: 2 }],
+  });
+});
 afterEach(cleanup);
 
 describe('StockRecords', () => {
@@ -230,5 +239,41 @@ describe('StockRecords', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByText('记录加载失败')).toBeNull();
     expect(screen.queryByText('该时间范围内没有出入库记录')).toBeNull();
+  });
+
+  it('asks the cloud for the direction of the page (#84)', async () => {
+    listStockEvents.mockResolvedValue(result({ rows: [ev('e1')] }));
+    render(<StockRecords device="D1" direction="OUT" />);
+    await waitFor(() => expect(listStockEvents).toHaveBeenCalled());
+    expect(listStockEvents.mock.calls[0][0].direction).toBe('OUT');
+    expect(listStockEvents.mock.calls[0][0].tank).toBeUndefined();
+  });
+
+  it('a refused tank (403 tank_not_authorized) goes back to all tanks and says so', async () => {
+    listStockEvents.mockResolvedValue(result({ rows: [ev('e1')] }));
+    render(<StockRecords device="D1" />);
+    await screen.findByText('92#');
+    listStockEvents.mockRejectedValueOnce(
+      new ApiError(
+        403,
+        'not authorized for this tank',
+        false,
+        'tank_not_authorized',
+      ),
+    );
+    // pick tank 2 in the select
+    fireEvent.mouseDown(await screen.findByLabelText('油罐'));
+    fireEvent.click(await screen.findByText('2号罐'));
+    await waitFor(() =>
+      expect(listStockEvents.mock.calls.some((c) => c[0].tank === 2)).toBe(
+        true,
+      ),
+    );
+    expect(
+      await screen.findByText('2号罐已无权查看，已切回全部油罐'),
+    ).toBeTruthy();
+    await waitFor(() =>
+      expect(listStockEvents.mock.calls.at(-1)?.[0].tank).toBeUndefined(),
+    );
   });
 });

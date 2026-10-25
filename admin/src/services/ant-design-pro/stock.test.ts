@@ -43,6 +43,12 @@ describe('listStockEvents', () => {
     );
   });
 
+  it('sends the tank and direction filters (#84)', async () => {
+    request.mockResolvedValue({ data: { rows: [] } });
+    await listStockEvents({ ...query, tank: 2, direction: 'OUT' });
+    expect(request.mock.calls[0][1].params).toMatchObject({ tank: 2, direction: 'OUT' });
+  });
+
   it('returns rows and every counter of a 200', async () => {
     request.mockResolvedValue({
       data: {

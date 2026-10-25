@@ -217,6 +217,10 @@ declare namespace API {
     device: string;
     beginTime: string;
     endTime: string;
+    /** 可选罐号筛选（yeweiyi-cloud docs/records-filter-contract.md，#84）：服务端先筛选后分页 */
+    tank?: number;
+    /** 可选方向筛选，仅出入库 */
+    direction?: 'IN' | 'OUT';
   };
 
   /** GET /api/alarms 的一行（internal/api/alarms.go alarmResponse）；一次状态变化一行 */

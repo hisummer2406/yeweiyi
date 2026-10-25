@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   defaultWindow,
+  type RecordsFilter,
   type RecordsWindow,
   toRecordsQuery,
 } from '@/utils/records';
@@ -20,12 +21,13 @@ export type RecordsQueryState<T> = {
   /** 用户选的固定窗口；undefined 表示滚动的「最近 24 小时」 */
   range?: RecordsWindow;
   setRange: (r?: RecordsWindow) => void;
-  /** device 或窗口变化时自增，调用方据此重置分页 */
+  /** device、窗口或筛选变化时自增，调用方据此重置分页 */
   version: number;
 };
 
 /**
- * 记录页的「设备 + 窗口 + 轮询」状态。
+ * 记录页的「设备 + 窗口 + 筛选 + 轮询」状态。筛选（罐号、方向）交给云端先筛选后分页（#84），
+ * 筛选变了与换设备一样清掉旧数据重新加载。
  * - 没有 device 就不请求；
  * - 默认窗口每次请求按当前时间重新计算（滚动的最近 24 小时），用户选了范围就固定不动；
  * - 请求序号：device/窗口变了、重复刷新、卸载之后，迟到的旧响应一律丢弃；
@@ -37,7 +39,9 @@ export function useRecordsQuery<T>(
   fetcher: (q: API.RecordsQuery) => Promise<T>,
   device: string | undefined,
   intervalMs: number = REFRESH_MS,
+  filter: RecordsFilter = {},
 ): RecordsQueryState<T> {
+  const { tank, direction } = filter;
   const [data, setData] = useState<T>();
   const [loading, setLoading] = useState(!!device);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,7 +71,7 @@ export function useRecordsQuery<T>(
       setRefreshing(true);
       try {
         const res = await fetcherRef.current(
-          toRecordsQuery(device, range ?? defaultWindow()),
+          toRecordsQuery(device, range ?? defaultWindow(), { tank, direction }),
         );
         if (mine !== seq.current) return;
         setData(res);
@@ -82,10 +86,10 @@ export function useRecordsQuery<T>(
         }
       }
     },
-    [device, range],
+    [device, range, tank, direction],
   );
 
-  // device 或窗口变化：丢掉旧数据，重新加载，并通知调用方重置分页。
+  // device、窗口或筛选变化：丢掉旧数据，重新加载，并通知调用方重置分页。
   useEffect(() => {
     setVersion((v) => v + 1);
     void run(true);

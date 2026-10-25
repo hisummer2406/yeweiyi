@@ -84,6 +84,11 @@ export default {
   'pages.console.records.device.pick': 'Select a device first',
   'pages.console.records.retry': 'Retry',
   'pages.console.records.refresh': 'Refresh',
+  'pages.console.records.filter.tank': 'Tank',
+  'pages.console.records.filter.allTanks': 'All tanks',
+  'pages.console.records.filter.tankNo': 'Tank {n}',
+  'pages.console.records.tankRefused':
+    'You can no longer view tank {n}; showing all tanks',
   'pages.console.records.range.label': 'Time range',
   'pages.console.records.assignedNote':
     'Records from before the device was assigned to the current customer are not shown.',

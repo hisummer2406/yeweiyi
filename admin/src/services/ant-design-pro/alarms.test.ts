@@ -53,6 +53,13 @@ describe('listAlarms', () => {
     expect(RECORDS_LIMIT).toBe(500);
   });
 
+  it('sends the tank filter (#84)', async () => {
+    request.mockResolvedValue({ data: [], headers: {} });
+    await listAlarms({ ...query, tank: 3 });
+    expect(request.mock.calls[0][1].params).toMatchObject({ tank: 3 });
+    expect(request.mock.calls[0][1].params.direction).toBeUndefined();
+  });
+
   it('returns the rows and partial=false without the header', async () => {
     request.mockResolvedValue({ data: [alarm], headers: {} });
     await expect(listAlarms(query)).resolves.toEqual({

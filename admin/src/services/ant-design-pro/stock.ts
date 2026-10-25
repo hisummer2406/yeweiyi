@@ -27,7 +27,7 @@ const toList = (body: StockBody, degraded?: API.StockDegraded): API.StockList =>
 });
 
 /**
- * GET /api/oil-in-out：某台设备在窗口内的出入库记录（云端没有方向过滤，方向由调用方在前端过滤）。
+ * GET /api/oil-in-out：某台设备在窗口内的出入库记录；可选 tank / direction 由云端先筛选后分页（#84）。
  * 响应是对象 `{rows, parsed, unparsable, legacySkipped, ...}`。
  *
  * 云端对「不可读记录」返回 502，body 仍是同一个对象并带 `code=STOCK_EVENT_FORMAT_UNSUPPORTED`：
@@ -44,6 +44,8 @@ export async function listStockEvents(
         device: query.device,
         beginTime: query.beginTime,
         endTime: query.endTime,
+        tank: query.tank,
+        direction: query.direction,
         sort: false,
         limit: RECORDS_LIMIT,
       },

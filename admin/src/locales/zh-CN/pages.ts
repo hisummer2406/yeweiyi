@@ -79,6 +79,10 @@ export default {
   'pages.console.records.device.pick': '请先选择设备',
   'pages.console.records.retry': '重试',
   'pages.console.records.refresh': '刷新',
+  'pages.console.records.filter.tank': '油罐',
+  'pages.console.records.filter.allTanks': '全部油罐',
+  'pages.console.records.filter.tankNo': '{n}号罐',
+  'pages.console.records.tankRefused': '{n}号罐已无权查看，已切回全部油罐',
   'pages.console.records.range.label': '时间范围',
   'pages.console.records.assignedNote':
     '设备转移给当前客户之前的记录不会显示。',

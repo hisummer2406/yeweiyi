@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultWindow,
   filterByDirection,
+  filterRows,
   hasDegradation,
   RECORDS_LIMIT,
   summarizeAlarms,
@@ -46,6 +47,27 @@ describe('window', () => {
       beginTime: '2026-10-06T12:00:00.000Z',
       endTime: '2026-10-07T12:00:00.000Z',
     });
+  });
+});
+
+describe('tank and direction filter (#84)', () => {
+  const w = defaultWindow(new Date('2026-10-07T12:00:00Z'));
+  it('puts only the given filters on the query', () => {
+    expect(
+      toRecordsQuery('D1', w, { tank: 2, direction: 'OUT' }),
+    ).toMatchObject({ tank: 2, direction: 'OUT' });
+    const q = toRecordsQuery('D1', w, {});
+    expect('tank' in q || 'direction' in q).toBe(false);
+  });
+  it('filterRows drops other tanks and directions (an older cloud ignores the parameters)', () => {
+    const rows = [
+      { ...ev('IN'), tank: 1 },
+      { ...ev('OUT'), tank: 2 },
+      { ...ev('IN'), tank: 2 },
+    ];
+    expect(filterRows(rows, { tank: 2 })).toHaveLength(2);
+    expect(filterRows(rows, { tank: 2, direction: 'IN' })).toHaveLength(1);
+    expect(filterRows(rows, {})).toHaveLength(3);
   });
 });
 
