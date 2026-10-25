@@ -1,0 +1,124 @@
+.rl-head {
+  padding: 24rpx 32rpx 8rpx;
+}
+
+.rl-station {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #131313;
+}
+
+.rl-banner {
+  margin: 16rpx 24rpx;
+}
+
+.rl-body {
+  padding: 8rpx 24rpx 0;
+}
+
+.rl-tip {
+  margin-top: 12rpx;
+}
+
+/* 表格：字号不为塞下所有列而缩小，列宽固定，超出单元格省略 */
+.rt {
+  display: flex;
+  background: #ffffff;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.rt-fixed {
+  flex-shrink: 0;
+  border-right: 1rpx solid #e3e7ef;
+}
+
+.rt-scroll {
+  flex: 1;
+  width: 0;
+  white-space: nowrap;
+}
+
+.rt-inner {
+  display: inline-block;
+}
+
+.rt-row {
+  display: flex;
+}
+
+.rt-cell {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 180rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 16rpx;
+  font-size: 28rpx;
+  color: #131313;
+  border-bottom: 1rpx solid #eef1f6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rt-tank {
+  width: 120rpx;
+  text-align: center;
+}
+
+.rt-wide {
+  width: 300rpx;
+}
+
+.rt-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rt-head {
+  background: #f3f5f9;
+  color: #5a6170;
+  font-size: 26rpx;
+}
+
+/* 报警中（未恢复）的行：文字标红；状态文字本身也写在报警信息里，不只靠颜色 */
+.rt-active {
+  color: #d9363e;
+}
+
+.rt-row.rt-active .rt-cell {
+  color: #d9363e;
+}
+
+.rl-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 100;
+}
+
+.rl-sheet {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border-radius: 24rpx 24rpx 0 0;
+}
+
+.rl-sheet-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.rl-sheet-text {
+  font-size: 28rpx;
+  margin-bottom: 16rpx;
+  word-break: break-all;
+}

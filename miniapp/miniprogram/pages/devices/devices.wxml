@@ -62,6 +62,7 @@
         wx:key="key"
         class="tank-row"
         data-device="{{g.deviceName}}"
+        data-tank="{{t.index}}"
         bindtap="onTapTank"
       >
         <view class="home-tank">

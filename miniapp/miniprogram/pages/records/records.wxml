@@ -1,6 +1,12 @@
-<!-- 设计稿「首页-我的记录04」。交班记录、库存记录没有云端数据，点了会说明原因（见 records.ts）；
-     原因不写在行内，避免把开发备注展示给用户。 -->
-<view class="menu-list">
+<!-- 设计稿「首页-我的记录04」。记录沿用首页当前油站及其唯一设备，不提供设备选择（miniapp#16）；
+     交班记录、库存记录没有云端数据，列表页会说明尚未开放（见 utils/recordColumns.ts SUPPORTED）。 -->
+<view class="records-station" wx:if="{{stationName}}">{{stationName}}</view>
+<view wx:if="{{notice}}" class="card banner-warning records-notice">
+  <text class="text-warning">{{notice}}</text>
+  <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
+  <button wx:if="{{state === 'error'}}" class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
+</view>
+<view class="menu-list {{state === 'ok' ? '' : 'menu-list-off'}}">
   <view
     wx:for="{{items}}"
     wx:key="title"

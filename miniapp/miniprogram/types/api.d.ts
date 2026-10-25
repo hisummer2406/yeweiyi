@@ -52,6 +52,16 @@ export interface Device {
   granted_tanks?: number[] | null;
 }
 
+// GET /api/devices/:device/tanks (yeweiyi-cloud internal/api/tankgrants.go listDeviceTanksHandler,
+// checked against main c34316b): the tanks the caller may see on the device, taken from the device's
+// latest snapshot and already filtered to the grants for a customer_user. A device that never reported
+// answers 200 with reported=false and no tanks.
+export interface DeviceTanksResponse {
+  deviceName: string;
+  reported: boolean;
+  tanks: { index: number }[];
+}
+
 // POST /api/devices/resolve (yeweiyi-cloud tank-grants-contract v1.0 §3). Locates a device from the
 // scanned label text; writes nothing — no binding, no grant. `code` is the label text as scanned.
 // POST /api/devices/bind is retired (always 410 bind_removed) and must not be called.

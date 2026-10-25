@@ -248,12 +248,15 @@ Page({
 
   onTapTank(e: WechatMiniprogram.BaseEvent) {
     const device = e.currentTarget.dataset.device as string;
+    // The protocol tank number (not the row's position): the detail page opens on this tank.
+    const tank = Number(e.currentTarget.dataset.tank);
+    const tankQuery = Number.isInteger(tank) ? `&tank=${tank}` : '';
     // The station the card was shown under travels with the device, so the detail page can follow the
     // station if its device is replaced while the page is open (see device-detail refreshAssociation).
     const station = stationParam(stationIdFromKey(this.data.stationKey));
     const stationQuery = station ? `&station=${station}` : '';
     wx.navigateTo({
-      url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}${stationQuery}`,
+      url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}${tankQuery}${stationQuery}`,
     });
   },
 
