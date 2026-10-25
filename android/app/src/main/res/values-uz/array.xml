@@ -72,10 +72,11 @@
         <item>Metil</item>
         <item>Dimetil</item>
         <item>Solvent</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
+        <item>PG</item>
+        <item>Etanol</item>
+        <item>Soya moyi</item>
+        <item>Palma moyi</item>
+        <item>Shina moyi</item>
         <item>Bo\'sh</item>
     </string-array>
 </resources>

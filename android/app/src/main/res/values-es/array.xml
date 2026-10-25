@@ -113,10 +113,11 @@
         <item>Metilo</item>
         <item>Dimetilo</item>
         <item>Aceite Disolvente</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
+        <item>PG</item>
+        <item>Etanol</item>
+        <item>Ac. Soja</item>
+        <item>Ac. Palma</item>
+        <item>Ac. Neumát.</item>
         <item>En blanco</item>
     </string-array>
 

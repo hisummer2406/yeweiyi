@@ -55,10 +55,11 @@
         <item>Methyl</item>
         <item>Dimethyl</item>
         <item>Solvent Oil</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
+        <item>PG</item>
+        <item>Ethanol</item>
+        <item>Soy Oil</item>
+        <item>Palm Oil</item>
+        <item>Tire Oil</item>
         <item>Blank</item>
     </string-array>
 

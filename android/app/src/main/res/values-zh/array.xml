@@ -52,6 +52,7 @@
         <item>乙醇</item>
         <item>大豆油</item>
         <item>棕榈油</item>
+        <item>轮胎油</item>
         <item>空白</item>
     </string-array>
     <string-array name="oilcanArray">

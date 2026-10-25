@@ -72,10 +72,11 @@
         <item>Метилацетат</item>
         <item>Диметилацетат</item>
         <item>Растворитель</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
-        <item>" "</item>
+        <item>ПГ</item>
+        <item>Этанол</item>
+        <item>Соев. масло</item>
+        <item>Пальм. масло</item>
+        <item>Шинн. масло</item>
         <item>Пусто</item>
     </string-array>
 </resources>
