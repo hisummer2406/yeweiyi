@@ -629,6 +629,10 @@ export WECHAT_APP_ID=wx0123456789abcdef
 export WECHAT_APP_SECRET=...        # 只能走环境变量；写进 config.yaml 会让服务拒绝启动
 ```
 
+- Docker 生产部署：将上述三项填入服务器 `.env.prod`（权限 `600`）；
+  `docker-compose.prod.yml` 会将它们传入 API 容器。修改后需用既有完整 Compose 文件组合
+  执行 `up -d --no-deps api` 重建 API 容器，`restart` 不会应用环境变量改动。
+  开启前先核对 AppID 与小程序一致，并验证服务健康及真实微信登录；密钥不提交到 Git。
 - 开启前核实目标小程序的**手机号快速验证能力**资格与费用，并在小程序后台配置服务器域名。
 - 启动时不访问微信；`access_token` 只存内存。AppSecret、access_token、openid、两类 code 不写日志、不进审计。
 - 员工需先由平台管理员创建（手机号 + 客户）才能登录；未开通手机号 `404 phone_not_provisioned`，
