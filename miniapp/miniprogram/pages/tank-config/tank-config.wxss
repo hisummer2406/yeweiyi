@@ -1,8 +1,20 @@
-/* 数值取自设计稿「储罐设置10」PNG：行高 90，标签 x=53、值 x=316；保存 / 恢复默认 在 1654–1741。
-   差异：介质密度等输入框的宽度比设计稿的占位 "0" 宽（76rpx，够 5 位数），所以单位比设计稿靠右约 37；
-   设计稿是静态图，没有考虑真实数值的宽度。 */
+/* 数值取自设计稿「储罐设置10」PNG：行高 90，标签 x=53、值 x=316。
+   输入框比设计稿的占位 "0" 宽，放得下「未设置」和 6 位数，单位固定在右侧。 */
 .fr-b .fi {
-  width: 76rpx;
+  width: 150rpx;
+  text-align: right;
+}
+
+.tc-page {
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+}
+
+.tc-banner {
+  margin: 16rpx 24rpx 0;
+}
+
+.tc-saved {
+  padding: 8rpx 53rpx 0;
 }
 
 .tc-color-dot {
@@ -18,4 +30,14 @@
   height: 60rpx;
   font-size: 28rpx;
   color: #131313;
+}
+
+.tc-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24rpx 0 calc(24rpx + env(safe-area-inset-bottom));
+  background: #edf0f7;
+  z-index: 10;
 }

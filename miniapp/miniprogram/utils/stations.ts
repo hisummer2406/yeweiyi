@@ -73,3 +73,37 @@ export function filterStations(options: StationOption[], query: string): Station
   if (!q) return options;
   return options.filter((o) => o.name.toLowerCase().includes(q) || o.address.toLowerCase().includes(q));
 }
+
+// Which device the 我的记录 pages show (miniapp#16).
+//
+// The records pages follow the home page's current station: the same options and the same pick rule
+// (above), fed the same remembered key, so the two cannot disagree. A station has at most one
+// device (station-device-replacement-contract); records are never merged across devices or stations,
+// and no device is ever guessed — there is no device picker on these pages.
+export type RecordsContext =
+  // `lost`: the remembered station is no longer offered and another one was picked (as on the home page).
+  | { kind: 'ok'; stationKey: string; stationName: string; device: Device; lost: boolean }
+  // No usable station: the cloud has none (or is older), or the current pick is "ungrouped".
+  | { kind: 'no-station' }
+  | { kind: 'empty-station'; stationKey: string; stationName: string }
+  // More than one device in one station: a data problem the contract forbids; never pick one.
+  | { kind: 'ambiguous'; stationKey: string; stationName: string };
+
+// `pinned`: a station key the page was opened for (an old device-detail link that was verified); it is
+// used instead of the remembered one and, if it is no longer offered, there is no fallback.
+export function recordsContext(
+  devices: Device[],
+  stations: Station[],
+  remembered: string | undefined,
+  pinned?: string,
+): RecordsContext {
+  const options = buildStationOptions(stations, devices);
+  const current = pinned ? options.find((o) => o.key === pinned) : pickStation(options, remembered);
+  if (!current || current.key === UNGROUPED_KEY) return { kind: 'no-station' };
+  const base = { stationKey: current.key, stationName: current.name };
+  const inStation = devicesOfStation(devices, stations, current.key);
+  if (inStation.length === 0) return { kind: 'empty-station', ...base };
+  if (inStation.length > 1) return { kind: 'ambiguous', ...base };
+  const lost = !pinned && !!remembered && remembered !== current.key && /^\d+$/.test(remembered);
+  return { kind: 'ok', ...base, device: inStation[0], lost };
+}

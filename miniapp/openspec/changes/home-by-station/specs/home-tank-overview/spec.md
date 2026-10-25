@@ -113,8 +113,8 @@
 - **THEN** 菜单中没有"邀请加入"，也没有任何微信邀请或手机号邀请入口
 
 ### Requirement: Tank card opens device detail
-点击罐卡片 SHALL 进入该罐所属设备的设备详情页，详情页保留报警记录、出入库记录、控制命令。
+点击罐卡片 SHALL 进入该罐所属设备的设备详情页并选中这个罐（单罐详情，见变更 `records-by-station-and-single-tank-detail` 的 `device-detail-single-tank`）。出入库记录不在详情页，从「我的记录」进入。
 
 #### Scenario: Open detail from a card
 - **WHEN** 用户点击某设备下的罐卡片
-- **THEN** 进入该设备的设备详情页
+- **THEN** 进入该设备的设备详情页，选中被点的罐

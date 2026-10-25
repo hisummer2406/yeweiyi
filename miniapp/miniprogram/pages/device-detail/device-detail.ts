@@ -9,29 +9,26 @@ import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
 import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
-import { formatLocalTime, roundFields } from '../../utils/format';
-import { isOilInOutListResponse, summarizeOilInOut } from '../../utils/oilInOut';
+import { formatLocalTime } from '../../utils/format';
 import {
   RANGE_PRESETS,
-  alarmQuery,
   customRangeProblem,
   formatDate,
   resolveWindow,
-  shouldAutoContinue,
-  splitAlarmPage,
-  stockQuery,
   type QueryWindow,
   type RangeKey,
   type RangeProblem,
   type RecordsRange,
 } from '../../utils/recordsRange';
+import { RecordFeed, failureCode, type FeedState, type Footer } from '../../utils/recordFeed';
+import { alarmRowKey } from '../../utils/recordColumns';
+import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import {
   ALARM_SEVERITY_KEYS,
   ALARM_STATUS_KEYS,
   ALARM_TYPE_KEYS,
   COMMAND_STATUS_KEYS,
-  STOCK_DIRECTION_KEYS,
   controlMethodLabel,
   label,
 } from '../../utils/labels';
@@ -42,16 +39,16 @@ import type {
   Device,
   LatestTelemetryResponse,
   ListCommandsResponse,
-  OilInOutListResponse,
-  OilInOutRow,
 } from '../../types/api';
 
-type TabKey = 'snapshot' | 'alarms' | 'oilInOut' | 'commands';
+// One tank at a time (miniapp#15): the home page opens the tank that was tapped, and the 实时数据 /
+// 报警记录 tabs and the live-alarm banner all follow the tank selected here. Stock in/out records are not
+// on this page any more: they are under 我的记录 (pages/record-list), bound to the home page's station.
+type TabKey = 'snapshot' | 'alarms' | 'commands';
 
 const TABS: { key: TabKey; labelKey: string }[] = [
   { key: 'snapshot', labelKey: 'detail.tabSnapshot' },
   { key: 'alarms', labelKey: 'detail.tabAlarms' },
-  { key: 'oilInOut', labelKey: 'detail.tabOilInOut' },
   // 控制命令 tab 入口已于 2026-10-17 关闭（页面、轮询和 issue-command 都保留，没有别的入口能进）。
   // 想起来再开时把下面这项加回 TABS：
   // { key: 'commands', labelKey: 'detail.tabCommands' },
@@ -65,22 +62,13 @@ function tabsView(tabs: { key: TabKey; labelKey: string }[]): { key: TabKey; lab
 // View-model types add pre-computed labels (in the current language) so WXML never has to embed a lookup —
 // wx:for item interpolation can't call a function, so the label has to already be a plain field on the
 // row by the time it reaches data.
-// The cloud sends RFC3339 UTC strings; the *Text fields are the phone's local wall clock. rowKey is
-// for wx:key: one alarmId appears twice (ACTIVE and CLEARED), so alarmId alone is not a key.
+// The cloud sends RFC3339 UTC strings; the *Text fields are the phone's local wall clock.
 type AlarmView = Alarm & {
   tankLabel: string;
   typeLabel: string;
   severityLabel: string;
   statusLabel: string;
   timeText: string;
-  rowKey: string;
-};
-type OilInOutView = OilInOutRow & {
-  tankLabel: string;
-  directionLabel: string;
-  timeText: string;
-  beginTimeText: string;
-  endTimeText: string;
   rowKey: string;
 };
 type CommandView = ControlCommand & { methodLabel: string; statusLabel: string };
@@ -93,46 +81,13 @@ function toAlarmView(a: Alarm): AlarmView {
     severityLabel: label(ALARM_SEVERITY_KEYS, a.severity),
     statusLabel: label(ALARM_STATUS_KEYS, a.status),
     timeText: formatLocalTime(a.time, currentLocale()),
-    // The cloud blanks alarmId for alarms it minted itself, so tank and type are part of the key too, or
-    // two such alarms in the same instant would collide (and the append-time dedupe would drop one).
-    rowKey: `${a.alarmId}:${a.tank}:${a.type}:${a.status}:${a.time}`,
-  };
-}
-
-const OIL_IN_OUT_NUMBER_FIELDS = [
-  'beginLevelMm',
-  'endLevelMm',
-  'beginVolumeL',
-  'endVolumeL',
-  'beginTempC',
-  'endTempC',
-  'beginWeightKg',
-  'endWeightKg',
-  'netVolumeL',
-  'duringDeliveryVolumeL',
-  'deliveredVolumeL',
-] as const;
-
-function toOilInOutView(r: OilInOutRow): OilInOutView {
-  return {
-    ...roundFields(r, OIL_IN_OUT_NUMBER_FIELDS),
-    tankLabel: tr('tank.no', { n: r.tank }),
-    directionLabel: label(STOCK_DIRECTION_KEYS, r.direction),
-    timeText: formatLocalTime(r.time, currentLocale()),
-    beginTimeText: formatLocalTime(r.beginTime, currentLocale()),
-    endTimeText: formatLocalTime(r.endTime, currentLocale()),
-    // The cloud sends eventId "" for cloud-generated rows, so eventId alone is not a unique key.
-    rowKey: `${r.eventId}|${r.time}|${r.tank}|${r.direction}`,
+    rowKey: alarmRowKey(a),
   };
 }
 
 function toCommandView(c: ControlCommand): CommandView {
   return { ...c, methodLabel: controlMethodLabel(c.method), statusLabel: label(COMMAND_STATUS_KEYS, c.status) };
 }
-
-// Bottom-of-list state of a paged tab: more = idle with more to load, loading, end = nothing further,
-// error = the last page failed (tap to retry). '' = no footer.
-type Footer = '' | 'more' | 'loading' | 'end' | 'error';
 
 const RANGE_HINT_KEYS: Record<Exclude<RangeProblem, ''>, string> = {
   incomplete: 'detail.rangeIncomplete',
@@ -141,10 +96,9 @@ const RANGE_HINT_KEYS: Record<Exclude<RangeProblem, ''>, string> = {
   future: 'detail.rangeFuture',
 };
 
-// Joins the "list is not complete" notes of the stock tab in the current language.
-function renderNotes(notes: { key: string; params?: Record<string, string | number> }[]): string {
-  return notes.map((m) => tr(m.key, m.params)).join(tr('common.listSep'));
-}
+// No tank selected: the snapshot has not been read yet, or the device has no tank to show (never
+// reported, or none visible) — then the alarm list is the whole device's.
+const NO_TANK = -1;
 
 Page({
   data: {
@@ -153,6 +107,8 @@ Page({
     // device left their scope): the tabs are hidden and `notice` says why. Nothing is queried then.
     deviceActive: true,
     notice: '',
+    // Informational line that does not stop the page (old stock link moved, a tank no longer visible).
+    infoNotice: '',
     text: texts('detail'),
     tabs: tabsView(TABS),
     activeTab: 'snapshot' as TabKey,
@@ -163,17 +119,24 @@ Page({
     socketDown: false,
     // Per tab: '' = what is shown is current; otherwise the notice that the last refresh failed and the
     // list on screen may be out of date.
-    stale: { snapshot: '', alarms: '', oilInOut: '', commands: '' } as Record<string, string>,
+    stale: { snapshot: '', alarms: '', commands: '' } as Record<string, string>,
     // First load failed (nothing to keep on screen): the reason, with a retry button.
     snapshotError: '',
     alarmsError: '',
 
     snapshotTs: '',
+    // The current tank's card only (an empty list when no tank is selected).
     tanks: [] as TankView[],
     snapshotLoaded: false,
+    // Visible tanks of this device, for the switcher; currentTank is a protocol tank number or NO_TANK.
+    tankOptions: [] as { tank: number; label: string }[],
+    currentTank: NO_TANK,
+    currentTankLabel: '',
+    // Why there is no tank to pick (never reported / none visible); '' when there is one.
+    tankless: '',
 
-    // Time range shared by the 报警记录 and 出入库记录 tabs. Presets roll back from "now" at load time;
-    // custom is whole local days. rangeHint says why nothing is shown yet (e.g. dates not picked).
+    // Time range of the 报警记录 tab. Presets roll back from "now" at load time; custom is whole local
+    // days. rangeHint says why nothing is shown yet (e.g. dates not picked).
     rangePresets: RANGE_PRESETS.map((p) => ({ key: p.key, label: tr(p.labelKey) })),
     rangeKey: '24h' as RangeKey,
     customStart: '',
@@ -185,14 +148,6 @@ Page({
     alarmsLoaded: false,
     alarmsFooter: '' as Footer,
 
-    oilInOut: [] as OilInOutView[],
-    // Set whenever the endpoint reports it could not show everything — unparsable (current device
-    // fault) or legacySkipped (closed historical hole) — so the list is never silently incomplete.
-    // See yeweiyi-cloud docs/protocol-v1-stock-event.md.
-    oilInOutNote: '',
-    oilInOutLoaded: false,
-    oilInOutFooter: '' as Footer,
-
     commands: [] as CommandView[],
     commandsLoaded: false,
   },
@@ -200,14 +155,13 @@ Page({
   socket: null as AlarmSocket | null,
   // Identity of "the device this page is showing". Bumped on every switch; every request and the
   // socket callback capture it and drop their result if it moved on, so nothing that was asked for the
-  // old device can write into the new device's view. (The alarms/stock lists have their own seqs too,
-  // which a switch also bumps.)
+  // old device can write into the new device's view.
   deviceGen: 0,
   snapshotSeq: 0,
   commandsSeq: 0,
   // The station this page was opened from (contract v1.2 §8.1): a number only when opened from a
   // station entry on the home page; the device then follows the station's current device
-  // (utils/stationDevice.ts followStationDevice). Opened by device name alone (我的记录) it stays
+  // (utils/stationDevice.ts followStationDevice). Opened by device name alone (scan) it stays
   // undefined and the page is an independent view of that device: it never switches, and only checks
   // the device is still in this user's scope.
   stationId: undefined as number | null | undefined,
@@ -217,33 +171,24 @@ Page({
   entryPending: null as 'scene' | 'station' | null,
   scene: '',
   commandsPollTimer: null as ReturnType<typeof setTimeout> | null,
-  // Phone clock at the last successful read of each tab, for the "out of date since" notice.
-  lastOk: { snapshot: '', alarms: '', oilInOut: '' } as Record<string, string>,
+  // Phone clock at the last successful read of the snapshot, for the "out of date since" notice.
+  lastOkSnapshot: '',
   // The page was hidden (another page opened, or the app went to the background): coming back refreshes.
   wasHidden: false,
   stopNet: null as (() => void) | null,
-  // Set from the `direction` query param when arriving from the 我的记录 page's 出库/入库 entries
-  // (device-detail itself only has one combined 出入库记录 tab; those two rows are the same tab
-  // pre-filtered by direction).
-  oilInOutDirection: '' as '' | 'IN' | 'OUT',
-
-  // Paging state of the two history tabs. *Seq is bumped by every fresh load and every range change, so
-  // a response that arrives after the list was restarted is dropped. *Window is fixed for the whole run
-  // of pages (a rolling preset resolved once), otherwise new records would shift the offsets. *Page is
-  // how many pages were consumed, which is what the next offset is computed from. *Busy is held by a fresh
-  // load AND by a load-more for their whole run (including a filtered stock list fetching on its own), so
-  // two requests can never ask for the same page; a restart clears it, and only the run that still owns the
-  // seq may clear it afterwards.
-  alarmsSeq: 0,
-  alarmsPage: 0,
-  alarmsHasMore: false,
-  alarmsBusy: false,
-  alarmsWindow: null as QueryWindow | null,
-  stockSeq: 0,
-  stockPage: 0,
-  stockHasMore: false,
-  stockBusy: false,
-  stockWindow: null as QueryWindow | null,
+  // The tank the entry asked for (home tank row). Used once, by the first snapshot of the first device:
+  // after a device switch the new device's tanks are another set of objects and it starts at its first.
+  requestedTank: undefined as number | undefined,
+  // customer_user: the grants on this device from GET /api/devices (a second guard; the cloud already
+  // filters). null = not known or an administrator.
+  grantedTanks: null as number[] | null,
+  // Tanks the cloud refused (403 tank_not_authorized) since this device was opened: left out of the
+  // switcher even if a snapshot still lists them.
+  revokedTanks: [] as number[],
+  alarmFeed: null as RecordFeed<Alarm> | null,
+  // Every tank of the last snapshot (the card shows the selected one only).
+  allTanks: [] as TankView[],
+  neverReported: false,
 
   onLoad(query: Record<string, string>) {
     // Network back: the live-alarm connection retries at once and the tab on screen is read again.
@@ -251,13 +196,18 @@ Page({
       this.socket?.reconnectNow();
       this.refreshActiveTab();
     });
+    this.alarmFeed = new RecordFeed<Alarm>(
+      'alarm',
+      (s) => this.showAlarms(s),
+      (err) => this.onTankRefused(err),
+    );
     const device = query.device || '';
     // A view-only account (customer_user) gets no 控制命令 tab: it cannot issue commands and the cloud
     // does not show it the command history either (tank-grants-contract v1.0 §2).
     const tabs = isReadOnlyRole(roleFromToken(getToken())) ? TABS.filter((x) => x.key !== 'commands') : TABS;
     const requestedTab = query.tab as TabKey | undefined;
     const tab: TabKey = tabs.some((x) => x.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
-    this.oilInOutDirection = query.direction === 'IN' || query.direction === 'OUT' ? query.direction : '';
+    this.requestedTank = parseTankParam(query.tank);
     this.stationId = stationIdFromKey(query.station);
     this.setData({ device, tabs: tabsView(tabs), activeTab: tab, today: formatDate(new Date()) });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
@@ -275,17 +225,52 @@ Page({
       this.setData({ deviceActive: false, notice: tr('detail.invalidEntry') });
       return;
     }
-    if (entry.kind === 'station') {
+    // An old link to the retired 出入库记录 tab (the 我的记录 page used to open it): move to that station's
+    // record list when the station can be verified, otherwise stay here and say where the records went.
+    if (query.tab === 'oilInOut') {
+      this.moveOldStockLink(device, query.direction === 'OUT' ? 'out' : 'in', entry.kind === 'station');
+      return;
+    }
+    this.startEntry(entry.kind === 'station');
+  },
+
+  startEntry(byStation: boolean) {
+    if (byStation) {
       // The device name on the query is only what the home list showed a moment ago: the station may
       // have been replaced since. Decide first, then query and subscribe.
       this.entryPending = 'station';
       this.enterByStation();
       return;
     }
-    this.loadTabIfNeeded(tab);
+    const device = this.data.device as string;
+    this.loadTabIfNeeded(this.data.activeTab);
     this.openSocket(device);
     // Catch a replacement that happened between the home list being drawn and this page opening.
     this.refreshAssociation();
+  },
+
+  moveOldStockLink(device: string, type: 'in' | 'out', byStation: boolean) {
+    const stationId = this.stationId;
+    const stay = () => {
+      this.setData({ infoNotice: tr('detail.oilMoved') });
+      this.startEntry(byStation);
+    };
+    if (typeof stationId !== 'number' || !device) {
+      stay();
+      return;
+    }
+    get<{ rows: Device[] }>('/api/devices')
+      .then((res) => {
+        if (this.unloaded) return;
+        if (followStationDevice(res.rows, device, stationId).kind === 'same') {
+          wx.redirectTo({ url: `/pages/record-list/record-list?type=${type}&station=${stationId}` });
+        } else {
+          stay();
+        }
+      })
+      .catch(() => {
+        if (!this.unloaded) stay();
+      });
   },
 
   // Entry that has not produced a device yet (scene not located, station not decided): run it again.
@@ -339,6 +324,8 @@ Page({
     this.setData({ deviceActive: false, notice: '', loading: true });
     const gen = this.deviceGen;
     const device = this.data.device as string;
+    // The tapped tank belongs to the tapped device: keep it only if the station still shows that device.
+    const requested = this.requestedTank;
     return get<{ rows: Device[] }>('/api/devices')
       .then((res) => {
         if (gen !== this.deviceGen) return;
@@ -347,7 +334,9 @@ Page({
         if (decision.kind === 'none') {
           this.switchDevice('', tr(FOLLOW_NOTICES[decision.reason]));
         } else {
-          this.switchDevice(decision.kind === 'switch' ? decision.device : device, '');
+          const next = decision.kind === 'switch' ? decision.device : device;
+          this.switchDevice(next, '', res.rows);
+          if (next === device) this.requestedTank = requested;
         }
       })
       .catch((err: Error) => {
@@ -370,14 +359,18 @@ Page({
     const socket = new AlarmSocket(
       device,
       (msg: AlarmPushMessage) => {
-      if (gen !== this.deviceGen || socket !== this.socket) return;
-      this.setData({ liveAlarm: `${label(ALARM_TYPE_KEYS, msg.type)}: ${msg.msg}` });
-      // A live push means the alarm list is stale if the user is looking at it.
-      // Only when the list is the live tail: a rolling range, and the user has not paged down (a reload
-      // would throw their place away). Otherwise the banner above is the notification.
-      if (this.data.activeTab === 'alarms' && this.data.rangeKey !== 'custom' && this.alarmsPage <= 1) {
-        this.loadAlarms();
-      }
+        if (gen !== this.deviceGen || socket !== this.socket) return;
+        // Another tank's alarm is not this page's: switching to that tank reloads its list anyway.
+        const tank = this.data.currentTank as number;
+        if (tank !== NO_TANK && msg.tank !== tank) return;
+        this.setData({ liveAlarm: `${label(ALARM_TYPE_KEYS, msg.type)}: ${msg.msg}` });
+        // A live push means the alarm list is stale if the user is looking at it.
+        // Only when the list is the live tail: a rolling range, and the user has not paged down (a reload
+        // would throw their place away). Otherwise the banner above is the notification.
+        const feed = this.alarmFeed;
+        if (this.data.activeTab === 'alarms' && this.data.rangeKey !== 'custom' && feed && feed.pageCount() <= 1) {
+          this.loadAlarms();
+        }
       },
       (state: SocketState) => {
         if (gen !== this.deviceGen || socket !== this.socket) return;
@@ -406,11 +399,13 @@ Page({
         const device = this.data.device as string;
         const decision = followStationDevice(devices, device, this.stationId);
         if (decision.kind === 'switch') {
-          this.switchDevice(decision.device, '');
+          this.switchDevice(decision.device, '', devices);
         } else if (decision.kind === 'none') {
           const notice = tr(FOLLOW_NOTICES[decision.reason]);
           // Already showing this notice with nothing held: nothing to clear again.
           if (this.data.device || this.data.notice !== notice) this.switchDevice('', notice);
+        } else {
+          this.grantedTanks = grantsOf(devices, device);
         }
       })
       // A failed re-read changes nothing: the current device stays as it was.
@@ -420,29 +415,26 @@ Page({
       });
   },
 
-  // Everything held for the old device is dropped here — latest value, tanks, alarms, stock records,
-  // commands, live banner, paging state, the socket and the poll timer — and requests still in flight
-  // for it are invalidated, before anything is asked for the new one. `device` '' = show the notice and
-  // query nothing. Nothing is migrated: the new device's view starts empty and says so.
-  switchDevice(device: string, notice: string) {
+  // Everything held for the old device is dropped here — latest value, tanks and the selected tank,
+  // alarms, commands, live banner, paging state, the socket and the poll timer — and requests still in
+  // flight for it are invalidated, before anything is asked for the new one. `device` '' = show the notice
+  // and query nothing. Nothing is migrated: "old device + tank 1" and "new device + tank 1" are different
+  // objects, so the new device's view starts empty, at its own first tank.
+  switchDevice(device: string, notice: string, devices?: Device[]) {
     if (this.unloaded) return;
     this.deviceGen++;
     this.snapshotSeq++;
     this.commandsSeq++;
-    this.alarmsSeq++;
-    this.stockSeq++;
-    this.alarmsPage = 0;
-    this.stockPage = 0;
-    this.alarmsHasMore = false;
-    this.stockHasMore = false;
-    this.alarmsBusy = false;
-    this.stockBusy = false;
-    this.alarmsWindow = null;
-    this.stockWindow = null;
+    this.alarmFeed?.reset();
+    this.requestedTank = undefined;
+    this.revokedTanks = [];
+    this.allTanks = [];
+    this.neverReported = false;
+    this.grantedTanks = devices ? grantsOf(devices, device) : null;
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
-    this.lastOk = { snapshot: '', alarms: '', oilInOut: '' };
+    this.lastOkSnapshot = '';
     this.setData({
       device,
       deviceActive: !!device,
@@ -450,19 +442,19 @@ Page({
       loading: false,
       liveAlarm: '',
       socketDown: false,
-      stale: { snapshot: '', alarms: '', oilInOut: '', commands: '' },
+      stale: { snapshot: '', alarms: '', commands: '' },
       snapshotError: '',
       alarmsError: '',
       snapshotTs: '',
       tanks: [],
       snapshotLoaded: false,
+      tankOptions: [],
+      currentTank: NO_TANK,
+      currentTankLabel: '',
+      tankless: '',
       alarms: [],
       alarmsLoaded: false,
       alarmsFooter: '',
-      oilInOut: [],
-      oilInOutNote: '',
-      oilInOutLoaded: false,
-      oilInOutFooter: '',
       commands: [],
       commandsLoaded: false,
       rangeHint: '',
@@ -498,23 +490,12 @@ Page({
     const tab = this.data.activeTab as TabKey;
     if (tab === 'snapshot' && this.data.snapshotLoaded) this.loadSnapshot();
     else if (tab === 'alarms' && this.data.alarmsLoaded) this.loadAlarms();
-    else if (tab === 'oilInOut' && this.data.oilInOutLoaded) this.loadOilInOut();
     else if (tab === 'commands' && this.data.commandsLoaded) this.loadCommands();
   },
 
   // The phone's clock now, for "last updated" notices.
   nowText(): string {
     return formatLocalTime(new Date().toISOString(), currentLocale());
-  },
-
-  markFresh(tab: 'snapshot' | 'alarms' | 'oilInOut') {
-    this.lastOk[tab] = this.nowText();
-    this.setData({ [`stale.${tab}`]: '' });
-  },
-
-  // A refresh failed while earlier data is on screen: keep it and say how old it is.
-  markStale(tab: 'snapshot' | 'alarms' | 'oilInOut') {
-    this.setData({ [`stale.${tab}`]: tr('detail.stale', { time: this.lastOk[tab] || this.nowText() }) });
   },
 
   onUnload() {
@@ -527,8 +508,7 @@ Page({
     this.deviceGen++;
     this.snapshotSeq++;
     this.commandsSeq++;
-    this.alarmsSeq++;
-    this.stockSeq++;
+    this.alarmFeed?.dispose();
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
@@ -544,7 +524,6 @@ Page({
   loadTabIfNeeded(tab: TabKey) {
     if (tab === 'snapshot' && !this.data.snapshotLoaded) this.loadSnapshot();
     if (tab === 'alarms' && !this.data.alarmsLoaded) this.loadAlarms();
-    if (tab === 'oilInOut' && !this.data.oilInOutLoaded) this.loadOilInOut();
     if (tab === 'commands' && !this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -557,13 +536,64 @@ Page({
     const reload: Record<TabKey, () => Promise<unknown>> = {
       snapshot: () => this.loadSnapshot(),
       alarms: () => this.loadAlarms(),
-      oilInOut: () => this.loadOilInOut(),
       commands: () => this.loadCommands(),
     };
     reload[this.data.activeTab as TabKey]().finally(() => wx.stopPullDownRefresh());
   },
 
-  // GET /api/devices/:device/telemetry/latest — replaces the deleted /api/oilcan/latest entirely.
+  // ---- Tank selection ----
+
+  // The snapshot decides which tanks exist and are visible; the selected one stays selected while it is
+  // visible. When it is not (grant revoked, tank gone) the first visible tank is selected and the page says
+  // so. Selecting a different tank restarts the alarm list (the range stays).
+  applyTanks(all: TankView[], neverReported: boolean) {
+    this.allTanks = all;
+    this.neverReported = neverReported;
+    const visible = visibleTanks(
+      all.map((v) => v.index),
+      this.grantedTanks,
+    ).filter((n) => !this.revokedTanks.includes(n));
+    const current = this.data.currentTank as number;
+    const requested = current !== NO_TANK ? current : this.requestedTank;
+    this.requestedTank = undefined;
+    const pick = pickTank(visible, requested);
+    const tank = pick.kind === 'tank' ? pick.tank : NO_TANK;
+    const view = all.find((v) => v.index === tank);
+    const changed = tank !== current;
+    let tankless = '';
+    if (pick.kind === 'none') tankless = neverReported || all.length === 0 ? tr('detail.noTankInfo') : tr('detail.noVisibleTank');
+    this.setData({
+      tankOptions: visible.map((n) => ({ tank: n, label: tr('tank.no', { n }) })),
+      currentTank: tank,
+      currentTankLabel: view ? `${view.tankNoLabel}　${view.oilType || '--'}` : '',
+      tanks: view ? [view] : [],
+      tankless,
+      ...(pick.hidden !== undefined ? { infoNotice: tr('detail.tankHidden', { n: pick.hidden }) } : {}),
+    });
+    if (changed) this.restartAlarms();
+  },
+
+  onPickTank(e: WechatMiniprogram.BaseEvent) {
+    const tank = Number(e.currentTarget.dataset.tank);
+    if (tank === this.data.currentTank) return;
+    this.setData({ currentTank: tank, liveAlarm: '', infoNotice: '' });
+    // Re-render from the last snapshot (the next refresh reads it again), then restart the alarm list.
+    this.applyTanks(this.allTanks, this.neverReported);
+    this.restartAlarms();
+  },
+
+  // A tank-level refusal (403 tank_not_authorized) is not a dead session and not "no records": drop that
+  // tank and select another visible one.
+  onTankRefused(err: Error) {
+    if (failureCode(err) !== 'tank_not_authorized') return;
+    const tank = this.data.currentTank as number;
+    if (tank === NO_TANK) return;
+    this.revokedTanks = this.revokedTanks.concat(tank);
+    this.setData({ currentTank: NO_TANK, infoNotice: tr('detail.tankRevoked', { n: tank }) });
+    this.loadSnapshot();
+  },
+
+  // GET /api/devices/:device/telemetry/latest — the cloud answers the granted tanks only.
   loadSnapshot() {
     if (!this.data.device) return Promise.resolve();
     const device = this.data.device as string;
@@ -572,8 +602,9 @@ Page({
     return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
         if (seq !== this.snapshotSeq) return;
-        this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), tanks: toTankViews(res, device), snapshotLoaded: true, snapshotError: '' });
-        this.markFresh('snapshot');
+        this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), snapshotLoaded: true, snapshotError: '' });
+        this.applyTanks(toTankViews(res, device), false);
+        this.markSnapshotFresh();
       })
       .catch((err: ApiError) => {
         if (seq !== this.snapshotSeq) return;
@@ -581,13 +612,17 @@ Page({
           // Authorized and provisioned, but no data — a real state, not an error. Also what a replaced
           // device's successor looks like until it reports (and yeweiyi-cloud#28 can answer 404 for a
           // device that stopped reporting): an empty state, never the previous device's readings.
-          this.setData({ tanks: [], snapshotTs: '', snapshotLoaded: true, snapshotError: '' });
-          this.markFresh('snapshot');
+          this.setData({ snapshotTs: '', snapshotLoaded: true, snapshotError: '' });
+          this.applyTanks([], true);
+          this.markSnapshotFresh();
         } else {
           // Nothing was ever loaded: say that reading failed (not "no data"), with a retry. Something was: keep
           // it and mark it out of date.
-          if (this.data.snapshotLoaded) this.markStale('snapshot');
-          else this.setData({ snapshotError: err.status === 403 ? tr('detail.noAccess') : describeError(err) });
+          if (this.data.snapshotLoaded) {
+            this.setData({ 'stale.snapshot': tr('detail.stale', { time: this.lastOkSnapshot || this.nowText() }) });
+          } else {
+            this.setData({ snapshotError: err.status === 403 ? tr('detail.noAccess') : describeError(err) });
+          }
           // 403 here is "not authorized for this device": no assignment for this device. Say what to do
           // instead of the cloud's English text; nothing in the app can grant it.
           wx.showToast({
@@ -605,14 +640,19 @@ Page({
       });
   },
 
-  // ---- Time range (shared by 报警记录 and 出入库记录) ----
+  markSnapshotFresh() {
+    this.lastOkSnapshot = this.nowText();
+    this.setData({ 'stale.snapshot': '' });
+  },
+
+  // ---- Time range ----
 
   currentRange(): RecordsRange {
     return { key: this.data.rangeKey, startDate: this.data.customStart, endDate: this.data.customEnd };
   },
 
   // The window to query for a fresh load, or null when the range cannot be queried yet (custom dates not
-  // picked or inconsistent) — then rangeHint says why and the lists stay empty.
+  // picked or inconsistent) — then rangeHint says why and the list stays empty.
   windowForReload(): QueryWindow | null {
     const range = this.currentRange();
     const now = new Date();
@@ -626,232 +666,72 @@ Page({
     if (key === this.data.rangeKey) return;
     // `today` bounds the date pickers; recompute it, the page may have been open past midnight.
     this.setData({ rangeKey: key, today: formatDate(new Date()) });
-    this.restartHistory();
+    this.restartAlarms();
   },
 
   onStartDate(e: WechatMiniprogram.CustomEvent) {
     this.setData({ customStart: e.detail.value as string });
-    this.restartHistory();
+    this.restartAlarms();
   },
 
   onEndDate(e: WechatMiniprogram.CustomEvent) {
     this.setData({ customEnd: e.detail.value as string });
-    this.restartHistory();
+    this.restartAlarms();
   },
 
-  // A different window: both lists start over. Bumping the seqs drops responses still in flight for the
-  // old window; only the tab being looked at loads now, the other one when it is opened.
-  restartHistory() {
-    this.alarmsSeq++;
-    this.stockSeq++;
-    this.alarmsPage = 0;
-    this.stockPage = 0;
-    this.alarmsHasMore = false;
-    this.stockHasMore = false;
-    this.alarmsBusy = false;
-    this.stockBusy = false;
-    this.setData({
-      loading: false,
-      alarms: [],
-      alarmsLoaded: false,
-      alarmsFooter: '',
-      oilInOut: [],
-      oilInOutNote: '',
-      oilInOutLoaded: false,
-      oilInOutFooter: '',
-    });
-    this.loadTabIfNeeded(this.data.activeTab);
+  // A different window or tank: the list starts over and responses still in flight for the old one are
+  // dropped. It loads now only when the tab is on screen, otherwise when it is opened.
+  restartAlarms() {
+    this.alarmFeed?.reset();
+    if (this.data.activeTab === 'alarms') this.loadAlarms();
   },
 
   // ---- 报警记录 ----
 
-  // GET /api/alarms answers a bare array, not {rows: [...]} — see types/api.d.ts's note on Alarm. It has
-  // no "more" flag, so a page asks for one extra row (alarmQuery) and splitAlarmPage uses it as the probe.
-  fetchAlarmPage(win: QueryWindow, pageIndex: number) {
-    return get<Alarm[]>('/api/alarms', alarmQuery(this.data.device, win, pageIndex)).then((rows) => {
-      if (!Array.isArray(rows)) throw new Error('unexpected response shape from /api/alarms');
-      return splitAlarmPage(rows);
+  showAlarms(s: FeedState<Alarm>) {
+    this.setData({
+      alarms: s.rows.map(toAlarmView),
+      alarmsLoaded: s.loaded,
+      alarmsError: s.error,
+      alarmsFooter: s.footer,
+      'stale.alarms': s.stale,
+      loading: s.loading,
     });
   },
 
-  // A fresh load of the first page (tab opened, range changed, pull-down refresh, live alarm).
+  // The current tank's alarms (the whole device's when there is no tank to select). The tank is known only
+  // after the snapshot: until then the snapshot is read first.
   loadAlarms(): Promise<unknown> {
+    const feed = this.alarmFeed;
+    const device = this.data.device as string;
+    if (!feed || !device) return Promise.resolve();
+    if (!this.data.snapshotLoaded) {
+      // applyTanks restarts the list once a tank is selected; with none, load the whole device here.
+      return this.loadSnapshot().then(() => {
+        if (this.data.snapshotLoaded && this.data.currentTank === NO_TANK) return this.reloadAlarmFeed();
+        if (!this.data.snapshotLoaded) this.setData({ alarmsError: this.data.snapshotError });
+        return undefined;
+      });
+    }
+    return this.reloadAlarmFeed();
+  },
+
+  reloadAlarmFeed(): Promise<unknown> {
+    const feed = this.alarmFeed;
     const win = this.windowForReload();
-    if (!win) return Promise.resolve();
-    const seq = ++this.alarmsSeq;
-    this.alarmsBusy = true;
-    this.setData({ loading: true });
-    return this.fetchAlarmPage(win, 0)
-      .then(({ items, hasMore }) => {
-        if (seq !== this.alarmsSeq) return;
-        // The window and page counter change only together with the list: if this refresh fails, the old
-        // list stays on screen and paging must keep continuing that list, not restart at page 0.
-        this.alarmsWindow = win;
-        this.alarmsPage = 1;
-        this.alarmsHasMore = hasMore;
-        this.setData({
-          alarms: items.map(toAlarmView),
-          alarmsLoaded: true,
-          alarmsError: '',
-          alarmsFooter: hasMore ? 'more' : 'end',
-        });
-        this.markFresh('alarms');
-      })
-      .catch((err: Error) => {
-        if (seq !== this.alarmsSeq) return;
-        wx.showToast({ title: describeError(err), icon: 'none' });
-        if (this.data.alarmsLoaded) this.markStale('alarms');
-        else this.setData({ alarmsError: describeError(err) });
-      })
-      .finally(() => {
-        if (seq !== this.alarmsSeq) return;
-        this.alarmsBusy = false;
-        this.setData({ loading: false });
-      });
+    if (!feed || !win) return Promise.resolve();
+    const tank = this.data.currentTank as number;
+    return feed.reload({ device: this.data.device, win, filter: tank === NO_TANK ? {} : { tank } });
   },
 
-  loadMoreAlarms() {
-    if (!this.alarmsHasMore || this.alarmsBusy || !this.alarmsWindow) return;
-    const seq = this.alarmsSeq;
-    this.alarmsBusy = true;
-    this.setData({ alarmsFooter: 'loading' });
-    this.fetchAlarmPage(this.alarmsWindow, this.alarmsPage)
-      .then(({ items, hasMore }) => {
-        if (seq !== this.alarmsSeq) return;
-        this.alarmsPage += 1;
-        this.alarmsHasMore = hasMore;
-        // A row can show up twice across a page boundary (an unreadable row the cloud skipped shifts the
-        // offsets by one; records still syncing in can land inside a window already shown), so drop any
-        // row whose key is already in the list.
-        const seen = new Set(this.data.alarms.map((a: AlarmView) => a.rowKey));
-        const fresh = items.map(toAlarmView).filter((a) => !seen.has(a.rowKey));
-        this.setData({
-          alarms: this.data.alarms.concat(fresh),
-          alarmsFooter: hasMore ? 'more' : 'end',
-        });
-      })
-      .catch((err: Error) => {
-        if (seq !== this.alarmsSeq) return;
-        this.setData({ alarmsFooter: 'error' });
-        wx.showToast({ title: describeError(err), icon: 'none' });
-      })
-      .finally(() => {
-        if (seq === this.alarmsSeq) this.alarmsBusy = false;
-      });
-  },
-
-  // ---- 出入库记录 ----
-
-  // GET /api/oil-in-out answers {rows, parsed, unparsable, legacySkipped, ...} on BOTH its 200 and its
-  // 502 path (internal/api/stock.go, stockListResponse) — unlike /api/alarms, which is a bare array.
-  // A 502 is the endpoint's own degraded-but-informative response, not a transport failure: request.ts
-  // hands the full parsed body back on ApiError.body precisely so it does not collapse to a bare error
-  // toast and lose the rows that DID parse. Anything that is not that envelope is a real failure.
-  requestStockPage(win: QueryWindow, pageIndex: number): Promise<OilInOutListResponse> {
-    const filtered = !!this.oilInOutDirection;
-    return get<OilInOutListResponse>('/api/oil-in-out', stockQuery(this.data.device, win, pageIndex, filtered))
-      .catch((err: ApiError) => {
-        if (isOilInOutListResponse(err.body)) return err.body;
-        throw err;
-      })
-      .then((res) => {
-        if (!isOilInOutListResponse(res)) {
-          // The response is not the shape this page was written against. Say so rather than throw a TypeError.
-          throw new Error('unexpected response shape from /api/oil-in-out');
-        }
-        return res;
-      });
-  },
-
-  // Fetches stock pages into the list. The 入库/出库 entries filter by direction here in the app (the
-  // cloud has no such filter), so one page may add few or no rows: keep going on our own — bounded by
-  // shouldAutoContinue — until enough were added or the cloud has no more.
-  fetchStock(seq: number, win: QueryWindow, reset: boolean, added = 0, pages = 0): Promise<void> {
-    const filtered = !!this.oilInOutDirection;
-    return this.requestStockPage(win, this.stockPage).then((res) => {
-      if (seq !== this.stockSeq) return;
-      const { rows, notes } = summarizeOilInOut(res, this.oilInOutDirection, { paged: true });
-      const note = renderNotes(notes);
-      const first = reset && pages === 0;
-      // Drop rows already shown (see the alarm list: a shifted offset or a record that synced in late).
-      const seen = new Set(first ? [] : this.data.oilInOut.map((r: OilInOutView) => r.rowKey));
-      const views = rows.map(toOilInOutView).filter((r) => !seen.has(r.rowKey));
-      this.stockPage += 1;
-      this.stockHasMore = !!res.truncated;
-      const addedNow = added + views.length;
-      const goOn = shouldAutoContinue(filtered, addedNow, this.stockHasMore, pages + 1);
-      this.setData({
-        oilInOut: first ? views : this.data.oilInOut.concat(views),
-        oilInOutNote: note,
-        oilInOutLoaded: true,
-        oilInOutFooter: goOn ? 'loading' : this.stockHasMore ? 'more' : 'end',
-      });
-      this.markFresh('oilInOut');
-      if (goOn) return this.fetchStock(seq, win, reset, addedNow, pages + 1);
-    });
-  },
-
-  loadOilInOut(): Promise<unknown> {
-    const win = this.windowForReload();
-    if (!win) return Promise.resolve();
-    const seq = ++this.stockSeq;
-    this.stockWindow = win;
-    this.stockPage = 0;
-    this.stockBusy = true;
-    this.setData({ loading: true });
-    return this.fetchStock(seq, win, true)
-      .catch((err: Error) => {
-        if (seq !== this.stockSeq) return;
-        wx.showToast({ title: describeError(err), icon: 'none' });
-        if (this.stockPage > 0) {
-          // A later page of this run failed (a filtered list fetches several on its own): what was
-          // already fetched stays on screen and the footer offers a retry, instead of wiping it.
-          this.setData({ oilInOutFooter: 'error' });
-        } else if (this.data.oilInOut.length > 0) {
-          // A refresh failed while an earlier list is on screen: keep it, marked out of date.
-          this.markStale('oilInOut');
-        } else {
-          this.setData({ oilInOut: [], oilInOutNote: describeError(err), oilInOutLoaded: true, oilInOutFooter: '' });
-        }
-      })
-      .finally(() => {
-        if (seq !== this.stockSeq) return;
-        this.stockBusy = false;
-        this.setData({ loading: false });
-      });
-  },
-
-  loadMoreOilInOut() {
-    if (!this.stockHasMore || this.stockBusy || !this.stockWindow) return;
-    const seq = this.stockSeq;
-    this.stockBusy = true;
-    this.setData({ oilInOutFooter: 'loading' });
-    this.fetchStock(seq, this.stockWindow, false)
-      .catch((err: Error) => {
-        if (seq !== this.stockSeq) return;
-        this.setData({ oilInOutFooter: 'error' });
-        wx.showToast({ title: describeError(err), icon: 'none' });
-      })
-      .finally(() => {
-        if (seq === this.stockSeq) this.stockBusy = false;
-      });
-  },
-
-  // Scrolled to the bottom of the page: the active history tab asks for its next page.
+  // Scrolled to the bottom of the page: the alarm tab asks for its next page.
   onReachBottom() {
-    if (this.data.activeTab === 'alarms') this.loadMoreAlarms();
-    else if (this.data.activeTab === 'oilInOut') this.loadMoreOilInOut();
+    if (this.data.activeTab === 'alarms') this.alarmFeed?.loadMore();
   },
 
   // Tap on the footer (加载失败，点击重试 / 点击加载更多).
   onRetryMore() {
-    // 'error': a failed page leaves hasMore as it was (only a success changes it), so retrying is just asking
-    // again. 'more': a short list (a filtered 入库/出库 list can end up shorter than the screen) never reaches
-    // the bottom by scrolling, so tapping the footer is the way to ask for the next page.
-    const footer = this.data.activeTab === 'alarms' ? this.data.alarmsFooter : this.data.oilInOutFooter;
-    if (footer !== 'error' && footer !== 'more') return;
-    if (this.data.activeTab === 'alarms') this.loadMoreAlarms();
-    else if (this.data.activeTab === 'oilInOut') this.loadMoreOilInOut();
+    if (this.data.activeTab === 'alarms') this.alarmFeed?.retryMore();
   },
 
   loadCommands() {
@@ -898,6 +778,7 @@ Page({
     }
   },
 
+  // Control commands stay device-level: selecting a tank does not change their target or who may send them.
   onIssueCommand() {
     // Carry the station this page follows, so the form can check the device is still the station's
     // current one right before it sends (a replacement may happen while the form is open).
@@ -907,3 +788,11 @@ Page({
     });
   },
 });
+
+// customer_user rows carry the tanks granted on that device; null for administrators or when not known.
+function grantsOf(devices: Device[], device: string): number[] | null {
+  const row = devices.find((d) => d.device_name === device);
+  return row && Array.isArray(row.granted_tanks) ? row.granted_tanks : null;
+}
+
+export {};

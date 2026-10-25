@@ -1,60 +1,73 @@
-<!-- 设计稿「储罐设置10–14」。云端 config.setTank / config.setAlarmThresholds 的方法名已存在但参数结构未定义，
-     所以"保存"不会下发，点击时说明（见 tank-config.ts）。 -->
-<view class="fc" style="margin-top:18rpx;padding:19rpx 0 25rpx;">
-  <view class="fr fr-b" id="row-tank" data-pick="tank" bindtap="onOpenPicker">
-    <text class="fl">{{form.tankNo}}</text>
-    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? form.select : tankOptions[tankIndex]}}</text>
-    <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+<!-- 设计稿「储罐设置」（miniapp#18）：只保存为本手机上的草稿，不读取、不下发控制器配置（云端 #70/#71 之后再接）。
+     编辑对象：首页当前油站 → 其唯一设备 → 当前账号可见的罐。 -->
+<view class="tc-page">
+  <view class="card banner-warning tc-banner">
+    <text class="text-warning">{{text.draftNote}}</text>
   </view>
-  <view class="fr fr-b" id="row-sensor" data-pick="sensor" bindtap="onOpenPicker">
-    <text class="fl">{{text.sensor}}</text>
-    <text class="fv {{sensorIndex < 0 ? 'fv-ph' : ''}}">{{sensorIndex < 0 ? form.select : sensorOptions[sensorIndex]}}</text>
-    <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+
+  <view wx:if="{{state !== 'ok' && state !== 'loading'}}" class="card banner-warning tc-banner">
+    <text class="text-warning">{{notice}}</text>
+    <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
+    <button wx:if="{{state === 'error'}}" class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
   </view>
-  <view class="fr fr-b" id="row-type" data-pick="type" bindtap="onOpenPicker">
-    <text class="fl">{{text.type}}</text>
-    <text class="fv {{typeIndex < 0 ? 'fv-ph' : ''}}">{{typeIndex < 0 ? form.select : typeOptions[typeIndex]}}</text>
-    <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
-  </view>
-  <view class="fr fr-b" id="row-color" data-pick="color" bindtap="onOpenPicker">
-    <text class="fl">{{text.color}}</text>
-    <view class="fv {{colorIndex < 0 ? 'fv-ph' : ''}}">
-      <text wx:if="{{colorIndex < 0}}">{{form.select}}</text>
-      <view wx:else class="tc-color-dot" style="background-color:{{colorOptions[colorIndex]}};"></view>
+
+  <block wx:if="{{state === 'ok'}}">
+    <!-- 编辑前先确认对象：油站、设备、罐号 -->
+    <view class="fc" style="margin-top:18rpx;padding:19rpx 0 19rpx;">
+      <view class="fr fr-b">
+        <text class="fl">{{text.station}}</text>
+        <text class="fv">{{stationName}}</text>
+      </view>
+      <view class="fr fr-b">
+        <text class="fl">{{text.device}}</text>
+        <text class="fv">{{device}}</text>
+      </view>
+      <view class="fr fr-b" id="row-tank" data-pick="tank" bindtap="onOpenPicker">
+        <text class="fl">{{form.tankNo}}</text>
+        <text class="fv">{{tankOptions[tankIndex]}}</text>
+        <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+      </view>
+      <view class="muted tc-saved">{{savedText}}</view>
     </view>
-    <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
-  </view>
 
-  <view class="fr fr-b" style="margin-top:5rpx;">
-    <text class="fl">{{text.medium}}</text>
-    <input class="fi-text" type="text" maxlength="20" placeholder="{{text.mediumPlaceholder}}" placeholder-class="fv-ph" value="{{mediumType}}" bindinput="onMediumTypeInput" />
-  </view>
-  <view class="fr fr-b">
-    <text class="fl">{{text.density}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{density}}" bindinput="onDensityInput" />
-    <text class="fu">kg/m³</text>
-  </view>
-  <view class="fr fr-b">
-    <text class="fl">{{text.height}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{height}}" bindinput="onHeightInput" />
-    <text class="fu">{{form.mm}}</text>
-  </view>
-  <view class="fr fr-b">
-    <text class="fl">{{text.capacity}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{capacity}}" bindinput="onCapacityInput" />
-    <text class="fu">{{form.liter}}</text>
-  </view>
-  <view class="fr fr-b" wx:for="{{thresholds}}" wx:key="key">
-    <text class="fl">{{text[item.key]}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{item.value}}" data-key="{{item.key}}" bindinput="onThresholdInput" />
-    <text class="fu">{{item.unitKey === 'mm' ? form.mm : '℃'}}</text>
+    <view class="fc" style="margin-top:18rpx;padding:19rpx 0 25rpx;">
+      <view class="fr fr-b" id="row-color" data-pick="color" bindtap="onOpenPicker">
+        <text class="fl">{{text.color}}</text>
+        <view class="fv {{colorIndex < 0 ? 'fv-ph' : ''}}">
+          <text wx:if="{{colorIndex < 0}}">{{text.unset}}</text>
+          <view wx:else class="tc-color-dot" style="background-color:{{colorOptions[colorIndex]}};"></view>
+        </view>
+        <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+      </view>
+      <view class="fr fr-b">
+        <text class="fl">{{text.medium}}</text>
+        <input class="fi-text" type="text" maxlength="20" placeholder="{{text.mediumPlaceholder}}" placeholder-class="fv-ph" value="{{medium}}" bindinput="onMediumInput" />
+      </view>
+      <!-- 左标签 / 中输入 / 右固定单位。占位写「未设置」，与已填写的 0 区分 -->
+      <view class="fr fr-b" wx:for="{{fields}}" wx:key="key">
+        <text class="fl">{{item.label}}</text>
+        <input
+          class="fi"
+          type="{{item.signed ? 'text' : 'digit'}}"
+          placeholder="{{text.unset}}"
+          placeholder-class="fv-ph"
+          value="{{item.value}}"
+          data-key="{{item.key}}"
+          bindinput="onFieldInput"
+        />
+        <text class="fu">{{item.unit}}</text>
+      </view>
+    </view>
+  </block>
+</view>
+
+<!-- 底部按钮固定在安全区之上，长表单滚动时不遮挡最后一项（.tc-page 留出底部空间） -->
+<view wx:if="{{state === 'ok'}}" class="tc-actions">
+  <view class="pill-row">
+    <button class="pill pill-lite" bindtap="onReset">{{text.reset}}</button>
+    <button class="pill pill-main" bindtap="onSave">{{text.saveDraft}}</button>
   </view>
 </view>
 
-<view class="pill-row" style="margin:57rpx 0 38rpx;">
-  <button class="pill pill-lite" bindtap="onSave">{{form.save}}</button>
-  <button class="pill pill-main" bindtap="onReset">{{text.reset}}</button>
-</view>
-
-<grid-picker show="{{gridShow}}" top="{{pickerTop}}" options="{{pickerKind === 'sensor' ? sensorOptions : tankOptions}}" value="{{pickerKind === 'sensor' ? sensorIndex : tankIndex}}" bind:pick="onPickGrid" bind:close="onClosePicker" />
-<side-picker show="{{sideShow}}" kind="{{pickerKind === 'color' ? 'swatches' : 'pills'}}" top="{{pickerTop}}" options="{{pickerKind === 'color' ? colorOptions : typeOptions}}" value="{{pickerKind === 'color' ? colorIndex : typeIndex}}" bind:pick="onPickSide" bind:close="onClosePicker" />
+<grid-picker show="{{gridShow}}" top="{{pickerTop}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickGrid" bind:close="onClosePicker" />
+<side-picker show="{{sideShow}}" kind="swatches" top="{{pickerTop}}" options="{{colorOptions}}" value="{{colorIndex}}" bind:pick="onPickSide" bind:close="onClosePicker" />

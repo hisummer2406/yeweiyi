@@ -1,86 +1,93 @@
 import { describeError } from '../../utils/errors';
 import { applyTabBar, setNavTitle, t, texts } from '../../utils/i18n';
-import { get } from '../../utils/request';
-import { devicePage } from '../../utils/devicePicker';
-import { showComingSoon } from '../../utils/comingSoon';
-import type { Device } from '../../types/api';
+import { loadRecordsContext } from '../../utils/stationPref';
+import { FOLLOW_NOTICES } from '../../utils/stationDevice';
+import type { RecordType } from '../../utils/recordColumns';
 
-type RecordTab = 'alarms' | 'oilInOut';
 type RecordItem = {
   titleKey: string;
   icon: string; // /assets/icons/{icon}.png，从设计稿 PSD 的「组59」画板抠出来的切图
-  tab?: RecordTab;
-  direction?: 'IN' | 'OUT';
+  type: RecordType;
 };
 
-// Shift handover has no uplink in device protocol V1, and stock records are a new record type the cloud
-// has no endpoint for: those two only answer "coming soon" (the reason is a developer note, never shown).
+// Five entries, each its own list page (pages/record-list). 交班 and 库存 have no cloud data yet: their
+// pages say so and send nothing (utils/recordColumns.ts SUPPORTED).
 const ITEMS: RecordItem[] = [
-  { titleKey: 'records.alarm', icon: 'records-alarm', tab: 'alarms' },
-  { titleKey: 'records.stockOut', icon: 'records-stockout', tab: 'oilInOut', direction: 'OUT' },
-  { titleKey: 'records.stockIn', icon: 'records-stockin', tab: 'oilInOut', direction: 'IN' },
-  { titleKey: 'records.shift', icon: 'records-shift' },
-  { titleKey: 'records.inventory', icon: 'records-stock' },
+  { titleKey: 'records.alarm', icon: 'records-alarm', type: 'alarm' },
+  { titleKey: 'records.stockOut', icon: 'records-stockout', type: 'out' },
+  { titleKey: 'records.stockIn', icon: 'records-stockin', type: 'in' },
+  { titleKey: 'records.shift', icon: 'records-shift', type: 'shift' },
+  { titleKey: 'records.inventory', icon: 'records-stock', type: 'stock' },
 ];
 
+// The page follows the home page's current station and its one device (miniapp#16): there is no device
+// picker. state: loading / ok / no-station (go choose one on the home page) / blocked (a station with no
+// visible device, or more than one) / error (reading failed; retry).
+type State = 'loading' | 'ok' | 'no-station' | 'blocked' | 'error';
+
 Page({
-  data: { items: [] as { title: string; icon: string }[] },
+  data: {
+    text: texts('records'),
+    items: [] as { title: string; icon: string }[],
+    state: 'loading' as State,
+    stationName: '',
+    // Why the entries cannot be opened, or that the remembered station was replaced by another.
+    notice: '',
+  },
+
+  seq: 0,
 
   onShow() {
     applyTabBar();
     setNavTitle('records.navTitle');
-    this.setData({ items: ITEMS.map((i) => ({ title: t(i.titleKey), icon: i.icon })) });
+    this.setData({ text: texts('records'), items: ITEMS.map((i) => ({ title: t(i.titleKey), icon: i.icon })) });
+    this.loadContext();
+  },
+
+  // Read again every time the tab is shown: the home page may have switched station, the account may
+  // have changed, or the station's device may have been replaced.
+  loadContext(): Promise<unknown> {
+    const seq = ++this.seq;
+    if (this.data.state !== 'ok') this.setData({ state: 'loading', notice: '' });
+    return loadRecordsContext()
+      .then((ctx) => {
+        if (seq !== this.seq) return;
+        if (ctx.kind === 'ok') {
+          this.setData({ state: 'ok', stationName: ctx.stationName, notice: ctx.lost ? t('home.lostStation') : '' });
+        } else if (ctx.kind === 'no-station') {
+          this.setData({ state: 'no-station', stationName: '', notice: t('records.noStation') });
+        } else {
+          const notice = ctx.kind === 'ambiguous' ? t(FOLLOW_NOTICES.ambiguous) : t('records.emptyStation');
+          this.setData({ state: 'blocked', stationName: ctx.stationName, notice });
+        }
+      })
+      .catch((err: Error) => {
+        if (seq !== this.seq) return;
+        this.setData({ state: 'error', stationName: '', notice: describeError(err) });
+      });
   },
 
   onItemTap(e: WechatMiniprogram.BaseEvent) {
-    const index = Number(e.currentTarget.dataset.index);
-    const item = ITEMS[index];
-    if (!item.tab) {
-      showComingSoon();
+    if (this.data.state !== 'ok') {
+      wx.showToast({ title: this.data.notice || t('records.noStation'), icon: 'none', duration: 3000 });
       return;
     }
-    this.pickDeviceThenOpen(item.tab, item.direction);
+    const item = ITEMS[Number(e.currentTarget.dataset.index)];
+    // No device or station on the URL: the list page decides them itself, the same way, so it can never
+    // be handed a device that is no longer the station's.
+    wx.navigateTo({ url: `/pages/record-list/record-list?type=${item.type}` });
   },
 
-  pickDeviceThenOpen(tab: RecordTab, direction?: 'IN' | 'OUT') {
-    get<{ rows: Device[] }>('/api/devices')
-      .then((res) => {
-        const devices = res.rows;
-        if (devices.length === 0) {
-          wx.showToast({ title: t('records.noDevices'), icon: 'none', duration: 3000 });
-          return;
-        }
-        if (devices.length === 1) {
-          this.openDevice(devices[0].device_name, tab, direction);
-          return;
-        }
-        this.chooseDevice(devices.map((d) => d.device_name), 0, tab, direction);
-      })
-      .catch((err: Error) => wx.showToast({ title: describeError(err), icon: 'none' }));
+  onGoHome() {
+    wx.switchTab({ url: '/pages/devices/devices' });
   },
 
-  // wx.showActionSheet takes at most 6 items and fails beyond that, and a customer admin or platform
-  // admin can have far more devices — so a long list is paged through the sheet, 5 at a time plus a
-  // "more…" row. Dismissing the sheet also lands in `fail`; that needs no message.
-  chooseDevice(names: string[], offset: number, tab: RecordTab, direction?: 'IN' | 'OUT') {
-    const page = devicePage(names, offset, t('common.more'));
-    wx.showActionSheet({
-      itemList: page.items,
-      success: (r) => {
-        if (r.tapIndex < page.devices.length) {
-          this.openDevice(page.devices[r.tapIndex], tab, direction);
-        } else {
-          this.chooseDevice(names, page.nextOffset, tab, direction);
-        }
-      },
-    });
+  onRetry() {
+    this.loadContext();
   },
 
-  openDevice(device: string, tab: RecordTab, direction?: 'IN' | 'OUT') {
-    const dirQuery = direction ? `&direction=${direction}` : '';
-    wx.navigateTo({
-      url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}&tab=${tab}${dirQuery}`,
-    });
+  onPullDownRefresh() {
+    this.loadContext().finally(() => wx.stopPullDownRefresh());
   },
 });
 

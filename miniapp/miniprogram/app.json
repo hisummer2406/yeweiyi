@@ -4,6 +4,7 @@
     "pages/language/language",
     "pages/devices/devices",
     "pages/records/records",
+    "pages/record-list/record-list",
     "pages/more/more",
     "pages/device-detail/device-detail",
     "pages/device-add/device-add",

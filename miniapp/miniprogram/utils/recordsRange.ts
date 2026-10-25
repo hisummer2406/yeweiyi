@@ -104,13 +104,18 @@ export type HistoryQuery = {
   limit: number;
   offset: number;
   sort: false;
+  tank?: number;
+  direction?: 'IN' | 'OUT';
 };
 
 // /api/alarms has no "more" flag, so ask for one extra row as a probe. The offset steps by the page
 // size (rows consumed), not by the rows shown, so one row the cloud could not decode cannot shift
 // the next page.
-export function alarmQuery(device: string, win: QueryWindow, pageIndex: number): HistoryQuery {
-  return { device, ...win, limit: PAGE_SIZE + 1, offset: pageIndex * PAGE_SIZE, sort: false };
+// `filtered`: a tank filter is applied in the app (the cloud has none before yeweiyi-cloud#84), so ask for
+// bigger pages, as the stock list does for a direction.
+export function alarmQuery(device: string, win: QueryWindow, pageIndex: number, filtered = false): HistoryQuery {
+  const size = filtered ? FILTERED_PAGE_SIZE : PAGE_SIZE;
+  return { device, ...win, limit: size + 1, offset: pageIndex * size, sort: false };
 }
 
 // "More" is a full page (>= PAGE_SIZE rows), not just the probe row: the cloud applies LIMIT in the
@@ -118,14 +123,39 @@ export function alarmQuery(device: string, win: QueryWindow, pageIndex: number):
 // can come back with 50 although more exist. Treating that as "more" costs at most one extra, empty
 // request at an exact page boundary; the row that was then returned twice is dropped by the caller.
 // This covers one skipped row per page; two or more in the same page would still read as the end.
-export function splitAlarmPage<T>(rows: T[]): { items: T[]; hasMore: boolean } {
-  return { items: rows.slice(0, PAGE_SIZE), hasMore: rows.length >= PAGE_SIZE };
+export function splitAlarmPage<T>(rows: T[], size = PAGE_SIZE): { items: T[]; hasMore: boolean } {
+  return { items: rows.slice(0, size), hasMore: rows.length >= size };
 }
 
 // /api/oil-in-out reports `truncated`, so no probe row is needed.
 export function stockQuery(device: string, win: QueryWindow, pageIndex: number, filtered: boolean): HistoryQuery {
   const size = filtered ? FILTERED_PAGE_SIZE : PAGE_SIZE;
   return { device, ...win, limit: size, offset: pageIndex * size, sort: false };
+}
+
+// Tank and direction filters. They are sent to the cloud, which filters before paging
+// (yeweiyi-cloud docs/records-filter-contract.md, #84); the app filters the rows again because an older
+// cloud ignores the parameters and answers the whole device. A filtered list therefore keeps the bounded
+// auto-continue: a page may add few or no rows, which must never read as "no records" — only the cloud
+// saying it has no more ends the list.
+export type RecordFilter = { tank?: number; direction?: 'IN' | 'OUT' };
+
+export function isFiltered(filter: RecordFilter): boolean {
+  return filter.tank !== undefined || !!filter.direction;
+}
+
+// The filter as query parameters: only what is set. `/api/alarms` has no direction.
+export function filterParams(filter: RecordFilter, withDirection: boolean): { tank?: number; direction?: 'IN' | 'OUT' } {
+  return {
+    ...(filter.tank !== undefined ? { tank: filter.tank } : {}),
+    ...(withDirection && filter.direction ? { direction: filter.direction } : {}),
+  };
+}
+
+export function matchesFilter(row: { tank: number; direction?: string }, filter: RecordFilter): boolean {
+  if (filter.tank !== undefined && row.tank !== filter.tank) return false;
+  if (filter.direction && row.direction !== filter.direction) return false;
+  return true;
 }
 
 export function shouldAutoContinue(

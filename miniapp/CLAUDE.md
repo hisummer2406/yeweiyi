@@ -246,7 +246,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts` and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/tankDraft.ts` and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -299,9 +299,20 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   page, never a dead session. Pure, Node-checked (`scripts/scene-entry.check.mjs`).
 - `utils/oilInOut.ts` — runtime guard for the `/api/oil-in-out` envelope and the "list is not
   complete" notes (unparsable / legacySkipped / partial / truncated / invalidSource). Pure.
-- `utils/devicePicker.ts` — pages `wx.showActionSheet` device choices (WeChat caps it at 6 items).
-- `utils/stations.ts` — station options, grouping, default selection and search; pure functions,
-  checked in Node by `npm run check`. `utils/stationPref.ts` — remembers the selected station.
+- `utils/stations.ts` — station options, grouping, default selection and search, and `recordsContext`
+  (which station and device the 我的记录 pages show: the home page's current station by the same rules,
+  its one device, never a guess); pure functions, checked in Node by `npm run check`.
+  `utils/stationPref.ts` — remembers the selected station; `loadRecordsContext` reads devices + stations
+  and applies `recordsContext`.
+- `utils/tankPick.ts` — single-tank detail (miniapp#15): visible tanks (snapshot ∩ `granted_tanks`) and
+  which one to select (the tapped one, else the lowest; a hidden one is reported). Pure, Node-checked.
+- `utils/recordColumns.ts` — the five record tables (miniapp#17): column order as on the device display,
+  units, cell values (missing → "—", never 0 or derived; in/out kg and alarm medium have no cloud source
+  yet), row keys, `SUPPORTED` (stock/shift not open). Pure, Node-checked.
+- `utils/recordFeed.ts` — one paged alarm or stock list for one device/window/filter, shared by
+  device-detail and `record-list`: sends `tank`/`direction` to the cloud (#84) and filters the rows again
+  for an older cloud, seqs that drop late answers, bounded auto-continue on filtered lists, the 502
+  envelope, stale/first-load error/footer states.
 - `utils/stationDevice.ts` — station → current device from `GET /api/devices` `station_id` (cloud
   contract `docs/station-device-replacement-contract.md` v1.3: no read-by-station endpoint; one device
   per station; data never merged by station/tank number), `tankKey` (device_name + tank = data/cache
@@ -309,7 +320,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   socket, poll and in-flight requests, load B; B not visible to this user → notice, no fallback to A). `commandGuard` is the last check before `issue-command` sends: it re-reads `GET /api/devices` and
   blocks (never redirects) unless the device is still the station's current one; a failed read blocks too.
   Pure, Node-checked (contract v1.3).
-- `utils/recordsRange.ts` — the time range and paging of device-detail's 报警记录 / 出入库记录 tabs:
+- `utils/recordsRange.ts` — the time range, paging and in-app filter rules of the record lists:
   presets (最近24小时/近7天/近30天, rolling from "now") and custom whole local days → `beginTime`/
   `endTime`; page queries (alarms ask for `limit+1` as a "more" probe because `/api/alarms` has no flag,
   stock uses `truncated`); the offset steps by the page size, not by rows shown. Pure, Node-checked.
@@ -328,18 +339,29 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
     Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
     device, `yeweiyi-cloud#45`).
-  - **我的记录 `records`** (tabBar) — entry list; 报警/出库/入库 pick a device then open
-    `device-detail` on that tab; 交班/库存 have no cloud data and say so.
+  - **我的记录 `records`** (tabBar) — the home page's current station (name on top) and five entries
+    (报警/出库/入库/交班/库存), each opening `record-list?type=`. **No device picker**: no valid station
+    (old cloud, ungrouped, none) → go choose one on the home page; empty or multi-device station → says
+    so. `record-list` re-decides station and device on every show (a home station switch or a device
+    replacement drops the old list), offers 全部罐 + the visible tanks (`GET /api/devices/:device/tanks`),
+    the same time range, and a table with the tank column fixed and the rest scrolling sideways. 交班/库存
+    say "not open yet" and send nothing. `record-list?station=` is only used by a verified old link and
+    then pins that station.
   - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
-  - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫码查看设备), `device-detail` (in-page tabs: 实时数据/报警记录/出入库记录/
-    控制命令, plus the live-alarm banner from `AlarmSocket`; polls the command list every 3s while
-    any command is non-terminal), `issue-command` (one control command, raw-JSON args).
-    The 报警记录 / 出入库记录 tabs share one time range bar and page by scrolling to the bottom
+  - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫码查看设备), `device-detail` (**one tank at a time**: opened with `tank=` from
+    the home tank row, else the lowest visible tank; a switcher over the visible tanks; in-page tabs
+    实时数据/报警记录 (控制命令 entry closed), both for the selected tank, plus the live-alarm banner from
+    `AlarmSocket` for that tank only; polls the command list every 3s while any command is non-terminal;
+    **no 出入库 tab** — an old `tab=oilInOut` link moves to `record-list` when its station is verified,
+    otherwise stays and says where the records went), `issue-command` (one control command, raw-JSON args).
+    The record lists have a time range bar and page by scrolling to the bottom
     (`onReachBottom`). Without it the cloud's default window is the last 24h and the app used to show
     only the newest 50 of that, i.e. nothing older was reachable. The window never starts before the
-    device was assigned to the caller's customer, so an empty older range says so. 入库/出库 (the
-    `direction` entries) are filtered in the app, so those pages fetch bigger pages and keep going
-    (bounded) until enough rows were added. Times are shown in the phone's local zone (`formatLocalTime`),
+    device was assigned to the caller's customer, so an empty older range says so. Tank and 入库/出库
+    direction are sent to the cloud (`tank` / `direction`, filtered before paging: yeweiyi-cloud
+    `docs/records-filter-contract.md`, #84 — on cloud branch `feat/records-tank-filter-84`, not yet on main);
+    the rows are filtered again for an older cloud that ignores them, so filtered lists still fetch bigger
+    pages and keep going (bounded) until enough rows were added; only the cloud's end ends them. Times are shown in the phone's local zone (`formatLocalTime`),
     not as the cloud's raw UTC strings. Page behaviour is **not verified in DevTools**.
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
@@ -358,6 +380,13 @@ measuring pixels, see `openspec/changes/home-by-station/tasks.md` 3.8–3.10) an
 - Device configuration is meant to be **station-administrator only**, and the cloud has no such
   role (`yeweiyi-cloud#44`). Do not stand in `customer_admin` for it.
 - `calibration` saves to the phone's own storage only; nothing it stores affects any display.
+- `tank-config` (miniapp#18) is a **phone draft**: it edits the home page's current station → its device →
+  one of the tanks this user can see (`GET /api/devices/:device/tanks`, not a fixed 1–12 list), and 保存
+  writes a draft keyed by account + device + tank (`utils/tankDraft.ts`, Node-checked). It reads and sends
+  no controller setting; "not set" is not 0; 恢复默认 only empties the form. Because the key carries the
+  account, these drafts are not cleared at logout (another account cannot open them). Reading/writing the
+  controller's settings waits for cloud#70/#71 (implemented on cloud branch `feat/tank-settings-70-71`,
+  not merged).
 
 ## Spec workflow
 
@@ -365,7 +394,8 @@ Requirements for new work live in `openspec/` (initialised 2026-10-07, schema `s
 `openspec/config.yaml` carries the project context and rules that every proposal must follow
 (the cloud owns the contract, specs do not copy cloud fields, the do-not-build list). Active change:
 `openspec/changes/home-by-station/` (home page by station, with its dependency on the cloud and the
-filed issues in `cloud-issues.md`). Use `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.
+filed issues in `cloud-issues.md`), `openspec/changes/records-by-station-and-single-tank-detail/` (miniapp
+#15–#17: single-tank detail, 我的记录 by the home station, record tables; cloud#84 on a cloud branch, #85 open). Use `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.
 
 ## What's explicitly NOT this project's problem
 

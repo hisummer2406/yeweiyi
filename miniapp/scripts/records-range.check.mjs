@@ -15,6 +15,9 @@ import {
   alarmQuery,
   customRangeProblem,
   formatDate,
+  filterParams,
+  isFiltered,
+  matchesFilter,
   resolveWindow,
   shouldAutoContinue,
   splitAlarmPage,
@@ -144,6 +147,38 @@ test('window-level notes survive paging', () => {
   const res = stockRes({ truncated: true, unparsable: 2, partial: true });
   const keys = summarizeOilInOut(res, '', { paged: true }).notes.map((m) => m.key);
   assert.deepEqual(keys, ['oilNote.unparsableMaybe', 'oilNote.partial']);
+});
+
+test('a tank filter asks for bigger alarm pages; the probe is one past the page', () => {
+  const q = alarmQuery('D1', WIN, 2, true);
+  assert.equal(q.limit, FILTERED_PAGE_SIZE + 1);
+  assert.equal(q.offset, 2 * FILTERED_PAGE_SIZE);
+  assert.equal(splitAlarmPage(new Array(FILTERED_PAGE_SIZE + 1).fill(0), FILTERED_PAGE_SIZE).hasMore, true);
+  assert.equal(splitAlarmPage(new Array(FILTERED_PAGE_SIZE - 1).fill(0), FILTERED_PAGE_SIZE).hasMore, false);
+});
+
+test('tank and direction filters', () => {
+  assert.equal(isFiltered({}), false);
+  assert.equal(isFiltered({ tank: 0 }), true);
+  assert.equal(isFiltered({ direction: 'OUT' }), true);
+  assert.equal(matchesFilter({ tank: 2, direction: 'IN' }, { tank: 2 }), true);
+  assert.equal(matchesFilter({ tank: 1, direction: 'IN' }, { tank: 2 }), false);
+  assert.equal(matchesFilter({ tank: 2, direction: 'IN' }, { tank: 2, direction: 'OUT' }), false);
+  assert.equal(matchesFilter({ tank: 2 }, {}), true);
+});
+
+test('filter query parameters: only what is set; alarms carry no direction', () => {
+  assert.deepEqual(filterParams({}, true), {});
+  assert.deepEqual(filterParams({ tank: 2, direction: 'OUT' }, true), { tank: 2, direction: 'OUT' });
+  assert.deepEqual(filterParams({ tank: 2, direction: 'OUT' }, false), { tank: 2 });
+});
+
+// A page made only of another tank's (or the other direction's) rows, with more on the cloud: keep going,
+// never read it as the end or as "no records".
+test('a page with nothing for the filter keeps going while the cloud has more', () => {
+  assert.equal(shouldAutoContinue(true, 0, true, 1), true);
+  assert.equal(shouldAutoContinue(true, 0, false, 1), false);
+  assert.equal(shouldAutoContinue(true, 0, true, MAX_AUTO_PAGES), false);
 });
 
 console.log(`${n} checks passed`);
