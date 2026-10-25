@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"yeweiyi-cloud/internal/protocol"
 )
 
 const (
@@ -31,6 +33,10 @@ type listParams struct {
 	limit  int32
 	offset int32
 	asc    bool
+	// Optional tank filter (#84), applied in SQL before LIMIT/OFFSET so paging and truncation describe
+	// the filtered rows. Invalid = no filter. A named tank the caller may not see is refused by
+	// requireListTank, never answered as an empty list.
+	tank pgtype.Int4
 }
 
 func parseListParams(c *gin.Context) (listParams, bool) {
@@ -95,7 +101,18 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 		asc = b
 	}
 
+	var tank pgtype.Int4
+	if v := c.Query("tank"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > protocol.MaxTankCount {
+			apiError(c, http.StatusBadRequest, "invalid_tank", "tank must be an integer between 1 and "+strconv.Itoa(protocol.MaxTankCount))
+			return listParams{}, false
+		}
+		tank = pgtype.Int4{Int32: int32(n), Valid: true}
+	}
+
 	return listParams{
+		tank:   tank,
 		device: device,
 		begin:  pgtype.Timestamptz{Time: begin, Valid: true},
 		end:    pgtype.Timestamptz{Time: end, Valid: true},
@@ -103,4 +120,15 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 		offset: offset,
 		asc:    asc,
 	}, true
+}
+
+// requireListTank is the tank half of the access rule for a filtered list: after recordWindow has
+// authorized the device, a named tank the caller may not view answers 403 tank_not_authorized — the same
+// whether the tank exists or not, so it cannot be used to count a device's tanks (cloud#63). Without a
+// filter the SQL already limits the rows to the caller's tanks.
+func requireListTank(c *gin.Context, deps Deps, p listParams) bool {
+	if !p.tank.Valid {
+		return true
+	}
+	return requireTankAccess(c, deps, p.device, int(p.tank.Int32))
 }

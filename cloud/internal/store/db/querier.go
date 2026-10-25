@@ -130,6 +130,7 @@ type Querier interface {
 	InsertTankGrantIfAllowed(ctx context.Context, arg InsertTankGrantIfAllowedParams) (int64, error)
 	// 该设备已汇总到的最后一个小时（毫秒）；从未汇总过返回 0。
 	LatestTelemetryHourStart(ctx context.Context, deviceName string) (int64, error)
+	// tank 为可选筛选（#84）：NULL 表示整机；在 LIMIT/OFFSET 之前生效。
 	ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAscParams) ([]ListAlarmEventsAscRow, error)
 	ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDescParams) ([]ListAlarmEventsDescRow, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
@@ -195,6 +196,7 @@ type Querier interface {
 	// 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
 	// （payload 无罐号，tank=0）只有管理员可见。
 	// 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
+	// tank / direction 为可选筛选（#84）：NULL 表示不筛选；在 LIMIT/OFFSET 之前生效，分页与截断都针对筛选后的结果。
 	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
 	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
 	// 员工-油罐查看授权（迁移 000024，cloud#63）。授权判定本身在 SQL 函数 user_may_access_device /

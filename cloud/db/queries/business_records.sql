@@ -42,12 +42,15 @@ ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING;
 -- 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
 -- （payload 无罐号，tank=0）只有管理员可见。
 -- 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
+-- tank / direction 为可选筛选（#84）：NULL 表示不筛选；在 LIMIT/OFFSET 之前生效，分页与截断都针对筛选后的结果。
 SELECT payload, synthetic_id, occurred_at, cardinality(report_ts)::INT AS report_count
 FROM stock_events s
 WHERE s.device_name = sqlc.arg('device_name')
   AND occurred_at >= sqlc.arg('begin_time') AND occurred_at < sqlc.arg('end_time')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
   AND user_may_access_tank(sqlc.arg('user_id'), s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
+  AND (sqlc.narg('tank')::INT IS NULL OR CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END = sqlc.narg('tank')::INT)
+  AND (sqlc.narg('direction')::TEXT IS NULL OR s.payload->>'direction' = sqlc.narg('direction')::TEXT)
 ORDER BY occurred_at ASC, event_id ASC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
@@ -58,6 +61,8 @@ WHERE s.device_name = sqlc.arg('device_name')
   AND occurred_at >= sqlc.arg('begin_time') AND occurred_at < sqlc.arg('end_time')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
   AND user_may_access_tank(sqlc.arg('user_id'), s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
+  AND (sqlc.narg('tank')::INT IS NULL OR CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END = sqlc.narg('tank')::INT)
+  AND (sqlc.narg('direction')::TEXT IS NULL OR s.payload->>'direction' = sqlc.narg('direction')::TEXT)
 ORDER BY occurred_at DESC, event_id DESC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
@@ -73,7 +78,11 @@ SELECT
         -- 嵌套 CASE 保证只对 invalid_source（必为合法 JSON）做 jsonb 转换，unparsable 原文不会触发转换错误
         CASE WHEN reason = 'invalid_source' THEN
             CASE WHEN (raw::jsonb)->>'tank' ~ '^[0-9]{1,3}$' THEN ((raw::jsonb)->>'tank')::INT ELSE 0 END
-        ELSE 0 END))::INT AS invalid_source,
+        ELSE 0 END)
+        -- 指定罐时只计该罐（#84）；unparsable 无法归属到罐，始终是整机计数
+        AND (sqlc.narg('tank')::INT IS NULL OR CASE WHEN reason = 'invalid_source' THEN
+            CASE WHEN (raw::jsonb)->>'tank' ~ '^[0-9]{1,3}$' THEN ((raw::jsonb)->>'tank')::INT ELSE 0 END
+        ELSE 0 END = sqlc.narg('tank')::INT))::INT AS invalid_source,
     COUNT(*) FILTER (WHERE reason = 'unparsable' AND sqlc.arg('cutoff_ms')::BIGINT > 0
                        AND env_ts < sqlc.arg('cutoff_ms')::BIGINT)::INT AS legacy,
     COUNT(*) FILTER (WHERE reason = 'unparsable' AND NOT (sqlc.arg('cutoff_ms')::BIGINT > 0
@@ -90,12 +99,14 @@ WHERE kind = 'stock' AND device_name = sqlc.arg('device_name')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT);
 
 -- name: ListAlarmEventsAsc :many
+-- tank 为可选筛选（#84）：NULL 表示整机；在 LIMIT/OFFSET 之前生效。
 SELECT payload, synthetic_id, occurred_at
 FROM alarm_events a
 WHERE a.device_name = sqlc.arg('device_name')
   AND occurred_at >= sqlc.arg('begin_time') AND occurred_at < sqlc.arg('end_time')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
   AND user_may_access_tank(sqlc.arg('user_id'), a.device_name, CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END)
+  AND (sqlc.narg('tank')::INT IS NULL OR CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END = sqlc.narg('tank')::INT)
 ORDER BY occurred_at ASC, alarm_id ASC, status ASC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
@@ -106,6 +117,7 @@ WHERE a.device_name = sqlc.arg('device_name')
   AND occurred_at >= sqlc.arg('begin_time') AND occurred_at < sqlc.arg('end_time')
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
   AND user_may_access_tank(sqlc.arg('user_id'), a.device_name, CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END)
+  AND (sqlc.narg('tank')::INT IS NULL OR CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END = sqlc.narg('tank')::INT)
 ORDER BY occurred_at DESC, alarm_id DESC, status DESC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
