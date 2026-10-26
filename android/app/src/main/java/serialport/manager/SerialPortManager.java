@@ -3,6 +3,7 @@ package serialport.manager;
 import android.util.Log;
 import android.support.v4.util.ArrayMap;
 
+import com.sansen.yeweiyi.applog.RelayLog;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 
 import java.util.Set;
@@ -154,6 +155,7 @@ public class SerialPortManager {
                             byte[] datas = mainSerialPort.receiveData();
 //                        byte[] datas = new byte[]{(byte) 0xFA, (byte) 0xFA, (byte) 0xFA, (byte) 0xA6,0x02,0x02,0x00,0x00,(byte) 0x61, (byte) 0xA8};
                             if (datas != null && datas.length > 0) {
+                                RelayLog.onReceive(datas);
 //                            DebugManager.getInstance().recive(DebugManager.PROBE_DATA, DataUtils.bytesToHexString(datas, datas.length));
                                //Log.i(TAG, "撬装站 run: 接收的数据" + DataUtils.bytesToHexString(datas, datas.length));
                                 mainbuffManager.setBuffer(datas);

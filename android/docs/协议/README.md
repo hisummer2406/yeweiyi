@@ -25,7 +25,7 @@
 
 | 文档 | 内容 | 对应代码 |
 |---|---|---|
-| `防溢阀自用串口报警协议.doc` | 防溢阀报警 / 解警、按罐号报警（`FE FE 01 01 …`） | `asynmsg/manage/AsyManager`、`AsyManager2` 的 `openOne` |
+| `防溢阀自用串口报警协议.doc` | 防溢阀报警 / 解警、按罐号报警（`FE FE 01 01 …`）。对应串口设置页串口 4 的「中成防溢油柜协议」选项（不是「标准Modbus协议」，后者发 `01 06` 写寄存器帧）；现有代码只在高高液位发功能码 04 | 组帧 `logic/relay/Serial4Frame`（单测按本文档示例校验），下发 `asynmsg/manage/AsyManager.openOne` |
 
 ## 真机验证情况（2026-10-18，rk3562_t）
 
