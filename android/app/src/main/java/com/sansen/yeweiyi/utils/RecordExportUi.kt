@@ -36,8 +36,11 @@ object RecordExportUi {
      */
     @JvmStatic
     fun <T> export(activity: Activity, fileName: String, columns: List<ExportColumn<T>>, records: Callable<List<T>>) {
-        // 没有存储权限时本次只发起申请，授权后再点一次导出
-        if (!StoragePermission.ensure(activity)) return
+        // 没有存储权限时先申请，授权后自动接着导出
+        StoragePermission.ensure(activity) { exportGranted(activity, fileName, columns, records) }
+    }
+
+    private fun <T> exportGranted(activity: Activity, fileName: String, columns: List<ExportColumn<T>>, records: Callable<List<T>>) {
         val headers = columns.map { SystemUtils.getRsStr(it.titleRes) }
         val loading = showLoading(activity)
         executor.execute {

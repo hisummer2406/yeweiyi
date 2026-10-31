@@ -12,11 +12,14 @@ import com.sansen.yeweiyi.utils.ToastUtils
  */
 object LogExportUi {
 
-    /** @param onDone 导出结束（成功或失败）后在主线程回调，可为 null；没有存储权限时只发起申请，不回调 */
+    /** @param onDone 导出结束（成功或失败）后在主线程回调，可为 null；没有存储权限时先申请，被拒绝则不导出、不回调 */
     @JvmStatic
     @JvmOverloads
     fun exportAndToast(activity: Activity, onDone: Runnable? = null) {
-        if (!StoragePermission.ensure(activity)) return
+        StoragePermission.ensure(activity) { export(onDone) }
+    }
+
+    private fun export(onDone: Runnable?) {
         AppLog.exportAsync { file, error ->
             // ToastUtils.showToast 的第二个参数直接当 Toast 时长，只认 LENGTH_SHORT/LONG
             if (error != null || file == null) {

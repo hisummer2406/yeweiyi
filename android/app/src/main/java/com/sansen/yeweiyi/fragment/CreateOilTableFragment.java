@@ -226,10 +226,12 @@ public class CreateOilTableFragment extends BaseFragment {
                 break;
 
             case R.id.createtable_bt_saveoilcan:
-                if (!StoragePermission.ensure(main)) break;
                // SaveInOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
                 Log.e("TAG", "导入罐表");
-                readLocation();
+                // 没有存储权限时先申请，授权后自动接着读 U 盘；授权回来时页面可能已切走
+                StoragePermission.ensure(main, () -> {
+                    if (isAdded()) readLocation();
+                });
                 break;
             case R.id.ly_upper_page:
 
