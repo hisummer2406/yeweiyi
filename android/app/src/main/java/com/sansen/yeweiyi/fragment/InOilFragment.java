@@ -6,7 +6,6 @@ import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
 import android.databinding.ObservableField;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
@@ -33,9 +32,7 @@ import com.sansen.yeweiyi.db.DetailInoutRecord;
 import com.sansen.yeweiyi.db.OilCanMapper;
 import com.sansen.yeweiyi.db.OilInOut;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
-import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
-import com.sansen.yeweiyi.logic.ExportExcel;
 import com.sansen.yeweiyi.manager.InOilManager;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
@@ -47,7 +44,6 @@ import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.DecimalDigitsInputFilter;
 import com.sansen.yeweiyi.utils.DoubleUtil;
-import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
@@ -55,9 +51,6 @@ import com.sansen.yeweiyi.view.MyDecoration;
 
 import org.apache.commons.lang3.StringUtils;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -67,8 +60,9 @@ import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.CompositeDisposable;
 import io.reactivex.observers.DisposableObserver;
 import io.reactivex.schedulers.Schedulers;
-
-import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
+import com.sansen.yeweiyi.logic.export.RecordExportColumns;
+import com.sansen.yeweiyi.utils.RecordExportUi;
+import com.sansen.yeweiyi.utils.CurrentTankLookup;
 
 public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemClickListener{
 
@@ -300,44 +294,10 @@ public class InOilFragment extends BaseFragment implements InOutAdapter.OnItemCl
 	protected void processClick(View v) {
 
 		if (v.getId()==R.id.ly_ruKu){
-			runOnUiThread(() -> {
-				// 主线程操作
-				ly_ruKu.setVisibility(View.GONE);
-			});
-			SaveInOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
+			// 列定义见 RecordExportColumns（与列表表头一致，RecordExportHeadersTest 核对）；按 time 倒序取数，与界面列表（isSort=true）一致
+			RecordExportUi.export(main, "Oil_in_record", RecordExportColumns.inStock(CurrentTankLookup.INSTANCE),
+					() -> stockRepository.findAllInSorted(true));
 		}
-	}
-	private void SaveInOIl(String path) {
-
-		//path=path+"/" + "Oil_in_record";
-		Log.e("TAG 路径",path);
-		ExportExcel<OilInOut> exportExcel = new ExportExcel<OilInOut>();
-		String headers[] = { "",SystemUtils.getRsStr(R.string.tank_no),SystemUtils.getRsStr(R.string.time), SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","入库量l","入库量kg", "介质"};
-		// 按 time 倒序取数，与界面列表（isSort=true）顺序保持一致
-		List<OilInOut> dataset = stockRepository.findAllInSorted(true);
-		File file = new File(path);
-		if (!file.exists())
-			file.mkdir();
-		OutputStream out = null;
-		try {
-			file = new File(path + "/" + "Oil_in_record" + ".xls");
-			out = new FileOutputStream(file);
-			exportExcel.exportExcel(headers, dataset,
-					new OilInOut().getParams(), out, new ExcelListener() {
-						@Override
-						public void Success(boolean isTrue) {
-							runOnUiThread(() -> {
-								// 主线程操作
-								ly_ruKu.setVisibility(View.VISIBLE);
-							});
-						}
-					});
-			out.close();
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
 	}
 
 
