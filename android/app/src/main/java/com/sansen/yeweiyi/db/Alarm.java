@@ -94,6 +94,8 @@ public class Alarm {
 
 	}
 
+	// 原给已删除的反射导出提供列名；保留是因为局域网接口 /alarm（AlarmHandler）用 fastjson 序列化本类，
+	// fastjson 会把这个 getter 输出成 "params" 字段，删掉会改变对外 JSON
 	public String[] getParams() {
 		String[] params = { "id", "time", "info","jieZhi","guanHao"};
 		return params;

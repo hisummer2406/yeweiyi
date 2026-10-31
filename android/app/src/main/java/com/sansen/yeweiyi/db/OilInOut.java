@@ -162,6 +162,8 @@ public class OilInOut {
 				+ ", beginVolum=" + beginVolum + ", beginWeight=" + beginWeight + ", endWeight=" + endWeight+ ", endVolum="  + endVolum + "]";
 	}
 
+	// 原给已删除的反射导出提供列名；保留是因为局域网接口 /oilDischarge（OilDischarge）用 fastjson 序列化本类，
+	// fastjson 会把这个 getter 输出成 "params" 字段，删掉会改变对外 JSON
 	public String[] getParams() {
 		String[] params = { "id","oilId", "time", "beginHeigth", "endHeigth" ,"beginVolum","endVolum","beginWeight","endWeight","jieZhi"};
 		return params;
