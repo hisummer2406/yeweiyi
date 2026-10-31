@@ -43,6 +43,7 @@ import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
+import com.sansen.yeweiyi.utils.StoragePermission;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
@@ -208,6 +209,7 @@ public class CreateOilTableFragment extends BaseFragment {
             case R.id.createtable_bt_writeoilcan:
 
                 if (temps!=null&&temps.size()>0){
+                    if (!StoragePermission.ensure(main)) break;
                     dataset.clear();
                     for (int i=0;i<temps.size();i++){
                         OilTable oilTable=new OilTable();
@@ -226,6 +228,7 @@ public class CreateOilTableFragment extends BaseFragment {
                 break;
 
             case R.id.createtable_bt_saveoilcan:
+                if (!StoragePermission.ensure(main)) break;
                // SaveInOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
                 Log.e("TAG", "导入罐表");
                 readLocation();

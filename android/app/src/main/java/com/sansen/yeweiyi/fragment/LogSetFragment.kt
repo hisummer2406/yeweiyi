@@ -134,7 +134,7 @@ class LogSetFragment : BaseFragment() {
     }
 
     private fun export() {
-        LogExportUi.exportAndToast { if (isAdded) refreshSize() }
+        LogExportUi.exportAndToast(requireActivity()) { if (isAdded) refreshSize() }
     }
 
     private fun confirmClear() {

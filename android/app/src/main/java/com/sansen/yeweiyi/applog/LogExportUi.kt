@@ -1,7 +1,9 @@
 package com.sansen.yeweiyi.applog
 
+import android.app.Activity
 import android.widget.Toast
 import com.sansen.yeweiyi.R
+import com.sansen.yeweiyi.utils.StoragePermission
 import com.sansen.yeweiyi.utils.SystemUtils
 import com.sansen.yeweiyi.utils.ToastUtils
 
@@ -10,10 +12,11 @@ import com.sansen.yeweiyi.utils.ToastUtils
  */
 object LogExportUi {
 
-    /** @param onDone 导出结束（成功或失败）后在主线程回调，可为 null */
+    /** @param onDone 导出结束（成功或失败）后在主线程回调，可为 null；没有存储权限时只发起申请，不回调 */
     @JvmStatic
     @JvmOverloads
-    fun exportAndToast(onDone: Runnable? = null) {
+    fun exportAndToast(activity: Activity, onDone: Runnable? = null) {
+        if (!StoragePermission.ensure(activity)) return
         AppLog.exportAsync { file, error ->
             // ToastUtils.showToast 的第二个参数直接当 Toast 时长，只认 LENGTH_SHORT/LONG
             if (error != null || file == null) {

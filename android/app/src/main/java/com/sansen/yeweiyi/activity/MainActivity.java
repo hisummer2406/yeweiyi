@@ -67,6 +67,7 @@ import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
+import com.sansen.yeweiyi.utils.StoragePermission;
 import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.web.handler.ServerManager;
 
@@ -315,6 +316,12 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
             }
         }
 
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        StoragePermission.onRequestResult(this, requestCode, grantResults);
     }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
