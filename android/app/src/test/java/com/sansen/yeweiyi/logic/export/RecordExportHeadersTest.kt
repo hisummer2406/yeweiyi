@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.logic.export
 
 import com.sansen.yeweiyi.R
+import com.sansen.yeweiyi.bean.GuanBiaoData
 import com.sansen.yeweiyi.bean.OilWork
 import com.sansen.yeweiyi.db.Alarm
 import com.sansen.yeweiyi.db.CommitWork
@@ -17,7 +18,7 @@ import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * 5 个记录页导出：表头顺序 == 列表页布局表头（第一个 LinearLayout 里可见的 TextView），
+ * 5 个记录页 + 罐表页导出：表头顺序 == 列表页布局表头（第一个 LinearLayout 里可见的 TextView），
  * 写出的 xls 首行就是这些列名，每行列数 == 表头列数。
  */
 class RecordExportHeadersTest {
@@ -57,6 +58,13 @@ class RecordExportHeadersTest {
         verify(RecordExportColumns.shift(tanks), expected, ShiftTankRow(shift, OilWork().apply { oilId = 1 }))
     }
 
+    /** 罐表页列表表头在页面中部（编号/高度/容积那一行），导出不含编号列。 */
+    @Test
+    fun oilTableExportMatchesList() {
+        val expected = headerRowContaining("fragment_createtable", "bianhao").filter { it != "bianhao" }
+        verify(RecordExportColumns.OIL_TABLE, expected, GuanBiaoData(0, 10f, 0.8))
+    }
+
     private fun <T> verify(columns: List<ExportColumn<T>>, expectedKeys: List<String>, sample: T) {
         assertEquals("导出列名与列表表头不一致", expectedKeys, columns.map { stringName(it.titleRes) })
         val rows = RecordExportColumns.rows(columns, listOf(sample))
@@ -91,6 +99,19 @@ class RecordExportHeadersTest {
                 .newDocumentBuilder().parse(File(resDir, "layout/$layout.xml")).documentElement
             val header = root.childElements().first { it.tagName == "LinearLayout" }
             return header.childElements()
+                .filter { it.tagName == "TextView" && it.getAttributeNS(ns, "visibility") != "gone" }
+                .map { it.getAttributeNS(ns, "text").removePrefix("@string/") }
+        }
+
+        /** 含 @string/[key] 的 TextView 所在的那一行，取其中可见 TextView 的 @string 名。 */
+        private fun headerRowContaining(layout: String, key: String): List<String> {
+            val ns = "http://schemas.android.com/apk/res/android"
+            val doc = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
+                .newDocumentBuilder().parse(File(resDir, "layout/$layout.xml"))
+            val nodes = doc.getElementsByTagName("TextView")
+            val anchor = (0 until nodes.length).map { nodes.item(it) as Element }
+                .first { it.getAttributeNS(ns, "text") == "@string/$key" }
+            return (anchor.parentNode as Element).childElements()
                 .filter { it.tagName == "TextView" && it.getAttributeNS(ns, "visibility") != "gone" }
                 .map { it.getAttributeNS(ns, "text").removePrefix("@string/") }
         }

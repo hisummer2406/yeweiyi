@@ -62,6 +62,9 @@
     <string name="createtable_oillengtg_nonull">Rezervuar uzunligi uchun bo\'sh qiymat kiritib bo\'lmaydi</string>
     <string name="createtable__nodiameternull">Diametrni bo\'sh qoldirib bo\'lmaydi</string>
     <string name="createtable_import_success">%1$d-raqamli rezervuarga import qilish</string>
+    <string name="createtable_multi_import_confirm">%1$s-raqamli rezervuarlar jadvallari qayta yoziladi. Import qilinsinmi?</string>
+    <string name="createtable_multi_import_success">%1$s-raqamli rezervuarlar jadvallari import qilindi</string>
+    <string name="createtable_sheet_name_invalid">«%1$s» varaq nomi noto\'g\'ri: 1–%2$d rezervuar raqamini kiriting. Import qilinmadi.</string>
     <string name="oilcan_height">H：</string>
     <string name="oilcan_length">L：</string>
     <string name="oilcan_diameter">H：</string>

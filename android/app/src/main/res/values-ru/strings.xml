@@ -62,6 +62,9 @@
     <string name="createtable_oillengtg_nonull">Длина резервуара не может быть пустой</string>
     <string name="createtable__nodiameternull">Диаметр не может быть пустым</string>
     <string name="createtable_import_success">Импорт в резервуар №%1$d</string>
+    <string name="createtable_multi_import_confirm">Таблицы резервуаров №%1$s будут перезаписаны. Импортировать?</string>
+    <string name="createtable_multi_import_success">Импортированы таблицы резервуаров №%1$s</string>
+    <string name="createtable_sheet_name_invalid">Недопустимое имя листа «%1$s»: укажите № резервуара 1–%2$d. Импорт отменён.</string>
     <string name="oilcan_height">H：</string>
     <string name="oilcan_length">L:</string>
     <string name="oilcan_diameter">H:</string>

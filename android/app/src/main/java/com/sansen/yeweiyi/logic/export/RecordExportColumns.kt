@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.logic.export
 
 import com.sansen.yeweiyi.R
+import com.sansen.yeweiyi.bean.GuanBiaoData
 import com.sansen.yeweiyi.bean.OilWork
 import com.sansen.yeweiyi.db.Alarm
 import com.sansen.yeweiyi.db.CommitWork
@@ -101,6 +102,13 @@ object RecordExportColumns {
         ExportColumn(R.string.houliang) { it.tank.endVolume },
         ExportColumn(R.string.chukuliangl) { it.tank.shellVolume },
         ExportColumn(R.string.chukuliangkg) { it.tank.shellWeight },
+    )
+
+    /** 罐表页"U盘导出"当前预览的罐表：同 fragment_createtable 列表表头（不含编号）；表头行会被导入时跳过 */
+    @JvmField
+    val OIL_TABLE: List<ExportColumn<GuanBiaoData>> = listOf(
+        ExportColumn(R.string.height_mm) { it.hight },
+        ExportColumn(R.string.rongji_u) { it.rongJi },
     )
 
     @JvmStatic
