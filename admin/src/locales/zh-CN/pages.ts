@@ -587,4 +587,8 @@ export default {
   'pages.console.stationFilter.all': '全部油站',
   'pages.console.stationFilter.none': '未分组',
   'pages.console.stationFilter.placeholder': '按油站筛选',
+  'pages.console.detail.snapshot.expired':
+    '设备已超过数据保留期未上报，最后上报于 {time}',
+  'pages.console.detail.snapshot.notProvisioned':
+    '设备接入信息尚未就绪，请联系平台管理员检查',
 };
