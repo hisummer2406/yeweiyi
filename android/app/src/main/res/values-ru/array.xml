@@ -77,6 +77,13 @@
         <item>Соев. масло</item>
         <item>Пальм. масло</item>
         <item>Шинн. масло</item>
+        <!-- 以下 6 项 2026-11-02 AI 翻译，待 review；P2/З2/Z2 = 二厂 -->
+        <item>Парафин</item>
+        <item>ДХМ</item>
+        <item>З2 HCl</item>
+        <item>З2 Травл. к-та</item>
+        <item>З2 NaOH</item>
+        <item>З2 H₂SO₄</item>
         <item>Пусто</item>
     </string-array>
 </resources>

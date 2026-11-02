@@ -77,6 +77,13 @@
         <item>Soya moyi</item>
         <item>Palma moyi</item>
         <item>Shina moyi</item>
+        <!-- 以下 6 项 2026-11-02 AI 翻译，待 review；P2/З2/Z2 = 二厂 -->
+        <item>Parafin</item>
+        <item>DXM</item>
+        <item>Z2 HCl</item>
+        <item>Z2 Xurish k-ta</item>
+        <item>Z2 NaOH</item>
+        <item>Z2 H₂SO₄</item>
         <item>Bo\'sh</item>
     </string-array>
 </resources>

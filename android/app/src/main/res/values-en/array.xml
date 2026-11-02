@@ -60,6 +60,13 @@
         <item>Soy Oil</item>
         <item>Palm Oil</item>
         <item>Tire Oil</item>
+        <!-- 以下 6 项 2026-11-02 AI 翻译，待 review；P2/З2/Z2 = 二厂 -->
+        <item>Paraffin</item>
+        <item>DCM</item>
+        <item>P2 HCl</item>
+        <item>P2 Etch Acid</item>
+        <item>P2 NaOH</item>
+        <item>P2 H₂SO₄</item>
         <item>Blank</item>
     </string-array>
 

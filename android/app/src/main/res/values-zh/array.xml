@@ -53,6 +53,12 @@
         <item>大豆油</item>
         <item>棕榈油</item>
         <item>轮胎油</item>
+        <item>石蜡</item>
+        <item>二氯甲烷</item>
+        <item>二厂盐酸</item>
+        <item>二厂酸蚀</item>
+        <item>二厂液碱</item>
+        <item>二厂硫酸</item>
         <item>空白</item>
     </string-array>
     <string-array name="oilcanArray">
