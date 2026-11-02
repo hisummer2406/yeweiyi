@@ -80,6 +80,13 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   仅平台管理员可 `GET /api/customers/:id/onboarding`、`POST .../onboarding/complete`（事务内锁客户行复检：有未停用且有手机号
   密码的客户管理员、至少一个油站、至少一台在该客户油站内的设备；不全 `409 onboarding_incomplete` + `missing`；重复幂等）。
   不使用 `users.disabled_at` 模拟客户状态；测试里 `newCustomer` 直接种为 `active`。
+- 设备彻底删除（#83，契约见 [docs/device-purge-contract.md](docs/device-purge-contract.md)）：仅平台管理员，
+  `POST /api/devices/:device/purge`（体须重复完整编号 + 原因）建异步任务，`internal/purge` 按 `thingsboard → business →
+  verify` 执行，每步幂等，失败停在 `failed` 等再次发起，`running` 的启动时续跑。`device_purges` 未完成的任务就是该设备的
+  **写入栅栏**：业务记录、小时汇总、回补标记的写入语句经 `device_record_writable` 判定（迁移 000032），`ListAllDeviceNames`
+  不再列出它，登记/配对密钥/油站/换机/罐授权/发命令返回 `409 device_purge_in_progress`。完成后同编号可重新登记，但信封
+  `ts` 不晚于删除完成时刻的记录一律不写入（挡设备重放）。**新增按设备编号存数据的表，必须同时加进删除清单
+  （`db/queries/device_purges.sql` 与 `CountDeviceRemnants`）**。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 
@@ -143,7 +150,8 @@ docs/                 当前规范与历史归档
    目标部署上按 `deploy/README.md`"启用 ThingsBoard 遥测 TTL 之前"完成出入库/报警回补（`cmd/backfill`）和小时汇总回补
    （`cmd/backfill -telemetry`）并核对无误——否则这些数据会被永久删除。小时汇总（#30）已实现：`internal/rollup`
    每小时由 ThingsBoard 的聚合结果写入 `telemetry_hourly`；`telemetry/history` 在 `telemetry.retention`
-   之内读 ThingsBoard，更早的部分读汇总表（仅 `interval=1h`）。
+   之内读 ThingsBoard，更早的部分读汇总表（仅 `interval=1h`）。**唯一例外**：平台管理员的设备彻底删除（#83，
+   [契约](docs/device-purge-contract.md)）清掉该设备在业务库与 ThingsBoard 的全部数据；换机、客户转移仍不删任何历史。
 6. 必须先授权、后检查设备是否存在，避免设备名枚举。
 7. 设备配对密钥必须与 ThingsBoard/MQTT 设备凭据隔离。
 8. 仅使用 ThingsBoard CE 功能，且部署必须支持完全离线环境。

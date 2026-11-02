@@ -100,6 +100,17 @@ func issueCommandHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		// Only for a caller who may see the device (invariant 6): everyone else gets control's usual
+		// 403 below, whether or not the device is being purged.
+		if deps.Queries != nil {
+			ctx := c.Request.Context()
+			if allowed, err := deps.Queries.UserMayAccessDevice(ctx, db.UserMayAccessDeviceParams{UserID: actor.UserID, DeviceName: c.Param("device")}); err == nil && allowed {
+				if purging, err := devicePurging(ctx, deps.Queries, c.Param("device")); err == nil && purging {
+					purgeInProgress(c)
+					return
+				}
+			}
+		}
 
 		cmd, err := deps.Control.Issue(c.Request.Context(), control.IssueRequest{
 			DeviceName: c.Param("device"),

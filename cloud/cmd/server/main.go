@@ -12,6 +12,7 @@ import (
 	"yeweiyi-cloud/internal/config"
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/ingest"
+	"yeweiyi-cloud/internal/purge"
 	"yeweiyi-cloud/internal/rollup"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
@@ -50,6 +51,7 @@ func main() {
 	var (
 		tbClient   *tbclient.Client
 		controlSvc *control.Service
+		purger     api.DevicePurger
 	)
 	if cfg.ThingsBoardEnabled() {
 		tbClient, err = tbclient.New(tbclient.Config{
@@ -88,6 +90,18 @@ func main() {
 			Logf:                    log.Printf,
 		})
 		go ingester.Run(ctx)
+
+		// Device purge tasks (cloud#83). Tasks a previous process left running resume now; failed ones
+		// wait for an administrator to ask again.
+		purgeRunner := purge.New(purge.Config{
+			Pool: pool, Queries: queries, TB: tbClient,
+			StopDevice: ingester.StopDevice,
+			Logf:       log.Printf,
+		})
+		if err := purgeRunner.Resume(ctx); err != nil {
+			log.Printf("purge: resume unfinished tasks: %v", err)
+		}
+		purger = purgeRunner
 
 		// Keeps the hourly telemetry summaries the business database holds for good (issue #30).
 		go rollup.New(rollup.Config{
@@ -144,6 +158,7 @@ func main() {
 		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
 		TelemetryRetention:      cfg.Telemetry.Retention.Std(),
 		DeviceCodePrefixes:      cfg.Pairing.CodePrefixes,
+		Purger:                  purger,
 	})
 
 	if cfg.Server.TLSCertFile != "" && cfg.Server.TLSKeyFile != "" {

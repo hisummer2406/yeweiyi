@@ -377,7 +377,7 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		device := c.Param("device")
 		ctx := c.Request.Context()
 		var previous pgtype.Int8
-		var denied, missing, noCustomer, badStation, unchanged bool
+		var denied, missing, noCustomer, badStation, unchanged, purging bool
 		var occupiedBy string
 		err := withTx(ctx, deps, func(q *db.Queries) error {
 			actorNow, err := lockStationActor(ctx, q, actor.ID)
@@ -421,6 +421,10 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 			if !mayManageCustomer(actor, dev.CustomerID.Int64) {
 				denied = true
 				return nil
+			}
+			// Decided under the device row lock, which the purge takes too when it creates its task.
+			if purging, err = devicePurging(ctx, q, device); err != nil || purging {
+				return err
 			}
 			if want.Valid {
 				st, err := q.GetStation(ctx, want.Int64)
@@ -475,6 +479,8 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		case missing || denied:
 			refuseObjectCode(c, deps, actor, "device.station", "no such device for this caller", map[string]any{"device": device},
 				http.StatusNotFound, "device not found", "device_not_found")
+		case purging:
+			purgeInProgress(c)
 		case occupiedBy != "":
 			c.JSON(http.StatusConflict, gin.H{"error": "the station already has a device; release it or replace it first",
 				"code": "station_occupied", "occupiedBy": occupiedBy})
@@ -609,6 +615,12 @@ func replaceStationDeviceHandler(deps Deps) gin.HandlerFunc {
 				hasCurrent = false
 			}
 			nd := locked[newName]
+			if purging, err := devicePurging(ctx, q, newName); err != nil {
+				return err
+			} else if purging {
+				conflictCode, conflictMsg = "device_purge_in_progress", "the device is being deleted"
+				return nil
+			}
 			if hasCurrent && cur.DeviceName == newName {
 				// A retry of a replacement that already happened.
 				previous = newName

@@ -2,12 +2,13 @@
 
 -- name: UpsertTelemetryHourly :exec
 -- 幂等；只在样本数不少于已存值时覆盖（迟到的补投会增加样本，TTL 会减少样本，后者不能顶掉完整值）。
+-- 设备删除中、或该小时开始于该编号最近一次删除完成时刻之前，不写入（cloud#83）。
 INSERT INTO telemetry_hourly (device_name, tank, field, hour_start, avg_value, min_value, max_value, samples)
-VALUES (
+SELECT
     sqlc.arg('device_name'), sqlc.arg('tank'), sqlc.arg('field'),
     to_timestamp(sqlc.arg('hour_start_ms')::BIGINT / 1000.0),
     sqlc.arg('avg_value'), sqlc.arg('min_value'), sqlc.arg('max_value'), sqlc.arg('samples')
-)
+WHERE device_record_writable(sqlc.arg('device_name')::TEXT, sqlc.arg('hour_start_ms')::BIGINT)
 ON CONFLICT (device_name, tank, field, hour_start) DO UPDATE SET
     avg_value = EXCLUDED.avg_value, min_value = EXCLUDED.min_value, max_value = EXCLUDED.max_value,
     samples = EXCLUDED.samples, computed_at = now()

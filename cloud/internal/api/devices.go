@@ -305,6 +305,11 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			DeviceName: device,
 			CustomerID: pgtype.Int8{Int64: req.CustomerID, Valid: true},
 		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The statement writes nothing while the device is being purged (cloud#83).
+			purgeInProgress(c)
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -496,6 +501,11 @@ func registerDeviceHandler(deps Deps) gin.HandlerFunc {
 			DeviceName: name,
 			CustomerID: pgtype.Int8{Int64: req.CustomerID, Valid: true},
 		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// The statement writes nothing while the device is being purged (cloud#83).
+			purgeInProgress(c)
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

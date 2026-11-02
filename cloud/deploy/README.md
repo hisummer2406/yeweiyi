@@ -474,6 +474,13 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 建议每日一次并异地留存；`manifest.txt` 记录了 ThingsBoard 镜像版本与业务库 schema 版本，
 恢复时据此判断目标环境是否匹配。
 
+**备份与设备彻底删除（cloud#83，[契约](../docs/device-purge-contract.md)）**：平台管理员彻底删除设备只清在线数据，
+已有的备份里仍有该设备的记录，按备份轮转周期自然过期，云端不宣称清除了它们。**恢复一份早于删除的备份会把被删
+设备连同历史一起带回来**（备份里也没有那条删除任务）：恢复后对照 `device_purges` 的导出或删除审计，逐台再发起一次删除。
+
+**被删设备以同一编号重新接入**：ThingsBoard 设备实体已随删除一起删掉，旧凭据失效。先在 ThingsBoard 按出货 CSV 流程
+重新预登记该编号，设备重新领取凭据，再由平台管理员 `POST /api/devices` 登记；它是全新设备，没有任何旧历史与授权。
+
 ### 启用 ThingsBoard 遥测 TTL 之前：回补出入库与报警
 
 `TS_RETENTION_SECONDS` 必须保持 `0`，直到下面几步做完（CLAUDE.md 约束 5）。TTL 一开，ThingsBoard

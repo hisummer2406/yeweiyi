@@ -161,6 +161,35 @@ type DevicePairingSecret struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// 平台管理员彻底删除设备的任务与结果记录（cloud#83）。只存元数据与各类删除条数，不存任何被删记录的内容；永久保留。未完成（running/failed）的任务同时是该设备的写入栅栏。
+type DevicePurge struct {
+	ID int64 `json:"id"`
+	// 被删除的完整设备编号。刻意不做外键：设备行在删除过程中被删掉，任务记录要留下。
+	DeviceName string `json:"device_name"`
+	// running 执行中；failed 停在 step 所示步骤，等再次发起；completed 全部清理并核对完成。
+	Status string `json:"status"`
+	// 下一个要做（或失败）的步骤：thingsboard → business → verify → done。每步幂等，重试从这里继续。
+	Step string `json:"step"`
+	// 最近一次失败的原因；成功推进后清空。
+	Error pgtype.Text `json:"error"`
+	// 各类数据删除条数（只有数字），随步骤推进写入。
+	Counts []byte `json:"counts"`
+	// 发起人填写的删除原因。
+	Reason string `json:"reason"`
+	// 发起人用户 ID；账号被删后置空，用户名快照仍在 requested_username。
+	RequestedBy pgtype.Int8 `json:"requested_by"`
+	// 发起时发起人的用户名快照。
+	RequestedUsername string `json:"requested_username"`
+	// 发起时设备所属客户（快照，不做外键，客户以后可被删除）。
+	CustomerID pgtype.Int8 `json:"customer_id"`
+	// 发起时设备所在油站（快照，不做外键）。
+	StationID pgtype.Int8        `json:"station_id"`
+	StartedAt pgtype.Timestamptz `json:"started_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 全部完成的时刻；同编号再次登记后，信封 ts 不晚于它的记录视为旧记录重放，不写入。
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+}
+
 // 设备的出入库与报警已从 ThingsBoard 全量回补完成的标记。没有标记的设备，定时回读会做全量回补而不是只读回看窗口。
 type RecordBackfill struct {
 	DeviceName  string             `json:"device_name"`
