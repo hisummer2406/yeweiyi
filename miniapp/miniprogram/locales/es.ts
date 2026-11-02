@@ -367,4 +367,9 @@ export const es: Record<string, string> = {
   "detail.tankRevoked": "Ya no puede ver el tanque {n}",
   "detail.oilMoved": "Los registros de entradas y salidas se han movido a Registros: elija la estación en Inicio y abra Registros.",
   "detail.noTankInfo": "El dispositivo aún no ha informado, así que no hay lista de tanques; las alarmas se muestran para todo el dispositivo",
+  "telemetry.neverReported": "Este dispositivo aún no ha reportado datos.",
+  "telemetry.expired": "Este dispositivo no ha reportado dentro del período de retención de datos. Último reporte: {time}",
+  "telemetry.notProvisioned": "Este dispositivo aún no está completamente configurado en la plataforma. Contacte al administrador de la plataforma.",
+  "err.platformUnavailable": "El servicio de datos del dispositivo no está disponible temporalmente. Inténtelo más tarde.",
+  "issueCmd.unconfirmed": "No se ha confirmado si el comando llegó al dispositivo. Revise la lista de comandos antes de volver a enviarlo.",
 };

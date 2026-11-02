@@ -6,7 +6,8 @@ import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndLocate } from '../../utils/scan';
 import { showComingSoon } from '../../utils/comingSoon';
-import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
+import { toTankViews, type TankView } from '../../utils/telemetry';
+import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
 import { stationIdFromKey, stationParam } from '../../utils/stationDevice';
@@ -30,6 +31,9 @@ type DeviceGroup = {
   fetchedAt: string;
   tanks: TankView[];
   error: string;
+  // With state 'never': which empty state — never reported, past the retention period, or not set up
+  // on the platform yet (yeweiyi-cloud#79). '' falls back to the plain "never reported" text.
+  note: string;
   // Set when the last refresh failed but an earlier one succeeded: the tanks on screen are kept and the
   // card says they may be out of date, and since when (the phone's clock at the last success).
   staleText: string;
@@ -42,6 +46,7 @@ const emptyGroup = (deviceName: string): DeviceGroup => ({
   fetchedAt: '',
   tanks: [],
   error: '',
+  note: '',
   staleText: '',
 });
 
@@ -214,9 +219,14 @@ Page({
         }),
       )
       .catch((err: ApiError) => {
-        if (isNeverReported(err)) {
-          // Authorized and provisioned, but has never reported — a real state, not an error.
-          this.patchGroup(deviceName, seq, { state: 'never', ts: '', tanks: [], error: '', staleText: '' });
+        const empty = telemetryFailure(err.status, err.body);
+        if (empty.kind === 'empty') {
+          // A real empty state, not an error: never reported, past the retention period, or not set up on
+          // the platform yet — each says so (yeweiyi-cloud#79), none shows the previous readings.
+          const note = t(empty.key, {
+            time: empty.lastReportedAt ? formatLocalTime(empty.lastReportedAt, currentLocale()) : '—',
+          });
+          this.patchGroup(deviceName, seq, { state: 'never', ts: '', tanks: [], error: '', note, staleText: '' });
         } else {
           const shown = (this.data.groups as DeviceGroup[]).find((g) => g.deviceName === deviceName);
           if (shown && shown.fetchedAt && shown.tanks.length > 0) {

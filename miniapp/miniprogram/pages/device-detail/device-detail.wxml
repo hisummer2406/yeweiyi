@@ -55,7 +55,7 @@
       </view>
       <view wx:if="{{!loading && snapshotLoaded && tanks.length === 0}}" class="empty empty-art">
         <image class="empty-art-img" src="/assets/illustrations/empty-data.png" mode="aspectFit" />
-        <view>{{tankless || text.neverReported}}</view>
+        <view>{{emptyNote || tankless || text.neverReported}}</view>
       </view>
       <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">{{text.reportedAt}} {{snapshotTs}}</view>
       <!-- 当前罐的全部读数（不画罐图）：状态与探针在上，读数两列排开，缺失值为「—」 -->

@@ -49,7 +49,7 @@
       </view>
 
       <view wx:if="{{g.state === 'loading'}}" class="group-note">{{text.loading}}</view>
-      <view wx:elif="{{g.state === 'never'}}" class="group-note">{{text.neverReported}}</view>
+      <view wx:elif="{{g.state === 'never'}}" class="group-note">{{g.note || text.neverReported}}</view>
       <view wx:elif="{{g.state === 'error'}}" class="group-note">
         <view class="text-danger">{{g.error}}</view>
         <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">{{text.retry}}</button>

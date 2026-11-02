@@ -12,6 +12,8 @@ const BY_CODE: Record<string, string> = {
   session_invalid: 'err.sessionExpired', // 401 for a dead token (yeweiyi-cloud#78)
   account_unavailable: 'err.accountDisabled', // bare 403: account deleted/disabled (yeweiyi-cloud#79)
   role_not_allowed: 'err.forbidden', // bare 403: account fine, role may not (yeweiyi-cloud#79)
+  device_platform_unavailable: 'err.platformUnavailable', // ThingsBoard down (yeweiyi-cloud#79)
+  command_delivery_unconfirmed: 'issueCmd.unconfirmed', // may have reached the device: never "retry"
 };
 
 export function errorKey(status: number, code?: string): string {
