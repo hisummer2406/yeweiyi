@@ -195,7 +195,9 @@ func TestFullLoop_CommandReachesTerminalStateViaIngest(t *testing.T) {
 	if !final.FinishedAt.Valid {
 		t.Error("a terminal command must have finished_at set")
 	}
-	if !final.AckedAt.Valid {
+	// acked_at is only written by the ACK step. If Issue answered "received" that step ran; if the result
+	// beat it ("succeeded" already), the state machine went sent -> succeeded and there is no ACK time.
+	if cmd.Status == protocol.CmdStatusReceived && !final.AckedAt.Valid {
 		t.Error("acked_at should have been recorded")
 	}
 	t.Logf("full loop: pending -> sent -> received -> %s", final.Status)
