@@ -33,9 +33,14 @@ Within `app/src/main/java` itself there are also several non-namespaced top-leve
 
 ### Toolchain is present on this machine — but still verify before claiming a build passed
 
-As of 2026-08-07 this macOS checkout builds: JDK 11 (Temurin) plus an Android SDK at `~/Library/Android/sdk`, with `local.properties` pointing at it. `./gradlew :app:assembleDebug` and `:app:testDebugUnitTest` both succeed (38 tests, 0 failures).
+This macOS checkout builds with JDK 11 (Temurin, unpacked tarball at `~/jdks/jdk-11.0.31+11/Contents/Home`) plus an Android SDK at `~/Library/Android/sdk`, with `local.properties` pointing at it. As of 2026-11-02 (main `23f4a48`), `assembleDebug` succeeds and the unit tests run 312 cases, 0 failures, 7 skipped (the probe-replay tests, which skip until field captures exist).
 
-Two caveats that have already bitten:
+```bash
+JAVA_HOME=~/jdks/jdk-11.0.31+11/Contents/Home ./gradlew :app:assembleDebug
+```
+
+Three caveats that have already bitten:
+- **The JDK 11 is invisible to `/usr/libexec/java_home`**, which only lists the system Temurin 17. Gradle 6.7.1 fails on 17 (`Unsupported class file major version 61`), so always set `JAVA_HOME` as above. Concluding "no JDK 11 here" from `java_home` alone got PR #38 merged without a build on 2026-11-02 (verified only afterwards).
 - Commits `6ae4e3f` through `ada562e` (阶段 0 and 阶段 1) were written *before* the toolchain existed and were merged unverified. Later commits are compile-verified.
 - `testDebugUnitTest` reports `UP-TO-DATE` and prints nothing when inputs haven't changed — a stale pass looks identical to a fresh one. Run `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest`, or read `app/build/test-results/testDebugUnitTest/*.xml`, before claiming tests passed.
 
