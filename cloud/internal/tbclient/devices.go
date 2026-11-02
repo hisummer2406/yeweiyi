@@ -130,8 +130,9 @@ func (c *Client) GetDeviceCredentials(ctx context.Context, deviceID string) (Dev
 }
 
 // DeleteDevice removes a device and its credentials. Used by the e2e checks to clean up after
-// themselves; device decommissioning in production is a business decision that goes through the
-// business database first.
+// themselves, and by the device purge (cloud#83, internal/purge) after it has deleted the device's
+// telemetry key by key — ThingsBoard clears a deleted device's data only asynchronously, so the purge
+// does not rely on that.
 func (c *Client) DeleteDevice(ctx context.Context, deviceID string) error {
 	return c.do(ctx, http.MethodDelete, "/api/device/"+url.PathEscape(deviceID), nil, nil)
 }

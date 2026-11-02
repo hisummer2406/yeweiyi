@@ -74,6 +74,10 @@ services:
       # 登录令牌有效期与滑动续期的绝对上限（自上次输入密码起）；maxSessionAge 不得小于 tokenTTL。
       TOKEN_TTL: ${TOKEN_TTL:-24h}
       TOKEN_MAX_SESSION_AGE: ${TOKEN_MAX_SESSION_AGE:-720h}
+      # 微信登录默认关闭；密钥仅从服务器环境文件注入。
+      WECHAT_ENABLED: ${WECHAT_ENABLED:-false}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
       # 容器内用服务名和 ThingsBoard 的容器端口 9090，不是宿主上的 8081。
       TB_BASE_URL: http://thingsboard:9090
       TB_USERNAME: ${TB_USERNAME:-tenant@thingsboard.org}

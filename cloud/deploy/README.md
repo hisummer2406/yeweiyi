@@ -422,7 +422,9 @@ Postgres、Redis 和 Go 后台。
 - **限制：每个 key 的“最新值”（`ts_kv_latest`）不随 TTL 清除。** 历史查询对已过期的 key 返回空，但
   “最新值”查询仍返回那个旧点。设备不再上报的 key（例如减少了罐数）会一直显示最后一个值。
   **`LatestSnapshot` 也受影响：** 它以 `tankCount` 的时间戳为锚点回查历史点，设备停报超过保留期后该点
-  已被删，结果为空，`/telemetry/latest` 返回 404（“尚未上报”），尽管平台仍留有最新值。待修复，见 #28；
+  已被删。#28 的处理：`/telemetry/latest` 返回 `404`，`code` 区分两种状态——`telemetry_not_reported`（从未上报）
+  与 `telemetry_expired`（上报过但已超过保留期，响应带 `lastReportedAt`）。**不返回旧值**：遥测不得复制进业务库，
+  按 key 取最新值再拼会让已删的罐复活。需要最后已知值的场景只能靠缩短不上报的窗口（或调大保留期）；
   直接按 key 取最新值的调用方需自行判断时间戳。
 - 开启后，`telemetry/history` 对早于保留期的窗口会返回 200 加空序列，与“没有数据”无法区分，由 #30 解决
   （超出 7 天读小时汇总，不可用的粒度返回 400）。
@@ -473,6 +475,13 @@ docker compose down -v       # 停容器并删除卷 —— 会丢数据，仅�
 
 建议每日一次并异地留存；`manifest.txt` 记录了 ThingsBoard 镜像版本与业务库 schema 版本，
 恢复时据此判断目标环境是否匹配。
+
+**备份与设备彻底删除（cloud#83，[契约](../docs/device-purge-contract.md)）**：平台管理员彻底删除设备只清在线数据，
+已有的备份里仍有该设备的记录，按备份轮转周期自然过期，云端不宣称清除了它们。**恢复一份早于删除的备份会把被删
+设备连同历史一起带回来**（备份里也没有那条删除任务）：恢复后对照 `device_purges` 的导出或删除审计，逐台再发起一次删除。
+
+**被删设备以同一编号重新接入**：ThingsBoard 设备实体已随删除一起删掉，旧凭据失效。先在 ThingsBoard 按出货 CSV 流程
+重新预登记该编号，设备重新领取凭据，再由平台管理员 `POST /api/devices` 登记；它是全新设备，没有任何旧历史与授权。
 
 ### 启用 ThingsBoard 遥测 TTL 之前：回补出入库与报警
 
@@ -629,6 +638,10 @@ export WECHAT_APP_ID=wx0123456789abcdef
 export WECHAT_APP_SECRET=...        # 只能走环境变量；写进 config.yaml 会让服务拒绝启动
 ```
 
+- Docker 生产部署：将上述三项填入服务器 `.env.prod`（权限 `600`）；
+  `docker-compose.prod.yml` 会将它们传入 API 容器。修改后需用既有完整 Compose 文件组合
+  执行 `up -d --no-deps api` 重建 API 容器，`restart` 不会应用环境变量改动。
+  开启前先核对 AppID 与小程序一致，并验证服务健康及真实微信登录；密钥不提交到 Git。
 - 开启前核实目标小程序的**手机号快速验证能力**资格与费用，并在小程序后台配置服务器域名。
 - 启动时不访问微信；`access_token` 只存内存。AppSecret、access_token、openid、两类 code 不写日志、不进审计。
 - 员工需先由平台管理员创建（手机号 + 客户）才能登录；未开通手机号 `404 phone_not_provisioned`，

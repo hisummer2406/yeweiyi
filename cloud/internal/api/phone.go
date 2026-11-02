@@ -37,3 +37,15 @@ func maskPhone(phone string) string {
 	}
 	return phone[:3] + "****" + phone[7:]
 }
+
+// usernamePattern is the form of a customer-side username (cloud#77): 3-32 characters, letters and
+// digits with . _ - inside, starting with a letter or digit. It mirrors users_phone_role_check.
+// Case is not significant (the unique index and login both fold it), but the spelling given is kept.
+var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$`)
+
+// validAccountUsername reports whether name may be the username of a customer-side account. A name
+// shaped like a mainland mobile number is refused so the two identifiers can never be confused: the
+// client routes digits-that-look-like-a-phone to the `phone` field.
+func validAccountUsername(name string) bool {
+	return usernamePattern.MatchString(name) && !phonePattern.MatchString(name)
+}

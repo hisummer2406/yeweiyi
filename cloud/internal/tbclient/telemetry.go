@@ -100,6 +100,11 @@ func (c *Client) LatestValues(ctx context.Context, deviceID string, keys []strin
 // the snapshot's timestamp and how many "tankN.*" key groups are still current, then re-reads every
 // field of exactly that snapshot at that exact timestamp instead of trusting each key's independent
 // cache. Returns ts=0 and an empty map, with no error, for a device that has never reported.
+//
+// ts > 0 with an empty map is the third state, "expired": the anchor survives in ThingsBoard's latest
+// cache (TTL cleanup does not touch it) but the history rows of that instant are gone, so the snapshot
+// cannot be rebuilt — and by design is not rebuilt from the per-key latest values (see above). ts is
+// then the last time the device reported. Callers must tell it apart from ts == 0 (cloud#28).
 func (c *Client) LatestSnapshot(ctx context.Context, deviceID string) (int64, map[string]any, error) {
 	anchor, err := c.LatestTimeseries(ctx, deviceID, []string{protocol.KeyTankCount, protocol.KeySnapshotSeq})
 	if err != nil {
@@ -145,6 +150,23 @@ func (c *Client) LatestSnapshot(ctx context.Context, deviceID string) (int64, ma
 		}
 	}
 	return snapshotTs, values, nil
+}
+
+// DeleteTimeseriesHistory removes the stored history rows of keys in [startMs, endMs) and leaves each
+// key's "latest value" alone (deleteLatest=false). That is exactly the state ThingsBoard's TTL cleanup
+// leaves behind (it deletes ts_kv rows but not ts_kv_latest), so tests use it to reproduce an expired
+// snapshot without waiting a day for the real cleanup.
+func (c *Client) DeleteTimeseriesHistory(ctx context.Context, deviceID string, keys []string, startMs, endMs int64) error {
+	q := url.Values{}
+	q.Set("keys", strings.Join(keys, ","))
+	q.Set("startTs", strconv.FormatInt(startMs, 10))
+	q.Set("endTs", strconv.FormatInt(endMs, 10))
+	q.Set("deleteLatest", "false")
+	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/timeseries/delete" + query(q)
+	if err := c.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
+		return fmt.Errorf("delete timeseries history of %s: %w", deviceID, err)
+	}
+	return nil
 }
 
 // TimeseriesQuery describes a history read.
@@ -255,6 +277,40 @@ func (c *Client) SetSharedAttributes(ctx context.Context, deviceID string, attrs
 	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/" + ScopeShared
 	if err := c.do(ctx, http.MethodPost, path, attrs, nil); err != nil {
 		return fmt.Errorf("set shared attributes on %s: %w", deviceID, err)
+	}
+	return nil
+}
+
+// TimeseriesKeys lists every telemetry key ThingsBoard holds for the device, whatever the device ever
+// reported — not just the keys this project knows about. The device purge (cloud#83) deletes from this
+// list, so a key from an old firmware or a debug build is not left behind.
+func (c *Client) TimeseriesKeys(ctx context.Context, deviceID string) ([]string, error) {
+	var keys []string
+	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/keys/timeseries"
+	if err := c.do(ctx, http.MethodGet, path, nil, &keys); err != nil {
+		return nil, fmt.Errorf("timeseries keys for %s: %w", deviceID, err)
+	}
+	return keys, nil
+}
+
+// deleteKeysPerRequest bounds the query string of one delete call; a device reports a few hundred keys
+// at most (MaxTankCount tanks × fields), which would otherwise make one very long URL.
+const deleteKeysPerRequest = 50
+
+// DeleteAllTimeseries deletes every stored point of the given keys, latest values included, through the
+// public telemetry API (never the database, never a TTL change). Used only by the device purge.
+func (c *Client) DeleteAllTimeseries(ctx context.Context, deviceID string, keys []string) error {
+	for start := 0; start < len(keys); start += deleteKeysPerRequest {
+		batch := keys[start:min(start+deleteKeysPerRequest, len(keys))]
+		q := url.Values{
+			"keys":                 {strings.Join(batch, ",")},
+			"deleteAllDataForKeys": {"true"},
+			"deleteLatest":         {"true"},
+		}
+		path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/timeseries/delete" + query(q)
+		if err := c.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
+			return fmt.Errorf("delete timeseries of %s: %w", deviceID, err)
+		}
 	}
 	return nil
 }

@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"yeweiyi-cloud/internal/protocol"
 )
 
 const (
@@ -31,12 +33,16 @@ type listParams struct {
 	limit  int32
 	offset int32
 	asc    bool
+	// Optional tank filter (#84), applied in SQL before LIMIT/OFFSET so paging and truncation describe
+	// the filtered rows. Invalid = no filter. A named tank the caller may not see is refused by
+	// requireListTank, never answered as an empty list.
+	tank pgtype.Int4
 }
 
 func parseListParams(c *gin.Context) (listParams, bool) {
 	device := c.Query("device")
 	if device == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "device query param is required"})
+		apiError(c, http.StatusBadRequest, "device_required", "device query param is required")
 		return listParams{}, false
 	}
 
@@ -49,7 +55,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("beginTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "beginTime must be RFC3339"})
+			apiError(c, http.StatusBadRequest, "invalid_time_format", "beginTime must be RFC3339")
 			return listParams{}, false
 		}
 		begin = t
@@ -59,7 +65,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("endTime"); v != "" {
 		t, err := time.Parse(time.RFC3339, v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "endTime must be RFC3339"})
+			apiError(c, http.StatusBadRequest, "invalid_time_format", "endTime must be RFC3339")
 			return listParams{}, false
 		}
 		end = t
@@ -69,7 +75,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 || n > maxLimit {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be an integer between 1 and 500"})
+			apiError(c, http.StatusBadRequest, "invalid_paging", "limit must be an integer between 1 and 500")
 			return listParams{}, false
 		}
 		limit = int32(n)
@@ -79,7 +85,7 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("offset"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be a non-negative integer"})
+			apiError(c, http.StatusBadRequest, "invalid_paging", "offset must be a non-negative integer")
 			return listParams{}, false
 		}
 		offset = int32(n)
@@ -89,13 +95,24 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 	if v := c.Query("sort"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "sort must be a boolean"})
+			apiError(c, http.StatusBadRequest, "invalid_paging", "sort must be a boolean")
 			return listParams{}, false
 		}
 		asc = b
 	}
 
+	var tank pgtype.Int4
+	if v := c.Query("tank"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > protocol.MaxTankCount {
+			apiError(c, http.StatusBadRequest, "invalid_tank", "tank must be an integer between 1 and "+strconv.Itoa(protocol.MaxTankCount))
+			return listParams{}, false
+		}
+		tank = pgtype.Int4{Int32: int32(n), Valid: true}
+	}
+
 	return listParams{
+		tank:   tank,
 		device: device,
 		begin:  pgtype.Timestamptz{Time: begin, Valid: true},
 		end:    pgtype.Timestamptz{Time: end, Valid: true},
@@ -103,4 +120,15 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 		offset: offset,
 		asc:    asc,
 	}, true
+}
+
+// requireListTank is the tank half of the access rule for a filtered list: after recordWindow has
+// authorized the device, a named tank the caller may not view answers 403 tank_not_authorized — the same
+// whether the tank exists or not, so it cannot be used to count a device's tanks (cloud#63). Without a
+// filter the SQL already limits the rows to the caller's tanks.
+func requireListTank(c *gin.Context, deps Deps, p listParams) bool {
+	if !p.tank.Valid {
+		return true
+	}
+	return requireTankAccess(c, deps, p.device, int(p.tank.Int32))
 }

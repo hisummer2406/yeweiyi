@@ -282,6 +282,13 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 			apiError(c, http.StatusConflict, "device_customer_mismatch", "the device does not belong to the employee's customer")
 			return
 		}
+		if purging, err := devicePurging(ctx, deps.Queries, device); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if purging {
+			purgeInProgress(c)
+			return
+		}
 
 		// Newly requested tanks must be tanks the device has reported. Revocations never need ThingsBoard.
 		current, err := grantedFor(c, deps, target.ID, device)

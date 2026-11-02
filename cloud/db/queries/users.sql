@@ -1,5 +1,6 @@
 -- name: GetUserByUsername :one
-SELECT * FROM users WHERE username = $1;
+-- Case-insensitive, matching the lower(username) unique index (#77).
+SELECT * FROM users WHERE lower(username) = lower($1);
 
 -- name: GetUserByID :one
 -- Used where a decision must reflect the user's *current* role and customer rather than what their
@@ -48,3 +49,8 @@ SELECT * FROM users WHERE id = $1 FOR SHARE;
 -- WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
 -- second sees the first's identity row instead of racing it.
 SELECT * FROM users WHERE phone = $1 FOR UPDATE;
+
+-- name: SetUserPhone :one
+-- A phone account's username mirrors its number (users_phone_role_check), so both move together.
+-- A clash with another account's phone or username trips a UNIQUE constraint (23505).
+UPDATE users SET phone = sqlc.arg('phone'), username = sqlc.arg('phone') WHERE id = sqlc.arg('id') RETURNING *;

@@ -98,6 +98,10 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 	rdb := redis.NewClient(&redis.Options{Addr: testRedisAddr()})
 	t.Cleanup(func() { rdb.Close() })
 
+	// Failure counters outlive the run in Redis; start every test from the address having none
+	// (httptest's fixed remote address).
+	rdb.Del(ctx, "loginfail:ip:192.0.2.1")
+
 	queries := db.New(pool)
 
 	deps := api.Deps{
@@ -105,6 +109,9 @@ func newTestEnvWith(t *testing.T, customize func(*api.Deps)) *testEnv {
 		Redis:     rdb,
 		Pool:      pool,
 		JWTSecret: []byte("api-test-secret"),
+		// Every test logs in from the same fake address and many fail on purpose, against a Redis that
+		// outlives the run. The limiter has its own tests (login_limit_test.go) that lower this.
+		LoginMaxFailures: 1000,
 	}
 	if customize != nil {
 		customize(&deps)
