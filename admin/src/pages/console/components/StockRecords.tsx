@@ -49,80 +49,79 @@ const StockRecords: React.FC<Props> = ({ device, direction }) => {
   );
 
   return (
-    <>
-      <TankFilter device={device} value={tank} onChange={setTank} />
-      {refused !== undefined && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginTop: 12 }}
-          title={intl.formatMessage(
-            { id: 'pages.console.records.tankRefused' },
-            { n: refused },
-          )}
-        />
-      )}
-      <RecordsFrame
-        state={state}
-        notices={notices}
-        hasRows={rows.length > 0}
-        emptyId="pages.console.records.empty.stock"
-      >
-        <Table<API.StockEvent>
-          key={`${state.version}|${direction ?? ''}|${tank ?? ''}`}
-          size="middle"
-          rowKey="eventId"
-          dataSource={rows}
-          pagination={{ pageSize: 20, showSizeChanger: false }}
-          scroll={{ x: 'max-content' }}
-          columns={[
-            {
-              title: t('pages.console.records.col.endTime'),
-              dataIndex: 'time',
-              render: (v: string) => fmtTime(v),
-            },
-            { title: t('pages.console.records.col.tank'), dataIndex: 'tank' },
-            {
-              title: t('pages.console.records.col.direction'),
-              dataIndex: 'direction',
-              render: (v: string) => (
-                <Tag color={v === 'IN' ? 'blue' : 'orange'}>
-                  {label(STOCK_DIRECTION_LABELS, v)}
-                </Tag>
-              ),
-            },
-            {
-              title: t('pages.console.records.col.oilType'),
-              dataIndex: 'oilType',
-              render: (v?: string) => v || '--',
-            },
-            {
-              title: t('pages.console.records.col.source'),
-              dataIndex: 'source',
-              render: (v: string) => label(STOCK_SOURCE_LABELS, v),
-            },
-            {
-              title: t('pages.console.records.col.delivered'),
-              dataIndex: 'deliveredVolumeL',
-              render: (v: number) => fmt(v),
-            },
-            {
-              title: t('pages.console.records.col.net'),
-              dataIndex: 'netVolumeL',
-              render: (v: number) => fmt(v),
-            },
-            {
-              title: t('pages.console.records.col.level'),
-              render: (_, r) => range(r.beginLevelMm, r.endLevelMm),
-            },
-            {
-              title: t('pages.console.records.col.volume'),
-              render: (_, r) => range(r.beginVolumeL, r.endVolumeL),
-            },
-          ]}
-        />
-      </RecordsFrame>
-    </>
+    <RecordsFrame
+      filters={<TankFilter device={device} value={tank} onChange={setTank} />}
+      banner={
+        refused !== undefined && (
+          <Alert
+            type="warning"
+            showIcon
+            title={intl.formatMessage(
+              { id: 'pages.console.records.tankRefused' },
+              { n: refused },
+            )}
+          />
+        )
+      }
+      state={state}
+      notices={notices}
+      hasRows={rows.length > 0}
+      emptyId="pages.console.records.empty.stock"
+    >
+      <Table<API.StockEvent>
+        key={`${state.version}|${direction ?? ''}|${tank ?? ''}`}
+        size="middle"
+        rowKey="eventId"
+        dataSource={rows}
+        pagination={{ pageSize: 20, showSizeChanger: false }}
+        scroll={{ x: 'max-content' }}
+        columns={[
+          {
+            title: t('pages.console.records.col.endTime'),
+            dataIndex: 'time',
+            render: (v: string) => fmtTime(v),
+          },
+          { title: t('pages.console.records.col.tank'), dataIndex: 'tank' },
+          {
+            title: t('pages.console.records.col.direction'),
+            dataIndex: 'direction',
+            render: (v: string) => (
+              <Tag color={v === 'IN' ? 'blue' : 'orange'}>
+                {label(STOCK_DIRECTION_LABELS, v)}
+              </Tag>
+            ),
+          },
+          {
+            title: t('pages.console.records.col.oilType'),
+            dataIndex: 'oilType',
+            render: (v?: string) => v || '--',
+          },
+          {
+            title: t('pages.console.records.col.source'),
+            dataIndex: 'source',
+            render: (v: string) => label(STOCK_SOURCE_LABELS, v),
+          },
+          {
+            title: t('pages.console.records.col.delivered'),
+            dataIndex: 'deliveredVolumeL',
+            render: (v: number) => fmt(v),
+          },
+          {
+            title: t('pages.console.records.col.net'),
+            dataIndex: 'netVolumeL',
+            render: (v: number) => fmt(v),
+          },
+          {
+            title: t('pages.console.records.col.level'),
+            render: (_, r) => range(r.beginLevelMm, r.endLevelMm),
+          },
+          {
+            title: t('pages.console.records.col.volume'),
+            render: (_, r) => range(r.beginVolumeL, r.endVolumeL),
+          },
+        ]}
+      />
+    </RecordsFrame>
   );
 };
 
