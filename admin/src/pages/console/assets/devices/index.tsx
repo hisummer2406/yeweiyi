@@ -10,6 +10,7 @@ import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
 import AssignStationModal from './AssignStationModal';
 import { downloadMiniCode } from './downloadMiniCode';
+import PurgeDeviceModal from './PurgeDeviceModal';
 import RegisterDeviceModal from './RegisterDeviceModal';
 import ReplaceDeviceModal from './ReplaceDeviceModal';
 import TransferDeviceModal from './TransferDeviceModal';
@@ -22,7 +23,9 @@ import TransferDeviceModal from './TransferDeviceModal';
  *   字段缺失（云端旧版本）显示「未知」，不当作未分配。
  * - 平台管理员与客户管理员：行内「分配油站」（PUT /api/devices/:device/station）。没有客户的设备（customer_id 为 null）
  *   不提供，云端不允许；客户管理员的行没有 customer_id 字段，照常提供，由云端裁决。
- * 登记/转移只是 UI 上按角色隐藏，真正的权限边界在云端（客户管理员调用会被 403）。
+ * - 平台管理员：行内「删除设备」（POST /api/devices/:device/purge，见 PurgeDeviceModal）：彻底删除设备及全部历史，不可撤销，
+ *   云端异步执行，弹窗展示真实状态。
+ * 登记/转移/删除只是 UI 上按角色隐藏，真正的权限边界在云端（客户管理员调用会被 403）。
  */
 type Row = API.DeviceRow & { customerName?: string; stationName?: string };
 
@@ -37,6 +40,7 @@ const AdminDevices: React.FC = () => {
   const [stations, setStations] = useState<API.Station[]>([]);
   const [stationTarget, setStationTarget] = useState<API.DeviceRow>();
   const [replaceTarget, setReplaceTarget] = useState<API.DeviceRow>();
+  const [purgeTarget, setPurgeTarget] = useState<Row>();
   // 最近一次加载的行：登记成功提示里的「分配油站」用它取到设备当前的油站（已登记的设备可能已有油站）
   const rowsRef = useRef<API.DeviceRow[]>([]);
 
@@ -135,6 +139,14 @@ const AdminDevices: React.FC = () => {
               {t('pages.console.stations.devices.action.replace')}
             </a>
           )}
+          {canPlatformAdmin && (
+            <a
+              style={{ color: 'var(--ant-color-error, #ff4d4f)' }}
+              onClick={() => setPurgeTarget(row)}
+            >
+              {t('pages.ops.devices.purge.action')}
+            </a>
+          )}
         </Space>
       ),
     },
@@ -224,6 +236,11 @@ const AdminDevices: React.FC = () => {
         devices={rowsRef.current}
         stations={stations}
         onClose={() => setReplaceTarget(undefined)}
+        onDone={() => actionRef.current?.reload()}
+      />
+      <PurgeDeviceModal
+        device={purgeTarget}
+        onClose={() => setPurgeTarget(undefined)}
         onDone={() => actionRef.current?.reload()}
       />
       <AssignStationModal

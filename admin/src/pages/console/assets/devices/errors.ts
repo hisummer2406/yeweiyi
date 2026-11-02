@@ -88,3 +88,39 @@ export function describeMiniCodeError(
       };
   }
 }
+
+/**
+ * 彻底删除设备（POST /api/devices/:device/purge）：按云端机器码分支。
+ * confirm_mismatch / reason_required 是 400，device_not_found 是 404（已删完或不存在），
+ * thingsboard_unavailable 是 503（云端没配 ThingsBoard，不建任务）；0 为网络不通，结果未知。
+ */
+export function describePurgeError(
+  status: number,
+  code?: string,
+  error?: string,
+): ErrorMessage {
+  switch (code) {
+    case 'confirm_mismatch':
+      return { id: 'pages.ops.devices.purge.error.confirmMismatch' };
+    case 'reason_required':
+      return { id: 'pages.ops.devices.purge.error.reasonRequired' };
+    case 'device_not_found':
+      return { id: 'pages.ops.devices.purge.error.notFound' };
+    case 'thingsboard_unavailable':
+      return { id: 'pages.ops.devices.purge.error.unavailable' };
+    default:
+  }
+  switch (status) {
+    case 403:
+      return { id: 'pages.ops.devices.error.forbidden' };
+    case 404:
+      return { id: 'pages.ops.devices.purge.error.notFound' };
+    case 0:
+      return { id: 'pages.ops.devices.purge.error.network' };
+    default:
+      return {
+        id: 'pages.ops.devices.purge.error.unknown',
+        detail: error ?? '',
+      };
+  }
+}
