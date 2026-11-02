@@ -390,7 +390,8 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public void refreshData(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse) {
         if (oilCan != null) {
             inOutOilDection(oilCan, errorTimesAtParse, oilLevelAtParse);
-            if (Singleton.getInstance().StockTime > 0) {
+            // 只有"生成库存记录"选是且生成时间 > 0 小时才定时生成；不满足时清零起点，重新满足后从头计时
+            if (Singleton.getInstance().IsCreatStock && Singleton.getInstance().StockTime > 0) {
                 currenTime = System.currentTimeMillis() / 1000;
                 if (currenTime - startTime > Singleton.getInstance().StockTime) {
                     if (startTime != 0) {
@@ -400,6 +401,8 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
                 }
 
+            } else {
+                startTime = 0;
             }
         }
     }
