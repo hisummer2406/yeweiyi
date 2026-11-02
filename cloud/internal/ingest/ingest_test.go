@@ -179,12 +179,13 @@ func TestFullLoop_CommandReachesTerminalStateViaIngest(t *testing.T) {
 		t.Fatalf("Issue: %v", err)
 	}
 
-	// The ACK only means the device accepted it.
-	if cmd.Status != protocol.CmdStatusReceived {
-		t.Fatalf("after ACK status = %q, want %q", cmd.Status, protocol.CmdStatusReceived)
-	}
-	if protocol.IsTerminal(cmd.Status) {
-		t.Fatal("an ACK must not be terminal")
+	// The ACK only means the device accepted it, so Issue answers "received". On a fast machine the
+	// device's cmdResult can be ingested before Issue's own ACK bookkeeping returns; the state machine
+	// only moves forward, so the row is then already "succeeded" — the real outcome arriving first, not
+	// an ACK mistaken for success. Anything else (pending, sent, failed, ...) is a bug.
+	if cmd.Status != protocol.CmdStatusReceived && cmd.Status != protocol.CmdStatusSucceeded {
+		t.Fatalf("after ACK status = %q, want %q (or %q if the result already arrived)",
+			cmd.Status, protocol.CmdStatusReceived, protocol.CmdStatusSucceeded)
 	}
 
 	// The device reports the real outcome moments later; the ingester must carry it into the row.
