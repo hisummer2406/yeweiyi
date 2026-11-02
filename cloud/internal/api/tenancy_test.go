@@ -320,6 +320,8 @@ var exemptRoutes = map[string]string{
 	"POST /api/devices/unbind":              "deletes only the caller's own binding row",
 	"POST /api/devices/resolve":             "device comes from the body; never 403 — a device the caller may not open is the same 404 as a missing one and nothing is written, see TestResolve_*",
 	"GET /api/users/:id/tank-grants":        "no device; platform admin only, see TestTankGrants_*",
+	"GET /api/device-purges":                "no device in the path; platform admin only, see TestDevicePurge_*",
+	"GET /api/device-purges/:id":            "no device; platform admin only, see TestDevicePurge_*",
 
 	"POST /api/customers":         "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",
@@ -370,6 +372,13 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 			},
 		},
 		"GET /api/devices/:device/tanks": {build: path("/tanks")},
+		// Platform admins only (cloud#83); every customer-side caller is refused by role.
+		"POST /api/devices/:device/purge": {
+			adminOnly: true,
+			build: func(device, _ string) (string, []byte) {
+				return "/api/devices/" + device + "/purge", []byte(`{"confirmDeviceName":"` + device + `","reason":"tenancy walk"}`)
+			},
+		},
 		// userAID is an employee of customer A. Only a platform administrator writes grants, so every
 		// customer-side caller (admin or employee, own customer or not) is refused by role.
 		"PUT /api/users/:id/tank-grants/:device": {

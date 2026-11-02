@@ -5,13 +5,14 @@
 -- customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
 -- 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 -- 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
+-- 设备删除中、或信封 ts 不晚于该编号最近一次删除完成时刻（旧记录重放）时不写入（cloud#83，device_record_writable）。
 INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload, customer_id)
-VALUES (
+SELECT
     sqlc.arg('device_name'), sqlc.arg('event_id'), sqlc.arg('synthetic_id'),
     to_timestamp(sqlc.arg('occurred_ms')::BIGINT / 1000.0), sqlc.arg('env_ts'),
     ARRAY[sqlc.arg('env_ts')::BIGINT], sqlc.arg('payload'),
     (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
-)
+WHERE device_record_writable(sqlc.arg('device_name')::TEXT, sqlc.arg('env_ts')::BIGINT)
 ON CONFLICT (device_name, event_id) DO UPDATE SET
     synthetic_id = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.synthetic_id ELSE stock_events.synthetic_id END,
     occurred_at  = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.occurred_at  ELSE stock_events.occurred_at  END,
@@ -23,19 +24,21 @@ ON CONFLICT (device_name, event_id) DO UPDATE SET
     updated_at   = now();
 
 -- name: InsertAlarmEvent :exec
--- 同一份重放不改变已有行。
+-- 同一份重放不改变已有行。删除栅栏与重放截止同 UpsertStockEvent。
 INSERT INTO alarm_events (device_name, alarm_id, status, synthetic_id, occurred_at, env_ts, payload, customer_id)
-VALUES (
+SELECT
     sqlc.arg('device_name'), sqlc.arg('alarm_id'), sqlc.arg('status'), sqlc.arg('synthetic_id'),
     to_timestamp(sqlc.arg('occurred_ms')::BIGINT / 1000.0), sqlc.arg('env_ts'), sqlc.arg('payload'),
     (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
-)
+WHERE device_record_writable(sqlc.arg('device_name')::TEXT, sqlc.arg('env_ts')::BIGINT)
 ON CONFLICT (device_name, alarm_id, status) DO NOTHING;
 
 -- name: InsertRecordReject :exec
+-- 删除栅栏与重放截止同 UpsertStockEvent。
 INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw, customer_id)
-VALUES (sqlc.arg('kind'), sqlc.arg('device_name'), sqlc.arg('env_ts'), sqlc.arg('reason'), sqlc.arg('raw'),
-        (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT))
+SELECT sqlc.arg('kind'), sqlc.arg('device_name'), sqlc.arg('env_ts'), sqlc.arg('reason'), sqlc.arg('raw'),
+       (SELECT d.customer_id FROM devices d WHERE d.device_name = sqlc.arg('device_name')::TEXT)
+WHERE device_record_writable(sqlc.arg('device_name')::TEXT, sqlc.arg('env_ts')::BIGINT)
 ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING;
 
 -- name: ListStockEventsAsc :many
@@ -125,4 +128,7 @@ LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 SELECT EXISTS (SELECT 1 FROM record_backfills WHERE device_name = $1)::BOOLEAN AS done;
 
 -- name: MarkRecordBackfill :exec
-INSERT INTO record_backfills (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING;
+-- 删除中的设备不写标记（cloud#83）：否则删除完成后残留的标记会让同编号新设备跳过首次全量回补。
+INSERT INTO record_backfills (device_name)
+SELECT $1::TEXT WHERE device_record_writable($1::TEXT, NULL)
+ON CONFLICT (device_name) DO NOTHING;

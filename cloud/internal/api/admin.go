@@ -1030,6 +1030,13 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		if purging, err := devicePurging(ctx, deps.Queries, device); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		} else if purging {
+			purgeInProgress(c)
+			return
+		}
 
 		// devices.customer_assigned_at is stamped at the UPDATE inside this transaction but only
 		// takes effect at COMMIT; the history endpoint hides one bucket after the stamp to cover that

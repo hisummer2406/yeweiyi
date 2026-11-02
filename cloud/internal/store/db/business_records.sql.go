@@ -24,11 +24,11 @@ func (q *Queries) HasRecordBackfill(ctx context.Context, deviceName string) (boo
 
 const insertAlarmEvent = `-- name: InsertAlarmEvent :exec
 INSERT INTO alarm_events (device_name, alarm_id, status, synthetic_id, occurred_at, env_ts, payload, customer_id)
-VALUES (
+SELECT
     $1, $2, $3, $4,
     to_timestamp($5::BIGINT / 1000.0), $6, $7,
     (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
-)
+WHERE device_record_writable($1::TEXT, $6::BIGINT)
 ON CONFLICT (device_name, alarm_id, status) DO NOTHING
 `
 
@@ -42,7 +42,7 @@ type InsertAlarmEventParams struct {
 	Payload     []byte `json:"payload"`
 }
 
-// 同一份重放不改变已有行。
+// 同一份重放不改变已有行。删除栅栏与重放截止同 UpsertStockEvent。
 func (q *Queries) InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error {
 	_, err := q.db.Exec(ctx, insertAlarmEvent,
 		arg.DeviceName,
@@ -58,8 +58,9 @@ func (q *Queries) InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventPara
 
 const insertRecordReject = `-- name: InsertRecordReject :exec
 INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw, customer_id)
-VALUES ($1, $2, $3, $4, $5,
-        (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT))
+SELECT $1, $2, $3, $4, $5,
+       (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
+WHERE device_record_writable($2::TEXT, $3::BIGINT)
 ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING
 `
 
@@ -71,6 +72,7 @@ type InsertRecordRejectParams struct {
 	Raw        string `json:"raw"`
 }
 
+// 删除栅栏与重放截止同 UpsertStockEvent。
 func (q *Queries) InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error {
 	_, err := q.db.Exec(ctx, insertRecordReject,
 		arg.Kind,
@@ -330,11 +332,14 @@ func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDe
 }
 
 const markRecordBackfill = `-- name: MarkRecordBackfill :exec
-INSERT INTO record_backfills (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING
+INSERT INTO record_backfills (device_name)
+SELECT $1::TEXT WHERE device_record_writable($1::TEXT, NULL)
+ON CONFLICT (device_name) DO NOTHING
 `
 
-func (q *Queries) MarkRecordBackfill(ctx context.Context, deviceName string) error {
-	_, err := q.db.Exec(ctx, markRecordBackfill, deviceName)
+// 删除中的设备不写标记（cloud#83）：否则删除完成后残留的标记会让同编号新设备跳过首次全量回补。
+func (q *Queries) MarkRecordBackfill(ctx context.Context, dollar_1 string) error {
+	_, err := q.db.Exec(ctx, markRecordBackfill, dollar_1)
 	return err
 }
 
@@ -409,12 +414,12 @@ func (q *Queries) SummarizeStockRejects(ctx context.Context, arg SummarizeStockR
 const upsertStockEvent = `-- name: UpsertStockEvent :exec
 
 INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload, customer_id)
-VALUES (
+SELECT
     $1, $2, $3,
     to_timestamp($4::BIGINT / 1000.0), $5,
     ARRAY[$5::BIGINT], $6,
     (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
-)
+WHERE device_record_writable($1::TEXT, $5::BIGINT)
 ON CONFLICT (device_name, event_id) DO UPDATE SET
     synthetic_id = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.synthetic_id ELSE stock_events.synthetic_id END,
     occurred_at  = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.occurred_at  ELSE stock_events.occurred_at  END,
@@ -440,6 +445,7 @@ type UpsertStockEventParams struct {
 // customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
 // 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 // 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
+// 设备删除中、或信封 ts 不晚于该编号最近一次删除完成时刻（旧记录重放）时不写入（cloud#83，device_record_writable）。
 func (q *Queries) UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error {
 	_, err := q.db.Exec(ctx, upsertStockEvent,
 		arg.DeviceName,

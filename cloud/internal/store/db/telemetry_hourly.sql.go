@@ -98,11 +98,11 @@ func (q *Queries) MaxTelemetryHourlyTank(ctx context.Context, deviceName string)
 const upsertTelemetryHourly = `-- name: UpsertTelemetryHourly :exec
 
 INSERT INTO telemetry_hourly (device_name, tank, field, hour_start, avg_value, min_value, max_value, samples)
-VALUES (
+SELECT
     $1, $2, $3,
     to_timestamp($4::BIGINT / 1000.0),
     $5, $6, $7, $8
-)
+WHERE device_record_writable($1::TEXT, $4::BIGINT)
 ON CONFLICT (device_name, tank, field, hour_start) DO UPDATE SET
     avg_value = EXCLUDED.avg_value, min_value = EXCLUDED.min_value, max_value = EXCLUDED.max_value,
     samples = EXCLUDED.samples, computed_at = now()
@@ -122,6 +122,7 @@ type UpsertTelemetryHourlyParams struct {
 
 // 小时级汇总（迁移 000018，issue #30）。
 // 幂等；只在样本数不少于已存值时覆盖（迟到的补投会增加样本，TTL 会减少样本，后者不能顶掉完整值）。
+// 设备删除中、或该小时开始于该编号最近一次删除完成时刻之前，不写入（cloud#83）。
 func (q *Queries) UpsertTelemetryHourly(ctx context.Context, arg UpsertTelemetryHourlyParams) error {
 	_, err := q.db.Exec(ctx, upsertTelemetryHourly,
 		arg.DeviceName,

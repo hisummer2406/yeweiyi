@@ -258,3 +258,37 @@ func (c *Client) SetSharedAttributes(ctx context.Context, deviceID string, attrs
 	}
 	return nil
 }
+
+// TimeseriesKeys lists every telemetry key ThingsBoard holds for the device, whatever the device ever
+// reported — not just the keys this project knows about. The device purge (cloud#83) deletes from this
+// list, so a key from an old firmware or a debug build is not left behind.
+func (c *Client) TimeseriesKeys(ctx context.Context, deviceID string) ([]string, error) {
+	var keys []string
+	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/keys/timeseries"
+	if err := c.do(ctx, http.MethodGet, path, nil, &keys); err != nil {
+		return nil, fmt.Errorf("timeseries keys for %s: %w", deviceID, err)
+	}
+	return keys, nil
+}
+
+// deleteKeysPerRequest bounds the query string of one delete call; a device reports a few hundred keys
+// at most (MaxTankCount tanks × fields), which would otherwise make one very long URL.
+const deleteKeysPerRequest = 50
+
+// DeleteAllTimeseries deletes every stored point of the given keys, latest values included, through the
+// public telemetry API (never the database, never a TTL change). Used only by the device purge.
+func (c *Client) DeleteAllTimeseries(ctx context.Context, deviceID string, keys []string) error {
+	for start := 0; start < len(keys); start += deleteKeysPerRequest {
+		batch := keys[start:min(start+deleteKeysPerRequest, len(keys))]
+		q := url.Values{
+			"keys":                 {strings.Join(batch, ",")},
+			"deleteAllDataForKeys": {"true"},
+			"deleteLatest":         {"true"},
+		}
+		path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/timeseries/delete" + query(q)
+		if err := c.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
+			return fmt.Errorf("delete timeseries of %s: %w", deviceID, err)
+		}
+	}
+	return nil
+}
