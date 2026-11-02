@@ -179,6 +179,10 @@ type Control struct {
 	// verified on real hardware (issue #1). This is the one setting in this file where the wrong
 	// value can move equipment in the field.
 	AllowPhysicalCommands bool `yaml:"allowPhysicalCommands"`
+	// AllowConfigCommands gates config.setTankSettings / config.setDeviceSettings, which write the
+	// controller's own settings. Default false until the device-side handler is verified on real
+	// hardware; a wrong value written to a field device is not undone by the cloud.
+	AllowConfigCommands bool `yaml:"allowConfigCommands"`
 }
 
 type Ingest struct {
@@ -259,6 +263,7 @@ func Defaults() Config {
 			AckTimeout:            Duration(10 * time.Second),
 			ExpirySweepInterval:   Duration(30 * time.Second),
 			AllowPhysicalCommands: false,
+			AllowConfigCommands:   false,
 		},
 		Ingest: Ingest{
 			DeviceRefreshInterval: Duration(30 * time.Second),
@@ -405,6 +410,16 @@ func (c *Config) applyEnv() error {
 			c.Control.AllowPhysicalCommands = false
 		default:
 			return fmt.Errorf("ALLOW_PHYSICAL_COMMANDS=%q: want true/false (or 1/0)", v)
+		}
+	}
+	if v, ok := os.LookupEnv("ALLOW_CONFIG_COMMANDS"); ok && v != "" {
+		switch strings.ToLower(v) {
+		case "true", "1":
+			c.Control.AllowConfigCommands = true
+		case "false", "0":
+			c.Control.AllowConfigCommands = false
+		default:
+			return fmt.Errorf("ALLOW_CONFIG_COMMANDS=%q: want true/false (or 1/0)", v)
 		}
 	}
 	return nil

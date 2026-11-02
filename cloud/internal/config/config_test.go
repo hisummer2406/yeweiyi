@@ -40,6 +40,9 @@ func TestLoad_DefaultsAreUsableAndSafe(t *testing.T) {
 	if cfg.Control.AllowPhysicalCommands {
 		t.Error("allowPhysicalCommands must default to false")
 	}
+	if cfg.Control.AllowConfigCommands {
+		t.Error("allowConfigCommands must default to false")
+	}
 	if cfg.ThingsBoardEnabled() {
 		t.Error("ThingsBoard should be off until configured")
 	}

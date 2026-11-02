@@ -142,6 +142,12 @@ func writeControlError(c *gin.Context, err error) {
 			"error": err.Error(),
 			"hint":  "physical control actions are disabled until device-side interlocks are verified on real hardware",
 		})
+	case errors.Is(err, control.ErrConfigCommandsDisabled):
+		c.JSON(http.StatusConflict, gin.H{
+			"error": err.Error(),
+			"code":  "config_commands_disabled",
+			"hint":  "device configuration commands are disabled until the device-side handler is verified on real hardware",
+		})
 	case errors.Is(err, control.ErrInvalidArgs):
 		var ae *protocol.ArgsError
 		if errors.As(err, &ae) {
