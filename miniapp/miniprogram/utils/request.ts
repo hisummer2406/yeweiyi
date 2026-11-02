@@ -41,6 +41,8 @@ export class ApiError extends Error {
 //   - 403 with the bare body "not authorized": yeweiyi-cloud's authMiddleware, which re-reads the
 //     user row on every request, found the user deleted or disabled — the token is still
 //     well-formed and unexpired, so this is the only signal. (A DB reset hits the same path.)
+//     Since yeweiyi-cloud#79 that body may carry code `role_not_allowed` (account fine, role may not
+//     call the route): that one keeps the session (loginFlow.ts isDeadAccount403).
 // Any other 403 means "not your device" (bound-or-not is indistinguishable by design, and an
 // unbound device answers the same 403 as one that does not exist at all; its body is
 // "not authorized for this device") and must NOT log the user out.

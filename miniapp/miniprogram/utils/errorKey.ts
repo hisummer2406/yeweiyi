@@ -10,6 +10,8 @@ const BY_CODE: Record<string, string> = {
   invalid_credentials: 'err.invalidCredentials',
   account_disabled: 'err.accountDisabled',
   session_invalid: 'err.sessionExpired', // 401 for a dead token (yeweiyi-cloud#78)
+  account_unavailable: 'err.accountDisabled', // bare 403: account deleted/disabled (yeweiyi-cloud#79)
+  role_not_allowed: 'err.forbidden', // bare 403: account fine, role may not (yeweiyi-cloud#79)
 };
 
 export function errorKey(status: number, code?: string): string {

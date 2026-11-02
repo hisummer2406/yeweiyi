@@ -133,15 +133,23 @@ export interface SessionEndInput {
   currentToken: string;
 }
 
+// The bare 403 {"error":"not authorized"} means "account deleted or disabled" — unless the cloud adds
+// code `role_not_allowed` (yeweiyi-cloud#79): the account is fine, its role may not call that route,
+// and the user keeps their session and is told so. `account_unavailable`, and an older cloud that sends
+// no code, still end the session.
+export function isDeadAccount403(status: number, body: unknown): boolean {
+  if (status !== 403 || !body || typeof body !== 'object') return false;
+  const b = body as { error?: unknown; code?: unknown };
+  return b.error === 'not authorized' && b.code !== 'role_not_allowed';
+}
+
 export type SessionDecision = { end: false } | { end: true; notice?: string };
 
 export function sessionDecision(i: SessionEndInput): SessionDecision {
   // Login calls (needAuth=false) have no session to end: their 401/403 are shown, not acted on.
   if (!i.needAuth) return { end: false };
-  const bodyError = i.body && typeof i.body === 'object' ? (i.body as { error?: unknown }).error : undefined;
   const notOnboarded = isNotOnboarded(i.status, i.body);
-  const dead =
-    (i.status === 401 && !i.keepSessionOn401) || (i.status === 403 && bodyError === 'not authorized');
+  const dead = (i.status === 401 && !i.keepSessionOn401) || isDeadAccount403(i.status, i.body);
   if (!notOnboarded && !dead) return { end: false };
   if (i.sentToken !== i.currentToken) return { end: false };
   return notOnboarded ? { end: true, notice: NOT_ONBOARDED_CODE } : { end: true };
