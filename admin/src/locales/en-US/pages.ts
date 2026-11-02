@@ -565,4 +565,8 @@ export default {
   'pages.console.stationFilter.all': 'All stations',
   'pages.console.stationFilter.none': 'Ungrouped',
   'pages.console.stationFilter.placeholder': 'Filter by station',
+  'pages.console.detail.snapshot.expired':
+    'This device has not reported within the data retention period. Last report: {time}',
+  'pages.console.detail.snapshot.notProvisioned':
+    'This device is not fully set up on the platform yet. Contact the platform administrator.',
 };

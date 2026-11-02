@@ -44,7 +44,11 @@ vi.mock('@umijs/max', async () => {
     }),
   };
 });
-vi.mock('@/services/ant-design-pro/telemetry', () => ({ getLatestTelemetry }));
+// Keep the module's real helpers (isTelemetryEmpty, telemetryEmptyMessageId); only the request is faked.
+vi.mock('@/services/ant-design-pro/telemetry', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getLatestTelemetry,
+}));
 vi.mock('@/services/ant-design-pro/alarms', () => ({ listAlarms }));
 vi.mock('@/services/ant-design-pro/stock', () => ({ listStockEvents }));
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
@@ -249,11 +253,27 @@ describe('live data tab states', () => {
   });
 
   it('404 (never reported) is a normal state, not an error', async () => {
-    getLatestTelemetry.mockResolvedValue(null);
+    getLatestTelemetry.mockResolvedValue({ empty: 'never' });
     at('/console/devices/D1');
     expect(await screen.findByText('该设备还没有上报过数据')).toBeTruthy();
     expect(screen.queryByText('实时数据加载失败')).toBeNull();
   });
+
+  it.each([
+    [
+      { empty: 'expired', lastReportedAt: '2026-10-01T08:00:00Z' },
+      /设备已超过数据保留期未上报，最后上报于 2026-10-01/,
+    ],
+    [{ empty: 'notProvisioned' }, '设备接入信息尚未就绪，请联系平台管理员检查'],
+  ])(
+    'an empty state %j says which one, not "never reported" (yeweiyi-cloud#79)',
+    async (empty, text) => {
+      getLatestTelemetry.mockResolvedValue(empty);
+      at('/console/devices/D1');
+      expect(await screen.findByText(text)).toBeTruthy();
+      expect(screen.queryByText('该设备还没有上报过数据')).toBeNull();
+    },
+  );
 
   it('403 says the device may not be viewed, not "never reported"', async () => {
     getLatestTelemetry.mockRejectedValue({
@@ -307,7 +327,7 @@ describe('switching device in place (e.g. after a screen replacement)', () => {
         ? new Promise((r) => {
             resolveA = r;
           })
-        : Promise.resolve(null),
+        : Promise.resolve({ empty: 'never' }),
     );
     render(
       <MemoryRouter initialEntries={['/console/devices/D1']}>
@@ -346,7 +366,7 @@ describe('station entry (?station=) follows a screen replacement (contract §8.1
   it('opened for A but the station now holds B: switches to B, keeps tab/station, never queries A afterwards', async () => {
     listDevices.mockResolvedValue([row('A', null), row('B', 5)]);
     getLatestTelemetry.mockImplementation((n: string) =>
-      Promise.resolve(n === 'B' ? null : telemetry),
+      Promise.resolve(n === 'B' ? { empty: 'never' } : telemetry),
     );
     at('/console/devices/A?station=5&tab=snapshot');
     await waitFor(() =>

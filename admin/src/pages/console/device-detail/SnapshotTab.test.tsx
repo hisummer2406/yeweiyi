@@ -22,7 +22,11 @@ vi.mock('@umijs/max', () => ({
       ),
   }),
 }));
-vi.mock('@/services/ant-design-pro/telemetry', () => ({ getLatestTelemetry }));
+// Keep the module's real helpers (isTelemetryEmpty, telemetryEmptyMessageId); only the request is faked.
+vi.mock('@/services/ant-design-pro/telemetry', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getLatestTelemetry,
+}));
 
 const { default: SnapshotTab } = await import('./SnapshotTab');
 const { REFRESH_MS } = await import('../components/useRecordsQuery');

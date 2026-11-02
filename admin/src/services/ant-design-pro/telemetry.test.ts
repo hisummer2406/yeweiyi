@@ -20,10 +20,24 @@ describe('getLatestTelemetry', () => {
     );
   });
 
-  it('404 (never reported) resolves to null', async () => {
-    request.mockRejectedValue({ response: { status: 404 } });
-    await expect(getLatestTelemetry('D1')).resolves.toBeNull();
+  it.each([
+    [{}, { empty: 'never' }], // an older cloud: no code
+    [{ code: 'telemetry_not_reported' }, { empty: 'never' }],
+    [
+      { code: 'telemetry_expired', lastReportedAt: '2026-10-01T00:00:00Z' },
+      { empty: 'expired', lastReportedAt: '2026-10-01T00:00:00Z' },
+    ],
+    [{ code: 'device_not_provisioned' }, { empty: 'notProvisioned' }],
+  ])('404 %j is an empty state, told apart by code (yeweiyi-cloud#79)', async (data, want) => {
+    request.mockRejectedValue({ response: { status: 404, data } });
+    await expect(getLatestTelemetry('D1')).resolves.toEqual(want);
     expect(forwardAuthFailure).not.toHaveBeenCalled();
+  });
+
+  it('a 404 with an unknown code is a failure, not "no data"', async () => {
+    const err = { response: { status: 404, data: { code: 'something_new' } } };
+    request.mockRejectedValue(err);
+    await expect(getLatestTelemetry('D1')).rejects.toBe(err);
   });
 
   it('other failures are forwarded to the auth handling and rethrown', async () => {

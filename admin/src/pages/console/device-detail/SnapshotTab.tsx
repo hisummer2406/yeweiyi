@@ -12,7 +12,12 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isAccountRevoked } from '@/requestErrorConfig';
-import { getLatestTelemetry } from '@/services/ant-design-pro/telemetry';
+import {
+  getLatestTelemetry,
+  isTelemetryEmpty,
+  type TelemetryEmpty,
+  telemetryEmptyMessageId,
+} from '@/services/ant-design-pro/telemetry';
 import { parseTankParam, pickTank } from '@/utils/tankPick';
 import { fmtTime } from '@/utils/telemetry';
 import { REFRESH_MS } from '../components/useRecordsQuery';
@@ -21,13 +26,13 @@ import TankDetail from './TankDetail';
 type State =
   | { kind: 'loading' }
   | { kind: 'ok'; telemetry: API.LatestTelemetry }
-  | { kind: 'never' }
+  | { kind: 'never'; empty: TelemetryEmpty }
   | { kind: 'forbidden' }
   | { kind: 'error' };
 
 /**
  * 区分「无权查看这台设备」与账号已失效：getLatestTelemetry 对 401 与账号失效的 403 已转交全局回登录页，
- * 这里只把「其余的 403」当作无权查看；404 在 getLatestTelemetry 里已变成 null（从未上报）。
+ * 这里只把「其余的 403」当作无权查看；404 在 getLatestTelemetry 里已变成空状态（从未上报/已过保留期/接入未就绪）。
  */
 const forbiddenOrSilent = (e: unknown): 'forbidden' | 'silent' | 'error' => {
   const r = (e as { response?: { status?: number; data?: { error?: string } } })
@@ -63,7 +68,11 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
       try {
         const telemetry = await getLatestTelemetry(device);
         if (mine !== seq.current) return;
-        setState(telemetry ? { kind: 'ok', telemetry } : { kind: 'never' });
+        setState(
+          isTelemetryEmpty(telemetry)
+            ? { kind: 'never', empty: telemetry }
+            : { kind: 'ok', telemetry },
+        );
       } catch (e) {
         if (mine !== seq.current) return;
         const why = forbiddenOrSilent(e);
@@ -94,7 +103,13 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
       body = <Skeleton active />;
       break;
     case 'never':
-      body = <Empty description={t('pages.console.detail.snapshot.never')} />;
+      body = (
+        <Empty
+          description={t(telemetryEmptyMessageId(state.empty), {
+            time: fmtTime(state.empty.lastReportedAt),
+          })}
+        />
+      );
       break;
     case 'forbidden':
       body = (

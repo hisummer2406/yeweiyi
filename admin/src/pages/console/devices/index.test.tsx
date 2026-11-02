@@ -24,6 +24,10 @@ vi.mock('@umijs/max', () => ({
     formatMessage: ({ id }: { id: string }) =>
       (zhPages as Record<string, string>)[id] ?? id,
   }),
+  getIntl: () => ({
+    formatMessage: ({ id }: { id: string }) =>
+      (zhPages as Record<string, string>)[id] ?? id,
+  }),
   // 带状态的 useSearchParams：setParams 后重新渲染，和 URL 同步的行为一致
   useSearchParams: () => {
     const [p, setP] = useState(() => new URLSearchParams(initialSearch));
@@ -33,7 +37,11 @@ vi.mock('@umijs/max', () => ({
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
 vi.mock('@/services/ant-design-pro/stations', () => ({ listStations }));
 vi.mock('@/services/ant-design-pro/customers', () => ({ listCustomers }));
-vi.mock('@/services/ant-design-pro/telemetry', () => ({ getLatestTelemetry }));
+// Keep the module's real helpers (isTelemetryEmpty, telemetryEmptyMessageId); only the request is faked.
+vi.mock('@/services/ant-design-pro/telemetry', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getLatestTelemetry,
+}));
 
 const { default: ConsoleDevices } = await import('./index');
 
@@ -95,7 +103,7 @@ describe('ConsoleDevices (overview) after extracting TankCard', () => {
 
   it('still shows the never-reported state', async () => {
     listDevices.mockResolvedValue([device('D1')]);
-    getLatestTelemetry.mockResolvedValue(null);
+    getLatestTelemetry.mockResolvedValue({ empty: 'never' });
     render(<ConsoleDevices />);
     expect(await screen.findByText('该设备还没有上报过数据')).toBeTruthy();
   });

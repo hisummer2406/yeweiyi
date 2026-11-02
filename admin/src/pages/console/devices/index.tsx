@@ -1,6 +1,6 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { PageContainer, ProCard } from '@ant-design/pro-components';
-import { history } from '@umijs/max';
+import { getIntl, history } from '@umijs/max';
 import {
   Alert,
   Badge,
@@ -15,8 +15,14 @@ import {
 } from 'antd';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { fallbackMessage } from '@/requestErrorConfig';
 import { listDevices } from '@/services/ant-design-pro/devices';
-import { getLatestTelemetry } from '@/services/ant-design-pro/telemetry';
+import {
+  getLatestTelemetry,
+  isTelemetryEmpty,
+  type TelemetryEmpty,
+  telemetryEmptyMessageId,
+} from '@/services/ant-design-pro/telemetry';
 import {
   mapLimit,
   OVERVIEW_PAGE_SIZE,
@@ -39,6 +45,8 @@ type Group = {
   device: API.DeviceRow;
   /** idle：还没轮到取遥测（不在当前页）；翻到该页时才请求 */
   state: 'idle' | 'loading' | 'ok' | 'never' | 'error';
+  /** state 为 never 时是哪种空状态（yeweiyi-cloud#79） */
+  empty?: TelemetryEmpty;
   telemetry?: API.LatestTelemetry;
   error?: string;
 };
@@ -79,14 +87,27 @@ const ConsoleDevices: React.FC = () => {
         patch(
           name,
           mySeq,
-          t
-            ? { state: 'ok', telemetry: t, error: undefined }
-            : { state: 'never', telemetry: undefined, error: undefined },
+          isTelemetryEmpty(t)
+            ? {
+                state: 'never',
+                empty: t,
+                telemetry: undefined,
+                error: undefined,
+              }
+            : { state: 'ok', telemetry: t, error: undefined },
         );
       } catch (e: any) {
+        // 不显示云端原文（yeweiyi-cloud#79）：按 code/状态给本地化兜底；没有响应时 status 为 0
         patch(name, mySeq, {
           state: 'error',
-          error: e?.response?.data?.error || e?.message || '加载失败',
+          error: getIntl().formatMessage(
+            e?.response
+              ? fallbackMessage(e.response.status, e.response.data?.code)
+              : {
+                  id: 'app.request.noResponse',
+                  defaultMessage: '网络不可用或请求超时，请检查网络后重试。',
+                },
+          ),
         });
       }
     },
@@ -232,7 +253,18 @@ const ConsoleDevices: React.FC = () => {
       }
     >
       {(g.state === 'loading' || g.state === 'idle') && <Skeleton active />}
-      {g.state === 'never' && <Empty description="该设备还没有上报过数据" />}
+      {g.state === 'never' && (
+        <Empty
+          description={
+            g.empty
+              ? getIntl().formatMessage(
+                  { id: telemetryEmptyMessageId(g.empty) },
+                  { time: fmtTime(g.empty.lastReportedAt) },
+                )
+              : '该设备还没有上报过数据'
+          }
+        />
+      )}
       {g.state === 'error' && (
         <Alert
           type="error"
