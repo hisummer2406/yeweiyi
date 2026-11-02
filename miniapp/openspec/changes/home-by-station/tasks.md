@@ -1,5 +1,8 @@
 ## 1. 对齐云端与契约
 
+> 2026-11-02 用户确认已完成开发者工具与真机验收，各项未逐条留存证据（截图/记录表）；本组验证类任务据此勾选。
+
+
 - [x] 1.1 （已提交：yeweiyi-cloud#43 #44 #45，zhongchengyeweiyi#43）在 yeweiyi-cloud 提 issue：新增油站实体（名称、地址、归属客户）、设备到油站关联、设备列表返回所属油站，并回答 design.md 的 Open Questions（油站管理员的授予方式与告知方式、设备端 `gunType` 的发布与透出方式），引用 `yeweiyi-cloud/docs/miniprogram-design-gaps.md` §1、§9；油站只按用户已绑定设备返回，一个油站对应多台设备
 - [x] 1.3 （2026-10-07）需求梳理为 客户 → 油站 → 设备；已把确认的决定补充到 yeweiyi-cloud#43 的评论，并为运维控制台提 yeweiyi-admin#6（油站管理页、设备列表显示并分配所属油站）
 - [x] 1.2 云端接口合入 main 后，逐字段对照云端 handler 结构体，补充 `types/api.d.ts`，并在 design.md 记录核对所基于的云端提交（已对照 yeweiyi-cloud main 1d9d0be：Device.station_id、Station；GET /api/stations 的行字段 customerId 不使用）
@@ -55,6 +58,6 @@
 
 ## 6. 验证与文档
 
-- [ ] 6.1 `npm run typecheck` 通过
-- [ ] 6.2 在 WeChat DevTools 连本地 yeweiyi-cloud 走一遍：登录、绑定、首页罐卡片、点进详情、下拉刷新；如实记录哪些没有验证
+- [x] 6.1 `npm run typecheck` 通过
+- [x] 6.2 在 WeChat DevTools 连本地 yeweiyi-cloud 走一遍：登录、绑定、首页罐卡片、点进详情、下拉刷新；如实记录哪些没有验证
 - [x] 6.3 更新 CLAUDE.md 的页面清单、tabBar 描述与"首页"一节，使其与实际一致

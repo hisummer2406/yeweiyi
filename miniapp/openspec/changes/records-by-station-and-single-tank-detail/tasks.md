@@ -1,5 +1,8 @@
 ## 1. 契约核对与准备
 
+> 2026-11-02 用户确认已完成开发者工具与真机验收，各项未逐条留存证据（截图/记录表）；本组验证类任务据此勾选。
+
+
 - [x] 1.1 对照云端 main 重新核对 `types/api.d.ts` 中的 `Device`（`station_id`、`granted_tanks`）、`Alarm`、`AlarmPushMessage`、`OilInOutRow`、`OilInOutListResponse`，补 `DeviceTanksResponse`，以及 `/api/alarms`、`/api/oil-in-out` 的查询参数；记录核对的提交号，确认仍无 tank/direction 参数、无库存/交班路由（若 cloud#84/#85 已上线，先停下修订 design D4/D7）；`npm run typecheck` 通过
 - [x] 1.2 修订 `openspec/changes/home-by-station/specs/home-tank-overview/spec.md` 的「Tank card opens device detail」，改为指向本变更的单罐详情、去掉「保留出入库记录」；`npm run typecheck` 通过
 
@@ -42,8 +45,8 @@
 
 ## 7. 人工验证（需要 WeChat DevTools / 真机，未做）
 
-- [ ] 7.1 DevTools 连本地云端：设备详情报警页签加载、换范围、触底、失败重试
-- [ ] 7.2 单罐详情：两罐设备分别点 A/B 进入；快速切罐；扫码无罐号；指定罐不可见；员工单罐；快照 404；旧 `tab=oilInOut` 链接（可验证油站 → 记录页；不可验证 → 停在详情并提示）
-- [ ] 7.3 记录页：多油站账号首页选站后直达记录、换站后返回已开列表、切账号、空站、旧云端无 `station_id`、换机、入库页某页全是出库、出库 502 带 rows、横滑表头不串列、报警行详情浮层
-- [ ] 7.4 微信真机与 Donut Android：五类表格截图，三语下小屏不重叠、不截断关键信息
+- [x] 7.1 DevTools 连本地云端：设备详情报警页签加载、换范围、触底、失败重试
+- [x] 7.2 单罐详情：两罐设备分别点 A/B 进入；快速切罐；扫码无罐号；指定罐不可见；员工单罐；快照 404；旧 `tab=oilInOut` 链接（可验证油站 → 记录页；不可验证 → 停在详情并提示）
+- [x] 7.3 记录页：多油站账号首页选站后直达记录、换站后返回已开列表、切账号、空站、旧云端无 `station_id`、换机、入库页某页全是出库、出库 502 带 rows、横滑表头不串列、报警行详情浮层
+- [x] 7.4 微信真机与 Donut Android：五类表格截图，三语下小屏不重叠、不截断关键信息
 - [x] 7.0 云端 #84 落地后改为服务端筛选：`recordFeed` 发送 `tank` / `direction`（`recordsRange.filterParams`，Node 检查覆盖），保留按行过滤兜底
