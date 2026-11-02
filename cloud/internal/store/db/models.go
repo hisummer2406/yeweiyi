@@ -296,6 +296,19 @@ type StockEvent struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 设备上报的罐体标定表镜像：(设备名, 罐号) 一行，由 internal/ingest 写入，云端不改。曲线通过 protocol.ParseTankCalibration 校验（严格升序、体积不减、至少 2 点）后才落库。
+type TankCalibration struct {
+	DeviceName string `json:"device_name"`
+	Tank       int32  `json:"tank"`
+	// 标定点高度，mm，严格升序；与 volume_l 逐位对应。
+	HeightMm []float64 `json:"height_mm"`
+	// 标定点体积，L，不减；与 height_mm 逐位对应。
+	VolumeL []float64 `json:"volume_l"`
+	// 两个标定属性在 ThingsBoard 中较新的更新时间（设备上报时刻）。设备只在重连时重发，现场改了标定表后云端要等下次重连才更新。
+	ReportedAt pgtype.Timestamptz `json:"reported_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 // 设备上报的油罐配置镜像：(设备名, 罐号) 一行，由 internal/ingest 从 ThingsBoard 客户端属性写入；云端不改配置值。设备停用某个罐后旧行保留。
 type TankSetting struct {
 	// 设备名，关联 devices.device_name；设备被删除时镜像一并删除。换机用新设备名，天然没有旧机镜像。

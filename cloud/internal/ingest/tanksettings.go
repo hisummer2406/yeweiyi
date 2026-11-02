@@ -48,6 +48,7 @@ func (i *Ingester) syncTankSettings(ctx context.Context, deviceName, deviceID st
 	for _, kv := range kvs {
 		attrs = append(attrs, protocol.Attribute{Key: kv.Key, Value: kv.Value, TS: kv.LastUpdateTs})
 	}
+	i.syncTankCalibration(ctx, deviceName, kvs)
 	tanks, skipped := protocol.ParseTankSettings(attrs)
 	if len(skipped) > 0 {
 		i.cfg.Logf("ingest: %s: tank settings: skipped unusable attributes %v", deviceName, skipped)
@@ -114,4 +115,37 @@ func text(v *string) pgtype.Text {
 // SyncTankSettingsForTest runs one pass synchronously so tests need not wait out the ticker.
 func (i *Ingester) SyncTankSettingsForTest(ctx context.Context, deviceName, deviceID string) int {
 	return i.syncTankSettings(ctx, deviceName, deviceID)
+}
+
+// syncTankCalibration mirrors each tank's calibration curve (cloud#14) from the same attribute read. A
+// curve that fails validation (see protocol.ParseTankCalibration) is logged and left out: the previous
+// mirror stays, rather than a corrupt table replacing a good one.
+func (i *Ingester) syncTankCalibration(ctx context.Context, deviceName string, kvs []tbclient.AttributeKV) {
+	attrs := make(map[string]any, len(kvs))
+	ts := make(map[string]int64, len(kvs))
+	for _, kv := range kvs {
+		attrs[kv.Key] = kv.Value
+		ts[kv.Key] = kv.LastUpdateTs
+	}
+	for n := 1; n <= protocol.MaxDeviceTankSettings; n++ {
+		cal, ok, err := protocol.ParseTankCalibration(attrs, n)
+		if err != nil {
+			i.cfg.Logf("ingest: %s: tank %d calibration ignored: %v", deviceName, n, err)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		reported := max(ts[protocol.TankKey(n, protocol.AttrCalibrationHeightMm)], ts[protocol.TankKey(n, protocol.AttrCalibrationVolumeL)])
+		at := time.Now()
+		if reported > 0 {
+			at = time.UnixMilli(reported)
+		}
+		if err := i.cfg.Queries.UpsertTankCalibration(ctx, db.UpsertTankCalibrationParams{
+			DeviceName: deviceName, Tank: int32(n), HeightMm: cal.HeightMm, VolumeL: cal.VolumeL,
+			ReportedAt: pgtype.Timestamptz{Time: at, Valid: true},
+		}); err != nil {
+			i.cfg.Logf("ingest: %s: save tank %d calibration: %v", deviceName, n, err)
+		}
+	}
 }

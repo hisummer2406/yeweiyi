@@ -120,6 +120,7 @@ type Querier interface {
 	// paths cannot deadlock. The partial unique index devices_station_id_key is the actual guarantee;
 	// this lock only lets a handler see the occupant and answer with a precise conflict.
 	GetStationForUpdate(ctx context.Context, id int64) (Station, error)
+	GetTankCalibration(ctx context.Context, arg GetTankCalibrationParams) (TankCalibration, error)
 	// Used where a decision must reflect the user's *current* role and customer rather than what their
 	// token said when it was issued.
 	GetUserByID(ctx context.Context, id int64) (User, error)
@@ -351,6 +352,9 @@ type Querier interface {
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 	// 设备删除中、或信封 ts 不晚于该编号最近一次删除完成时刻（旧记录重放）时不写入（cloud#83，device_record_writable）。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
+	// 设备上报的罐体标定表镜像（迁移 000035，cloud#14）。只由 internal/ingest 写入，API 只读。
+	// reported_at 没变就不写（设备每次重连都会重发，lastUpdateTs 随之前进）。
+	UpsertTankCalibration(ctx context.Context, arg UpsertTankCalibrationParams) error
 	// 设备上报的油罐配置镜像（迁移 000033，cloud#70）。只由 internal/ingest 写入，API 只读。
 	// 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
 	UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error

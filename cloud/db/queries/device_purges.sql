@@ -79,7 +79,8 @@ SELECT
     (SELECT COUNT(*) FROM user_tank_grants g WHERE g.device_name = sqlc.arg('device_name')::TEXT)::BIGINT       AS tank_grants,
     (SELECT COUNT(*) FROM user_devices u WHERE u.device_name = sqlc.arg('device_name')::TEXT)::BIGINT           AS user_devices,
     (SELECT COUNT(*) FROM device_pairing_secrets s WHERE s.device_name = sqlc.arg('device_name')::TEXT)::BIGINT AS pairing_secrets,
-    (SELECT COUNT(*) FROM tank_settings t WHERE t.device_name = sqlc.arg('device_name')::TEXT)::BIGINT AS tank_settings;
+    (SELECT COUNT(*) FROM tank_settings t WHERE t.device_name = sqlc.arg('device_name')::TEXT)::BIGINT AS tank_settings,
+    (SELECT COUNT(*) FROM tank_calibration c2 WHERE c2.device_name = sqlc.arg('device_name')::TEXT)::BIGINT AS tank_calibration;
 
 -- name: PurgeDeviceRow :execrows
 DELETE FROM devices x WHERE x.device_name = sqlc.arg('device_name')::TEXT;
@@ -98,4 +99,5 @@ SELECT
   + (SELECT COUNT(*) FROM user_devices x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM device_pairing_secrets x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM tank_settings x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM tank_calibration x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM devices x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT AS remnants;

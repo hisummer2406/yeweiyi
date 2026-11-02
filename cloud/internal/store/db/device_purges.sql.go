@@ -88,7 +88,8 @@ SELECT
     (SELECT COUNT(*) FROM user_tank_grants g WHERE g.device_name = $1::TEXT)::BIGINT       AS tank_grants,
     (SELECT COUNT(*) FROM user_devices u WHERE u.device_name = $1::TEXT)::BIGINT           AS user_devices,
     (SELECT COUNT(*) FROM device_pairing_secrets s WHERE s.device_name = $1::TEXT)::BIGINT AS pairing_secrets,
-    (SELECT COUNT(*) FROM tank_settings t WHERE t.device_name = $1::TEXT)::BIGINT AS tank_settings
+    (SELECT COUNT(*) FROM tank_settings t WHERE t.device_name = $1::TEXT)::BIGINT AS tank_settings,
+    (SELECT COUNT(*) FROM tank_calibration c2 WHERE c2.device_name = $1::TEXT)::BIGINT AS tank_calibration
 `
 
 type CountDeviceCascadesRow struct {
@@ -97,6 +98,7 @@ type CountDeviceCascadesRow struct {
 	UserDevices     int64 `json:"user_devices"`
 	PairingSecrets  int64 `json:"pairing_secrets"`
 	TankSettings    int64 `json:"tank_settings"`
+	TankCalibration int64 `json:"tank_calibration"`
 }
 
 func (q *Queries) CountDeviceCascades(ctx context.Context, deviceName string) (CountDeviceCascadesRow, error) {
@@ -108,6 +110,7 @@ func (q *Queries) CountDeviceCascades(ctx context.Context, deviceName string) (C
 		&i.UserDevices,
 		&i.PairingSecrets,
 		&i.TankSettings,
+		&i.TankCalibration,
 	)
 	return i, err
 }
@@ -125,6 +128,7 @@ SELECT
   + (SELECT COUNT(*) FROM user_devices x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM device_pairing_secrets x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM tank_settings x WHERE x.device_name = $1::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM tank_calibration x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM devices x WHERE x.device_name = $1::TEXT)::BIGINT AS remnants
 `
 
