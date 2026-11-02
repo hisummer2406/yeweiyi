@@ -12,4 +12,5 @@ export default {
   'app.error.reload': '重新整理頁面',
   'app.error.home': '返回首頁',
   'app.request.offline': '網路不可用，請檢查網路連線後重試。',
+  'app.request.roleNotAllowed': '沒有權限執行此操作。',
 };

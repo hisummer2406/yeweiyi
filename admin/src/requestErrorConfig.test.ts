@@ -64,6 +64,37 @@ describe('handleRequestError', () => {
     expect(messageError).not.toHaveBeenCalled();
   });
 
+  it('403 "not authorized" + account_unavailable (cloud#79) clears the token and redirects', () => {
+    setToken('tok');
+    handleRequestError(
+      {
+        response: {
+          status: 403,
+          data: { error: 'not authorized', code: 'account_unavailable' },
+        },
+      },
+      {},
+    );
+    expect(getToken()).toBeUndefined();
+    expect(replace).toHaveBeenCalled();
+  });
+
+  it('403 "not authorized" + role_not_allowed (cloud#79) keeps the token and says no permission', () => {
+    setToken('tok');
+    handleRequestError(
+      {
+        response: {
+          status: 403,
+          data: { error: 'not authorized', code: 'role_not_allowed' },
+        },
+      },
+      {},
+    );
+    expect(getToken()).toBe('tok');
+    expect(replace).not.toHaveBeenCalled();
+    expect(messageError).toHaveBeenCalledWith('没有权限执行此操作。');
+  });
+
   it('other 403s show the backend error and keep the token', () => {
     setToken('tok');
     handleRequestError(

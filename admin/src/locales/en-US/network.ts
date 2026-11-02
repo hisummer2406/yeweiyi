@@ -14,4 +14,6 @@ export default {
   'app.error.home': 'Back Home',
   'app.request.offline':
     'Network unavailable. Please check your connection and try again.',
+  'app.request.roleNotAllowed':
+    'You do not have permission to perform this action.',
 };

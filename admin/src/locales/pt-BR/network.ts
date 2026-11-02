@@ -14,4 +14,6 @@ export default {
   'app.error.home': 'Voltar ao Início',
   'app.request.offline':
     'Rede indisponível. Verifique sua conexão e tente novamente.',
+  'app.request.roleNotAllowed':
+    'Você não tem permissão para executar esta ação.',
 };

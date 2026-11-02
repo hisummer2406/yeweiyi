@@ -13,4 +13,5 @@ export default {
   'app.error.home': 'হোমে ফিরে যান',
   'app.request.offline':
     'নেটওয়ার্ক অনুপলব্ধ। আপনার সংযোগ পরীক্ষা করুন এবং আবার চেষ্টা করুন।',
+  'app.request.roleNotAllowed': 'এই কাজটি করার অনুমতি আপনার নেই।',
 };
