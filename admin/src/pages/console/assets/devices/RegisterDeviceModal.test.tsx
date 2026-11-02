@@ -296,13 +296,16 @@ describe('RegisterDeviceModal', () => {
     expect(codeInput()).toHaveValue('ZCT000001');
   });
 
-  it('shows the backend text on a 400', async () => {
+  it('says the input is invalid on a 400, without the backend text (yeweiyi-cloud#79)', async () => {
     registerDevice.mockRejectedValue(new ApiError(400, 'unknown customerId'));
     setup();
     typeCode('ZCT000001');
     await pickCustomer('A 油站');
     submit();
-    expect(await screen.findByText(/unknown customerId/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(zhPages['pages.ops.devices.error.invalid']),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/unknown customerId/)).not.toBeInTheDocument();
   });
 
   it('says there is no permission on a 403', async () => {

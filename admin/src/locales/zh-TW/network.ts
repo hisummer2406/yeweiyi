@@ -13,4 +13,13 @@ export default {
   'app.error.home': '返回首頁',
   'app.request.offline': '網路不可用，請檢查網路連線後重試。',
   'app.request.roleNotAllowed': '沒有權限執行此操作。',
+  'app.request.platformUnavailable': '設備資料服務暫時無法使用，請稍後重試。',
+  'app.request.commandUnconfirmed':
+    '執行結果尚未確認，請先查看操作記錄，不要直接重複提交。',
+  'app.request.invalid': '提交內容無效，請檢查後重試。',
+  'app.request.notFound': '要操作的物件不存在，請重新整理後重試。',
+  'app.request.conflict': '資料已變更，請重新整理後重試。',
+  'app.request.tooMany': '操作太頻繁，請稍後再試。',
+  'app.request.unknown': '操作失敗，請稍後重試；持續失敗請聯絡平台管理員。',
+  'app.request.noResponse': '網路無法使用或請求逾時，請檢查網路後重試。',
 };

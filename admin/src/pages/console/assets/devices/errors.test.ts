@@ -15,17 +15,15 @@ describe('describeRegisterError', () => {
     ).toEqual({ id: 'pages.ops.devices.error.conflict' });
   });
 
-  it('400 passes the backend error text through', () => {
+  it('400 never shows the backend text (yeweiyi-cloud#79)', () => {
     expect(describeRegisterError(400, 'unknown customerId')).toEqual({
       id: 'pages.ops.devices.error.invalid',
-      detail: 'unknown customerId',
     });
   });
 
   it('400 without a body still has a message', () => {
     expect(describeRegisterError(400)).toEqual({
       id: 'pages.ops.devices.error.invalid',
-      detail: '',
     });
   });
 
@@ -44,7 +42,6 @@ describe('describeRegisterError', () => {
   it.each([500, 502, 418])('%i falls back to a generic message', (status) => {
     expect(describeRegisterError(status, 'boom')).toEqual({
       id: 'pages.ops.devices.error.unknown',
-      detail: 'boom',
     });
   });
 
@@ -62,11 +59,10 @@ describe('describeCustomerError', () => {
     ).toEqual({ id: 'pages.ops.devices.customer.error.exists' });
   });
 
-  it('400 passes the backend error text through', () => {
+  it('400 never shows the backend text (yeweiyi-cloud#79)', () => {
     expect(describeCustomerError(400, 'name must be 1-100 characters')).toEqual(
       {
         id: 'pages.ops.devices.customer.error.invalid',
-        detail: 'name must be 1-100 characters',
       },
     );
   });
@@ -80,7 +76,6 @@ describe('describeCustomerError', () => {
     });
     expect(describeCustomerError(500, 'boom')).toEqual({
       id: 'pages.ops.devices.error.unknown',
-      detail: 'boom',
     });
   });
 });
@@ -95,9 +90,9 @@ describe('describeAssignError', () => {
     expect(describeAssignError(403).id).toBe(
       'pages.ops.devices.error.forbidden',
     );
-    expect(describeAssignError(400, 'unknown customerId').detail).toBe(
-      'unknown customerId',
-    );
+    expect(
+      describeAssignError(400, 'unknown customerId').detail,
+    ).toBeUndefined();
   });
 });
 
@@ -116,7 +111,6 @@ describe('describeMiniCodeError', () => {
     expect(d(502).id).toBe('pages.console.miniCode.error.upstream');
     expect(d(500, undefined, 'boom')).toEqual({
       id: 'pages.console.miniCode.error.unknown',
-      detail: 'boom',
     });
   });
 });

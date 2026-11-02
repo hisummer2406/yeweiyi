@@ -230,11 +230,12 @@ export default {
     '用户名无效：需 3-32 位字母、数字、. _ -，首位为字母或数字，且不能是手机号。',
   'pages.ops.users.error.usernameTaken': '该用户名已被使用。',
   'pages.ops.users.error.invalidPassword': '密码需要 8-72 字节。',
-  'pages.ops.users.error.invalid': '提交内容无效：{detail}',
+  'pages.ops.users.error.invalid': '提交内容无效，请检查填写的内容后重试。',
   'pages.ops.users.error.forbidden': '没有权限执行此操作。',
   'pages.ops.users.error.notFound': '账号不存在，请刷新列表。',
   'pages.ops.users.error.network': '网络不可用，请检查连接后重试。',
-  'pages.ops.users.error.unknown': '操作失败：{detail}',
+  'pages.ops.users.error.unknown':
+    '操作失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.ops.devices.col.customer': '所属客户',
   'pages.ops.devices.col.actions': '操作',
   'pages.ops.devices.customer.unassigned': '未分配',
@@ -290,7 +291,8 @@ export default {
     '云端未配置 ThingsBoard，无法删除设备；未创建删除任务。',
   'pages.ops.devices.purge.error.network':
     '网络不通或请求超时，结果未知：云端可能已经受理。请关闭后重新打开本窗口查看；确认没有任务后再手动提交。',
-  'pages.ops.devices.purge.error.unknown': '删除失败：{detail}',
+  'pages.ops.devices.purge.error.unknown':
+    '删除失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.ops.devices.error.notFound': '设备不存在，请刷新列表。',
   'pages.ops.customers.col.actions': '操作',
   'pages.ops.customers.action.rename': '重命名',
@@ -417,13 +419,15 @@ export default {
     '设备 {device} 已登记在客户 {customer} 名下，无需重复登记。',
   'pages.ops.devices.customer.created': '已创建客户 {name}',
   'pages.ops.devices.customer.error.exists': '客户名称已存在',
-  'pages.ops.devices.customer.error.invalid': '客户名称无效：{detail}',
+  'pages.ops.devices.customer.error.invalid':
+    '客户名称无效：不能为空，且不超过 100 个字符。',
   'pages.ops.devices.error.conflict': '该设备已属于其他客户，此处不能迁移。',
-  'pages.ops.devices.error.invalid': '提交内容无效：{detail}',
+  'pages.ops.devices.error.invalid': '提交内容无效，请检查填写的内容后重试。',
   'pages.ops.devices.error.forbidden':
     '没有权限执行此操作（仅平台管理员可登记设备）。',
   'pages.ops.devices.error.network': '网络不可用，请检查连接后重试。',
-  'pages.ops.devices.error.unknown': '操作失败：{detail}',
+  'pages.ops.devices.error.unknown':
+    '操作失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.ops.devices.form.code.required': '请输入设备编号',
   'pages.ops.devices.form.code.invalid':
     '编号格式不正确：应为完整编号（如 ZCT000001）或纯数字短码',
@@ -454,13 +458,15 @@ export default {
     '确定删除油站 {name}？只能删除没有设备的油站。',
   'pages.console.stations.delete.success': '已删除油站 {name}',
   'pages.console.stations.error.exists': '该客户下已有同名油站。',
-  'pages.console.stations.error.invalid': '提交内容无效：{detail}',
+  'pages.console.stations.error.invalid':
+    '提交内容无效，请检查填写的内容后重试。',
   'pages.console.stations.error.notFound': '油站不存在，请刷新列表。',
   'pages.console.stations.error.inUse':
     '该油站下还有设备，请先把设备移到其他油站，或取消它们的油站。',
   'pages.console.stations.error.forbidden': '没有权限，或该对象已不存在。',
   'pages.console.stations.error.network': '网络不通，请稍后重试。',
-  'pages.console.stations.error.unknown': '操作失败：{detail}',
+  'pages.console.stations.error.unknown':
+    '操作失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.console.stations.devices.col.station': '所属油站',
   'pages.console.stations.devices.station.none': '未分组',
   'pages.console.stations.devices.station.unknown': '未知',
@@ -486,7 +492,8 @@ export default {
   'pages.console.miniCode.error.unavailable':
     '云端未启用微信，无法生成小程序码。',
   'pages.console.miniCode.error.upstream': '微信服务返回失败，请稍后重试。',
-  'pages.console.miniCode.error.unknown': '下载小程序码失败：{detail}',
+  'pages.console.miniCode.error.unknown':
+    '下载小程序码失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.console.stations.devices.action.replace': '换机',
   'pages.console.stations.replace.title': '换机：{station}',
   'pages.console.stations.replace.station': '油站',
@@ -568,7 +575,8 @@ export default {
     '设备不存在或不在你的范围内，已刷新。',
   'pages.console.staff.error.unavailable': '设备平台暂时不可用，请稍后重试。',
   'pages.console.staff.error.network': '网络不通，请稍后重试。',
-  'pages.console.staff.error.unknown': '操作失败：{detail}',
+  'pages.console.staff.error.unknown':
+    '操作失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.console.customerFilter.label': '客户',
   'pages.console.customerFilter.all': '全部客户',
   'pages.console.records.device.current': '当前大屏：{device}',

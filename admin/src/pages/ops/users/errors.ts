@@ -2,11 +2,11 @@ import type { ErrorMessage } from '../../console/assets/devices/errors';
 
 /**
  * 账号相关请求失败时的提示归类，按 HTTP 状态码判断，不解析后端文案；
- * 后端 {error} 文本放在 detail 里供页面拼接。0 为网络不通。
+ * 不把后端 {error} 原文给用户看（yeweiyi-cloud#79）：未归类的失败用完整的本地化兜底文案。0 为网络不通。
  */
 export function describeUserError(
   status: number,
-  error?: string,
+  _error?: string,
   code?: string,
 ): ErrorMessage {
   // 云端新接口带机器码，先按码归类；文案不泄露其他客户的信息，所以重复手机号不说明在哪个客户。
@@ -28,7 +28,7 @@ export function describeUserError(
     case 409:
       return { id: 'pages.ops.users.error.exists' };
     case 400:
-      return { id: 'pages.ops.users.error.invalid', detail: error ?? '' };
+      return { id: 'pages.ops.users.error.invalid' };
     case 403:
       return { id: 'pages.ops.users.error.forbidden' };
     case 404:
@@ -36,7 +36,7 @@ export function describeUserError(
     case 0:
       return { id: 'pages.ops.users.error.network' };
     default:
-      return { id: 'pages.ops.users.error.unknown', detail: error ?? '' };
+      return { id: 'pages.ops.users.error.unknown' };
   }
 }
 

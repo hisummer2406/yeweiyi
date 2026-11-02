@@ -95,20 +95,66 @@ describe('handleRequestError', () => {
     expect(messageError).toHaveBeenCalledWith('没有权限执行此操作。');
   });
 
-  it('other 403s show the backend error and keep the token', () => {
+  it('other 403s keep the token and say "no permission", not the backend text', () => {
     setToken('tok');
     handleRequestError(
       {
         response: {
           status: 403,
-          data: { error: 'not authorized for this device' },
+          data: {
+            error: 'not authorized for this device',
+            code: 'device_not_authorized',
+          },
         },
       },
       {},
     );
-    expect(messageError).toHaveBeenCalledWith('not authorized for this device');
+    expect(messageError).toHaveBeenCalledWith('没有权限执行此操作。');
     expect(getToken()).toBe('tok');
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [500, 'internal_error', '操作失败，请稍后重试；持续失败请联系平台管理员。'],
+    [
+      503,
+      'device_platform_unavailable',
+      '设备数据服务暂时不可用，请稍后重试。',
+    ],
+    [
+      503,
+      'command_delivery_unconfirmed',
+      '执行结果尚未确认，请先查看操作记录，不要直接重复提交。',
+    ],
+    [400, 'invalid_request', '提交内容无效，请检查后重试。'],
+    [409, 'station_occupied', '数据已变化，请刷新后重试。'],
+    [429, 'login_rate_limited', '操作太频繁，请稍后再试。'],
+    [418, undefined, '操作失败，请稍后重试；持续失败请联系平台管理员。'],
+  ])(
+    '%i %s falls back to a localized message, never the backend text',
+    (status, code, text) => {
+      handleRequestError(
+        {
+          response: {
+            status,
+            data: { error: 'pq: relation "users" does not exist', code },
+          },
+        },
+        {},
+      );
+      expect(messageError).toHaveBeenCalledWith(text);
+    },
+  );
+
+  it('no response says network or timeout; a request that never went out does not', () => {
+    handleRequestError({ request: {} }, {});
+    expect(messageError).toHaveBeenLastCalledWith(
+      '网络不可用或请求超时，请检查网络后重试。',
+    );
+    handleRequestError(new Error('bad config'), {});
+    expect(messageError).toHaveBeenLastCalledWith(
+      '操作失败，请稍后重试；持续失败请联系平台管理员。',
+    );
   });
 
   it('rethrows when skipErrorHandler is set', () => {

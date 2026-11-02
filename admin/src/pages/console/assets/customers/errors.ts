@@ -16,7 +16,6 @@ export function describeRenameError(
     case 400:
       return {
         id: 'pages.ops.devices.customer.error.invalid',
-        detail: error ?? '',
       };
     default:
       return describeRegisterError(status, error);

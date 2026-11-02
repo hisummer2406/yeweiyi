@@ -248,12 +248,14 @@ export default {
     'Invalid username: 3-32 letters, digits, . _ -, starting with a letter or digit, not a phone number.',
   'pages.ops.users.error.usernameTaken': 'That username is already taken.',
   'pages.ops.users.error.invalidPassword': 'The password must be 8-72 bytes.',
-  'pages.ops.users.error.invalid': 'Invalid input: {detail}',
+  'pages.ops.users.error.invalid':
+    'Invalid input. Check the form and try again.',
   'pages.ops.users.error.forbidden': 'You are not allowed to do this.',
   'pages.ops.users.error.notFound': 'Account not found, refresh the list.',
   'pages.ops.users.error.network':
     'Network unavailable, check the connection and retry.',
-  'pages.ops.users.error.unknown': 'Operation failed: {detail}',
+  'pages.ops.users.error.unknown':
+    'Operation failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.col.customer': 'Customer',
   'pages.ops.devices.col.actions': 'Actions',
   'pages.ops.devices.customer.unassigned': 'Unassigned',
@@ -314,7 +316,8 @@ export default {
     'ThingsBoard is not configured in the cloud, so the device cannot be deleted. No task was created.',
   'pages.ops.devices.purge.error.network':
     'Network failure or timeout, the result is unknown: the cloud may have accepted it. Close and reopen this window to check; submit again only if there is no task.',
-  'pages.ops.devices.purge.error.unknown': 'Deletion failed: {detail}',
+  'pages.ops.devices.purge.error.unknown':
+    'Deletion failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.error.notFound': 'Device not found, refresh the list.',
   'pages.ops.customers.col.actions': 'Actions',
   'pages.ops.customers.action.users': 'Accounts',
@@ -371,15 +374,18 @@ export default {
   'pages.ops.devices.customer.created': 'Customer {name} created',
   'pages.ops.devices.customer.error.exists':
     'A customer with this name already exists',
-  'pages.ops.devices.customer.error.invalid': 'Invalid customer name: {detail}',
+  'pages.ops.devices.customer.error.invalid':
+    'Invalid customer name: it must be 1–100 characters.',
   'pages.ops.devices.error.conflict':
     'This device already belongs to a different customer; it cannot be moved here.',
-  'pages.ops.devices.error.invalid': 'Invalid request: {detail}',
+  'pages.ops.devices.error.invalid':
+    'Invalid input. Check the form and try again.',
   'pages.ops.devices.error.forbidden':
     'Not allowed (only platform administrators can register devices).',
   'pages.ops.devices.error.network':
     'Network unavailable. Please check your connection and retry.',
-  'pages.ops.devices.error.unknown': 'Operation failed: {detail}',
+  'pages.ops.devices.error.unknown':
+    'Operation failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.form.code.required': 'Please enter the device code',
   'pages.ops.devices.form.code.invalid':
     'Invalid code: use a full code (e.g. ZCT000001) or a numeric short code',
@@ -411,7 +417,8 @@ export default {
   'pages.console.stations.delete.success': 'Station {name} deleted',
   'pages.console.stations.error.exists':
     'This customer already has a station with that name.',
-  'pages.console.stations.error.invalid': 'Invalid input: {detail}',
+  'pages.console.stations.error.invalid':
+    'Invalid input. Check the form and try again.',
   'pages.console.stations.error.notFound':
     'Station not found. Please refresh the list.',
   'pages.console.stations.error.inUse':
@@ -420,7 +427,8 @@ export default {
     'No permission, or the object no longer exists.',
   'pages.console.stations.error.network':
     'Network unreachable. Please try again later.',
-  'pages.console.stations.error.unknown': 'Operation failed: {detail}',
+  'pages.console.stations.error.unknown':
+    'Operation failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.console.stations.devices.col.station': 'Station',
   'pages.console.stations.devices.station.none': 'Ungrouped',
   'pages.console.stations.devices.station.unknown': 'Unknown',
@@ -454,7 +462,7 @@ export default {
   'pages.console.miniCode.error.upstream':
     'WeChat service failed; please retry later.',
   'pages.console.miniCode.error.unknown':
-    'Failed to download the code: {detail}',
+    'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.console.stations.devices.action.replace': 'Replace',
   'pages.console.stations.replace.title': 'Replace device: {station}',
   'pages.console.stations.replace.station': 'Station',
@@ -544,7 +552,8 @@ export default {
   'pages.console.staff.error.unavailable':
     'The device platform is temporarily unavailable; try again shortly.',
   'pages.console.staff.error.network': 'Network error; please try again.',
-  'pages.console.staff.error.unknown': 'Operation failed: {detail}',
+  'pages.console.staff.error.unknown':
+    'Operation failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.console.customerFilter.label': 'Customer',
   'pages.console.customerFilter.all': 'All customers',
   'pages.console.records.device.current': 'Current display: {device}',

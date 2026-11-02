@@ -128,7 +128,7 @@
 一个油站同一时刻至多一台大屏，一台大屏只属于一个油站；一台大屏下有多个罐，按「设备码 + 罐号」定位；换大屏用**新设备码**，
 从新设备重新采集，不迁移/合并/接续旧设备历史，不删旧设备记录，不自动复制旧设备的用户授权。
 
-- 错误按 `ApiError.code` 分支，不按 `error` 文案；`403 not authorized` 表示账号失效，**例外**是 yeweiyi-cloud#79 起带 `code: role_not_allowed` 的同一 body（账号正常、角色不允许）：不清 token，全局提示 `app.request.roleNotAllowed`（判定集中在 `isAccountRevoked`，别在页面里另写）。`ApiError` 带 `occupiedBy` /
+- 错误按 `ApiError.code` 分支，不按 `error` 文案；`403 not authorized` 表示账号失效，**例外**是 yeweiyi-cloud#79 起带 `code: role_not_allowed` 的同一 body（账号正常、角色不允许）：不清 token，全局提示 `app.request.roleNotAllowed`（判定集中在 `isAccountRevoked`，别在页面里另写）。**不把云端 `error` 原文显示给用户**（yeweiyi-cloud#79）：页面归类不到的失败用完整的本地化兜底文案，`ErrorMessage.detail` 只放业务信息（如占用油站的设备编号）；全局兜底按 code/状态走 `fallbackMessage`。`ApiError` 带 `occupiedBy` /
   `currentDeviceName`（冲突响应附带）。契约新增的码：`station_occupied`、`station_device_changed`、`device_in_other_station`、
   `device_customer_mismatch`、`device_without_customer`；v1.1 起 404 带 `station_not_found` / `device_not_found`（对客户管理员，
   别客户的与不存在的完全相同），换机 400 带 `invalid_request` / `same_device`。没有 code（旧版云端）时退回合并提示。

@@ -9,7 +9,7 @@ import type { ErrorMessage } from '../devices/errors';
  */
 export function describeStationError(
   status: number,
-  error?: string,
+  _error?: string,
 ): ErrorMessage {
   switch (status) {
     case 409:
@@ -17,7 +17,6 @@ export function describeStationError(
     case 400:
       return {
         id: 'pages.console.stations.error.invalid',
-        detail: error ?? '',
       };
     case 404:
       return { id: 'pages.console.stations.error.notFound' };
@@ -28,7 +27,6 @@ export function describeStationError(
     default:
       return {
         id: 'pages.console.stations.error.unknown',
-        detail: error ?? '',
       };
   }
 }

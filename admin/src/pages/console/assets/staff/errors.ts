@@ -8,7 +8,7 @@ import type { ErrorMessage } from '../devices/errors';
 export function describeTankGrantError(
   status: number,
   code?: string,
-  error?: string,
+  _error?: string,
 ): ErrorMessage {
   switch (code) {
     case 'tanks_unknown':
@@ -35,7 +35,6 @@ export function describeTankGrantError(
     default:
       return {
         id: 'pages.console.staff.error.unknown',
-        detail: error ?? '',
       };
   }
 }

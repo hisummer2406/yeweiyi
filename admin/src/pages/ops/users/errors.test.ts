@@ -17,10 +17,13 @@ describe('describeUserError', () => {
     expect(describeUserError(status, 'x').id).toBe(id);
   });
 
-  it('carries the backend text as detail for 400', () => {
-    expect(describeUserError(400, 'password must be 8-72 bytes').detail).toBe(
-      'password must be 8-72 bytes',
-    );
+  it('never passes the backend text on (yeweiyi-cloud#79)', () => {
+    expect(
+      describeUserError(400, 'password must be 8-72 bytes').detail,
+    ).toBeUndefined();
+    expect(
+      describeUserError(500, 'pq: deadlock detected').detail,
+    ).toBeUndefined();
   });
 });
 

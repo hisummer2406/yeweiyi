@@ -27,7 +27,6 @@ describe('describeTankGrantError', () => {
     );
     expect(describeTankGrantError(500, undefined, 'boom')).toEqual({
       id: 'pages.console.staff.error.unknown',
-      detail: 'boom',
     });
   });
 
