@@ -542,13 +542,34 @@ func TestTankSettings_MirrorsDeviceReportedAttributes(t *testing.T) {
 	s := newStack(t, control.Config{})
 	ctx := context.Background()
 
-	if err := s.sim.PublishRawAttributes(map[string]any{
+	attrs := map[string]any{
 		"tank1.tankHeightMm": 2500, "tank1.tankShape": 1, "tank1.oilType": "92#", "tank1.oilTypeIndex": 3,
 		"tank1.alarmHighLevelMm": 2200, "tank1.alarmLowLowLevelMm": 0, "tank1.density": 0.56,
 		"tank1.levelCorrectionMm": -1.5,
 		"tank1.sensorLengthMm":    "not a number",
-	}); err != nil {
-		t.Fatalf("publish attributes: %v", err)
+	}
+
+	// The simulator published its own default tank settings when it connected. Two attribute posts in a
+	// row reach ThingsBoard together and are stored asynchronously, so the defaults can land AFTER these
+	// values and win. Publish until ThingsBoard really holds this test's values (a later post settles it),
+	// and only then sync — otherwise the sync mirrors the defaults.
+	attrDeadline := time.Now().Add(30 * time.Second)
+	for {
+		if err := s.sim.PublishRawAttributes(attrs); err != nil {
+			t.Fatalf("publish attributes: %v", err)
+		}
+		held := false
+		for i := 0; i < 10 && !held; i++ {
+			time.Sleep(300 * time.Millisecond)
+			got, err := s.tb.Attributes(ctx, s.tbDevID, tbclient.ScopeClient, []string{"tank1.tankHeightMm", "tank1.sensorLengthMm"})
+			held = err == nil && fmt.Sprint(got["tank1.tankHeightMm"]) == "2500" && got["tank1.sensorLengthMm"] == "not a number"
+		}
+		if held {
+			break
+		}
+		if time.Now().After(attrDeadline) {
+			t.Fatal("ThingsBoard never stored the published attributes")
+		}
 	}
 
 	var rows []db.TankSetting
