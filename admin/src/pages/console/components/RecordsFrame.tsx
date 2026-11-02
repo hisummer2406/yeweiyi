@@ -25,6 +25,10 @@ type Props<T> = {
   emptyId: string;
   /** 只在有行时渲染 */
   children: React.ReactNode;
+  /** 与时间范围同一行的筛选控件（如油罐下拉），放在工具栏最前面 */
+  filters?: React.ReactNode;
+  /** 工具栏下方、记录之上的额外提示（如「该罐已无权查看」） */
+  banner?: React.ReactNode;
 };
 
 /**
@@ -38,6 +42,8 @@ function RecordsFrame<T>({
   hasRows,
   emptyId,
   children,
+  filters,
+  banner,
 }: Props<T>) {
   const intl = useIntl();
   const t = (id: string, values?: Record<string, string>) =>
@@ -97,7 +103,8 @@ function RecordsFrame<T>({
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Space wrap>
+      <Space wrap size="middle" align="center">
+        {filters}
         <span>{t('pages.console.records.range.label')}</span>
         <DatePicker.RangePicker
           showTime
@@ -118,6 +125,7 @@ function RecordsFrame<T>({
       <Typography.Text type="secondary">
         {t('pages.console.records.assignedNote')}
       </Typography.Text>
+      {banner}
       {body}
     </Space>
   );

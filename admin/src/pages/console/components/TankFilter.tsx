@@ -40,7 +40,7 @@ const TankFilter: React.FC<Props> = ({ device, value, onChange }) => {
   }, [device]);
 
   return (
-    <Space>
+    <Space size="small" align="center">
       <span>{t('pages.console.records.filter.tank')}</span>
       <Select<number | 'all'>
         aria-label={t('pages.console.records.filter.tank')}

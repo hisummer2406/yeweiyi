@@ -38,69 +38,66 @@ const AlarmRecords: React.FC<{ device: string }> = ({ device }) => {
   );
 
   return (
-    <>
-      <TankFilter device={device} value={tank} onChange={setTank} />
-      {refused !== undefined && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginTop: 12 }}
-          title={intl.formatMessage(
-            { id: 'pages.console.records.tankRefused' },
-            { n: refused },
-          )}
-        />
-      )}
-      <RecordsFrame
-        state={state}
-        notices={notices}
-        hasRows={rows.length > 0}
-        emptyId="pages.console.records.empty.alarms"
-      >
-        <Table<API.Alarm>
-          key={state.version}
-          size="middle"
-          rowKey={(r) =>
-            `${r.alarmId}|${r.time}|${r.tank}|${r.status}|${r.type}`
-          }
-          dataSource={rows}
-          pagination={{ pageSize: 20, showSizeChanger: false }}
-          columns={[
-            {
-              title: t('pages.console.records.col.time'),
-              dataIndex: 'time',
-              render: (v: string) => fmtTime(v),
-            },
-            { title: t('pages.console.records.col.tank'), dataIndex: 'tank' },
-            {
-              title: t('pages.console.records.col.type'),
-              dataIndex: 'type',
-              render: (v: string) => label(ALARM_TYPE_LABELS, v),
-            },
-            {
-              title: t('pages.console.records.col.severity'),
-              dataIndex: 'severity',
-              render: (v: string) => label(ALARM_SEVERITY_LABELS, v),
-            },
-            {
-              title: t('pages.console.records.col.status'),
-              dataIndex: 'status',
-              render: (v: string) => (
-                <Tag color={v === 'ACTIVE' ? 'error' : 'default'}>
-                  {label(ALARM_STATUS_LABELS, v)}
-                </Tag>
-              ),
-            },
-            { title: t('pages.console.records.col.text'), dataIndex: 'text' },
-            {
-              title: t('pages.console.records.col.value'),
-              dataIndex: 'value',
-              render: (v?: number) => (v === undefined ? '--' : fmt(v)),
-            },
-          ]}
-        />
-      </RecordsFrame>
-    </>
+    <RecordsFrame
+      filters={<TankFilter device={device} value={tank} onChange={setTank} />}
+      banner={
+        refused !== undefined && (
+          <Alert
+            type="warning"
+            showIcon
+            title={intl.formatMessage(
+              { id: 'pages.console.records.tankRefused' },
+              { n: refused },
+            )}
+          />
+        )
+      }
+      state={state}
+      notices={notices}
+      hasRows={rows.length > 0}
+      emptyId="pages.console.records.empty.alarms"
+    >
+      <Table<API.Alarm>
+        key={state.version}
+        size="middle"
+        rowKey={(r) => `${r.alarmId}|${r.time}|${r.tank}|${r.status}|${r.type}`}
+        dataSource={rows}
+        pagination={{ pageSize: 20, showSizeChanger: false }}
+        columns={[
+          {
+            title: t('pages.console.records.col.time'),
+            dataIndex: 'time',
+            render: (v: string) => fmtTime(v),
+          },
+          { title: t('pages.console.records.col.tank'), dataIndex: 'tank' },
+          {
+            title: t('pages.console.records.col.type'),
+            dataIndex: 'type',
+            render: (v: string) => label(ALARM_TYPE_LABELS, v),
+          },
+          {
+            title: t('pages.console.records.col.severity'),
+            dataIndex: 'severity',
+            render: (v: string) => label(ALARM_SEVERITY_LABELS, v),
+          },
+          {
+            title: t('pages.console.records.col.status'),
+            dataIndex: 'status',
+            render: (v: string) => (
+              <Tag color={v === 'ACTIVE' ? 'error' : 'default'}>
+                {label(ALARM_STATUS_LABELS, v)}
+              </Tag>
+            ),
+          },
+          { title: t('pages.console.records.col.text'), dataIndex: 'text' },
+          {
+            title: t('pages.console.records.col.value'),
+            dataIndex: 'value',
+            render: (v?: number) => (v === undefined ? '--' : fmt(v)),
+          },
+        ]}
+      />
+    </RecordsFrame>
   );
 };
 
