@@ -50,6 +50,55 @@ export const forwardAuthFailure = (error: any): boolean => {
   return false;
 };
 
+/**
+ * 未被页面单独处理的失败的兜底文案：按云端 code，再按 HTTP 状态（cloud docs/error-codes-contract.md）。
+ * 不承诺原因：只有确实是平台/服务不可用的码才说"暂时不可用"。
+ */
+export const fallbackMessage = (
+  status: number,
+  code?: string,
+): { id: string; defaultMessage: string } => {
+  if (code === 'device_platform_unavailable')
+    return {
+      id: 'app.request.platformUnavailable',
+      defaultMessage: '设备数据服务暂时不可用，请稍后重试。',
+    };
+  if (code === 'command_delivery_unconfirmed')
+    return {
+      id: 'app.request.commandUnconfirmed',
+      defaultMessage: '执行结果尚未确认，请先查看操作记录，不要直接重复提交。',
+    };
+  if (status === 400)
+    return {
+      id: 'app.request.invalid',
+      defaultMessage: '提交内容无效，请检查后重试。',
+    };
+  if (status === 403)
+    return {
+      id: 'app.request.roleNotAllowed',
+      defaultMessage: '没有权限执行此操作。',
+    };
+  if (status === 404)
+    return {
+      id: 'app.request.notFound',
+      defaultMessage: '要操作的对象不存在，请刷新后重试。',
+    };
+  if (status === 409)
+    return {
+      id: 'app.request.conflict',
+      defaultMessage: '数据已变化，请刷新后重试。',
+    };
+  if (status === 429)
+    return {
+      id: 'app.request.tooMany',
+      defaultMessage: '操作太频繁，请稍后再试。',
+    };
+  return {
+    id: 'app.request.unknown',
+    defaultMessage: '操作失败，请稍后重试；持续失败请联系平台管理员。',
+  };
+};
+
 export const handleRequestError = (error: any, opts: any) => {
   if (opts?.skipErrorHandler) throw error;
   if (error.response) {
@@ -75,8 +124,8 @@ export const handleRequestError = (error: any, opts: any) => {
       );
       return;
     }
-    // 其它 403：展示后端给出的原因，不清 token。
-    message.error(data?.error || `Response status:${status}`);
+    // 其余失败：按状态给本地化兜底，不展示后端原文（yeweiyi-cloud#79）
+    message.error(getIntl().formatMessage(fallbackMessage(status, data?.code)));
   } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
     message.error(
       getIntl().formatMessage({
@@ -86,9 +135,16 @@ export const handleRequestError = (error: any, opts: any) => {
       }),
     );
   } else if (error.request) {
-    message.error('None response! Please retry.');
+    // 发出去了没有响应：超时或连接被断
+    message.error(
+      getIntl().formatMessage({
+        id: 'app.request.noResponse',
+        defaultMessage: '网络不可用或请求超时，请检查网络后重试。',
+      }),
+    );
   } else {
-    message.error('Request error, please retry.');
+    // 请求没能发出（原因未知）：不说成网络问题
+    message.error(getIntl().formatMessage(fallbackMessage(-1)));
   }
 };
 

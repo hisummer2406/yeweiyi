@@ -22,11 +22,9 @@ describe('describeStationError', () => {
     );
     expect(describeStationError(400, 'bad name')).toEqual({
       id: 'pages.console.stations.error.invalid',
-      detail: 'bad name',
     });
     expect(describeStationError(500, 'boom')).toEqual({
       id: 'pages.console.stations.error.unknown',
-      detail: 'boom',
     });
   });
 });

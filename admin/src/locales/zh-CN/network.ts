@@ -12,4 +12,13 @@ export default {
   'app.error.home': '返回首页',
   'app.request.offline': '网络不可用，请检查网络连接后重试。',
   'app.request.roleNotAllowed': '没有权限执行此操作。',
+  'app.request.platformUnavailable': '设备数据服务暂时不可用，请稍后重试。',
+  'app.request.commandUnconfirmed':
+    '执行结果尚未确认，请先查看操作记录，不要直接重复提交。',
+  'app.request.invalid': '提交内容无效，请检查后重试。',
+  'app.request.notFound': '要操作的对象不存在，请刷新后重试。',
+  'app.request.conflict': '数据已变化，请刷新后重试。',
+  'app.request.tooMany': '操作太频繁，请稍后再试。',
+  'app.request.unknown': '操作失败，请稍后重试；持续失败请联系平台管理员。',
+  'app.request.noResponse': '网络不可用或请求超时，请检查网络后重试。',
 };
