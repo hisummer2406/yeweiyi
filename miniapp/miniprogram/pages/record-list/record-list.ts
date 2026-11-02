@@ -61,7 +61,14 @@ type RowView = {
   cells: string[];
   // Alarm rows: ACTIVE / CLEARED keeps its own mark, and a tap shows the full text, status and severity.
   active?: boolean;
-  detail?: { title: string; text: string; status: string; severity: string; time: string };
+  // The alarm's own sheet: every field of the record, the message in full.
+  detail?: {
+    kind: string;
+    active: boolean;
+    status: string;
+    rows: { label: string; value: string }[];
+    text: string;
+  };
 };
 
 type Row = Alarm | OilInOutRow;
@@ -310,11 +317,16 @@ Page({
           cells: alarmCells(a, info, time),
           active: a.status === 'ACTIVE',
           detail: {
-            title: `${t('tank.no', { n: a.tank })}　${kind}`,
-            text: a.text,
+            kind,
+            active: a.status === 'ACTIVE',
             status,
-            severity: label(ALARM_SEVERITY_KEYS, a.severity),
-            time: time(a.time),
+            rows: [
+              { label: t('table.tank'), value: t('tank.no', { n: a.tank }) },
+              { label: t('records.severity'), value: label(ALARM_SEVERITY_KEYS, a.severity) },
+              { label: t('table.alarmTime'), value: time(a.time) },
+              ...(typeof a.value === 'number' && Number.isFinite(a.value) ? [{ label: t('records.value'), value: String(a.value) }] : []),
+            ],
+            text: a.text,
           },
         };
       }

@@ -13,7 +13,7 @@
     <text class="text-warning">{{text.socketDown}}</text>
   </view>
 
-  <!-- 当前罐：首页点中的罐；可在可见罐之间切换，实时数据与报警记录都只看这个罐（单罐时只显示罐名）。 -->
+  <!-- 当前罐：首页点中的罐；可在可见罐之间切换，实时数据与实时报警只看这个罐（单罐时只显示罐名）。 -->
   <view class="tank-bar" wx:if="{{deviceActive && snapshotLoaded}}">
     <view wx:if="{{currentTankLabel}}" class="tank-bar-current">{{currentTankLabel}}</view>
     <view wx:if="{{tankless && activeTab !== 'snapshot'}}" class="muted">{{tankless}}</view>
@@ -28,7 +28,8 @@
     </view>
   </view>
 
-  <view class="tabs" wx:if="{{deviceActive}}">
+  <!-- 只剩一个页签（实时数据）时不显示页签栏；报警、出入库记录只从「我的记录」进入 -->
+  <view class="tabs" wx:if="{{deviceActive && tabs.length > 1}}">
     <view
       wx:for="{{tabs}}"
       wx:key="key"
@@ -57,93 +58,21 @@
         <view>{{tankless || text.neverReported}}</view>
       </view>
       <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">{{text.reportedAt}} {{snapshotTs}}</view>
+      <!-- 当前罐的全部读数（不画罐图）：状态与探针在上，读数两列排开，缺失值为「—」 -->
       <view wx:for="{{tanks}}" wx:key="key" class="card">
-        <view class="row" style="margin-bottom:16rpx;">
+        <view class="dt-head">
           <text class="tag">{{item.tankNoLabel}}　{{item.oilType || '--'}}</text>
-          <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel}}</text>
+          <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel || '—'}}</text>
         </view>
-        <view class="tank-card-head">
-          <image class="tank-illustration" src="/assets/illustrations/tank-horizontal.png" mode="aspectFit" />
-          <view class="tank-card-body">
-            <view class="stat-row">
-              <text class="stat-row-label">{{text.level}}</text>
-              <text class="stat-row-value">{{item.oilLevelMm}}</text>
-              <text class="stat-row-unit">{{text.unitMm}}</text>
-            </view>
-            <view class="stat-row">
-              <text class="stat-row-label">{{text.volume}}</text>
-              <text class="stat-row-value">{{item.oilVolumeL}}</text>
-              <text class="stat-row-unit">{{text.unitL}}</text>
-            </view>
-            <view class="stat-row">
-              <text class="stat-row-label">{{text.water}}</text>
-              <text class="stat-row-value">{{item.waterLevelMm}}</text>
-              <text class="stat-row-unit">{{text.unitMm}}</text>
-            </view>
-            <view class="stat-row">
-              <text class="stat-row-label">{{text.temp}}</text>
-              <text class="stat-row-value">{{item.tempC}}</text>
-              <text class="stat-row-unit">℃</text>
-            </view>
-            <view class="stat-row">
-              <text class="stat-row-label">{{text.mass}}</text>
-              <text class="stat-row-value">{{item.oilWeightKg}}</text>
-              <text class="stat-row-unit">{{text.unitKg}}</text>
-            </view>
-            <view class="stat-row">
-              <text class="stat-row-label">{{text.ullage}}</text>
-              <text class="stat-row-value">{{item.nullVolumeL}}</text>
-              <text class="stat-row-unit">{{text.unitL}}</text>
-            </view>
+        <view class="dt-probe {{item.probeConnected ? '' : 'dt-probe-off'}}">
+          {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}
+        </view>
+        <view class="dt-grid">
+          <view wx:for="{{tankFields}}" wx:for-item="f" wx:key="label" class="dt-cell">
+            <view class="dt-label">{{f.label}}</view>
+            <view class="dt-value {{f.strong ? 'dt-value-strong' : ''}}">{{f.value}}<text class="dt-unit">{{f.unit}}</text></view>
           </view>
         </view>
-        <view class="muted text-danger" wx:if="{{!item.probeConnected}}" style="margin-top:8rpx;">{{text.probeOff}}</view>
-      </view>
-    </view>
-
-    <!-- 报警记录的时间范围：快捷档位滚动（按点击时的当前时间往回算），自定义按本地整天。 -->
-    <view wx:if="{{activeTab === 'alarms'}}" class="range-bar">
-      <view class="range-chips">
-        <view
-          wx:for="{{rangePresets}}"
-          wx:key="key"
-          class="range-chip {{rangeKey === item.key ? 'range-chip-on' : ''}}"
-          data-key="{{item.key}}"
-          bindtap="onPickRange"
-        >{{item.label}}</view>
-        <view class="range-chip {{rangeKey === 'custom' ? 'range-chip-on' : ''}}" data-key="custom" bindtap="onPickRange">{{text.custom}}</view>
-      </view>
-      <view wx:if="{{rangeKey === 'custom'}}" class="range-custom">
-        <picker mode="date" value="{{customStart}}" end="{{customEnd || today}}" bindchange="onStartDate">
-          <view class="range-date">{{customStart || text.startDate}}</view>
-        </picker>
-        <text class="range-sep">{{text.to}}</text>
-        <picker mode="date" value="{{customEnd}}" start="{{customStart}}" end="{{today}}" bindchange="onEndDate">
-          <view class="range-date">{{customEnd || text.endDate}}</view>
-        </picker>
-      </view>
-      <view wx:if="{{rangeHint}}" class="muted range-hint">{{rangeHint}}</view>
-    </view>
-
-    <!-- 报警记录：GET /api/alarms（裸数组，见 types/api.d.ts），只列当前罐，触底加载下一页 -->
-    <view wx:if="{{activeTab === 'alarms'}}">
-      <view wx:if="{{alarmsError}}" class="empty">
-        <view class="text-danger">{{alarmsError}}</view>
-        <button class="btn-primary" size="mini" bindtap="loadAlarms" style="margin-top:24rpx;">{{text.retry}}</button>
-      </view>
-      <view wx:if="{{!rangeHint && !loading && alarmsLoaded && alarms.length === 0 && alarmsFooter === 'end'}}" class="empty">
-        {{rangeKey === '24h' ? text.alarmsEmpty24h : text.alarmsEmptyRange}}
-      </view>
-      <view wx:for="{{alarms}}" wx:key="rowKey" class="card">
-        <view class="row">
-          <text>{{item.tankLabel}}　{{item.typeLabel}}</text>
-          <text class="badge {{item.status === 'ACTIVE' ? 'badge-failed' : 'badge-online'}}">{{item.statusLabel}}</text>
-        </view>
-        <view class="muted" style="margin-top:8rpx;">{{item.text}}</view>
-        <view class="muted tabular-nums">{{item.severityLabel}}　{{item.timeText}}</view>
-      </view>
-      <view wx:if="{{alarmsFooter && (alarms.length > 0 || alarmsFooter !== 'end')}}" class="list-footer" bindtap="onRetryMore">
-        {{alarmsFooter === 'loading' ? text.footerLoading : (alarmsFooter === 'end' ? text.footerEnd : (alarmsFooter === 'error' ? text.footerError : text.footerMore))}}
       </view>
     </view>
 

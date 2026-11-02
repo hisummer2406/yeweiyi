@@ -349,9 +349,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     then pins that station.
   - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
   - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫码查看设备), `device-detail` (**one tank at a time**: opened with `tank=` from
-    the home tank row, else the lowest visible tank; a switcher over the visible tanks; in-page tabs
-    实时数据/报警记录 (控制命令 entry closed), both for the selected tank, plus the live-alarm banner from
-    `AlarmSocket` for that tank only; polls the command list every 3s while any command is non-terminal;
+    the home tank row, else the lowest visible tank; a switcher over the visible tanks; shows every reading of the
+    selected tank as a grid, no tank picture (only the 实时数据 tab is left — 控制命令 entry closed — so the
+    tab bar is hidden), plus the live-alarm banner from `AlarmSocket` for that tank only. **No alarm or stock
+    record tab**: records have one entry only, 我的记录 (2026-10-26); polls the command list every 3s while any command is non-terminal;
     **no 出入库 tab** — an old `tab=oilInOut` link moves to `record-list` when its station is verified,
     otherwise stays and says where the records went), `issue-command` (one control command, raw-JSON args).
     The record lists have a time range bar and page by scrolling to the bottom

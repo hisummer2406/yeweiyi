@@ -102,13 +102,24 @@
   </view>
 </view>
 
-<!-- 报警行详情：完整报警信息、状态与级别（页内浮层，不用 wx.showModal） -->
+<!-- 报警行详情（底部弹层，页内实现，不用 wx.showModal）：类型 + 状态在上，逐项字段，完整报警信息，整宽关闭按钮 -->
 <view wx:if="{{detail}}" class="rl-mask" bindtap="onCloseDetail">
   <view class="rl-sheet" catchtap="">
-    <view class="rl-sheet-title">{{detail.title}}</view>
-    <view class="rl-sheet-text">{{detail.text}}</view>
-    <view class="muted">{{text.status}}：{{detail.status}}　{{text.severity}}：{{detail.severity}}</view>
-    <view class="muted tabular-nums">{{detail.time}}</view>
-    <button class="btn-primary" size="mini" bindtap="onCloseDetail" style="margin-top:24rpx;">{{text.close}}</button>
+    <view class="rl-sheet-grip"></view>
+    <view class="rl-sheet-head">
+      <text class="rl-sheet-title">{{detail.kind}}</text>
+      <text class="rl-sheet-status {{detail.active ? 'rl-status-active' : 'rl-status-cleared'}}">{{detail.status}}</text>
+    </view>
+    <view class="rl-sheet-rows">
+      <view wx:for="{{detail.rows}}" wx:key="label" class="rl-sheet-row">
+        <text class="rl-sheet-label">{{item.label}}</text>
+        <text class="rl-sheet-value">{{item.value}}</text>
+      </view>
+    </view>
+    <view wx:if="{{detail.text}}" class="rl-sheet-msg">
+      <view class="rl-sheet-label">{{text.message}}</view>
+      <view class="rl-sheet-msg-text">{{detail.text}}</view>
+    </view>
+    <button class="rl-sheet-close" bindtap="onCloseDetail">{{text.close}}</button>
   </view>
 </view>

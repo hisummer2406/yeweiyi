@@ -41,7 +41,7 @@
       <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
       <view class="group-head" wx:if="{{showSingleDeviceHeader || g.ts}}">
         <text class="group-name" wx:if="{{showSingleDeviceHeader}}">{{g.deviceName}}</text>
-        <text class="muted tabular-nums" wx:if="{{g.ts}}">{{text.reportedAt}} {{g.ts}}</text>
+        <text class="group-ts tabular-nums" wx:if="{{g.ts}}">{{text.reportedAt}} {{g.ts}}</text>
       </view>
 
       <view wx:if="{{g.staleText}}" class="card banner-warning" style="margin:0 20rpx 12rpx;">
@@ -84,7 +84,7 @@
           <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
           <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
-          <view class="text-danger muted" wx:if="{{!t.probeConnected}}">{{text.probeOff}}</view>
+          <view class="hs-probe-off" wx:if="{{!t.probeConnected}}">{{text.probeOff}}</view>
         </view>
       </view>
     </view>
