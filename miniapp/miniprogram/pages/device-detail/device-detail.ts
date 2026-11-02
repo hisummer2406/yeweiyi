@@ -10,30 +10,15 @@ import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
 import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
 import { formatLocalTime } from '../../utils/format';
-import {
-  RANGE_PRESETS,
-  customRangeProblem,
-  formatDate,
-  resolveWindow,
-  type QueryWindow,
-  type RangeKey,
-  type RangeProblem,
-  type RecordsRange,
-} from '../../utils/recordsRange';
-import { RecordFeed, failureCode, type FeedState, type Footer } from '../../utils/recordFeed';
-import { alarmRowKey } from '../../utils/recordColumns';
 import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
 import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
 import {
-  ALARM_SEVERITY_KEYS,
-  ALARM_STATUS_KEYS,
   ALARM_TYPE_KEYS,
   COMMAND_STATUS_KEYS,
   controlMethodLabel,
   label,
 } from '../../utils/labels';
 import type {
-  Alarm,
   AlarmPushMessage,
   ControlCommand,
   Device,
@@ -41,14 +26,14 @@ import type {
   ListCommandsResponse,
 } from '../../types/api';
 
-// One tank at a time (miniapp#15): the home page opens the tank that was tapped, and the 实时数据 /
-// 报警记录 tabs and the live-alarm banner all follow the tank selected here. Stock in/out records are not
-// on this page any more: they are under 我的记录 (pages/record-list), bound to the home page's station.
-type TabKey = 'snapshot' | 'alarms' | 'commands';
+// One tank at a time (miniapp#15): the home page opens the tank that was tapped, and the 实时数据 tab and
+// the live-alarm banner follow the tank selected here. Records — alarms as well as stock in/out — are not
+// on this page: they have one entry only, under 我的记录 (pages/record-list), bound to the home page's
+// station. An old `tab=alarms` link simply opens 实时数据.
+type TabKey = 'snapshot' | 'commands';
 
 const TABS: { key: TabKey; labelKey: string }[] = [
   { key: 'snapshot', labelKey: 'detail.tabSnapshot' },
-  { key: 'alarms', labelKey: 'detail.tabAlarms' },
   // 控制命令 tab 入口已于 2026-10-17 关闭（页面、轮询和 issue-command 都保留，没有别的入口能进）。
   // 想起来再开时把下面这项加回 TABS：
   // { key: 'commands', labelKey: 'detail.tabCommands' },
@@ -59,46 +44,39 @@ function tabsView(tabs: { key: TabKey; labelKey: string }[]): { key: TabKey; lab
   return tabs.map((tab) => ({ key: tab.key, label: tr(tab.labelKey) }));
 }
 
-// View-model types add pre-computed labels (in the current language) so WXML never has to embed a lookup —
-// wx:for item interpolation can't call a function, so the label has to already be a plain field on the
-// row by the time it reaches data.
-// The cloud sends RFC3339 UTC strings; the *Text fields are the phone's local wall clock.
-type AlarmView = Alarm & {
-  tankLabel: string;
-  typeLabel: string;
-  severityLabel: string;
-  statusLabel: string;
-  timeText: string;
-  rowKey: string;
-};
 type CommandView = ControlCommand & { methodLabel: string; statusLabel: string };
-
-function toAlarmView(a: Alarm): AlarmView {
-  return {
-    ...a,
-    tankLabel: tr('tank.no', { n: a.tank }),
-    typeLabel: label(ALARM_TYPE_KEYS, a.type),
-    severityLabel: label(ALARM_SEVERITY_KEYS, a.severity),
-    statusLabel: label(ALARM_STATUS_KEYS, a.status),
-    timeText: formatLocalTime(a.time, currentLocale()),
-    rowKey: alarmRowKey(a),
-  };
-}
 
 function toCommandView(c: ControlCommand): CommandView {
   return { ...c, methodLabel: controlMethodLabel(c.method), statusLabel: label(COMMAND_STATUS_KEYS, c.status) };
 }
 
-const RANGE_HINT_KEYS: Record<Exclude<RangeProblem, ''>, string> = {
-  incomplete: 'detail.rangeIncomplete',
-  invalid: 'detail.rangeInvalid',
-  order: 'detail.rangeOrder',
-  future: 'detail.rangeFuture',
-};
-
 // No tank selected: the snapshot has not been read yet, or the device has no tank to show (never
-// reported, or none visible) — then the alarm list is the whole device's.
+// reported, or none visible).
 const NO_TANK = -1;
+
+// Every reading of one tank in the snapshot (yeweiyi-cloud internal/protocol.Tank), as label / value / unit
+// rows: the detail page shows all of them, the home card only five. Missing or non-numeric values are a
+// dash, never 0. The tank number and oil type are in the header; snapshotSeq is a transport counter and
+// is not shown.
+type TankField = { label: string; value: string; unit: string; strong?: boolean };
+
+function num(v: unknown): string {
+  return typeof v === 'number' && Number.isFinite(v) ? String(v) : '—';
+}
+
+function tankFields(v: TankView): TankField[] {
+  return [
+    { label: tr('detail.level'), value: num(v.oilLevelMm), unit: tr('detail.unitMm'), strong: true },
+    { label: tr('detail.volume'), value: num(v.oilVolumeL), unit: tr('detail.unitL'), strong: true },
+    { label: tr('detail.mass'), value: num(v.oilWeightKg), unit: tr('detail.unitKg') },
+    { label: tr('detail.temp'), value: num(v.tempC), unit: '℃' },
+    { label: tr('detail.water'), value: num(v.waterLevelMm), unit: tr('detail.unitMm') },
+    { label: tr('detail.waterVolume'), value: num(v.waterVolumeL), unit: tr('detail.unitL') },
+    { label: tr('detail.ullage'), value: num(v.nullVolumeL), unit: tr('detail.unitL') },
+    { label: tr('detail.oilRatio'), value: num(v.oilRatioPct), unit: '%' },
+    { label: tr('detail.waterRatio'), value: num(v.waterRatioPct), unit: '%' },
+  ];
+}
 
 Page({
   data: {
@@ -119,14 +97,15 @@ Page({
     socketDown: false,
     // Per tab: '' = what is shown is current; otherwise the notice that the last refresh failed and the
     // list on screen may be out of date.
-    stale: { snapshot: '', alarms: '', commands: '' } as Record<string, string>,
+    stale: { snapshot: '', commands: '' } as Record<string, string>,
     // First load failed (nothing to keep on screen): the reason, with a retry button.
     snapshotError: '',
-    alarmsError: '',
 
     snapshotTs: '',
     // The current tank's card only (an empty list when no tank is selected).
     tanks: [] as TankView[],
+    // All readings of the current tank, see tankFields.
+    tankFields: [] as TankField[],
     snapshotLoaded: false,
     // Visible tanks of this device, for the switcher; currentTank is a protocol tank number or NO_TANK.
     tankOptions: [] as { tank: number; label: string }[],
@@ -134,19 +113,6 @@ Page({
     currentTankLabel: '',
     // Why there is no tank to pick (never reported / none visible); '' when there is one.
     tankless: '',
-
-    // Time range of the 报警记录 tab. Presets roll back from "now" at load time; custom is whole local
-    // days. rangeHint says why nothing is shown yet (e.g. dates not picked).
-    rangePresets: RANGE_PRESETS.map((p) => ({ key: p.key, label: tr(p.labelKey) })),
-    rangeKey: '24h' as RangeKey,
-    customStart: '',
-    customEnd: '',
-    today: formatDate(new Date()),
-    rangeHint: '',
-
-    alarms: [] as AlarmView[],
-    alarmsLoaded: false,
-    alarmsFooter: '' as Footer,
 
     commands: [] as CommandView[],
     commandsLoaded: false,
@@ -182,10 +148,6 @@ Page({
   // customer_user: the grants on this device from GET /api/devices (a second guard; the cloud already
   // filters). null = not known or an administrator.
   grantedTanks: null as number[] | null,
-  // Tanks the cloud refused (403 tank_not_authorized) since this device was opened: left out of the
-  // switcher even if a snapshot still lists them.
-  revokedTanks: [] as number[],
-  alarmFeed: null as RecordFeed<Alarm> | null,
   // Every tank of the last snapshot (the card shows the selected one only).
   allTanks: [] as TankView[],
   neverReported: false,
@@ -196,11 +158,6 @@ Page({
       this.socket?.reconnectNow();
       this.refreshActiveTab();
     });
-    this.alarmFeed = new RecordFeed<Alarm>(
-      'alarm',
-      (s) => this.showAlarms(s),
-      (err) => this.onTankRefused(err),
-    );
     const device = query.device || '';
     // A view-only account (customer_user) gets no 控制命令 tab: it cannot issue commands and the cloud
     // does not show it the command history either (tank-grants-contract v1.0 §2).
@@ -209,7 +166,7 @@ Page({
     const tab: TabKey = tabs.some((x) => x.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
     this.requestedTank = parseTankParam(query.tank);
     this.stationId = stationIdFromKey(query.station);
-    this.setData({ device, tabs: tabsView(tabs), activeTab: tab, today: formatDate(new Date()) });
+    this.setData({ device, tabs: tabsView(tabs), activeTab: tab });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     // Opened from a device mini-program code: the scene is the device's printed code, not yet a device
     // name. Locate it first; nothing is queried until the cloud has answered.
@@ -360,17 +317,10 @@ Page({
       device,
       (msg: AlarmPushMessage) => {
         if (gen !== this.deviceGen || socket !== this.socket) return;
-        // Another tank's alarm is not this page's: switching to that tank reloads its list anyway.
+        // Another tank's alarm is not this page's.
         const tank = this.data.currentTank as number;
         if (tank !== NO_TANK && msg.tank !== tank) return;
         this.setData({ liveAlarm: `${label(ALARM_TYPE_KEYS, msg.type)}: ${msg.msg}` });
-        // A live push means the alarm list is stale if the user is looking at it.
-        // Only when the list is the live tail: a rolling range, and the user has not paged down (a reload
-        // would throw their place away). Otherwise the banner above is the notification.
-        const feed = this.alarmFeed;
-        if (this.data.activeTab === 'alarms' && this.data.rangeKey !== 'custom' && feed && feed.pageCount() <= 1) {
-          this.loadAlarms();
-        }
       },
       (state: SocketState) => {
         if (gen !== this.deviceGen || socket !== this.socket) return;
@@ -416,7 +366,7 @@ Page({
   },
 
   // Everything held for the old device is dropped here — latest value, tanks and the selected tank,
-  // alarms, commands, live banner, paging state, the socket and the poll timer — and requests still in
+  // commands, live banner, paging state, the socket and the poll timer — and requests still in
   // flight for it are invalidated, before anything is asked for the new one. `device` '' = show the notice
   // and query nothing. Nothing is migrated: "old device + tank 1" and "new device + tank 1" are different
   // objects, so the new device's view starts empty, at its own first tank.
@@ -425,9 +375,7 @@ Page({
     this.deviceGen++;
     this.snapshotSeq++;
     this.commandsSeq++;
-    this.alarmFeed?.reset();
     this.requestedTank = undefined;
-    this.revokedTanks = [];
     this.allTanks = [];
     this.neverReported = false;
     this.grantedTanks = devices ? grantsOf(devices, device) : null;
@@ -442,22 +390,18 @@ Page({
       loading: false,
       liveAlarm: '',
       socketDown: false,
-      stale: { snapshot: '', alarms: '', commands: '' },
+      stale: { snapshot: '', commands: '' },
       snapshotError: '',
-      alarmsError: '',
       snapshotTs: '',
       tanks: [],
+      tankFields: [],
       snapshotLoaded: false,
       tankOptions: [],
       currentTank: NO_TANK,
       currentTankLabel: '',
       tankless: '',
-      alarms: [],
-      alarmsLoaded: false,
-      alarmsFooter: '',
       commands: [],
       commandsLoaded: false,
-      rangeHint: '',
     });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     if (!device) return;
@@ -489,7 +433,6 @@ Page({
     if (!this.data.deviceActive || !this.data.device) return;
     const tab = this.data.activeTab as TabKey;
     if (tab === 'snapshot' && this.data.snapshotLoaded) this.loadSnapshot();
-    else if (tab === 'alarms' && this.data.alarmsLoaded) this.loadAlarms();
     else if (tab === 'commands' && this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -508,7 +451,6 @@ Page({
     this.deviceGen++;
     this.snapshotSeq++;
     this.commandsSeq++;
-    this.alarmFeed?.dispose();
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
@@ -523,7 +465,6 @@ Page({
 
   loadTabIfNeeded(tab: TabKey) {
     if (tab === 'snapshot' && !this.data.snapshotLoaded) this.loadSnapshot();
-    if (tab === 'alarms' && !this.data.alarmsLoaded) this.loadAlarms();
     if (tab === 'commands' && !this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -535,7 +476,6 @@ Page({
     this.refreshAssociation();
     const reload: Record<TabKey, () => Promise<unknown>> = {
       snapshot: () => this.loadSnapshot(),
-      alarms: () => this.loadAlarms(),
       commands: () => this.loadCommands(),
     };
     reload[this.data.activeTab as TabKey]().finally(() => wx.stopPullDownRefresh());
@@ -545,21 +485,20 @@ Page({
 
   // The snapshot decides which tanks exist and are visible; the selected one stays selected while it is
   // visible. When it is not (grant revoked, tank gone) the first visible tank is selected and the page says
-  // so. Selecting a different tank restarts the alarm list (the range stays).
+  // so.
   applyTanks(all: TankView[], neverReported: boolean) {
     this.allTanks = all;
     this.neverReported = neverReported;
     const visible = visibleTanks(
       all.map((v) => v.index),
       this.grantedTanks,
-    ).filter((n) => !this.revokedTanks.includes(n));
+);
     const current = this.data.currentTank as number;
     const requested = current !== NO_TANK ? current : this.requestedTank;
     this.requestedTank = undefined;
     const pick = pickTank(visible, requested);
     const tank = pick.kind === 'tank' ? pick.tank : NO_TANK;
     const view = all.find((v) => v.index === tank);
-    const changed = tank !== current;
     let tankless = '';
     if (pick.kind === 'none') tankless = neverReported || all.length === 0 ? tr('detail.noTankInfo') : tr('detail.noVisibleTank');
     this.setData({
@@ -567,30 +506,18 @@ Page({
       currentTank: tank,
       currentTankLabel: view ? `${view.tankNoLabel}　${view.oilType || '--'}` : '',
       tanks: view ? [view] : [],
+      tankFields: view ? tankFields(view) : [],
       tankless,
       ...(pick.hidden !== undefined ? { infoNotice: tr('detail.tankHidden', { n: pick.hidden }) } : {}),
     });
-    if (changed) this.restartAlarms();
   },
 
   onPickTank(e: WechatMiniprogram.BaseEvent) {
     const tank = Number(e.currentTarget.dataset.tank);
     if (tank === this.data.currentTank) return;
     this.setData({ currentTank: tank, liveAlarm: '', infoNotice: '' });
-    // Re-render from the last snapshot (the next refresh reads it again), then restart the alarm list.
+    // Re-render from the last snapshot; the next refresh reads it again.
     this.applyTanks(this.allTanks, this.neverReported);
-    this.restartAlarms();
-  },
-
-  // A tank-level refusal (403 tank_not_authorized) is not a dead session and not "no records": drop that
-  // tank and select another visible one.
-  onTankRefused(err: Error) {
-    if (failureCode(err) !== 'tank_not_authorized') return;
-    const tank = this.data.currentTank as number;
-    if (tank === NO_TANK) return;
-    this.revokedTanks = this.revokedTanks.concat(tank);
-    this.setData({ currentTank: NO_TANK, infoNotice: tr('detail.tankRevoked', { n: tank }) });
-    this.loadSnapshot();
   },
 
   // GET /api/devices/:device/telemetry/latest — the cloud answers the granted tanks only.
@@ -643,95 +570,6 @@ Page({
   markSnapshotFresh() {
     this.lastOkSnapshot = this.nowText();
     this.setData({ 'stale.snapshot': '' });
-  },
-
-  // ---- Time range ----
-
-  currentRange(): RecordsRange {
-    return { key: this.data.rangeKey, startDate: this.data.customStart, endDate: this.data.customEnd };
-  },
-
-  // The window to query for a fresh load, or null when the range cannot be queried yet (custom dates not
-  // picked or inconsistent) — then rangeHint says why and the list stays empty.
-  windowForReload(): QueryWindow | null {
-    const range = this.currentRange();
-    const now = new Date();
-    const problem = customRangeProblem(range, now);
-    this.setData({ rangeHint: problem ? tr(RANGE_HINT_KEYS[problem]) : '' });
-    return problem ? null : resolveWindow(range, now);
-  },
-
-  onPickRange(e: WechatMiniprogram.BaseEvent) {
-    const key = e.currentTarget.dataset.key as RangeKey;
-    if (key === this.data.rangeKey) return;
-    // `today` bounds the date pickers; recompute it, the page may have been open past midnight.
-    this.setData({ rangeKey: key, today: formatDate(new Date()) });
-    this.restartAlarms();
-  },
-
-  onStartDate(e: WechatMiniprogram.CustomEvent) {
-    this.setData({ customStart: e.detail.value as string });
-    this.restartAlarms();
-  },
-
-  onEndDate(e: WechatMiniprogram.CustomEvent) {
-    this.setData({ customEnd: e.detail.value as string });
-    this.restartAlarms();
-  },
-
-  // A different window or tank: the list starts over and responses still in flight for the old one are
-  // dropped. It loads now only when the tab is on screen, otherwise when it is opened.
-  restartAlarms() {
-    this.alarmFeed?.reset();
-    if (this.data.activeTab === 'alarms') this.loadAlarms();
-  },
-
-  // ---- 报警记录 ----
-
-  showAlarms(s: FeedState<Alarm>) {
-    this.setData({
-      alarms: s.rows.map(toAlarmView),
-      alarmsLoaded: s.loaded,
-      alarmsError: s.error,
-      alarmsFooter: s.footer,
-      'stale.alarms': s.stale,
-      loading: s.loading,
-    });
-  },
-
-  // The current tank's alarms (the whole device's when there is no tank to select). The tank is known only
-  // after the snapshot: until then the snapshot is read first.
-  loadAlarms(): Promise<unknown> {
-    const feed = this.alarmFeed;
-    const device = this.data.device as string;
-    if (!feed || !device) return Promise.resolve();
-    if (!this.data.snapshotLoaded) {
-      // applyTanks restarts the list once a tank is selected; with none, load the whole device here.
-      return this.loadSnapshot().then(() => {
-        if (this.data.snapshotLoaded && this.data.currentTank === NO_TANK) return this.reloadAlarmFeed();
-        if (!this.data.snapshotLoaded) this.setData({ alarmsError: this.data.snapshotError });
-        return undefined;
-      });
-    }
-    return this.reloadAlarmFeed();
-  },
-
-  reloadAlarmFeed(): Promise<unknown> {
-    const feed = this.alarmFeed;
-    const win = this.windowForReload();
-    if (!feed || !win) return Promise.resolve();
-    const tank = this.data.currentTank as number;
-    return feed.reload({ device: this.data.device, win, filter: tank === NO_TANK ? {} : { tank } });
-  },
-
-  // Scrolled to the bottom of the page: the alarm tab asks for its next page.
-  onReachBottom() {
-    if (this.data.activeTab === 'alarms') this.alarmFeed?.loadMore();
-  },
-
-  // Tap on the footer (加载失败，点击重试 / 点击加载更多).
-  onRetryMore() {
-    if (this.data.activeTab === 'alarms') this.alarmFeed?.retryMore();
   },
 
   loadCommands() {

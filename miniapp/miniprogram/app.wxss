@@ -1,10 +1,17 @@
 /* 色板/字号/圆角来自 docs/智能液位仪-小程序.psd 的解析结果，见发布的《液位仪视觉规范》。
-   画板设计宽度 750px = 小程序 750rpx 基准，PSD 里量出的像素值可以直接当 rpx 数值用。 */
+   画板设计宽度 750px = 小程序 750rpx 基准，PSD 里量出的像素值可以直接当 rpx 数值用。
+
+   适老化（miniapp#13，2026-10-26）：全小程序字号统一按设计稿 ×1.25 放大（取最近偶数），所有页面与组件
+   用同一张对照表，层级关系不变：
+     设计稿 20 22 24 25 26 27 28 30 32 34 36
+     现在   26 28 30 32 32 34 36 38 40 42 46
+   新增样式请直接用右列的值；写死 height/line-height 的文字要按新字号留够高度。
+   底部 tabBar 与导航栏标题由微信绘制，字号不受这里控制。 */
 
 page {
   background-color: #edf0f7;
   color: #131313;
-  font-size: 28rpx;
+  font-size: 36rpx;
   box-sizing: border-box;
 }
 
@@ -32,7 +39,7 @@ page {
 }
 
 .brand-title {
-  font-size: 34rpx;
+  font-size: 42rpx;
   font-weight: 600;
   color: #131313;
   margin-bottom: 8rpx;
@@ -40,7 +47,7 @@ page {
 }
 
 .brand-subtitle {
-  font-size: 24rpx;
+  font-size: 30rpx;
   color: #8697a4;
   margin-bottom: 48rpx;
   text-align: center;
@@ -68,14 +75,14 @@ page {
 
 .muted {
   color: #606060;
-  font-size: 24rpx;
+  font-size: 30rpx;
 }
 
 .empty {
   text-align: center;
   color: #8697a4;
   padding: 80rpx 0;
-  font-size: 26rpx;
+  font-size: 32rpx;
 }
 
 /* 空状态配图：.empty 之上的一张示意图（目前用在实时数据页没有上报过数据时） */
@@ -114,7 +121,7 @@ page {
   color: #ffffff;
   padding: 4rpx 16rpx;
   border-radius: 999rpx;
-  font-size: 22rpx;
+  font-size: 28rpx;
   font-weight: 600;
 }
 
@@ -122,7 +129,7 @@ button.btn-primary {
   background: linear-gradient(135deg, #05507c, #0066a2);
   color: #ffffff;
   border-radius: 999rpx;
-  font-size: 30rpx;
+  font-size: 38rpx;
   font-weight: 600;
   line-height: 2.6;
 }
@@ -136,7 +143,7 @@ button.btn-secondary {
   color: #b23b3b;
   border: 1rpx solid #e1e1e1;
   border-radius: 999rpx;
-  font-size: 30rpx;
+  font-size: 38rpx;
   line-height: 2.6;
 }
 
@@ -148,7 +155,7 @@ button.btn-secondary::after {
   display: inline-block;
   padding: 6rpx 20rpx;
   border-radius: 999rpx;
-  font-size: 22rpx;
+  font-size: 28rpx;
   font-weight: 600;
 }
 
@@ -182,7 +189,7 @@ button.btn-secondary::after {
   flex: 1;
   text-align: center;
   padding: 20rpx 0;
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #606060;
 }
 
@@ -197,7 +204,7 @@ button.btn-secondary::after {
 }
 
 .field-label {
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #606060;
   margin-bottom: 8rpx;
   display: block;
@@ -208,7 +215,7 @@ button.btn-secondary::after {
   border: 1rpx solid #e1e1e1;
   border-radius: 12rpx;
   padding: 16rpx;
-  font-size: 28rpx;
+  font-size: 36rpx;
   color: #131313;
 }
 
@@ -233,7 +240,7 @@ button.btn-secondary::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
+  font-size: 40rpx;
   margin-right: 20rpx;
   flex-shrink: 0;
 }
@@ -270,7 +277,7 @@ button.btn-secondary::after {
 /* 选中态勾选标记：PSD 里"油站选择"没有导出专门的勾选图层，就是个状态符号，非插画 */
 .text-selected-mark {
   color: #05507c;
-  font-size: 32rpx;
+  font-size: 40rpx;
   font-weight: 700;
   margin-left: 12rpx;
   flex-shrink: 0;
@@ -280,7 +287,7 @@ button.btn-secondary::after {
 .stat-row {
   display: flex;
   align-items: baseline;
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #606060;
   padding: 6rpx 0;
 }
@@ -299,7 +306,7 @@ button.btn-secondary::after {
 
 .stat-row-unit {
   color: #8697a4;
-  font-size: 22rpx;
+  font-size: 28rpx;
 }
 
 .tabular-nums {
@@ -325,7 +332,7 @@ button.btn-secondary::after {
 }
 
 .section-title {
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #606060;
   font-weight: 600;
   margin: 24rpx 0 12rpx;
@@ -360,7 +367,7 @@ button.btn-secondary::after {
 .menu-title {
   flex: 1;
   min-width: 0;
-  font-size: 28rpx;
+  font-size: 36rpx;
   color: #131313;
 }
 
@@ -384,7 +391,7 @@ button.btn-secondary::after {
   align-items: center;
   height: 81rpx;
   padding: 0 37rpx 0 51rpx;
-  font-size: 28rpx;
+  font-size: 36rpx;
   color: #131313;
 }
 
@@ -415,7 +422,7 @@ button.btn-secondary::after {
 .fi {
   width: 69rpx;
   height: 60rpx;
-  font-size: 28rpx;
+  font-size: 36rpx;
   color: #131313;
 }
 
@@ -445,7 +452,7 @@ button.pill {
   margin: 0;
   padding: 0;
   border-radius: 44rpx;
-  font-size: 36rpx;
+  font-size: 46rpx;
   color: #ffffff;
 }
 
@@ -509,7 +516,7 @@ button.pill::after {
   justify-content: space-between;
   height: 120rpx;
   padding: 0 38rpx 0 36rpx;
-  font-size: 28rpx;
+  font-size: 36rpx;
   color: #131313;
 }
 
@@ -529,7 +536,7 @@ button.pill::after {
   border-radius: 28rpx;
   background: #ffffff;
   border: 1rpx solid #d9dee8;
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #131313;
 }
 
@@ -551,14 +558,14 @@ button.pill::after {
   border-radius: 12rpx;
   background: #ffffff;
   border: 1rpx solid #d9dee8;
-  font-size: 26rpx;
+  font-size: 32rpx;
   text-align: center;
 }
 
 .range-sep {
   margin: 0 16rpx;
   color: #8a8a8a;
-  font-size: 26rpx;
+  font-size: 32rpx;
 }
 
 .range-hint {
@@ -569,6 +576,6 @@ button.pill::after {
 .list-footer {
   padding: 24rpx 0 32rpx;
   text-align: center;
-  font-size: 26rpx;
+  font-size: 32rpx;
   color: #8a8a8a;
 }

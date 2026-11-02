@@ -10,16 +10,16 @@ page {
 }
 
 .add-title {
-  font-size: 34rpx;
-  line-height: 48rpx;
+  font-size: 42rpx;
+  line-height: 56rpx;
   text-align: center;
   color: #131313;
 }
 
 .add-subtitle {
   margin: 13rpx 0 0;
-  font-size: 26rpx;
-  line-height: 36rpx;
+  font-size: 32rpx;
+  line-height: 44rpx;
   text-align: center;
   color: #8b98a9;
 }
@@ -34,15 +34,15 @@ page {
 }
 
 .add-card-title {
-  font-size: 28rpx;
-  line-height: 40rpx;
+  font-size: 36rpx;
+  line-height: 48rpx;
   color: #131313;
 }
 
 .add-card-desc {
   margin-top: 16rpx;
-  font-size: 25rpx;
-  line-height: 36rpx;
+  font-size: 32rpx;
+  line-height: 44rpx;
   color: #8b98a9;
 }
 
@@ -54,7 +54,7 @@ button.add-scan {
   padding: 0;
   background: #0066a2;
   color: #ffffff;
-  font-size: 30rpx;
+  font-size: 38rpx;
   border-radius: 12rpx;
   box-shadow: 0 8rpx 20rpx rgba(0, 102, 162, 0.28);
 }
