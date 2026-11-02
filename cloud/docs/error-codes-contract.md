@@ -7,6 +7,7 @@
 | --- | --- | --- | --- |
 | `session_invalid` | 401 | 令牌缺失/过期/被篡改 | `error` 固定为「登录失效，请重新登录」。受保护 HTTP 路由与 `/ws/alarms` 握手一致。`invalid_credentials`、`wechat_code_invalid`、`wechat_not_bound` 等登录类 401 不并入。`403 not authorized`（账号停用/删除）不变。 |
 | `telemetry_not_reported` | 404 | `GET /devices/:device/telemetry/latest` | 已授权、设备已在 ThingsBoard，但从未上报。 |
+| `telemetry_expired` | 404 | `GET /devices/:device/telemetry/latest` | 设备上报过，但距今超过 ThingsBoard 保留期，快照已被清理（cloud#28）。体里带 `lastReportedAt`（最后一次上报时间）。**不返回旧值**：遥测不复制进业务库，按 key 拼最新值会让已不存在的罐复活。状态码仍是 404，只看状态码的客户端行为不变，只是可以多说一句「已超过保留期」。 |
 | `device_not_provisioned` | 404 | 遥测/历史读取 | 业务库有该设备，ThingsBoard 里没有（接入信息未就绪）。 |
 | `device_platform_unavailable` | 503 | 遥测/历史读取 | ThingsBoard 未配置或不可达。 |
 
