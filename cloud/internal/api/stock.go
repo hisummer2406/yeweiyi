@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -84,14 +85,16 @@ type stockEventResponse struct {
 	BeginTime time.Time `json:"beginTime"`
 	EndTime   time.Time `json:"endTime"`
 
-	BeginLevelMm  float64 `json:"beginLevelMm"`
-	EndLevelMm    float64 `json:"endLevelMm"`
-	BeginVolumeL  float64 `json:"beginVolumeL"`
-	EndVolumeL    float64 `json:"endVolumeL"`
-	BeginTempC    float64 `json:"beginTempC"`
-	EndTempC      float64 `json:"endTempC"`
-	BeginWeightKg float64 `json:"beginWeightKg"`
-	EndWeightKg   float64 `json:"endWeightKg"`
+	// The readings are null when the record carries no such key (a manual entry only knows the level
+	// before and the volume moved), never 0: a zero would read as a measured one (cloud#69, #15).
+	BeginLevelMm  *float64 `json:"beginLevelMm"`
+	EndLevelMm    *float64 `json:"endLevelMm"`
+	BeginVolumeL  *float64 `json:"beginVolumeL"`
+	EndVolumeL    *float64 `json:"endVolumeL"`
+	BeginTempC    *float64 `json:"beginTempC"`
+	EndTempC      *float64 `json:"endTempC"`
+	BeginWeightKg *float64 `json:"beginWeightKg"`
+	EndWeightKg   *float64 `json:"endWeightKg"`
 
 	NetVolumeL            float64 `json:"netVolumeL"`
 	DuringDeliveryVolumeL float64 `json:"duringDeliveryVolumeL,omitempty"`
@@ -102,6 +105,11 @@ type stockEventResponse struct {
 	DeliveredVolumeL float64 `json:"deliveredVolumeL"`
 
 	Time time.Time `json:"time"` // when the device closed the record
+
+	// Origin is "device" for what the device reported (including its own BuLuFragment backfill) and
+	// "cloud" for an entry made through POST /api/devices/:device/stock-events. Only "cloud" rows can
+	// be withdrawn (DELETE .../stock-events/:eventId).
+	Origin string `json:"origin"`
 }
 
 // stockListResponse is the body on both paths. `rows` is always present and always an array — a
@@ -145,7 +153,16 @@ type stockListResponse struct {
 	LegacyCutoff string `json:"legacyCutoff,omitempty"`
 }
 
-func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
+// optional returns v when the stored report carries key, nil when it does not. present == nil means the
+// stored text could not be inspected, in which case every value is shown as it decoded.
+func optional(present map[string]bool, key string, v float64) *float64 {
+	if present != nil && !present[key] {
+		return nil
+	}
+	return &v
+}
+
+func toStockEventResponse(e protocol.StockEvent, present map[string]bool, origin string) stockEventResponse {
 	delivered := e.NetVolumeL + e.DuringDeliveryVolumeL
 	if e.Direction == protocol.StockOut {
 		// Outbound: the tank's change is negative and there is no concurrent-delivery adjustment,
@@ -166,25 +183,26 @@ func toStockEventResponse(e protocol.StockEvent) stockEventResponse {
 		Source:                source,
 		BeginTime:             time.UnixMilli(e.BeginTimeMs).UTC(),
 		EndTime:               time.UnixMilli(e.EndTimeMs).UTC(),
-		BeginLevelMm:          e.BeginLevelMm,
-		EndLevelMm:            e.EndLevelMm,
-		BeginVolumeL:          e.BeginVolumeL,
-		EndVolumeL:            e.EndVolumeL,
-		BeginTempC:            e.BeginTempC,
-		EndTempC:              e.EndTempC,
-		BeginWeightKg:         e.BeginWeightKg,
-		EndWeightKg:           e.EndWeightKg,
+		BeginLevelMm:          optional(present, "beginLevelMm", e.BeginLevelMm),
+		EndLevelMm:            optional(present, "endLevelMm", e.EndLevelMm),
+		BeginVolumeL:          optional(present, "beginVolumeL", e.BeginVolumeL),
+		EndVolumeL:            optional(present, "endVolumeL", e.EndVolumeL),
+		BeginTempC:            optional(present, "beginTempC", e.BeginTempC),
+		EndTempC:              optional(present, "endTempC", e.EndTempC),
+		BeginWeightKg:         optional(present, "beginWeightKg", e.BeginWeightKg),
+		EndWeightKg:           optional(present, "endWeightKg", e.EndWeightKg),
 		NetVolumeL:            e.NetVolumeL,
 		DuringDeliveryVolumeL: e.DuringDeliveryVolumeL,
 		DeliveredVolumeL:      delivered,
 		Time:                  time.UnixMilli(e.TSMs).UTC(),
+		Origin:                origin,
 	}
 }
 
 // stockResponseFrom rebuilds the API row from the stored report. The payload is the device's own
 // JSON kept verbatim, so it is parsed again here rather than copied into columns that would have to
 // follow every future protocol field.
-func stockResponseFrom(payload []byte, synthetic bool, occurred time.Time) (stockEventResponse, bool) {
+func stockResponseFrom(payload []byte, synthetic bool, occurred time.Time, origin string) (stockEventResponse, bool) {
 	ev, err := protocol.ParseStockEvent(payload)
 	if err != nil {
 		// Written only after a successful parse, so this means the parser got stricter since. Leave
@@ -199,7 +217,16 @@ func stockResponseFrom(payload []byte, synthetic bool, occurred time.Time) (stoc
 		// must not be presented as one.
 		ev.EventID = ""
 	}
-	return toStockEventResponse(ev), true
+	var keys map[string]json.RawMessage
+	var present map[string]bool
+	if json.Unmarshal(payload, &keys) == nil {
+		present = make(map[string]bool, len(keys))
+		for k, v := range keys {
+			// An explicit null is as absent as a missing key.
+			present[k] = string(v) != "null"
+		}
+	}
+	return toStockEventResponse(ev, present, origin), true
 }
 
 func listOilInOutHandler(deps Deps) gin.HandlerFunc {
@@ -243,7 +270,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 				return
 			}
 			for _, r := range rows {
-				stored = append(stored, stockRowData{r.Payload, r.SyntheticID, r.OccurredAt.Time, int(r.ReportCount)})
+				stored = append(stored, stockRowData{r.Payload, r.SyntheticID, r.OccurredAt.Time, int(r.ReportCount), r.Origin})
 			}
 		} else {
 			rows, err := deps.Queries.ListStockEventsDesc(ctx, db.ListStockEventsDescParams(args))
@@ -252,7 +279,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 				return
 			}
 			for _, r := range rows {
-				stored = append(stored, stockRowData{r.Payload, r.SyntheticID, r.OccurredAt.Time, int(r.ReportCount)})
+				stored = append(stored, stockRowData{r.Payload, r.SyntheticID, r.OccurredAt.Time, int(r.ReportCount), r.Origin})
 			}
 		}
 
@@ -263,7 +290,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		out := make([]stockEventResponse, 0, len(stored))
 		folded := 0
 		for _, r := range stored {
-			resp, ok := stockResponseFrom(r.payload, r.synthetic, r.occurred)
+			resp, ok := stockResponseFrom(r.payload, r.synthetic, r.occurred, r.origin)
 			if !ok {
 				continue
 			}
@@ -342,6 +369,7 @@ type stockRowData struct {
 	synthetic bool
 	occurred  time.Time
 	reports   int
+	origin    string
 }
 
 // truncateRunes cuts on a rune boundary, not a byte one: the device's payloads carry Chinese oil
