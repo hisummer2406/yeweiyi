@@ -13,6 +13,7 @@ import {
   buildPasswordLogin,
   noticeFromQuery,
 } from '../miniprogram/utils/loginFlow.ts';
+import { errorKey } from '../miniprogram/utils/errorKey.ts';
 
 let n = 0;
 const test = (name, fn) => {
@@ -139,6 +140,13 @@ test('sessionDecision: not onboarded ends the session with the notice; dead acco
   assert.deepEqual(sessionDecision({ ...base, status: 403, body: NOT_ONBOARDED }), { end: true, notice: 'customer_not_onboarded' });
   assert.deepEqual(sessionDecision({ ...base, status: 403, body: { error: 'not authorized' } }), { end: true });
   assert.deepEqual(sessionDecision({ ...base, status: 401, body: { error: 'expired' } }), { end: true });
+});
+
+test('sessionDecision: the bare 403 by code (yeweiyi-cloud#79)', () => {
+  assert.deepEqual(sessionDecision({ ...base, status: 403, body: { error: 'not authorized', code: 'account_unavailable' } }), { end: true });
+  assert.deepEqual(sessionDecision({ ...base, status: 403, body: { error: 'not authorized', code: 'role_not_allowed' } }), { end: false });
+  assert.equal(errorKey(403, 'role_not_allowed'), 'err.forbidden');
+  assert.equal(errorKey(403, 'account_unavailable'), 'err.accountDisabled');
 });
 
 test('sessionDecision: other failures and login calls never end the session', () => {
