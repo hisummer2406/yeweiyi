@@ -81,7 +81,7 @@ public class DaoHelp {
 //			config.setDbVersion(1);
 //			// 创建数据库
 //			db = DbUtils.create(config);
-        db = DbUtils.create(ct, "sansen", 6,
+        db = DbUtils.create(ct, "sansen", 7,
                 new DbUtils.DbUpgradeListener() {
                     @Override
                     public void onUpgrade(DbUtils dbUtils, int oldVersion, int newVersion) {
@@ -134,6 +134,25 @@ public class DaoHelp {
                                 } catch (DbException e) { }
                                 // 注意：如果你希望继续执行后续升级，不要 break
                                 break;
+                        }
+
+                        // 出入库记录/详情加 source 列（手动补录 vs 自动检测，见 zhongchengyeweiyi#42 待办2）。
+                        // 故意放在上面这个 switch 外面、按 oldVersion < 7 无条件判断，不是 case 6 分支——
+                        // DbUtils.create() 只调用一次 onUpgrade（传真实的 oldVersion/newVersion=7），
+                        // switch(oldVersion) 上面每个 case 都直接 break，1-5 版本的设备一次性升到 7
+                        // 时只会命中自己那个 case 就退出，永远走不到原来写在 case 6 里的这三条 ALTER；
+                        // 之后插入/更新这三张表会报 "no such column: source"，且不会重试（数据库已经
+                        // 盖章成版本 7）——PR #38 Codex 第五轮审核 P1。ALTER TABLE ADD COLUMN 对已经
+                        // 有这列的库（oldVersion==6 走过旧 case 6，或者本次升级本身跑了不止一次）
+                        // 会抛 DbException，被下面的 catch 吞掉，不影响其余设备。
+                        if (oldVersion < 7) {
+                            try {
+                                dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OilInOut ADD COLUMN source TEXT");
+                                dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OutStock ADD COLUMN source TEXT");
+                                dbUtils.execNonQuery("ALTER TABLE detail_inout_record ADD COLUMN source TEXT");
+                            } catch (DbException e) {
+                                Log.e(TAG, "onUpgrade 数据库操作失败", e);
+                            }
                         }
 
 //                        if (oldVersion == 1 && newVersion == 2) {

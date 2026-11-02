@@ -395,6 +395,10 @@ public class SerialPortManager implements IParseDataListener {
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
                                             if (isRight) {
                                                 mOilCan.setErrorTimes(0);
+                                                // 通讯恢复 → 若此罐之前上报过"探头断线"报警，则上报其恢复（CLEARED）；没有则什么都不发。
+                                                // 第三个参数是恢复时的读数，探头断线没有读数，填 0（与失败计数无关）。
+                                                CloudAlarmReporter.getInstance().onRecovered(mOilCan.getOilCanPos(),
+                                                        OilMessage.PRO_ERR_CONN, 0);
 //                                        Log.i(TAG, "串口数据校验成功: "+mOilCan.getErrorTimes()+"==="+data);
                                                 if (MyApplication.alarmStates.containsKey(mOilCan.getOilCanPos()) && MyApplication.alarmStates.get(mOilCan.getOilCanPos()).getConnectError() == 1) {
                                                     MyApplication.alarmStates.get(mOilCan.getOilCanPos()).setConnectError(0);
@@ -502,6 +506,10 @@ public class SerialPortManager implements IParseDataListener {
             oilMessage.setDate(DateUtils.getYYYMMddHHmmss());
             oilMessage.setOilCanId(msg.what);
             oilMessage.setType(OilMessage.PRO_ERR_CONN);
+            // 故意不 setValue：探头断线报警没有"触发时的读数"这个概念（断线就是读不到数），
+            // 不像液位/水位/温度报警那样有真实测量值可以填——跟 PR #38 Codex 第六轮审核 P2
+            // 指出的"value 恒为 0、跟真实 0 读数无法区分"是同一类问题，但这里没有值可填，
+            // 只能保持 0（其余 6 种映射到云端的报警类型在 AlarmDetection 里已经补上真实读数）。
             if (OilcanDataManager.getInstance(MyApplication.getInstance()).getData(msg.what) != null)
                 oilMessage.setJieZhi(DataUtils.getOilType()[OilcanDataManager.getInstance(MyApplication.getInstance()).getData(msg.what).getOilType()]);
 

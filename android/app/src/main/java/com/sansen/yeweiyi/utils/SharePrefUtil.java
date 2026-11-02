@@ -55,6 +55,12 @@ public class SharePrefUtil {
     public static final String MIN_ITEM_SELECT = "minItemSelect";
     public static final String DEVICESECRET = "devicesecret";
 
+    // ThingsBoard 设备凭据：每台设备独立配网时写入，见 manager.ThingsBoardCredentialStore。
+    // 不走 local.properties/BuildConfig 那条构建期注入通道——那条通道是全部设备共享一份，
+    // 做不到"每台设备独立凭据"。
+    public static final String TB_DEVICE_ID = "tbDeviceId";
+    public static final String TB_ACCESS_TOKEN = "tbAccessToken";
+
     public static final String BrandSet = "BrandSet";
     private static SharedPreferences sp;
     public static String ISFIRST = "isFirst";
@@ -89,6 +95,17 @@ public class SharePrefUtil {
             sp = context.getSharedPreferences(SP_NAME, 0);
         sp.edit().putString(key, value).commit();
 
+    }
+
+    /** 多个键值一次 commit 写入，读方不会看到只写了一半的组合。参数按 key, value, key, value… 排列。 */
+    public static void saveStrings(Context context, String... keyValues) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        SharedPreferences.Editor editor = sp.edit();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            editor.putString(keyValues[i], keyValues[i + 1]);
+        }
+        editor.commit();
     }
 
     public static void clear(Context context) {
@@ -160,6 +177,13 @@ public class SharePrefUtil {
      * @param defValue
      * @return
      */
+    /** 同 {@link #saveInt}，但返回 commit() 是否成功写盘（读回不能证明落盘：内存缓存先于磁盘更新）。 */
+    public static boolean saveIntChecked(Context context, String key, int value) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        return sp.edit().putInt(key, value).commit();
+    }
+
     public static int getInt(Context context, String key, int defValue) {
         //Log.i(TAG, "getInt: "+key);
         if (sp == null)

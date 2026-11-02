@@ -13,10 +13,12 @@ import com.sansen.yeweiyi.logic.inout.InOutDirection;
 import com.sansen.yeweiyi.logic.inout.InOutEvent;
 import com.sansen.yeweiyi.logic.inout.InOutThresholds;
 import com.sansen.yeweiyi.logic.inout.MultiTankInOutDetector;
+import com.sansen.yeweiyi.logic.thingsboard.StockEventMapper;
 import com.sansen.yeweiyi.repository.StockRepository;
 import com.sansen.yeweiyi.repository.StockRepositoryImpl;
 import com.sansen.yeweiyi.utils.DataUtils;
 import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.utils.GsonUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.HashMap;
@@ -103,7 +105,7 @@ public class InOilManager {
         record.setBeginWater(oilCan.getWaterLevel());
         record.setBeginTcVolume(oilCan.getSurPlus());
         record.setBeginTemp(oilCan.getTemper());
-        record.setBeginTime(DateUtils.getYYYMMddHHmmss());
+        record.setBeginTime(DateUtils.getYYYMMddHHmmssWithSeconds());
         record.setBeginOilWeight(oilCan.getOilWeight());
         record.setBeginWaterVolume(oilCan.getWaterVolume());
         pendingRecords.put(tankId, record);
@@ -130,7 +132,9 @@ public class InOilManager {
         }
 
         double density = oilCan.getDensity();
-        double beginVolume = DataUtils.getLitre(event.getStartHeight(), oilCan.getHightArray(), oilCan.getLitreArray());
+        // 30 点罐表走 ATGJNI，返回 float，转 double 会带 649.2999877929688 这种尾数，保留 1 位小数
+        double beginVolume = DataUtils.doubleFoment(
+                DataUtils.getLitre(event.getStartHeight(), oilCan.getHightArray(), oilCan.getLitreArray()));
         double endVolume = oilCan.getOilVolume();
 
         DetailInoutRecord detailInoutRecord = pendingRecords.remove(event.getTankId());
@@ -139,10 +143,14 @@ public class InOilManager {
             // （比如服务重启后状态机是从中途状态起算的极端情况），避免空指针。
             detailInoutRecord = new DetailInoutRecord();
             detailInoutRecord.setOilcanId(event.getTankId());
-            detailInoutRecord.setBeginHeith(event.getStartHeight());
-            detailInoutRecord.setBeginVolume(beginVolume);
-            detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmss());
+            detailInoutRecord.setBeginTime(DateUtils.getYYYMMddHHmmssWithSeconds());
         }
+        // 起始液位/体积/质量跟出入库表同一来源（状态机起点 + 罐表）。快照是在已检测到变化后才拍的，
+        // 这三项会漏掉第一段变化；水位、温度几秒内几乎不变，仍取快照。
+        // beginTcVolume（可添油体积）也仍取快照，随液位变化，跟 beginVolume 对不上；它不上报云端，暂不处理。
+        detailInoutRecord.setBeginHeith(event.getStartHeight());
+        detailInoutRecord.setBeginVolume(beginVolume);
+        detailInoutRecord.setBeginOilWeight(DataUtils.doubleFoment(beginVolume * density));
         detailInoutRecord.setOilType(Const.getOilType(oilCan.getOilType()));
         detailInoutRecord.setEndHeight(event.getEndHeight());
         detailInoutRecord.setEndVolume(endVolume);
@@ -151,8 +159,8 @@ public class InOilManager {
         detailInoutRecord.setEndTcVolume(oilCan.getSurPlus());
         detailInoutRecord.setEndOilWeight(oilCan.getOilWeight());
         detailInoutRecord.setEndTemp(oilCan.getTemper());
-        detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmss());
-        detailInoutRecord.setSaleVolume(endVolume - beginVolume);
+        detailInoutRecord.setEndTime(DateUtils.getYYYMMddHHmmssWithSeconds());
+        detailInoutRecord.setSaleVolume(DataUtils.doubleFoment(endVolume - beginVolume));
 
         String time = DateUtils.getYYYMMddHHmmss();
         int savedId = 0;
@@ -217,7 +225,10 @@ public class InOilManager {
             Log.w(TAG, "processEvent: " + (isIn ? "findLastIn" : "findLastOut") + " 未取到刚保存的记录，跳过详情落库");
         }
 
-        SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(detailInoutRecord.toString());
+        // 发给云端的必须是 StockEventMapper 产出的结构化 JSON，不能是 toString() 调试字符串——
+        // 后者不是 JSON，云端完全解析不了，见 zhongchengyeweiyi#42 待办3。
+        String stockEventJson = GsonUtil.toJsonStr(StockEventMapper.build(detailInoutRecord, isIn));
+        SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(stockEventJson);
 
         OilMessage oilMessage = new OilMessage();
         oilMessage.setDate(DateUtils.getYYYMMddHHmm());

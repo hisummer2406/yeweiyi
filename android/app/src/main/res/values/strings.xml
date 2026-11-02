@@ -11,6 +11,7 @@
     <!--报警信息（%1$d 为罐号占位符，语序/措辞由各语言资源自己决定，代码不再按语言拼字符串）-->
     <string name="oilHeight_alarm">%1$d 号储罐 高液位报警</string>
     <string name="oilHHeight_alarm">%1$d 号储罐 高高液位报警</string>
+    <string name="oil_connect_error">%1$d 号储罐连接失败</string>
     <string name="oillow_alarm">%1$d 号储罐 低液位报警</string>
     <string name="oilllow_alarm">%1$d 号储罐 低低液位报警</string>
     <string name="waterheight_alarm">%1$d 号储罐 高水位报警</string>
@@ -589,4 +590,24 @@
 
     <!-- MainFragment 罐列表 canvas 绘制的罐号标签 -->
     <string name="oilcan_short_label_format">%1$d号 </string>
+
+    <!-- ThingsBoardSetFragment 云平台设置页：页面只在中文界面开放，en/es 待设计稿文案 -->
+    <string name="tb_device_id_hint" tools:ignore="MissingTranslation">设备贴纸上的编号</string>
+    <string name="tb_access_token_hint" tools:ignore="MissingTranslation">留空则自动从云平台领取</string>
+    <string name="tb_broker_host_empty" tools:ignore="MissingTranslation">Broker地址不能为空</string>
+    <string name="tb_port_not_number" tools:ignore="MissingTranslation">端口必须是数字</string>
+    <string name="tb_port_out_of_range" tools:ignore="MissingTranslation">端口必须在 1-65535 之间</string>
+    <string name="tb_device_id_empty" tools:ignore="MissingTranslation">设备编号不能为空</string>
+    <string name="tb_saved" tools:ignore="MissingTranslation">已保存，正在使用新配置重新连接云平台</string>
+    <string name="tb_saved_provisioning" tools:ignore="MissingTranslation">已保存，正在向云平台自动领取访问令牌</string>
+    <string name="tb_confirm_device_id_title" tools:ignore="MissingTranslation">确认设备编号</string>
+    <string name="tb_confirm_device_id_message" tools:ignore="MissingTranslation">请核对与设备贴纸上的编号完全一致：\n\n%1$s\n\n编号输错会占用其他设备的身份。</string>
+    <string name="tb_status_connected" tools:ignore="MissingTranslation">当前状态：已连接云平台</string>
+    <string name="tb_status_disconnected" tools:ignore="MissingTranslation">当前状态：未连接云平台</string>
+    <string name="tb_provision_in_progress" tools:ignore="MissingTranslation">自动领取令牌：进行中</string>
+    <string name="tb_provision_success" tools:ignore="MissingTranslation">自动领取令牌：成功</string>
+    <string name="tb_provision_rejected" tools:ignore="MissingTranslation">自动领取令牌：云平台拒绝（编号未登记或已注册过，请联系云平台管理员）%1$s</string>
+    <string name="tb_provision_network_error" tools:ignore="MissingTranslation">自动领取令牌：网络失败，稍后自动重试</string>
+    <string name="tb_provision_not_configured" tools:ignore="MissingTranslation">自动领取令牌：本机未配置注册密钥，请手填访问令牌</string>
+    <string name="tb_provision_token_unreadable" tools:ignore="MissingTranslation">已保存的令牌无法解密（配置可能来自另一台设备或备份），不会自动领取。请核对设备编号后重新保存</string>
 </resources>

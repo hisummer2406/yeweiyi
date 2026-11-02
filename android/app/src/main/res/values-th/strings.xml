@@ -11,6 +11,7 @@
     <!--ข้อความแจ้งเตือน-->
     <string name="oilHeight_alarm">ถังน้ำมัเบอร์ แจ้งระดับน้ำมันสูง</string>
     <string name="oilHHeight_alarm">ถังน้ำมัเบอร์ แจ้งระดับน้ำมันสูงมาก</string>
+    <string name="oil_connect_error">ถังน้ำมัเบอร์เชื่อมต่อล้มเหลว</string>
     <string name="oillow_alarm">ถังน้ำมัเบอร์ แจ้งระดับน้ำมันต่ำ</string>
     <string name="oilllow_alarm">น้ำมัเบอร์ แจ้งระดับน้ำมันต่ำมาก</string>
     <string name="waterheight_alarm">ถังน้ำมัเบอร์ แจ้งระดับน้ำมันสูง</string>

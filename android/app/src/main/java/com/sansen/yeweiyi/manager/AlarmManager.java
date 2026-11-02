@@ -71,6 +71,8 @@ public class AlarmManager {
 	 * 向报警消息队列中添加数据
 	 */
 	public void addAlarmState(OilMessage alarm) {
+		// 云端报警上报的"产生"时刻：本地所有报警都经过这里。已经 ACTIVE 的不会重复上报。
+		CloudAlarmReporter.getInstance().onRaised(alarm);
 		if (!alarmQueue.contains(alarm)) {
 			alarmQueue.add(alarm);
 		}

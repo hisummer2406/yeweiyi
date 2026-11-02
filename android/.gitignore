@@ -23,3 +23,5 @@ app/keystore/*.jks
 
 # 临时工作文件（蓝湖导出、核对表、验证计划文档等），不进版本库
 /temp/
+/.claude/skills/r8-analyzer
+/code_review

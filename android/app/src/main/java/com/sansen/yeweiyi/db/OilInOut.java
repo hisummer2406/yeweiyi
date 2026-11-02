@@ -59,7 +59,13 @@ public class OilInOut {
 	@Column(column = "endweight")
 	private double endWeight;
 
-
+	/**
+	 * "AUTO"（InOilManager 自动检测，默认值）或 "MANUAL"（BuLuFragment 手动补录）——
+	 * 见 StockEventMapper.SOURCE_AUTO/SOURCE_MANUAL。zhongchengyeweiyi#42 待办2 新增列，
+	 * 老设备升级需要走 DaoHelp 的 ALTER TABLE 迁移（dbVersion 6→7），不是新建表就有的。
+	 */
+	@Column(column = "source")
+	private String source = "AUTO";
 
 	public int getId() {
 		return id;
@@ -139,6 +145,14 @@ public class OilInOut {
 
 	public void setJieZhi(String jieZhi) {
 		this.jieZhi = jieZhi;
+	}
+
+	public String getSource() {
+		return source;
+	}
+
+	public void setSource(String source) {
+		this.source = source;
 	}
 
 	@Override

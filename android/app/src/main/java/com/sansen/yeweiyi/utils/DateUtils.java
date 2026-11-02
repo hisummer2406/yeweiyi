@@ -101,6 +101,14 @@ public class DateUtils {
 		return dateFormat.format(date);
 	}
 
+	/**
+	 * 获取当前时间 yyyy-MM-dd HH:mm:ss（真正到秒）。
+	 * {@link #getYYYMMddHHmmss()} 名字带 ss 但实际只到分钟，且有 30 多处本地显示/存储依赖那个格式，不能改它。
+	 */
+	public static String getYYYMMddHHmmssWithSeconds() {
+		return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(System.currentTimeMillis()));
+	}
+
 	/** 获取当前的day信息 yyyyMMdd */
 
 	/** get server date String */

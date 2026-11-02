@@ -73,4 +73,9 @@ public class LanguageUtil {
         }
         return locale;
     }
+
+    /** 当前界面语言是否为中文（只比较语言码，zh_CN/zh_TW 等地区都算中文）。 */
+    public static boolean isChinese(Context context) {
+        return Locale.CHINESE.getLanguage().equals(getCurrentLocale(context).getLanguage());
+    }
 }

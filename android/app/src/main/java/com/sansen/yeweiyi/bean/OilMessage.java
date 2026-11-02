@@ -154,13 +154,11 @@ public class OilMessage {
     // 也可达（受 SharePreManager.getRelaySwitch() 开关控制，运行时可开可关，不是恒假分支）。
     // 真正确认不可达的只有：LOW_TEMPER（producer 侧的 tempLowDection() 从未被调用，见下方注释）、
     // IN_OIL/OUT_OIL/IN_OILing/OUT_OILing（全仓库没人 setType() 过这 4 个，见下方注释）、
-    // OIl_EXPLORATION（producer 侧 GasExplorationAdapter 死，见下方注释）、PRO_ERR_CONN——这个比较
-    // 特殊：AlarmRepositoryImpl.saveAlarm() 方法体第一行就是
-    // `if (oilMessage.getType() == OilMessage.PRO_ERR_CONN) return;`，明确把它排除在存库逻辑外，
-    // 所以虽然 SerialPortManager 里确实调用了 saveAlarm(...)，实际会被这个 return 挡掉，consumer
-    // 侧仍是死的——oil_connect_error 不用优先翻；NET_ERR_CONN 的唯一 setType() 调用点在
-    // BackService.java，而那个 Service 全仓库没有任何地方真正 startService() 过，producer 侧本身
-    // 就没跑起来，net_connect_err 不用优先翻。
+    // OIl_EXPLORATION（producer 侧 GasExplorationAdapter 死，见下方注释）；NET_ERR_CONN 原来唯一的
+    // setType() 调用点在旧 Alink 版 BackService.java 里，ThingsBoard 迁移时随旧代码一起删了，现在
+    // 全仓库没人 setType() 过它（2026-10-04 复核），net_connect_err 不用优先翻。
+    // [已更正-2026-10-04] PRO_ERR_CONN 原先也列在不可达里（它不存库），但它现在是云端探头断线
+    // 报警的 text 来源，oil_connect_error 已恢复，见下方 case。
     private String getState(int oilid, int state, double value) {
         switch (state) {
             case HEIGHT_OIL_ALARM:
@@ -191,21 +189,20 @@ public class OilMessage {
                 return null; // return SystemUtils.getRsStr(R.string.inoiling, oilid);
             case OUT_OILing:
                 return null; // return SystemUtils.getRsStr(R.string.outoiling, oilid);
-            // [不可达-2026-09-23] SerialPortManager 确实调用了 alarmRepository.saveAlarm(...)，但
-            // AlarmRepositoryImpl.saveAlarm() 方法体第一行就是
-            // `if (oilMessage.getType() == OilMessage.PRO_ERR_CONN) return;`——明确把这个类型
-            // 排除在存库/报警记录页展示之外，consumer 侧仍是死的。oil_connect_error 不用优先翻。
+            // [可达-2026-10-04] 不存库（AlarmRepositoryImpl.saveAlarm() 第一行就排除了 PRO_ERR_CONN），
+            // 但会作为云端探头断线报警的 text 上报（CloudAlarmReporter.onRaised 取 toString()）。
+            // 2026-09-23 判定不可达时删过 oil_connect_error，ThingsBoard 报警上报接入后恢复。
             case PRO_ERR_CONN:
-                // [已屏蔽-2026-09-23] oil_connect_error 已删除（不可达，见上方注释）。
-                return null; // return SystemUtils.getRsStr(R.string.oil_connect_error, oilid);
+                return SystemUtils.getRsStr(R.string.oil_connect_error, oilid);
             // [不可达-2026-09-21] 唯一 setType 调用点是 GasExplorationAdapter，而那个类的 getView()
             // 因为数据源从未赋值、getCount() 恒为 0 而永远不会被框架调用（见 GasExplorationAdapter.java
             // 里的注释，西语翻译覆盖率核查时发现）。tantou_height 不用优先翻。
             case OIl_EXPLORATION:
                 // [已屏蔽-2026-09-23] tantou_height 已删除（不可达，见上方注释）。
                 return null; // return SystemUtils.getRsStr(R.string.tantou_height, oilid);
-            // [不可达-2026-09-21] 唯一 setType 调用点在 BackService.java，而这个 Service 在全仓库没有
-            // 任何地方真正 startService() 过（西语翻译覆盖率核查时发现）。net_connect_err 不用优先翻。
+            // [不可达-2026-09-21] 原来唯一的 setType 调用点在旧 Alink 版 BackService.java 里（当时那个
+            // Service 也没人启动过），ThingsBoard 迁移时随旧代码一起删了，现在全仓库无人 setType()
+            // 这个类型。net_connect_err 不用优先翻。
             case NET_ERR_CONN:
                 // [已屏蔽-2026-09-23] net_connect_err 已删除（不可达，见上方注释）。
                 return null; // return SystemUtils.getRsStr(R.string.net_connect_err);

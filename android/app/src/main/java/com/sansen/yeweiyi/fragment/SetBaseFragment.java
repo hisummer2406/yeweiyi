@@ -15,6 +15,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.manager.ThingsBoardManager;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
@@ -182,6 +183,8 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
                     SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.OutTime ,outTime);
                     Singleton.getInstance().getSetData(Constans.OutTime);
                 }
+                // 出入库阈值属于云端客户端属性，保存后重发（切语言会重启 app，重启后连上时也会发）
+                ThingsBoardManager.getInstance(MyApplication.getInstance()).requestClientAttributesPublish();
                 if (pendingLocale != null && LanguageUtil.updateLocale(MyApplication.getInstance().getApplicationContext(), pendingLocale)) {
                     // 语言切换涉及大量已渲染文案，且 recreate() 会对本 app 里缺无参构造函数的
                     // 几个 Fragment 触发反射恢复崩溃（详见 AppManager.restartApp 注释），

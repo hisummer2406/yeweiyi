@@ -9,6 +9,7 @@ import android.os.IBinder;
 import android.os.RemoteException;
 
 import com.sansen.yeweiyi.bean.OilMessage;
+import com.sansen.yeweiyi.service.BackService;
 import com.sansen.yeweiyi.service.IBackService;
 
 import java.util.HashMap;
@@ -34,10 +35,9 @@ public class SocketManager {
     public void initData() {
         try {
             dataManager = OilcanDataManager.getInstance(ct);
-//            mServiceIntent = new Intent(ct, BackService.class);
-//            ct.bindService(mServiceIntent, conn, Context.BIND_AUTO_CREATE);
-//            mServiceIntent = new Intent(ct, UdpService.class);
-//            ct.bindService(mServiceIntent, conn, Context.BIND_AUTO_CREATE);
+            mServiceIntent = new Intent(ct, BackService.class);
+            ct.startService(mServiceIntent);
+            ct.bindService(mServiceIntent, conn, Context.BIND_AUTO_CREATE);
         } catch (Exception e) {
             Log.e(TAG, "initData 执行失败", e);
         }

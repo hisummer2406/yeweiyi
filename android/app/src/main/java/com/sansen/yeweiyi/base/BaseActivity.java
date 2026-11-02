@@ -327,7 +327,8 @@ public abstract class BaseActivity extends FragmentActivity implements
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case DATA_REFRESH:
-                    refreshData((OilCan) msg.obj);
+                    ParsedReading reading = (ParsedReading) msg.obj;
+                    refreshData(reading.oilCan, reading.errorTimes, reading.oilLevel);
                     break;
                 case OILCAN_DISMISS:
                     oilcanDismiss((OilCan) msg.obj);
@@ -357,18 +358,35 @@ public abstract class BaseActivity extends FragmentActivity implements
         public void onDataRefresh(OilCan oilCan) {
             Message msg = Message.obtain();
             msg.what = DATA_REFRESH;
-            msg.obj = oilCan;
+            msg.obj = new ParsedReading(oilCan);
             handler.sendMessage(msg);
         }
     };
+
+    /**
+     * 解析完成那一刻（串口线程，SerialPortManager 清零失败计数之前）的失败计数和液位。
+     * 主线程处理消息时同一个 OilCan 已被串口线程和界面改过，不能再读来判断这一帧是否可信。
+     */
+    private static final class ParsedReading {
+        final OilCan oilCan;
+        final int errorTimes;
+        final double oilLevel;
+
+        ParsedReading(OilCan oilCan) {
+            this.oilCan = oilCan;
+            this.errorTimes = oilCan.getErrorTimes();
+            this.oilLevel = oilCan.getOilLevel();
+        }
+    }
     public TextView tv_unlogin;
 
     /**
-     * 回调方法 当油罐信息刷新时，回调给actvity层
+     * 油罐信息刷新时回调给 Activity 层（主线程）。
      *
-     * @param oilCan
+     * @param errorTimesAtParse 解析完成时的通讯失败计数，非 0 说明这一帧在断线/重连途中
+     * @param oilLevelAtParse   解析完成时的液位
      */
-    public abstract void refreshData(OilCan oilCan);
+    public abstract void refreshData(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse);
 
     public abstract void oilcanDismiss(OilCan obj);
 

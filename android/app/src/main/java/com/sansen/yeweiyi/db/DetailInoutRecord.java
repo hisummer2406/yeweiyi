@@ -59,6 +59,14 @@ public class DetailInoutRecord {
     @Column
     double duringDelivery;
 
+    /**
+     * "AUTO"（{@code InOilManager} 自动检测，默认值）或 "MANUAL"（{@code BuLuFragment} 手动补录）——
+     * 见 {@code StockEventMapper.SOURCE_AUTO}/{@code SOURCE_MANUAL}。默认值确保自动检测路径
+     * 不需要显式赋值就能落上 "AUTO"，只有 BuLuFragment 需要主动覆盖成 "MANUAL"。
+     */
+    @Column
+    String source = "AUTO";
+
     public int getId() {
         return id;
     }
@@ -229,6 +237,14 @@ public class DetailInoutRecord {
 
     public void setDuringDelivery(double duringDelivery) {
         this.duringDelivery = duringDelivery;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 
     @Override

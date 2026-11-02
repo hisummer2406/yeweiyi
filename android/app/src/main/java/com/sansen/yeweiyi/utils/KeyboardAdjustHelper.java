@@ -5,11 +5,12 @@ import android.view.View;
 import android.view.WindowManager;
 
 /**
- * 给挂载在 MainActivity 上、含较多 EditText 的设置类 Fragment（目前是 OilCanSetFragment /
- * SetBaseFragment）复用的软键盘遮挡处理。这两个页面的共同结构是：title_bar + weight=1 的表单
- * 内容区 + 紧跟在后面、固定高度的底部操作栏（保存/返回上页之类的按钮）。
+ * 给挂载在 MainActivity 上、含较多 EditText 的设置类 Fragment（OilCanSetFragment /
+ * SetBaseFragment / SetPawFragment / ThingsBoardSetFragment）复用的软键盘遮挡处理。这些页面
+ * 的共同结构是：title_bar + weight=1 的表单内容区 + 紧跟在后面、固定高度的底部操作栏
+ * （保存/返回上页之类的按钮）。
  *
- * 只在这两个页面用得到——SetSeniorFragment 等其它 MainActivity 挂载的页面要么没有 EditText，
+ * 只在这类页面用得到——SetSeniorFragment 等其它 MainActivity 挂载的页面要么没有 EditText，
  * 要么本身就没有键盘遮挡的问题，不需要套这层逻辑。
  */
 public class KeyboardAdjustHelper {
