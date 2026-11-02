@@ -45,6 +45,40 @@
 **未动**：所有 `403 {"error":"not authorized"}`（账号失效 vs 角色不足的拆分需先确认兼容方案，客户端据此回登录页）、
 500 的原文错误体、出入库/报警"不完整"信封、命令结果未确认的状态语义。
 
+## 服务异常、请求体与命令（#79 第三批）
+
+同样只加 `code`，状态码不变。**例外：500 的 `error` 文案不再透传底层错误**（SQL、约束名、ThingsBoard 响应体），
+统一为 `internal server error`，原文只进服务端日志；此前没有客户端依赖 500 的文案。
+
+| code | HTTP | 场景 |
+| --- | --- | --- |
+| `internal_error` | 500 | 未预期的服务端错误，所有接口共用；客户端显示通用兜底「操作失败，请稍后重试」 |
+| `telemetry_unparsable` | 500 | `telemetry/latest`：设备最新遥测不符合协议，读不出来（设备侧问题，不是"未上报"） |
+| `invalid_request` | 400 | 请求体/参数绑定失败（缺字段、类型错、JSON 坏）。`error` 仍是绑定器原文，指出字段，供开发排查，**不给最终用户看** |
+| `device_not_authorized` | 403 | 设备级读取被拒：不存在、跨客户、未授权**同一个码同一个体**（约束 6、9）。`/ws/alarms` 握手相同 |
+| `command_not_authorized` | 403 | 发命令被拒（设备不可访问或该角色不能发该方法），同样不区分原因 |
+| `platform_admin_required` | 403 | 设备登记、签发配对密钥只限平台管理员。体不是裸 `not authorized`，客户端不应据此登出 |
+| `unknown_method` | 400 | 命令方法名不存在（仅对有权访问设备者返回） |
+| `reason_required` | 400 | 该方法必须填写原因 |
+| `physical_commands_disabled` | 409 | 泵/阀/重启等物理命令在本部署禁用（约束 1） |
+| `command_delivery_unconfirmed` | 503 | ThingsBoard 在交接命令时出错。命令**可能已送达**设备（约束 2），客户端提示「执行结果尚未确认，请先查看操作记录」，**不得**提示失败或引导直接重试 |
+| `cannot_disable_self` | 400 | 平台管理员不能停用自己 |
+
+设备 RPC 方法列表、`tanks` 列表读 ThingsBoard 失败时，与遥测读取同用 `device_not_provisioned` / `device_platform_unavailable`。
+
+## 待三端确认（#79 未落地部分）
+
+以下需要小程序（miniapp#7）与网页（admin#17）负责人确认后再改，云端不单方面动：
+
+1. **裸 `403 {"error":"not authorized"}` 的拆分。** 现在客户端看到这个体就回登录页；它同时用于账号停用/删除与
+   "有效账号但角色不够"（员工调管理接口、客户管理员调平台管理员接口）。提案：体与状态码不变，追加
+   `code`——`account_unavailable`（停用/删除，应结束会话）与 `role_not_allowed`（角色不足，不应结束会话）。
+   旧客户端按体判定不受影响；新客户端按 `code` 区分。需确认客户端迁移顺序后实施。
+2. **记录"不完整"信封**（`parsed`/`unparsable`/`legacySkipped`、`STOCK_EVENT_FORMAT_UNSUPPORTED`）保持现状，
+   只需客户端按字段显示"列表可能不完整"，不需要云端新码。
+3. **场景 × 文案矩阵**（操作场景—HTTP—code—默认文案—下一步—会话行为）以本表的 code 为准，由客户端维护本地化文案；
+   码名改动需三端同步。
+
 ## 账号与登录（#77）
 
 | code | HTTP | 场景 |

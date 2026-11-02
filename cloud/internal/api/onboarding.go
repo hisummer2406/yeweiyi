@@ -84,12 +84,12 @@ func getOnboardingHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusNotFound, codeCustomerNotFound, "customer not found")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		st, err := onboardingStateFor(ctx, deps.Queries, cust)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, st)
@@ -144,7 +144,7 @@ func completeOnboardingHandler(deps Deps) gin.HandlerFunc {
 				map[string]any{"customerId": id})
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		switch {

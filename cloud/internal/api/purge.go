@@ -151,7 +151,7 @@ func purgeDeviceHandler(deps Deps) gin.HandlerFunc {
 			})
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if missing {
@@ -187,7 +187,7 @@ func getDevicePurgeHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"purge": toPurgeResponse(task)})
@@ -209,7 +209,7 @@ func listDevicePurgesHandler(deps Deps) gin.HandlerFunc {
 			tasks, err = deps.Queries.ListRecentDevicePurges(ctx, recentPurgesLimit)
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		rows := make([]purgeResponse, 0, len(tasks))

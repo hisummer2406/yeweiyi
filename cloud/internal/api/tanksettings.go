@@ -95,13 +95,13 @@ func listTankSettingsHandler(deps Deps) gin.HandlerFunc {
 		}
 		rows, err := deps.Queries.ListTankSettings(c.Request.Context(), device)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		var granted map[int]bool
 		if isEmployee(c) {
 			if granted, err = grantedTankSet(c, deps, device); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 		}

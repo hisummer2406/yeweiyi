@@ -44,7 +44,7 @@ func deviceMiniCodeHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusNotFound, "device_not_found", "device not found")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		img, err := deps.WeChat.MiniCode(c.Request.Context(), device, deps.MiniCodePage, deps.MiniCodeEnv)

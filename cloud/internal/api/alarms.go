@@ -65,7 +65,7 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		if p.asc {
 			res, err := deps.Queries.ListAlarmEventsAsc(ctx, args)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			for _, r := range res {
@@ -74,7 +74,7 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		} else {
 			res, err := deps.Queries.ListAlarmEventsDesc(ctx, db.ListAlarmEventsDescParams(args))
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			for _, r := range res {
@@ -109,7 +109,7 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		// The body is a bare array, so there is no field to carry this; a header does.
 		backfilled, err := recordsBackfilled(c, deps, p.device)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if !backfilled {

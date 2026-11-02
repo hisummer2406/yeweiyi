@@ -266,7 +266,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		if p.asc {
 			rows, err := deps.Queries.ListStockEventsAsc(ctx, args)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			for _, r := range rows {
@@ -275,7 +275,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		} else {
 			rows, err := deps.Queries.ListStockEventsDesc(ctx, db.ListStockEventsDescParams(args))
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			for _, r := range rows {
@@ -307,7 +307,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 			UserID: c.MustGet("userID").(int64), Tank: p.tank,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if isEmployee(c) {
@@ -321,7 +321,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 
 		backfilled, err := recordsBackfilled(c, deps, p.device)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		body := stockListResponse{

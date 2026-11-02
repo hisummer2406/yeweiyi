@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -75,7 +76,10 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 
 		snap, err := protocol.ParseSnapshot(ts, values)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "device telemetry could not be parsed: " + err.Error()})
+			// The device sent something the protocol does not accept: a device-side fault, not ours,
+			// but the parser's text is still nothing an end user can act on.
+			log.Printf("api: telemetry of %q could not be parsed: %v", device, err)
+			apiError(c, http.StatusInternalServerError, codeTelemetryUnparsable, "the device's latest telemetry could not be read")
 			return
 		}
 
@@ -85,7 +89,7 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			// it is cut down to the granted tanks here, on the server (cloud#63).
 			granted, err := grantedTankSet(c, deps, device)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			tanks = tanks[:0:0]
@@ -117,6 +121,6 @@ func writeThingsBoardError(c *gin.Context, err error, device string) {
 		apiError(c, http.StatusServiceUnavailable, codeDevicePlatformUnavailable,
 			"the device platform is temporarily unavailable; retry shortly")
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 	}
 }

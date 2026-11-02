@@ -61,7 +61,7 @@ func requireDeviceOwnershipAt(c *gin.Context, deps Deps, deviceName string) (tim
 	if !ok {
 		// authMiddleware always sets this before a handler runs; ok=false means a handler was wired
 		// up without it, which is a wiring bug, not a client error.
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
+		internalError(c, errors.New("no authenticated user in context"))
 		return time.Time{}, false
 	}
 
@@ -69,11 +69,11 @@ func requireDeviceOwnershipAt(c *gin.Context, deps Deps, deviceName string) (tim
 		UserID: userID.(int64), DeviceName: deviceName,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return time.Time{}, false
 	}
 	if !res.Allowed {
-		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for this device"})
+		apiError(c, http.StatusForbidden, codeDeviceNotAuthorized, "not authorized for this device")
 		return time.Time{}, false
 	}
 	return res.DecidedAt.Time, true
@@ -166,7 +166,7 @@ func resolveDeviceHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deviceName": name})
@@ -279,13 +279,13 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if actor.Role != control.RolePlatformAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only a platform administrator may mint a device pairing secret"})
+			apiError(c, http.StatusForbidden, codePlatformAdminOnly, "only a platform administrator may mint a device pairing secret")
 			return
 		}
 
 		var req mintPairingSecretRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required: " + err.Error()})
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "customerId is required: "+err.Error())
 			return
 		}
 
@@ -297,7 +297,7 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -311,7 +311,7 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if !owner.Valid || owner.Int64 != req.CustomerID {
@@ -321,14 +321,14 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 
 		raw := make([]byte, 32)
 		if _, err := rand.Read(raw); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		secret := base64.RawURLEncoding.EncodeToString(raw)
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -343,7 +343,7 @@ func mintPairingSecretHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "device_customer_mismatch", "device already belongs to a different customer")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -355,7 +355,7 @@ func unbindDeviceHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req deviceNameRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 
@@ -401,7 +401,7 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 		userID := c.MustGet("userID").(int64)
 		rows, err := deps.Queries.ListDevicesForUser(c.Request.Context(), userID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		// The role is the one the auth middleware read from the database for this request.
@@ -411,7 +411,7 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 		if role == control.RoleCustomerUser {
 			gr, err := deps.Queries.ListTankGrantsForUser(c.Request.Context(), userID)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			for _, g := range gr {
@@ -470,13 +470,13 @@ func registerDeviceHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if actor.Role != control.RolePlatformAdmin {
-			c.JSON(http.StatusForbidden, gin.H{"error": "only a platform administrator may register a device"})
+			apiError(c, http.StatusForbidden, codePlatformAdminOnly, "only a platform administrator may register a device")
 			return
 		}
 
 		var req registerDeviceRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "deviceName and customerId are required: " + err.Error()})
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "deviceName and customerId are required: "+err.Error())
 			return
 		}
 		name := strings.TrimSpace(req.DeviceName)
@@ -493,7 +493,7 @@ func registerDeviceHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -507,7 +507,7 @@ func registerDeviceHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if !res.CustomerID.Valid || res.CustomerID.Int64 != req.CustomerID {
