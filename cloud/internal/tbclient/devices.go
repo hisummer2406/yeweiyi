@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // EntityID is ThingsBoard's polymorphic identifier shape: {"id": "<uuid>", "entityType": "DEVICE"}.
@@ -175,4 +176,29 @@ func (c *Client) DeviceActivity(ctx context.Context) (map[string]bool, error) {
 			return out, nil
 		}
 	}
+}
+
+// SetAccessToken replaces a device's MQTT access token. The old token stops working at once, which is
+// how a leaked, mis-claimed or replaced device identity is revoked (docs/device-provisioning.md §4):
+// deleting provisionState only lets the name be provisioned again — and hands back the same token.
+func (c *Client) SetAccessToken(ctx context.Context, deviceID, token string) error {
+	creds, err := c.GetDeviceCredentials(ctx, deviceID)
+	if err != nil {
+		return err
+	}
+	creds.CredentialsID = token
+	if err := c.PostJSON(ctx, "/api/device/credentials", creds, nil); err != nil {
+		return fmt.Errorf("set access token for device %s: %w", deviceID, err)
+	}
+	return nil
+}
+
+// DeleteServerAttributes removes cloud-owned attributes of a device. The ops use is clearing
+// provisionState so the device name can be provisioned again.
+func (c *Client) DeleteServerAttributes(ctx context.Context, deviceID string, keys []string) error {
+	path := "/api/plugins/telemetry/DEVICE/" + url.PathEscape(deviceID) + "/" + ScopeServer + "?keys=" + url.QueryEscape(strings.Join(keys, ","))
+	if err := c.do(ctx, http.MethodDelete, path, nil, nil); err != nil {
+		return fmt.Errorf("delete server attributes of %s: %w", deviceID, err)
+	}
+	return nil
 }
