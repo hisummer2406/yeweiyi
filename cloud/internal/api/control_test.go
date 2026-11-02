@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"yeweiyi-cloud/internal/api"
@@ -466,6 +467,9 @@ func TestLatestTelemetry_ReturnsUnavailableWhenThingsBoardNotConfigured(t *testi
 	rec := env.authed("GET", "/api/devices/"+device+"/telemetry/latest", nil)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"code":"device_platform_unavailable"`) {
+		t.Fatalf("503 must carry device_platform_unavailable: %s", rec.Body.String())
 	}
 }
 

@@ -64,7 +64,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		raw := wsAuthToken(c)
 		if raw == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+			abortSessionInvalid(c)
 			return
 		}
 		claims := &apiClaims{}
@@ -72,7 +72,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 			return deps.JWTSecret, nil
 		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			abortSessionInvalid(c)
 			return
 		}
 

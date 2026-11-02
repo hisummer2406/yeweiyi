@@ -29,11 +29,17 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   （403）不续期。令牌带 `authAt`（上次输入密码的时间），续期时沿用，且新令牌的 `exp` 不会超过
   `authAt + auth.maxSessionAge`（默认 30 天，到点必须重新登录）。`/ws/alarms` 不受影响：连接仍在**原令牌**
   到期时以 `token expired` 关闭，客户端需用新令牌重连。续期不写 `audit_log`。
+- 用户名账号（#77，契约见该文档 §11）：国外用户无微信，客户侧账号也可以是**独立用户名 + 密码**账号（`phone` 为 NULL，三种
+  角色包括 `customer_user` 都必须有密码，用户名全局唯一不区分大小写，不得形如手机号）；与手机号账号二选一、不互转。手机号员工
+  也可由平台管理员设置密码（之后 `phone` + 密码可登录）。`POST /api/login` 的 `username` 接受任何无手机号的账号。**没有自助改密、
+  没有强制改密标记**（产品决定）：改密一律平台管理员重置。登录失败按账号标识与来源地址限流，超限 `429 login_rate_limited`
+  （Redis，重置密码可解锁）。员工令牌调任何管理类接口一律 403，按库内当前角色判定。下面这条手机号账号的规则中"员工没有密码"一句已被
+  放宽：员工密码可选。
 - 账号（#59，契约见 [docs/account-phone-wechat-contract.md](docs/account-phone-wechat-contract.md)）：客户侧账号以手机号
-  标识（`users.phone`，11 位大陆号，全局唯一，客户角色的 `username` 等于手机号）；员工（`customer_user`）**没有网页密码**
-  （`password_hash` 必须为 NULL，由 CHECK 保证），只能经微信登录。**只有平台管理员能创建/停用/启用/重置账号**，客户管理员
+  标识（`users.phone`，11 位大陆号，全局唯一，客户角色的 `username` 等于手机号）；手机号员工（`customer_user`）默认**没有密码**
+  （`password_hash` 为 NULL），只能经微信登录；平台管理员可为其设置密码（#77）。**只有平台管理员能创建/停用/启用/重置账号**，客户管理员
   调用这些接口一律 `403 not authorized`（在解析请求体之前，写 `denied` 审计）；客户管理员只能列出本客户员工（手机号脱敏）。
-  `POST /api/login` 的 `username`（平台管理员）与 `phone`（客户管理员）二选一；员工以任何方式密码登录都与密码错误同样
+  `POST /api/login` 的 `username`（平台管理员）与 `phone`（客户管理员）二选一；没有密码的员工以任何方式密码登录都与密码错误同样
   `401 invalid_credentials`。令牌 `sub` 是用户 ID，不是用户名；客户端用登录响应的 `user` 或 `GET /api/me` 取身份。
   新增的认证/账号响应带 `code` 字段，客户端按 `code` 分支。开发库里升级前的旧客户账号不迁移，需重建。
   微信登录：`POST /api/auth/wechat/login`（已绑定身份恢复）与 `/phone-login`（首次手机号授权并绑定，只收 `loginCode`
@@ -74,6 +80,13 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   仅平台管理员可 `GET /api/customers/:id/onboarding`、`POST .../onboarding/complete`（事务内锁客户行复检：有未停用且有手机号
   密码的客户管理员、至少一个油站、至少一台在该客户油站内的设备；不全 `409 onboarding_incomplete` + `missing`；重复幂等）。
   不使用 `users.disabled_at` 模拟客户状态；测试里 `newCustomer` 直接种为 `active`。
+- 设备彻底删除（#83，契约见 [docs/device-purge-contract.md](docs/device-purge-contract.md)）：仅平台管理员，
+  `POST /api/devices/:device/purge`（体须重复完整编号 + 原因）建异步任务，`internal/purge` 按 `thingsboard → business →
+  verify` 执行，每步幂等，失败停在 `failed` 等再次发起，`running` 的启动时续跑。`device_purges` 未完成的任务就是该设备的
+  **写入栅栏**：业务记录、小时汇总、回补标记的写入语句经 `device_record_writable` 判定（迁移 000032），`ListAllDeviceNames`
+  不再列出它，登记/配对密钥/油站/换机/罐授权/发命令返回 `409 device_purge_in_progress`。完成后同编号可重新登记，但信封
+  `ts` 不晚于删除完成时刻的记录一律不写入（挡设备重放）。**新增按设备编号存数据的表，必须同时加进删除清单
+  （`db/queries/device_purges.sql` 与 `CountDeviceRemnants`）**。
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 
@@ -137,7 +150,8 @@ docs/                 当前规范与历史归档
    目标部署上按 `deploy/README.md`"启用 ThingsBoard 遥测 TTL 之前"完成出入库/报警回补（`cmd/backfill`）和小时汇总回补
    （`cmd/backfill -telemetry`）并核对无误——否则这些数据会被永久删除。小时汇总（#30）已实现：`internal/rollup`
    每小时由 ThingsBoard 的聚合结果写入 `telemetry_hourly`；`telemetry/history` 在 `telemetry.retention`
-   之内读 ThingsBoard，更早的部分读汇总表（仅 `interval=1h`）。
+   之内读 ThingsBoard，更早的部分读汇总表（仅 `interval=1h`）。**唯一例外**：平台管理员的设备彻底删除（#83，
+   [契约](docs/device-purge-contract.md)）清掉该设备在业务库与 ThingsBoard 的全部数据；换机、客户转移仍不删任何历史。
 6. 必须先授权、后检查设备是否存在，避免设备名枚举。
 7. 设备配对密钥必须与 ThingsBoard/MQTT 设备凭据隔离。
 8. 仅使用 ThingsBoard CE 功能，且部署必须支持完全离线环境。
@@ -199,7 +213,8 @@ docs/                 当前规范与历史归档
   `openspec/changes/archive/2026-10-05-implement-multitenant-support-with-customer-isolation/`。`GET /api/devices` 的语义变化、
   `pairing-secret` 新增必填 `customerId` 已对照小程序与运维控制台的代码核对，无需改客户端（2026-10-06，见
   open-items §D-租户）；实现运维控制台的"配对密钥"页面时请求体须带 `customerId`。
-- `/api/oil-in-out` 与 `/api/alarms` 读业务库（#29）。`/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动
+- `/api/oil-in-out` 与 `/api/alarms` 读业务库（#29），支持可选的 `tank`（两者）与 `direction`（出入库）筛选，先筛选后分页，
+  指定未授权罐为 `403 tank_not_authorized`（#84，[契约](docs/records-filter-contract.md)）。`/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动
   （zhongchengyeweiyi#39）。真实设备当前上报的
   `DetailInoutRecord.toString()` 解析不了，此时接口返回 502 与 `STOCK_EVENT_FORMAT_UNSUPPORTED`，
   不再以 200 + 空数组冒充成功；两条路径都返回 `{rows, parsed, unparsable, legacySkipped, …}`。

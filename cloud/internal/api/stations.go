@@ -118,7 +118,7 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 		case actor.Role == control.RoleCustomerAdmin && actor.CustomerID.Valid:
 			customerID = actor.CustomerID.Int64
 		default:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required"})
+			apiError(c, http.StatusBadRequest, "invalid_request", "customerId is required")
 			return
 		}
 		if !mayManageCustomer(actor, customerID) {
@@ -128,14 +128,14 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		name, address, ok := validStationFields(req.Name, req.Address)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 1-100 characters and address at most 200"})
+			apiError(c, http.StatusBadRequest, "invalid_name", "name must be 1-100 characters and address at most 200")
 			return
 		}
 
 		ctx := c.Request.Context()
 		if _, err := deps.Queries.GetCustomer(ctx, customerID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown customerId"})
+				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -169,7 +169,7 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		if err != nil {
 			if isPgCode(err, "23505") {
-				c.JSON(http.StatusConflict, gin.H{"error": "a station with this name already exists in this customer"})
+				apiError(c, http.StatusConflict, "station_name_taken", "a station with this name already exists in this customer")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -236,7 +236,7 @@ func updateStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		name, address, ok := validStationFields(req.Name, req.Address)
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "name must be 1-100 characters and address at most 200"})
+			apiError(c, http.StatusBadRequest, "invalid_name", "name must be 1-100 characters and address at most 200")
 			return
 		}
 
@@ -265,7 +265,7 @@ func updateStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		if err != nil {
 			if isPgCode(err, "23505") {
-				c.JSON(http.StatusConflict, gin.H{"error": "a station with this name already exists in this customer"})
+				apiError(c, http.StatusConflict, "station_name_taken", "a station with this name already exists in this customer")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -309,7 +309,7 @@ func deleteStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		if err != nil {
 			if isPgCode(err, "23503") {
-				c.JSON(http.StatusConflict, gin.H{"error": "the station still has devices; move them to another station first"})
+				apiError(c, http.StatusConflict, "station_not_empty", "the station still has devices; move them to another station first")
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -363,12 +363,12 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		var want pgtype.Int8
 		switch {
 		case len(req.StationID) == 0:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "stationId is required (a number, or null to clear)"})
+			apiError(c, http.StatusBadRequest, "invalid_station", "stationId is required (a number, or null to clear)")
 			return
 		case string(req.StationID) != "null":
 			var id int64
 			if err := json.Unmarshal(req.StationID, &id); err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "stationId must be a number or null"})
+				apiError(c, http.StatusBadRequest, "invalid_station", "stationId must be a number or null")
 				return
 			}
 			want = int8(id)
@@ -377,7 +377,7 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		device := c.Param("device")
 		ctx := c.Request.Context()
 		var previous pgtype.Int8
-		var denied, missing, noCustomer, badStation, unchanged bool
+		var denied, missing, noCustomer, badStation, unchanged, purging bool
 		var occupiedBy string
 		err := withTx(ctx, deps, func(q *db.Queries) error {
 			actorNow, err := lockStationActor(ctx, q, actor.ID)
@@ -421,6 +421,10 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 			if !mayManageCustomer(actor, dev.CustomerID.Int64) {
 				denied = true
 				return nil
+			}
+			// Decided under the device row lock, which the purge takes too when it creates its task.
+			if purging, err = devicePurging(ctx, q, device); err != nil || purging {
+				return err
 			}
 			if want.Valid {
 				st, err := q.GetStation(ctx, want.Int64)
@@ -467,7 +471,7 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		case err != nil && (isPgCode(err, "23503") || isPgCode(err, "23514")):
 			// Lost a race with a station delete or a customer transfer; the checks above passed but
 			// the database, which is the actual guarantee, refused.
-			c.JSON(http.StatusConflict, gin.H{"error": "the device or station changed while assigning; retry"})
+			apiError(c, http.StatusConflict, "station_assignment_retry", "the device or station changed while assigning; retry")
 		case err != nil:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		case missing && actor.Role == control.RolePlatformAdmin:
@@ -475,13 +479,15 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		case missing || denied:
 			refuseObjectCode(c, deps, actor, "device.station", "no such device for this caller", map[string]any{"device": device},
 				http.StatusNotFound, "device not found", "device_not_found")
+		case purging:
+			purgeInProgress(c)
 		case occupiedBy != "":
 			c.JSON(http.StatusConflict, gin.H{"error": "the station already has a device; release it or replace it first",
 				"code": "station_occupied", "occupiedBy": occupiedBy})
 		case noCustomer:
 			apiError(c, http.StatusConflict, "device_without_customer", "the device has no customer; assign it to a customer first")
 		case badStation:
-			c.JSON(http.StatusBadRequest, gin.H{"error": "stationId does not name a station of the device's customer"})
+			apiError(c, http.StatusBadRequest, "invalid_station", "stationId does not name a station of the device's customer")
 		default:
 			c.JSON(http.StatusOK, gin.H{"deviceName": device, "stationId": int8Ptr(want), "changed": !unchanged})
 		}
@@ -609,6 +615,12 @@ func replaceStationDeviceHandler(deps Deps) gin.HandlerFunc {
 				hasCurrent = false
 			}
 			nd := locked[newName]
+			if purging, err := devicePurging(ctx, q, newName); err != nil {
+				return err
+			} else if purging {
+				conflictCode, conflictMsg = "device_purge_in_progress", "the device is being deleted"
+				return nil
+			}
 			if hasCurrent && cur.DeviceName == newName {
 				// A retry of a replacement that already happened.
 				previous = newName

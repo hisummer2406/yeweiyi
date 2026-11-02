@@ -320,6 +320,8 @@ var exemptRoutes = map[string]string{
 	"POST /api/devices/unbind":              "deletes only the caller's own binding row",
 	"POST /api/devices/resolve":             "device comes from the body; never 403 — a device the caller may not open is the same 404 as a missing one and nothing is written, see TestResolve_*",
 	"GET /api/users/:id/tank-grants":        "no device; platform admin only, see TestTankGrants_*",
+	"GET /api/device-purges":                "no device in the path; platform admin only, see TestDevicePurge_*",
+	"GET /api/device-purges/:id":            "no device; platform admin only, see TestDevicePurge_*",
 
 	"POST /api/customers":         "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",
@@ -369,8 +371,16 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 				return "/api/devices/" + device + "/station", []byte(`{"stationId":null}`)
 			},
 		},
-		"GET /api/devices/:device/tanks":         {build: path("/tanks")},
-		"GET /api/devices/:device/tank-settings": {build: path("/tank-settings")},
+		"GET /api/devices/:device/tanks":                   {build: path("/tanks")},
+		"GET /api/devices/:device/tank-settings":           {build: path("/tank-settings")},
+		"GET /api/devices/:device/tanks/:tank/calibration": {build: path("/tanks/1/calibration")},
+		// Platform admins only (cloud#83); every customer-side caller is refused by role.
+		"POST /api/devices/:device/purge": {
+			adminOnly: true,
+			build: func(device, _ string) (string, []byte) {
+				return "/api/devices/" + device + "/purge", []byte(`{"confirmDeviceName":"` + device + `","reason":"tenancy walk"}`)
+			},
+		},
 		"POST /api/devices/:device/stock-events": {customerUserDenied: true, build: func(device, _ string) (string, []byte) {
 			return "/api/devices/" + device + "/stock-events", []byte(`{"direction":"IN","tank":1,"time":"2026-01-01T00:00:00Z","beforeLevelMm":1,"volumeL":1,"reason":"x"}`)
 		}},
@@ -748,9 +758,16 @@ func TestTenancy_SchemaInvariants(t *testing.T) {
 		t.Error("a customer user without a customer must be rejected")
 	}
 	ph = testPhone()
+	// Phone staff may have a password (000031); a username account may not go without one.
 	if err := exec(`INSERT INTO users (username, phone, password_hash, role, customer_id) VALUES ($1,$1,'x','customer_user',$2)`,
-		ph, tn.custA); err == nil {
-		t.Error("staff (customer_user) with a password hash must be rejected")
+		ph, tn.custA); err != nil {
+		t.Errorf("phone staff with a password hash must be accepted: %v", err)
+	}
+	// It was accepted, so it exists: remove it, or the customers cleaned up afterwards stay referenced.
+	exec(`DELETE FROM users WHERE username = $1`, ph)
+	if err := exec(`INSERT INTO users (username, role, customer_id) VALUES ($1,'customer_user',$2)`,
+		name("nopw"), tn.custA); err == nil {
+		t.Error("a username staff account without a password hash must be rejected")
 	}
 	ph = testPhone()
 	if err := exec(`INSERT INTO users (username, phone, role, customer_id) VALUES ($1,$1,'customer_admin',$2)`,

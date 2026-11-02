@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 )
@@ -101,5 +102,54 @@ func TestTankSettings_NeverReportedIsEmptyNotError(t *testing.T) {
 	}
 	if v := decodeTankSettings(t, body); v.Tanks == nil || len(v.Tanks) != 0 {
 		t.Errorf("want an empty array, got %s", body)
+	}
+}
+
+// cloud#14: the calibration curve mirror. Rows are seeded directly; the ingest side has its own test.
+func TestTankCalibration_VisibilityAndShape(t *testing.T) {
+	g := newGrantEnv(t)
+	reported := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Millisecond)
+	if _, err := g.env.pool.Exec(context.Background(), `
+		INSERT INTO tank_calibration (device_name, tank, height_mm, volume_l, reported_at)
+		VALUES ($1, 2, ARRAY[10,20,30]::float8[], ARRAY[100,200,300.5]::float8[], $2)`, g.device, reported); err != nil {
+		t.Fatal(err)
+	}
+	url := func(tank string) string { return "/api/devices/" + g.device + "/tanks/" + tank + "/calibration" }
+
+	code, body := g.call(t, "GET", url("2"), g.admin, nil)
+	var v struct {
+		Tank       int       `json:"tank"`
+		PointCount int       `json:"pointCount"`
+		HeightMm   []float64 `json:"heightMm"`
+		VolumeL    []float64 `json:"volumeL"`
+		ReportedAt time.Time `json:"reportedAt"`
+	}
+	if err := json.Unmarshal([]byte(body), &v); code != http.StatusOK || err != nil ||
+		v.Tank != 2 || v.PointCount != 3 || v.VolumeL[2] != 300.5 || v.HeightMm[0] != 10 || !v.ReportedAt.Equal(reported) {
+		t.Fatalf("admin: %d %s (%v)", code, body, err)
+	}
+
+	// Reported for no other tank: a distinct 404 from the 403s.
+	if code, body := g.call(t, "GET", url("1"), g.admin, nil); code != http.StatusNotFound || !strings.Contains(body, "calibration_not_reported") {
+		t.Errorf("unreported tank: %d %s", code, body)
+	}
+	if code, _ := g.call(t, "GET", url("0"), g.admin, nil); code != http.StatusBadRequest {
+		t.Errorf("tank 0: %d, want 400", code)
+	}
+
+	// An employee needs a grant on that tank; an ungranted or out-of-range tank is the same 403.
+	if code, body := g.set(t, g.platform, g.empID, g.device, 1); code != http.StatusOK {
+		t.Fatalf("grant: %d %s", code, body)
+	}
+	for _, tank := range []string{"2", "99"} {
+		if code, body := g.call(t, "GET", url(tank), g.emp, nil); code != http.StatusForbidden || !strings.Contains(body, "tank_not_authorized") {
+			t.Errorf("employee tank %s: %d %s, want 403 tank_not_authorized", tank, code, body)
+		}
+	}
+	if code, body := g.set(t, g.platform, g.empID, g.device, 1, 2); code != http.StatusOK {
+		t.Fatalf("grant: %d %s", code, body)
+	}
+	if code, _ := g.call(t, "GET", url("2"), g.emp, nil); code != http.StatusOK {
+		t.Errorf("granted employee: %d, want 200", code)
 	}
 }

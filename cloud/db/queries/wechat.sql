@@ -11,3 +11,8 @@ INSERT INTO user_wechat_identities (user_id, appid, openid) VALUES ($1, $2, $3) 
 
 -- name: TouchWechatLogin :exec
 UPDATE user_wechat_identities SET last_login_at = now() WHERE id = $1;
+
+-- name: DeleteWechatIdentityByUser :execrows
+-- Changing a phone number drops the WeChat binding: the new number must be proven again through
+-- /api/auth/wechat/phone-login, so a previous holder of the number keeps no way in.
+DELETE FROM user_wechat_identities WHERE user_id = $1;

@@ -2425,3 +2425,21 @@ Codex 担心的"命令在设备易主之后才被**发送**"发生在插入**之
   does *not* implement `queue.Publisher` — the write-back queue's pending→sent hop still needs a
   real device-side "operation acknowledged" topic/semantics that doesn't exist yet (see "Device-side
   work this project depends on"), so `cmd/server/main.go` still wires `unbuiltMQTTPublisher` there.
+
+### 2026-10-27 — 设备彻底删除（cloud#83）：业务记录永久保存的唯一例外
+
+用户 2026-10-25 确认要"彻底删除设备及其全部历史"，不是隐藏或解除归属。契约 [docs/device-purge-contract.md](device-purge-contract.md)，
+设计 `openspec/changes/device-purge/`。几条不显然的决定：
+
+- **任务表兼作栅栏**。业务记录表刻意没有对 `devices` 的外键，删设备行挡不住迟到的写入；`ingest.sync` 也从不停订阅。
+  所以写入语句改成 `INSERT … SELECT … WHERE device_record_writable(...)`，判定与写入同一语句；`ListAllDeviceNames`
+  排除删除中的设备，订阅/汇总/回补工具一起停。
+- **异步任务 + 断点**。ThingsBoard 按键删除与核对可能很慢，同步接口超时后客户端无从知道结果；跨存储不能单事务，
+  每步幂等、`step` 记断点，失败停在 `failed` 等人工再次发起，`running` 的在启动时续跑。
+- **先删 ThingsBoard 再删业务库**：设备先断联；ThingsBoard 删除实体后自己的清理是异步的，所以先显式按键删遥测并复查。
+- **删除 TB 设备实体**（用户 2026-10-27 选择）：代价是同编号重新接入须重新预登记、设备重新领取凭据；不删的话设备会继续
+  上报，重新登记时被首次全量回补读进来。
+- **重放截止按信封 ts**（用户 2026-10-27 选择）：设备本机长期保存记录，重新接入后会重发；用生成时刻而不是到达时刻
+  与删除完成时刻比较。已知限制：设备时钟落后会误丢新记录。
+- `tank_settings`（合并时改号为 000033）、`tank_calibration`（000035）也按设备编号存数据，**已在合并时加入删除清单与**
+  `CountDeviceRemnants`，否则 verify 不会发现它们。

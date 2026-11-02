@@ -57,11 +57,11 @@ func (q *Queries) HasRecordBackfill(ctx context.Context, deviceName string) (boo
 
 const insertAlarmEvent = `-- name: InsertAlarmEvent :exec
 INSERT INTO alarm_events (device_name, alarm_id, status, synthetic_id, occurred_at, env_ts, payload, customer_id)
-VALUES (
+SELECT
     $1, $2, $3, $4,
     to_timestamp($5::BIGINT / 1000.0), $6, $7,
     (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
-)
+WHERE device_record_writable($1::TEXT, $6::BIGINT)
 ON CONFLICT (device_name, alarm_id, status) DO NOTHING
 `
 
@@ -75,7 +75,7 @@ type InsertAlarmEventParams struct {
 	Payload     []byte `json:"payload"`
 }
 
-// 同一份重放不改变已有行。
+// 同一份重放不改变已有行。删除栅栏与重放截止同 UpsertStockEvent。
 func (q *Queries) InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error {
 	_, err := q.db.Exec(ctx, insertAlarmEvent,
 		arg.DeviceName,
@@ -129,8 +129,9 @@ func (q *Queries) InsertManualStockEvent(ctx context.Context, arg InsertManualSt
 
 const insertRecordReject = `-- name: InsertRecordReject :exec
 INSERT INTO record_rejects (kind, device_name, env_ts, reason, raw, customer_id)
-VALUES ($1, $2, $3, $4, $5,
-        (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT))
+SELECT $1, $2, $3, $4, $5,
+       (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
+WHERE device_record_writable($2::TEXT, $3::BIGINT)
 ON CONFLICT (kind, device_name, env_ts, raw_hash) DO NOTHING
 `
 
@@ -142,6 +143,7 @@ type InsertRecordRejectParams struct {
 	Raw        string `json:"raw"`
 }
 
+// 删除栅栏与重放截止同 UpsertStockEvent。
 func (q *Queries) InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error {
 	_, err := q.db.Exec(ctx, insertRecordReject,
 		arg.Kind,
@@ -160,8 +162,9 @@ WHERE a.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
   AND user_may_access_tank($4, a.device_name, CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END)
+  AND ($5::INT IS NULL OR CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END = $5::INT)
 ORDER BY occurred_at ASC, alarm_id ASC, status ASC
-LIMIT $6 OFFSET $5
+LIMIT $7 OFFSET $6
 `
 
 type ListAlarmEventsAscParams struct {
@@ -169,6 +172,7 @@ type ListAlarmEventsAscParams struct {
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
 	UserID     int64              `json:"user_id"`
+	Tank       pgtype.Int4        `json:"tank"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -179,12 +183,14 @@ type ListAlarmEventsAscRow struct {
 	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
 }
 
+// tank 为可选筛选（#84）：NULL 表示整机；在 LIMIT/OFFSET 之前生效。
 func (q *Queries) ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAscParams) ([]ListAlarmEventsAscRow, error) {
 	rows, err := q.db.Query(ctx, listAlarmEventsAsc,
 		arg.DeviceName,
 		arg.BeginTime,
 		arg.EndTime,
 		arg.UserID,
+		arg.Tank,
 		arg.Off,
 		arg.Lim,
 	)
@@ -213,8 +219,9 @@ WHERE a.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
   AND user_may_access_tank($4, a.device_name, CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END)
+  AND ($5::INT IS NULL OR CASE WHEN a.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (a.payload->>'tank')::INT ELSE 0 END = $5::INT)
 ORDER BY occurred_at DESC, alarm_id DESC, status DESC
-LIMIT $6 OFFSET $5
+LIMIT $7 OFFSET $6
 `
 
 type ListAlarmEventsDescParams struct {
@@ -222,6 +229,7 @@ type ListAlarmEventsDescParams struct {
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
 	UserID     int64              `json:"user_id"`
+	Tank       pgtype.Int4        `json:"tank"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -238,6 +246,7 @@ func (q *Queries) ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDe
 		arg.BeginTime,
 		arg.EndTime,
 		arg.UserID,
+		arg.Tank,
 		arg.Off,
 		arg.Lim,
 	)
@@ -267,8 +276,10 @@ WHERE s.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
   AND user_may_access_tank($4, s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
+  AND ($5::INT IS NULL OR CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END = $5::INT)
+  AND ($6::TEXT IS NULL OR s.payload->>'direction' = $6::TEXT)
 ORDER BY occurred_at ASC, event_id ASC
-LIMIT $6 OFFSET $5
+LIMIT $8 OFFSET $7
 `
 
 type ListStockEventsAscParams struct {
@@ -276,6 +287,8 @@ type ListStockEventsAscParams struct {
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
 	UserID     int64              `json:"user_id"`
+	Tank       pgtype.Int4        `json:"tank"`
+	Direction  pgtype.Text        `json:"direction"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -291,12 +304,15 @@ type ListStockEventsAscRow struct {
 // 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
 // （payload 无罐号，tank=0）只有管理员可见。
 // 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
+// tank / direction 为可选筛选（#84）：NULL 表示不筛选；在 LIMIT/OFFSET 之前生效，分页与截断都针对筛选后的结果。
 func (q *Queries) ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error) {
 	rows, err := q.db.Query(ctx, listStockEventsAsc,
 		arg.DeviceName,
 		arg.BeginTime,
 		arg.EndTime,
 		arg.UserID,
+		arg.Tank,
+		arg.Direction,
 		arg.Off,
 		arg.Lim,
 	)
@@ -332,8 +348,10 @@ WHERE s.device_name = $1
   AND occurred_at >= $2 AND occurred_at < $3
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
   AND user_may_access_tank($4, s.device_name, CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END)
+  AND ($5::INT IS NULL OR CASE WHEN s.payload->>'tank' ~ '^[0-9]{1,3}$' THEN (s.payload->>'tank')::INT ELSE 0 END = $5::INT)
+  AND ($6::TEXT IS NULL OR s.payload->>'direction' = $6::TEXT)
 ORDER BY occurred_at DESC, event_id DESC
-LIMIT $6 OFFSET $5
+LIMIT $8 OFFSET $7
 `
 
 type ListStockEventsDescParams struct {
@@ -341,6 +359,8 @@ type ListStockEventsDescParams struct {
 	BeginTime  pgtype.Timestamptz `json:"begin_time"`
 	EndTime    pgtype.Timestamptz `json:"end_time"`
 	UserID     int64              `json:"user_id"`
+	Tank       pgtype.Int4        `json:"tank"`
+	Direction  pgtype.Text        `json:"direction"`
 	Off        int32              `json:"off"`
 	Lim        int32              `json:"lim"`
 }
@@ -359,6 +379,8 @@ func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDe
 		arg.BeginTime,
 		arg.EndTime,
 		arg.UserID,
+		arg.Tank,
+		arg.Direction,
 		arg.Off,
 		arg.Lim,
 	)
@@ -387,11 +409,14 @@ func (q *Queries) ListStockEventsDesc(ctx context.Context, arg ListStockEventsDe
 }
 
 const markRecordBackfill = `-- name: MarkRecordBackfill :exec
-INSERT INTO record_backfills (device_name) VALUES ($1) ON CONFLICT (device_name) DO NOTHING
+INSERT INTO record_backfills (device_name)
+SELECT $1::TEXT WHERE device_record_writable($1::TEXT, NULL)
+ON CONFLICT (device_name) DO NOTHING
 `
 
-func (q *Queries) MarkRecordBackfill(ctx context.Context, deviceName string) error {
-	_, err := q.db.Exec(ctx, markRecordBackfill, deviceName)
+// 删除中的设备不写标记（cloud#83）：否则删除完成后残留的标记会让同编号新设备跳过首次全量回补。
+func (q *Queries) MarkRecordBackfill(ctx context.Context, dollar_1 string) error {
+	_, err := q.db.Exec(ctx, markRecordBackfill, dollar_1)
 	return err
 }
 
@@ -423,29 +448,34 @@ SELECT
         -- 嵌套 CASE 保证只对 invalid_source（必为合法 JSON）做 jsonb 转换，unparsable 原文不会触发转换错误
         CASE WHEN reason = 'invalid_source' THEN
             CASE WHEN (raw::jsonb)->>'tank' ~ '^[0-9]{1,3}$' THEN ((raw::jsonb)->>'tank')::INT ELSE 0 END
-        ELSE 0 END))::INT AS invalid_source,
-    COUNT(*) FILTER (WHERE reason = 'unparsable' AND $3::BIGINT > 0
-                       AND env_ts < $3::BIGINT)::INT AS legacy,
-    COUNT(*) FILTER (WHERE reason = 'unparsable' AND NOT ($3::BIGINT > 0
-                       AND env_ts < $3::BIGINT))::INT AS unparsable,
+        ELSE 0 END)
+        -- 指定罐时只计该罐（#84）；unparsable 无法归属到罐，始终是整机计数
+        AND ($3::INT IS NULL OR CASE WHEN reason = 'invalid_source' THEN
+            CASE WHEN (raw::jsonb)->>'tank' ~ '^[0-9]{1,3}$' THEN ((raw::jsonb)->>'tank')::INT ELSE 0 END
+        ELSE 0 END = $3::INT))::INT AS invalid_source,
+    COUNT(*) FILTER (WHERE reason = 'unparsable' AND $4::BIGINT > 0
+                       AND env_ts < $4::BIGINT)::INT AS legacy,
+    COUNT(*) FILTER (WHERE reason = 'unparsable' AND NOT ($4::BIGINT > 0
+                       AND env_ts < $4::BIGINT))::INT AS unparsable,
     COALESCE((SELECT r.raw FROM record_rejects r
               WHERE r.kind = 'stock' AND r.device_name = $2 AND r.reason = 'unparsable'
-                AND r.env_ts >= $4 AND r.env_ts < $5
-                AND NOT ($3::BIGINT > 0 AND r.env_ts < $3::BIGINT)
+                AND r.env_ts >= $5 AND r.env_ts < $6
+                AND NOT ($4::BIGINT > 0 AND r.env_ts < $4::BIGINT)
                 AND r.customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
               ORDER BY r.env_ts ASC, r.id ASC LIMIT 1), '')::TEXT AS sample
 FROM record_rejects
 WHERE kind = 'stock' AND device_name = $2
-  AND env_ts >= $4 AND env_ts < $5
+  AND env_ts >= $5 AND env_ts < $6
   AND customer_id IS NOT DISTINCT FROM (SELECT d.customer_id FROM devices d WHERE d.device_name = $2::TEXT)
 `
 
 type SummarizeStockRejectsParams struct {
-	UserID     int64  `json:"user_id"`
-	DeviceName string `json:"device_name"`
-	CutoffMs   int64  `json:"cutoff_ms"`
-	BeginMs    int64  `json:"begin_ms"`
-	EndMs      int64  `json:"end_ms"`
+	UserID     int64       `json:"user_id"`
+	DeviceName string      `json:"device_name"`
+	Tank       pgtype.Int4 `json:"tank"`
+	CutoffMs   int64       `json:"cutoff_ms"`
+	BeginMs    int64       `json:"begin_ms"`
+	EndMs      int64       `json:"end_ms"`
 }
 
 type SummarizeStockRejectsRow struct {
@@ -464,6 +494,7 @@ func (q *Queries) SummarizeStockRejects(ctx context.Context, arg SummarizeStockR
 	row := q.db.QueryRow(ctx, summarizeStockRejects,
 		arg.UserID,
 		arg.DeviceName,
+		arg.Tank,
 		arg.CutoffMs,
 		arg.BeginMs,
 		arg.EndMs,
@@ -481,12 +512,12 @@ func (q *Queries) SummarizeStockRejects(ctx context.Context, arg SummarizeStockR
 const upsertStockEvent = `-- name: UpsertStockEvent :exec
 
 INSERT INTO stock_events (device_name, event_id, synthetic_id, occurred_at, env_ts, report_ts, payload, customer_id)
-VALUES (
+SELECT
     $1, $2, $3,
     to_timestamp($4::BIGINT / 1000.0), $5,
     ARRAY[$5::BIGINT], $6,
     (SELECT d.customer_id FROM devices d WHERE d.device_name = $1::TEXT)
-)
+WHERE device_record_writable($1::TEXT, $5::BIGINT)
 ON CONFLICT (device_name, event_id) DO UPDATE SET
     synthetic_id = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.synthetic_id ELSE stock_events.synthetic_id END,
     occurred_at  = CASE WHEN EXCLUDED.env_ts > stock_events.env_ts THEN EXCLUDED.occurred_at  ELSE stock_events.occurred_at  END,
@@ -512,6 +543,7 @@ type UpsertStockEventParams struct {
 // customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
 // 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 // 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
+// 设备删除中、或信封 ts 不晚于该编号最近一次删除完成时刻（旧记录重放）时不写入（cloud#83，device_record_writable）。
 func (q *Queries) UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error {
 	_, err := q.db.Exec(ctx, upsertStockEvent,
 		arg.DeviceName,
