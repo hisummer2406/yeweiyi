@@ -11,7 +11,8 @@ import { describeResolveError, resolveDevice } from '../../utils/scan';
 import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
 import { formatLocalTime } from '../../utils/format';
 import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
-import { isNeverReported, toTankViews, type TankView } from '../../utils/telemetry';
+import { toTankViews, type TankView } from '../../utils/telemetry';
+import { telemetryFailure } from '../../utils/failureState';
 import {
   ALARM_TYPE_KEYS,
   COMMAND_STATUS_KEYS,
@@ -100,6 +101,8 @@ Page({
     stale: { snapshot: '', commands: '' } as Record<string, string>,
     // First load failed (nothing to keep on screen): the reason, with a retry button.
     snapshotError: '',
+    // Which empty state the snapshot tab is in, when it has no data (yeweiyi-cloud#79): '' = none.
+    emptyNote: '',
 
     snapshotTs: '',
     // The current tank's card only (an empty list when no tank is selected).
@@ -392,6 +395,7 @@ Page({
       socketDown: false,
       stale: { snapshot: '', commands: '' },
       snapshotError: '',
+      emptyNote: '',
       snapshotTs: '',
       tanks: [],
       tankFields: [],
@@ -529,17 +533,21 @@ Page({
     return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
         if (seq !== this.snapshotSeq) return;
-        this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), snapshotLoaded: true, snapshotError: '' });
+        this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), snapshotLoaded: true, snapshotError: '', emptyNote: '' });
         this.applyTanks(toTankViews(res, device), false);
         this.markSnapshotFresh();
       })
       .catch((err: ApiError) => {
         if (seq !== this.snapshotSeq) return;
-        if (isNeverReported(err)) {
-          // Authorized and provisioned, but no data — a real state, not an error. Also what a replaced
-          // device's successor looks like until it reports (and yeweiyi-cloud#28 can answer 404 for a
-          // device that stopped reporting): an empty state, never the previous device's readings.
-          this.setData({ snapshotTs: '', snapshotLoaded: true, snapshotError: '' });
+        const empty = telemetryFailure(err.status, err.body);
+        if (empty.kind === 'empty') {
+          // No data — a real state, not an error. Also what a replaced device's successor looks like until
+          // it reports: an empty state, never the previous device's readings. Which one — never reported,
+          // past the retention period (yeweiyi-cloud#28), not set up on the platform — is said (#79).
+          const emptyNote = tr(empty.key, {
+            time: empty.lastReportedAt ? formatLocalTime(empty.lastReportedAt, currentLocale()) : '—',
+          });
+          this.setData({ snapshotTs: '', snapshotLoaded: true, snapshotError: '', emptyNote });
           this.applyTanks([], true);
           this.markSnapshotFresh();
         } else {

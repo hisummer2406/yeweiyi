@@ -1,4 +1,5 @@
 import { describeError } from '../../utils/errors';
+import { commandOutcomeUnknown } from '../../utils/failureState';
 import { setNavTitle, t, texts } from '../../utils/i18n';
 import { ApiError, get, post } from '../../utils/request';
 import { commandGuard, stationIdFromKey } from '../../utils/stationDevice';
@@ -132,6 +133,10 @@ Page({
       .catch((err: Error) => {
         if (err instanceof Blocked) {
           this.setData({ errorMsg: t(err.messageKey) });
+        } else if (err instanceof ApiError && commandOutcomeUnknown(err.status, err.body)) {
+          // The device may be acting on it (yeweiyi-cloud invariant 2): send the user to the command list,
+          // never suggest sending it again.
+          this.setData({ errorMsg: t('issueCmd.unconfirmed') });
         } else if (err instanceof ApiError && err.status === 409) {
           // The cloud refused it in the current state, e.g. a physical action that stays disabled.
           this.setData({ errorMsg: t('issueCmd.refused') });

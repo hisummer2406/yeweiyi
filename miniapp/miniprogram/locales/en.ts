@@ -367,4 +367,9 @@ export const en: Record<string, string> = {
   "detail.tankRevoked": "You can no longer view tank {n}",
   "detail.oilMoved": "Stock in/out records have moved to Records: choose the station on Home, then open Records.",
   "detail.noTankInfo": "The device has not reported yet, so there is no tank list; alarms are shown for the whole device",
+  "telemetry.neverReported": "This device has not reported any data yet.",
+  "telemetry.expired": "This device has not reported within the data retention period. Last report: {time}",
+  "telemetry.notProvisioned": "This device is not fully set up on the platform yet. Contact the platform administrator.",
+  "err.platformUnavailable": "The device data service is temporarily unavailable. Please try again later.",
+  "issueCmd.unconfirmed": "It is not confirmed whether the command reached the device. Check the command list before submitting again.",
 };

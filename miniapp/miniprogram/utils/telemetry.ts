@@ -37,8 +37,5 @@ export function toTankViews(res: LatestTelemetryResponse, deviceName: string): T
   }));
 }
 
-// GET /api/devices/:device/telemetry/latest answers 404 for "authorized and provisioned, but has
-// never reported" — a real state, not an error (see types/api.d.ts). Anything else is a failure.
-export function isNeverReported(err: { status?: number }): boolean {
-  return err.status === 404;
-}
+// A failed telemetry/latest read is classified by utils/failureState.ts telemetryFailure: a 404 is
+// never reported, past the retention period, or not set up on the platform, told apart by `code`.

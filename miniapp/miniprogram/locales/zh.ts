@@ -367,4 +367,9 @@ export const zh: Record<string, string> = {
   "detail.tankRevoked": "{n}号罐已无权查看",
   "detail.oilMoved": "出入库记录已移到「我的记录」，请从首页选择油站后在「我的记录」中查看。",
   "detail.noTankInfo": "设备尚未上报，暂无罐信息，报警按整机显示",
+  "telemetry.neverReported": "该设备还没有上报过数据",
+  "telemetry.expired": "设备已超过数据保留期未上报，最后上报于 {time}",
+  "telemetry.notProvisioned": "设备接入信息尚未就绪，请联系平台管理员检查",
+  "err.platformUnavailable": "设备数据服务暂时不可用，请稍后重试",
+  "issueCmd.unconfirmed": "命令是否已送达设备尚未确认，请先在控制命令列表查看结果，不要直接重复提交",
 };
