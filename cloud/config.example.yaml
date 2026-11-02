@@ -89,6 +89,11 @@ control:
   # 打开它不会绕过任何权限检查，只是让这些方法不再被整体拒绝。
   allowPhysicalCommands: false
 
+  # 设备配置写入命令（config.setTankSettings / config.setDeviceSettings）的闸门。
+  # 它们不是物理动作，但会覆盖控制器里保存的设置；设备端处理完成并真机验证之前保持 false，
+  # 关闭时这两个方法返回 409 code=config_commands_disabled。
+  allowConfigCommands: false
+
 telemetry:
   # ThingsBoard 保留原始 30 秒遥测多久，必须与部署的 TS_RETENTION_SECONDS 一致（issue #30）。
   # 趋势接口对比它新的部分读 ThingsBoard，更早的部分读业务库的小时汇总，且更早部分不支持小于 1h 的粒度。
@@ -170,6 +175,7 @@ wechat:
 #   COMMAND_ACK_TIMEOUT              control.ackTimeout
 #   COMMAND_EXPIRY_SWEEP_INTERVAL    control.expirySweepInterval
 #   ALLOW_PHYSICAL_COMMANDS          control.allowPhysicalCommands  (true/false/1/0)
+#   ALLOW_CONFIG_COMMANDS            control.allowConfigCommands    (true/false/1/0)
 #   INGEST_DEVICE_REFRESH_INTERVAL   ingest.deviceRefreshInterval
 #   INGEST_RESUBSCRIBE_DELAY         ingest.resubscribeDelay
 #   INGEST_RECORD_RECONCILE_INTERVAL ingest.recordReconcileInterval

@@ -55,6 +55,10 @@ var (
 	// ErrPhysicalCommandsDisabled is returned when a method that causes a physical action is
 	// requested while the interlock gate is closed. See Config.AllowPhysicalCommands.
 	ErrPhysicalCommandsDisabled = errors.New("control: physical commands are disabled on this deployment")
+
+	// ErrConfigCommandsDisabled is returned for config.setTankSettings / config.setDeviceSettings while
+	// Config.AllowConfigCommands is off.
+	ErrConfigCommandsDisabled = errors.New("control: device configuration commands are disabled on this deployment")
 	// ErrPlatformUnavailable means ThingsBoard could not be reached, so the command was never
 	// handed over. The command row stays pending and will expire.
 	ErrPlatformUnavailable = errors.New("control: device platform unavailable")
@@ -103,6 +107,11 @@ type Config struct {
 	// forgetting to configure anything — a flag that defaults to "allowed" would mean a fresh
 	// deployment ships able to start pumps.
 	AllowPhysicalCommands bool
+
+	// AllowConfigCommands gates config.setTankSettings and config.setDeviceSettings. They are not
+	// physical actions, but they overwrite settings stored in the controller, so they stay off until
+	// the device-side handler is verified on real hardware. Defaults to false.
+	AllowConfigCommands bool
 
 	// Logf receives what must not go unnoticed: audit rows that could not be written, and database
 	// errors while applying a device's result. Defaults to log.Printf; never silent, because the
@@ -517,11 +526,19 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 		return fmt.Errorf("%w: %s", ErrPhysicalCommandsDisabled, spec.Method)
 	}
 
+	if !s.cfg.AllowConfigCommands && isConfigWriteMethod(spec.Method) {
+		return fmt.Errorf("%w: %s", ErrConfigCommandsDisabled, spec.Method)
+	}
+
 	// The role gates *which methods*; the device decision gates *which devices*.
 	if !roleAllows(actor.Role, spec.Permission) {
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
 	}
 	return nil
+}
+
+func isConfigWriteMethod(method string) bool {
+	return method == protocol.MethodConfigTankSettings || method == protocol.MethodConfigDeviceSettings
 }
 
 func roleAllows(role string, need protocol.PermissionLevel) bool {

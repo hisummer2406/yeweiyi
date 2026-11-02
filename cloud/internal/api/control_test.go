@@ -539,7 +539,7 @@ func configBody(t *testing.T, method string, args map[string]any) []byte {
 // cloud#71: config.setTankSettings is open to customer administrators, config.setDeviceSettings only to
 // platform administrators, bad args are a precise 400 and never reach ThingsBoard.
 func TestIssueCommand_ConfigSettings(t *testing.T) {
-	env, sender := newControlEnv(t, control.Config{})
+	env, sender := newControlEnv(t, control.Config{AllowConfigCommands: true})
 	device := "ctl-api-config"
 	env.ownDevice(device)
 	url := "/api/devices/" + device + "/commands"
@@ -587,5 +587,25 @@ func TestIssueCommand_ConfigSettings(t *testing.T) {
 	rec = env.authed("POST", url, configBody(t, protocol.MethodConfigDeviceSettings, map[string]any{"outStockHeightThresholdMm": 30}))
 	if rec.Code != http.StatusAccepted {
 		t.Errorf("platform admin setDeviceSettings: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// The config gate is closed by default: both methods answer 409 config_commands_disabled to every role,
+// and nothing reaches ThingsBoard.
+func TestIssueCommand_ConfigSettingsDisabledByDefault(t *testing.T) {
+	env, sender := newControlEnv(t, control.Config{})
+	device := "ctl-api-config-off"
+	env.ownDevice(device)
+	url := "/api/devices/" + device + "/commands"
+
+	env.setRole(control.RolePlatformAdmin)
+	for _, m := range []string{protocol.MethodConfigTankSettings, protocol.MethodConfigDeviceSettings} {
+		rec := env.authed("POST", url, configBody(t, m, map[string]any{"tank": 1, "outStockHeightThresholdMm": 30}))
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "config_commands_disabled") {
+			t.Errorf("%s: %d %s, want 409 config_commands_disabled", m, rec.Code, rec.Body.String())
+		}
+	}
+	if sender.calls != 0 {
+		t.Error("a blocked config command must never reach ThingsBoard")
 	}
 }

@@ -99,7 +99,8 @@
 | `config.setTankSettings` | 平台管理员、客户管理员（本客户设备） | 改单个罐。员工（`customer_user`）一律 403 |
 | `config.setDeviceSettings` | **仅平台管理员** | 改整机出入库判定阈值；客户管理员 403 |
 
-不属于物理动作，不受 `allowPhysicalCommands` 影响。旧方法 `config.setAlarmThresholds` 保留不动（语义不同：
+不属于物理动作，不受 `allowPhysicalCommands` 影响；但受独立闸门 `control.allowConfigCommands`（环境变量
+`ALLOW_CONFIG_COMMANDS`，默认 false）约束：关闭时两个方法返回 `409 code=config_commands_disabled`，设备端处理真机验证后再打开。旧方法 `config.setAlarmThresholds` 保留不动（语义不同：
 要求四级严格递减、不能设 0），新代码请用 `config.setTankSettings`。
 
 请求（`reason` 必填，同其他命令）：

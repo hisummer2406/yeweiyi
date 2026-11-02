@@ -69,7 +69,7 @@ func (s *stack) countCommands(t *testing.T) int {
 }
 
 func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T) {
-	s := newStack(t, control.Config{})
+	s := newStack(t, control.Config{AllowConfigCommands: true})
 	ctx := context.Background()
 
 	before := s.mirror(t)
@@ -124,7 +124,7 @@ func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T
 }
 
 func TestConfigTankSettings_DeviceRefusalsSurfaceAsRejected(t *testing.T) {
-	s := newStack(t, control.Config{})
+	s := newStack(t, control.Config{AllowConfigCommands: true})
 
 	// The cloud only sees the levels it is sent; the device merges them with its stored ones. Low 2700
 	// against a stored High of 2600 passes the cloud's check and the device refuses it.
@@ -151,7 +151,7 @@ func TestConfigTankSettings_DeviceRefusalsSurfaceAsRejected(t *testing.T) {
 }
 
 func TestConfigTankSettings_CloudRejectsBadArgsBeforeAnythingIsSent(t *testing.T) {
-	s := newStack(t, control.Config{})
+	s := newStack(t, control.Config{AllowConfigCommands: true})
 	before := s.countCommands(t)
 
 	for name, args := range map[string]string{
@@ -178,7 +178,7 @@ func TestConfigTankSettings_CloudRejectsBadArgsBeforeAnythingIsSent(t *testing.T
 }
 
 func TestConfigDeviceSettings_PlatformAdminOnly(t *testing.T) {
-	s := newStack(t, control.Config{})
+	s := newStack(t, control.Config{AllowConfigCommands: true})
 	args := `{"outStockHeightThresholdMm":30,"outStockTimeThresholdSec":90}`
 
 	if _, err := s.issue(t, s.actor, protocol.MethodConfigDeviceSettings, args); !errors.Is(err, control.ErrForbidden) {

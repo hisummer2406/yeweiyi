@@ -72,6 +72,7 @@ func main() {
 			CommandTTL:            cfg.Control.CommandTTL.Std(),
 			AckTimeout:            cfg.Control.AckTimeout.Std(),
 			AllowPhysicalCommands: cfg.Control.AllowPhysicalCommands,
+			AllowConfigCommands:   cfg.Control.AllowConfigCommands,
 		})
 
 		// Drives cmdResult back into the command state machine, stores 出入库/报警 records in the business
