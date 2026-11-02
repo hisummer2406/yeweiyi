@@ -232,6 +232,47 @@ export default {
   'pages.ops.devices.transfer.success': '设备 {device} 已转移到 {customer}',
   'pages.ops.devices.transfer.unchanged':
     '该设备本来就属于 {customer}，未做改动',
+  'pages.ops.devices.purge.title': '彻底删除设备',
+  'pages.ops.devices.purge.warning':
+    '将彻底删除该设备及全部历史数据，无法在系统内撤销',
+  'pages.ops.devices.purge.warningDetail':
+    '包括遥测、小时汇总、报警、出入库、命令、员工授权等；所在油站保留并显示为未安装。设备本机存储和服务器备份里的副本不在清理范围。',
+  'pages.ops.devices.purge.reason': '删除原因（必填）',
+  'pages.ops.devices.purge.typeName': '请输入完整设备编号 {device} 以确认：',
+  'pages.ops.devices.purge.confirmLabel': '确认设备编号',
+  'pages.ops.devices.purge.submit': '彻底删除',
+  'pages.ops.devices.purge.retry': '重试',
+  'pages.ops.devices.purge.close': '关闭',
+  'pages.ops.devices.purge.running':
+    '云端正在删除，请稍候；可以关闭本窗口，删除会继续进行。',
+  'pages.ops.devices.purge.pollFailing': '暂时取不到最新状态，正在重试。',
+  'pages.ops.devices.purge.completed': '设备 {device} 已彻底删除',
+  'pages.ops.devices.purge.completedHint':
+    '同一编号以后要重新接入，需先在 ThingsBoard 重新预登记，再在这里重新登记；它是全新设备，没有任何旧历史与授权。',
+  'pages.ops.devices.purge.failed': '删除未完成：停在「{step}」',
+  'pages.ops.devices.purge.failedHint':
+    '已完成的步骤不会重做，点「重试」从失败处继续。',
+  'pages.ops.devices.purge.step.thingsboard': '清理 ThingsBoard',
+  'pages.ops.devices.purge.step.business': '清理业务数据',
+  'pages.ops.devices.purge.step.verify': '核对',
+  'pages.ops.devices.purge.step.done': '完成',
+  'pages.ops.devices.purge.action': '删除设备',
+  'pages.ops.devices.purge.count.stockEvents': '出入库',
+  'pages.ops.devices.purge.count.alarmEvents': '报警',
+  'pages.ops.devices.purge.count.recordRejects': '拒收原文',
+  'pages.ops.devices.purge.count.telemetryHourly': '小时汇总',
+  'pages.ops.devices.purge.count.controlCommands': '命令',
+  'pages.ops.devices.purge.count.tankGrants': '罐授权',
+  'pages.ops.devices.purge.error.confirmMismatch': '确认编号与设备编号不一致。',
+  'pages.ops.devices.purge.error.reasonRequired':
+    '请填写删除原因（不超过 500 字）。',
+  'pages.ops.devices.purge.error.notFound':
+    '设备不存在或已被删除，请刷新列表。',
+  'pages.ops.devices.purge.error.unavailable':
+    '云端未配置 ThingsBoard，无法删除设备；未创建删除任务。',
+  'pages.ops.devices.purge.error.network':
+    '网络不通或请求超时，结果未知：云端可能已经受理。请关闭后重新打开本窗口查看；确认没有任务后再手动提交。',
+  'pages.ops.devices.purge.error.unknown': '删除失败：{detail}',
   'pages.ops.devices.error.notFound': '设备不存在，请刷新列表。',
   'pages.ops.customers.col.actions': '操作',
   'pages.ops.customers.action.rename': '重命名',

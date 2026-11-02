@@ -28,6 +28,9 @@ vi.mock('@/services/ant-design-pro/devices', () => ({
   listDevices,
   registerDevice: vi.fn(),
   assignDeviceCustomer: vi.fn(),
+  purgeDevice: vi.fn(),
+  getDevicePurge: vi.fn(),
+  listDevicePurges: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/services/ant-design-pro/customers', () => ({
   listCustomers,
@@ -293,5 +296,29 @@ describe('AdminDevices replace action (one station : one device)', () => {
     expect(
       screen.getByText(zhPages['pages.console.stations.replace.old']),
     ).toBeTruthy();
+  });
+});
+
+describe('AdminDevices delete entry (cloud#83)', () => {
+  it('platform admin sees 删除设备 on every row and it opens the dialog for that row', async () => {
+    listDevices.mockResolvedValue([dev('000123', 1, 3), dev('000124', 1)]);
+    listStations.mockResolvedValue([
+      { id: 3, customerId: 1, name: '甲站', address: '', createdAt: '' },
+    ]);
+    render(<AdminDevices />);
+    expect(within(await rowOf('000124')).getByText('删除设备')).toBeTruthy();
+    fireEvent.click(within(await rowOf('000123')).getByText('删除设备'));
+    expect(await screen.findByText('彻底删除设备：000123')).toBeTruthy();
+    // 带出客户与油站名，供核对
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByText('A 油站')).toBeTruthy();
+    expect(dialog.getByText('甲站')).toBeTruthy();
+  });
+
+  it('customer admin gets no delete entry', async () => {
+    canPlatformAdmin = false;
+    listDevices.mockResolvedValue([dev('000123')]);
+    render(<AdminDevices />);
+    expect(within(await rowOf('000123')).queryByText('删除设备')).toBeNull();
   });
 });
