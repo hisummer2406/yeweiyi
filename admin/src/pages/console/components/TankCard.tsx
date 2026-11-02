@@ -2,8 +2,9 @@ import { ProCard } from '@ant-design/pro-components';
 import { Col, Row, Space, Statistic, Tag } from 'antd';
 import type React from 'react';
 import { alarmColor, alarmLabel, fmt } from '@/utils/telemetry';
+import TankPicture from './TankPicture';
 
-/** 一个油罐的最新遥测卡片（带通用罐示意图）：设备总览与设备详情的实时数据页签共用。 */
+/** 一个油罐的最新遥测卡片（带通用罐示意图和真实液位填充）：设备总览用。点击进入该罐的详情。 */
 export const TankCard: React.FC<{ tank: API.Tank; onClick: () => void }> = ({
   tank,
   onClick,
@@ -27,14 +28,7 @@ export const TankCard: React.FC<{ tank: API.Tank; onClick: () => void }> = ({
   >
     <Row gutter={[16, 16]} align="middle" wrap>
       <Col flex="0 0 96px">
-        {/* 通用示意图（取自安卓端卧罐图），不是该罐的真实罐型：云端还没有罐型字段（cloud#45）。
-            不随液位、状态变色，状态靠标题里的文字标签。 */}
-        <img
-          src="/images/tank-generic.png"
-          alt={`${tank.index}号罐示意图（通用，非实际罐型）`}
-          width={96}
-          style={{ display: 'block', maxWidth: '100%', height: 'auto' }}
-        />
+        <TankPicture tank={tank} />
       </Col>
       <Col flex="1 1 240px">
         <Row gutter={[16, 16]}>

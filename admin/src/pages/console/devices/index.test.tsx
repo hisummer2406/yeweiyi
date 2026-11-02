@@ -90,7 +90,7 @@ describe('ConsoleDevices (overview) after extracting TankCard', () => {
     getLatestTelemetry.mockResolvedValue(telemetry('ZCT/01'));
     render(<ConsoleDevices />);
     fireEvent.click(await screen.findByText(/1号 92#/));
-    expect(push).toHaveBeenCalledWith('/console/devices/ZCT%2F01');
+    expect(push).toHaveBeenCalledWith('/console/devices/ZCT%2F01?tank=1');
   });
 
   it('still shows the never-reported state', async () => {

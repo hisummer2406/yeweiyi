@@ -1,11 +1,10 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { useIntl } from '@umijs/max';
+import { useIntl, useSearchParams } from '@umijs/max';
 import {
   Alert,
   Button,
-  Col,
   Empty,
-  Row,
+  Segmented,
   Skeleton,
   Space,
   Typography,
@@ -13,9 +12,10 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getLatestTelemetry } from '@/services/ant-design-pro/telemetry';
+import { parseTankParam, pickTank } from '@/utils/tankPick';
 import { fmtTime } from '@/utils/telemetry';
-import TankCard from '../components/TankCard';
 import { REFRESH_MS } from '../components/useRecordsQuery';
+import TankDetail from './TankDetail';
 
 type State =
   | { kind: 'loading' }
@@ -39,8 +39,9 @@ const forbiddenOrSilent = (e: unknown): 'forbidden' | 'silent' | 'error' => {
 };
 
 /**
- * 设备详情的「实时数据」页签：最新遥测（GET /api/devices/:device/telemetry/latest），每个油罐一张
- * 与设备总览相同的卡片。404 是正常状态「从未上报」，403 是「无权查看」，两者都不是普通错误。
+ * 设备详情的「实时数据」页签：最新遥测（GET /api/devices/:device/telemetry/latest）。**一次只显示一个罐**（同小程序）：
+ * `?tank=` 是总览里点的那个罐的协议罐号，缺省显示最小罐号；请求的罐不可见就提示并改显示最小罐号。多个罐时上方有切换，
+ * 切换只改 URL 的 tank。404 是正常状态「从未上报」，403 是「无权查看」，两者都不是普通错误。
  * 每 30 秒自动刷新；刷新时保留旧数据不闪回骨架屏，迟到的旧响应丢弃。
  */
 const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
@@ -49,6 +50,8 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
     intl.formatMessage({ id }, values);
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const requestedTank = parseTankParam(params.get('tank'));
   const seq = useRef(0);
 
   const load = useCallback(
@@ -115,17 +118,60 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
         />
       );
       break;
-    case 'ok':
+    case 'ok': {
+      const tanks = [...state.telemetry.tanks].sort(
+        (a, b) => a.index - b.index,
+      );
+      const pick = pickTank(
+        tanks.map((x) => x.index),
+        requestedTank,
+      );
+      if (pick.kind === 'none') {
+        body = (
+          <Empty description={t('pages.console.detail.snapshot.noTank')} />
+        );
+        break;
+      }
+      const tank = tanks.find((x) => x.index === pick.tank) as API.Tank;
       body = (
-        <Row gutter={[16, 16]}>
-          {state.telemetry.tanks.map((tank) => (
-            <Col key={tank.index} xs={24} md={12} xl={8}>
-              <TankCard tank={tank} onClick={() => {}} />
-            </Col>
-          ))}
-        </Row>
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          {pick.hidden !== undefined && (
+            <Alert
+              type="warning"
+              showIcon
+              title={intl.formatMessage(
+                { id: 'pages.console.detail.snapshot.tankHidden' },
+                { index: pick.hidden, shown: pick.tank },
+              )}
+            />
+          )}
+          {tanks.length > 1 && (
+            <Segmented
+              aria-label={t('pages.console.detail.snapshot.switch')}
+              value={pick.tank}
+              options={tanks.map((x) => ({
+                value: x.index,
+                label: `${x.index}号 ${x.oilType || '--'}`,
+              }))}
+              onChange={(v) => {
+                const next = new URLSearchParams(params);
+                next.set('tank', String(v));
+                setParams(next, { replace: true });
+              }}
+            />
+          )}
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            {intl.formatMessage(
+              { id: 'pages.console.detail.snapshot.tank' },
+              { index: tank.index },
+            )}{' '}
+            {tank.oilType || '--'}
+          </Typography.Title>
+          <TankDetail tank={tank} />
+        </Space>
       );
       break;
+    }
   }
 
   return (
