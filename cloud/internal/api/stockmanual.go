@@ -120,7 +120,7 @@ func addManualStockEventHandler(deps Deps) gin.HandlerFunc {
 		eventID := newManualEventID(device, req.RequestID)
 		payload := manualPayload(eventID, req, at)
 		if _, err := protocol.ParseStockEvent(payload); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -165,7 +165,7 @@ func addManualStockEventHandler(deps Deps) gin.HandlerFunc {
 		})
 		switch {
 		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 		case tooEarly:
 			manualInvalid(c, "time_before_visible", "time 早于设备归属当前客户的时间，补录后也无法在记录里看到")
 		case conflict:
@@ -173,7 +173,7 @@ func addManualStockEventHandler(deps Deps) gin.HandlerFunc {
 		default:
 			resp, ok := stockResponseFrom(stored, false, at, "cloud")
 			if !ok {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "stored manual record is unreadable"})
+				internalError(c, errors.New("stored manual record is unreadable"))
 				return
 			}
 			status := http.StatusCreated
@@ -235,7 +235,7 @@ func deleteManualStockEventHandler(deps Deps) gin.HandlerFunc {
 		})
 		switch {
 		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 		case missing:
 			apiError(c, http.StatusNotFound, "stock_event_not_found", "stock event not found")
 		case notDeletable:

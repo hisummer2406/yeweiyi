@@ -37,7 +37,7 @@ func listStationsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rows, err := deps.Queries.ListStationsForUser(c.Request.Context(), c.MustGet("userID").(int64))
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		out := make([]stationResponse, 0, len(rows))
@@ -107,7 +107,7 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req createStationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 
@@ -138,7 +138,7 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -172,7 +172,7 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "station_name_taken", "a station with this name already exists in this customer")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, toStationResponse(created))
@@ -203,7 +203,7 @@ func loadManageableStation(c *gin.Context, deps Deps, actor db.User, action stri
 		}
 		return db.Station{}, false
 	case err != nil:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return db.Station{}, false
 	}
 	if !mayManageCustomer(actor, st.CustomerID) {
@@ -231,7 +231,7 @@ func updateStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req updateStationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		name, address, ok := validStationFields(req.Name, req.Address)
@@ -268,7 +268,7 @@ func updateStationHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "station_name_taken", "a station with this name already exists in this customer")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, toStationResponse(updated))
@@ -312,7 +312,7 @@ func deleteStationHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "station_not_empty", "the station still has devices; move them to another station first")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -357,7 +357,7 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req assignStationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		var want pgtype.Int8
@@ -473,7 +473,7 @@ func assignDeviceStationHandler(deps Deps) gin.HandlerFunc {
 			// the database, which is the actual guarantee, refused.
 			apiError(c, http.StatusConflict, "station_assignment_retry", "the device or station changed while assigning; retry")
 		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 		case missing && actor.Role == control.RolePlatformAdmin:
 			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
 		case missing || denied:
@@ -521,7 +521,7 @@ func replaceStationDeviceHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req replaceDeviceRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		newName := req.DeviceName
@@ -674,7 +674,7 @@ func replaceStationDeviceHandler(deps Deps) gin.HandlerFunc {
 		case err != nil && (isPgCode(err, "23503") || isPgCode(err, "23514")):
 			apiError(c, http.StatusConflict, "station_device_changed", "the device or station changed while replacing; reload and try again")
 		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 		case stationGone:
 			refuseObjectCode(c, deps, actor, "station.replace_device", "no such station for this caller", map[string]any{"stationId": st.ID},
 				http.StatusNotFound, "station not found", "station_not_found")

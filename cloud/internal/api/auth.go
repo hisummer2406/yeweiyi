@@ -193,7 +193,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 			found = true
 		case errors.Is(err, pgx.ErrNoRows):
 		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -222,7 +222,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 
 		// After the credentials are proven, so this answer is only ever given to the account's owner.
 		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		} else if blocked {
 			abortNotOnboarded(c)
@@ -232,7 +232,7 @@ func loginHandler(deps Deps) gin.HandlerFunc {
 		now := time.Now()
 		token, _, err := issueToken(deps, user.ID, user.Role, amrPassword, now, now)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -252,7 +252,7 @@ func meHandler(deps Deps) gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, toUserResponse(user, true))
@@ -348,7 +348,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
 				return
 			}
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if user.DisabledAt.Valid {
@@ -357,7 +357,7 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 		}
 
 		if blocked, err := customerNotOnboarded(c.Request.Context(), deps.Queries, user); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		} else if blocked {
 			abortNotOnboarded(c)

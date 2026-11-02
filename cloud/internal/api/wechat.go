@@ -52,7 +52,7 @@ func signInWeChatUser(c *gin.Context, deps Deps, user db.User) {
 	now := time.Now()
 	token, _, err := issueToken(deps, user.ID, user.Role, amrWeChat, now, now)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"token": token, "user": toUserResponse(user, true)})
@@ -86,7 +86,7 @@ func wechatLoginHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusUnauthorized, codeWeChatNotBound, "this WeChat account is not bound to a user yet")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		user, err := deps.Queries.GetUserByID(ctx, identity.UserID)
@@ -95,7 +95,7 @@ func wechatLoginHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusUnauthorized, codeWeChatNotBound, "this WeChat account is not bound to a user yet")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if user.DisabledAt.Valid {
@@ -103,7 +103,7 @@ func wechatLoginHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if blocked, err := customerNotOnboarded(ctx, deps.Queries, user); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		} else if blocked {
 			abortNotOnboarded(c)
@@ -238,7 +238,7 @@ func wechatPhoneLoginHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, codeWeChatConflict, "this WeChat account or user is already bound; please retry")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 

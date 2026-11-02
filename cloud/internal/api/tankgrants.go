@@ -42,7 +42,7 @@ func requireTankAccess(c *gin.Context, deps Deps, device string, tank int) bool 
 		UserID: c.MustGet("userID").(int64), DeviceName: device, Tank: int32(tank),
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return false
 	}
 	if !ok {
@@ -126,14 +126,14 @@ func listDeviceTanksHandler(deps Deps) gin.HandlerFunc {
 		}
 		all, reported, status, err := deviceTankIndexes(c, deps, device)
 		if err != nil {
-			c.JSON(status, gin.H{"error": err.Error()})
+			writeTankIndexError(c, status, err)
 			return
 		}
 		tanks := all
 		if isEmployee(c) {
 			granted, err := grantedTankSet(c, deps, device)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			tanks = nil
@@ -179,7 +179,7 @@ func loadGrantTarget(c *gin.Context, deps Deps, actor db.User, action string) (d
 		apiError(c, http.StatusNotFound, "user_not_found", "user not found")
 		return db.User{}, false
 	case err != nil:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return db.User{}, false
 	}
 	if target.Role != control.RoleCustomerUser {
@@ -204,7 +204,7 @@ func listUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 		}
 		rows, err := deps.Queries.ListTankGrantsForUser(c.Request.Context(), target.ID)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		out := userTankGrantsResponse{UserID: target.ID, Grants: []deviceGrantRow{}}
@@ -275,7 +275,7 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if derr != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": derr.Error()})
+			internalError(c, derr)
 			return
 		}
 		if !dev.CustomerID.Valid || !target.CustomerID.Valid || dev.CustomerID.Int64 != target.CustomerID.Int64 {
@@ -283,7 +283,7 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if purging, err := devicePurging(ctx, deps.Queries, device); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		} else if purging {
 			purgeInProgress(c)
@@ -293,7 +293,7 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 		// Newly requested tanks must be tanks the device has reported. Revocations never need ThingsBoard.
 		current, err := grantedFor(c, deps, target.ID, device)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		var added []int
@@ -306,7 +306,7 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 		if len(added) > 0 {
 			known, reported, status, err := deviceTankIndexes(c, deps, device)
 			if err != nil {
-				c.JSON(status, gin.H{"error": err.Error()})
+				writeTankIndexError(c, status, err)
 				return
 			}
 			if !reported {
@@ -407,7 +407,7 @@ func putUserTankGrantsHandler(deps Deps) gin.HandlerFunc {
 		case errors.Is(err, errStationActorLost) || (err == nil && denied) || errors.Is(err, errGrantRefused):
 			refuse(c, deps, actor, "tank.grants.set", "authority changed", map[string]any{"userId": target.ID, "device": device})
 		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 		case targetGone:
 			apiError(c, http.StatusNotFound, "device_not_found", "user or device not found")
 		default:

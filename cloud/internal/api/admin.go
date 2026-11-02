@@ -41,7 +41,7 @@ const (
 func requireAdminActor(c *gin.Context, deps Deps) (db.User, bool) {
 	userID, ok := c.Get("userID")
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
+		internalError(c, errors.New("no authenticated user in context"))
 		return db.User{}, false
 	}
 	user, err := deps.Queries.GetUserByID(c.Request.Context(), userID.(int64))
@@ -50,7 +50,7 @@ func requireAdminActor(c *gin.Context, deps Deps) (db.User, bool) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
 			return db.User{}, false
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return db.User{}, false
 	}
 	if user.DisabledAt.Valid {
@@ -197,7 +197,7 @@ func createCustomerHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req customerNameRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		name, ok := validCustomerName(req.Name)
@@ -220,7 +220,7 @@ func createCustomerHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "customer_name_taken", "a customer with this name already exists")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusCreated, toCustomerResponse(created))
@@ -239,7 +239,7 @@ func listCustomersHandler(deps Deps) gin.HandlerFunc {
 		}
 		rows, err := deps.Queries.ListCustomers(c.Request.Context())
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		out := make([]customerResponse, 0, len(rows))
@@ -275,7 +275,7 @@ func renameCustomerHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req customerNameRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		name, ok := validCustomerName(req.Name)
@@ -291,7 +291,7 @@ func renameCustomerHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusNotFound, "customer_not_found", "customer not found")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if current.Name == "default" {
@@ -313,7 +313,7 @@ func renameCustomerHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "customer_name_taken", "a customer with this name already exists")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, toCustomerResponse(renamed))
@@ -342,7 +342,7 @@ func deleteCustomerHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusNotFound, "customer_not_found", "customer not found")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if current.Name == "default" {
@@ -362,7 +362,7 @@ func deleteCustomerHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, "customer_not_empty", "the customer still has users, devices, stations or history and cannot be deleted")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.Status(http.StatusNoContent)
@@ -466,7 +466,7 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 					apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 					return
 				}
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 		}
@@ -477,7 +477,7 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 		if plan.password != "" {
 			h, err := bcrypt.GenerateFromPassword([]byte(plan.password), bcrypt.DefaultCost)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			hash = pgtype.Text{String: string(h), Valid: true}
@@ -520,7 +520,7 @@ func createUserHandler(deps Deps) gin.HandlerFunc {
 			case isPgCode(err, "23503"):
 				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 			default:
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 			}
 			return
 		}
@@ -636,7 +636,7 @@ func listUsersHandler(deps Deps) gin.HandlerFunc {
 		}
 		rows, err := deps.Queries.ListUsers(c.Request.Context(), filter)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		out := make([]userResponse, 0, len(rows))
@@ -679,7 +679,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req updateUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 		if req.Disabled == nil && req.Password == nil && req.Phone == nil {
@@ -705,7 +705,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 		if req.Password != nil {
 			var err error
 			if hash, err = bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 		}
@@ -721,7 +721,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusNotFound, "user_not_found", "user not found")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if v := decideUserUpdate(actor, pre, disabling, req.Phone != nil); v.status != 0 {
@@ -816,7 +816,7 @@ func updateUserHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusConflict, codePhoneExists, "phone number already registered")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if req.Password != nil {
@@ -856,7 +856,7 @@ func decideUserUpdate(actor, target db.User, disabling, settingPhone bool) userV
 		return userVerdict{status: http.StatusForbidden, audit: true, msg: "not authorized"}
 	}
 	if disabling && target.ID == actor.ID {
-		return userVerdict{status: http.StatusBadRequest, msg: "you cannot disable yourself"}
+		return userVerdict{status: http.StatusBadRequest, code: "cannot_disable_self", msg: "you cannot disable yourself"}
 	}
 	if settingPhone && (target.Role == control.RolePlatformAdmin || !target.Phone.Valid) {
 		return userVerdict{status: http.StatusConflict, code: "phone_not_applicable", msg: "this account has no phone number to change"}
@@ -908,7 +908,7 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req customerIDRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required: " + err.Error()})
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "customerId is required: "+err.Error())
 			return
 		}
 
@@ -919,7 +919,7 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusNotFound, "user_not_found", "user not found")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if target.Role == control.RolePlatformAdmin {
@@ -931,7 +931,7 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		var moved db.User
@@ -987,7 +987,7 @@ func moveUserHandler(deps Deps) gin.HandlerFunc {
 				respondVerdict(c, deps, actor, id, "user.move", userVerdict(v))
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, toUserResponse(moved, true))
@@ -1016,7 +1016,7 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 		}
 		var req customerIDRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "customerId is required: " + err.Error()})
+			apiError(c, http.StatusBadRequest, codeInvalidRequest, "customerId is required: "+err.Error())
 			return
 		}
 
@@ -1027,11 +1027,11 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 				apiError(c, http.StatusBadRequest, "unknown_customer", "unknown customerId")
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if purging, err := devicePurging(ctx, deps.Queries, device); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		} else if purging {
 			purgeInProgress(c)
@@ -1104,7 +1104,7 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 		})
 		switch {
 		case err != nil:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 		case missing:
 			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
 		default:

@@ -2,7 +2,6 @@ package api
 
 import (
 	"errors"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -43,7 +42,7 @@ func recordWindow(c *gin.Context, deps Deps, p listParams) (begin, end pgtype.Ti
 			b = from
 		}
 	case err != nil && !errors.Is(err, pgx.ErrNoRows):
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 		return begin, end, false
 	}
 	if e.After(authAt) {

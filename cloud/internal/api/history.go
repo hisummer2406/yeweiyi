@@ -176,7 +176,7 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 		// a platform admin may still query it, and there is no assignment to clip to.
 		row, err := deps.Queries.GetDevice(ctx, device)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if err == nil && row.CustomerAssignedAt.Valid {
@@ -252,7 +252,7 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 				EndTime:   pgtype.Timestamptz{Time: time.UnixMilli(rollEnd).UTC(), Valid: true},
 			})
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			}
 			for _, r := range rows {

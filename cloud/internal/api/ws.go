@@ -78,7 +78,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 
 		device := c.Query("device")
 		if device == "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "device query param is required"})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "device query param is required", "code": "device_required"})
 			return
 		}
 
@@ -86,7 +86,7 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 		// configuring (or for a customer never onboarded) must not open a stream.
 		if u, err := deps.Queries.GetUserByID(c.Request.Context(), claims.UserID); err == nil && !u.DisabledAt.Valid {
 			if blocked, err := customerNotOnboarded(c.Request.Context(), deps.Queries, u); err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				internalError(c, err)
 				return
 			} else if blocked {
 				abortNotOnboarded(c)
@@ -102,11 +102,11 @@ func wsAlarmsHandler(deps Deps) gin.HandlerFunc {
 		// See userMayAccessDevice in devices.go.
 		owns, err := userMayAccessDevice(c.Request.Context(), deps, claims.UserID, device)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if !owns {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized for this device"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized for this device", "code": codeDeviceNotAuthorized})
 			return
 		}
 

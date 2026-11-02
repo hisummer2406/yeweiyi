@@ -92,7 +92,7 @@ func issueCommandHandler(deps Deps) gin.HandlerFunc {
 
 		var req issueCommandRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			badRequest(c, err)
 			return
 		}
 
@@ -134,12 +134,13 @@ func writeControlError(c *gin.Context, err error) {
 	case errors.Is(err, control.ErrForbidden):
 		// Deliberately indistinguishable from "no such device" — see control.ErrForbidden's
 		// comment: separate codes would let a caller enumerate device names.
-		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized for this device or method"})
+		apiError(c, http.StatusForbidden, codeCommandNotAuthorized, "not authorized for this device or method")
 	case errors.Is(err, control.ErrPhysicalCommandsDisabled):
 		// 409 rather than 403: the caller may well be entitled to this method; the deployment is
 		// what is refusing, until the device-side interlocks are verified.
 		c.JSON(http.StatusConflict, gin.H{
 			"error": err.Error(),
+			"code":  codePhysicalDisabled,
 			"hint":  "physical control actions are disabled until device-side interlocks are verified on real hardware",
 		})
 	case errors.Is(err, control.ErrConfigCommandsDisabled):
@@ -155,17 +156,23 @@ func writeControlError(c *gin.Context, err error) {
 			return
 		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_args"})
-	case errors.Is(err, control.ErrUnknownMethod), errors.Is(err, control.ErrReasonRequired):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, control.ErrUnknownMethod):
+		apiError(c, http.StatusBadRequest, codeUnknownMethod, err.Error())
+	case errors.Is(err, control.ErrReasonRequired):
+		apiError(c, http.StatusBadRequest, codeReasonRequired, err.Error())
 	case errors.Is(err, control.ErrAuditUnavailable):
 		// 503 for the same reason: nothing was sent, and trying again is the right response.
 		apiError(c, http.StatusServiceUnavailable, "audit_unavailable", "the audit trail is unavailable, so the command was not sent; try again")
 	case errors.Is(err, control.ErrPlatformUnavailable):
 		// 503, and explicitly not 500: this says "the device platform is down, retry later",
 		// which is the degradation behaviour issue #10 asks to be well-defined.
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		// Not "not sent": a ThingsBoard timeout can come after the RPC was handed over, so the device
+		// may be acting on it (invariant 2). The client must send the user to the command history,
+		// not offer a blind retry.
+		apiError(c, http.StatusServiceUnavailable, codeCommandDeliveryUnconfirmed,
+			"the device platform did not confirm the hand-off; check the command history before trying again")
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		internalError(c, err)
 	}
 }
 
@@ -190,7 +197,7 @@ func listDeviceCommandsHandler(deps Deps) gin.HandlerFunc {
 			Off:        offset,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -221,7 +228,7 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 				c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
 				return
 			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 		if user.DisabledAt.Valid {
@@ -273,7 +280,7 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 			Off:        offset,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			internalError(c, err)
 			return
 		}
 
@@ -313,7 +320,7 @@ func actorFrom(c *gin.Context) (control.Actor, bool) {
 	userID, ok := c.Get("userID")
 	if !ok {
 		// authMiddleware always sets this; missing means a route was wired without it.
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "no authenticated user in context"})
+		internalError(c, errors.New("no authenticated user in context"))
 		return control.Actor{}, false
 	}
 	username, _ := c.Get("username")
