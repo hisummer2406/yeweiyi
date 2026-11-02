@@ -76,8 +76,10 @@
 请求：`{"password": "...", "username": "..."}`（平台管理员）或 `{"password": "...", "phone": "138..."}`
 （客户管理员）。**两字段必须恰好给一个**，服务端不猜测输入含义，否则 `400 invalid_request`。
 
-- `username` 路径只接受 `platform_admin`；`phone` 路径只接受 `customer_admin`。`customer_user` 以任何方式都得到
-  与"密码错误"完全相同的 `401 invalid_credentials`，且执行等价的哈希比较以避免计时差异。
+- `phone` 路径只接受 `customer_admin`（手机号账号）。`username` 路径接受**任何没有手机号的账号**：平台管理员与
+  用户名账号（§11，含 `customer_user`）。手机号账号（`username` 列只是号码的镜像）不能走 `username` 字段。
+  没有密码的手机号员工以任何方式都得到与"密码错误"完全相同的 `401 invalid_credentials`，且执行等价的哈希比较
+  以避免计时差异。连续失败会被限制，见 §11.4（`429 login_rate_limited`）。
 - 密码错、账号不存在、角色不允许、已停用：`401 invalid_credentials`（沿用现有"不泄露账号是否存在/停用"）。
 - 密码正确但所属客户未开通：`403 customer_not_onboarded`（**#60 落地后启用**，见 §9）。
 - 成功：`200 {"token": "...", "user": {...}}`（`token` 字段位置不变，旧客户端不受影响）。
@@ -131,8 +133,8 @@
 - 非平台管理员（含客户管理员、`customer_user`）：在**解析请求体之前**返回 `403 {"error":"not authorized"}`
   并写 `denied` 审计；伪造 `role`/`customerId` 得不到不同的错误。写入事务内再按库内当前角色复核（既有做法保留）。
 - `role=platform_admin`：`username`+`password`，不得带 `phone`/`customerId`（现状不变）。
-- `role=customer_admin`：`phone`+`password`+`customerId` 必填，不接受 `username`。
-- `role=customer_user`：`phone`+`customerId` 必填；**出现 `password` 字段即 `400 password_not_allowed`**，不静默忽略。
+- `role=customer_admin`：`customerId` 必填，**`phone` 与 `username` 恰好给一个**，`password` 必填（§11 起可用 `username`）。
+- `role=customer_user`：`customerId` 必填，`phone` 与 `username` 恰好给一个。给 `phone`：`password` 可选（不给则只能微信）；给 `username`：`password` 必填（§11）。
 - 错误：`400 invalid_phone`、`400 unknown customerId`（沿用）、`409 phone_exists`（不含客户信息）。
 - 响应 `201`：`user` 对象（§3.1，平台管理员看到完整手机号）。
 
@@ -141,9 +143,25 @@
 | 接口 | 变化 |
 | --- | --- |
 | `GET /api/users` | 平台管理员不变；客户管理员仍可列**本客户员工**（只读，手机号脱敏；油罐分配已改为仅平台管理员，此入口不再用于分配）；`customer_user` 仍 403 |
-| `PUT /api/users/:id`（停用/启用/重置密码） | **仅平台管理员**。客户管理员 → `403 not authorized`。对 `customer_user` 重置密码 → `409 no_password_for_role` |
+| `PUT /api/users/:id`（停用/启用/重置密码/改手机号，§4.7） | **仅平台管理员**。客户管理员 → `403 not authorized`。可为任何账号（含 `customer_user`，包括此前没有密码的手机号员工）设置/重置密码，并清除该账号的登录失败计数（§11.3） |
 | `PUT /api/users/:id/customer` | 已仅平台管理员，不变 |
 | 删除账号 | 当前**没有**删除接口，本期不新增（停用即可）；不得为此引入 |
+
+### 4.7 `PUT /api/users/:id` 的 `phone` 字段（修改手机号）
+
+请求体 `{"disabled"?: bool, "password"?: string, "phone"?: string}`，三者至少一个，可同时传。
+
+- **仅平台管理员**；客户管理员/员工在读请求体之前 `403 not authorized`（写 `denied` 审计）。
+- `phone` 用 §2 的规范化（去空格/连字符与 `+86`/`86`/`0086`），非法 `400 invalid_phone`。
+- 只适用于**手机号账号**（`customer_admin`/`customer_user`，含没有密码的员工）。平台管理员与用户名账号没有手机号，
+  传 `phone` → `409 phone_not_applicable`（不做账号类型互转）。
+- 已被任何账号占用 → `409 phone_exists`，响应不含号码与所属客户。传账号当前的号码是无操作：200，不写审计、不解绑。
+- 同一事务内：`phone` 与镜像它的 `username` 一起改；**删除该用户的微信绑定**（新号码须重新经
+  `/api/auth/wechat/phone-login` 验证，号码的前持有人不能凭旧绑定继续登录）；写审计 `user.change-phone`，
+  `detail` = `userId`、`role`、`oldPhone`、`newPhone`（均脱敏 `138****8000`）。
+- **已签发令牌不受影响**：`sub` 是用户 ID，改号后继续有效，也不触发续期变化；要踢人请停用账号。
+- 响应 `200`：与其他 `PUT /api/users/:id` 相同的 `user` 对象（平台管理员视角，手机号完整）。
+- 其他错误沿用：`404 user_not_found`、`400 invalid_password`、`400 invalid_request`（什么都没传）。
 
 ## 5. 配置与离线边界
 
@@ -208,3 +226,59 @@ wechat:
 3. admin：登录表单、`access.ts`、员工/管理员创建表单、`customer_admin` 去除员工管理入口。
 4. miniapp：登录页重做、身份键迁移到 `id`、错误分支。
 5. 联合验收：必须用真实微信小程序与真实后端，模拟不算通过。
+
+## 11. 用户名账号与员工密码（#77，国外用户无微信）
+
+> 产品决定（2026-10-19，见 #77 评论）：①用户名**全局唯一**；②**不做自助改密、不做首次登录强制改密**，改密码一律联系平台管理员重置。
+> 其余"请云端定"的项由云端决定，写在下面。旧章节与此冲突处以本节为准。迁移 `000030`（用户名账号）、`000031`（员工可有密码）。
+
+### 11.1 两种客户侧账号
+
+客户侧账号（`customer_admin`、`customer_user`）**二选一**，创建后不能互相转换：
+
+| | 手机号账号（#59） | 用户名账号（#77） |
+| --- | --- | --- |
+| 标识 | `phone`（`username` 列镜像之，对外为 `null`） | `username`（`phone` 为 `null`） |
+| 登录 | `phone` + 密码（需有密码）；任何人：微信 | `username` + 密码（三种角色一致） |
+| 密码 | `customer_admin` 必填；`customer_user` **可选**（不设则只能微信，管理员之后可补设） | 必填（包括 `customer_user`） |
+| 微信 | 可绑定 | 不可（手机号授权按手机号找账号，用户名账号没有手机号 → `phone_not_provisioned`） |
+
+同一账号不同时拥有手机号与用户名（避免绑定冲突规则变复杂；日后确需再扩）。
+
+### 11.2 用户名规则（全局唯一，登录无需指定客户）
+
+- 3–32 位，`[A-Za-z0-9._-]`，首字符为字母或数字；**不得形如大陆手机号**（`^1[3-9]\d{9}$`），以免与 `phone` 字段混淆。
+  违反 → `400 invalid_username`。
+- **全局唯一、不区分大小写**（唯一索引 `lower(username)`；登录也忽略大小写），保留创建时的写法。撞名 →
+  `409 username_taken`（响应不含任何别的账号信息）。
+- 平台管理员的用户名规则不变（1–64 字符），但同样参与上述大小写不敏感的唯一性。
+
+### 11.3 创建、初始密码、重置
+
+- `POST /api/users`（仅平台管理员，§4.5）：`customer_admin`/`customer_user` 带 `customerId`，`phone` 与 `username` **恰好给一个**，
+  `username` 账号 `password` 必填；`phone` 账号 `customer_admin` 必填密码、`customer_user` 可选。
+- **密码强度**：8–72 字节（bcrypt 上限），无其他组成规则。不合规 → `400 invalid_password`（新路径：用户名账号、手机号员工）；
+  `platform_admin` 与手机号 `customer_admin` 的既有路径保持原来的 `400 invalid_request`（现有 `code` 不改）。
+- **初始密码只出现在请求里**：由管理员输入，响应、日志、审计都不回显（服务端不生成密码）。
+- `PUT /api/users/:id` `{"password": "..."}`（仅平台管理员）：可为**任何**账号设置/重置密码，包括 `customer_user`（含此前没有密码的手机号员工）。
+  旧密码立即失效；已签发的令牌仍可用到过期（不吊销）。该账号当前的登录失败计数同时清除。
+- 因此 §4.5 的 `400 password_not_allowed` 与 §4.6 的 `409 no_password_for_role` **不再返回**。
+- **没有自助改密接口，登录响应也没有"需要改密"标记**：用户要改密码联系平台管理员重置。
+
+### 11.4 爆破防护
+
+Redis 计数：同一**提交的账号标识**（用户名折成小写，或规范化手机号）连续失败 5 次、同一来源地址失败 30 次，则在窗口内
+（15 分钟，自首次失败起，不被后续失败延长）一律 `429 login_rate_limited` 并带 `Retry-After`（秒），**先于**校验凭据（正确密码也不放行）。
+不存在的账号标识同样计数，所以锁定本身不泄露账号是否存在。成功登录清除该账号的计数；平台管理员重置密码也清除（"被锁的合法用户"
+的恢复路径：重置，或等待）。已知代价：知道用户名的人可以让该用户短暂登录不了；对停用与未开通账号，失败照常计数，应答不变。
+Redis 不可用时放行（不因缓存故障锁死全部用户）。阈值目前是代码常量（`Deps.LoginMaxFailures/LoginLockout`），未接配置。
+
+### 11.5 员工密码不开放网页后台
+
+员工有密码后 `/api/login` 会给他们签发令牌，但：任何管理类接口（账号、客户、油站、设备归属、授权分配、审计等）对 `customer_user`
+一律 `403`，**按数据库当前角色判定，不信令牌里的 `role`**（伪造角色的令牌同样被拒，见 `TestUsernameAccounts_StaffTokenCannotAdminister`）；
+员工可读范围不变，仍只有已授权油罐的只读数据（#63）。网页后台的前端拦截只是界面层。
+
+### 11.6 审计
+
+`user.create`、`user.reset-password`（既有）；`detail` 只含 `userId`、`role`，不含密码、完整手机号。

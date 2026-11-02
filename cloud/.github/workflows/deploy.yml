@@ -21,7 +21,9 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # 固定 24.04：ubuntu-latest 换成 26.04 后 Runner 的 docker image inspect .Id 与服务器 docker load 后不一致，
+    # 「远端预载镜像标识不一致」门禁误拦（2026-11-02）。换回 latest 前先确认两端 .Id 口径一致。
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       RELEASE_SHA: ${{ inputs.release_sha }}

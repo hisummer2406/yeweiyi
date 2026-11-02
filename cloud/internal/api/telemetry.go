@@ -23,13 +23,6 @@ import (
 // locally — is what the legacy `oilcan:latest:{device}` Redis key did, and it is exactly the
 // duplicate-storage pattern being retired.
 
-// Codes of the two 404s of GET /api/devices/:device/telemetry/latest. A client can tell "never reported"
-// from "reported once, too long ago for the platform to still hold the snapshot".
-const (
-	CodeTelemetryNotReported = "telemetry_not_reported"
-	CodeTelemetryExpired     = "telemetry_expired"
-)
-
 // latestTelemetryHandler is GET /api/devices/:device/telemetry/latest.
 func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -41,7 +34,7 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if deps.TB == nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "ThingsBoard is not configured on this deployment"})
+			apiError(c, http.StatusServiceUnavailable, codeDevicePlatformUnavailable, "ThingsBoard is not configured on this deployment")
 			return
 		}
 
@@ -70,16 +63,13 @@ func latestTelemetryHandler(deps Deps) gin.HandlerFunc {
 				// resurrect tanks the device no longer has (cloud#28).
 				c.JSON(http.StatusNotFound, gin.H{
 					"error":          "this device has not reported within the telemetry retention period",
-					"code":           CodeTelemetryExpired,
+					"code":           codeTelemetryExpired,
 					"lastReportedAt": time.UnixMilli(ts).UTC(),
 				})
 				return
 			}
 			// Authorized, provisioned, but has never reported. A real state, not an error.
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": "this device has not reported any telemetry yet",
-				"code":  CodeTelemetryNotReported,
-			})
+			apiError(c, http.StatusNotFound, codeTelemetryNotReported, "this device has not reported any telemetry yet")
 			return
 		}
 
@@ -122,11 +112,10 @@ func writeThingsBoardError(c *gin.Context, err error, device string) {
 	case errors.Is(err, tbclient.ErrNotFound):
 		// Bound in the business database but absent from ThingsBoard: a provisioning gap between
 		// the two device registries, not a permission problem and not an outage.
-		c.JSON(http.StatusNotFound, gin.H{"error": "device " + device + " is not provisioned in ThingsBoard"})
+		apiError(c, http.StatusNotFound, codeDeviceNotProvisioned, "device "+device+" is not provisioned in ThingsBoard")
 	case tbclient.Unavailable(err):
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": "the device platform is temporarily unavailable; retry shortly",
-		})
+		apiError(c, http.StatusServiceUnavailable, codeDevicePlatformUnavailable,
+			"the device platform is temporarily unavailable; retry shortly")
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}

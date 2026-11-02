@@ -35,6 +35,20 @@ func (q *Queries) CreateWechatIdentity(ctx context.Context, arg CreateWechatIden
 	return i, err
 }
 
+const deleteWechatIdentityByUser = `-- name: DeleteWechatIdentityByUser :execrows
+DELETE FROM user_wechat_identities WHERE user_id = $1
+`
+
+// Changing a phone number drops the WeChat binding: the new number must be proven again through
+// /api/auth/wechat/phone-login, so a previous holder of the number keeps no way in.
+func (q *Queries) DeleteWechatIdentityByUser(ctx context.Context, userID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWechatIdentityByUser, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getWechatIdentity = `-- name: GetWechatIdentity :one
 SELECT id, user_id, appid, openid, bound_at, last_login_at FROM user_wechat_identities WHERE appid = $1 AND openid = $2
 `
