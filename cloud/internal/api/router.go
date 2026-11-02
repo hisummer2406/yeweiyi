@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,11 @@ type Deps struct {
 	// MaxSessionAge caps how long sliding renewal can keep a login alive, counted from the password
 	// login (the token's authAt). Zero means defaultMaxSessionAge.
 	MaxSessionAge time.Duration
+
+	// LoginMaxFailures / LoginLockout bound password guessing (loginlimit.go). Zero means 5 failures
+	// per 15 minutes per account, six times that per client address.
+	LoginMaxFailures int
+	LoginLockout     time.Duration
 
 	// WeChat verifies mini-program login codes. Nil means the feature is off (config wechat.enabled);
 	// the WeChat routes then answer 503 wechat_unavailable and nothing else is affected.
@@ -61,6 +67,15 @@ type Deps struct {
 	// short code (`000001` for device `ZCT000001`). Empty means short-code binding matches the
 	// scanned text exactly and nothing else. See bindDeviceHandler.
 	DeviceCodePrefixes []string
+
+	// Purger runs device purge tasks (internal/purge, cloud#83). Nil when ThingsBoard is not configured;
+	// the purge route then answers 503 and creates no task.
+	Purger DevicePurger
+}
+
+// DevicePurger starts (or resumes) a device purge task in the background.
+type DevicePurger interface {
+	Start(ctx context.Context, id int64)
 }
 
 func NewRouter(deps Deps) *gin.Engine {
@@ -129,6 +144,9 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.DELETE("/stations/:id", deleteStationHandler(deps))
 		authorized.GET("/devices/:device/mini-code", deviceMiniCodeHandler(deps))
 		authorized.PUT("/devices/:device/station", assignDeviceStationHandler(deps))
+		authorized.POST("/devices/:device/purge", purgeDeviceHandler(deps))
+		authorized.GET("/device-purges", listDevicePurgesHandler(deps))
+		authorized.GET("/device-purges/:id", getDevicePurgeHandler(deps))
 		authorized.POST("/stations/:id/replace-device", replaceStationDeviceHandler(deps))
 	}
 

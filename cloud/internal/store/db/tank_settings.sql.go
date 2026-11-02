@@ -119,7 +119,7 @@ type UpsertTankSettingsParams struct {
 	ReportedAt           pgtype.Timestamptz `json:"reported_at"`
 }
 
-// 设备上报的油罐配置镜像（迁移 000026，cloud#70）。只由 internal/ingest 写入，API 只读。
+// 设备上报的油罐配置镜像（迁移 000033，cloud#70）。只由 internal/ingest 写入，API 只读。
 // 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
 func (q *Queries) UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error {
 	_, err := q.db.Exec(ctx, upsertTankSettings,

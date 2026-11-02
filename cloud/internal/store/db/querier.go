@@ -11,6 +11,8 @@ import (
 )
 
 type Querier interface {
+	// 一步完成：合并本步条数，推进到下一步。只推进 running 任务，且只从预期的那一步推进。
+	AdvanceDevicePurge(ctx context.Context, arg AdvanceDevicePurgeParams) (DevicePurge, error)
 	// The access decision (same function) plus the DATABASE clock for the moment of that decision.
 	// Callers that clip a window of ThingsBoard data by devices.customer_assigned_at must cap it at
 	// decided_at, not at the API host's clock: both values are then stamped by one clock, so skew
@@ -22,6 +24,10 @@ type Querier interface {
 	// The statement start is guaranteed not to be later than the snapshot, so the cap is never later
 	// than what the decision saw.
 	AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error)
+	CompleteDevicePurge(ctx context.Context, id int64) (DevicePurge, error)
+	CountDeviceCascades(ctx context.Context, deviceName string) (CountDeviceCascadesRow, error)
+	// verify 步骤：清单里每一类都应为 0。
+	CountDeviceRemnants(ctx context.Context, deviceName string) (int32, error)
 	// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
 	// from the SAME clock. Letting the column default to the database's now() while the application
 	// computes expires_at from its own clock means the two can disagree by however long the round trip
@@ -45,6 +51,10 @@ type Querier interface {
 	// the device changed hands — happens after this statement and no lock here could prevent it.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
+	// 设备彻底删除（cloud#83，迁移 000032，契约 docs/device-purge-contract.md）。
+	// 设备行须已由调用方在同一事务里锁住（GetDeviceForUpdate）。同设备已有未完成任务时唯一索引冲突（23505），
+	// 调用方改读那个任务。
+	CreateDevicePurge(ctx context.Context, arg CreateDevicePurgeParams) (DevicePurge, error)
 	CreateStation(ctx context.Context, arg CreateStationParams) (Station, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// A concurrent bind of the same openid or the same user trips a UNIQUE constraint (23505); the caller
@@ -70,6 +80,10 @@ type Querier interface {
 	// 与用户换客户同一个事务：旧客户下的授权不能带进新客户。返回被清除授权涉及的设备数。
 	DeleteTankGrantsForUser(ctx context.Context, userID int64) (int32, error)
 	DeleteTankGrantsForUserDevice(ctx context.Context, arg DeleteTankGrantsForUserDeviceParams) (int64, error)
+	// Changing a phone number drops the WeChat binding: the new number must be proven again through
+	// /api/auth/wechat/phone-login, so a previous holder of the number keeps no way in.
+	DeleteWechatIdentityByUser(ctx context.Context, userID int64) (int64, error)
+	DevicePurgeInProgress(ctx context.Context, deviceName string) (bool, error)
 	// Every other table FKs to devices(device_name). Message ordering over MQTT isn't guaranteed, so an
 	// alarm/oil-in-out/shift response can arrive before the first isOline event for a brand-new device
 	// — handlers call this first so the FK insert doesn't fail.
@@ -79,11 +93,14 @@ type Querier interface {
 	// different customer is left alone and its current customer_id is returned, so the caller can see
 	// the mismatch and refuse: minting must never silently move a device between customers — that is
 	// a reassignment, which also has to clear the old customer's user_devices bindings.
+	// No row comes back while the device is being purged (cloud#83): the caller answers 409
+	// device_purge_in_progress instead of reviving a row the purge is about to delete.
 	EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceForCustomerParams) (pgtype.Int8, error)
 	// The cloud-side half of the validity window: anything past its expiry that never reached a
 	// terminal state is closed as 'expired'. The device enforces the same rule independently on
 	// arrival, so this is about the command *record*, not about preventing the action.
 	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
+	FailDevicePurge(ctx context.Context, arg FailDevicePurgeParams) (DevicePurge, error)
 	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
 	// Completing onboarding locks the row so the readiness check and the status write see one state.
@@ -93,6 +110,8 @@ type Querier interface {
 	// both win.
 	GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error)
 	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
+	GetDevicePurge(ctx context.Context, id int64) (DevicePurge, error)
+	GetOpenDevicePurge(ctx context.Context, deviceName string) (DevicePurge, error)
 	GetStation(ctx context.Context, id int64) (Station, error)
 	// The one device currently on a station, if any (at most one: devices_station_id_key).
 	GetStationDevice(ctx context.Context, stationID pgtype.Int8) (Device, error)
@@ -108,7 +127,8 @@ type Querier interface {
 	// WeChat binding locks the account it binds to, so two first logins for one phone serialize and the
 	// second sees the first's identity row instead of racing it.
 	GetUserByPhoneForUpdate(ctx context.Context, phone pgtype.Text) (User, error)
-	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Case-insensitive, matching the lower(username) unique index (#77).
+	GetUserByUsername(ctx context.Context, lower string) (User, error)
 	// Locks the acting administrator against being demoted, moved or disabled mid-transaction.
 	GetUserForShare(ctx context.Context, id int64) (User, error)
 	// Locks the row for the rest of the transaction. Administration re-reads its target here and decides
@@ -117,8 +137,9 @@ type Querier interface {
 	GetWechatIdentity(ctx context.Context, arg GetWechatIdentityParams) (UserWechatIdentity, error)
 	GetWechatIdentityByUser(ctx context.Context, userID int64) (UserWechatIdentity, error)
 	HasRecordBackfill(ctx context.Context, deviceName string) (bool, error)
-	// 同一份重放不改变已有行。
+	// 同一份重放不改变已有行。删除栅栏与重放截止同 UpsertStockEvent。
 	InsertAlarmEvent(ctx context.Context, arg InsertAlarmEventParams) error
+	// 删除栅栏与重放截止同 UpsertStockEvent。
 	InsertRecordReject(ctx context.Context, arg InsertRecordRejectParams) error
 	// 判定与写入是同一条语句：被授权者必须是 customer_user，且设备与其同属一个客户。重复授权是 no-op
 	// （ON CONFLICT），返回 0 行 = 已存在或被拒绝；调用方在同一事务里先用 GetUserForUpdate /
@@ -126,11 +147,14 @@ type Querier interface {
 	InsertTankGrantIfAllowed(ctx context.Context, arg InsertTankGrantIfAllowedParams) (int64, error)
 	// 该设备已汇总到的最后一个小时（毫秒）；从未汇总过返回 0。
 	LatestTelemetryHourStart(ctx context.Context, deviceName string) (int64, error)
+	// tank 为可选筛选（#84）：NULL 表示整机；在 LIMIT/OFFSET 之前生效。
 	ListAlarmEventsAsc(ctx context.Context, arg ListAlarmEventsAscParams) ([]ListAlarmEventsAscRow, error)
 	ListAlarmEventsDesc(ctx context.Context, arg ListAlarmEventsDescParams) ([]ListAlarmEventsDescRow, error)
 	// Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
 	// Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 	// already exist when a device comes back, or its first snapshot after reconnecting is missed.
+	// A device being purged (cloud#83) is left out, so rollup, cmd/backfill and new subscriptions skip it;
+	// the purge stops its running subscription itself.
 	ListAllDeviceNames(ctx context.Context) ([]string, error)
 	ListAuditLogForCommand(ctx context.Context, commandID pgtype.UUID) ([]AuditLog, error)
 	// INTERNAL and test use only: no authorization. Anything that answers a user's request must use
@@ -163,6 +187,7 @@ type Querier interface {
 	// (operator, reason, arguments, results) to the new one.
 	ListControlCommandsVisibleToUser(ctx context.Context, arg ListControlCommandsVisibleToUserParams) ([]ControlCommand, error)
 	ListCustomers(ctx context.Context) ([]Customer, error)
+	ListDevicePurgesByDevice(ctx context.Context, deviceName string) ([]DevicePurge, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on
 	// which they hold at least one tank grant (cloud#63); the tanks themselves are listed separately.
 	// A customer still being configured (cloud#60) lists nothing for its non-platform accounts, exactly
@@ -180,6 +205,9 @@ type Querier interface {
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
+	ListRecentDevicePurges(ctx context.Context, lim int32) ([]DevicePurge, error)
+	// 启动时续跑：被重启打断的任务。failed 的等人工再次发起。
+	ListRunningDevicePurges(ctx context.Context) ([]DevicePurge, error)
 	// The station list a caller is allowed to see, by the same three-way rule as ListDevicesForUser:
 	//   platform_admin  every station;
 	//   customer_admin  every station of their own customer — including ones with no devices yet, or a
@@ -191,6 +219,7 @@ type Querier interface {
 	// 罐级过滤在语句内完成（user_may_access_tank）：分页与截断判断都基于过滤后的行，不泄露他罐的存在。整机级记录
 	// （payload 无罐号，tank=0）只有管理员可见。
 	// 按记录关闭时刻落在 [begin, end) 取，再按同一时刻排序；调用方多取一行判断是否截断。
+	// tank / direction 为可选筛选（#84）：NULL 表示不筛选；在 LIMIT/OFFSET 之前生效，分页与截断都针对筛选后的结果。
 	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
 	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
 	// 员工-油罐查看授权（迁移 000024，cloud#63）。授权判定本身在 SQL 函数 user_may_access_device /
@@ -237,16 +266,28 @@ type Querier interface {
 	// ThingsBoard 里已经不存在的设备（被删除）不会再出现在列表里，只靠 SyncDeviceOnlineStatus 它们会
 	// 永远停在在线。传入本轮在 ThingsBoard 看到的全部设备名，其余仍标记在线的一律置为离线。
 	MarkDevicesOfflineExcept(ctx context.Context, seenNames []string) (int64, error)
-	MarkRecordBackfill(ctx context.Context, deviceName string) error
+	// 删除中的设备不写标记（cloud#83）：否则删除完成后残留的标记会让同编号新设备跳过首次全量回补。
+	MarkRecordBackfill(ctx context.Context, dollar_1 string) error
 	// 该设备已汇总过的最大罐号；没有汇总返回 0。
 	MaxTelemetryHourlyTank(ctx context.Context, deviceName string) (int32, error)
 	// A platform admin belongs to no customer (users_customer_role_check), so it cannot be moved.
 	MoveUserToCustomer(ctx context.Context, arg MoveUserToCustomerParams) (User, error)
+	PurgeAlarmEvents(ctx context.Context, deviceName string) (int64, error)
+	// 本删除动作自身的审计（device.purge）保留：它记录的是删除，不是设备历史。
+	PurgeAuditLog(ctx context.Context, deviceName string) (int64, error)
+	PurgeDeviceRow(ctx context.Context, deviceName string) (int64, error)
+	PurgeRecordBackfills(ctx context.Context, deviceName string) (int64, error)
+	PurgeRecordRejects(ctx context.Context, deviceName string) (int64, error)
+	// 以下按设备编号删除业务库数据，全部在 business 步骤的同一事务里执行。设备行最后删，级联带走
+	// control_commands、user_tank_grants、user_devices、device_pairing_secrets（先计数再删）。
+	PurgeStockEvents(ctx context.Context, deviceName string) (int64, error)
+	PurgeTelemetryHourly(ctx context.Context, deviceName string) (int64, error)
 	// Idempotent operator registration (POST /api/devices). Same ownership rule as
 	// EnsureDeviceForCustomer — create, or claim an unassigned device, never move an assigned one — but
 	// also reports whether this call inserted the row, so the caller can answer 201 vs 200. xmax is 0
 	// only on a freshly inserted tuple; a conflict-update leaves it non-zero. The caller compares the
 	// returned customer_id with the requested one to detect a device owned by someone else.
+	// Like EnsureDeviceForCustomer, no row comes back while the device is being purged.
 	RegisterDeviceForCustomer(ctx context.Context, arg RegisterDeviceForCustomerParams) (RegisterDeviceForCustomerRow, error)
 	// The `default` customer is protected: deployment docs and bootstrap SQL look it up by name.
 	RenameCustomer(ctx context.Context, arg RenameCustomerParams) (Customer, error)
@@ -263,6 +304,8 @@ type Querier interface {
 	// 且只返回调用者本来就能定位的设备（客户管理员：本客户设备；员工：至少有一个被授权罐的设备）。
 	// 无权、不存在、别的客户的设备一律无行，与不存在不可区分。平台管理员不走这里。
 	ResolveDeviceForNavigation(ctx context.Context, arg ResolveDeviceForNavigationParams) (string, error)
+	// 再次发起：failed → running，保留 step，从断点继续。
+	RestartDevicePurge(ctx context.Context, id int64) (DevicePurge, error)
 	// The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
 	// would otherwise refuse the change.
 	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
@@ -273,6 +316,9 @@ type Querier interface {
 	// Disabling keeps the original timestamp if already disabled; enabling clears it.
 	SetUserDisabled(ctx context.Context, arg SetUserDisabledParams) (User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (int64, error)
+	// A phone account's username mirrors its number (users_phone_role_check), so both move together.
+	// A clash with another account's phone or username trips a UNIQUE constraint (23505).
+	SetUserPhone(ctx context.Context, arg SetUserPhoneParams) (User, error)
 	// 窗口内（按信封 ts）读不出来的记录。cutoff_ms = 0 表示未配置 stock.legacyFormatBefore，此时一律算当下
 	// 故障；否则早于它的算已封口的旧格式空洞（legacy）。sample 取窗口内第一条当下故障的原文。
 	// invalid_source 是合法 JSON，能识别罐号：只计入调用者可见的罐（user_may_access_tank，整机级无罐号
@@ -303,12 +349,14 @@ type Querier interface {
 	// customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
 	// 同一 (设备, eventId) 只保留信封 ts 最大的一份；相同则保留先写入的，结果与到达顺序无关。
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
+	// 设备删除中、或信封 ts 不晚于该编号最近一次删除完成时刻（旧记录重放）时不写入（cloud#83，device_record_writable）。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
-	// 设备上报的油罐配置镜像（迁移 000026，cloud#70）。只由 internal/ingest 写入，API 只读。
+	// 设备上报的油罐配置镜像（迁移 000033，cloud#70）。只由 internal/ingest 写入，API 只读。
 	// 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
 	UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error
 	// 小时级汇总（迁移 000018，issue #30）。
 	// 幂等；只在样本数不少于已存值时覆盖（迟到的补投会增加样本，TTL 会减少样本，后者不能顶掉完整值）。
+	// 设备删除中、或该小时开始于该编号最近一次删除完成时刻之前，不写入（cloud#83）。
 	UpsertTelemetryHourly(ctx context.Context, arg UpsertTelemetryHourlyParams) error
 	// Only answers "is there a user_devices row". It is NOT an authorization check: it ignores the
 	// customer boundary and the role tiers. Every device-scoped handler must call UserMayAccessDevice.

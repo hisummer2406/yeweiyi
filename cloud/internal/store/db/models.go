@@ -161,6 +161,35 @@ type DevicePairingSecret struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// 平台管理员彻底删除设备的任务与结果记录（cloud#83）。只存元数据与各类删除条数，不存任何被删记录的内容；永久保留。未完成（running/failed）的任务同时是该设备的写入栅栏。
+type DevicePurge struct {
+	ID int64 `json:"id"`
+	// 被删除的完整设备编号。刻意不做外键：设备行在删除过程中被删掉，任务记录要留下。
+	DeviceName string `json:"device_name"`
+	// running 执行中；failed 停在 step 所示步骤，等再次发起；completed 全部清理并核对完成。
+	Status string `json:"status"`
+	// 下一个要做（或失败）的步骤：thingsboard → business → verify → done。每步幂等，重试从这里继续。
+	Step string `json:"step"`
+	// 最近一次失败的原因；成功推进后清空。
+	Error pgtype.Text `json:"error"`
+	// 各类数据删除条数（只有数字），随步骤推进写入。
+	Counts []byte `json:"counts"`
+	// 发起人填写的删除原因。
+	Reason string `json:"reason"`
+	// 发起人用户 ID；账号被删后置空，用户名快照仍在 requested_username。
+	RequestedBy pgtype.Int8 `json:"requested_by"`
+	// 发起时发起人的用户名快照。
+	RequestedUsername string `json:"requested_username"`
+	// 发起时设备所属客户（快照，不做外键，客户以后可被删除）。
+	CustomerID pgtype.Int8 `json:"customer_id"`
+	// 发起时设备所在油站（快照，不做外键）。
+	StationID pgtype.Int8        `json:"station_id"`
+	StartedAt pgtype.Timestamptz `json:"started_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 全部完成的时刻；同编号再次登记后，信封 ts 不晚于它的记录视为旧记录重放，不写入。
+	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+}
+
 // 设备的出入库与报警已从 ThingsBoard 全量回补完成的标记。没有标记的设备，定时回读会做全量回补而不是只读回看窗口。
 type RecordBackfill struct {
 	DeviceName  string             `json:"device_name"`
@@ -338,7 +367,7 @@ type User struct {
 	ID int64 `json:"id"`
 	// 登录用户名，唯一。
 	Username string `json:"username"`
-	// bcrypt 哈希。平台管理员、客户管理员必填；客户普通用户（员工）必须为 NULL，只能经微信登录。
+	// bcrypt 哈希。平台管理员、客户管理员、用户名账号必填；手机号员工可空（空则只能经微信登录），由平台管理员设置后也可用手机号 + 密码登录。
 	PasswordHash pgtype.Text `json:"password_hash"`
 	// 账号创建时间。
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -348,7 +377,7 @@ type User struct {
 	CustomerID pgtype.Int8 `json:"customer_id"`
 	// 停用时间；NULL=启用。停用后无法登录，且已签发的 token 也无法访问任何设备（判定读库）。
 	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
-	// 规范化手机号（中国大陆 11 位）。平台管理员为 NULL，客户管理员/员工必填，且 username 与之相等；全局唯一。
+	// 规范化手机号（中国大陆 11 位）。平台管理员为 NULL；客户侧账号要么有手机号（username 与之相等），要么是用户名账号（phone 为 NULL）；全局唯一。
 	Phone pgtype.Text `json:"phone"`
 }
 

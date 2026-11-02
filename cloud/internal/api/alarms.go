@@ -47,7 +47,7 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		begin, end, ok := recordWindow(c, deps, p)
-		if !ok {
+		if !ok || !requireListTank(c, deps, p) {
 			return
 		}
 
@@ -60,7 +60,7 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 		ctx := c.Request.Context()
 		args := db.ListAlarmEventsAscParams{
 			DeviceName: p.device, BeginTime: begin, EndTime: end, Lim: p.limit, Off: p.offset,
-			UserID: c.MustGet("userID").(int64),
+			UserID: c.MustGet("userID").(int64), Tank: p.tank,
 		}
 		if p.asc {
 			res, err := deps.Queries.ListAlarmEventsAsc(ctx, args)

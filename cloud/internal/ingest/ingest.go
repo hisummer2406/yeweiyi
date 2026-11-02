@@ -179,6 +179,18 @@ func (i *Ingester) StartDevice(parent context.Context, deviceName string) {
 	}()
 }
 
+// StopDevice ends the device's subscription and its reconcile loop, if this process runs one. Used by
+// the device purge (cloud#83): sync never stops a subscription on its own, and the purged device must
+// not keep one. The SQL fence already refuses the writes; this ends the traffic.
+func (i *Ingester) StopDevice(deviceName string) {
+	i.mu.Lock()
+	cancel, ok := i.active[deviceName]
+	i.mu.Unlock()
+	if ok {
+		cancel()
+	}
+}
+
 // subscribeOnce runs a single subscription until it fails or ctx ends.
 func (i *Ingester) subscribeOnce(ctx context.Context, deviceName string) error {
 	dev, err := i.cfg.TB.GetDeviceByName(ctx, deviceName)

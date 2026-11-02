@@ -79,7 +79,7 @@
 
 ## 实现位置
 
-`db/migrations/000026_tank_settings.*`、`db/queries/tank_settings.sql`、`internal/protocol/tank_settings.go`
+`db/migrations/000033_tank_settings.*`、`db/queries/tank_settings.sql`、`internal/protocol/tank_settings.go`
 （解析）、`internal/ingest/tanksettings.go`（同步）、`internal/api/tanksettings.go`（接口）。
 
 ---

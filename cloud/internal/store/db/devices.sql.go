@@ -24,7 +24,9 @@ func (q *Queries) EnsureDevice(ctx context.Context, deviceName string) error {
 }
 
 const ensureDeviceForCustomer = `-- name: EnsureDeviceForCustomer :one
-INSERT INTO devices (device_name, customer_id) VALUES ($1, $2)
+INSERT INTO devices (device_name, customer_id)
+SELECT $1::TEXT, $2
+WHERE device_record_writable($1::TEXT, NULL)
 ON CONFLICT (device_name) DO UPDATE
     SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)
 RETURNING customer_id
@@ -40,6 +42,8 @@ type EnsureDeviceForCustomerParams struct {
 // different customer is left alone and its current customer_id is returned, so the caller can see
 // the mismatch and refuse: minting must never silently move a device between customers — that is
 // a reassignment, which also has to clear the old customer's user_devices bindings.
+// No row comes back while the device is being purged (cloud#83): the caller answers 409
+// device_purge_in_progress instead of reviving a row the purge is about to delete.
 func (q *Queries) EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceForCustomerParams) (pgtype.Int8, error) {
 	row := q.db.QueryRow(ctx, ensureDeviceForCustomer, arg.DeviceName, arg.CustomerID)
 	var customer_id pgtype.Int8
@@ -90,12 +94,16 @@ func (q *Queries) GetDeviceForUpdate(ctx context.Context, deviceName string) (De
 }
 
 const listAllDeviceNames = `-- name: ListAllDeviceNames :many
-SELECT device_name FROM devices ORDER BY device_name
+SELECT device_name FROM devices d
+WHERE NOT EXISTS (SELECT 1 FROM device_purges p WHERE p.device_name = d.device_name AND p.status <> 'completed')
+ORDER BY device_name
 `
 
 // Drives the ThingsBoard telemetry ingestion path (internal/ingest), which subscribes per device.
 // Unlike ListOnlineDeviceNames this deliberately includes offline devices: a subscription must
 // already exist when a device comes back, or its first snapshot after reconnecting is missed.
+// A device being purged (cloud#83) is left out, so rollup, cmd/backfill and new subscriptions skip it;
+// the purge stops its running subscription itself.
 func (q *Queries) ListAllDeviceNames(ctx context.Context) ([]string, error) {
 	rows, err := q.db.Query(ctx, listAllDeviceNames)
 	if err != nil {
@@ -162,7 +170,9 @@ func (q *Queries) MarkDevicesOfflineExcept(ctx context.Context, seenNames []stri
 }
 
 const registerDeviceForCustomer = `-- name: RegisterDeviceForCustomer :one
-INSERT INTO devices (device_name, customer_id) VALUES ($1, $2)
+INSERT INTO devices (device_name, customer_id)
+SELECT $1::TEXT, $2
+WHERE device_record_writable($1::TEXT, NULL)
 ON CONFLICT (device_name) DO UPDATE
     SET customer_id = COALESCE(devices.customer_id, EXCLUDED.customer_id)
 RETURNING customer_id, (xmax = 0) AS inserted
@@ -183,6 +193,7 @@ type RegisterDeviceForCustomerRow struct {
 // also reports whether this call inserted the row, so the caller can answer 201 vs 200. xmax is 0
 // only on a freshly inserted tuple; a conflict-update leaves it non-zero. The caller compares the
 // returned customer_id with the requested one to detect a device owned by someone else.
+// Like EnsureDeviceForCustomer, no row comes back while the device is being purged.
 func (q *Queries) RegisterDeviceForCustomer(ctx context.Context, arg RegisterDeviceForCustomerParams) (RegisterDeviceForCustomerRow, error) {
 	row := q.db.QueryRow(ctx, registerDeviceForCustomer, arg.DeviceName, arg.CustomerID)
 	var i RegisterDeviceForCustomerRow

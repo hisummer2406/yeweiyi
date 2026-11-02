@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/store/db"
@@ -207,8 +208,19 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		if !ok {
 			return
 		}
+		// Optional direction filter (#84/#85: the 入库 and 出库 pages are separate), applied in SQL like the
+		// tank filter so a page of the other direction cannot read as "no records".
+		var direction pgtype.Text
+		switch v := c.Query("direction"); v {
+		case "":
+		case protocol.StockIn, protocol.StockOut:
+			direction = pgtype.Text{String: v, Valid: true}
+		default:
+			apiError(c, http.StatusBadRequest, "invalid_direction", "direction must be IN or OUT")
+			return
+		}
 		begin, end, ok := recordWindow(c, deps, p)
-		if !ok {
+		if !ok || !requireListTank(c, deps, p) {
 			return
 		}
 		ctx := c.Request.Context()
@@ -221,7 +233,7 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 		args := db.ListStockEventsAscParams{
 			DeviceName: p.device, BeginTime: begin, EndTime: end,
 			Lim: p.limit + 1, Off: p.offset,
-			UserID: c.MustGet("userID").(int64),
+			UserID: c.MustGet("userID").(int64), Tank: p.tank, Direction: direction,
 		}
 		var stored []stockRowData
 		if p.asc {
@@ -261,9 +273,11 @@ func listOilInOutHandler(deps Deps) gin.HandlerFunc {
 
 		// Unreadable records are classified by the envelope ts they arrived under, not by the window
 		// of the movements above: the payload is not decodable, so there is no close time to use.
+		// With a tank filter, invalidSource counts that tank only; unparsable cannot be attributed to a
+		// tank or a direction and stays a device-wide count (docs/records-filter-contract.md).
 		summary, err := deps.Queries.SummarizeStockRejects(ctx, db.SummarizeStockRejectsParams{
 			DeviceName: p.device, BeginMs: begin.Time.UnixMilli(), EndMs: end.Time.UnixMilli(), CutoffMs: cutoffMs,
-			UserID: c.MustGet("userID").(int64),
+			UserID: c.MustGet("userID").(int64), Tank: p.tank,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
