@@ -107,6 +107,9 @@ Page({
     if (this.data.submitting) return;
     this.setData({ submitting: true, errorMsg: '' });
     const device = this.data.device as string;
+    // Only a failure of the POST itself can leave the outcome unknown: if the device-list read below fails,
+    // nothing was sent, and telling the user to check the command history would be wrong.
+    let posted = false;
     // Re-read the device list first: the station's device may have been replaced while this form was
     // open, and the replaced device can still be visible to this user. If it cannot be confirmed, the
     // command is not sent (a control command is not something to send on a guess).
@@ -114,6 +117,7 @@ Page({
       .then((res) => {
         const guard = commandGuard(res.rows, device, this.stationId);
         if (!guard.ok) throw new Blocked(guard.messageKey);
+        posted = true;
         return post<ControlCommand>(`/api/devices/${encodeURIComponent(device)}/commands`, {
           method: method.method,
           reason,
@@ -133,7 +137,7 @@ Page({
       .catch((err: Error) => {
         if (err instanceof Blocked) {
           this.setData({ errorMsg: t(err.messageKey) });
-        } else if (err instanceof ApiError && commandOutcomeUnknown(err.status, err.body)) {
+        } else if (posted && err instanceof ApiError && commandOutcomeUnknown(err.status, err.body)) {
           // The device may be acting on it (yeweiyi-cloud invariant 2): send the user to the command list,
           // never suggest sending it again.
           this.setData({ errorMsg: t('issueCmd.unconfirmed') });
