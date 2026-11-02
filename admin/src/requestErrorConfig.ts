@@ -31,13 +31,15 @@ export const handleUnauthorized = () => {
 };
 
 /**
- * authMiddleware 在 token 还有效但账号已被删除/停用时返回 403 {error:"not authorized"}
- * （internal/api/auth.go）。设备级拒绝的文案是 "not authorized for this device"，不会误中；
- * 个别管理接口的角色拒绝文案与此相同，此时回登录页重新取角色也是合理的。
+ * 裸 403 {error:"not authorized"}：authMiddleware 在 token 还有效但账号已被删除/停用时返回（internal/api/auth.go）。
+ * 设备级拒绝的文案是 "not authorized for this device"，不会误中。
+ * yeweiyi-cloud#79 起同一个 body 追加 code：account_unavailable（账号失效，回登录页）与 role_not_allowed
+ * （账号正常、角色不允许该操作，不清 token，提示无权限）。不带 code 的旧云端仍按账号失效处理。
  */
 export const isAccountRevoked = (error: any): boolean =>
   error?.response?.status === 403 &&
-  error.response.data?.error === 'not authorized';
+  error.response.data?.error === 'not authorized' &&
+  error.response.data?.code !== 'role_not_allowed';
 
 /** 401 或账号已失效：清 token 回登录页。返回是否已处理。 */
 export const forwardAuthFailure = (error: any): boolean => {
@@ -59,6 +61,16 @@ export const handleRequestError = (error: any, opts: any) => {
         getIntl().formatMessage({
           id: 'pages.login.customerNotOnboarded',
           defaultMessage: '所在客户尚未完成开通，请联系平台管理员。',
+        }),
+      );
+      return;
+    }
+    // 账号正常、角色不允许（cloud#79）：提示无权限，不清 token
+    if (status === 403 && data?.code === 'role_not_allowed') {
+      message.error(
+        getIntl().formatMessage({
+          id: 'app.request.roleNotAllowed',
+          defaultMessage: '没有权限执行此操作。',
         }),
       );
       return;

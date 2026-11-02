@@ -14,4 +14,6 @@ export default {
   'app.error.home': 'Kembali ke Beranda',
   'app.request.offline':
     'Jaringan tidak tersedia. Periksa koneksi Anda dan coba lagi.',
+  'app.request.roleNotAllowed':
+    'Anda tidak memiliki izin untuk melakukan tindakan ini.',
 };

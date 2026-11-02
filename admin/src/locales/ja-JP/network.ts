@@ -14,4 +14,5 @@ export default {
   'app.error.home': 'ホームに戻る',
   'app.request.offline':
     'ネットワークに接続できません。接続を確認して再試行してください。',
+  'app.request.roleNotAllowed': 'この操作を実行する権限がありません。',
 };

@@ -11,6 +11,7 @@ import {
 } from 'antd';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isAccountRevoked } from '@/requestErrorConfig';
 import { getLatestTelemetry } from '@/services/ant-design-pro/telemetry';
 import { parseTankParam, pickTank } from '@/utils/tankPick';
 import { fmtTime } from '@/utils/telemetry';
@@ -33,7 +34,7 @@ const forbiddenOrSilent = (e: unknown): 'forbidden' | 'silent' | 'error' => {
     ?.response;
   if (r?.status === 401) return 'silent';
   if (r?.status === 403) {
-    return r.data?.error === 'not authorized' ? 'silent' : 'forbidden';
+    return isAccountRevoked(e) ? 'silent' : 'forbidden';
   }
   return 'error';
 };

@@ -14,4 +14,5 @@ export default {
   'app.error.home': 'بازگشت به صفحه اصلی',
   'app.request.offline':
     'شبکه در دسترس نیست. لطفاً اتصال خود را بررسی و دوباره تلاش کنید.',
+  'app.request.roleNotAllowed': 'شما اجازه انجام این عملیات را ندارید.',
 };
