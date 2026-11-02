@@ -249,7 +249,7 @@ func meHandler(deps Deps) gin.HandlerFunc {
 		if err != nil {
 			// authMiddleware has just loaded this row; a miss here means it was deleted in between.
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+				forbidAccount(c)
 				return
 			}
 			internalError(c, err)
@@ -345,14 +345,14 @@ func authMiddleware(deps Deps) gin.HandlerFunc {
 		user, err := deps.Queries.GetUserByID(c.Request.Context(), claims.UserID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+				forbidAccount(c)
 				return
 			}
 			internalError(c, err)
 			return
 		}
 		if user.DisabledAt.Valid {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+			forbidAccount(c)
 			return
 		}
 

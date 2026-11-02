@@ -104,7 +104,7 @@ func TestOnboarding_CompleteChecksConditions(t *testing.T) {
 			{tn.send(t, "POST", onboardingPath(cust, "/complete"), token, nil)},
 			{tn.send(t, "GET", onboardingPath(cust, ""), token, nil)},
 		} {
-			if rec.Code != http.StatusForbidden || rec.Body.String() != `{"error":"not authorized"}` {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != `{"code":"role_not_allowed","error":"not authorized"}` {
 				t.Errorf("%s: %d %s", who, rec.Code, rec.Body.String())
 			}
 		}

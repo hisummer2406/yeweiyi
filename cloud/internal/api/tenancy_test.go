@@ -869,8 +869,10 @@ func TestTenancy_DisabledOrDeletedUserIsRefusedEverywhere(t *testing.T) {
 		{"GET", "/api/audit?device=" + tn.devA1},
 		{"GET", "/api/users"},
 	} {
-		if rec := tn.send(t, route.method, route.path, token, nil); rec.Code != http.StatusForbidden {
-			t.Errorf("disabled user on %s %s: got %d, want 403", route.method, route.path, rec.Code)
+		// The body clients match to end the session is unchanged; the code says why (cloud#79).
+		if rec := tn.send(t, route.method, route.path, token, nil); rec.Code != http.StatusForbidden ||
+			rec.Body.String() != `{"code":"account_unavailable","error":"not authorized"}` {
+			t.Errorf("disabled user on %s %s: got %d %s, want 403 account_unavailable", route.method, route.path, rec.Code, rec.Body.String())
 		}
 	}
 	if code := unbind(); code != http.StatusForbidden {
@@ -894,8 +896,9 @@ func TestTenancy_DisabledOrDeletedUserIsRefusedEverywhere(t *testing.T) {
 	if _, err := tn.env.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if rec := tn.send(t, "GET", "/api/devices", token, nil); rec.Code != http.StatusForbidden {
-		t.Errorf("a deleted user's token: got %d, want 403", rec.Code)
+	if rec := tn.send(t, "GET", "/api/devices", token, nil); rec.Code != http.StatusForbidden ||
+		rec.Body.String() != `{"code":"account_unavailable","error":"not authorized"}` {
+		t.Errorf("a deleted user's token: got %d %s, want 403 account_unavailable", rec.Code, rec.Body.String())
 	}
 }
 

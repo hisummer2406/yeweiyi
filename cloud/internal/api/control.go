@@ -225,14 +225,14 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 		user, err := deps.Queries.GetUserByID(ctx, c.MustGet("userID").(int64))
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+				forbidAccount(c)
 				return
 			}
 			internalError(c, err)
 			return
 		}
 		if user.DisabledAt.Valid {
-			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+			forbidAccount(c)
 			return
 		}
 

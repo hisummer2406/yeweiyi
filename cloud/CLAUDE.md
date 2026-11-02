@@ -61,7 +61,8 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   平台管理员不限客户，客户管理员限本客户，别的客户的油站/设备与"不存在"对客户管理员完全相同：`404 station not found` /
   `404 device not found`（现带 `code`：`station_not_found` / `device_not_found`），带别的客户的
   `customerId` 建油站与客户不存在同为 `400 unknown customerId`（#54）。**`403 {"error":"not authorized"}` 只留给角色/账号
-  问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页，
+  问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页（#79 起体不变、追加 `code`：`account_unavailable` | `role_not_allowed`，见
+  [错误码契约](docs/error-codes-contract.md)），
   对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObject`/`refuseObjectCode`；两者都写 `denied` 审计）。
   记录表不带 `station_id`，历史跟着设备所属油站走。加锁顺序固定：油站行 → 设备行（按名升序）。
 - 油罐授权与扫码（#63，契约见 [docs/tank-grants-contract.md](docs/tank-grants-contract.md)）：员工（`customer_user`）按

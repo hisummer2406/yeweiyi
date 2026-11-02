@@ -241,7 +241,7 @@ func TestDevicePurge_RefusesEveryoneButPlatformAdmin(t *testing.T) {
 
 	for name, tok := range map[string]string{"customer_admin": adminTok, "customer_user": staffTok} {
 		rec := pe.do("POST", "/api/devices/"+device+"/purge", []byte(tok), []byte(`not even json`))
-		if rec.Code != http.StatusForbidden || rec.Body.String() != `{"error":"not authorized"}` {
+		if rec.Code != http.StatusForbidden || rec.Body.String() != `{"code":"role_not_allowed","error":"not authorized"}` {
 			t.Errorf("%s: %d %s, want 403 not authorized before the body is read", name, rec.Code, rec.Body.String())
 		}
 		if rec := pe.do("GET", "/api/device-purges?deviceName="+device, []byte(tok), nil); rec.Code != http.StatusForbidden {

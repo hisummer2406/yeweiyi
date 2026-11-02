@@ -70,10 +70,12 @@
 
 以下需要小程序（miniapp#7）与网页（admin#17）负责人确认后再改，云端不单方面动：
 
-1. **裸 `403 {"error":"not authorized"}` 的拆分。** 现在客户端看到这个体就回登录页；它同时用于账号停用/删除与
-   "有效账号但角色不够"（员工调管理接口、客户管理员调平台管理员接口）。提案：体与状态码不变，追加
-   `code`——`account_unavailable`（停用/删除，应结束会话）与 `role_not_allowed`（角色不足，不应结束会话）。
-   旧客户端按体判定不受影响；新客户端按 `code` 区分。需确认客户端迁移顺序后实施。
+1. **裸 `403 {"error":"not authorized"}` 已追加 `code`（体与状态码不变）**：`account_unavailable`（账号已删除/停用，
+   应结束会话）与 `role_not_allowed`（账号有效、角色不允许，**不应**结束会话）。事务内复检失败（"authority changed"）
+   时按调用者当前账号行判定：停用/删除 → `account_unavailable`，否则 `role_not_allowed`；读不到行时回落为
+   `account_unavailable`（与旧行为一致）。小程序与网页现按 `error === "not authorized"` 判定登出，不受影响；
+   **待客户端确认后**改为仅在 `account_unavailable`（或无 `code` 的旧体）时登出，`role_not_allowed` 显示
+   「没有权限执行此操作」（miniapp#7、admin#17）。
 2. **记录"不完整"信封**（`parsed`/`unparsable`/`legacySkipped`、`STOCK_EVENT_FORMAT_UNSUPPORTED`）保持现状，
    只需客户端按字段显示"列表可能不完整"，不需要云端新码。
 3. **场景 × 文案矩阵**（操作场景—HTTP—code—默认文案—下一步—会话行为）以本表的 code 为准，由客户端维护本地化文案；
