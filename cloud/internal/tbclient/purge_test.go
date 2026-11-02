@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"yeweiyi-cloud/internal/devicesim"
+	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/tbclient"
 )
 
@@ -26,8 +27,13 @@ func TestPurge_DeletesEveryKeyThenTheDevice(t *testing.T) {
 		}
 	}
 
+	// Wait until the last snapshot is stored, every key of it. ThingsBoard persists asynchronously:
+	// deleting as soon as the first key shows up let a snapshot still in flight write its points back
+	// afterwards, and the "every key gone" check below then timed out on keys the delete never saw.
+	// Counting points per key does not work either: snapshots sent within the same millisecond share
+	// a timestamp and ThingsBoard keeps one point per (key, ts).
 	var keys []string
-	eventually(t, settleTimeout, "telemetry keys to appear", func() error {
+	eventually(t, settleTimeout, "the last snapshot to be stored", func() error {
 		var err error
 		keys, err = c.TimeseriesKeys(ctx, dev.ID.ID)
 		if err != nil {
@@ -35,6 +41,30 @@ func TestPurge_DeletesEveryKeyThenTheDevice(t *testing.T) {
 		}
 		if len(keys) == 0 {
 			return errors.New("no keys yet")
+		}
+		points, err := c.Timeseries(ctx, dev.ID.ID, tbclient.TimeseriesQuery{
+			Keys: keys, StartMs: 0, EndMs: time.Now().Add(time.Hour).UnixMilli(), Limit: 10,
+		})
+		if err != nil {
+			return err
+		}
+		lastTS := int64(-1)
+		for _, p := range points[protocol.KeySnapshotSeq] {
+			if p.Value == "3" {
+				lastTS = p.TS
+			}
+		}
+		if lastTS < 0 {
+			return errors.New("snapshot 3 not stored yet")
+		}
+		for _, k := range keys {
+			found := false
+			for _, p := range points[k] {
+				found = found || p.TS == lastTS
+			}
+			if !found {
+				return fmt.Errorf("key %s has no point of the last snapshot yet", k)
+			}
 		}
 		return nil
 	})

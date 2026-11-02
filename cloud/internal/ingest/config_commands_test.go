@@ -102,12 +102,15 @@ func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T
 	}
 
 	// The mirror follows the device's re-published attributes (about 2 s after the write), never the
-	// command: wait for them.
+	// command: wait for them. Wait for every changed field, not just one: the device publishes them in
+	// one message, but ThingsBoard stores attributes key by key, so a sync pass can read some keys new
+	// and others still old; the next pass completes the mirror.
 	deadline := time.Now().Add(20 * time.Second)
 	var after db.TankSetting
 	for {
 		after = s.mirror(t)
-		if after.AlarmHighLevelMm.Int32 == 2700 || time.Now().After(deadline) {
+		caughtUp := after.AlarmHighLevelMm.Int32 == 2700 && after.Density.Float64 == 0.7 && after.CapacityL.Float64 == 40000
+		if caughtUp || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)

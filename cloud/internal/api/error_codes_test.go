@@ -1,11 +1,13 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/protocol"
 )
 
@@ -60,5 +62,27 @@ func TestErrorCodes_PlatformAdminOnlyDeviceOperations(t *testing.T) {
 	rec := tn.env.do("POST", "/api/devices", []byte(tn.adminA), []byte(`{"deviceName":"x","customerId":1}`))
 	if rec.Code != http.StatusForbidden || bodyCode(t, rec) != "platform_admin_required" {
 		t.Errorf("register as customer admin = %d %s, want 403 platform_admin_required", rec.Code, rec.Body.String())
+	}
+}
+
+// A role refusal and a dead account share the bare body clients match on, and differ by code: an
+// administrator demoted mid-session is told "your role may not", a disabled one "account
+// unavailable" — on the same administrative route (cloud#79).
+func TestErrorCodes_RoleRefusalVersusDeadAccount(t *testing.T) {
+	tn := newTenancy(t)
+	ctx := context.Background()
+	staffTok, staffID := tn.env.userIn(control.RoleCustomerUser, tn.custA)
+
+	create := func() *httptest.ResponseRecorder {
+		return tn.env.do("POST", "/api/customers", []byte(staffTok), []byte(`{"name":"x"}`))
+	}
+	if rec := create(); rec.Code != http.StatusForbidden || rec.Body.String() != `{"code":"role_not_allowed","error":"not authorized"}` {
+		t.Errorf("staff on an admin route = %d %s, want 403 role_not_allowed", rec.Code, rec.Body.String())
+	}
+	if _, err := tn.env.pool.Exec(ctx, `UPDATE users SET disabled_at = now() WHERE id = $1`, staffID); err != nil {
+		t.Fatal(err)
+	}
+	if rec := create(); rec.Code != http.StatusForbidden || rec.Body.String() != `{"code":"account_unavailable","error":"not authorized"}` {
+		t.Errorf("disabled staff = %d %s, want 403 account_unavailable", rec.Code, rec.Body.String())
 	}
 }

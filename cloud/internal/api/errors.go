@@ -21,7 +21,14 @@ const (
 	// codeCommandDeliveryUnconfirmed: ThingsBoard failed while the command was being handed over.
 	// It may or may not have reached the device; never present it as "failed" or "not sent".
 	codeCommandDeliveryUnconfirmed = "command_delivery_unconfirmed"
+
+	// The bare 403 {"error":"not authorized"} keeps its body, which clients match exactly to end the
+	// session; these codes only tell a newer client which of the two cases it is.
+	codeAccountUnavailable = "account_unavailable" // caller deleted or disabled: end the session
+	codeRoleNotAllowed     = "role_not_allowed"    // caller is fine, their role may not do this: keep the session
 )
+
+const notAuthorized = "not authorized"
 
 // internalErrorMessage is the only text a 500 carries. The underlying error (SQL, driver,
 // ThingsBoard response bodies) goes to the log: it is useless to an end user and it can name
@@ -33,6 +40,26 @@ const internalErrorMessage = "internal server error"
 func internalError(c *gin.Context, err error) {
 	log.Printf("api: %s %s: %v", c.Request.Method, c.FullPath(), err)
 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": internalErrorMessage, "code": codeInternalError})
+}
+
+// forbidAccount answers the bare 403 for a caller whose account is gone or disabled.
+func forbidAccount(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": notAuthorized, "code": codeAccountUnavailable})
+}
+
+// refusalCode tells a role refusal from a dead account by reading the caller's row now. Refusals
+// decided inside a transaction ("authority changed") may be either: the caller was demoted, or
+// disabled, while the request ran. When the row cannot be read the answer is account_unavailable,
+// which is what every client did with this body before the codes existed.
+func refusalCode(c *gin.Context, deps Deps, actorID int64) string {
+	if deps.Queries == nil {
+		return codeAccountUnavailable
+	}
+	u, err := deps.Queries.GetUserByID(c.Request.Context(), actorID)
+	if err != nil || u.DisabledAt.Valid {
+		return codeAccountUnavailable
+	}
+	return codeRoleNotAllowed
 }
 
 // badRequest answers a request body or query that failed to bind. The binder's text names the

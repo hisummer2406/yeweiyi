@@ -47,14 +47,14 @@ func requireAdminActor(c *gin.Context, deps Deps) (db.User, bool) {
 	user, err := deps.Queries.GetUserByID(c.Request.Context(), userID.(int64))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+			forbidAccount(c)
 			return db.User{}, false
 		}
 		internalError(c, err)
 		return db.User{}, false
 	}
 	if user.DisabledAt.Valid {
-		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+		forbidAccount(c)
 		return db.User{}, false
 	}
 	return user, true
@@ -88,10 +88,11 @@ func auditRefusal(c *gin.Context, deps Deps, actor db.User, action, reason strin
 // refuse audits a denied administrative attempt and answers 403. Clients read a 403 whose body is
 // exactly "not authorized" as "this account is revoked" and send the user back to the login page, so
 // reserve it for the caller's role or account; a refusal about an object (someone else's, or missing)
-// goes through refuseObject.
+// goes through refuseObject. The body stays exactly that; the code (account_unavailable or
+// role_not_allowed, see refusalCode) lets a newer client keep the session on a role refusal.
 func refuse(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any) {
 	auditRefusal(c, deps, actor, action, reason, detail)
-	c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+	c.JSON(http.StatusForbidden, gin.H{"error": notAuthorized, "code": refusalCode(c, deps, actor.ID)})
 }
 
 // refuseObject audits the attempt like refuse but answers with the status and message a missing
@@ -876,7 +877,7 @@ func respondVerdict(c *gin.Context, deps Deps, actor db.User, targetID int64, ac
 			refuse(c, deps, actor, action, v.msg, detail)
 			return
 		}
-		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized"})
+		forbidAccount(c)
 		return
 	}
 	if v.code != "" {
