@@ -189,10 +189,11 @@ const ConsoleDevices: React.FC = () => {
   }, [idleKey, loadDevice]);
 
   // 带上油站：从油站分段进入的详情页会在换机后自动切到该油站的新设备（契约 §8.1）
-  const openDetail = (name: string, stationId?: number | null) =>
+  // tank 是点的那个罐的协议罐号：详情只显示这个罐（同小程序「点谁是谁」）
+  const openDetail = (name: string, tank: number, stationId?: number | null) =>
     history.push(
-      `/console/devices/${encodeURIComponent(name)}${
-        typeof stationId === 'number' ? `?station=${stationId}` : ''
+      `/console/devices/${encodeURIComponent(name)}?tank=${tank}${
+        typeof stationId === 'number' ? `&station=${stationId}` : ''
       }`,
     );
 
@@ -258,7 +259,7 @@ const ConsoleDevices: React.FC = () => {
               <TankCard
                 tank={t}
                 onClick={() =>
-                  openDetail(g.device.device_name, g.device.station_id)
+                  openDetail(g.device.device_name, t.index, g.device.station_id)
                 }
               />
             </Col>
