@@ -373,3 +373,21 @@ openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶�
 3. A-2 / A-4 / A-5 的改名与错误码取并集，**一批做完**——分批改名会让两侧多经历几次不兼容窗口。
 4. 接入 C 的共用 fixture，此后任一侧改动都会让双方构建变红。
 5. A-6 与 B 各条按各自的决定人推进，不阻塞 1–4。
+
+## E. 油罐配置镜像（cloud#70，第一阶段）—— 待设备端同步
+
+云端已按设备端 `TankSettingsAttributeBuilder` / `远程配置下发-字段清单.md` 的键名消费客户端属性
+`tank{N}.*`（契约见 [tank-settings-contract.md](tank-settings-contract.md)）。这是**可选、向后兼容**的消费，
+**Refs 而非 Closes** 设备端 PR #38；字段名、单位、形状仍以设备端确认为准。待办：
+
+| 项 | 需要谁 |
+|---|---|
+| 把 `fixtures/protocol/v1/client_attributes_tank_settings.json` 同步进设备端 fixture，并让其测试读它 | 设备端 |
+| `density` 单位（设置页标 kg/m³，实际存 0.56）：云端原样透传，不声明单位 | 现场 / 产品 |
+| 确认 `oilTypeIndex` 1–17 内置名称由谁维护（云端不内置） | 小程序 / 设备端 |
+| 真机验证：属性是否在连接与变更时按预期上报（零真机验证） | 设备端 |
+
+**#71 追加（下发配置）：** 云端新增方法 `config.setTankSettings`（admin）、`config.setDeviceSettings`（仅平台管理员），
+args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、`cmd_result_set_tank_settings.json`，同样待设备端同步
+并让其测试读取。另：设备端字段清单把结果载荷写成 `data`，但 `RpcWirePayloads.cmdResult` 和云端协议都是 `detail`——请设备端
+订正文档。真机验证清单见 [tank-settings-device-verification.md](tank-settings-device-verification.md)。

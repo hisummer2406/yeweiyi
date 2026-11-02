@@ -211,6 +211,9 @@ func (pe *purgeEnv) seedHistory(device string, oldCustomer, customer, staffID in
 	if _, err := pe.pool.Exec(ctx, `INSERT INTO device_pairing_secrets (device_name, secret_hash) VALUES ($1, 'x')`, device); err != nil {
 		pe.t.Fatal(err)
 	}
+	if _, err := pe.pool.Exec(ctx, `INSERT INTO tank_settings (device_name, tank, reported_at) VALUES ($1, 1, now()), ($1, 2, now())`, device); err != nil {
+		pe.t.Fatal(err)
+	}
 }
 
 // historyRows counts every business row that names the device (the purge's own audit row excluded).
@@ -218,7 +221,7 @@ func (pe *purgeEnv) historyRows(device string) int64 {
 	pe.t.Helper()
 	var total int64
 	for _, table := range []string{"stock_events", "alarm_events", "record_rejects", "record_backfills", "telemetry_hourly",
-		"control_commands", "user_tank_grants", "user_devices", "device_pairing_secrets", "devices"} {
+		"control_commands", "user_tank_grants", "user_devices", "device_pairing_secrets", "tank_settings", "devices"} {
 		total += pe.count("SELECT COUNT(*) FROM "+table+" WHERE device_name = $1", device)
 	}
 	return total + pe.count(`SELECT COUNT(*) FROM audit_log WHERE device_name = $1 AND action <> 'device.purge'`, device)
@@ -318,7 +321,7 @@ func TestDevicePurge_DeletesEverythingOfTheDeviceAndNothingElse(t *testing.T) {
 		t.Fatalf("task after run: %+v", got)
 	}
 	want := map[string]int64{"stockEvents": 2, "alarmEvents": 2, "recordRejects": 2, "recordBackfills": 1, "telemetryHourly": 3,
-		"auditLog": 1, "controlCommands": 1, "tankGrants": 2, "userDevices": 1, "pairingSecrets": 1, "devices": 1, "tbKeys": 5, "tbDevice": 1}
+		"auditLog": 1, "controlCommands": 1, "tankGrants": 2, "userDevices": 1, "pairingSecrets": 1, "tankSettings": 2, "devices": 1, "tbKeys": 5, "tbDevice": 1}
 	for k, v := range want {
 		if got.Counts[k] != v {
 			t.Errorf("counts[%s] = %d, want %d (all: %v)", k, got.Counts[k], v, got.Counts)

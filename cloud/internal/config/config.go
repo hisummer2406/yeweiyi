@@ -197,6 +197,9 @@ type Ingest struct {
 	// flag. It only adds to ThingsBoard's own inactivity timeout (default 10 minutes), which is what
 	// really decides how late an offline device is noticed.
 	OnlineStatusInterval Duration `yaml:"onlineStatusInterval"`
+	// TankSettingsInterval is how often each device's reported tank configuration is re-read from
+	// ThingsBoard client attributes into tank_settings (cloud#70).
+	TankSettingsInterval Duration `yaml:"tankSettingsInterval"`
 }
 
 // Telemetry covers continuous telemetry: how long ThingsBoard keeps it raw, and the hourly summaries
@@ -264,6 +267,7 @@ func Defaults() Config {
 			RecordReconcileInterval: Duration(10 * time.Minute),
 			RecordReconcileLookback: Duration(8 * 24 * time.Hour),
 			OnlineStatusInterval:    Duration(30 * time.Second),
+			TankSettingsInterval:    Duration(time.Minute),
 		},
 		Telemetry: Telemetry{
 			Retention:       Duration(7 * 24 * time.Hour),
@@ -341,6 +345,7 @@ func (c *Config) applyEnv() error {
 		{"INGEST_RECORD_RECONCILE_INTERVAL", &c.Ingest.RecordReconcileInterval},
 		{"INGEST_RECORD_RECONCILE_LOOKBACK", &c.Ingest.RecordReconcileLookback},
 		{"INGEST_ONLINE_STATUS_INTERVAL", &c.Ingest.OnlineStatusInterval},
+		{"INGEST_TANK_SETTINGS_INTERVAL", &c.Ingest.TankSettingsInterval},
 		{"TELEMETRY_RETENTION", &c.Telemetry.Retention},
 		{"TELEMETRY_ROLLUP_INTERVAL", &c.Telemetry.RollupInterval},
 		{"TELEMETRY_ROLLUP_RECOMPUTE", &c.Telemetry.RollupRecompute},
@@ -433,6 +438,7 @@ func (c *Config) Validate() error {
 		{"ingest.recordReconcileInterval", c.Ingest.RecordReconcileInterval},
 		{"ingest.recordReconcileLookback", c.Ingest.RecordReconcileLookback},
 		{"ingest.onlineStatusInterval", c.Ingest.OnlineStatusInterval},
+		{"ingest.tankSettingsInterval", c.Ingest.TankSettingsInterval},
 		{"telemetry.retention", c.Telemetry.Retention},
 		{"telemetry.rollupInterval", c.Telemetry.RollupInterval},
 		{"telemetry.rollupRecompute", c.Telemetry.RollupRecompute},

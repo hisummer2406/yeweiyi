@@ -1,0 +1,13 @@
+{
+  "_comment": "config.setTankSettings 成功后设备上报的 cmdResult。detail.updated 是实际修改的字段，detail.ignored（可无）是设备不认识而忽略的字段。注意设备端字段清单文档里写的 `data` 实际线上字段名是 `detail`（RpcWirePayloads.cmdResult）。改动后设备约 2 秒内重发客户端属性，云端据此更新镜像。cloud#71，未冻结。",
+  "ts": 1756713600900,
+  "values": {
+    "cmdResult": {
+      "commandId": "5d0f7b0e-2a4c-4f7e-9d34-6a1b8c2e9f10",
+      "status": "succeeded",
+      "reason": "罐设置已更新",
+      "detail": { "tank": 1, "updated": ["alarmHighLevelMm", "density", "oilTypeIndex", "capacityL"], "ignored": ["foo"] },
+      "tsMs": 1756713600900
+    }
+  }
+}

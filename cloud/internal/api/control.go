@@ -142,6 +142,13 @@ func writeControlError(c *gin.Context, err error) {
 			"error": err.Error(),
 			"hint":  "physical control actions are disabled until device-side interlocks are verified on real hardware",
 		})
+	case errors.Is(err, control.ErrInvalidArgs):
+		var ae *protocol.ArgsError
+		if errors.As(err, &ae) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": ae.Error(), "code": "invalid_args", "fields": ae.Fields})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_args"})
 	case errors.Is(err, control.ErrUnknownMethod), errors.Is(err, control.ErrReasonRequired):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	case errors.Is(err, control.ErrAuditUnavailable):

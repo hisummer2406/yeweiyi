@@ -40,6 +40,24 @@
       "pins": "客户端属性：只在配置变化时上报，不进遥测"
     },
     {
+      "file": "rpc_request_set_tank_settings.json",
+      "sha256": "e8557026b9738c310b46441503b3277165503194c90ef6f98b36ae05b304becb",
+      "direction": "downlink",
+      "pins": "config.setTankSettings 请求（cloud#71，未冻结）：args 字段名同客户端属性，部分更新"
+    },
+    {
+      "file": "cmd_result_set_tank_settings.json",
+      "sha256": "f275b1a7c1b648037fe1adbbc4f2475e4a05455cbdfd38b5a258645fa123baed",
+      "direction": "uplink",
+      "pins": "config.setTankSettings 成功的 cmdResult：detail.updated/ignored（cloud#71，未冻结）"
+    },
+    {
+      "file": "client_attributes_tank_settings.json",
+      "sha256": "dfdeaa239d887b9077147d3c283d0debc35c55c29bb479e2f873100b5b40b40a",
+      "direction": "uplink",
+      "pins": "罐设置客户端属性 tank{N}.*（cloud#70，未冻结）：罐高/形状/油品序号/报警阈值/修正值/密度；0 = 不启用"
+    },
+    {
       "file": "alarm_active.json",
       "sha256": "a58493dac5b3420f38d08ee5167c00bdeda0d8d61f84b03ef2070d97588148ac",
       "direction": "uplink",

@@ -47,6 +47,9 @@ var (
 	ErrForbidden = errors.New("control: not permitted")
 	// ErrUnknownMethod is a method absent from protocol.Methods.
 	ErrUnknownMethod = errors.New("control: unknown method")
+	// ErrInvalidArgs wraps a *protocol.ArgsError: the args of a method with a defined shape are wrong.
+	ErrInvalidArgs = errors.New("control: invalid args")
+
 	// ErrReasonRequired enforces issue #1's mandatory 二次确认 justification.
 	ErrReasonRequired = errors.New("control: a reason is required")
 	// ErrPhysicalCommandsDisabled is returned when a method that causes a physical action is
@@ -202,6 +205,14 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
 		return db.ControlCommand{}, err
+	}
+
+	// Checked after authorization (a caller who may not issue the method learns nothing about its
+	// argument shape) and before anything is recorded or sent.
+	if err := protocol.ValidateArgs(req.Method, req.Args); err != nil {
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": err.Error()})
+		return db.ControlCommand{}, fmt.Errorf("%w: %w", ErrInvalidArgs, err)
 	}
 
 	dev, err := s.tb.GetDeviceByName(ctx, req.DeviceName)
@@ -515,8 +526,10 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 
 func roleAllows(role string, need protocol.PermissionLevel) bool {
 	switch role {
-	case RolePlatformAdmin, RoleCustomerAdmin:
-		return true // both tiers
+	case RolePlatformAdmin:
+		return true
+	case RoleCustomerAdmin:
+		return need != protocol.PermPlatform
 	case RoleCustomerUser:
 		// Viewing is granted per tank (cloud#63); a command acts on the whole device, so a grant on one
 		// tank must not let an employee mute or restart anything for the others. Employees are

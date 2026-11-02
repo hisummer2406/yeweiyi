@@ -371,7 +371,8 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 				return "/api/devices/" + device + "/station", []byte(`{"stationId":null}`)
 			},
 		},
-		"GET /api/devices/:device/tanks": {build: path("/tanks")},
+		"GET /api/devices/:device/tanks":         {build: path("/tanks")},
+		"GET /api/devices/:device/tank-settings": {build: path("/tank-settings")},
 		// Platform admins only (cloud#83); every customer-side caller is refused by role.
 		"POST /api/devices/:device/purge": {
 			adminOnly: true,
