@@ -37,7 +37,7 @@ import serialport.help.SerialPortHelper;
  * 协议编排层：串口/PC/探头三路轮询、厂商协议分发（factory/）、报警联动、经 {@link DataRefreshCallback}
  * 把解析结果回调给 UI 层。不是 HAL——底层字节收发在 {@code serialport.manager.SerialPortManager}
  * （263 行，零 UI 依赖，几乎无调用方）。两者同名易混淆：UI/业务层应始终经本类，禁止直接调用
- * {@code serialport.manager.SerialPortManager}。见 openspec/changes/layer-data-and-hardware-boundaries §8、
+ * {@code serialport.manager.SerialPortManager}。见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries §8、
  * `CLAUDE.md` "Known landmines"。
  */
 public class SerialPortManager implements IParseDataListener {

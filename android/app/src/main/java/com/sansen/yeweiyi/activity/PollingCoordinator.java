@@ -9,7 +9,7 @@ import java.util.TimerTask;
 /**
  * 定时任务的启动/停止，对接 {@link MyTimeTask}（20 分钟一次的 TEST_DATA 标志位
  * 看门狗）。从 MainActivity 搬出，MainActivity 的 onDestroy 负责调用 {@link #stop()}
- * 以保证生命周期正确绑定。见 openspec/changes/split-main-activity §3。
+ * 以保证生命周期正确绑定。见 openspec/changes/archive/2026-11-02-split-main-activity §3。
  *
  * <p>注意：MainActivity 里另有一条独立的 1 秒周期 Handler 循环（REFLASH_TIME，
  * 更新 {@code SerialPortEntrity.time} 与条件触发 {@code setTestModel()}），本组

@@ -15,7 +15,7 @@ import java.util.List;
  * {@code ProbeToOil}（探针地址映射）/{@code Sideleakage}（侧漏检测记录）/{@code OilCanMapper}
  * （测试数据映射表）/{@code OilExploration}（油气探测报警值）六个实体，取代对 {@code DBDataManager}
  * 油罐相关方法的直接调用。
- * 见 openspec/changes/layer-data-and-hardware-boundaries §6。
+ * 见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries §6。
  */
 public interface OilTankRepository {
 
