@@ -22,7 +22,7 @@ import com.sansen.yeweiyi.utils.SystemUtils;
  * （用 {@code main} 代替原来的 {@code ct}——两者本是同一个实例，见
  * {@code BaseActivity.onCreate} 里的 {@code ct = this}；{@code ct} 是
  * protected 且与本类不同包，直接用 main 更简单）。见
- * openspec/changes/split-main-activity §5。
+ * openspec/changes/archive/2026-11-02-split-main-activity §5。
  *
  * <p>5.1 核查：{@code layer-data-and-hardware-boundaries} 的 {@code AlarmRepository}
  * 只存在于另一个未合并分支（PR #21），当前分支上不存在。5.2 核查：本组搬移的

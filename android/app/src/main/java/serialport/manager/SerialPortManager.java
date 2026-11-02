@@ -15,7 +15,7 @@ import serialport.thread.IThread;
  * HAL：底层 JNI 串口字节收发，零 UI 依赖，几乎无调用方（263 行）。这是硬件访问边界——
  * UI/业务层禁止直接调用本类，一律经 {@code com.sansen.yeweiyi.manager.SerialPortManager}
  * （协议编排层，负责厂商协议分发、报警联动、经 {@code DataRefreshCallback} 回调 UI）。
- * 两个同名类容易混淆，见 openspec/changes/layer-data-and-hardware-boundaries §8、
+ * 两个同名类容易混淆，见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries §8、
  * `CLAUDE.md` "Known landmines"。
  *
  * Created by Administrator on 2019-04-28.

@@ -31,7 +31,7 @@ import java.util.List;
 /**
  * {@link OilTankRepository} 的实现：内部直接调用现有的 {@code DaoHelp}/{@code DbUtils}，
  * 与 {@code DBDataManager} 当前访问的是同一套存储，不改表结构、不改行为。
- * 迁移方式见 openspec/changes/layer-data-and-hardware-boundaries/design.md 决策1（绞杀者模式）。
+ * 迁移方式见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries/design.md 决策1（绞杀者模式）。
  */
 public class OilTankRepositoryImpl implements OilTankRepository {
 

@@ -22,7 +22,7 @@ import com.sansen.yeweiyi.utils.SystemUtils;
  * 出入库/交班等业务动作按钮处理与密码校验，从 MainActivity 搬出。持有
  * MainActivity 引用以复用其导航状态（mContent/setFragment/navigator/
  * clearButtonState）——这些字段本身仍归 MainActivity 所有，本类不重复持有，
- * 见 openspec/changes/split-main-activity §2 关于 mContent/Fragment 缓存字段
+ * 见 openspec/changes/archive/2026-11-02-split-main-activity §2 关于 mContent/Fragment 缓存字段
  * 外部耦合过广、未随导航机制搬移的决定。
  *
  * <p>4.2 核查：本组搬移的方法均不直接访问 DBDataManager/OilTankRepository/
