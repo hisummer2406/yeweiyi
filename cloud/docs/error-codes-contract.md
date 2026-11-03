@@ -26,7 +26,7 @@
 | `invalid_time_format` | 400 | `beginTime`/`endTime` 不是 RFC3339 |
 | `invalid_time_range` | 400 | 历史查询 `beginTime` 不早于 `endTime` |
 | `invalid_paging` | 400 | `limit`/`offset`/`sort` 非法 |
-| `device_required` | 400 | 列表接口缺 `device` 参数 |
+| `device_required` | 400 | 列表接口缺 `device` 参数。例外：员工（`customer_user`）调 `GET /api/audit` 不带 `device` 为 **403**（兼容旧行为，体不是 `not authorized`，不应登出） |
 | `invalid_tank` | 400 | 报警/出入库列表的 `tank` 不是 1–64 的整数（[records-filter-contract](records-filter-contract.md)，#84）；罐授权写入里的未上报罐号沿用同码 |
 | `invalid_direction` | 400 | 出入库列表的 `direction` 不是 `IN`/`OUT`（#84） |
 | `invalid_station` | 400 | `stationId` 缺失/类型错/不属于设备所在客户 |

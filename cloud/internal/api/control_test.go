@@ -418,8 +418,18 @@ func TestListAudit_ScopeByRole(t *testing.T) {
 	env, _ := newControlEnv(t, control.Config{})
 
 	env.setRole(control.RoleCustomerUser)
-	if rec := env.authed("GET", "/api/audit", nil); rec.Code != http.StatusForbidden {
+	// 403 is kept for compatibility, but the body must not be the bare "not authorized" (clients log
+	// out on that) and must carry a code so the client can show something better than a fallback (#79).
+	rec := env.authed("GET", "/api/audit", nil)
+	if rec.Code != http.StatusForbidden {
 		t.Fatalf("a customer user without a device filter: expected 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var body struct{ Error, Code string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v: %s", err, rec.Body.String())
+	}
+	if body.Code != "device_required" || body.Error == "not authorized" {
+		t.Errorf("a customer user without a device filter: want code device_required and a non-session body, got %s", rec.Body.String())
 	}
 
 	env.setRole(control.RoleCustomerAdmin)

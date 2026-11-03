@@ -244,9 +244,9 @@ func listAuditHandler(deps Deps) gin.HandlerFunc {
 			}
 			deviceFilter = pgtype.Text{String: device, Valid: true}
 		} else if user.Role == control.RoleCustomerUser {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "device query param is required for your role",
-			})
+			// Stays 403 for older clients; the code is the same one a missing device gets elsewhere
+			// (as a 400), so a client can map both to "pick a device first" (#79).
+			apiError(c, http.StatusForbidden, "device_required", "device query param is required for your role")
 			return
 		}
 
