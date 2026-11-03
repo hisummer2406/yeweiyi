@@ -3,7 +3,7 @@ import { currentLocale, t } from './i18n';
 import { ApiError, get } from './request';
 import { formatLocalTime } from './format';
 import { isOilInOutListResponse, summarizeOilInOut } from './oilInOut';
-import { alarmRowKey, stockRowKey } from './recordColumns';
+import { alarmRowKey, inventoryRowKey, isRecordListResponse, shiftRowKey, stockRowKey, syncSummary } from './recordColumns';
 import {
   FILTERED_PAGE_SIZE,
   PAGE_SIZE,
@@ -17,11 +17,12 @@ import {
   type QueryWindow,
   type RecordFilter,
 } from './recordsRange';
-import type { Alarm, OilInOutListResponse, OilInOutRow } from '../types/api';
+import type { Alarm, OilInOutListResponse, OilInOutRow, RecordListResponse, ShiftRecordRow, StockRecordRow } from '../types/api';
 import type { Msg } from './i18nCore';
 
-// One paged history list — alarms (GET /api/alarms) or stock in/out (GET /api/oil-in-out) — for one
-// device, one time window and one filter. Shared by device-detail's 报警记录 tab and the 我的记录 list
+// One paged history list — alarms (GET /api/alarms), stock in/out (GET /api/oil-in-out), shifts
+// (GET /api/shift-records) or stock snapshots (GET /api/stock-records) — for one device, one time window
+// and one filter. Shared by device-detail's 报警记录 tab and the 我的记录 list
 // pages so the paging rules live in one place. The pure decisions are in recordsRange.ts.
 //
 // Tank and direction are sent to the cloud, which filters before paging (yeweiyi-cloud
@@ -34,7 +35,15 @@ import type { Msg } from './i18nCore';
 // page failed (tap to retry). '' = no footer.
 export type Footer = '' | 'more' | 'loading' | 'end' | 'error';
 
-export type FeedKind = 'alarm' | 'stock';
+// 'stock' = 出入库 movements; 'inventory' = 库存 snapshots.
+export type FeedKind = 'alarm' | 'stock' | 'shift' | 'inventory';
+
+export type FeedRow = Alarm | OilInOutRow | ShiftRecordRow | StockRecordRow;
+
+const RECORD_PATHS: Record<'shift' | 'inventory', string> = {
+  shift: '/api/shift-records',
+  inventory: '/api/stock-records',
+};
 
 export interface FeedQuery {
   device: string;
@@ -51,15 +60,28 @@ export interface FeedState<T> {
   error: string;
   // A refresh failed while an earlier list is on screen: "may be out of date, last updated …".
   stale: string;
-  // The stock list is not known to be whole (unparsable / legacySkipped / partial / invalidSource).
+  // The list is not known to be whole (unparsable / legacySkipped / partial / invalidSource / syncing).
   note: string;
   footer: Footer;
+  // An empty list may be shown as "no records". False while a 交班/库存 list is not SYNCED (cloud#85).
+  canSayEmpty: boolean;
+  // 交班/库存: the device has never reported this kind of record (syncStatus UNSUPPORTED).
+  unsupported: boolean;
+  // 交班/库存: the cloud has no such endpoint (a cloud before #85 answers the route with a bare 404).
+  notOpen: boolean;
 }
 
-type Page<T> = { rows: T[]; hasMore: boolean; notes: Msg[] };
+type Page<T> = { rows: T[]; hasMore: boolean; notes: Msg[]; canSayEmpty: boolean; unsupported: boolean; notOpen: boolean };
 
 function emptyState<T>(): FeedState<T> {
-  return { rows: [], loaded: false, loading: false, error: '', stale: '', note: '', footer: '' };
+  return {
+    rows: [], loaded: false, loading: false, error: '', stale: '', note: '', footer: '',
+    canSayEmpty: true, unsupported: false, notOpen: false,
+  };
+}
+
+function plainPage<T>(rows: T[], hasMore: boolean, notes: Msg[]): Page<T> {
+  return { rows, hasMore, notes, canSayEmpty: true, unsupported: false, notOpen: false };
 }
 
 // The cloud's machine code on a failed answer (e.g. "tank_not_authorized"), if any.
@@ -69,7 +91,7 @@ export function failureCode(err: unknown): string {
   return typeof code === 'string' ? code : '';
 }
 
-export class RecordFeed<T extends Alarm | OilInOutRow> {
+export class RecordFeed<T extends FeedRow> {
   state: FeedState<T> = emptyState<T>();
   // Bumped by every reload and reset: a run that no longer owns the seq drops what it gets.
   private seq = 0;
@@ -96,7 +118,16 @@ export class RecordFeed<T extends Alarm | OilInOutRow> {
   }
 
   private key(row: T): string {
-    return this.kind === 'alarm' ? alarmRowKey(row as Alarm) : stockRowKey(row as OilInOutRow);
+    switch (this.kind) {
+      case 'alarm':
+        return alarmRowKey(row as Alarm);
+      case 'shift':
+        return shiftRowKey(row as ShiftRecordRow);
+      case 'inventory':
+        return inventoryRowKey(row as StockRecordRow);
+      default:
+        return stockRowKey(row as OilInOutRow);
+    }
   }
 
   // Pages of the list on screen (0 = nothing loaded yet).
@@ -136,8 +167,33 @@ export class RecordFeed<T extends Alarm | OilInOutRow> {
       return get<Alarm[]>('/api/alarms', query).then((rows) => {
         if (!Array.isArray(rows)) throw new Error('unexpected response shape from /api/alarms');
         const { items, hasMore } = splitAlarmPage(rows, filtered ? FILTERED_PAGE_SIZE : PAGE_SIZE);
-        return { rows: items.filter((a) => matchesFilter(a, q.filter)) as T[], hasMore, notes: [] };
+        return plainPage(items.filter((a) => matchesFilter(a, q.filter)) as T[], hasMore, []);
       });
+    }
+    if (this.kind === 'shift' || this.kind === 'inventory') {
+      // {rows, truncated, partial, unparsable, syncStatus} (cloud#85 §4). These routes are newer than the
+      // tank filter (#84), so the cloud always filters; the rows are matched again only as a safeguard.
+      const query = { ...stockQuery(q.device, q.win, pageIndex, filtered), ...filterParams(q.filter, false) };
+      return get<RecordListResponse<T>>(RECORD_PATHS[this.kind], query)
+        .then((res) => {
+          if (!isRecordListResponse(res)) throw new Error(`unexpected response shape from ${RECORD_PATHS[this.kind as 'shift']}`);
+          const sum = syncSummary(res);
+          return {
+            rows: (res.rows as T[]).filter((r) => matchesFilter(r as { tank: number }, q.filter)),
+            hasMore: !!res.truncated,
+            notes: sum.notes,
+            canSayEmpty: sum.canSayEmpty,
+            unsupported: sum.unsupported,
+            notOpen: false,
+          };
+        })
+        .catch((err: unknown) => {
+          // A cloud before #85 has no such route: gin's bare 404 with no code. Not an error to retry.
+          if (err instanceof ApiError && err.status === 404 && !failureCode(err)) {
+            return { rows: [] as T[], hasMore: false, notes: [], canSayEmpty: false, unsupported: false, notOpen: true };
+          }
+          throw err;
+        });
     }
     // The same envelope on 200 and 502 (some records unparsable): a 502 still carries the rows that did
     // parse, recovered from ApiError.body. Anything that is not the envelope is a real failure.
@@ -150,7 +206,7 @@ export class RecordFeed<T extends Alarm | OilInOutRow> {
       .then((res) => {
         if (!isOilInOutListResponse(res)) throw new Error('unexpected response shape from /api/oil-in-out');
         const { rows, notes } = summarizeOilInOut(res, q.filter.direction || '', { paged: true });
-        return { rows: rows.filter((r) => matchesFilter(r, q.filter)) as T[], hasMore: !!res.truncated, notes };
+        return plainPage(rows.filter((r) => matchesFilter(r, q.filter)) as T[], !!res.truncated, notes);
       });
   }
 
@@ -177,6 +233,9 @@ export class RecordFeed<T extends Alarm | OilInOutRow> {
         stale: '',
         note: res.notes.map((m) => t(m.key, m.params)).join(t('common.listSep')),
         footer: goOn ? 'loading' : res.hasMore ? 'more' : 'end',
+        canSayEmpty: res.canSayEmpty,
+        unsupported: res.unsupported,
+        notOpen: res.notOpen,
       });
       if (goOn) return this.run(seq, q, pageIndex + 1, replace, addedNow, pages + 1);
     });

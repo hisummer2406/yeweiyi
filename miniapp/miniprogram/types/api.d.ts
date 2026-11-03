@@ -110,6 +110,10 @@ export interface Alarm {
   text: string;
   value?: number;
   time: string;
+  // The tank's oil when the alarm fired (cloud#85, newer firmware); null on device-level alarms and older
+  // records. Absent on a cloud before #85. Show by oilTypeIndex first (utils/recordColumns.ts mediumText).
+  oilType?: string | null;
+  oilTypeIndex?: number | null;
 }
 
 // The live-push message /ws/alarms sends (yeweiyi-cloud internal/ingest.handleAlarm's Redis
@@ -153,7 +157,61 @@ export interface OilInOutRow {
   netVolumeL: number;
   duringDeliveryVolumeL?: number;
   deliveredVolumeL: number;
+  // Delivered mass computed by the device (cloud#85, newer firmware); null on older records, absent on a
+  // cloud before #85. Not end minus begin weight (that includes sales during the delivery).
+  deliveredWeightKg?: number | null;
+  oilTypeIndex?: number | null;
   time: string;
+}
+
+// ---- 交班 / 库存 records (yeweiyi-cloud#85, docs/shift-stock-records-contract.md §4) ----
+
+// GET /api/shift-records and GET /api/stock-records: one row per (record, tank); tank filter and grants
+// apply before paging. Every missing reading is null — shown as a dash, never 0.
+// UNSUPPORTED = the device never reported this kind of record; SYNCING = the initial takeover has not
+// finished. Only SYNCED with no rows may be shown as "no records".
+export type RecordSyncStatus = 'UNSUPPORTED' | 'SYNCING' | 'SYNCED';
+
+export interface RecordListResponse<T> {
+  rows: T[];
+  truncated: boolean;
+  partial: boolean;
+  // Device-wide count of originals the cloud could not read (not attributable to a tank).
+  unparsable: number;
+  syncStatus: RecordSyncStatus;
+}
+
+// Mirrors internal/api/shiftstock.go shiftRecordRow. Rows of one shift share shiftId. An open shift
+// (status OPEN) has endTime and every end/out figure null.
+export interface ShiftRecordRow {
+  shiftId: string;
+  status: string; // "OPEN" | "CLOSED"
+  beginTime: string; // 接班时间
+  endTime: string | null; // 交班时间
+  tank: number;
+  oilType: string | null;
+  oilTypeIndex: number | null;
+  beginLevelMm: number | null;
+  beginVolumeL: number | null;
+  endLevelMm: number | null;
+  endVolumeL: number | null;
+  outVolumeL: number | null;
+  outWeightKg: number | null;
+}
+
+// Mirrors internal/api/shiftstock.go stockRecordRow. Level and water are millimetres.
+export interface StockRecordRow {
+  recordId: string;
+  time: string; // 库存生成时间
+  trigger: string | null; // "SCHEDULED" | "MANUAL"
+  tank: number;
+  oilType: string | null;
+  oilTypeIndex: number | null;
+  levelMm: number | null;
+  volumeL: number | null;
+  waterLevelMm: number | null;
+  tempC: number | null;
+  weightKg: number | null;
 }
 
 // GET /api/oil-in-out returns this shape on BOTH the 200 and the 502 path (yeweiyi-cloud
