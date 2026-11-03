@@ -16,14 +16,13 @@ const (
 	maxLimit     = 500
 )
 
-// listParams is the shared query shape for the device history endpoints — /api/alarms (alarms.go)
-// and /api/oil-in-out (stock.go), both served from the business database (issue #29). "History for one
-// device, filtered by time range, paginated."
+// listParams is the shared query shape for the device history endpoints — /api/alarms (alarms.go),
+// /api/oil-in-out (stock.go), /api/shift-records and /api/stock-records (shiftstock.go), all served
+// from the business database (issues #29, #85). "History for one device, filtered by time range,
+// paginated."
 //
-// /api/shifts (交班) used to share it too. That endpoint was removed rather than migrated: 设备协议 V1
-// has no shift uplink on either side, so it could only ever have returned an empty list. Leaving a
-// route that answers 200 with nothing is worse than having no route — it looks like a working
-// feature. See docs/protocol-v1-reconciliation.md. `device` is
+// The old /api/shifts stays gone (TestShiftsEndpointIsGone): it predated any shift uplink and could
+// only answer an empty list. /api/shift-records replaced it once the device reported shifts. `device` is
 // required — unlike the doc's draft routes, CLAUDE.md's multi-device cloud table design means there
 // is no well-defined "all devices" listing, so callers must scope to one deviceName explicitly.
 type listParams struct {

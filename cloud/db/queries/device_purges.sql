@@ -60,6 +60,13 @@ DELETE FROM stock_events WHERE device_name = $1;
 -- name: PurgeAlarmEvents :execrows
 DELETE FROM alarm_events WHERE device_name = $1;
 
+-- name: PurgeShiftRecords :execrows
+-- 罐行随表头级联删除。
+DELETE FROM shift_records WHERE device_name = $1;
+
+-- name: PurgeStockRecords :execrows
+DELETE FROM stock_records WHERE device_name = $1;
+
 -- name: PurgeRecordRejects :execrows
 DELETE FROM record_rejects WHERE device_name = $1;
 
@@ -90,6 +97,10 @@ DELETE FROM devices x WHERE x.device_name = sqlc.arg('device_name')::TEXT;
 SELECT
     (SELECT COUNT(*) FROM stock_events x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM alarm_events x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM shift_records x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM shift_record_tanks x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM stock_records x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM stock_record_tanks x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM record_rejects x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM record_backfills x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM telemetry_hourly x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT

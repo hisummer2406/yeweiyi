@@ -80,6 +80,15 @@ type StockEvent struct {
 	// selling during a delivery cannot reconcile without it.
 	DuringDeliveryVolumeL float64 `json:"duringDeliveryVolumeL,omitempty"`
 
+	// DeliveredWeightKg is the delivered volume (IN: NetVolumeL + DuringDeliveryVolumeL; OUT:
+	// −NetVolumeL) times the tank's density setting when the record closed, computed by the device.
+	// BeginWeightKg/EndWeightKg cannot stand in for it: their difference includes what was sold during
+	// a delivery. Absent on manual entries (no density snapshot) and on older firmware (cloud#85).
+	DeliveredWeightKg *float64 `json:"deliveredWeightKg,omitempty"`
+	// OilTypeIndex is the device's oil table index (0 unset, 1–17 built in, 18–25 custom), independent
+	// of the display language OilType was rendered in. Absent on manual entries and older firmware.
+	OilTypeIndex *int `json:"oilTypeIndex,omitempty"`
+
 	// TSMs is when the device closed the record, epoch millis UTC.
 	TSMs int64 `json:"tsMs"`
 

@@ -119,6 +119,10 @@ const countDeviceRemnants = `-- name: CountDeviceRemnants :one
 SELECT
     (SELECT COUNT(*) FROM stock_events x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM alarm_events x WHERE x.device_name = $1::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM shift_records x WHERE x.device_name = $1::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM shift_record_tanks x WHERE x.device_name = $1::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM stock_records x WHERE x.device_name = $1::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM stock_record_tanks x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM record_rejects x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM record_backfills x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM telemetry_hourly x WHERE x.device_name = $1::TEXT)::BIGINT
@@ -464,6 +468,19 @@ func (q *Queries) PurgeRecordRejects(ctx context.Context, deviceName string) (in
 	return result.RowsAffected(), nil
 }
 
+const purgeShiftRecords = `-- name: PurgeShiftRecords :execrows
+DELETE FROM shift_records WHERE device_name = $1
+`
+
+// 罐行随表头级联删除。
+func (q *Queries) PurgeShiftRecords(ctx context.Context, deviceName string) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeShiftRecords, deviceName)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const purgeStockEvents = `-- name: PurgeStockEvents :execrows
 
 DELETE FROM stock_events WHERE device_name = $1
@@ -473,6 +490,18 @@ DELETE FROM stock_events WHERE device_name = $1
 // control_commands、user_tank_grants、user_devices、device_pairing_secrets（先计数再删）。
 func (q *Queries) PurgeStockEvents(ctx context.Context, deviceName string) (int64, error) {
 	result, err := q.db.Exec(ctx, purgeStockEvents, deviceName)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const purgeStockRecords = `-- name: PurgeStockRecords :execrows
+DELETE FROM stock_records WHERE device_name = $1
+`
+
+func (q *Queries) PurgeStockRecords(ctx context.Context, deviceName string) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeStockRecords, deviceName)
 	if err != nil {
 		return 0, err
 	}

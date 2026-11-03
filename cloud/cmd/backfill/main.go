@@ -101,7 +101,8 @@ func main() {
 			log.Printf("%s: FAILED: %v", name, err)
 			continue
 		}
-		log.Printf("%s: read %d stockEvent and %d alarm points", name, res.StockPoints, res.AlarmPoints)
+		log.Printf("%s: read %d stockEvent, %d alarm, %d shiftEvent and %d stockRecord points",
+			name, res.StockPoints, res.AlarmPoints, res.ShiftPoints, res.StockRecordPoints)
 	}
 	log.Printf("done: %d device(s), %d not in ThingsBoard, %d failed", len(names), absent, failed)
 	if failed > 0 {

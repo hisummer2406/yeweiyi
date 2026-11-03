@@ -1,0 +1,27 @@
+{
+  "_comment": "开始交班（status=OPEN）。shiftId = shift-{beginTimeMs}，开始时刻取自设备数据库 commitwork.begintimems（到秒），结束报文沿用同一个值。进行中的班没有结束数据：endTimeMs 与各罐 endLevelMm/endVolumeL/outVolumeL/outWeightKg 都不出现（缺键 = null，读方必须同等对待，不得当 0）。oilType 是开始交班时该罐介质的显示名（随设备界面语言变化），oilTypeIndex 是油品表下标（与语言无关，对照表见 oil_type_index.json），读方以 oilTypeIndex 为准。",
+  "ts": 1762146400000,
+  "values": {
+    "shiftEvent": {
+      "shiftId": "shift-1762146400000",
+      "status": "OPEN",
+      "beginTimeMs": 1762146400000,
+      "tanks": [
+        {
+          "tank": 1,
+          "oilType": "92#",
+          "oilTypeIndex": 5,
+          "beginLevelMm": 1520.0,
+          "beginVolumeL": 18230.5
+        },
+        {
+          "tank": 2,
+          "oilType": "0#",
+          "oilTypeIndex": 1,
+          "beginLevelMm": 980.0,
+          "beginVolumeL": 11020.0
+        }
+      ]
+    }
+  }
+}

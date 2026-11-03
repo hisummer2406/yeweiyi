@@ -138,7 +138,7 @@ func (pe *purgeEnv) cleanupPurges(names ...string) {
 	pe.t.Cleanup(func() {
 		ctx := context.Background()
 		for _, n := range names {
-			for _, table := range []string{"stock_events", "alarm_events", "record_rejects", "record_backfills", "telemetry_hourly", "audit_log", "device_purges"} {
+			for _, table := range []string{"stock_events", "alarm_events", "shift_records", "stock_records", "record_rejects", "record_backfills", "telemetry_hourly", "audit_log", "device_purges"} {
 				pe.pool.Exec(ctx, "DELETE FROM "+table+" WHERE device_name = $1", n)
 			}
 			pe.pool.Exec(ctx, `DELETE FROM devices WHERE device_name = $1`, n)
@@ -176,6 +176,22 @@ func (pe *purgeEnv) seedHistory(device string, oldCustomer, customer, staffID in
 		}
 		if err := q.InsertAlarmEvent(ctx, db.InsertAlarmEventParams{DeviceName: device, AlarmID: fmt.Sprintf("a%d", i),
 			Status: "ACTIVE", OccurredMs: ts, EnvTs: ts, Payload: []byte(`{"tank":2}`)}); err != nil {
+			pe.t.Fatal(err)
+		}
+		// 交班、库存记录（cloud#85）：表头 + 罐行，罐行随表头级联删除。
+		shiftID, recordID := fmt.Sprintf("shift-%d", i), fmt.Sprintf("stock-%d", i)
+		if _, err := q.UpsertShiftRecord(ctx, db.UpsertShiftRecordParams{DeviceName: device, ShiftID: shiftID, Status: "OPEN",
+			BeginMs: ts, EnvTs: ts, Payload: []byte(`{"tanks":[{"tank":1},{"tank":2}]}`)}); err != nil {
+			pe.t.Fatal(err)
+		}
+		if err := q.SyncShiftRecordTanks(ctx, db.SyncShiftRecordTanksParams{DeviceName: device, ShiftID: shiftID}); err != nil {
+			pe.t.Fatal(err)
+		}
+		if _, err := q.UpsertStockRecord(ctx, db.UpsertStockRecordParams{DeviceName: device, RecordID: recordID,
+			OccurredMs: ts, EnvTs: ts, Payload: []byte(`{"tanks":[{"tank":1}]}`)}); err != nil {
+			pe.t.Fatal(err)
+		}
+		if err := q.SyncStockRecordTanks(ctx, db.SyncStockRecordTanksParams{DeviceName: device, RecordID: recordID}); err != nil {
 			pe.t.Fatal(err)
 		}
 		if err := q.InsertRecordReject(ctx, db.InsertRecordRejectParams{Kind: "stock", DeviceName: device, EnvTs: ts,
@@ -223,8 +239,8 @@ func (pe *purgeEnv) seedHistory(device string, oldCustomer, customer, staffID in
 func (pe *purgeEnv) historyRows(device string) int64 {
 	pe.t.Helper()
 	var total int64
-	for _, table := range []string{"stock_events", "alarm_events", "record_rejects", "record_backfills", "telemetry_hourly",
-		"control_commands", "user_tank_grants", "user_devices", "device_pairing_secrets", "tank_settings", "tank_calibration", "devices"} {
+	for _, table := range []string{"stock_events", "alarm_events", "shift_records", "shift_record_tanks", "stock_records",
+		"stock_record_tanks", "record_rejects", "record_backfills", "telemetry_hourly", "control_commands", "user_tank_grants", "user_devices", "device_pairing_secrets", "tank_settings", "tank_calibration", "devices"} {
 		total += pe.count("SELECT COUNT(*) FROM "+table+" WHERE device_name = $1", device)
 	}
 	return total + pe.count(`SELECT COUNT(*) FROM audit_log WHERE device_name = $1 AND action <> 'device.purge'`, device)
@@ -323,7 +339,7 @@ func TestDevicePurge_DeletesEverythingOfTheDeviceAndNothingElse(t *testing.T) {
 	if got.Status != purge.StatusCompleted || got.Step != purge.StepDone || got.FinishedAt == nil {
 		t.Fatalf("task after run: %+v", got)
 	}
-	want := map[string]int64{"stockEvents": 2, "alarmEvents": 2, "recordRejects": 2, "recordBackfills": 1, "telemetryHourly": 3,
+	want := map[string]int64{"stockEvents": 2, "alarmEvents": 2, "shiftRecords": 2, "stockRecords": 2, "recordRejects": 2, "recordBackfills": 1, "telemetryHourly": 3,
 		"auditLog": 1, "controlCommands": 1, "tankGrants": 2, "userDevices": 1, "pairingSecrets": 1, "tankSettings": 2, "tankCalibration": 1, "devices": 1, "tbKeys": 5, "tbDevice": 1}
 	for k, v := range want {
 		if got.Counts[k] != v {

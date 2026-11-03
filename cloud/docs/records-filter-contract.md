@@ -51,4 +51,5 @@
 ## 5. 待确认
 
 - 【待确认】参数名 `tank` / `direction` 与错误码 `invalid_tank`（沿用罐授权接口已有的码）/ `invalid_direction` 由小程序、admin 负责人确认。
-- 【待确认】库存、交班记录的筛选与本契约同形（cloud#85，草稿见 [shift-stock-records-contract](shift-stock-records-contract.md)），定稿后在此文档追加，不另起参数名。
+- 库存、交班记录（`/api/stock-records`、`/api/shift-records`，cloud#85）的 `tank` 筛选与本契约同形、同错误码，
+  见 [shift-stock-records-contract](shift-stock-records-contract.md) §4。

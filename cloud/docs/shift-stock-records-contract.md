@@ -1,7 +1,9 @@
-# 交班、库存记录同步与五类记录展示：契约草稿（v0.3，产品已决定，设备端实现中）
+# 交班、库存记录同步与五类记录展示：契约（v1.0，两端已实现，未真机验证）
 
-状态：**草稿，未实现，未冻结。** 字段名、单位、标识规则在设备端
-[zhongchengyeweiyi#49](https://github.com/hisummer2406/zhongchengyeweiyi/issues/49) 确认前一律不得写进代码或 fixture。
+状态（2026-11-03）：**设备端与云端均已实现，只在 JVM 单测 / 云端真实数据库 + ThingsBoard 测试中验证，未做真机联调；
+小程序未接入。** 设备端实现见 [zhongchengyeweiyi#49](https://github.com/hisummer2406/zhongchengyeweiyi/issues/49)
+（分支 `fix/shift-record-defects`）；共享 fixture 已收录到 `fixtures/protocol/v1/`（8 份，设备端起草，以云端副本为准）。
+协议 V1 整体仍未冻结（open-items §F）。
 主需求：[cloud#85](https://github.com/hisummer2406/yeweiyi-cloud/issues/85)。配套：
 [miniapp#16](https://github.com/hisummer2406/yeweiyi-miniapp/issues/16)、[#17](https://github.com/hisummer2406/yeweiyi-miniapp/issues/17)；
 筛选沿用 [records-filter-contract](records-filter-contract.md)（#84）。
@@ -75,7 +77,7 @@
 - 【提议】`status`：`OPEN`（开始时上报）| `CLOSED`（结束时上报，补齐 `endTimeMs` 与各罐结束数据）。
   同一 `shiftId` 多次上报时，**信封 `ts` 最大的一份胜出**（与 `stockEvent` 的折叠规则一致），所以对已结束的班重复按「结束」
   会以最新一次为准——这是设备本地的事实，云端不纠正。
-- 【需求】进行中或缺失的值必须是 `null` 或省略，**不得是 0**（对应 §1.1 缺陷 4）。旧版本库里进行中的班结束字段是 `0.0`，
+- 【需求】进行中或缺失的值必须是 `null` 或省略，**不得是 0**。设备实际一律**省略键**（fixture 照此），读方把缺键当 null（对应 §1.1 缺陷 4）。旧版本库里进行中的班结束字段是 `0.0`，
   上报层按「`endTime` 为空 ⇒ 结束字段全部为 `null`」处理。
 - 【需求】`tanks[]` 按罐号匹配开始/结束数据（修 §1.1 缺陷 3）；只有开始或只有结束数据的罐也要出现，缺的一侧为 `null`。
 - 【提议】`oilType`：**开始交班时**该罐的介质（设备端需新增记录，§1.1 缺陷 6）；没有则省略，云端显示「—」，
@@ -126,22 +128,28 @@
   在载荷里带 `"precision": "MINUTE"` 与 `"legacy": true` 标记；旧交班没有介质，且串罐无法事后识别（旧代码把别的罐的
   开始数据改了罐号存回），开始值为 0 的行与真实 0 无法区分——只有罐号连续且班内未增删罐时可信。是否展示由产品决定。
 
-## 3. 云端存储（【提议】）
+## 3. 云端存储（已实现，迁移 000037）
 
 与 `stock_events` / `alarm_events` 同构：`internal/ingest` 实时订阅 + 定时回读 ThingsBoard，幂等写入，业务库永久保存。
 
 | 表 | 主键 | 说明 |
 | --- | --- | --- |
-| `shift_records` | `(device_name, shift_id)` | 状态、起止时间、`env_ts`、`report_ts`、原始 `payload`、首次写入时的 `customer_id` |
-| `shift_record_tanks` | `(device_name, shift_id, tank)` | 每罐一行，供按罐授权、筛选、分页；随胜出的 `payload` 整组替换 |
-| `stock_records` | `(device_name, record_id, tank)` | 每罐一行，`occurred_at`、各字段、`env_ts`、`customer_id`；原始 `payload` 按批次保存 |
+| `shift_records` | `(device_name, shift_id)` | 表头：状态、接班/交班时刻、胜出报告的 `env_ts` 与原始 `payload`、首次写入时的 `customer_id` |
+| `shift_record_tanks` | `(device_name, shift_id, tank)` | 每罐一行（该罐原始对象），供按罐授权、筛选、分页 |
+| `stock_records` | `(device_name, record_id)` | 表头：库存生成时刻、`env_ts`、`payload`、`customer_id` |
+| `stock_record_tanks` | `(device_name, record_id, tank)` | 每罐一行 |
 
-- 【需求】三张表加进设备彻底删除清单（`db/queries/device_purges.sql` 与 `CountDeviceRemnants`），写入语句经
+- 同一记录信封 `ts` 最大的一份胜出（相同则保留先写入的）；每次写入后罐行与表头载荷对齐（`Sync*RecordTanks`），
+  中断或并发写入都在下一次写入（含回补重放）时收敛。
+- 实时订阅与定时回读（`RecordReconcileLookback`，默认 8 天）都覆盖 `shiftEvent`/`stockRecord`；`cmd/backfill` 同样覆盖。
+  回补完成标记 `record_backfills` 是在这两类出现之前就有的，已标记的设备不会为它们再从头回读——它们只随新固件出现，
+  回看窗口会覆盖；需要全量时运行 `cmd/backfill`。
+
+- 【已实现】四张表已加进设备彻底删除清单（`db/queries/device_purges.sql` 与 `CountDeviceRemnants`），写入语句经
   `device_record_writable` 判定（#83）。
-- 【需求】无法解析的原文进 `record_rejects`，接口计入 `unparsable`，不静默丢弃。
-- 【需求】ThingsBoard TTL 开启前，`cmd/backfill` 需同样覆盖这两类记录。
+- 【已实现】无法解析的原文进 `record_rejects`（`kind` = `shift` / `stock_record`），接口计入 `unparsable`，不静默丢弃。
 
-## 4. 查询接口（【提议】，形状对齐 `/api/oil-in-out`）
+## 4. 查询接口（已实现）
 
 ```
 GET /api/shift-records?device=&tank=&beginTime=&endTime=&limit=&offset=
@@ -151,10 +159,17 @@ GET /api/stock-records?device=&tank=&beginTime=&endTime=&limit=&offset=
 - 【需求】`device` 必填（完整设备编号）；`tank` 可选，语义、校验与错误码同 #84（`invalid_tank`、`tank_not_authorized`）。
   授权、客户归属时间窗、按罐过滤、筛选全部在 SQL 的 `LIMIT/OFFSET` 之前生效；员工只见被授权的罐。
 - 【需求】必须登记到 `internal/api/tenancy_test.go` 的 `deviceScopedRoutes`。
-- 【提议】交班按 `(shift, tank)` 一行返回，带 `shiftId` 以便客户端把同一班的行归组；时间窗按**接班时间**（`beginTimeMs`）匹配，
+- 交班按 `(shift, tank)` 一行返回，带 `shiftId` 以便客户端把同一班的行归组；时间窗按**接班时间**（`beginTimeMs`）匹配，
   进行中的班也返回，`status: "OPEN"`、结束字段为 `null`。
-- 【提议】库存时间窗按 `tsMs` 匹配。
-- 【提议】响应信封：
+- 库存按 `(recordId, tank)` 一行返回，时间窗按 `tsMs` 匹配。
+- 其余参数（`beginTime`/`endTime` 默认最近 24 小时、`limit` 1–500 默认 50、`offset`、`sort` 布尔默认升序）与
+  `/api/oil-in-out` 相同。
+- 行字段（缺失一律 `null`）：
+  - 交班：`shiftId` `status` `beginTime`（接班）`endTime`（交班）`tank` `oilType` `oilTypeIndex` `beginLevelMm` `beginVolumeL`
+    `endLevelMm` `endVolumeL` `outVolumeL` `outWeightKg`
+  - 库存：`recordId` `time` `trigger` `tank` `oilType` `oilTypeIndex` `levelMm` `volumeL` `waterLevelMm` `tempC` `weightKg`
+- `/api/oil-in-out` 行新增 `deliveredWeightKg`、`oilTypeIndex`；`/api/alarms` 行新增 `oilType`、`oilTypeIndex`（均可为 `null`）。
+- 响应信封：
 
 ```json
 {"rows": [...], "truncated": false, "partial": false, "unparsable": 0,
@@ -163,8 +178,9 @@ GET /api/stock-records?device=&tank=&beginTime=&endTime=&limit=&offset=
 
   `syncStatus`：`UNSUPPORTED`（该设备从未上报过此类记录，客户端显示「设备暂不支持」）| `SYNCING`（初次回补未完成）|
   `SYNCED`。客户端只有在 `SYNCED` 且 `rows` 为空时才能显示「暂无记录」。
-- 【待确认·云端】`UNSUPPORTED` 的判定：按「设备是否上报过任一该类记录」还是按设备客户端属性声明的能力。前者在新设备
-  首条记录到达前会误报不支持，后者需要设备端新增属性（如 `recordTypes`）。
+- 【选择】`UNSUPPORTED` 按「该设备是否上报过任一该类记录（含读不出来的原文）」判定，不需要设备端新增属性。代价：新固件的
+  设备在第一条交班/库存记录到达前显示「设备暂不支持」。【待确认·小程序】该文案是否可接受。
+- `unparsable` 是整机计数（原文无法归属到罐），员工也能看到计数但看不到原文。
 
 ## 5. 五类记录的字段口径（对照 #85「设计要求字段顺序」）
 
@@ -197,14 +213,17 @@ GET /api/stock-records?device=&tank=&beginTime=&endTime=&limit=&offset=
 
 | # | 事项 | 决定人 |
 | --- | --- | --- |
-| 1 | §2.1/§2.2 事件名、字段名、`shiftId`/`recordId` 规则 | 设备端已同意（v0.2） |
-| 2 | §1.1 缺陷 3、4、6 与时间到秒在上报前修复；缺陷 5 暂不改 | 设备端修复中 |
+| 1 | §2.1/§2.2 事件名、字段名、`shiftId`/`recordId` 规则 | 已定，两端已实现 |
+| 2 | §1.1 缺陷 3、4、6 与时间到秒在上报前修复；缺陷 5 暂不改 | 设备端已修（未真机验证） |
 | 3 | 是否恢复班号 | 已定：不要 |
 | 4 | 库存按罐一条还是每次一条多罐 | 已定：每次一条多罐（v0.2） |
 | 5 | 升级前历史是否上传 | 已定：都不传 |
 | 6 | 入/出库千克数、报警介质是否由设备端新增字段 | 已定：设备端补上报（`deliveredWeightKg`、`alarm.oilType`） |
-| 7 | `syncStatus` 判定方式与接口路径、参数名 | 云端 + 小程序负责人 |
+| 7 | `syncStatus` 判定方式与接口路径、参数名 | 云端已按 §4 实现；待小程序负责人确认 |
 | 8 | 介质是否另加稳定的 `oilTypeIndex` | 已定：加，四类载荷都加 |
-| 9 | `deliveredWeightKg` 的精确口径、`oilTypeIndex` 对照表 | 设备端定，写入 fixture |
+| 9 | `deliveredWeightKg` 的精确口径、`oilTypeIndex` 对照表 | 已定，见 fixture `stock_event_in_delivered_weight.json`、`oil_type_index.json` |
 
-确认后的顺序：设备端按定稿修复并上报 → 共享 fixture（`fixtures/protocol/v1/`）→ 云端迁移、入库、回补、接口 → 小程序接入 → 联合验收。
+剩余：小程序接入（miniapp#17 的库存、交班表格）→ 真机联调（数据库 7→8 升级、outbox 实际发布、云端入库）→ 联合验收。
+
+注意（设备端说明）：`deliveredWeightKg` 公式里的边卸边卖核对在设备上已废弃，`duringDeliveryVolumeL` 实际恒不出现、出入库事件
+也不会因核对而重报；`oilType` 中英文表不逐项对应（设备端已知翻译缺陷），客户端应按 `oilTypeIndex` 本地化。

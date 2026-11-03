@@ -28,6 +28,8 @@ type Querier interface {
 	CountDeviceCascades(ctx context.Context, deviceName string) (CountDeviceCascadesRow, error)
 	// verify 步骤：清单里每一类都应为 0。
 	CountDeviceRemnants(ctx context.Context, deviceName string) (int32, error)
+	// 窗口内（按信封 ts）读不出来的交班/库存原文条数。无法归属到罐，按整机计（同出入库的 unparsable）。
+	CountRecordRejects(ctx context.Context, arg CountRecordRejectsParams) (int32, error)
 	// issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
 	// from the SAME clock. Letting the column default to the database's now() while the application
 	// computes expires_at from its own clock means the two can disagree by however long the round trip
@@ -213,6 +215,9 @@ type Querier interface {
 	ListRecentDevicePurges(ctx context.Context, lim int32) ([]DevicePurge, error)
 	// 启动时续跑：被重启打断的任务。failed 的等人工再次发起。
 	ListRunningDevicePurges(ctx context.Context) ([]DevicePurge, error)
+	// 每 (班, 罐) 一行。授权（user_may_access_tank）、客户归属、时间窗（按接班时刻）与可选罐筛选全部在 LIMIT/OFFSET 之前生效。
+	// asc = 按接班时刻升序，否则降序；同一班内按罐号升序。调用方多取一行判断是否截断。
+	ListShiftRecordTanks(ctx context.Context, arg ListShiftRecordTanksParams) ([]ListShiftRecordTanksRow, error)
 	// The station list a caller is allowed to see, by the same three-way rule as ListDevicesForUser:
 	//   platform_admin  every station;
 	//   customer_admin  every station of their own customer — including ones with no devices yet, or a
@@ -227,6 +232,8 @@ type Querier interface {
 	// tank / direction 为可选筛选（#84）：NULL 表示不筛选；在 LIMIT/OFFSET 之前生效，分页与截断都针对筛选后的结果。
 	ListStockEventsAsc(ctx context.Context, arg ListStockEventsAscParams) ([]ListStockEventsAscRow, error)
 	ListStockEventsDesc(ctx context.Context, arg ListStockEventsDescParams) ([]ListStockEventsDescRow, error)
+	// 每 (库存批次, 罐) 一行；规则同 ListShiftRecordTanks，时间窗按库存生成时刻。
+	ListStockRecordTanks(ctx context.Context, arg ListStockRecordTanksParams) ([]ListStockRecordTanksRow, error)
 	// 员工-油罐查看授权（迁移 000024，cloud#63）。授权判定本身在 SQL 函数 user_may_access_device /
 	// user_may_access_tank 里，这里只是授权关系的读写。
 	ListTankGrantsForUser(ctx context.Context, userID int64) ([]UserTankGrant, error)
@@ -283,10 +290,16 @@ type Querier interface {
 	PurgeDeviceRow(ctx context.Context, deviceName string) (int64, error)
 	PurgeRecordBackfills(ctx context.Context, deviceName string) (int64, error)
 	PurgeRecordRejects(ctx context.Context, deviceName string) (int64, error)
+	// 罐行随表头级联删除。
+	PurgeShiftRecords(ctx context.Context, deviceName string) (int64, error)
 	// 以下按设备编号删除业务库数据，全部在 business 步骤的同一事务里执行。设备行最后删，级联带走
 	// control_commands、user_tank_grants、user_devices、device_pairing_secrets（先计数再删）。
 	PurgeStockEvents(ctx context.Context, deviceName string) (int64, error)
+	PurgeStockRecords(ctx context.Context, deviceName string) (int64, error)
 	PurgeTelemetryHourly(ctx context.Context, deviceName string) (int64, error)
+	// 设备是否上报过该类记录（含读不出来的原文）：false 时接口给 syncStatus=UNSUPPORTED，客户端显示"设备暂不支持"
+	// 而不是"暂无记录"。按设备判定，不看客户归属：这是设备固件的能力，不是谁的数据。kind 取 'shift' 或 'stock_record'。
+	RecordKindReported(ctx context.Context, arg RecordKindReportedParams) (bool, error)
 	// Idempotent operator registration (POST /api/devices). Same ownership rule as
 	// EnsureDeviceForCustomer — create, or claim an unassigned device, never move an assigned one — but
 	// also reports whether this call inserted the row, so the caller can answer 201 vs 200. xmax is 0
@@ -335,6 +348,11 @@ type Querier interface {
 	// 按 ThingsBoard 的 active 标志同步在线状态；只在状态真的变化时才写，所以时间戳记录的是
 	// 观察到变化的时刻（精度即轮询间隔），而不是每次轮询都刷新。业务库里没有的设备不会被创建。
 	SyncDeviceOnlineStatus(ctx context.Context, arg SyncDeviceOnlineStatusParams) (int64, error)
+	// 让罐行与表头里胜出的那份载荷一致：删掉载荷里已没有的罐，插入或更新其余的罐，内容没变的不写。每次写入都执行，
+	// 所以表头写入后进程中断、或两次写入并发，下一次写入（含回补重放）都会收敛到同一结果。解析器已保证罐号合法且不重复。
+	SyncShiftRecordTanks(ctx context.Context, arg SyncShiftRecordTanksParams) error
+	// 同 SyncShiftRecordTanks。
+	SyncStockRecordTanks(ctx context.Context, arg SyncStockRecordTanksParams) error
 	TouchWechatLogin(ctx context.Context, id int64) error
 	// 旧的设备级绑定查询（BindUserDeviceIfAllowed / BindUserDeviceByCodeIfAllowed）已在 cloud#63 中移除：
 	// 扫码不再创建任何授权，授权只来自 user_tank_grants（db/queries/tank_grants.sql）。user_devices 表保留为
@@ -351,6 +369,11 @@ type Querier interface {
 	// customer cannot use and silently invalidate the new owner's. Zero rows back means ownership
 	// changed (or never held), and the handler answers 409.
 	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
+	// 交班与库存记录（迁移 000037，cloud#85，契约 docs/shift-stock-records-contract.md）。写入全部幂等：
+	// 表头按信封 ts 最大者胜（相同则保留先写入的），罐行随后由 Sync*RecordTanks 与表头载荷对齐。
+	// 返回 1 = 本份胜出（新插入或替换了更旧的一份）；0 = 已有同样新或更新的一份，表头不变。之后调用方一律执行 SyncShiftRecordTanks。
+	// customer_id 取首次写入时设备所属的客户，之后不改。删除栅栏与重放截止同 UpsertStockEvent。
+	UpsertShiftRecord(ctx context.Context, arg UpsertShiftRecordParams) (int64, error)
 	// 出入库与报警的业务库副本（迁移 000017，issue #29）。写入全部幂等：回补与实时摄取并发、补投重复、
 	// 乱序到达都收敛到同一结果。
 	// customer_id 取首次写入时设备所属的客户，之后的重放与修正版不改它（归属由写入时的事实决定，不看设备自报的时间戳）。
@@ -358,6 +381,8 @@ type Querier interface {
 	// 不同信封 ts 记入 report_ts（不论是否胜出），重放同一份不会重复计数。
 	// 设备删除中、或信封 ts 不晚于该编号最近一次删除完成时刻（旧记录重放）时不写入（cloud#83，device_record_writable）。
 	UpsertStockEvent(ctx context.Context, arg UpsertStockEventParams) error
+	// 同 UpsertShiftRecord。
+	UpsertStockRecord(ctx context.Context, arg UpsertStockRecordParams) (int64, error)
 	// 设备上报的罐体标定表镜像（迁移 000035，cloud#14）。只由 internal/ingest 写入，API 只读。
 	// reported_at 没变就不写（设备每次重连都会重发，lastUpdateTs 随之前进）。
 	UpsertTankCalibration(ctx context.Context, arg UpsertTankCalibrationParams) error

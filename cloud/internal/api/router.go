@@ -102,6 +102,8 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.GET("/me", meHandler(deps))
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
+		authorized.GET("/shift-records", listShiftRecordsHandler(deps))
+		authorized.GET("/stock-records", listStockRecordsHandler(deps))
 		authorized.GET("/devices", listDevicesHandler(deps))
 		authorized.GET("/stations", listStationsHandler(deps))
 		authorized.POST("/devices", registerDeviceHandler(deps))

@@ -13,7 +13,7 @@
     "androidVerifiedAt": ""
   },
   "source": "yeweiyi-cloud/fixtures/protocol/v1",
-  "updated": "2026-09-04",
+  "updated": "2026-11-03",
   "fixtures": [
     {
       "file": "telemetry_snapshot.json",
@@ -116,6 +116,54 @@
       "sha256": "e9a75b72ed5cb0c984f797f801e9cff0d1e53e8a82530f7879d690d71c4a41cc",
       "direction": "uplink",
       "pins": "重复 commandId 回放上次终态并置 duplicate=true，不重复执行动作"
+    },
+    {
+      "file": "shift_event_open.json",
+      "sha256": "cff9139e8667e88eb2b8ffb131e953b6028d6740b29478297ee0327e4ae94fba",
+      "direction": "uplink",
+      "pins": "开始交班 status=OPEN：shiftId=shift-{beginTimeMs}，进行中的班结束字段缺键（=null，不得当 0）"
+    },
+    {
+      "file": "shift_event_closed.json",
+      "sha256": "4c7e086aa8e34fd3c446376d47b952f56d88e06cd864c65d2d427efa1c02e38d",
+      "direction": "uplink",
+      "pins": "同一班 status=CLOSED，信封 ts 更大者胜；outVolumeL=begin−end，outWeightKg 按结束时刻密度"
+    },
+    {
+      "file": "shift_event_tank_added.json",
+      "sha256": "37eb9e229cd6f9ecea53b3eb699083b93e5cff4011e46b79a7f4bb61f2ebe040",
+      "direction": "uplink",
+      "pins": "班内新增罐只有结束数据，开始数据与介质缺键，不用当前设置补"
+    },
+    {
+      "file": "shift_event_tank_removed.json",
+      "sha256": "3f581dfefac5711305d71640438c397890886e41374a7b4c9aa29cd8e61ff03e",
+      "direction": "uplink",
+      "pins": "班内删除罐保留开始数据，结束数据缺键"
+    },
+    {
+      "file": "stock_record.json",
+      "sha256": "7dcd93e6f27d748f0947e28efc2cec6602a8f24858c3f1e810b2c61542751aa2",
+      "direction": "uplink",
+      "pins": "一次库存保存一条多罐，recordId=stock-{tsMs}，trigger SCHEDULED|MANUAL，单位 mm/L/℃/kg"
+    },
+    {
+      "file": "stock_event_in_delivered_weight.json",
+      "sha256": "b3e3faf0246a976b3bef3f4af48876e1d3f28cc670438de352eb8a3d7f09739d",
+      "direction": "uplink",
+      "pins": "stockEvent 可选 oilTypeIndex 与 deliveredWeightKg（交付体积×关闭时刻密度）"
+    },
+    {
+      "file": "alarm_active_oil_type.json",
+      "sha256": "155cbb4158317f0f63034974f1bd46416fb8a995844049aca4611792a740feb6",
+      "direction": "uplink",
+      "pins": "alarm 可选 oilType/oilTypeIndex，取报警发生时，CLEARED 原样带出"
+    },
+    {
+      "file": "oil_type_index.json",
+      "sha256": "8b38d967305588edb3a0c16a5a6c6ac1f56cced5f12bf6c960001d8afeda7612",
+      "direction": "uplink",
+      "pins": "oilTypeIndex 对照表（字典，非报文）：0 未设置，1–17 内置，18–25 自定义；以中文名为准"
     }
   ]
 }

@@ -53,14 +53,18 @@ const (
 // up — matching on (tank, type) alone would mis-pair two occurrences that overlap after a
 // reconnect backfill.
 type AlarmEvent struct {
-	AlarmID  string  `json:"alarmId"`
-	Tank     int     `json:"tank"` // 1-based tank index; 0 for a device-level alarm
-	Type     string  `json:"type"`
-	Severity string  `json:"severity"`
-	Status   string  `json:"status"`
-	Text     string  `json:"text"`            // human-readable Chinese text as shown on the device
-	Value    float64 `json:"value,omitempty"` // the reading that tripped it, in that alarm's own unit
-	TSMs     int64   `json:"tsMs"`            // when the device detected it, epoch millis UTC
+	AlarmID  string `json:"alarmId"`
+	Tank     int    `json:"tank"` // 1-based tank index; 0 for a device-level alarm
+	Type     string `json:"type"`
+	Severity string `json:"severity"`
+	Status   string `json:"status"`
+	Text     string `json:"text"` // human-readable Chinese text as shown on the device
+	// OilType/OilTypeIndex are the tank's oil when the alarm was raised; a CLEARED report carries the
+	// ACTIVE one's values. Absent for device-level alarms, deleted tanks and older firmware (cloud#85).
+	OilType      string  `json:"oilType,omitempty"`
+	OilTypeIndex *int    `json:"oilTypeIndex,omitempty"`
+	Value        float64 `json:"value,omitempty"` // the reading that tripped it, in that alarm's own unit
+	TSMs         int64   `json:"tsMs"`            // when the device detected it, epoch millis UTC
 }
 
 // MarshalTelemetry produces the exact bytes a device publishes to TelemetryTopic for an alarm.

@@ -10,12 +10,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/store/db"
 	"yeweiyi-cloud/internal/tbclient"
 )
 
-// 出入库与报警是业务记录，业务库是它们的长期事实来源（CLAUDE.md 约束 5，issue #29）；ThingsBoard
+// 出入库、报警、交班、库存记录是业务记录，业务库是它们的长期事实来源（CLAUDE.md 约束 5，issue #29）；ThingsBoard
 // 只是传输与短期缓冲。本文件是它们进入业务库的唯一入口，实时订阅与回补共用同一组写入函数，且全部幂等：
 //
 //   - 出入库按 (设备, eventId) 折叠，信封 ts 最大者胜，相同则保留先写入的；
@@ -113,11 +115,59 @@ func SaveAlarmEvent(ctx context.Context, q *db.Queries, deviceName string, envTS
 	return ev, true, err
 }
 
+// SaveShiftEvent persists one shiftEvent report (cloud#85). The header keeps the report with the
+// largest envelope ts; the tank rows are then aligned with whatever the header holds, on every call,
+// so an interrupted or concurrent write converges on the next one (including a reconcile replay).
+func SaveShiftEvent(ctx context.Context, q *db.Queries, deviceName string, envTS int64, value any) error {
+	raw := rawJSON(value)
+	ev, err := protocol.ParseShiftEvent(value)
+	if err != nil {
+		return q.InsertRecordReject(ctx, db.InsertRecordRejectParams{
+			Kind: "shift", DeviceName: deviceName, EnvTs: envTS, Reason: rejectUnparsable, Raw: raw,
+		})
+	}
+	var end pgtype.Int8
+	if ev.EndTimeMs != nil {
+		end = pgtype.Int8{Int64: *ev.EndTimeMs, Valid: true}
+	}
+	if _, err := q.UpsertShiftRecord(ctx, db.UpsertShiftRecordParams{
+		DeviceName: deviceName, ShiftID: ev.ShiftID, Status: ev.Status,
+		BeginMs: ev.BeginTimeMs, EndMs: end, EnvTs: envTS, Payload: []byte(raw),
+	}); err != nil {
+		return err
+	}
+	return q.SyncShiftRecordTanks(ctx, db.SyncShiftRecordTanksParams{DeviceName: deviceName, ShiftID: ev.ShiftID})
+}
+
+// SaveStockRecord persists one stockRecord report; see SaveShiftEvent.
+func SaveStockRecord(ctx context.Context, q *db.Queries, deviceName string, envTS int64, value any) error {
+	raw := rawJSON(value)
+	rec, err := protocol.ParseStockRecord(value)
+	if err != nil {
+		return q.InsertRecordReject(ctx, db.InsertRecordRejectParams{
+			Kind: "stock_record", DeviceName: deviceName, EnvTs: envTS, Reason: rejectUnparsable, Raw: raw,
+		})
+	}
+	if _, err := q.UpsertStockRecord(ctx, db.UpsertStockRecordParams{
+		DeviceName: deviceName, RecordID: rec.RecordID, OccurredMs: rec.TSMs, EnvTs: envTS, Payload: []byte(raw),
+	}); err != nil {
+		return err
+	}
+	return q.SyncStockRecordTanks(ctx, db.SyncStockRecordTanksParams{DeviceName: deviceName, RecordID: rec.RecordID})
+}
+
 // BackfillResult counts what one backfill pass read from ThingsBoard. These are points read, not
 // rows created: a pass over data that is already stored reads the same points and changes nothing.
 type BackfillResult struct {
-	StockPoints int
-	AlarmPoints int
+	StockPoints       int
+	AlarmPoints       int
+	ShiftPoints       int
+	StockRecordPoints int
+}
+
+// Total is the number of points read across all kinds.
+func (r BackfillResult) Total() int {
+	return r.StockPoints + r.AlarmPoints + r.ShiftPoints + r.StockRecordPoints
 }
 
 const (
@@ -157,7 +207,22 @@ func (i *Ingester) backfillByID(ctx context.Context, deviceName, deviceID string
 	if err != nil {
 		return res, fmt.Errorf("backfill %s alarm: %w", deviceName, err)
 	}
-	// Only a pass that started at 0 and read both kinds to the end proves the history is here.
+	res.ShiftPoints, err = i.scanKey(ctx, deviceID, protocol.KeyShiftEvent, fromMs, toMs, func(pt tbclient.TSValue) error {
+		return SaveShiftEvent(ctx, i.cfg.Queries, deviceName, pt.TS, pt.Value)
+	})
+	if err != nil {
+		return res, fmt.Errorf("backfill %s shiftEvent: %w", deviceName, err)
+	}
+	res.StockRecordPoints, err = i.scanKey(ctx, deviceID, protocol.KeyStockRecord, fromMs, toMs, func(pt tbclient.TSValue) error {
+		return SaveStockRecord(ctx, i.cfg.Queries, deviceName, pt.TS, pt.Value)
+	})
+	if err != nil {
+		return res, fmt.Errorf("backfill %s stockRecord: %w", deviceName, err)
+	}
+	// Only a pass that started at 0 and read every kind to the end proves the history is here. A
+	// device marked before shift/stock records existed is not re-read from 0: those kinds only appear
+	// with new firmware, and the reconcile lookback (8 days by default) re-reads their recent history
+	// on every pass; cmd/backfill reads all of it.
 	if fromMs == 0 {
 		if err := i.cfg.Queries.MarkRecordBackfill(ctx, deviceName); err != nil {
 			return res, fmt.Errorf("backfill %s: mark complete: %w", deviceName, err)
@@ -238,7 +303,8 @@ func (i *Ingester) reconcileOnce(ctx context.Context, deviceName, deviceID strin
 		}
 		return
 	}
-	if announce && res.StockPoints+res.AlarmPoints > 0 {
-		i.cfg.Logf("ingest: %s: reconciled %d stockEvent / %d alarm points", deviceName, res.StockPoints, res.AlarmPoints)
+	if announce && res.Total() > 0 {
+		i.cfg.Logf("ingest: %s: reconciled %d stockEvent / %d alarm / %d shiftEvent / %d stockRecord points",
+			deviceName, res.StockPoints, res.AlarmPoints, res.ShiftPoints, res.StockRecordPoints)
 	}
 }

@@ -1,0 +1,24 @@
+{
+  "_comment": "oilTypeIndex 对照表（不是报文，是字典）。下标来自设备 DataUtils.getOilType()：0 = 未设置；1–17 = 内置油品，取 res/values*/array.xml 的 oiltypeArray 前 18 项（第 19 项『空白』不进表）；18–25 = 用户自定义的 8 个油品，名称存在设备本地（中文/英文各一份），没有固定名称，读方显示 oilType。与云端 tank-settings 契约的 oilTypeIndex（0–25）是同一套下标。注意：设备英文表与中文表并非逐项对应（2 号中文为 -10#、英文为 Sulfuric Acid；10 号中文为米糠油、英文为 Kerosene），这是设备端已知的翻译缺陷，以中文名为准；这正是读方应以 oilTypeIndex 而非 oilType 识别油品的原因。",
+  "unset": 0,
+  "builtin": {
+    "1": {"zh": "0#", "en": "0# Diesel"},
+    "2": {"zh": "-10#", "en": "Sulfuric Acid"},
+    "3": {"zh": "-20#", "en": "-20# Diesel"},
+    "4": {"zh": "-35#", "en": "-35# Diesel"},
+    "5": {"zh": "92#", "en": "92# Gasoline"},
+    "6": {"zh": "95#", "en": "95# Gasoline"},
+    "7": {"zh": "98#", "en": "98# Gasoline"},
+    "8": {"zh": "甲醇", "en": "Methanol"},
+    "9": {"zh": "甲苯", "en": "Toluene"},
+    "10": {"zh": "米糠油", "en": "Kerosene"},
+    "11": {"zh": "硫酸", "en": "Sulfuric Acid"},
+    "12": {"zh": "二甲苯", "en": "Xylene"},
+    "13": {"zh": "正丁酯", "en": "n-Butyl"},
+    "14": {"zh": "仲丁酯", "en": "sec-Butyl"},
+    "15": {"zh": "甲酯", "en": "Methyl"},
+    "16": {"zh": "二甲酯", "en": "Dimethyl"},
+    "17": {"zh": "溶剂油", "en": "Solvent Oil"}
+  },
+  "custom": {"from": 18, "to": 25}
+}
