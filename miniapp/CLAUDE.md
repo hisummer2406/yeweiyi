@@ -307,8 +307,11 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 - `utils/tankPick.ts` — single-tank detail (miniapp#15): visible tanks (snapshot ∩ `granted_tanks`) and
   which one to select (the tapped one, else the lowest; a hidden one is reported). Pure, Node-checked.
 - `utils/recordColumns.ts` — the five record tables (miniapp#17): column order as on the device display,
-  units, cell values (missing → "—", never 0 or derived; in/out kg and alarm medium have no cloud source
-  yet), row keys, `SUPPORTED` (stock/shift not open). Pure, Node-checked.
+  units, cell values (missing → "—", never 0 or derived), row keys, 介质 by `oilTypeIndex` (1–17 → `oil.N`
+  in the app language, from the Chinese names — the device's English list is misaligned, zhongchengyeweiyi#52;
+  else the device's `oilType` text), and `syncSummary` for 交班/库存 (cloud#85: `UNSUPPORTED` → "设备暂不支持",
+  `SYNCING` → "同步中", only `SYNCED` + empty may say "no records", `unparsable` > 0 → "may be incomplete").
+  Pure, Node-checked.
 - `utils/recordFeed.ts` — one paged alarm or stock list for one device/window/filter, shared by
   device-detail and `record-list`: sends `tank`/`direction` to the cloud (#84) and filters the rows again
   for an older cloud, seqs that drop late answers, bounded auto-continue on filtered lists, the 502
@@ -345,7 +348,9 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     so. `record-list` re-decides station and device on every show (a home station switch or a device
     replacement drops the old list), offers 全部罐 + the visible tanks (`GET /api/devices/:device/tanks`),
     the same time range, and a table with the tank column fixed and the rest scrolling sideways. 交班/库存
-    say "not open yet" and send nothing. `record-list?station=` is only used by a verified old link and
+    read `GET /api/shift-records` / `GET /api/stock-records` (cloud#85, `docs/shift-stock-records-contract.md`
+    §4/§5; one row per record × tank, rows of one shift/snapshot share a shade; an open shift has dashes for
+    its handover time and end figures); a cloud without those routes (bare 404) shows "not open yet". `record-list?station=` is only used by a verified old link and
     then pins that station.
   - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
   - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫码查看设备), `device-detail` (**one tank at a time**: opened with `tank=` from
@@ -396,7 +401,7 @@ Requirements for new work live in `openspec/` (initialised 2026-10-07, schema `s
 (the cloud owns the contract, specs do not copy cloud fields, the do-not-build list). Active change:
 `openspec/changes/home-by-station/` (home page by station, with its dependency on the cloud and the
 filed issues in `cloud-issues.md`), `openspec/changes/records-by-station-and-single-tank-detail/` (miniapp
-#15–#17: single-tank detail, 我的记录 by the home station, record tables; cloud#84 on a cloud branch, #85 open). Use `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.
+#15–#17: single-tank detail, 我的记录 by the home station, record tables; cloud#84 on a cloud branch, #85 merged — cloud main 0335ce3). Use `/opsx:propose`, `/opsx:apply`, `/opsx:archive`.
 
 ## What's explicitly NOT this project's problem
 

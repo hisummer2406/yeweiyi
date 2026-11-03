@@ -83,6 +83,12 @@
 }
 
 /* 报警中（未恢复）的行：文字标红；状态文字本身也写在报警信息里，不只靠颜色 */
+/* 交班/库存：同一班（同一次库存）的各罐行底色相同，相邻两班交替 */
+.rt-tank.rt-shade,
+.rt-row.rt-shade .rt-cell {
+  background: #f6f8fb;
+}
+
 .rt-active {
   color: #d9363e;
 }

@@ -4,7 +4,7 @@
   <view class="muted">{{title}}</view>
 </view>
 
-<!-- 库存/交班尚未开放、没有有效油站、油站暂无设备、读取失败：都不显示表格，也不猜设备 -->
+<!-- 云端没有该类记录的接口（cloud#85 之前）、没有有效油站、油站暂无设备、读取失败：都不显示表格，也不猜设备 -->
 <view wx:if="{{state !== 'ok' && state !== 'loading' && notice}}" class="card banner-warning rl-banner">
   <text class="text-warning">{{notice}}</text>
   <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
@@ -60,7 +60,10 @@
     <button class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:24rpx;">{{text.retry}}</button>
   </view>
   <view wx:if="{{!error && !loaded && loading}}" class="empty">{{dtext.footerLoading}}</view>
-  <view wx:if="{{!rangeHint && loaded && rows.length === 0 && footer === 'end'}}" class="empty">
+  <!-- 交班/库存：设备从未上报过该类记录（UNSUPPORTED）；只有 SYNCED 且为空才说「没有记录」（cloud#85 §4） -->
+  <view wx:if="{{!rangeHint && loaded && rows.length === 0 && footer === 'end' && unsupported}}" class="empty">{{text.syncUnsupported}}</view>
+  <view wx:elif="{{!rangeHint && loaded && rows.length === 0 && footer === 'end' && !canSayEmpty}}" class="empty">{{text.emptyNotSynced}}</view>
+  <view wx:elif="{{!rangeHint && loaded && rows.length === 0 && footer === 'end'}}" class="empty">
     {{rangeKey === '24h' ? text.empty24h : text.emptyRange}}
   </view>
 
@@ -71,7 +74,7 @@
       <view
         wx:for="{{rows}}"
         wx:key="key"
-        class="rt-cell rt-tank {{item.active ? 'rt-active' : ''}}"
+        class="rt-cell rt-tank {{item.cls}} {{item.active ? 'rt-active' : ''}}"
         data-index="{{index}}"
         bindtap="onTapRow"
       >{{item.tank}}</view>
@@ -86,7 +89,7 @@
           wx:for-item="r"
           wx:for-index="ri"
           wx:key="key"
-          class="rt-row {{r.active ? 'rt-active' : ''}}"
+          class="rt-row {{r.cls}} {{r.active ? 'rt-active' : ''}}"
           data-index="{{ri}}"
           bindtap="onTapRow"
         >

@@ -49,4 +49,5 @@
 - [x] 7.2 单罐详情：两罐设备分别点 A/B 进入；快速切罐；扫码无罐号；指定罐不可见；员工单罐；快照 404；旧 `tab=oilInOut` 链接（可验证油站 → 记录页；不可验证 → 停在详情并提示）
 - [x] 7.3 记录页：多油站账号首页选站后直达记录、换站后返回已开列表、切账号、空站、旧云端无 `station_id`、换机、入库页某页全是出库、出库 502 带 rows、横滑表头不串列、报警行详情浮层
 - [x] 7.4 微信真机与 Donut Android：五类表格截图，三语下小屏不重叠、不截断关键信息
+- [x] 7.5 云端 #85 合并后（cloud main `0335ce3`）接入交班、库存：`GET /api/shift-records`、`GET /api/stock-records`，`syncStatus` 三态与 `unparsable` 提示，只有 `SYNCED` 且为空才说「没有记录」；出入库千克取 `deliveredWeightKg`，报警介质取 `oilType`/`oilTypeIndex`，介质优先按 `oilTypeIndex` 本地化；旧云端无路由（裸 404）显示「尚未开放」；`npm run typecheck`、`npm run check` 通过，未在 DevTools/真机验证，也未连真实云端
 - [x] 7.0 云端 #84 落地后改为服务端筛选：`recordFeed` 发送 `tank` / `direction`（`recordsRange.filterParams`，Node 检查覆盖），保留按行过滤兜底

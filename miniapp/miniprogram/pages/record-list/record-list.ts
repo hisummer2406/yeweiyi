@@ -4,16 +4,22 @@ import { formatLocalTime } from '../../utils/format';
 import { loadRecordsContext } from '../../utils/stationPref';
 import { FOLLOW_NOTICES } from '../../utils/stationDevice';
 import { describeError } from '../../utils/errors';
-import { RecordFeed, failureCode, type FeedState, type Footer } from '../../utils/recordFeed';
+import { RecordFeed, failureCode, type FeedKind, type FeedRow, type FeedState, type Footer } from '../../utils/recordFeed';
 import {
   COLUMNS,
-  SUPPORTED,
   alarmCells,
   alarmRowKey,
   directionOf,
+  groupOf,
+  inventoryCells,
+  inventoryRowKey,
   isRecordType,
+  mediumText,
+  shiftCells,
+  shiftRowKey,
   stockCells,
   stockRowKey,
+  type CellFormat,
   type RecordType,
 } from '../../utils/recordColumns';
 import {
@@ -27,7 +33,7 @@ import {
   type RecordsRange,
 } from '../../utils/recordsRange';
 import { ALARM_SEVERITY_KEYS, ALARM_STATUS_KEYS, ALARM_TYPE_KEYS, label } from '../../utils/labels';
-import type { Alarm, DeviceTanksResponse, OilInOutRow } from '../../types/api';
+import type { Alarm, DeviceTanksResponse, OilInOutRow, ShiftRecordRow, StockRecordRow } from '../../types/api';
 
 // One record type of 我的记录 as a table (miniapp#16, #17): the home page's current station and its one
 // device, all visible tanks by default with a tank filter, columns in the device display's order.
@@ -51,7 +57,9 @@ const RANGE_HINT_KEYS: Record<Exclude<RangeProblem, ''>, string> = {
 // All visible tanks (no tank filter).
 const ALL = -1;
 
-// not-open: the type has no cloud data yet; no-station / blocked / error: no device to read (see the
+const FEED_KINDS: Record<RecordType, FeedKind> = { in: 'stock', out: 'stock', alarm: 'alarm', shift: 'shift', stock: 'inventory' };
+
+// not-open: the cloud has no endpoint for this type (a cloud before #85); no-station / blocked / error: no device to read (see the
 // records page); ok: the table.
 type State = 'loading' | 'ok' | 'not-open' | 'no-station' | 'blocked' | 'error';
 
@@ -59,6 +67,8 @@ type RowView = {
   key: string;
   tank: string;
   cells: string[];
+  // Extra row classes: alternate shading per shift / stock snapshot (the rows of one record are one group).
+  cls: string;
   // Alarm rows: ACTIVE / CLEARED keeps its own mark, and a tap shows the full text, status and severity.
   active?: boolean;
   // The alarm's own sheet: every field of the record, the message in full.
@@ -71,7 +81,7 @@ type RowView = {
   };
 };
 
-type Row = Alarm | OilInOutRow;
+type Row = FeedRow;
 
 function cellClass(align: 'left' | 'right', wide?: boolean): string {
   return `rt-cell ${align === 'right' ? 'rt-num' : ''} ${wide ? 'rt-wide' : ''}`;
@@ -99,6 +109,9 @@ Page({
     stale: '',
     note: '',
     footer: '' as Footer,
+    canSayEmpty: true,
+    // 交班/库存: the device never reported this kind of record.
+    unsupported: false,
 
     tankOptions: [] as { tank: number; label: string }[],
     tank: ALL,
@@ -136,13 +149,8 @@ Page({
       cellCls: cols.slice(1).map((c) => cellClass(c.align, c.wide)),
       today: formatDate(new Date()),
     });
-    if (!SUPPORTED[type]) {
-      // 库存 / 交班: no cloud endpoint yet. Say so and send nothing — never an empty table.
-      this.setData({ state: 'not-open', notice: t('records.notOpen') });
-      return;
-    }
     this.feed = new RecordFeed<Row>(
-      type === 'alarm' ? 'alarm' : 'stock',
+      FEED_KINDS[type],
       (s) => this.showRows(s),
       (err) => this.onRefused(err),
     );
@@ -151,7 +159,6 @@ Page({
   onShow() {
     this.setData({ text: texts('records'), dtext: texts('detail') });
     setNavTitle(TITLE_KEYS[this.data.type as RecordType]);
-    if (this.data.state === 'not-open') return;
     // Every show: the home page may have switched station or the station's device may have been replaced.
     const refresh = this.wasHidden;
     this.wasHidden = false;
@@ -303,8 +310,16 @@ Page({
   },
 
   showRows(s: FeedState<Row>) {
+    // A cloud without this record type's endpoint: no table, no "no records" (a later reload may find it).
+    if (s.notOpen) {
+      this.setData({ state: 'not-open', notice: t('records.notOpen'), rows: [], loaded: false, loading: s.loading, footer: '' });
+      return;
+    }
+    if (this.data.state === 'not-open') this.setData({ state: 'ok', notice: '' });
     const type = this.data.type as RecordType;
-    const time = (iso: string) => formatLocalTime(iso, currentLocale());
+    const f: CellFormat = { time: (iso: string) => formatLocalTime(iso, currentLocale()), tr: (key: string) => t(key) };
+    let group = '';
+    let shade = true;
     const rows: RowView[] = s.rows.map((r) => {
       if (type === 'alarm') {
         const a = r as Alarm;
@@ -314,7 +329,8 @@ Page({
         return {
           key: alarmRowKey(a),
           tank: String(a.tank),
-          cells: alarmCells(a, info, time),
+          cls: '',
+          cells: alarmCells(a, info, f),
           active: a.status === 'ACTIVE',
           detail: {
             kind,
@@ -322,16 +338,32 @@ Page({
             status,
             rows: [
               { label: t('table.tank'), value: t('tank.no', { n: a.tank }) },
+              { label: t('table.medium'), value: mediumText(a.oilTypeIndex, a.oilType, f.tr) },
               { label: t('records.severity'), value: label(ALARM_SEVERITY_KEYS, a.severity) },
-              { label: t('table.alarmTime'), value: time(a.time) },
+              { label: t('table.alarmTime'), value: f.time(a.time) },
               ...(typeof a.value === 'number' && Number.isFinite(a.value) ? [{ label: t('records.value'), value: String(a.value) }] : []),
             ],
             text: a.text,
           },
         };
       }
+      if (type === 'shift' || type === 'stock') {
+        // Rows of one shift / snapshot are adjacent (the cloud orders by time, then record, then tank).
+        const g = groupOf(type, r as { shiftId?: string; recordId?: string });
+        if (g !== group) {
+          group = g;
+          shade = !shade;
+        }
+        const cls = shade ? 'rt-shade' : '';
+        if (type === 'shift') {
+          const x = r as ShiftRecordRow;
+          return { key: shiftRowKey(x), tank: String(x.tank), cls, cells: shiftCells(x, f) };
+        }
+        const x = r as StockRecordRow;
+        return { key: inventoryRowKey(x), tank: String(x.tank), cls, cells: inventoryCells(x, f) };
+      }
       const o = r as OilInOutRow;
-      return { key: stockRowKey(o), tank: String(o.tank), cells: stockCells(o, time) };
+      return { key: stockRowKey(o), tank: String(o.tank), cls: '', cells: stockCells(o, f) };
     });
     this.setData({
       rows,
@@ -341,6 +373,8 @@ Page({
       stale: s.stale,
       note: s.note,
       footer: s.footer,
+      canSayEmpty: s.canSayEmpty,
+      unsupported: s.unsupported,
     });
   },
 
@@ -371,10 +405,6 @@ Page({
   },
 
   onPullDownRefresh() {
-    if (this.data.state === 'not-open') {
-      wx.stopPullDownRefresh();
-      return;
-    }
     this.resolve(true).finally(() => wx.stopPullDownRefresh());
   },
 });
