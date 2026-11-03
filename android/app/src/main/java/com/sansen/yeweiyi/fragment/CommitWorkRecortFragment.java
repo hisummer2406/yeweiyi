@@ -19,6 +19,8 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.sansen.yeweiyi.bean.OilCan;
+import com.sansen.yeweiyi.logic.shift.ShiftExportRows;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.adapter.OilCommitWorkAdapter;
 import com.sansen.yeweiyi.application.MyApplication;
@@ -79,29 +81,18 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 //			SaveOutOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
 			// 按 id 倒序取数（与 findAllSorted 已有排序口径一致），与界面列表（isSort=true）顺序保持一致
 			lists = shiftRepository.findAllSorted(true);
-			//String gsonInfo=lists.get(0).getInfo();
-			for (int i=0;i<lists.size();i++){
-				List<OilWork> oilWorks=dbManager.stringToArray(lists.get(i).getInfo(), OilWork[].class);
-				for (OilWork oilwork :oilWorks) {
-					oilwork.setTime(lists.get(i).getTime());
-					oilwork.setEndTime(lists.get(i).getEndTime());
-					// 开始交班时已记录介质的就用记录值，旧记录才退回当前罐设置（issue #49）。
-					if (oilwork.getJieZhi() == null || oilwork.getJieZhi().isEmpty()) {
-						oilwork.setJieZhi(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilwork.getOilId()).getOilType()));
-					}
-				}
-				dataset.addAll(oilWorks);
-			}
-			for (CommitWork work:lists) {
-				dataset.addAll(dbManager.stringToArray(work.getInfo(), OilWork[].class));
-			}
+			// 每次导出重新组装：原来 dataset 是字段且从不清空，每行还被加两遍，罐删了会 NPE
+			dataset = ShiftExportRows.build(lists, tank -> {
+				OilCan oilCan = OilcanDataManager.getInstance(MyApplication.getInstance()).getData(tank);
+				return oilCan == null ? null : Const.getOilType(oilCan.getOilType());
+			});
 			SaveCommitOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
 
 
 		}
 
 	}
-	List<OilWork> dataset=new ArrayList<>();
+	private List<OilWork> dataset = new ArrayList<>();
 	private void SaveCommitOIl(String path) {
 		Log.e("TAG 路径",path);
 		ExportExcel<OilWork> exportExcel = new ExportExcel<OilWork>();

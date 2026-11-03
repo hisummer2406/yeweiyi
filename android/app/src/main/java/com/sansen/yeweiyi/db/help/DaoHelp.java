@@ -145,13 +145,16 @@ public class DaoHelp {
                         // 盖章成版本 7）——PR #38 Codex 第五轮审核 P1。ALTER TABLE ADD COLUMN 对已经
                         // 有这列的库（oldVersion==6 走过旧 case 6，或者本次升级本身跑了不止一次）
                         // 会抛 DbException，被下面的 catch 吞掉，不影响其余设备。
-                        if (oldVersion < 7) {
-                            try {
-                                dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OilInOut ADD COLUMN source TEXT");
-                                dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OutStock ADD COLUMN source TEXT");
-                                dbUtils.execNonQuery("ALTER TABLE detail_inout_record ADD COLUMN source TEXT");
-                            } catch (DbException e) {
-                                Log.e(TAG, "onUpgrade 数据库操作失败", e);
+                        // 每张表单独 try：原来三条共用一个 try，第一条失败（如该表还没建）后两条就不执行了。
+                        // 条件放宽到 < 8：已升到 7 但当时漏加列的设备，借这次升到 8 补上；已有该列的只抛异常被吞掉。
+                        if (oldVersion < 8) {
+                            for (String table : new String[]{"com_sansen_yeweiyi_db_OilInOut",
+                                    "com_sansen_yeweiyi_db_OutStock", "detail_inout_record"}) {
+                                try {
+                                    dbUtils.execNonQuery("ALTER TABLE " + table + " ADD COLUMN source TEXT");
+                                } catch (DbException e) {
+                                    Log.e(TAG, "onUpgrade 数据库操作失败: " + table, e);
+                                }
                             }
                         }
 
