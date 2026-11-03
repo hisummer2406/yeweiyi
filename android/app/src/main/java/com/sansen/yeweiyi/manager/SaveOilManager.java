@@ -47,6 +47,8 @@ public class SaveOilManager {
 				maps = oilcanDataManager.getData();
 				if (maps != null) {
 					List<Oil> oils = new ArrayList<Oil>();
+					// 一次保存的各罐共用同一时刻、精确到秒（issue #49）；原来每罐各取一次且只到分钟。
+					String time = DateUtils.getYYYMMddHHmmssWithSeconds();
 
 					for (int i=0;i<maps.size();i++) {
 						OilCan oilCan = maps.valueAt(i);
@@ -65,7 +67,7 @@ public class SaveOilManager {
 						stockSave.setVolum(oilCan.getOilVolume());
 						stockSave.setOilId(oilCan.getOilCanPos());
 						stockSave.setHeight(oilCan.getOilLevel());
-						stockSave.setTime(DateUtils.getYYYMMddHHmmss());
+						stockSave.setTime(time);
 						stockRepository.saveStockRecord(stockSave);
 					}
 

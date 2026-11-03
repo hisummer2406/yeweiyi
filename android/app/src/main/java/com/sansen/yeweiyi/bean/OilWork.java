@@ -4,6 +4,11 @@ import com.lidroid.xutils.db.annotation.Column;
 
 import java.io.Serializable;
 
+/**
+ * 交班记录里一个罐的数据，序列化为 {@code CommitWork.info} 的 JSON 数组元素。
+ * 高度/容积/出库量用包装类型：null = 缺失（进行中的班没有结束数据、中途新增的罐没有开始数据），
+ * 不再用 0.0 冒充（issue #49）。升级前存的 JSON 里这些字段是 0.0，照常解析为 0.0。
+ */
 public class OilWork implements Serializable {
 	/**
 	 * 開始时间
@@ -23,29 +28,29 @@ public class OilWork implements Serializable {
 	/**
 	 * 接班时高度
 	 */
-	private double beginHeight;
+	private Double beginHeight;
 	/**
 	 * 交班时高度
 	 */
-	private double endHeight;
+	private Double endHeight;
 
 	/**
 	 * 接班时容量
 	 */
-	private double beginVolume;
+	private Double beginVolume;
 
 	/**
 	 * 交班时容量
 	 */
-	private double endVolume;
+	private Double endVolume;
 	/**
 	 * 售出油的体积
 	 */
-	private double shellVolume;
+	private Double shellVolume;
 	/**
 	 * 售出油的重量
 	 */
-	private double shellWeight;
+	private Double shellWeight;
 	/**
 	 * 開始时间
 	 */
@@ -94,19 +99,19 @@ public class OilWork implements Serializable {
 		this.jieZhi = jieZhi;
 	}
 
-	public double getBeginVolume() {
+	public Double getBeginVolume() {
 		return beginVolume;
 	}
 
-	public void setBeginVolume(double beginVolume) {
+	public void setBeginVolume(Double beginVolume) {
 		this.beginVolume = beginVolume;
 	}
 
-	public double getEndVolume() {
+	public Double getEndVolume() {
 		return endVolume;
 	}
 
-	public void setEndVolume(double endVolume) {
+	public void setEndVolume(Double endVolume) {
 		this.endVolume = endVolume;
 	}
 
@@ -118,35 +123,35 @@ public class OilWork implements Serializable {
 		this.oilId = oilId;
 	}
 
-	public double getBeginHeight() {
+	public Double getBeginHeight() {
 		return beginHeight;
 	}
 
-	public void setBeginHeight(double beginHeight) {
+	public void setBeginHeight(Double beginHeight) {
 		this.beginHeight = beginHeight;
 	}
 
-	public double getEndHeight() {
+	public Double getEndHeight() {
 		return endHeight;
 	}
 
-	public void setEndHeight(double endHeight) {
+	public void setEndHeight(Double endHeight) {
 		this.endHeight = endHeight;
 	}
 
-	public double getShellVolume() {
+	public Double getShellVolume() {
 		return shellVolume;
 	}
 
-	public void setShellVolume(double shellVolume) {
+	public void setShellVolume(Double shellVolume) {
 		this.shellVolume = shellVolume;
 	}
 
-	public double getShellWeight() {
+	public Double getShellWeight() {
 		return shellWeight;
 	}
 
-	public void setShellWeight(double shellWeight) {
+	public void setShellWeight(Double shellWeight) {
 		this.shellWeight = shellWeight;
 	}
 

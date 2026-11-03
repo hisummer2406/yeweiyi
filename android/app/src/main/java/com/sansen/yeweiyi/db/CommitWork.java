@@ -47,6 +47,21 @@ public class CommitWork {
 
 
 	/**
+	 * 开始交班时刻的 epoch 毫秒（截到整秒，与 time 同一瞬间）。数据库版本 8 起才有，旧记录为 null。
+	 * 上报 shiftId 由它生成，避免开始到结束之间改时区导致同一班算出两个标识（issue #49）。
+	 */
+	@Column(column = "begintimems")
+	private Long beginTimeMs;
+
+	public Long getBeginTimeMs() {
+		return beginTimeMs;
+	}
+
+	public void setBeginTimeMs(Long beginTimeMs) {
+		this.beginTimeMs = beginTimeMs;
+	}
+
+	/**
 	 * 油罐信息Gson
 	 */
 	@Column(column = "oilinfogson")

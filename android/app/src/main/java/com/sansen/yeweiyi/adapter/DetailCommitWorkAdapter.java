@@ -11,6 +11,7 @@ import android.widget.TextView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.OilWork;
+import com.sansen.yeweiyi.logic.shift.ShiftRecordBuilder;
 import com.sansen.yeweiyi.db.OilCanSet;
 import com.sansen.yeweiyi.logic.Const;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
@@ -85,10 +86,10 @@ public class DetailCommitWorkAdapter extends BaseAdapter {
 		}
 		OilWork oil = oilWorks.get(position);
 		holder.detailcommmitwork_tv_id.setText(oil.getOilId() + "");
-		holder.detailcommitwork_tv_beginheight.setText(DataUtils.doubleFoment(oil.getBeginHeight()) + "");
-		holder.detailcommitwork_tv_endheight.setText(DataUtils.doubleFoment(oil.getEndHeight()) + "");
-		holder.detailcommitwork_tv_shellvolume.setText(DataUtils.doubleFoment(oil.getShellVolume()) + "");
-		holder.detailcommitwork_tv_shellweight.setText(DataUtils.doubleFoment(oil.getShellWeight()) + "");
+		holder.detailcommitwork_tv_beginheight.setText(ShiftRecordBuilder.formatOrDash(oil.getBeginHeight()));
+		holder.detailcommitwork_tv_endheight.setText(ShiftRecordBuilder.formatOrDash(oil.getEndHeight()));
+		holder.detailcommitwork_tv_shellvolume.setText(ShiftRecordBuilder.formatOrDash(oil.getShellVolume()));
+		holder.detailcommitwork_tv_shellweight.setText(ShiftRecordBuilder.formatOrDash(oil.getShellWeight()));
 
 		if (OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oil.getOilId())==null){
 			jieZhi=Const.getOilType(0);
@@ -96,9 +97,10 @@ public class DetailCommitWorkAdapter extends BaseAdapter {
 		else {
 			jieZhi=Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oil.getOilId()).getOilType());
 		}
-		holder.detailcommitwork_tv_jiezhi.setText(jieZhi);
-		holder.detailcommitwork_tv_beginvolume.setText(DataUtils.doubleFoment(oil.getBeginVolume())+"");
-		holder.detailcommitwork_tv_endvolume.setText(DataUtils.doubleFoment(oil.getEndVolume())+"");
+		// 优先显示开始交班时记录的介质；旧记录没有才退回当前罐设置（issue #49）。
+		holder.detailcommitwork_tv_jiezhi.setText(ShiftRecordBuilder.displayOilType(oil.getJieZhi(), jieZhi));
+		holder.detailcommitwork_tv_beginvolume.setText(ShiftRecordBuilder.formatOrDash(oil.getBeginVolume()));
+		holder.detailcommitwork_tv_endvolume.setText(ShiftRecordBuilder.formatOrDash(oil.getEndVolume()));
 		return convertView;
 	}
 

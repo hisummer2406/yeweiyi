@@ -81,7 +81,7 @@ public class DaoHelp {
 //			config.setDbVersion(1);
 //			// 创建数据库
 //			db = DbUtils.create(config);
-        db = DbUtils.create(ct, "sansen", 7,
+        db = DbUtils.create(ct, "sansen", 8,
                 new DbUtils.DbUpgradeListener() {
                     @Override
                     public void onUpgrade(DbUtils dbUtils, int oldVersion, int newVersion) {
@@ -150,6 +150,16 @@ public class DaoHelp {
                                 dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OilInOut ADD COLUMN source TEXT");
                                 dbUtils.execNonQuery("ALTER TABLE com_sansen_yeweiyi_db_OutStock ADD COLUMN source TEXT");
                                 dbUtils.execNonQuery("ALTER TABLE detail_inout_record ADD COLUMN source TEXT");
+                            } catch (DbException e) {
+                                Log.e(TAG, "onUpgrade 数据库操作失败", e);
+                            }
+                        }
+
+                        // 交班开始时刻 epoch 列（issue #49）。与上面 source 列同理放在 switch 外按版本判断；
+                        // 单独 try，已有该列时抛的异常不影响别的升级步骤。
+                        if (oldVersion < 8) {
+                            try {
+                                dbUtils.execNonQuery("ALTER TABLE commitwork ADD COLUMN begintimems INTEGER");
                             } catch (DbException e) {
                                 Log.e(TAG, "onUpgrade 数据库操作失败", e);
                             }

@@ -13,16 +13,18 @@ import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilWork;
 import com.sansen.yeweiyi.db.CommitWork;
 import com.sansen.yeweiyi.db.help.DaoHelp;
+import com.sansen.yeweiyi.logic.shift.ShiftRecordBuilder;
+import com.sansen.yeweiyi.logic.shift.ShiftTime;
+import com.sansen.yeweiyi.logic.shift.TankReading;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DataUtils;
-import com.sansen.yeweiyi.utils.DateUtils;
-import com.sansen.yeweiyi.utils.DoubleUtil;
 import com.sansen.yeweiyi.utils.ToastUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.TimeZone;
 
 /**
  * {@link ShiftRepository} 的实现：内部直接调用现有的 {@code DaoHelp}/{@code DbUtils}，
@@ -52,73 +54,43 @@ public class ShiftRepositoryImpl implements ShiftRepository {
 
     @Override
     public void startShift(SparseArray<OilCan> oilMap) {
-        String curTime = DateUtils.getYYYMMddHHmmss();
-        List<OilWork> oils = new ArrayList<>();
-
+        ShiftTime now = ShiftTime.of(System.currentTimeMillis(), TimeZone.getDefault());
         CommitWork commitWork = new CommitWork();
-        commitWork.setTime(curTime);
-        commitWork.setInfo("[{\"shellVolume\":0.0,\"shellWeight\":0.0,\"beginHeight\":0.0,\"endHeight\":0.0,\"oilId\":0}]");
-
-        int key;
-        for (int index = 0; index < oilMap.size(); index++) {
-            key = oilMap.keyAt(index);
-            OilWork oilWork = new OilWork();
-            oilWork.setOilId(oilMap.get(key).getOilCanPos());
-            oilWork.setBeginHeight(oilMap.get(key).getOilLevel());
-            OilCan oilCan = OilcanDataManager.getInstance(myApplication).getData(oilWork.getOilId());
-            double curOilVolume = DataUtils.getLitre(oilWork.getBeginHeight(), oilCan.getHightArray(), oilCan.getLitreArray());
-            oilWork.setBeginVolume(curOilVolume);
-            oils.add(oilWork);
-        }
-
-        commitWork.setInfo(new Gson().toJson(oils));
+        commitWork.setTime(now.local);
+        commitWork.setBeginTimeMs(now.epochMs);
+        commitWork.setInfo(new Gson().toJson(ShiftRecordBuilder.begin(readings(oilMap))));
         save(commitWork);
     }
 
     @Override
     public void endShift(SparseArray<OilCan> oilMap, String startTime) {
-        // startTime is unused, matching the pre-migration DBDataManager.CommitWork(int, String, SparseArray)
-        // behavior — endTime is always recomputed from the current time instead. Not fixed here (see
-        // design.md 决策1: 行为不变优先于修正).
-        String curTime = DateUtils.getYYYMMddHHmmss();
-        List<OilWork> oils = new ArrayList<>();
-
+        // startTime 一直没用到（迁移前 DBDataManager 也一样），结束时间取当前时间。
         List<CommitWork> commitWorks = findAllSorted(true);
-        CommitWork commitWork;
-        String gsonInfo;
-        if (commitWorks != null && commitWorks.size() != 0) {
-            gsonInfo = commitWorks.get(0).getInfo();
-            commitWork = commitWorks.get(0);
-        } else {
+        if (commitWorks == null || commitWorks.isEmpty()) {
             ToastUtils.showToast("未开始交接", 5);
             return;
         }
-        commitWork.setEndTime(curTime);
-
-        List<OilWork> oilWorks = Arrays.asList(new Gson().fromJson(gsonInfo, OilWork[].class));
-
-        int key;
-        for (int index = 0; index < oilMap.size(); index++) {
-            key = oilMap.keyAt(index);
-            OilWork oilWork;
-            if (oilWorks.size() > key - 1) {
-                oilWork = oilWorks.get(key - 1);
-            } else {
-                oilWork = new OilWork();
-                oilWork.setOilId(key);
-            }
-            oilWork.setOilId(oilMap.get(key).getOilCanPos());
-            oilWork.setEndHeight(oilMap.get(key).getOilLevel());
-            OilCan oilCan = OilcanDataManager.getInstance(myApplication).getData(oilWork.getOilId());
-            double curOilVolume = DataUtils.getLitre(oilWork.getEndHeight(), oilCan.getHightArray(), oilCan.getLitreArray());
-            oilWork.setEndVolume(curOilVolume);
-            oilWork.setShellVolume(DoubleUtil.double2(-curOilVolume + oilWork.getBeginVolume()));
-            oilWork.setShellWeight(oilWork.getShellVolume() * oilCan.getDensity());
-            oils.add(oilWork);
-        }
-
+        // 仍取 id 最大的一行，不论它是否已结束——重复结束的行为按 issue #49 暂不改。
+        CommitWork commitWork = commitWorks.get(0);
+        commitWork.setEndTime(ShiftTime.of(System.currentTimeMillis(), TimeZone.getDefault()).local);
+        OilWork[] begins = new Gson().fromJson(commitWork.getInfo(), OilWork[].class);
+        List<OilWork> oils = ShiftRecordBuilder.end(
+                begins == null ? null : Arrays.asList(begins), readings(oilMap));
         commitWork.setInfo(new Gson().toJson(oils));
         update(commitWork);
+    }
+
+    /** 把当前各罐转换成交班读数；容积由当前罐表换算（同旧实现）。 */
+    private List<TankReading> readings(SparseArray<OilCan> oilMap) {
+        List<TankReading> readings = new ArrayList<>();
+        for (int index = 0; index < oilMap.size(); index++) {
+            OilCan live = oilMap.valueAt(index);
+            int tank = live.getOilCanPos();
+            OilCan oilCan = OilcanDataManager.getInstance(myApplication).getData(tank);
+            double volume = DataUtils.getLitre(live.getOilLevel(), oilCan.getHightArray(), oilCan.getLitreArray());
+            readings.add(new TankReading(tank, live.getOilLevel(), volume, oilCan.getDensity(), oilCan.getJieZhi()));
+        }
+        return readings;
     }
 
     @Override

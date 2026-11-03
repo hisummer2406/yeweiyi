@@ -85,7 +85,10 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 				for (OilWork oilwork :oilWorks) {
 					oilwork.setTime(lists.get(i).getTime());
 					oilwork.setEndTime(lists.get(i).getEndTime());
-					oilwork.setJieZhi(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilwork.getOilId()).getOilType()));
+					// 开始交班时已记录介质的就用记录值，旧记录才退回当前罐设置（issue #49）。
+					if (oilwork.getJieZhi() == null || oilwork.getJieZhi().isEmpty()) {
+						oilwork.setJieZhi(Const.getOilType(OilcanDataManager.getInstance(MyApplication.getInstance()).getData(oilwork.getOilId()).getOilType()));
+					}
 				}
 				dataset.addAll(oilWorks);
 			}
