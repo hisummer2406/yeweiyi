@@ -487,7 +487,9 @@ func TestListOilInOut_ReplayedPreUpgradeRecordIsClassifiedByItsOwnTimestamp(t *t
 			t.Fatalf("GET %s: %d %s", path, rec.Code, rec.Body.String())
 		}
 		body := decodeStock(t, rec.Body.Bytes())
-		if body.Parsed == 0 {
+		// The two records are ingested independently; judge only once both have landed, or the
+		// readable one arriving first reads as "the old one was not classified".
+		if body.Parsed == 0 || body.LegacySkipped+body.Unparsable == 0 {
 			time.Sleep(300 * time.Millisecond)
 			continue
 		}
