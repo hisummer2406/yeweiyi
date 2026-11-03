@@ -30,14 +30,18 @@ import (
 // which 设备协议 V1 replaced outright. Any client reading the old shape must be updated.
 
 type alarmResponse struct {
-	AlarmID  string    `json:"alarmId"`
-	Tank     int       `json:"tank"`
-	Type     string    `json:"type"`
-	Severity string    `json:"severity"`
-	Status   string    `json:"status"`
-	Text     string    `json:"text"`
-	Value    float64   `json:"value,omitempty"`
-	Time     time.Time `json:"time"`
+	AlarmID  string  `json:"alarmId"`
+	Tank     int     `json:"tank"`
+	Type     string  `json:"type"`
+	Severity string  `json:"severity"`
+	Status   string  `json:"status"`
+	Text     string  `json:"text"`
+	Value    float64 `json:"value,omitempty"`
+	// OilType/OilTypeIndex: the tank's oil when the alarm was raised; null on device-level alarms and
+	// on reports from older firmware — never filled from the current tank settings (cloud#85).
+	OilType      *string   `json:"oilType"`
+	OilTypeIndex *int      `json:"oilTypeIndex"`
+	Time         time.Time `json:"time"`
 }
 
 func listAlarmsHandler(deps Deps) gin.HandlerFunc {
@@ -95,14 +99,16 @@ func listAlarmsHandler(deps Deps) gin.HandlerFunc {
 				ev.AlarmID = ""
 			}
 			out = append(out, alarmResponse{
-				AlarmID:  ev.AlarmID,
-				Tank:     ev.Tank,
-				Type:     ev.Type,
-				Severity: ev.Severity,
-				Status:   ev.Status,
-				Text:     ev.Text,
-				Value:    ev.Value,
-				Time:     r.occurred.UTC(),
+				AlarmID:      ev.AlarmID,
+				Tank:         ev.Tank,
+				Type:         ev.Type,
+				Severity:     ev.Severity,
+				Status:       ev.Status,
+				Text:         ev.Text,
+				Value:        ev.Value,
+				OilType:      nonEmpty(ev.OilType),
+				OilTypeIndex: ev.OilTypeIndex,
+				Time:         r.occurred.UTC(),
 			})
 		}
 

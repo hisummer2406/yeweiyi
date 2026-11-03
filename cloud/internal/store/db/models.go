@@ -198,7 +198,8 @@ type RecordBackfill struct {
 
 // 无法解析的出入库/报警原文（如固件升级前的 DetailInoutRecord.toString()、source 取值非法的记录）。(kind, device_name, env_ts, 原文哈希) 唯一，回补重放幂等。
 type RecordReject struct {
-	ID         int64  `json:"id"`
+	ID int64 `json:"id"`
+	// stock = 出入库；alarm = 报警；shift = 交班；stock_record = 库存记录。
 	Kind       string `json:"kind"`
 	DeviceName string `json:"device_name"`
 	// 信封 ts（毫秒）。接口用它与 stock.legacyFormatBefore 比较，区分已封口的旧格式记录与当下故障。
@@ -260,6 +261,38 @@ type RiverQueue struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
+// 交班记录表头（设备协议 V1 shiftEvent）。以 (device_name, shift_id) 为键幂等写入，信封 ts 最大的一份胜出。永久保存。
+type ShiftRecord struct {
+	// 设备名，不设外键：设备删除（换机、转移）后记录仍保留；只有彻底删除（cloud#83）会清掉。
+	DeviceName string `json:"device_name"`
+	// 设备生成的班标识 shift-{beginTimeMs}，开始与结束两次上报相同。
+	ShiftID string `json:"shift_id"`
+	// OPEN = 进行中（无结束数据）；CLOSED = 已交班。
+	Status string `json:"status"`
+	// 接班时刻（载荷 beginTimeMs），接口按它列窗口与排序。
+	BeginAt pgtype.Timestamptz `json:"begin_at"`
+	// 交班时刻（载荷 endTimeMs）；进行中为 NULL。
+	EndAt pgtype.Timestamptz `json:"end_at"`
+	// 胜出那一份报告的 ThingsBoard 信封 ts（毫秒）：设备生成该报文的时刻，补投原样保留。
+	EnvTs int64 `json:"env_ts"`
+	// 胜出那一份报告的原始 JSON。
+	Payload []byte `json:"payload"`
+	// 首次写入时设备所属的客户；之后的重报不改它。接口只返回与设备当前客户一致的记录。
+	CustomerID pgtype.Int8        `json:"customer_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 交班记录的每罐数据，随表头胜出的那一份整组替换。
+type ShiftRecordTank struct {
+	DeviceName string `json:"device_name"`
+	ShiftID    string `json:"shift_id"`
+	// 协议罐号（1 起）。
+	Tank int32 `json:"tank"`
+	// 载荷 tanks[] 中该罐的原始对象；缺键即缺失值，不是 0。
+	Data []byte `json:"data"`
+}
+
 // 油站：客户 → 油站 → 设备 的中间层，只存在于业务库，ThingsBoard 不知道油站。
 type Station struct {
 	// 油站主键。
@@ -302,6 +335,34 @@ type StockEvent struct {
 	DeletedAt pgtype.Timestamptz `json:"deleted_at"`
 	// 撤销操作人。
 	DeletedBy pgtype.Int8 `json:"deleted_by"`
+}
+
+// 库存记录表头（设备协议 V1 stockRecord）：设备一次库存保存（周期或手动）。以 (device_name, record_id) 为键幂等写入，信封 ts 最大的一份胜出。永久保存。
+type StockRecord struct {
+	// 设备名，不设外键，同 shift_records。
+	DeviceName string `json:"device_name"`
+	// 设备生成的批次标识 stock-{tsMs}。
+	RecordID string `json:"record_id"`
+	// 库存生成时刻（载荷 tsMs），接口按它列窗口与排序。
+	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
+	// 胜出那一份报告的信封 ts（毫秒）。
+	EnvTs int64 `json:"env_ts"`
+	// 胜出那一份报告的原始 JSON。
+	Payload []byte `json:"payload"`
+	// 首次写入时设备所属的客户，同 shift_records。
+	CustomerID pgtype.Int8        `json:"customer_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+// 库存记录的每罐数据，随表头胜出的那一份整组替换。
+type StockRecordTank struct {
+	DeviceName string `json:"device_name"`
+	RecordID   string `json:"record_id"`
+	// 协议罐号（1 起）。
+	Tank int32 `json:"tank"`
+	// 载荷 tanks[] 中该罐的原始对象；缺键即缺失值，不是 0。
+	Data []byte `json:"data"`
 }
 
 // 设备上报的罐体标定表镜像：(设备名, 罐号) 一行，由 internal/ingest 写入，云端不改。曲线通过 protocol.ParseTankCalibration 校验（严格升序、体积不减、至少 2 点）后才落库。

@@ -396,10 +396,11 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 `GET /api/devices/:device/tanks/:tank/calibration`，见 [tank-settings-contract.md](tank-settings-contract.md)）。仍待设备端确认：
 数组形状/单位；设备只在 MQTT 重连时重发（现场改表后云端滞后到下次重连）；是否需要变更时主动重发。
 
-## F. 交班、库存记录与介质字段（cloud#85 / zhongchengyeweiyi#49）—— 产品已决定，待设备端实现与 fixture
+## F. 交班、库存记录与介质字段（cloud#85 / zhongchengyeweiyi#49）—— 两端已实现，待真机验证
 
 契约见 [shift-stock-records-contract](shift-stock-records-contract.md)（v0.3）。新增的协议内容（产品 2026-11-03 决定，设备端会话已同意形状）：
 
 - 新事件 `shiftEvent`、`stockRecord`（§2.1/§2.2），走设备端独立 outbox，不占报警补投队列。
 - 既有事件新增**可选、向后兼容**字段：`stockEvent.deliveredWeightKg`、`stockEvent.oilTypeIndex`、`alarm.oilType`、`alarm.oilTypeIndex`。
-- 待设备端提供：上述全部载荷的共享 fixture（含 `oilTypeIndex` 对照表）。fixture 入库前云端不写解析与存储代码。
+- 共享 fixture 已由设备端起草、云端收录（2026-11-03，8 份，见 MANIFEST），两端已按其实现并测试。仍待：设备端分支合并、
+  真机联调；Android 侧 fixture 仍是副本，未接入校验和门禁（同 §C-1）。

@@ -1,0 +1,32 @@
+{
+  "_comment": "班内删除（或停用）了 2 号罐：开始交班时有它，结束时已不存在。2 号罐保留开始数据与介质，endLevelMm/endVolumeL/outVolumeL/outWeightKg 缺键（= null）。",
+  "ts": 1762175200000,
+  "values": {
+    "shiftEvent": {
+      "shiftId": "shift-1762146400000",
+      "status": "CLOSED",
+      "beginTimeMs": 1762146400000,
+      "endTimeMs": 1762175200000,
+      "tanks": [
+        {
+          "tank": 1,
+          "oilType": "92#",
+          "oilTypeIndex": 5,
+          "beginLevelMm": 1520.0,
+          "beginVolumeL": 18230.5,
+          "endLevelMm": 1310.0,
+          "endVolumeL": 15710.5,
+          "outVolumeL": 2520.0,
+          "outWeightKg": 1864.8
+        },
+        {
+          "tank": 2,
+          "oilType": "0#",
+          "oilTypeIndex": 1,
+          "beginLevelMm": 980.0,
+          "beginVolumeL": 11020.0
+        }
+      ]
+    }
+  }
+}

@@ -88,6 +88,12 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   不再列出它，登记/配对密钥/油站/换机/罐授权/发命令返回 `409 device_purge_in_progress`。完成后同编号可重新登记，但信封
   `ts` 不晚于删除完成时刻的记录一律不写入（挡设备重放）。**新增按设备编号存数据的表，必须同时加进删除清单
   （`db/queries/device_purges.sql` 与 `CountDeviceRemnants`）**。
+- 交班、库存记录（#85，契约见 [docs/shift-stock-records-contract.md](docs/shift-stock-records-contract.md)）：设备以
+  `shiftEvent`（一班开始、结束各报一次，同 `shiftId`）与 `stockRecord`（一次库存保存一条多罐）上报，只同步显示器已生成的
+  记录，云端绝不用快照/汇总补造；升级前的旧记录不传。落 `shift_records`/`stock_records` 表头 + 每罐一行（迁移 000037），信封 `ts`
+  最大者胜，永久保存（同约束 5）。`GET /api/shift-records`、`/api/stock-records` 每 (记录, 罐) 一行，规则同 `/api/oil-in-out`（#84），
+  缺失值一律 `null` 不当 0，`syncStatus` 为 `UNSUPPORTED|SYNCING|SYNCED`，客户端只在 `SYNCED` 且无行时显示"暂无记录"。
+  `oilTypeIndex` 是与界面语言无关的油品标识，`oilType` 只是显示名。**设备端与云端都未真机验证。**
 - 设备端仓库是 `~/Developer/zhongchengyeweiyi`，小程序仓库是
   `~/Developer/yeweiyi-miniapp`。跨仓库协议变更必须获得相关负责人确认。
 

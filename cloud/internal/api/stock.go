@@ -103,6 +103,13 @@ type stockEventResponse struct {
 	// because getting it wrong understates deliveries and that is the number people argue with
 	// suppliers about.
 	DeliveredVolumeL float64 `json:"deliveredVolumeL"`
+	// DeliveredWeightKg is the device's own figure (delivered volume × density when the record
+	// closed); null on manual entries and older firmware. Not derived here: the cloud has no density
+	// history, and begin/end weights include what was sold during a delivery (cloud#85).
+	DeliveredWeightKg *float64 `json:"deliveredWeightKg"`
+	// OilTypeIndex identifies the oil independently of the display language OilType was rendered in;
+	// null when the device did not report it.
+	OilTypeIndex *int `json:"oilTypeIndex"`
 
 	Time time.Time `json:"time"` // when the device closed the record
 
@@ -194,6 +201,8 @@ func toStockEventResponse(e protocol.StockEvent, present map[string]bool, origin
 		NetVolumeL:            e.NetVolumeL,
 		DuringDeliveryVolumeL: e.DuringDeliveryVolumeL,
 		DeliveredVolumeL:      delivered,
+		DeliveredWeightKg:     e.DeliveredWeightKg,
+		OilTypeIndex:          e.OilTypeIndex,
 		Time:                  time.UnixMilli(e.TSMs).UTC(),
 		Origin:                origin,
 	}

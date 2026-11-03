@@ -269,6 +269,8 @@ func (r *Runner) business(ctx context.Context, task db.DevicePurge) (db.DevicePu
 	}{
 		{"stockEvents", q.PurgeStockEvents},
 		{"alarmEvents", q.PurgeAlarmEvents},
+		{"shiftRecords", q.PurgeShiftRecords},
+		{"stockRecords", q.PurgeStockRecords},
 		{"recordRejects", q.PurgeRecordRejects},
 		{"recordBackfills", q.PurgeRecordBackfills},
 		{"telemetryHourly", q.PurgeTelemetryHourly},

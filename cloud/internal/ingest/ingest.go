@@ -253,6 +253,24 @@ func (i *Ingester) HandleUpdate(ctx context.Context, deviceName string, u tbclie
 	if raw, ok := u.Values[protocol.KeyAlarm]; ok {
 		i.handleAlarm(ctx, deviceName, u.EnvTS(protocol.KeyAlarm), raw)
 	}
+	if raw, ok := u.Values[protocol.KeyShiftEvent]; ok {
+		i.saveRecord(ctx, deviceName, protocol.KeyShiftEvent, u.EnvTS(protocol.KeyShiftEvent), raw, SaveShiftEvent)
+	}
+	if raw, ok := u.Values[protocol.KeyStockRecord]; ok {
+		i.saveRecord(ctx, deviceName, protocol.KeyStockRecord, u.EnvTS(protocol.KeyStockRecord), raw, SaveStockRecord)
+	}
+}
+
+// saveRecord writes a shift or stock record seen live. A failure is not fatal: reconcileLoop re-reads
+// the point from ThingsBoard on its next pass.
+func (i *Ingester) saveRecord(ctx context.Context, deviceName, key string, envTS int64, raw any,
+	save func(context.Context, *db.Queries, string, int64, any) error) {
+	if i.cfg.Queries == nil {
+		return
+	}
+	if err := save(ctx, i.cfg.Queries, deviceName, envTS, raw); err != nil {
+		i.cfg.Logf("ingest: %s: save %s: %v", deviceName, key, err)
+	}
 }
 
 func (i *Ingester) handleCmdResult(ctx context.Context, deviceName string, raw any) {

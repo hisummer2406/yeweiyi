@@ -344,6 +344,8 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 	return map[string]routeCase{
 		"GET /api/alarms":                            {build: query("/api/alarms?device=")},
 		"GET /api/oil-in-out":                        {build: query("/api/oil-in-out?device=")},
+		"GET /api/shift-records":                     {build: query("/api/shift-records?device=")},
+		"GET /api/stock-records":                     {build: query("/api/stock-records?device=")},
 		"GET /api/audit":                             {build: query("/api/audit?device=")},
 		"GET /api/devices/:device/mini-code":         {adminOnly: true, build: path("/mini-code")},
 		"GET /api/devices/:device/telemetry/latest":  {build: path("/telemetry/latest")},
