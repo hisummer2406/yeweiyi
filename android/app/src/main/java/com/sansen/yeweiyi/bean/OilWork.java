@@ -57,6 +57,20 @@ public class OilWork implements Serializable {
 	@Column(column = "jieZhi")
 	private String jieZhi;
 
+	/**
+	 * 开始交班时该罐的油品表下标（{@code OilCanSet.oilType}，与界面语言无关；0 未设置，1–17 内置，18–25 自定义）。
+	 * 与 jieZhi 同时记录；旧记录为 null。
+	 */
+	private Integer oilTypeIndex;
+
+	public Integer getOilTypeIndex() {
+		return oilTypeIndex;
+	}
+
+	public void setOilTypeIndex(Integer oilTypeIndex) {
+		this.oilTypeIndex = oilTypeIndex;
+	}
+
 	public OilWork() {
 		super();
 		// TODO Auto-generated constructor stub

@@ -61,6 +61,18 @@ public class CommitWork {
 		this.beginTimeMs = beginTimeMs;
 	}
 
+	/** 结束交班时刻的 epoch 毫秒（截到整秒，与 endTime 同一瞬间）。数据库版本 8 起才有，进行中的班与旧记录为 null。 */
+	@Column(column = "endtimems")
+	private Long endTimeMs;
+
+	public Long getEndTimeMs() {
+		return endTimeMs;
+	}
+
+	public void setEndTimeMs(Long endTimeMs) {
+		this.endTimeMs = endTimeMs;
+	}
+
 	/**
 	 * 油罐信息Gson
 	 */

@@ -13,6 +13,13 @@ import java.util.List;
  */
 public interface ShiftRepository {
 
+    /** 交班记录新增或修改（开始、结束、手工修改）并已落库后回调，在后台线程上执行。删除不回调。 */
+    interface ShiftChangedListener {
+        void onShiftChanged(int localId);
+    }
+
+    void setShiftChangedListener(ShiftChangedListener listener);
+
     /**
      * 开始交班：记录各油罐的起始高度/体积/介质，时间到秒并存开始 epoch（issue #49）。
      */

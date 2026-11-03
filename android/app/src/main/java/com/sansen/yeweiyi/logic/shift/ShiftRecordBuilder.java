@@ -19,7 +19,7 @@ public final class ShiftRecordBuilder {
     private ShiftRecordBuilder() {
     }
 
-    /** 开始交班：每罐记开始高度、容积和当时的介质；结束字段保持 null。 */
+    /** 开始交班：每罐记开始高度、容积和当时的介质（显示名与油品表下标）；结束字段保持 null。 */
     public static List<OilWork> begin(List<TankReading> readings) {
         List<OilWork> works = new ArrayList<>();
         for (TankReading r : readings) {
@@ -28,6 +28,7 @@ public final class ShiftRecordBuilder {
             w.setBeginHeight(r.levelMm);
             w.setBeginVolume(r.volumeL);
             w.setJieZhi(r.oilType);
+            w.setOilTypeIndex(r.oilTypeIndex);
             works.add(w);
         }
         return works;

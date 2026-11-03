@@ -6,6 +6,20 @@
 - 拷贝日期：2026-10-04
 - 使用方：`app/src/test/java/com/sansen/yeweiyi/logic/thingsboard/ProtocolV1ContractTest.java`、`StockEventMapperTest.java`
 
+## 设备端起草、待云端收录的 fixture（zhongchengyeweiyi#49 / cloud#85）
+
+下列文件由设备端手写（不是实现序列化出来的），云端拷进 `yeweiyi-cloud/fixtures/protocol/v1/` 并登记 MANIFEST 后，
+以云端副本为准，按下面的同步方法回拷：
+
+| fixture | 内容 | Android 覆盖 |
+|---|---|---|
+| `shift_event_open.json` / `shift_event_closed.json` | 交班开始/结束 | `ShiftEventMapperTest` |
+| `shift_event_tank_added.json` / `shift_event_tank_removed.json` | 班内增/删罐 | `ShiftEventMapperTest` |
+| `stock_record.json` | 一次库存保存（多罐） | `StockRecordMapperTest` |
+| `stock_event_in_delivered_weight.json` | stockEvent 新增 `oilTypeIndex`、`deliveredWeightKg` | `StockEventMapperTest` |
+| `alarm_active_oil_type.json` | alarm 新增 `oilType`、`oilTypeIndex` | `ProtocolV1ContractTest` |
+| `oil_type_index.json` | `oilTypeIndex` 对照表（字典，不是报文） | `OilTypeIndexFixtureTest`（与 `res/values*/array.xml` 比对） |
+
 ## 同步方法
 
 云端协议有改动时，重新整目录拷贝，然后跑测试：

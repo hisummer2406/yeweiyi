@@ -155,13 +155,15 @@ public class DaoHelp {
                             }
                         }
 
-                        // 交班开始时刻 epoch 列（issue #49）。与上面 source 列同理放在 switch 外按版本判断；
-                        // 单独 try，已有该列时抛的异常不影响别的升级步骤。
+                        // 交班起止时刻 epoch 列（issue #49）。与上面 source 列同理放在 switch 外按版本判断；
+                        // 每列单独 try，已有该列（或表尚未创建）时抛的异常不影响另一列。
                         if (oldVersion < 8) {
-                            try {
-                                dbUtils.execNonQuery("ALTER TABLE commitwork ADD COLUMN begintimems INTEGER");
-                            } catch (DbException e) {
-                                Log.e(TAG, "onUpgrade 数据库操作失败", e);
+                            for (String column : new String[]{"begintimems", "endtimems"}) {
+                                try {
+                                    dbUtils.execNonQuery("ALTER TABLE commitwork ADD COLUMN " + column + " INTEGER");
+                                } catch (DbException e) {
+                                    Log.e(TAG, "onUpgrade 数据库操作失败: " + column, e);
+                                }
                             }
                         }
 

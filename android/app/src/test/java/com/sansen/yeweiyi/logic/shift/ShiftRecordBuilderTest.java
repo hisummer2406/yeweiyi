@@ -20,7 +20,7 @@ public class ShiftRecordBuilderTest {
     private static final double EPS = 1e-9;
 
     private static TankReading reading(int tank, double level, double volume, double density, String oilType) {
-        return new TankReading(tank, level, volume, density, oilType);
+        return new TankReading(tank, level, volume, density, oilType, null);
     }
 
     private static OilWork byTank(List<OilWork> works, int tank) {
@@ -43,6 +43,13 @@ public class ShiftRecordBuilderTest {
         assertEquals(800.0, t3.getBeginHeight(), EPS);
         assertEquals(9000.0, t3.getBeginVolume(), EPS);
         assertEquals("0#", t3.getJieZhi());
+    }
+
+    @Test
+    public void beginRecordsOilTypeIndex() {
+        List<OilWork> begin = ShiftRecordBuilder.begin(Collections.singletonList(
+                new TankReading(1, 1.0, 1.0, 1.0, "92#", 5)));
+        assertEquals(Integer.valueOf(5), begin.get(0).getOilTypeIndex());
     }
 
     @Test

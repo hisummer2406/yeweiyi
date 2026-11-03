@@ -38,6 +38,7 @@ public class ShiftRepositoryImpl implements ShiftRepository {
     private static ShiftRepository instance;
 
     private final DbUtils db;
+    private volatile ShiftChangedListener shiftChangedListener;
     private final MyApplication myApplication;
 
     private ShiftRepositoryImpl(Context ct) {
@@ -50,6 +51,19 @@ public class ShiftRepositoryImpl implements ShiftRepository {
             instance = new ShiftRepositoryImpl(MyApplication.getInstance());
         }
         return instance;
+    }
+
+    /** 交班上报（zhongchengyeweiyi#49）挂在这里：开始/结束/手工修改都经过 save/update。 */
+    @Override
+    public void setShiftChangedListener(ShiftChangedListener listener) {
+        this.shiftChangedListener = listener;
+    }
+
+    private void notifyShiftChanged(int localId) {
+        ShiftChangedListener listener = shiftChangedListener;
+        if (listener != null) {
+            listener.onShiftChanged(localId);
+        }
     }
 
     @Override
@@ -72,7 +86,9 @@ public class ShiftRepositoryImpl implements ShiftRepository {
         }
         // 仍取 id 最大的一行，不论它是否已结束——重复结束的行为按 issue #49 暂不改。
         CommitWork commitWork = commitWorks.get(0);
-        commitWork.setEndTime(ShiftTime.of(System.currentTimeMillis(), TimeZone.getDefault()).local);
+        ShiftTime now = ShiftTime.of(System.currentTimeMillis(), TimeZone.getDefault());
+        commitWork.setEndTime(now.local);
+        commitWork.setEndTimeMs(now.epochMs);
         OilWork[] begins = new Gson().fromJson(commitWork.getInfo(), OilWork[].class);
         List<OilWork> oils = ShiftRecordBuilder.end(
                 begins == null ? null : Arrays.asList(begins), readings(oilMap));
@@ -88,7 +104,8 @@ public class ShiftRepositoryImpl implements ShiftRepository {
             int tank = live.getOilCanPos();
             OilCan oilCan = OilcanDataManager.getInstance(myApplication).getData(tank);
             double volume = DataUtils.getLitre(live.getOilLevel(), oilCan.getHightArray(), oilCan.getLitreArray());
-            readings.add(new TankReading(tank, live.getOilLevel(), volume, oilCan.getDensity(), oilCan.getJieZhi()));
+            readings.add(new TankReading(tank, live.getOilLevel(), volume, oilCan.getDensity(), oilCan.getJieZhi(),
+                    oilCan.getOilType()));
         }
         return readings;
     }
@@ -180,7 +197,9 @@ public class ShiftRepositoryImpl implements ShiftRepository {
                         db.update(commitWork);
                     } catch (DbException e) {
                         Log.e(TAG, "update 数据库操作失败", e);
+                        return;
                     }
+                    notifyShiftChanged(commitWork.getId());
                 }
             });
         }
@@ -222,10 +241,16 @@ public class ShiftRepositoryImpl implements ShiftRepository {
                 @Override
                 public void run() {
                     try {
-                        db.save(commitWork);
+                        // saveBindingId：落库后回填自增 id，上报通道按 id 回读该行
+                        if (!db.saveBindingId(commitWork)) {
+                            Log.e(TAG, "save 未取到自增 id");
+                            return;
+                        }
                     } catch (DbException e) {
                         Log.e(TAG, "save 数据库操作失败", e);
+                        return;
                     }
+                    notifyShiftChanged(commitWork.getId());
                 }
             });
         }
