@@ -63,6 +63,17 @@ public final class StockEventMapper {
      * {@code ThingsBoardManager} 包成 telemetry payload。
      */
     public static Map<String, Object> build(DetailInoutRecord record, boolean isIn) {
+        return build(record, isIn, null, null);
+    }
+
+    /**
+     * 同上，另带两个可选字段（zhongchengyeweiyi#49，fixture {@code stock_event_in_delivered_weight.json}）：
+     * {@code oilTypeIndex} 关闭时该罐的油品表下标；{@code deliveredWeightKg} = 交付体积 × 关闭时刻密度（kg/L），
+     * 交付体积与云端 deliveredVolumeL 同口径（IN：净变化 + 期间销量；OUT：−净变化）。密度未知或 ≤0 时不出现。
+     * 人工补录没有密度/介质快照，走无参版本。
+     */
+    public static Map<String, Object> build(DetailInoutRecord record, boolean isIn,
+                                            Integer oilTypeIndex, Double densityKgPerL) {
         long beginTimeMs = parseDeviceTime(record.getBeginTime());
         long endTimeMs = parseDeviceTime(record.getEndTime());
 
@@ -71,6 +82,9 @@ public final class StockEventMapper {
         event.put("tank", record.getOilcanId());
         event.put("direction", isIn ? DIRECTION_IN : DIRECTION_OUT);
         event.put("oilType", record.getOilType());
+        if (oilTypeIndex != null) {
+            event.put("oilTypeIndex", oilTypeIndex);
+        }
         event.put("beginTimeMs", beginTimeMs);
         event.put("endTimeMs", endTimeMs);
         event.put("beginLevelMm", record.getBeginHeith());
@@ -86,7 +100,8 @@ public final class StockEventMapper {
         event.put("beginTempC", record.getBeginTemp());
         event.put("endTempC", record.getEndTemp());
         // 保留 1 位小数，跟其它体积字段一致；直接相减会带出 -121.59999999999991 这种浮点误差
-        event.put("netVolumeL", Math.round((record.getEndVolume() - record.getBeginVolume()) * 10) / 10.0);
+        double netVolumeL = Math.round((record.getEndVolume() - record.getBeginVolume()) * 10) / 10.0;
+        event.put("netVolumeL", netVolumeL);
         // omitempty 语义：只有人工核对过 during-delivery 销量（非 0）才带这个字段，
         // 跟云端 Go 结构体的 `json:"duringDeliveryVolumeL,omitempty"` 行为保持一致。
         if (record.getDuringDelivery() != 0.0) {
@@ -94,6 +109,10 @@ public final class StockEventMapper {
         }
         // omitempty：自动检测（默认值）不带这个字段，跟已核对过的两份共享 fixture 保持字节相同；
         // 只有补录（SOURCE_MANUAL）才带，见类注释。
+        if (densityKgPerL != null && densityKgPerL > 0) {
+            double delivered = isIn ? netVolumeL + record.getDuringDelivery() : -netVolumeL;
+            event.put("deliveredWeightKg", Math.round(delivered * densityKgPerL * 10) / 10.0);
+        }
         if (SOURCE_MANUAL.equals(record.getSource())) {
             event.put("source", SOURCE_MANUAL);
         }

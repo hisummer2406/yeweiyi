@@ -3,6 +3,7 @@ package com.sansen.yeweiyi.manager;
 import android.content.Context;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.logic.thingsboard.ActiveAlarmTracker;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
@@ -59,9 +60,13 @@ public final class CloudAlarmReporter {
             return;
         }
         String text = message.toString();
+        // 报警发生时该罐的介质（#49）；罐不在当前配置里（设备级/已删除）时两项都不报
+        OilCan oilCan = OilcanDataManager.getInstance(context).getData(message.getOilCanId());
+        String oilType = oilCan == null ? null : oilCan.getJieZhi();
+        Integer oilTypeIndex = oilCan == null ? null : oilCan.getOilType();
         synchronized (this) {
             report(tracker.raise(message.getOilCanId(), message.getType(), message.getValue(), text,
-                    System.currentTimeMillis()));
+                    System.currentTimeMillis(), oilType, oilTypeIndex));
         }
     }
 

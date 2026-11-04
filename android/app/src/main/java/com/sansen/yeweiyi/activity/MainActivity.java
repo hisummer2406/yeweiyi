@@ -20,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import com.sansen.yeweiyi.logic.thingsboard.StockRecordMapper;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseActivity;
@@ -390,7 +391,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
 
     private void saveStock() {
-        myApplication.getmSaveOilManager().SaveOilDB();
+        myApplication.getmSaveOilManager().saveStock(StockRecordMapper.TRIGGER_SCHEDULED);
     }
 
     private void inOutOilDection(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse) {

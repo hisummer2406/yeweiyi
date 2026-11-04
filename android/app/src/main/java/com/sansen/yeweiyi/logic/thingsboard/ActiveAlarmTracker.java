@@ -36,6 +36,9 @@ public final class ActiveAlarmTracker {
         public int type;
         public String alarmId;
         public String text;
+        /** 报警发生时该罐的介质显示名与油品表下标（#49）；旧版本存下的条目没有，为 null。 */
+        public String oilType;
+        public Integer oilTypeIndex;
 
         public Entry() {
         }
@@ -97,6 +100,12 @@ public final class ActiveAlarmTracker {
 
     /** @return 需要上报 ACTIVE 时返回事件；类型不可上报或已经 ACTIVE 时返回 null。 */
     public synchronized Transition raise(int tank, int type, double value, String text, long nowMs) {
+        return raise(tank, type, value, text, nowMs, null, null);
+    }
+
+    /** 同上，另记下报警发生时的介质，恢复时原样带出（不取恢复时的罐设置）。 */
+    public synchronized Transition raise(int tank, int type, double value, String text, long nowMs,
+                                         String oilType, Integer oilTypeIndex) {
         if (!AlarmEventBuilder.isReportable(type)) {
             return null;
         }
@@ -105,6 +114,8 @@ public final class ActiveAlarmTracker {
             return null;
         }
         Entry entry = new Entry(tank, type, AlarmEventBuilder.alarmIdFor(type, tank, nowMs), text);
+        entry.oilType = oilType;
+        entry.oilTypeIndex = oilTypeIndex;
         active.put(key, entry);
         persistence.saveAll(new ArrayList<>(active.values()));
         return new Transition(entry, false, value, nowMs);

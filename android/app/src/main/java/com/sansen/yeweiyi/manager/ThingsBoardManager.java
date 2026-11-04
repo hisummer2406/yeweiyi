@@ -40,9 +40,15 @@ import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
+import com.sansen.yeweiyi.db.CommitWork;
+import com.sansen.yeweiyi.logic.thingsboard.RecordOutbox;
+import com.sansen.yeweiyi.logic.thingsboard.ShiftEventMapper;
+import com.sansen.yeweiyi.logic.thingsboard.StockRecordMapper;
+import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
 import com.sansen.yeweiyi.utils.Singleton;
 
 import java.util.List;
+import java.util.TimeZone;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -71,6 +77,8 @@ public final class ThingsBoardManager {
     private static final long TELEMETRY_PERIOD_MILLIS = 30_000L;
     private static final long COMMAND_RETENTION_MILLIS = 24L * 60 * 60 * 1000; // 24 小时
     private static final int MAX_PENDING_ALARMS = 200;
+    /** 交班/库存上报通道容量：16 罐每小时一条库存，离线约 40 天才会开始丢最旧的。 */
+    private static final int MAX_RECORD_OUTBOX = 1000;
     private static final long RECONNECT_INITIAL_DELAY_MILLIS = 2_000L;
     private static final long RECONNECT_MAX_DELAY_MILLIS = 60_000L;
     private static final long PROVISION_TIMEOUT_MILLIS = 15_000L;
@@ -97,6 +105,7 @@ public final class ThingsBoardManager {
     private final ThingsBoardMqttConnection connection;
     private final TelemetryScheduler telemetryScheduler;
     private final PendingAlarmStore pendingAlarmStore;
+    private final RecordOutbox recordOutbox;
     private final ProcessedCommandStore commandStore;
     private final RpcDispatcher rpcDispatcher;
     private final ReconnectBackoff reconnectBackoff;
@@ -173,6 +182,7 @@ public final class ThingsBoardManager {
         // 队列满时先成对丢报警（"产生"连同它的"恢复"），"恢复"从不单独丢；保住出入库和命令结果
         this.pendingAlarmStore = new PendingAlarmStore(new PendingAlarmFilePersistence(context, boundDeviceId), MAX_PENDING_ALARMS,
                 AlarmEventBuilder.EVICTION_POLICY);
+        this.recordOutbox = new RecordOutbox(new RecordOutboxFilePersistence(context, boundDeviceId), MAX_RECORD_OUTBOX);
         this.commandStore = new ProcessedCommandStore(new ProcessedCommandFilePersistence(context, boundDeviceId),
                 COMMAND_RETENTION_MILLIS);
         this.reconnectBackoff = new ReconnectBackoff(RECONNECT_INITIAL_DELAY_MILLIS, RECONNECT_MAX_DELAY_MILLIS, 2.0);
@@ -214,6 +224,7 @@ public final class ThingsBoardManager {
         // 客户端属性，不等下次重连
         OilcanDataManager.getInstance(MyApplication.getInstance()).setConfigChangedListener(this::onTankConfigReloaded);
         OilTankRepositoryImpl.getInstance().setOilCanSetChangedListener(this::requestClientAttributesPublish);
+        ShiftRepositoryImpl.getInstance().setShiftChangedListener(this::reportShiftChanged);
         // 启动时也清理一次：App 没运行期间罐可能已经被删除或停用
         CloudAlarmReporter.getInstance().onTanksReloaded(currentEnabledTankIds());
         scheduleConnectAttempt(0);
@@ -225,6 +236,7 @@ public final class ThingsBoardManager {
         }
         OilcanDataManager.getInstance(MyApplication.getInstance()).setConfigChangedListener(null);
         OilTankRepositoryImpl.getInstance().setOilCanSetChangedListener(null);
+        ShiftRepositoryImpl.getInstance().setShiftChangedListener(null);
         telemetryScheduler.stop();
         synchronized (connectLock) {
             if (pendingConnect != null) {
@@ -363,7 +375,7 @@ public final class ThingsBoardManager {
         // alarm.tsMs 跟外层 ts 保持一致（共享 fixture 里两者相等）。
         long now = eventTsAllocator.allocate(transition.tsMs);
         Map<String, Object> event = AlarmEventBuilder.build(entry.type, entry.tank, entry.alarmId,
-                transition.recovered, entry.text, transition.value, now);
+                transition.recovered, entry.text, transition.value, now, entry.oilType, entry.oilTypeIndex);
         if (event == null) {
             // ActiveAlarmTracker 只接收可上报类型，这里正常不会走到。
             Log.w(TAG, "reportAlarmTransition: type=" + entry.type + " 没有对应的云端报警类型，跳过上报");
@@ -432,6 +444,60 @@ public final class ThingsBoardManager {
 
     private void drainPendingAlarms() {
         pendingAlarmStore.drainAndSend(connection::publishTelemetry);
+    }
+
+    // ---- 交班/库存记录（zhongchengyeweiyi#49，契约 shift-stock-records-contract §2.3）----
+    // 走独立的 RecordOutbox，不进上面的报警补投队列；与报警/出入库之间不保证先后。
+
+    /** 交班新增/结束/手工修改已落库：整班按库里最新内容（重新）上报。演示模式不报。 */
+    public void reportShiftChanged(int localId) {
+        if (isDemoMode()) {
+            return;
+        }
+        long generatedAt = System.currentTimeMillis();
+        outboundEventExecutor.execute(guarded("交班上报", () -> {
+            recordOutbox.enqueueShift(localId, eventTsAllocator.allocate(generatedAt));
+            drainRecordOutbox();
+        }));
+    }
+
+    /** 一次库存保存（全部罐一条）。报文在入队时生成，库存记录保存后不再修改。演示模式不报。 */
+    public void reportStockRecord(String trigger, long tsMs, List<StockRecordMapper.Tank> tanks) {
+        if (isDemoMode()) {
+            return;
+        }
+        outboundEventExecutor.execute(guarded("库存上报", () -> {
+            long ts = eventTsAllocator.allocate(tsMs);
+            Map<String, Object> payload = StockRecordMapper.wrapAsTelemetry(
+                    StockRecordMapper.build(trigger, tsMs, tanks), ts);
+            recordOutbox.enqueueStock(gson.toJson(payload), ts);
+            drainRecordOutbox();
+        }));
+    }
+
+    /** 只在 {@link #outboundEventExecutor} 上调用。 */
+    private void drainRecordOutbox() {
+        if (connection.isConnected()) {
+            recordOutbox.drainAndSend(this::resolveShiftTelemetry, connection::publishTelemetry);
+        }
+    }
+
+    /** 按本地 id 回读交班行并组装报文；行已被本地删除时返回 null（不同步删除，丢弃该条）。 */
+    private String resolveShiftTelemetry(int localId, long ts) {
+        CommitWork row = ShiftRepositoryImpl.getInstance().findById(localId);
+        if (row == null) {
+            return null;
+        }
+        Map<String, Object> event = ShiftEventMapper.build(row, TimeZone.getDefault());
+        if (event == null) {
+            Log.w(TAG, "交班 id=" + localId + " 开始时间无法解析，跳过上报");
+            return null;
+        }
+        return gson.toJson(ShiftEventMapper.wrapAsTelemetry(event, ts));
+    }
+
+    private boolean isDemoMode() {
+        return SharePrefUtil.getBoolean(appContext, SharePrefUtil.TEST_DATA, false);
     }
 
     /**
@@ -657,6 +723,7 @@ public final class ThingsBoardManager {
         if (ok) {
             reconnectBackoff.reset();
             drainPendingAlarms();
+            outboundEventExecutor.execute(guarded("交班/库存补发", this::drainRecordOutbox));
             publishClientAttributes();
             requestSharedAttributes();
         } else {
@@ -718,6 +785,7 @@ public final class ThingsBoardManager {
             Log.w(TAG, "设备身份变更: " + (boundDeviceId.isEmpty() ? "(未配置)" : boundDeviceId) + " -> "
                     + (id.isEmpty() ? "(未配置)" : id) + "，待补投/报警状态切换到新身份名下，旧身份数据保留不发送");
             pendingAlarmStore.switchPersistence(new PendingAlarmFilePersistence(appContext, id));
+            recordOutbox.switchPersistence(new RecordOutboxFilePersistence(appContext, id));
             commandStore.switchPersistence(new ProcessedCommandFilePersistence(appContext, id));
             CloudAlarmReporter.getInstance().rebindIdentity(id);
             boundDeviceId = id;

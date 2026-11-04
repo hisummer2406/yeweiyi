@@ -7,12 +7,14 @@ import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.Oil;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.db.StockSave;
+import com.sansen.yeweiyi.logic.shift.ShiftTime;
+import com.sansen.yeweiyi.logic.thingsboard.StockRecordMapper;
 import com.sansen.yeweiyi.repository.StockRepository;
 import com.sansen.yeweiyi.repository.StockRepositoryImpl;
-import com.sansen.yeweiyi.utils.DateUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TimeZone;
 public class SaveOilManager {
 	private static SaveOilManager mInsatance;
 	private MyApplication application;
@@ -35,9 +37,11 @@ public class SaveOilManager {
 		return mInsatance;
 	}
 	/**
-	 * Save all the oilcan information 保存库存记录
+	 * Save all the oilcan information 保存库存记录，并上报云端 stockRecord（一次一条、带全部罐，#49）。
+	 *
+	 * @param trigger {@link StockRecordMapper#TRIGGER_SCHEDULED}（周期）或 {@link StockRecordMapper#TRIGGER_MANUAL}（库存页手动）
 	 */
-	public void SaveOilDB() {
+	public void saveStock(final String trigger) {
 
 		ThreadManager.getShortPool().execute(new Runnable() {
 
@@ -47,6 +51,10 @@ public class SaveOilManager {
 				maps = oilcanDataManager.getData();
 				if (maps != null) {
 					List<Oil> oils = new ArrayList<Oil>();
+					// 一次保存的各罐共用同一时刻、精确到秒（issue #49）；本地时间字符串与上报的 tsMs 取自同一瞬间。
+					ShiftTime now = ShiftTime.of(System.currentTimeMillis(), TimeZone.getDefault());
+					String time = now.local;
+					List<StockRecordMapper.Tank> reported = new ArrayList<>();
 
 					for (int i=0;i<maps.size();i++) {
 						OilCan oilCan = maps.valueAt(i);
@@ -65,9 +73,13 @@ public class SaveOilManager {
 						stockSave.setVolum(oilCan.getOilVolume());
 						stockSave.setOilId(oilCan.getOilCanPos());
 						stockSave.setHeight(oilCan.getOilLevel());
-						stockSave.setTime(DateUtils.getYYYMMddHHmmss());
+						stockSave.setTime(time);
 						stockRepository.saveStockRecord(stockSave);
+						reported.add(new StockRecordMapper.Tank(oilCan.getOilCanPos(), oilCan.getJieZhi(),
+								oilCan.getOilType(), oilCan.getOilLevel(), oilCan.getOilVolume(),
+								oilCan.getWaterLevel(), oilCan.getTemper(), oilCan.getOilWeight()));
 					}
+					ThingsBoardManager.getInstance(application).reportStockRecord(trigger, now.epochMs, reported);
 
 					//String gosnInfo = dbDataManager.getListToStringByGson(oils);
 

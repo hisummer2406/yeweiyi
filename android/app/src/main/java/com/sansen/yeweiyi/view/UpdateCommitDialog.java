@@ -50,10 +50,10 @@ public class UpdateCommitDialog extends Activity implements OnClickListener {
 		item_et_dialog_jie_height = (EditText)findViewById(R.id.item_et_dialog_jie_height);
 		item_et_dialog_jiao_height = (EditText)findViewById(R.id.item_et_dialog_jiao_height);
 		
-		item_et_dialog_jie_height.setHint(oilWork.getBeginHeight()+"");
-		item_et_dialog_jiao_height.setHint(oilWork.getEndHeight()+"");
-		item_et_dialog_volume.setHint(oilWork.getShellVolume()+"");
-		item_et_dialog_weight.setHint(oilWork.getShellWeight()+"");
+		item_et_dialog_jie_height.setHint(hintOf(oilWork.getBeginHeight()));
+		item_et_dialog_jiao_height.setHint(hintOf(oilWork.getEndHeight()));
+		item_et_dialog_volume.setHint(hintOf(oilWork.getShellVolume()));
+		item_et_dialog_weight.setHint(hintOf(oilWork.getShellWeight()));
 		dialog_commit_update = (Button) findViewById(R.id.dialog_commit_update);
 		dialog_commit_cancel = (Button) findViewById(R.id.dialog_commit_cancel);
 		dialog_commit_cancel.setOnClickListener(this);
@@ -112,5 +112,10 @@ public class UpdateCommitDialog extends Activity implements OnClickListener {
 		// TODO Auto-generated method stub
 		super.onPause();
 		overridePendingTransition(0,0);
+	}
+
+	/** 缺失值（null）不显示成 "null"。 */
+	private static String hintOf(Double value) {
+		return value == null ? "" : String.valueOf(value);
 	}
 }

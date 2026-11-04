@@ -114,6 +114,16 @@ public final class AlarmEventBuilder {
      */
     public static Map<String, Object> build(int oilMessageType, int tank, String alarmId, boolean recovered,
                                             String text, double value, long deviceTimeMs) {
+        return build(oilMessageType, tank, alarmId, recovered, text, value, deviceTimeMs, null, null);
+    }
+
+    /**
+     * 同上，另带报警发生时该罐的介质（zhongchengyeweiyi#49，fixture {@code alarm_active_oil_type.json}）：
+     * {@code oilType} 显示名、{@code oilTypeIndex} 油品表下标，均可选，null 时不出现。恢复报文传 ACTIVE 时记下的值。
+     */
+    public static Map<String, Object> build(int oilMessageType, int tank, String alarmId, boolean recovered,
+                                            String text, double value, long deviceTimeMs,
+                                            String oilType, Integer oilTypeIndex) {
         Mapping mapping = TYPE_MAPPING.get(oilMessageType);
         if (mapping == null) {
             return null;
@@ -124,6 +134,12 @@ public final class AlarmEventBuilder {
         event.put("type", mapping.type);
         event.put("severity", mapping.severity);
         event.put("tank", tank);
+        if (oilType != null && !oilType.isEmpty()) {
+            event.put("oilType", oilType);
+        }
+        if (oilTypeIndex != null) {
+            event.put("oilTypeIndex", oilTypeIndex);
+        }
         event.put("text", text);
         event.put("value", value);
         event.put("tsMs", deviceTimeMs);

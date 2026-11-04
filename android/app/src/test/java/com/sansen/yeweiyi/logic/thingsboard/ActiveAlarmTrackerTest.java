@@ -185,4 +185,44 @@ public class ActiveAlarmTrackerTest {
         tracker.recover(1, HIGH, 0, 3000L);
         assertEquals("只有真正的状态变化才写文件，每次轮询都会调用", 1, persistence.saves);
     }
+
+    // ---- zhongchengyeweiyi#49：报警发生时的介质随 ACTIVE 持久化，恢复时原样带出 ----
+
+    /** 经 Gson 往返，模拟写文件再读回（与 ActiveAlarmFilePersistence 相同的序列化方式）。 */
+    static final class JsonPersistence implements ActiveAlarmTracker.Persistence {
+        private final com.google.gson.Gson gson = new com.google.gson.Gson();
+        String json = "[]";
+
+        @Override
+        public java.util.List<ActiveAlarmTracker.Entry> loadAll() {
+            return java.util.Arrays.asList(gson.fromJson(json, ActiveAlarmTracker.Entry[].class));
+        }
+
+        @Override
+        public void saveAll(java.util.List<ActiveAlarmTracker.Entry> entries) {
+            json = gson.toJson(entries);
+        }
+    }
+
+    @Test
+    public void oilTypeCapturedAtRaiseIsCarriedToRecoveryAcrossRestart() {
+        JsonPersistence persistence = new JsonPersistence();
+        new ActiveAlarmTracker(persistence).raise(1, HH, 1980.4, "t", 1000L, "0#", 1);
+
+        ActiveAlarmTracker.Transition cleared = new ActiveAlarmTracker(persistence).recover(1, HH, 1800.0, 2000L);
+
+        assertEquals("0#", cleared.entry.oilType);
+        assertEquals(Integer.valueOf(1), cleared.entry.oilTypeIndex);
+    }
+
+    @Test
+    public void entriesPersistedByOlderFirmwareLoadWithoutOilType() {
+        JsonPersistence persistence = new JsonPersistence();
+        persistence.json = "[{\"tank\":1,\"type\":" + HH + ",\"alarmId\":\"HH-1-1\",\"text\":\"t\"}]";
+
+        ActiveAlarmTracker.Transition cleared = new ActiveAlarmTracker(persistence).recover(1, HH, 1800.0, 2000L);
+
+        org.junit.Assert.assertNull(cleared.entry.oilType);
+        org.junit.Assert.assertNull(cleared.entry.oilTypeIndex);
+    }
 }

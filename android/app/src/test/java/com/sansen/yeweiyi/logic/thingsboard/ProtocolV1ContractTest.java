@@ -116,6 +116,15 @@ public class ProtocolV1ContractTest {
         assertEquals(FixtureLoader.loadProtocolV1("alarm_cleared.json"), actual);
     }
 
+    @Test
+    public void alarmActiveWithOilTypeMatchesDeviceFixture() {
+        long ts = 1756713612345L;
+        Map<String, Object> event = AlarmEventBuilder.build(OilMessage.HHEIGHT_OIL_ALARM, 1, FIXTURE_ALARM_ID,
+                false, "1号罐高高液位报警", 1980.4, ts, "0#", 1);
+        JsonObject actual = GSON.toJsonTree(AlarmEventBuilder.wrapAsTelemetry(event, ts)).getAsJsonObject();
+        assertEquals(FixtureLoader.loadProtocolV1("alarm_active_oil_type.json"), actual);
+    }
+
     /** 跟踪器产出的一对 ACTIVE/CLEARED 共用同一个 alarmId——fixture 两个文件的 alarmId 也相同。 */
     @Test
     public void trackerPairsActiveAndClearedWithSameAlarmId() {

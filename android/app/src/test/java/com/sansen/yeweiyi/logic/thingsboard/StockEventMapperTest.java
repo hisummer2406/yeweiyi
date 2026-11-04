@@ -185,4 +185,32 @@ public class StockEventMapperTest {
         Map<String, Object> event = StockEventMapper.build(record, true);
         assertEquals(StockEventMapper.SOURCE_MANUAL, event.get("source"));
     }
+
+    // ---- zhongchengyeweiyi#49：deliveredWeightKg / oilTypeIndex（可选字段）----
+
+    @Test
+    public void inEventWithDensityAndOilTypeIndexMatchesFixture() {
+        JsonObject actual = GSON.toJsonTree(StockEventMapper.wrapAsTelemetry(
+                StockEventMapper.build(inRecord(), true, 1, 0.84), 1756717200000L)).getAsJsonObject();
+        assertEquals(FixtureLoader.loadProtocolV1("stock_event_in_delivered_weight.json"), actual);
+    }
+
+    @Test
+    public void outEventDeliveredWeightIsPositive() {
+        Map<String, Object> event = StockEventMapper.build(outRecord(), false, 1, 0.84);
+        // −(−5000.0) × 0.84
+        assertEquals(4200.0, (Double) event.get("deliveredWeightKg"), 1e-9);
+    }
+
+    @Test
+    public void withoutDensityTheNewFieldsAreOmitted() {
+        Map<String, Object> event = StockEventMapper.build(inRecord(), true, null, null);
+        assertFalse(event.containsKey("deliveredWeightKg"));
+        assertFalse(event.containsKey("oilTypeIndex"));
+    }
+
+    @Test
+    public void nonPositiveDensityIsTreatedAsUnknown() {
+        assertFalse(StockEventMapper.build(inRecord(), true, 1, 0.0).containsKey("deliveredWeightKg"));
+    }
 }
