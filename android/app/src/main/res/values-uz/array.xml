@@ -84,6 +84,10 @@
         <item>Z2 Xurish k-ta</item>
         <item>Z2 NaOH</item>
         <item>Z2 H₂SO₄</item>
+        <!-- 以下 3 项 2026-11-04 AI 翻译，待 review -->
+        <item>Drenaj q-ma</item>
+        <item>Sharq. drenaj</item>
+        <item>G\'arb. drenaj</item>
         <item>Bo\'sh</item>
     </string-array>
 </resources>

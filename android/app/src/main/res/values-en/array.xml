@@ -67,6 +67,10 @@
         <item>P2 Etch Acid</item>
         <item>P2 NaOH</item>
         <item>P2 H₂SO₄</item>
+        <!-- 以下 3 项 2026-11-04 AI 翻译，待 review -->
+        <item>Drainer</item>
+        <item>E. Drain</item>
+        <item>W. Drain</item>
         <item>Blank</item>
     </string-array>
 

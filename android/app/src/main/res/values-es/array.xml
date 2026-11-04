@@ -125,6 +125,10 @@
         <item>P2 Ác. grabado</item>
         <item>P2 NaOH</item>
         <item>P2 H₂SO₄</item>
+        <!-- 以下 3 项 2026-11-04 AI 翻译，待 review -->
+        <item>Drenador</item>
+        <item>Drenaje E</item>
+        <item>Drenaje O</item>
         <item>En blanco</item>
     </string-array>
 
