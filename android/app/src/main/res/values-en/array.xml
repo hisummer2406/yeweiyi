@@ -39,7 +39,7 @@
     <string-array name="oiltypeArray">
         <item>Not set</item>
         <item>0# Diesel</item>
-        <item>Sulfuric Acid</item>
+        <item>-10# Diesel</item>
         <item>-20# Diesel</item>
         <item>-35# Diesel</item>
         <item>92# Gasoline</item>
@@ -47,7 +47,7 @@
         <item>98# Gasoline</item>
         <item>Methanol</item>
         <item>Toluene</item>
-        <item>Kerosene</item>
+        <item>Rice Bran Oil</item>
         <item>Sulfuric Acid</item>
         <item>Xylene</item>
         <item>n-Butyl</item>
