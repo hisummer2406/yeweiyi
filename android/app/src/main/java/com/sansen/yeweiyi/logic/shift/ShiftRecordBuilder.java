@@ -44,6 +44,11 @@ public final class ShiftRecordBuilder {
         if (begins != null) {
             for (OilWork b : begins) {
                 if (b != null) {
+                    // 升级前存的开始数据里结束字段是 0.0 占位，先清掉，只给本次有读数的罐填结束数据。
+                    b.setEndHeight(null);
+                    b.setEndVolume(null);
+                    b.setShellVolume(null);
+                    b.setShellWeight(null);
                     byTank.put(b.getOilId(), b);
                 }
             }

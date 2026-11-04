@@ -66,6 +66,12 @@ public interface StockRepository {
 
     void saveStockRecord(StockSave stockSave);
 
+    /**
+     * 在调用线程上同步保存一批库存记录（一个事务，全成或全不成），返回是否写入成功。
+     * 调用方据此决定是否上报云端，避免云端有、本地没有的记录（#49）。不要在主线程调用。
+     */
+    boolean saveStockBatchNow(List<StockSave> records);
+
     void deleteStock(StockSave stockSave);
 
     void deleteAllStock();

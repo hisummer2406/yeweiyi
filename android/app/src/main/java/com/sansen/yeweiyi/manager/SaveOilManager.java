@@ -54,6 +54,7 @@ public class SaveOilManager {
 					// 一次保存的各罐共用同一时刻、精确到秒（issue #49）；本地时间字符串与上报的 tsMs 取自同一瞬间。
 					ShiftTime now = ShiftTime.of(System.currentTimeMillis(), TimeZone.getDefault());
 					String time = now.local;
+					List<StockSave> records = new ArrayList<>();
 					List<StockRecordMapper.Tank> reported = new ArrayList<>();
 
 					for (int i=0;i<maps.size();i++) {
@@ -74,12 +75,16 @@ public class SaveOilManager {
 						stockSave.setOilId(oilCan.getOilCanPos());
 						stockSave.setHeight(oilCan.getOilLevel());
 						stockSave.setTime(time);
-						stockRepository.saveStockRecord(stockSave);
-						reported.add(new StockRecordMapper.Tank(oilCan.getOilCanPos(), oilCan.getJieZhi(),
-								oilCan.getOilType(), oilCan.getOilLevel(), oilCan.getOilVolume(),
-								oilCan.getWaterLevel(), oilCan.getTemper(), oilCan.getOilWeight()));
+						records.add(stockSave);
+						// 上报值取自刚存的 stockSave，不再读一遍 oilCan：串口线程随时会改它，两次读可能不是同一份读数。
+						reported.add(new StockRecordMapper.Tank(stockSave.getOilId(), stockSave.getJieZhi(),
+								oilCan.getOilType(), stockSave.getHeight(), stockSave.getVolum(),
+								stockSave.getWaterheigth(), stockSave.getTemperature(), stockSave.getWeight()));
 					}
-					ThingsBoardManager.getInstance(application).reportStockRecord(trigger, now.epochMs, reported);
+					// 本地整批写入成功才上报，写入失败则本次不上报（云端不会有本地没有的记录）。
+					if (stockRepository.saveStockBatchNow(records)) {
+						ThingsBoardManager.getInstance(application).reportStockRecord(trigger, now.epochMs, reported);
+					}
 
 					//String gosnInfo = dbDataManager.getListToStringByGson(oils);
 
