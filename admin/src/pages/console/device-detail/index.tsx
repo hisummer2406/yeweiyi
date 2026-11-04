@@ -4,12 +4,14 @@ import { Tabs } from 'antd';
 import type React from 'react';
 import { useEffect } from 'react';
 import AlarmRecords from '../components/AlarmRecords';
+import InventoryRecords from '../components/InventoryRecords';
+import ShiftRecords from '../components/ShiftRecords';
 import StockRecords from '../components/StockRecords';
 import { useStationCurrentDevice } from '../components/useStationCurrentDevice';
 import DeviceOwnership from './DeviceOwnership';
 import SnapshotTab from './SnapshotTab';
 
-const TAB_KEYS = ['snapshot', 'alarms', 'stock'] as const;
+const TAB_KEYS = ['snapshot', 'alarms', 'stock', 'shift', 'inventory'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 /** `?tab=` 取值之外（缺省、拼错）一律回到实时数据。 */
@@ -19,7 +21,7 @@ const parseTab = (v: string | null): TabKey =>
     : 'snapshot';
 
 /**
- * 设备详情——PC 端对应小程序 pages/device-detail 的前三个页签：实时数据、报警记录、出入库记录
+ * 设备详情——PC 端对应小程序 pages/device-detail 的页签：实时数据、报警记录、出入库记录、交班记录、库存记录
  * （控制命令页签随远程控制另做）。设备名取自路由 `:deviceName`（路由库已解码），
  * 记录页签复用与记录页相同的组件，设备来自路由所以不显示设备选择。
  * 非活动页签不挂载，避免三个页签同时轮询。
@@ -78,6 +80,16 @@ const ConsoleDeviceDetail: React.FC = () => {
             key: 'stock',
             label: t('pages.console.detail.tab.stock'),
             children: <StockRecords key={deviceName} device={deviceName} />,
+          },
+          {
+            key: 'shift',
+            label: t('pages.console.detail.tab.shift'),
+            children: <ShiftRecords key={deviceName} device={deviceName} />,
+          },
+          {
+            key: 'inventory',
+            label: t('pages.console.detail.tab.inventory'),
+            children: <InventoryRecords key={deviceName} device={deviceName} />,
           },
         ]}
       />

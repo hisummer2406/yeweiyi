@@ -21,12 +21,16 @@ export type RecordsQueryState<T> = {
   /** 用户选的固定窗口；undefined 表示滚动的「最近 24 小时」 */
   range?: RecordsWindow;
   setRange: (r?: RecordsWindow) => void;
-  /** device、窗口或筛选变化时自增，调用方据此重置分页 */
+  /** device、窗口或筛选变化时自增 */
   version: number;
+  /** 当前页（从 1 起）；device、窗口或筛选变了回到第 1 页 */
+  page: number;
+  setPage: (page: number) => void;
 };
 
 /**
- * 记录页的「设备 + 窗口 + 筛选 + 轮询」状态。筛选（罐号、方向）交给云端先筛选后分页（#84），
+ * 记录页的「设备 + 窗口 + 筛选 + 页码 + 轮询」状态。分页在云端做：每页一次请求（limit/offset），
+ * 轮询刷新的是当前页；翻页时保留上一页的行直到新页到达（refreshing），不闪骨架屏。筛选（罐号、方向）交给云端先筛选后分页（#84），
  * 筛选变了与换设备一样清掉旧数据重新加载。
  * - 没有 device 就不请求；
  * - 默认窗口每次请求按当前时间重新计算（滚动的最近 24 小时），用户选了范围就固定不动；
@@ -49,6 +53,11 @@ export function useRecordsQuery<T>(
   const [range, setRange] = useState<RecordsWindow>();
   const [version, setVersion] = useState(0);
   const [owner, setOwner] = useState(device);
+  // 页码属于一组「设备 + 窗口 + 筛选」：这组变了，页码自动回到 1（不必等 effect 清）
+  const scope = `${device ?? ''}|${range?.begin.getTime() ?? ''}|${range?.end.getTime() ?? ''}|${tank ?? ''}|${direction ?? ''}`;
+  const [paging, setPaging] = useState({ scope, page: 1 });
+  const page = paging.scope === scope ? paging.page : 1;
+  const lastScope = useRef<string | undefined>(undefined);
   const seq = useRef(0);
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
@@ -71,7 +80,12 @@ export function useRecordsQuery<T>(
       setRefreshing(true);
       try {
         const res = await fetcherRef.current(
-          toRecordsQuery(device, range ?? defaultWindow(), { tank, direction }),
+          toRecordsQuery(
+            device,
+            range ?? defaultWindow(),
+            { tank, direction },
+            page,
+          ),
         );
         if (mine !== seq.current) return;
         setData(res);
@@ -86,22 +100,28 @@ export function useRecordsQuery<T>(
         }
       }
     },
-    [device, range, tank, direction],
+    [device, range, tank, direction, page],
   );
 
-  // device、窗口或筛选变化：丢掉旧数据，重新加载，并通知调用方重置分页。
+  // device、窗口或筛选变化：丢掉旧数据重新加载；只换了页：保留旧行，后台取新页。
   useEffect(() => {
-    setVersion((v) => v + 1);
-    void run(true);
+    const fresh = lastScope.current !== scope;
+    lastScope.current = scope;
+    if (fresh) setVersion((v) => v + 1);
+    void run(fresh);
     const timer = setInterval(() => void run(false), intervalMs);
     return () => {
       clearInterval(timer);
       seq.current++; // 卸载或参数变化后丢弃在途响应
     };
-  }, [run, intervalMs]);
+  }, [run, intervalMs, scope]);
 
   const reload = useCallback(() => void run(false), [run]);
   const setWindow = useCallback((r?: RecordsWindow) => setRange(r), []);
+  const setPage = useCallback(
+    (n: number) => setPaging({ scope, page: Math.max(1, Math.floor(n)) }),
+    [scope],
+  );
 
   // 状态属于另一台设备（换设备后的第一帧）：当作还没加载，等 effect 清空并发起新请求
   const current = owner === device;
@@ -114,5 +134,7 @@ export function useRecordsQuery<T>(
     range,
     setRange: setWindow,
     version,
+    page,
+    setPage,
   };
 }

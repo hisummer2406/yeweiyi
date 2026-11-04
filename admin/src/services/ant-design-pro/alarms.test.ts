@@ -11,13 +11,14 @@ vi.mock('@umijs/max', () => ({ request }));
 vi.mock('@/requestErrorConfig', () => ({ forwardAuthFailure }));
 
 const { listAlarms } = await import('./alarms');
-const { RECORDS_LIMIT } = await import('@/utils/records');
 const { ApiError } = await import('./apiError');
 
 const query = {
   device: 'ZCT000001',
   beginTime: '2026-10-06T00:00:00.000Z',
   endTime: '2026-10-07T00:00:00.000Z',
+  limit: 20,
+  offset: 40,
 };
 const alarm = {
   alarmId: 'a1',
@@ -32,7 +33,7 @@ const alarm = {
 describe('listAlarms', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('asks for newest first, the window and the cloud maximum, and skips the global handler', async () => {
+  it('asks newest first for one page plus one row (to know if more follow), and skips the global handler', async () => {
     request.mockResolvedValue({ data: [alarm], headers: {} });
     await listAlarms(query);
     expect(request).toHaveBeenCalledWith(
@@ -44,13 +45,32 @@ describe('listAlarms', () => {
           beginTime: query.beginTime,
           endTime: query.endTime,
           sort: false,
-          limit: 500,
+          limit: 21,
+          offset: 40,
         },
         getResponse: true,
         skipErrorHandler: true,
       }),
     );
-    expect(RECORDS_LIMIT).toBe(500);
+  });
+
+  it('the extra row only says more follow; it is not shown', async () => {
+    const rows = Array.from({ length: 21 }, (_, i) => ({ ...alarm, alarmId: `a${i}` }));
+    request.mockResolvedValue({ data: rows, headers: {} });
+    const res = await listAlarms(query);
+    expect(res.rows).toHaveLength(20);
+    expect(res.rows[19].alarmId).toBe('a19');
+    expect(res.truncated).toBe(true);
+    request.mockResolvedValue({ data: rows.slice(0, 19), headers: {} });
+    expect((await listAlarms(query)).truncated).toBe(false);
+  });
+
+  it('asked for 21 and got 20 (the cloud skipped an unreadable row): there may be more, next stays enabled', async () => {
+    const rows = Array.from({ length: 20 }, (_, i) => ({ ...alarm, alarmId: `a${i}` }));
+    request.mockResolvedValue({ data: rows, headers: {} });
+    const res = await listAlarms(query);
+    expect(res.rows).toHaveLength(20);
+    expect(res.truncated).toBe(true);
   });
 
   it('sends the tank filter (#84)', async () => {
@@ -65,6 +85,7 @@ describe('listAlarms', () => {
     await expect(listAlarms(query)).resolves.toEqual({
       rows: [alarm],
       partial: false,
+      truncated: false,
     });
   });
 
@@ -78,7 +99,11 @@ describe('listAlarms', () => {
 
   it('an empty window is an empty list, not an error', async () => {
     request.mockResolvedValue({ data: [], headers: {} });
-    await expect(listAlarms(query)).resolves.toEqual({ rows: [], partial: false });
+    await expect(listAlarms(query)).resolves.toEqual({
+      rows: [],
+      partial: false,
+      truncated: false,
+    });
   });
 
   it('tolerates a non-array body', async () => {

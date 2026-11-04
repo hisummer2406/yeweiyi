@@ -84,6 +84,11 @@ export default {
   'pages.console.records.device.pick': 'Select a device first',
   'pages.console.records.retry': 'Retry',
   'pages.console.records.refresh': 'Refresh',
+  'pages.console.records.page.prev': 'Previous',
+  'pages.console.records.page.next': 'Next',
+  'pages.console.records.page.current': 'Page {page}',
+  'pages.console.records.page.empty':
+    'No records on this page (they may have just changed); go back a page',
   'pages.console.records.filter.tank': 'Tank',
   'pages.console.records.filter.allTanks': 'All tanks',
   'pages.console.records.filter.tankNo': 'Tank {n}',
@@ -97,8 +102,6 @@ export default {
     'Refresh failed, showing the previous result',
   'pages.console.records.notice.partial':
     'The initial sync has not finished; records may be incomplete.',
-  'pages.console.records.notice.truncated':
-    'Only the latest {limit} are shown, narrow the time range.',
   'pages.console.records.notice.legacySkipped':
     '{count} records from before the upgrade cannot be shown.',
   'pages.console.records.notice.invalidSource':
@@ -133,6 +136,55 @@ export default {
   'pages.console.detail.tab.snapshot': 'Live data',
   'pages.console.detail.tab.alarms': 'Alarms',
   'pages.console.detail.tab.stock': 'Stock in/out',
+  'pages.console.records.title.shift': 'Shift records',
+  'pages.console.records.title.inventory': 'Inventory records',
+  'pages.console.records.notice.unsupported':
+    'This device does not support this kind of record yet',
+  'pages.console.records.notice.syncing':
+    'Records are still syncing; the list may be incomplete',
+  'pages.console.records.notice.syncUnknown':
+    'Cannot tell whether the records are fully synced; the list may be incomplete',
+  'pages.console.records.notice.unparsable':
+    '{count} records of this device could not be read; the list may be incomplete',
+  'pages.console.records.empty.shift': 'No shift records in this time range',
+  'pages.console.records.empty.inventory':
+    'No inventory records in this time range',
+  'pages.console.records.shiftOpen': 'Open',
+  'pages.console.records.col.medium': 'Medium',
+  'pages.console.records.col.shiftTime': 'Handover',
+  'pages.console.records.col.takeoverTime': 'Takeover',
+  'pages.console.records.col.beginLevel': 'Begin level (mm)',
+  'pages.console.records.col.beginVolume': 'Begin volume (L)',
+  'pages.console.records.col.endLevel': 'End level (mm)',
+  'pages.console.records.col.endVolume': 'End volume (L)',
+  'pages.console.records.col.outQtyL': 'Out (L)',
+  'pages.console.records.col.outQtyKg': 'Out (kg)',
+  'pages.console.records.col.stockTime': 'Recorded at',
+  'pages.console.records.col.levelMm': 'Level (mm)',
+  'pages.console.records.col.volumeL': 'Volume (L)',
+  'pages.console.records.col.waterMm': 'Water (mm)',
+  'pages.console.records.col.tempC': 'Temp (℃)',
+  'pages.console.records.col.weightKg': 'Mass (kg)',
+  'pages.console.records.col.deliveredKg': 'Moved (kg)',
+  'pages.console.oil.1': '0# Diesel',
+  'pages.console.oil.2': '-10# Diesel',
+  'pages.console.oil.3': '-20# Diesel',
+  'pages.console.oil.4': '-35# Diesel',
+  'pages.console.oil.5': '92# Gasoline',
+  'pages.console.oil.6': '95# Gasoline',
+  'pages.console.oil.7': '98# Gasoline',
+  'pages.console.oil.8': 'Methanol',
+  'pages.console.oil.9': 'Toluene',
+  'pages.console.oil.10': 'Rice Bran Oil',
+  'pages.console.oil.11': 'Sulfuric Acid',
+  'pages.console.oil.12': 'Xylene',
+  'pages.console.oil.13': 'n-Butyl Ester',
+  'pages.console.oil.14': 'sec-Butyl Ester',
+  'pages.console.oil.15': 'Methyl Ester',
+  'pages.console.oil.16': 'Dimethyl Ester',
+  'pages.console.oil.17': 'Solvent Oil',
+  'pages.console.detail.tab.shift': 'Shifts',
+  'pages.console.detail.tab.inventory': 'Inventory',
   'pages.console.detail.snapshot.never':
     'This device has not reported any data yet',
   'pages.console.detail.snapshot.forbidden':

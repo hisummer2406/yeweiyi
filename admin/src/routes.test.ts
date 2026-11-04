@@ -54,7 +54,13 @@ describe('记录查询菜单', () => {
   it('是一级菜单，不再嵌在设备监控下面，三种角色都能进', () => {
     expect(records.name).toBe('records');
     expect(records.access).toBe('canConsole');
-    expect(menuNames(records)).toEqual(['alarms', 'stock-in', 'stock-out']);
+    expect(menuNames(records)).toEqual([
+      'alarms',
+      'stock-in',
+      'stock-out',
+      'shift',
+      'inventory',
+    ]);
     expect(menuNames(group('/console'))).not.toContain('records');
   });
 

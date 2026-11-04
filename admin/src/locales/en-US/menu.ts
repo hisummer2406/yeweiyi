@@ -10,6 +10,8 @@ export default {
   'menu.records.alarms': 'Alarms',
   'menu.records.stock-in': 'Stock In',
   'menu.records.stock-out': 'Stock Out',
+  'menu.records.shift': 'Shifts',
+  'menu.records.inventory': 'Inventory',
   'menu.console.issue-command': 'Remote Control',
   'menu.assets': 'Assets',
   'menu.assets.customers': 'Customers',

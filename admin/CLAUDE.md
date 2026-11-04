@@ -26,7 +26,7 @@
 「设备监控」分组的 path 是 `/console`，所以记录查询、资产管理曾放在 `/console/records/*`、`/console/assets/*` 时，点它们会把「设备监控」一并点亮；
 现在它们是 `/records/*`、`/assets/*`。**新增菜单组时，别把 URL 放在另一个分组的 path 前缀下**，分组里也别放 path 等于分组 path 的无名重定向。
 `src/routes.test.ts` 的「菜单高亮」用同一个 `getMatchMenu` 守着这一点。分组 path 也不能随便改成别的值：react-router 要求嵌套的绝对子路径以父路径开头。
-一级菜单顺序是 资产管理 → 设备监控 → 记录查询（报警·入库·出库，URL 是 `/records/*`）→ 运维管理（2026-10-15 资产管理与运维管理互换了位置）；记录查询是单独的顶层路由，不嵌在设备监控下面。
+一级菜单顺序是 资产管理 → 设备监控 → 记录查询（报警·入库·出库·交班·库存，URL 是 `/records/*`）→ 运维管理（2026-10-15 资产管理与运维管理互换了位置）；记录查询是单独的顶层路由，不嵌在设备监控下面。
 设备页是设备**登记、客户归属、油站归属**的唯一入口：登记设备、分配/转移客户、「所属客户」列只对平台管理员显示（UI 隐藏，
 权限边界在云端）；「分配油站」对两种管理员都有，是分配油站的唯一入口。登记成功的提示里带「分配油站」动作（点了才打开弹窗）。
 客户管理员的设备行没有 `customer_id`，所以设备页对它不请求 `GET /api/customers`（云端只允许平台管理员，请求必然 403 并弹错）。
@@ -86,7 +86,11 @@
 几个必须知道的云端行为，别凭记忆改：
 
 - 报警/出入库接口**必须带 `device`**，没有跨设备列表；默认窗口 24 小时、**默认升序**，所以前端显式传
-  `sort=false`；一次取 `limit=500`（云端上限）前端分页，没有总数。出入库**没有方向过滤**，入库/出库页在前端过滤。
+  `sort=false`。**分页在云端做**（2026-11-04 起，四类记录都是）：每页 20 条（`PAGE_SIZE`），`limit`/`offset` 每页一次请求，
+  云端不给总数，只有上一页/下一页；出入库、交班、库存的 `truncated` 表示「这一页之后还有」（云端多取一条判断），报警接口没有该字段，
+  `listAlarms` 多要一条、只显示前 20 条，**回了 >= 20 条就算还有**（云端先 LIMIT 再跳过解析不了的行，要 21 回 20 时后面可能还有）。
+  `offset` 一律 `(页码-1)×20`，**不按实际显示行数算**（各接口都会在分页后跳过坏行，一页可能不足 20 条）。换设备/时间窗/筛选回到第 1 页，轮询刷新当前页，翻页时保留旧行直到新页到达。
+  罐号、方向由云端先筛选后分页（#84），前端按行再过滤一遍只为兼容旧云端。
 - 查询窗口下界是设备归属当前客户的时间（`customer_assigned_at`），转移前的记录看不到，平台管理员也一样。
 - 出入库的 **502（`STOCK_EVENT_FORMAT_UNSUPPORTED`）不是通用失败**，body 仍带 `rows` 和计数，`listStockEvents`
   把它当降级结果返回；`unparsable`/`legacySkipped`/`partial`/`truncated` 和报警的 `X-Records-Partial` 头都必须如实
@@ -96,7 +100,17 @@
 - **设备总览分页与请求控制**（`pages/console/devices`，纯函数 `src/utils/overviewPaging.ts`）：设备列表一次取全，前端每页 12 台，
   **只对当前页取遥测**（翻到才取，已取过的沿用缓存），遥测请求并发上限 5；按油站分段时分页单位是油站（不拆开，超过一页的分段切开并重复标题）；
   标签页不可见时不轮询，回到前台立即刷新。云端没有批量遥测接口，有了再把「逐台请求」换成一次请求。
-- 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送、交班/库存记录。
+- **交班记录、库存记录（cloud#85，契约 `docs/shift-stock-records-contract.md` §4/§5；小程序 miniapp PR #24 同规则）**：
+  `/records/shift`、`/records/inventory`，设备详情也有同名页签（`?tab=shift|inventory`）。接口 `GET /api/shift-records`、
+  `GET /api/stock-records`，参数同出入库（device 必填、tank 可选，显式 `sort=false`，`limit`/`offset` 云端分页），响应 `{rows, truncated, partial,
+  unparsable, syncStatus}`，每个 (记录, 罐) 一行。提示规则在 `summarizeSynced`（`utils/records.ts`）：`UNSUPPORTED`「设备暂不支持该类记录」，
+  `SYNCING`/`SYNCED+partial`「同步中」，不认识或缺失的状态「无法确认」，只有 `SYNCED` 且没有行才说没有记录；`unparsable` 是整机计数，文案写「本设备」。
+  缺失值一律「—」（`num`/`DASH`），0 照常显示。交班列顺序：罐号、介质、交班时间（`endTime`）、接班时间（`beginTime`）、前高、前量、后高、后量、
+  出库量(L/kg)；进行中的班（`OPEN`）交班时间显示「—」并带「进行中」标签。库存：罐号、介质、库存生成时间、液位(mm)、容积、水高(mm)、温度、质量。
+  同一班/同一次库存的行同底色、相邻交替（`groupStripes`）。**介质**（含报警、出入库）按 `oilTypeIndex` 1–17 显示本地名称（`utils/oilType.ts`，
+  文案 `pages.console.oil.N`，以中文表为准，设备英文表有错位 zhongchengyeweiyi#52），其余显示 `oilType` 原文，再没有就「—」。
+  出入库多一列「实际进出量(kg)」= `deliveredWeightKg`，null 显示「—」，**不能用前后重量差代替**；报警多一列「介质」，取报警自带的值，不拿罐当前油品代替。
+- 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送。
 
 **油站（`/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。
 油站页只管油站增删改（对平台管理员和客户管理员开放，`access.canManageAssets`）；给设备分配油站在设备页。云端契约：

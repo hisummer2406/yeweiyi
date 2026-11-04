@@ -8,7 +8,8 @@ import {
   STOCK_DIRECTION_LABELS,
   STOCK_SOURCE_LABELS,
 } from '@/utils/labels';
-import { filterRows, summarizeStock } from '@/utils/records';
+import { mediumText } from '@/utils/oilType';
+import { filterRows, num, summarizeStock } from '@/utils/records';
 import { fmt, fmtTime } from '@/utils/telemetry';
 import RecordsFrame from './RecordsFrame';
 import TankFilter from './TankFilter';
@@ -24,8 +25,8 @@ type Props = {
 const range = (a: number, b: number) => `${fmt(a)} → ${fmt(b)}`;
 
 /**
- * 某台设备的出入库记录（GET /api/oil-in-out）：最新在前，一次取窗口内最新 500 条，前端分页。
- * 方向与罐号交给云端先筛选后分页（#84），500 条上限针对筛选后的记录；按行再过滤一遍只为兼容旧云端。
+ * 某台设备的出入库记录（GET /api/oil-in-out）：最新在前，每页 20 条由云端分页（limit/offset）。
+ * 方向与罐号交给云端先筛选后分页（#84），分页针对筛选后的记录；按行再过滤一遍只为兼容旧云端。
  * 云端的降级信号（502 固件未升级、unparsable、legacySkipped、partial、truncated 等）由 summarizeStock
  * 转成提示；有降级而没有行时只显示提示，不显示成「没有出入库记录」。
  */
@@ -69,11 +70,11 @@ const StockRecords: React.FC<Props> = ({ device, direction }) => {
       emptyId="pages.console.records.empty.stock"
     >
       <Table<API.StockEvent>
-        key={`${state.version}|${direction ?? ''}|${tank ?? ''}`}
         size="middle"
         rowKey="eventId"
         dataSource={rows}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
+        pagination={false}
+        loading={state.refreshing && !state.loading}
         scroll={{ x: 'max-content' }}
         columns={[
           {
@@ -92,9 +93,8 @@ const StockRecords: React.FC<Props> = ({ device, direction }) => {
             ),
           },
           {
-            title: t('pages.console.records.col.oilType'),
-            dataIndex: 'oilType',
-            render: (v?: string) => v || '--',
+            title: t('pages.console.records.col.medium'),
+            render: (_, r) => mediumText(r.oilTypeIndex, r.oilType, t),
           },
           {
             title: t('pages.console.records.col.source'),
@@ -105,6 +105,13 @@ const StockRecords: React.FC<Props> = ({ device, direction }) => {
             title: t('pages.console.records.col.delivered'),
             dataIndex: 'deliveredVolumeL',
             render: (v: number) => fmt(v),
+          },
+          {
+            // 设备给的交付质量（cloud#85）；旧记录 null 显示「—」，不能用前后重量差代替（差值含期间销售）
+            title: t('pages.console.records.col.deliveredKg'),
+            dataIndex: 'deliveredWeightKg',
+            align: 'right',
+            render: (v?: number | null) => num(v),
           },
           {
             title: t('pages.console.records.col.net'),

@@ -17,13 +17,15 @@ const query = {
   device: 'ZCT000001',
   beginTime: '2026-10-06T00:00:00.000Z',
   endTime: '2026-10-07T00:00:00.000Z',
+  limit: 20,
+  offset: 0,
 };
 const row = { eventId: 'e1', tank: 1, direction: 'IN', source: 'AUTO' };
 
 describe('listStockEvents', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('asks for newest first, the window and the cloud maximum, and skips the global handler', async () => {
+  it('asks newest first for one page (limit/offset), and skips the global handler', async () => {
     request.mockResolvedValue({ data: { rows: [] } });
     await listStockEvents(query);
     expect(request).toHaveBeenCalledWith(
@@ -35,7 +37,8 @@ describe('listStockEvents', () => {
           beginTime: query.beginTime,
           endTime: query.endTime,
           sort: false,
-          limit: 500,
+          limit: 20,
+          offset: 0,
         },
         getResponse: true,
         skipErrorHandler: true,

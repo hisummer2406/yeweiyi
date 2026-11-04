@@ -9,6 +9,7 @@ import {
   ALARM_TYPE_LABELS,
   label,
 } from '@/utils/labels';
+import { mediumText } from '@/utils/oilType';
 import { filterRows, summarizeAlarms } from '@/utils/records';
 import { fmt, fmtTime } from '@/utils/telemetry';
 import RecordsFrame from './RecordsFrame';
@@ -17,7 +18,7 @@ import { REFRESH_MS, useRecordsQuery } from './useRecordsQuery';
 import { useTankSelection } from './useTankSelection';
 
 /**
- * 某台设备的报警记录（GET /api/alarms）：最新在前，一次取窗口内最新 500 条，前端分页。
+ * 某台设备的报警记录（GET /api/alarms）：最新在前，每页 20 条由云端分页（limit/offset）。
  * 一次状态变化一行（ACTIVE 与之后的 CLEARED 是两行，共用 alarmId），云端没有折叠。
  * 可按罐号筛选，由云端先筛选后分页（#84）。
  */
@@ -58,11 +59,11 @@ const AlarmRecords: React.FC<{ device: string }> = ({ device }) => {
       emptyId="pages.console.records.empty.alarms"
     >
       <Table<API.Alarm>
-        key={state.version}
         size="middle"
         rowKey={(r) => `${r.alarmId}|${r.time}|${r.tank}|${r.status}|${r.type}`}
         dataSource={rows}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
+        pagination={false}
+        loading={state.refreshing && !state.loading}
         columns={[
           {
             title: t('pages.console.records.col.time'),
@@ -70,6 +71,11 @@ const AlarmRecords: React.FC<{ device: string }> = ({ device }) => {
             render: (v: string) => fmtTime(v),
           },
           { title: t('pages.console.records.col.tank'), dataIndex: 'tank' },
+          {
+            // 报警发生时的介质（cloud#85）；设备级报警与旧记录没有，显示「—」，不拿罐当前油品代替
+            title: t('pages.console.records.col.medium'),
+            render: (_, r) => mediumText(r.oilTypeIndex, r.oilType, t),
+          },
           {
             title: t('pages.console.records.col.type'),
             dataIndex: 'type',
