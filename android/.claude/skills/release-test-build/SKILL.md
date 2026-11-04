@@ -1,13 +1,13 @@
 ---
 name: release-test-build
-description: 出测试包：把 versionName 末尾的版本字母加一（如 1.0.5-E → 1.0.5-F），打 release 包并核对签名和构建开关，提交"[chore]测试包X；"，再整理出距上一个测试包的更新内容。用户说"更新版本字母""打 release 包""出测试包""整理更新内容/更新说明"时用。
+description: 出测试包：把 versionName 末尾的版本字母加一（如 1.0.5-E → 1.0.5-F），打 release 包并核对签名和构建开关，整理成"x.y.z_X版本.zip"，提交"[chore]测试包X；"，再整理出距上一个测试包的更新内容。用户说"更新版本字母""打 release 包""出测试包""整理更新内容/更新说明"时用。
 metadata:
   version: "1.0"
 ---
 
 # 出测试包
 
-步骤 1～5 要按顺序做，前一步不通过就停下，告诉用户原因。
+步骤 1～6 要按顺序做，前一步不通过就停下，告诉用户原因。
 
 ## 1. 前置检查
 
@@ -41,7 +41,31 @@ metadata:
 
 构建日志里出现 `[配置缺失]` 时：截至 F 包，`productKey`/`productSecret`/`requestEncryptKey`/`baseUrl` 这 4 项一直缺。它们只给旧的阿里云接口用，和 ThingsBoard 无关，照实告诉用户即可。除此之外缺了其他项，就停下问用户。
 
-## 4. 提交
+## 4. 整理成 zip 包
+
+核对全部通过后，把 `app/build/outputs/apk/release/` 整理成交付用的 zip。目录名和 zip 名都是 `<x.y.z>_<字母>版本`，例如 1.0.5-K 对应 `1.0.5_K版本`：
+
+```bash
+cd app/build/outputs/apk
+rm release/output-metadata.json
+mv release 1.0.5_K版本
+python3 -I - 1.0.5_K版本 <<'PY'
+import os, sys, zipfile
+d = sys.argv[1]
+with zipfile.ZipFile(d + '.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+    z.write(d)
+    for f in sorted(os.listdir(d)):
+        if f != '.DS_Store':
+            z.write(os.path.join(d, f))
+    print(z.namelist())   # 只应有目录和 apk
+PY
+```
+
+- 同名目录或 zip 已经存在时，停下问用户，不要覆盖。
+- 用 Python 的 zipfile 压缩，因为它会给中文文件名打 UTF-8 标记。Finder 的"压缩"、`ditto`、`zip` 都不打这个标记（Finder 还会带上 `__MACOSX/` 和 `.DS_Store`），Windows 上解压时"版本"两个字可能变成乱码。系统 `unzip -l` 也会把中文显示成乱码，不能用它来判断 zip 有没有问题。
+- 改名后 `release/` 目录就没有了，下次 `assembleRelease` 会重新生成。
+
+## 5. 提交
 
 ```bash
 git add app/build.gradle
@@ -50,7 +74,7 @@ git commit -m "[chore]测试包X；"   # 末尾加当前会话要求的 Co-Autho
 
 只提交 `build.gradle` 这一个文件。不推送，不打 tag，除非用户要求。
 
-## 5. 整理更新内容
+## 6. 整理更新内容
 
 - 范围：`git log --oneline <上个测试包提交>..HEAD`，排除测试包提交本身和只改文档的提交。
 - 每条都要对照 `git show <hash>` 的实际 diff 来写，不能只看提交信息。提交信息可能写得不全，也可能夸大。
@@ -62,4 +86,4 @@ git commit -m "[chore]测试包X；"   # 末尾加当前会话要求的 Co-Autho
   ```
 - 更新内容之外，单独另起几行告诉用户：哪些改动还没有真机验证过、release 包本身有没有在真机上装过。这些不写进更新内容。
 
-交付时给出：apk 的完整绝对路径、核对结果、新的提交 hash、更新内容。
+交付时给出：zip 和其中 apk 的完整绝对路径、核对结果、新的提交 hash、更新内容。
