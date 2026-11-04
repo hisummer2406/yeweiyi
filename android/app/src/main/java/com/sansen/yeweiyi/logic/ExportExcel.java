@@ -250,10 +250,11 @@ public class ExportExcel<T> {
             for (Field field : fields) {
                 System.out.println("方法名字 ==  " + field.getName());
             }
-            for (int i = 0; i < fields.length; i++) {
+            // 按 params 列出的列取值，不按实体字段数：实体新增字段（OilInOut.source、OilWork.oilTypeIndex）
+            // 后字段数多于列数，曾在 params[i] 处数组越界，导出整体失败。
+            for (int i = 0; i < params.length; i++) {
                 HSSFCell cell = row.createCell(i);
                 cell.setCellStyle(style2);
-                Field field = fields[i];
 
                 String fieldName = params[i];
                 String getMethodName = "get"

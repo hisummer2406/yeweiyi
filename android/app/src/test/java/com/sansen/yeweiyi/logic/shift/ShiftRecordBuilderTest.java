@@ -180,6 +180,26 @@ public class ShiftRecordBuilderTest {
     }
 
     @Test
+    public void legacyZeroEndFieldsAreClearedForTankWithoutEndReading() {
+        // 升级前开始的班，结束时罐 2 已删除/停用：旧 JSON 里的 0.0 不能当成真实的结束数据保留下来。
+        String legacy = "[{\"oilId\":1,\"beginHeight\":1500.0,\"beginVolume\":18000.0,"
+                + "\"endHeight\":0.0,\"endVolume\":0.0,\"shellVolume\":0.0,\"shellWeight\":0.0},"
+                + "{\"oilId\":2,\"beginHeight\":600.0,\"beginVolume\":6000.0,"
+                + "\"endHeight\":0.0,\"endVolume\":0.0,\"shellVolume\":0.0,\"shellWeight\":0.0}]";
+        List<OilWork> begin = Arrays.asList(new Gson().fromJson(legacy, OilWork[].class));
+
+        List<OilWork> end = ShiftRecordBuilder.end(begin, Collections.singletonList(
+                reading(1, 1400.0, 17000.0, 0.74, "92#")));
+
+        OilWork t2 = byTank(end, 2);
+        assertEquals(600.0, t2.getBeginHeight(), EPS);
+        assertNull(t2.getEndHeight());
+        assertNull(t2.getEndVolume());
+        assertNull(t2.getShellVolume());
+        assertNull(t2.getShellWeight());
+    }
+
+    @Test
     public void nullBeginListIsTreatedAsNoBeginData() {
         List<OilWork> end = ShiftRecordBuilder.end(null, Collections.singletonList(
                 reading(1, 1400.0, 17000.0, 0.74, "92#")));

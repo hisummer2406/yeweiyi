@@ -154,6 +154,20 @@ public class StockRepositoryImpl implements StockRepository {
     }
 
     @Override
+    public boolean saveStockBatchNow(List<StockSave> records) {
+        if (records == null || records.isEmpty()) {
+            return false;
+        }
+        try {
+            db.saveAll(records);
+            return true;
+        } catch (DbException e) {
+            Log.e(TAG, "saveStockBatchNow 数据库操作失败", e);
+            return false;
+        }
+    }
+
+    @Override
     public void deleteStock(StockSave stockSave) {
         delete(stockSave);
     }
