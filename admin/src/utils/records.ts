@@ -3,8 +3,21 @@
  * 放在这里是为了让「哪些情况要给用户什么提示」能不带 DOM 地单测。
  */
 
-/** 云端单次上限（internal/api/listparams.go maxLimit）；前端一次取满，分页在前端做。 */
-export const RECORDS_LIMIT = 500;
+/** 缺失值的显示：云端没给的值一律「—」，不显示 0（0 本身是有效值照常显示）。 */
+export const DASH = '—';
+
+/** 记录表里的数值：最多两位小数（同小程序 recordColumns.num），缺失或非有限数显示「—」。 */
+export const num = (v: unknown): string =>
+  typeof v === 'number' && Number.isFinite(v)
+    ? String(Math.round((v + Number.EPSILON) * 100) / 100)
+    : DASH;
+
+/**
+ * 每页条数。分页在云端做（limit/offset，internal/api/listparams.go）：每翻一页请求一次，
+ * 云端多取一条判断后面还有没有（出入库、交班、库存的 truncated；报警由前端多要一条自己判断）。
+ * 云端不给总数，所以只有上一页/下一页。
+ */
+export const PAGE_SIZE = 20;
 
 /** 默认窗口：最近 24 小时（与云端默认一致，但这里显式传，不依赖云端默认）。 */
 export const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -20,15 +33,18 @@ export const defaultWindow = (now: Date = new Date()): RecordsWindow => ({
 /** 罐号与方向筛选（yeweiyi-cloud docs/records-filter-contract.md，#84）；缺省的字段不筛选。 */
 export type RecordsFilter = { tank?: number; direction?: 'IN' | 'OUT' };
 
-/** 窗口转成云端要求的 RFC3339（UTC）查询参数；筛选只带有值的字段。 */
+/** 窗口转成云端要求的 RFC3339（UTC）查询参数，第 page 页（从 1 起）；筛选只带有值的字段。 */
 export const toRecordsQuery = (
   device: string,
   w: RecordsWindow,
   filter: RecordsFilter = {},
+  page = 1,
 ): API.RecordsQuery => ({
   device,
   beginTime: w.begin.toISOString(),
   endTime: w.end.toISOString(),
+  limit: PAGE_SIZE,
+  offset: (Math.max(1, Math.floor(page)) - 1) * PAGE_SIZE,
   ...(filter.tank !== undefined ? { tank: filter.tank } : {}),
   ...(filter.direction ? { direction: filter.direction } : {}),
 });
@@ -61,11 +77,14 @@ export type Notice = {
   level: 'error' | 'warning' | 'info';
   id:
     | 'partial'
-    | 'truncated'
     | 'legacySkipped'
     | 'invalidSource'
     | 'folded'
-    | 'firmware';
+    | 'firmware'
+    | 'unsupported'
+    | 'syncing'
+    | 'syncUnknown'
+    | 'unparsable';
   values: Record<string, string>;
 };
 
@@ -73,21 +92,16 @@ export type Notice = {
 export const hasDegradation = (notices: Notice[]): boolean =>
   notices.some((n) => n.level !== 'info');
 
-const limitValue = { limit: String(RECORDS_LIMIT) };
-
-/** 报警：响应头 partial，以及满 500 条（云端没有 truncated 标记，满额只能当作可能被截断）。 */
+/** 报警：响应头 partial（首次回补未完成）。 */
 export function summarizeAlarms(list: API.AlarmList): Notice[] {
   const out: Notice[] = [];
   if (list.partial) out.push({ level: 'warning', id: 'partial', values: {} });
-  if (list.rows.length >= RECORDS_LIMIT) {
-    out.push({ level: 'warning', id: 'truncated', values: limitValue });
-  }
   return out;
 }
 
 /**
  * 出入库：502 降级或 unparsable>0 是错误级（设备固件未升级，部分记录读不到）；
- * partial、legacySkipped、invalidSource、truncated 是警告级；folded 只是说明。
+ * partial、legacySkipped、invalidSource 是警告级；folded 只是说明。truncated 是「后面还有」，由翻页处理，不是提示。
  */
 export function summarizeStock(list: API.StockList): Notice[] {
   const out: Notice[] = [];
@@ -117,9 +131,6 @@ export function summarizeStock(list: API.StockList): Notice[] {
       values: { count: String(list.invalidSource) },
     });
   }
-  if (list.truncated) {
-    out.push({ level: 'warning', id: 'truncated', values: limitValue });
-  }
   if (list.folded > 0) {
     out.push({
       level: 'info',
@@ -127,5 +138,53 @@ export function summarizeStock(list: API.StockList): Notice[] {
       values: { count: String(list.folded) },
     });
   }
+  return out;
+}
+
+/**
+ * 交班/库存记录（cloud#85 §4）的完整性提示，规则与小程序 recordColumns.syncSummary 一致：
+ * - UNSUPPORTED：设备从未上报过这类记录，显示「设备暂不支持」而不是「暂无记录」；
+ * - SYNCING：初次回补未完成，列表为空也不能说没有记录；
+ * - 不认识的值或缺失（更新/更旧的云端）：无法确认是否完整；
+ * - 只有 SYNCED 才可能显示「暂无记录」（SYNCED 但 partial 仍按同步中提示）。
+ * unparsable 是整机计数，按罐筛选时也不能说成「该罐有 N 条错误」。这些都是警告级：有它们时空列表不显示成「没有记录」。
+ * truncated 是「后面还有」，由翻页处理。
+ */
+export function summarizeSynced(list: API.SyncedRecordList<unknown>): Notice[] {
+  const out: Notice[] = [];
+  const status = list.syncStatus;
+  if (status === 'UNSUPPORTED') {
+    out.push({ level: 'warning', id: 'unsupported', values: {} });
+  } else if (status === 'SYNCING') {
+    out.push({ level: 'warning', id: 'syncing', values: {} });
+  } else if (status !== 'SYNCED') {
+    out.push({ level: 'warning', id: 'syncUnknown', values: {} });
+  } else if (list.partial) {
+    out.push({ level: 'warning', id: 'syncing', values: {} });
+  }
+  if (list.unparsable > 0) {
+    out.push({
+      level: 'warning',
+      id: 'unparsable',
+      values: { count: String(list.unparsable) },
+    });
+  }
+  return out;
+}
+
+/**
+ * 按所属记录分组的斑马底色：同一班（shiftId）或同一次库存（recordId）的多行同底色，相邻两组交替。
+ * 返回与 rows 等长的 0/1 序列；组键为空的行各自成组。
+ */
+export function groupStripes<R>(rows: R[], keyOf: (r: R) => string): number[] {
+  const out: number[] = [];
+  let prev: string | undefined;
+  let stripe = 1;
+  rows.forEach((r, i) => {
+    const k = keyOf(r);
+    if (i === 0 || !k || k !== prev) stripe ^= 1;
+    prev = k;
+    out.push(stripe);
+  });
   return out;
 }

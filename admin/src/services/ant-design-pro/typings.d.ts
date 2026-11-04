@@ -240,6 +240,9 @@ declare namespace API {
     tank?: number;
     /** 可选方向筛选，仅出入库 */
     direction?: 'IN' | 'OUT';
+    /** 每页条数与偏移，分页在云端做 */
+    limit: number;
+    offset: number;
   };
 
   /** GET /api/alarms 的一行（internal/api/alarms.go alarmResponse）；一次状态变化一行 */
@@ -253,12 +256,17 @@ declare namespace API {
     text: string;
     value?: number;
     time: string;
+    /** 报警发生时的油品显示名与设备油品表下标（cloud#85）；设备级报警与旧记录为 null/缺失 */
+    oilType?: string | null;
+    oilTypeIndex?: number | null;
   };
 
   /** listAlarms 的结果：partial 来自响应头 X-Records-Partial */
   type AlarmList = {
     rows: Alarm[];
     partial: boolean;
+    /** 这一页之后还有记录（云端报警接口没有该字段，由前端多要一条判断） */
+    truncated: boolean;
   };
 
   /** GET /api/oil-in-out 的一行（internal/api/stock.go stockEventResponse） */
@@ -281,6 +289,10 @@ declare namespace API {
     netVolumeL: number;
     duringDeliveryVolumeL?: number;
     deliveredVolumeL: number;
+    /** 设备按记录关闭时刻密度算的交付质量（cloud#85）；旧记录 null，不能用重量差代替 */
+    deliveredWeightKg?: number | null;
+    /** 设备油品表下标（cloud#85）；1–17 按界面语言显示，其余显示 oilType 原文 */
+    oilTypeIndex?: number | null;
     time: string;
   };
 
@@ -306,6 +318,57 @@ declare namespace API {
     truncated: boolean;
     partial: boolean;
     degraded?: StockDegraded;
+  };
+
+  /**
+   * GET /api/shift-records 与 /api/stock-records 的同步状态（yeweiyi-cloud docs/shift-stock-records-contract.md §4）。
+   * 只有 SYNCED 且没有行才能说「暂无记录」；不认识的值（更新的云端）按「无法确认」处理。
+   */
+  type RecordSyncStatus = 'UNSUPPORTED' | 'SYNCING' | 'SYNCED' | string;
+
+  /** 交班/库存记录的响应信封（truncated = 这一页之后还有记录）；字段缺失时 service 层补成安全默认值，syncStatus 缺失保留 undefined（=无法确认） */
+  type SyncedRecordList<R> = {
+    rows: R[];
+    truncated: boolean;
+    partial: boolean;
+    /** 整机计数：原文无法归属到罐，按罐筛选时也不按罐区分 */
+    unparsable: number;
+    syncStatus?: RecordSyncStatus;
+  };
+
+  /** GET /api/shift-records 的一行：每个 (班, 罐) 一行；缺失值一律 null，显示「—」不显示 0 */
+  type ShiftRecord = {
+    shiftId: string;
+    /** 进行中的班是 OPEN，此时 endTime 与结束、出库各列为 null */
+    status: 'OPEN' | 'CLOSED' | string;
+    /** 接班时间 */
+    beginTime: string | null;
+    /** 交班时间 */
+    endTime: string | null;
+    tank: number;
+    oilType: string | null;
+    oilTypeIndex: number | null;
+    beginLevelMm: number | null;
+    beginVolumeL: number | null;
+    endLevelMm: number | null;
+    endVolumeL: number | null;
+    outVolumeL: number | null;
+    outWeightKg: number | null;
+  };
+
+  /** GET /api/stock-records 的一行：每个 (库存记录, 罐) 一行；液位、水高单位 mm */
+  type InventoryRecord = {
+    recordId: string;
+    time: string | null;
+    trigger: string | null;
+    tank: number;
+    oilType: string | null;
+    oilTypeIndex: number | null;
+    levelMm: number | null;
+    volumeL: number | null;
+    waterLevelMm: number | null;
+    tempC: number | null;
+    weightKg: number | null;
   };
 
   type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';

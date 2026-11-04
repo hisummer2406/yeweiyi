@@ -41,9 +41,15 @@ const alarm = (i: number, p: Partial<API.Alarm> = {}): API.Alarm => ({
   time: new Date(Date.UTC(2026, 9, 6, 0, i)).toISOString(),
   ...p,
 });
-const list = (n: number, partial = false): API.AlarmList => ({
-  rows: Array.from({ length: n }, (_, i) => alarm(i)),
+const list = (
+  n: number,
+  partial = false,
+  truncated = false,
+  from = 0,
+): API.AlarmList => ({
+  rows: Array.from({ length: n }, (_, i) => alarm(from + i)),
   partial,
+  truncated,
 });
 
 beforeEach(() => vi.clearAllMocks());
@@ -86,30 +92,61 @@ describe('AlarmRecords', () => {
     expect(within(row).getByText('--')).toBeTruthy();
   });
 
-  it('paginates on the client: 45 rows, 20 per page', async () => {
-    listAlarms.mockResolvedValue(list(45));
+  it('medium comes from the alarm itself (cloud#85); none is a dash', async () => {
+    listAlarms.mockResolvedValue({
+      rows: [
+        alarm(0, { oilType: 'Sulfuric Acid', oilTypeIndex: 2 }),
+        alarm(1, { oilType: '自定义', oilTypeIndex: 20 }),
+        alarm(2, { oilType: null, oilTypeIndex: null }),
+      ],
+      partial: false,
+    });
+    render(<AlarmRecords device="D1" />);
+    const row = async (i: number) =>
+      (await screen.findByText(`text-${i}`)).closest('tr') as HTMLElement;
+    expect(within(await row(0)).getByText('-10#')).toBeTruthy();
+    expect(within(await row(1)).getByText('自定义')).toBeTruthy();
+    expect(within(await row(2)).getByText('—')).toBeTruthy();
+  });
+
+  it('pages on the cloud: next asks for the next offset, previous goes back', async () => {
+    listAlarms
+      .mockResolvedValueOnce(list(20, false, true))
+      .mockResolvedValueOnce(list(5, false, false, 20))
+      .mockResolvedValueOnce(list(20, false, true));
     render(<AlarmRecords device="D1" />);
     await screen.findByText('text-0');
-    expect(screen.queryByText('text-20')).toBeNull();
-    fireEvent.click(screen.getByTitle('2'));
+    expect(listAlarms.mock.calls[0][0]).toMatchObject({ limit: 20, offset: 0 });
+    expect(screen.getByText('第 1 页')).toBeTruthy();
+    expect(
+      (screen.getByText('上一页').closest('button') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText('下一页'));
     expect(await screen.findByText('text-20')).toBeTruthy();
-    expect(listAlarms).toHaveBeenCalledTimes(1);
+    expect(listAlarms.mock.calls[1][0]).toMatchObject({ offset: 20 });
+    expect(screen.getByText('第 2 页')).toBeTruthy();
+    expect(
+      (screen.getByText('下一页').closest('button') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText('上一页'));
+    expect(await screen.findByText('text-0')).toBeTruthy();
+    expect(listAlarms.mock.calls[2][0]).toMatchObject({ offset: 0 });
+  });
+
+  it('a single page has no pager', async () => {
+    listAlarms.mockResolvedValue(list(3));
+    render(<AlarmRecords device="D1" />);
+    await screen.findByText('text-0');
+    expect(screen.queryByText('下一页')).toBeNull();
   });
 
   it('shows no notice for a complete short list', async () => {
     listAlarms.mockResolvedValue(list(37));
     render(<AlarmRecords device="D1" />);
     await screen.findByText('text-0');
-    expect(screen.queryByText(/请缩小时间范围/)).toBeNull();
     expect(screen.queryByText(/首次同步尚未完成/)).toBeNull();
-  });
-
-  it('warns at exactly 500 rows that more may exist', async () => {
-    listAlarms.mockResolvedValue(list(500));
-    render(<AlarmRecords device="D1" />);
-    expect(
-      await screen.findByText(/只显示最新 500 条，请缩小时间范围/),
-    ).toBeTruthy();
   });
 
   it('says the records may be incomplete when the response is partial, and still shows the rows', async () => {

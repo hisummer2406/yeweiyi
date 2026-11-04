@@ -6,7 +6,7 @@
  * 两个分区，同一个应用，靠 access 区分（详见项目根 CLAUDE.md「两个前台，一个仓库」）：
  * - /ops/*      运维/管理控制台，仅 platform_admin（access.ts 的 canPlatformAdmin）
  * - /console/*  客户 PC 监控台，小程序的桌面版，三种角色都能进（canConsole）
- * - /records/*  记录查询（报警·入库·出库）、/assets/* 资产管理：与监控台并列的一级菜单，权限见各组 access
+ * - /records/*  记录查询（报警·入库·出库·交班·库存）、/assets/* 资产管理：与监控台并列的一级菜单，权限见各组 access
  */
 export default [
   {
@@ -189,6 +189,18 @@ export default [
         icon: 'upload',
         path: '/records/stock-out',
         component: './console/oil-in-out',
+      },
+      {
+        name: 'shift',
+        icon: 'swap',
+        path: '/records/shift',
+        component: './console/shift',
+      },
+      {
+        name: 'inventory',
+        icon: 'database',
+        path: '/records/inventory',
+        component: './console/inventory',
       },
     ],
   },

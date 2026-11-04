@@ -10,6 +10,8 @@ export default {
   'menu.records.alarms': '报警记录',
   'menu.records.stock-in': '入库记录',
   'menu.records.stock-out': '出库记录',
+  'menu.records.shift': '交班记录',
+  'menu.records.inventory': '库存记录',
   'menu.console.issue-command': '远程控制',
   'menu.assets': '资产管理',
   'menu.assets.customers': '客户管理',

@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
@@ -70,6 +71,33 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('StockRecords', () => {
+  it('kg column is the device delivered mass; missing is a dash, never the weight difference (cloud#85)', async () => {
+    listStockEvents.mockResolvedValue(
+      result({
+        rows: [
+          ev('a', { oilType: 'A', deliveredWeightKg: 5600.123 }),
+          ev('b', { oilType: 'B', deliveredWeightKg: null }),
+          ev('c', { oilType: 'Kerosene', oilTypeIndex: 10 }),
+        ],
+      }),
+    );
+    render(<StockRecords device="D1" />);
+    const cellsOf = async (text: string) => {
+      const cells = within(
+        (await screen.findByText(text)).closest('tr') as HTMLElement,
+      ).getAllByRole('cell');
+      return cells.map((c) => c.textContent);
+    };
+    const a = await cellsOf('A');
+    const kg = screen
+      .getAllByRole('columnheader')
+      .findIndex((h) => h.textContent === '实际进出量(kg)');
+    expect(kg).toBeGreaterThan(0);
+    expect(a[kg]).toBe('5600.12');
+    expect((await cellsOf('B'))[kg]).toBe('—');
+    expect(await screen.findByText('米糠油')).toBeTruthy();
+  });
+
   it('requests the given device for the last 24 hours', async () => {
     listStockEvents.mockResolvedValue(result({ rows: [ev('e1')] }));
     render(<StockRecords device="D1" />);
@@ -201,14 +229,41 @@ describe('StockRecords', () => {
     expect(screen.queryByText('该时间范围内没有出入库记录')).toBeNull();
   });
 
-  it('truncated asks to narrow the range', async () => {
+  it('the next offset is page × 20, not the rows shown (the cloud skips unreadable rows after paging)', async () => {
+    listStockEvents
+      .mockResolvedValueOnce(
+        result({
+          rows: Array.from({ length: 15 }, (_, i) =>
+            ev(`e${i}`, { oilType: `P1-${i}` }),
+          ),
+          truncated: true,
+        }),
+      )
+      .mockResolvedValueOnce(
+        result({ rows: [ev('n1', { oilType: 'P2' })], truncated: true }),
+      )
+      .mockResolvedValue(result({ rows: [ev('n2', { oilType: 'P3' })] }));
+    render(<StockRecords device="D1" />);
+    await screen.findByText('P1-0');
+    expect(listStockEvents.mock.calls[0][0]).toMatchObject({
+      limit: 20,
+      offset: 0,
+    });
+    fireEvent.click(screen.getByText('下一页'));
+    await screen.findByText('P2');
+    expect(listStockEvents.mock.calls[1][0]).toMatchObject({ offset: 20 });
+    fireEvent.click(screen.getByText('下一页'));
+    await screen.findByText('P3');
+    expect(listStockEvents.mock.calls[2][0]).toMatchObject({ offset: 40 });
+  });
+
+  it('truncated means more follow: a next page, not a warning', async () => {
     listStockEvents.mockResolvedValue(
       result({ rows: [ev('e1')], truncated: true }),
     );
     render(<StockRecords device="D1" />);
-    expect(
-      await screen.findByText(/只显示最新 500 条，请缩小时间范围/),
-    ).toBeTruthy();
+    expect(await screen.findByText('下一页')).toBeTruthy();
+    expect(screen.queryByText(/请缩小时间范围/)).toBeNull();
   });
 
   it('reports invalidSource and folded counts', async () => {

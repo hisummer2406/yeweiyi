@@ -53,6 +53,8 @@ describe('useRecordsQuery', () => {
       device: 'D1',
       beginTime: '2026-01-01T00:00:00.000Z',
       endTime: '2026-01-02T00:00:00.000Z',
+      limit: 20,
+      offset: 0,
     });
   });
 
@@ -231,5 +233,46 @@ describe('useRecordsQuery', () => {
     await waitFor(() => expect(result.current.data).toEqual(['a1']));
     rerender({ device: 'B' });
     await waitFor(() => expect(result.current.data).toEqual([]));
+  });
+
+  it('a page flip asks for the next offset and keeps the old rows until it arrives', async () => {
+    const next = deferred<string>();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce('page1')
+      .mockReturnValueOnce(next.promise);
+    const { result } = renderHook(() => useRecordsQuery(fetcher, 'D1'));
+    await waitFor(() => expect(result.current.data).toBe('page1'));
+    act(() => result.current.setPage(2));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    expect(fetcher.mock.calls[1][0]).toMatchObject({ limit: 20, offset: 20 });
+    expect(result.current.page).toBe(2);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(true);
+    expect(result.current.data).toBe('page1');
+    await act(async () => next.resolve('page2'));
+    expect(result.current.data).toBe('page2');
+  });
+
+  it('changing the device or the filter goes back to page 1', async () => {
+    const fetcher = vi.fn().mockResolvedValue('ok');
+    const { result, rerender } = renderHook(
+      ({ device, tank }: { device: string; tank?: number }) =>
+        useRecordsQuery(fetcher, device, REFRESH_MS, { tank }),
+      { initialProps: { device: 'D1' } as { device: string; tank?: number } },
+    );
+    await waitFor(() => expect(result.current.data).toBe('ok'));
+    act(() => result.current.setPage(3));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    rerender({ device: 'D1', tank: 2 });
+    expect(result.current.page).toBe(1);
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    expect(fetcher.mock.calls[2][0]).toMatchObject({ tank: 2, offset: 0 });
+    act(() => result.current.setPage(2));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
+    rerender({ device: 'D2', tank: 2 });
+    expect(result.current.page).toBe(1);
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(5));
+    expect(fetcher.mock.calls[4][0]).toMatchObject({ device: 'D2', offset: 0 });
   });
 });

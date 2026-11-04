@@ -1,5 +1,4 @@
 import { request } from '@umijs/max';
-import { RECORDS_LIMIT } from '@/utils/records';
 import { toApiError } from './apiError';
 
 /** 云端对「设备固件尚未升级」给出的稳定错误码（internal/api/stock.go）。 */
@@ -47,7 +46,8 @@ export async function listStockEvents(
         tank: query.tank,
         direction: query.direction,
         sort: false,
-        limit: RECORDS_LIMIT,
+        limit: query.limit,
+        offset: query.offset,
       },
       getResponse: true,
       skipErrorHandler: true,
