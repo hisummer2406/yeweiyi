@@ -13,7 +13,7 @@
     "androidVerifiedAt": ""
   },
   "source": "yeweiyi-cloud/fixtures/protocol/v1",
-  "updated": "2026-11-03",
+  "updated": "2026-11-04",
   "fixtures": [
     {
       "file": "telemetry_snapshot.json",
@@ -161,9 +161,9 @@
     },
     {
       "file": "oil_type_index.json",
-      "sha256": "8b38d967305588edb3a0c16a5a6c6ac1f56cced5f12bf6c960001d8afeda7612",
+      "sha256": "28c6d3311a42f2704819ede0f048cb95f3033f44708f4f06ed3dd1b92e6c1eda",
       "direction": "uplink",
-      "pins": "oilTypeIndex 对照表（字典，非报文）：0 未设置，1–17 内置，18–25 自定义；以中文名为准"
+      "pins": "oilTypeIndex 对照表（字典，非报文）：0 未设置，1–17 内置，18–25 自定义；英文名已按设备端 #52 修正"
     }
   ]
 }

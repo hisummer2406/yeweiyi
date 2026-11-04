@@ -226,4 +226,4 @@ GET /api/stock-records?device=&tank=&beginTime=&endTime=&limit=&offset=
 剩余：小程序接入（miniapp#17 的库存、交班表格）→ 真机联调（数据库 7→8 升级、outbox 实际发布、云端入库）→ 联合验收。
 
 注意（设备端说明）：`deliveredWeightKg` 公式里的边卸边卖核对在设备上已废弃，`duringDeliveryVolumeL` 实际恒不出现、出入库事件
-也不会因核对而重报；`oilType` 中英文表不逐项对应（设备端已知翻译缺陷），客户端应按 `oilTypeIndex` 本地化。
+也不会因核对而重报；`oilType` 只是设备当前界面语言的显示名，客户端应按 `oilTypeIndex` 本地化；设备端 #52 修正了英文表 2、10 号的错位，旧设备与历史记录里仍可能出现错误英文名。
