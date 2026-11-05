@@ -1,0 +1,68 @@
+/*
+ * Design Tokens — 从设备端 PSD「中成系统.psd」解析提炼的视觉变量
+ * 数据来源：psd-tools 解析 28 个画板、657 个文字图层的精确色值/字号
+ * 品牌色系：工业蓝（#45BAFF 天蓝为主色）
+ *
+ * 使用方式：在 app.wxss 里 @import "/styles/tokens.wxss";
+ * 所有页面 wxss 用 var(--xxx) 引用，不要硬编码色值/字号。
+ *
+ * 注意：设备端设计稿是 1280x800 横屏，字号/间距为横屏数值。
+ * 小程序竖屏需重新布局，但颜色 token 直接复用，字号层级参考。
+ */
+
+page {
+  /* ===== 颜色（从 PSD 文字图层精确提取）===== */
+  /* 主色系 —— 品牌天蓝 + 深蓝 + 深海军蓝 */
+  --color-primary: #45BAFF;      /* 主色/强调色，出现 60 次 */
+  --color-primary-deep: #05507C;  /* 深蓝，出现 30 次 */
+  --color-primary-dark: #002C47;  /* 深海军蓝，标题栏背景，出现 11 次 */
+  --color-primary-light: #E6F1FB;  /* 主色浅底（用于选中背景，近似） */
+
+  /* 文字色 —— 从深到浅，取 PSD 出现频次最高的灰阶 */
+  --color-text-primary: #3C3C3C;   /* 正文主文字，出现 236 次 */
+  --color-text-secondary: #5C5C5C; /* 辅助文字，出现 94 次 */
+  --color-text-tertiary: #A4A4A4;  /* 弱化/占位，出现 22 次 */
+  --color-text-placeholder: #EDEDED; /* 极浅灰（浅底占位） */
+  --color-text-on-dark: #FFFFFF;    /* 深色背景上的白字，出现 276 次 */
+
+  /* 背景色 —— 深海军蓝标题栏 + 白底内容区（工业 HMI 风格） */
+  --color-bg-page: #FFFFFF;        /* 内容区背景 */
+  --color-bg-card: #F5F7FA;        /* 卡片/模块背景 */
+  --color-bg-header: #002C47;      /* 顶部标题栏背景（深海军蓝） */
+  --color-border: #E5E5E5;         /* 分割线 */
+
+  /* 语义色 —— 报警(红)/在线(绿)/警告(橙)，工业惯例 */
+  --color-danger: #F5222D;
+  --color-danger-light: #FFF1F0;
+  --color-success: #52C41A;
+  --color-success-light: #F6FFED;
+  --color-warning: #FAAD14;
+  --color-warning-light: #FFFBE6;
+
+  /* ===== 字号 ===== */
+  /* 设备端 1280px 横屏的字号，按出现频次归并 7 档。
+     小程序竖屏实际使用建议：display 20px、title 17px、body 15px、
+     label 14px、caption 12px，其余档位按需微调。 */
+  --font-display: 24px;   /* 大按钮「返回首页」 */
+  --font-title: 17px;     /* 罐号「1号/甲醇」 */
+  --font-subtitle: 16px;  /* 数据标签「液位/容积」 */
+  --font-body: 14px;      /* 标题、底部导航 */
+  --font-label: 13px;     /* 时间、数据值 */
+  --font-caption: 12px;   /* 单位「毫米/升」 */
+  --font-micro: 11px;     /* 设置项 */
+
+  /* ===== 间距 ===== */
+  --space-xs: 4px;   /* 图标-文字 */
+  --space-sm: 8px;   /* 列表项内部 */
+  --space-md: 12px;  /* 卡片 padding */
+  --space-lg: 16px;  /* 卡片间、模块间 */
+  --space-xl: 24px;  /* 页面级段落 */
+
+  /* ===== 圆角 ===== */
+  --radius-sm: 4px;   /* tag、小按钮 */
+  --radius-md: 8px;   /* 输入框、列表 */
+  --radius-lg: 12px;  /* 卡片、弹窗 */
+
+  /* ===== 其他 ===== */
+  --border-width: 0.5px;  /* 小程序 1px 边框在小屏会显得粗，0.5 更接近设计 */
+}

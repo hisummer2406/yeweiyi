@@ -1,0 +1,128 @@
+<!-- 我的记录的一类记录（miniapp#16/#17）：首页当前油站的唯一设备，默认全部可见罐，列顺序同设备显示器。 -->
+<view class="rl-head">
+  <view class="rl-station" wx:if="{{stationName}}">{{stationName}}</view>
+  <view class="muted">{{title}}</view>
+</view>
+
+<!-- 云端没有该类记录的接口（cloud#85 之前）、没有有效油站、油站暂无设备、读取失败：都不显示表格，也不猜设备 -->
+<view wx:if="{{state !== 'ok' && state !== 'loading' && notice}}" class="card banner-warning rl-banner">
+  <text class="text-warning">{{notice}}</text>
+  <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
+  <button wx:if="{{state === 'error'}}" class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
+</view>
+
+<view wx:if="{{state === 'ok'}}" class="rl-body">
+  <view wx:if="{{infoNotice}}" class="card banner-warning">
+    <text class="text-warning">{{infoNotice}}</text>
+  </view>
+
+  <!-- 罐号筛选：全部 + 当前账号可见的实际罐号 -->
+  <view wx:if="{{tankOptions.length > 0}}" class="range-chips">
+    <view class="range-chip {{tank === -1 ? 'range-chip-on' : ''}}" data-tank="-1" bindtap="onPickTank">{{text.allTanks}}</view>
+    <view
+      wx:for="{{tankOptions}}"
+      wx:key="tank"
+      class="range-chip {{tank === item.tank ? 'range-chip-on' : ''}}"
+      data-tank="{{item.tank}}"
+      bindtap="onPickTank"
+    >{{item.label}}</view>
+  </view>
+
+  <view class="range-bar">
+    <view class="range-chips">
+      <view
+        wx:for="{{rangePresets}}"
+        wx:key="key"
+        class="range-chip {{rangeKey === item.key ? 'range-chip-on' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onPickRange"
+      >{{item.label}}</view>
+      <view class="range-chip {{rangeKey === 'custom' ? 'range-chip-on' : ''}}" data-key="custom" bindtap="onPickRange">{{dtext.custom}}</view>
+    </view>
+    <view wx:if="{{rangeKey === 'custom'}}" class="range-custom">
+      <picker mode="date" value="{{customStart}}" end="{{customEnd || today}}" bindchange="onStartDate">
+        <view class="range-date">{{customStart || dtext.startDate}}</view>
+      </picker>
+      <text class="range-sep">{{dtext.to}}</text>
+      <picker mode="date" value="{{customEnd}}" start="{{customStart}}" end="{{today}}" bindchange="onEndDate">
+        <view class="range-date">{{customEnd || dtext.endDate}}</view>
+      </picker>
+    </view>
+    <view wx:if="{{rangeHint}}" class="muted range-hint">{{rangeHint}}</view>
+  </view>
+
+  <!-- 刷新失败但保留旧数据 / 列表不完整（出入库 unparsable、legacySkipped、partial 等） -->
+  <view wx:if="{{stale}}" class="card banner-warning"><text class="text-warning">{{stale}}</text></view>
+  <view wx:if="{{note}}" class="card banner-warning"><text class="text-warning">{{note}}</text></view>
+
+  <view wx:if="{{error}}" class="empty">
+    <view class="text-danger">{{error}}</view>
+    <button class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:24rpx;">{{text.retry}}</button>
+  </view>
+  <view wx:if="{{!error && !loaded && loading}}" class="empty">{{dtext.footerLoading}}</view>
+  <!-- 交班/库存：设备从未上报过该类记录（UNSUPPORTED）；只有 SYNCED 且为空才说「没有记录」（cloud#85 §4） -->
+  <view wx:if="{{!rangeHint && loaded && rows.length === 0 && footer === 'end' && unsupported}}" class="empty">{{text.syncUnsupported}}</view>
+  <view wx:elif="{{!rangeHint && loaded && rows.length === 0 && footer === 'end' && !canSayEmpty}}" class="empty">{{text.emptyNotSynced}}</view>
+  <view wx:elif="{{!rangeHint && loaded && rows.length === 0 && footer === 'end'}}" class="empty">
+    {{rangeKey === '24h' ? text.empty24h : text.emptyRange}}
+  </view>
+
+  <!-- 表格：左侧罐号列固定，右侧表头与数据一起横向滚动；行高固定，两侧对齐 -->
+  <view wx:if="{{rows.length > 0}}" class="rt">
+    <view class="rt-fixed">
+      <view class="rt-cell rt-tank rt-head">{{tankHeader}}</view>
+      <view
+        wx:for="{{rows}}"
+        wx:key="key"
+        class="rt-cell rt-tank {{item.cls}} {{item.active ? 'rt-active' : ''}}"
+        data-index="{{index}}"
+        bindtap="onTapRow"
+      >{{item.tank}}</view>
+    </view>
+    <scroll-view scroll-x class="rt-scroll">
+      <view class="rt-inner">
+        <view class="rt-row">
+          <view wx:for="{{header}}" wx:key="title" class="{{item.cls}} rt-head">{{item.title}}</view>
+        </view>
+        <view
+          wx:for="{{rows}}"
+          wx:for-item="r"
+          wx:for-index="ri"
+          wx:key="key"
+          class="rt-row {{r.cls}} {{r.active ? 'rt-active' : ''}}"
+          data-index="{{ri}}"
+          bindtap="onTapRow"
+        >
+          <view wx:for="{{r.cells}}" wx:for-item="c" wx:for-index="ci" class="{{cellCls[ci]}}">{{c}}</view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+  <view wx:if="{{type === 'alarm' && rows.length > 0}}" class="muted rl-tip">{{text.tapForDetail}}</view>
+
+  <view wx:if="{{footer && (rows.length > 0 || footer !== 'end')}}" class="list-footer" bindtap="onRetryMore">
+    {{footer === 'loading' ? dtext.footerLoading : (footer === 'end' ? dtext.footerEnd : (footer === 'error' ? dtext.footerError : dtext.footerMore))}}
+  </view>
+</view>
+
+<!-- 报警行详情（底部弹层，页内实现，不用 wx.showModal）：类型 + 状态在上，逐项字段，完整报警信息，整宽关闭按钮 -->
+<view wx:if="{{detail}}" class="rl-mask" bindtap="onCloseDetail">
+  <view class="rl-sheet" catchtap="">
+    <view class="rl-sheet-grip"></view>
+    <view class="rl-sheet-head">
+      <text class="rl-sheet-title">{{detail.kind}}</text>
+      <text class="rl-sheet-status {{detail.active ? 'rl-status-active' : 'rl-status-cleared'}}">{{detail.status}}</text>
+    </view>
+    <view class="rl-sheet-rows">
+      <view wx:for="{{detail.rows}}" wx:key="label" class="rl-sheet-row">
+        <text class="rl-sheet-label">{{item.label}}</text>
+        <text class="rl-sheet-value">{{item.value}}</text>
+      </view>
+    </view>
+    <view wx:if="{{detail.text}}" class="rl-sheet-msg">
+      <view class="rl-sheet-label">{{text.message}}</view>
+      <view class="rl-sheet-msg-text">{{detail.text}}</view>
+    </view>
+    <button class="rl-sheet-close" bindtap="onCloseDetail">{{text.close}}</button>
+  </view>
+</view>

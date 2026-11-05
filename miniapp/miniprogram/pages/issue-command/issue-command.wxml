@@ -1,0 +1,39 @@
+<view class="container">
+  <view class="card" wx:if="{{methods.length === 0}}">
+    <text class="muted">{{text.noPermission}}</text>
+  </view>
+
+  <view class="card" wx:else>
+    <view class="field">
+      <text class="field-label">{{text.command}}</text>
+      <picker mode="selector" range="{{methods}}" range-key="label" value="{{methodIndex}}" bindchange="onMethodChange">
+        <view class="field-input">{{methods[methodIndex].label}}</view>
+      </picker>
+      <view class="muted text-warning" wx:if="{{methods[methodIndex].physical}}" style="margin-top:8rpx;">
+        {{text.physicalWarning}}
+      </view>
+    </view>
+
+    <view class="field">
+      <text class="field-label">{{text.reasonLabel}}</text>
+      <input class="field-input" value="{{reason}}" bindinput="onReasonInput" placeholder="{{text.reasonPlaceholder}}" />
+    </view>
+
+    <view class="field">
+      <text class="field-label">{{text.argsLabel}}</text>
+      <textarea
+        class="field-input"
+        style="width:100%;height:200rpx;"
+        value="{{argsText}}"
+        bindinput="onArgsInput"
+      />
+    </view>
+
+    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">{{text.submit}}</button>
+    <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;">{{errorMsg}}</view>
+  </view>
+
+  <view class="card muted">
+    {{text.note}}
+  </view>
+</view>

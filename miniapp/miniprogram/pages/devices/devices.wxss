@@ -1,0 +1,235 @@
+/* 数值取自设计稿「首页-卧罐01」PNG（750 宽，1px = 1rpx）的像素实测，不是目测：
+   头部渐变 #05629B → #004873；分隔线 #C5C9D0；标签 156×32 #03355E；读数 22rpx，行高 40rpx，
+   标签/数值 #131313，单位 #505050；单台罐行高 293rpx。差异见 openspec/changes/home-by-station/tasks.md 3.8。
+   罐行的字号、行高、罐图尺寸已按适老化（miniapp#13）偏离设计稿，见下方 .tank-row 起的说明。 */
+page {
+  background-color: #edf0f7;
+}
+
+.btn-primary {
+  margin-bottom: 24rpx;
+}
+
+/* 头部：自定义导航栏，渐变一直铺到状态栏下面（padding-top 由 TS 按状态栏高度写入） */
+.home-header {
+  padding: 0 30rpx 30rpx;
+  background: linear-gradient(180deg, #05629b 0%, #004873 100%);
+  color: #ffffff;
+}
+
+.home-brand {
+  display: flex;
+  align-items: center;
+  min-height: 56rpx;
+  margin-top: 17rpx;
+}
+
+.home-brand-mark {
+  width: 56rpx;
+  height: 56rpx;
+  margin-right: 24rpx;
+}
+
+.home-brand-title {
+  font-size: 46rpx;
+}
+
+.home-station {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58rpx;
+  margin-top: 55rpx;
+}
+
+.home-station-name {
+  font-size: 46rpx;
+}
+
+.home-station-pick {
+  display: flex;
+  align-items: center;
+}
+
+/* 下拉三角：用边框画，仓库里没有现成的白色下拉图标；尺寸未对照设计稿像素校准 */
+.home-station-arrow {
+  width: 0;
+  height: 0;
+  margin-left: 16rpx;
+  border-left: 10rpx solid transparent;
+  border-right: 10rpx solid transparent;
+  border-top: 12rpx solid #ffffff;
+}
+
+.home-plus {
+  width: 42rpx;
+  height: 42rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-list {
+  padding-bottom: 24rpx;
+}
+
+/* 设计稿没有"上报时间"这一行；它必须显示（快照不是实时流）。适老化（miniapp#13）后放大到 26rpx 并加深颜色 */
+.group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 20rpx 30rpx 0;
+}
+
+.group-name {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #131313;
+}
+
+.group-ts {
+  font-size: 30rpx;
+  color: #4a4f57;
+}
+
+.group-note {
+  padding: 40rpx 30rpx;
+  text-align: center;
+  font-size: 32rpx;
+  color: #4a4f57;
+}
+
+/* 罐行（miniapp#13 适老化）：字号与全小程序同一档（见 app.wxss 顶部的放大对照表：正文 36、说明 30），
+   读数最突出（40 加粗）。行高随内容撑开（不再固定 293rpx），多出的提示（探针未连接）不会溢出；
+   罐图从 240 缩到 200rpx 给读数腾出宽度，标签列按三种语言里最长的「Volumen」定宽。需真机对比后再定。 */
+.tank-row {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 360rpx;
+  margin: 0 30rpx;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #c5c9d0;
+}
+
+/* 图片 240×176 原尺寸按 200rpx 宽等比缩放 */
+.home-tank {
+  position: relative;
+  width: 200rpx;
+  height: 147rpx;
+  flex-shrink: 0;
+  margin-left: 8rpx;
+}
+
+.home-tank-img {
+  width: 100%;
+  height: 100%;
+}
+
+/* 填充只在罐身中间两道箍之间的那一列（不铺满整个罐、不含顶部人孔和底座），按 tank-horizontal-home.png 实测：
+   左箍外沿 x=45–53、右箍 x=107–115，所以这一列是 x=54–106（宽 52），上下沿与罐身一致（y=26–165）。
+   罐图按比例缩小后用百分比表示同一块区域（54/240、52/240、26/176、139/176），面积和位置不变。 */
+.home-tank-body {
+  position: absolute;
+  left: 22.5%;
+  width: 21.67%;
+  top: 14.77%;
+  height: 78.98%;
+  overflow: hidden;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.6;
+}
+
+.fill-water {
+  background-color: #1e88e5;
+}
+
+.fill-oil {
+  background-color: #f2a516;
+}
+
+.fill-oil.fill-alarm {
+  background-color: #d93a3a;
+}
+
+.fill-oil.fill-fault {
+  background-color: #8a8f98;
+}
+
+.tank-info {
+  flex: 1;
+  min-width: 0;
+  margin-left: 28rpx;
+}
+
+.tank-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+/* 罐号 + 油品：允许换行，长油品名不截断 */
+.tank-tag {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 4rpx 12rpx;
+  line-height: 44rpx;
+  background-color: #03355e;
+  color: #ffffff;
+  font-size: 32rpx;
+  border-radius: 6rpx;
+  word-break: break-all;
+}
+
+.tank-tag-row .badge {
+  margin: 4rpx 0 4rpx 12rpx;
+  font-size: 28rpx;
+}
+
+.hs-row {
+  display: flex;
+  align-items: baseline;
+  min-height: 60rpx;
+  color: #131313;
+}
+
+.hs-label {
+  width: 128rpx;
+  flex-shrink: 0;
+  font-size: 32rpx;
+  color: #2f3540;
+}
+
+/* 读数最突出：大号加粗、等宽数字、右对齐便于上下比较；不截断，太长时换行 */
+.hs-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 40rpx;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-all;
+}
+
+.hs-unit {
+  width: 64rpx;
+  flex-shrink: 0;
+  margin-left: 10rpx;
+  font-size: 28rpx;
+  color: #3d434c;
+}
+
+.hs-probe-off {
+  margin-top: 6rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #c62828;
+}

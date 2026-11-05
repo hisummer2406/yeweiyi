@@ -1,0 +1,61 @@
+/* 数值取自设计稿「储罐设置-下拉框储罐类型13」「-物料颜色14」PNG：面板 278 宽、右缘距屏幕 55、圆角约 16；
+   药丸 202×57、行距 77；色块 64×57、行距 87、圆角 4、两列。 */
+.sp-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.sp-panel {
+  position: absolute;
+  right: 55rpx;
+  width: 278rpx;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  border-radius: 16rpx;
+}
+
+.sp-panel-pills {
+  padding: 32rpx 0 18rpx 37rpx;
+}
+
+.sp-panel-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 33rpx 46rpx 3rpx;
+}
+
+.sp-pill {
+  width: 202rpx;
+  height: 57rpx;
+  line-height: 57rpx;
+  margin-bottom: 20rpx;
+  text-align: center;
+  font-size: 32rpx;
+  color: #131313;
+  background-color: #f5f6f8;
+  border-radius: 29rpx;
+}
+
+.sp-pill-on {
+  color: #ffffff;
+  background-color: #0066a2;
+}
+
+.sp-swatch {
+  box-sizing: border-box;
+  width: 64rpx;
+  height: 57rpx;
+  margin-bottom: 30rpx;
+  border-radius: 4rpx;
+}
+
+/* 设计稿没有画选中态；用深色描边标出当前颜色 */
+.sp-swatch-on {
+  border: 4rpx solid #131313;
+}

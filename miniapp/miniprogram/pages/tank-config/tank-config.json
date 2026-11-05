@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "",
+  "usingComponents": {
+    "grid-picker": "/components/grid-picker/grid-picker",
+    "side-picker": "/components/side-picker/side-picker"
+  }
+}

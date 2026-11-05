@@ -1,0 +1,31 @@
+.btn-primary {
+  margin-top: 12rpx;
+}
+
+.mode-tabs {
+  display: flex;
+  margin-bottom: 28rpx;
+  border-bottom: 1rpx solid #ededed;
+}
+
+.mode-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 36rpx;
+  color: #606060;
+  border-bottom: 4rpx solid transparent;
+}
+
+.mode-tab.active {
+  color: #05507c;
+  font-weight: 600;
+  border-bottom-color: #05507c;
+}
+
+.lang-entry {
+  margin-top: 32rpx;
+  padding: 12rpx 24rpx;
+  font-size: 32rpx;
+  color: #05507c;
+}

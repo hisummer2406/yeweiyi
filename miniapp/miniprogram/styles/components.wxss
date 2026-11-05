@@ -1,0 +1,129 @@
+/*
+ * 组件样式 —— 从蓝湖归纳的可复用组件 class
+ *
+ * 使用方式：在 app.wxss 里 @import "/styles/components.wxss";
+ * 页面 wxml 直接用 class="btn-primary" 等
+ * 所有数值引用 tokens.wxss 的 var()，不硬编码
+ *
+ * 提炼方法：扫蓝湖所有页面，长得一样的元素归为同一组件
+ * 填写原则：先写最常见的，特殊样式在页面 wxss 里覆盖
+ */
+
+/* ===== 按钮 ===== */
+/* 蓝湖里找主按钮（主色底白字那个），抄它的圆角/字号/padding */
+.btn-primary {
+  background: var(--color-primary);
+  color: #FFFFFF;
+  font-size: var(--font-body);
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  text-align: center;
+  line-height: 1.4;
+}
+.btn-primary:active {
+  background: var(--color-primary-dark);
+  opacity: 0.85;
+}
+
+/* 次按钮（透明底边框那个） */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--font-body);
+  border: var(--border-width) solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* ===== 卡片 ===== */
+.card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-lg);
+}
+
+/* ===== 列表项 ===== */
+/* 用于报警/卸油/交班记录，左内容 + 右时间 */
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.list-item:last-child {
+  border-bottom: none;
+}
+
+/* ===== 表单输入 ===== */
+.input-field {
+  display: flex;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.input-field .label {
+  width: 80px;
+  font-size: var(--font-label);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.input-field input {
+  flex: 1;
+  font-size: var(--font-body);
+  color: var(--color-text-primary);
+}
+
+/* ===== 状态标签 ===== */
+.tag {
+  display: inline-block;
+  font-size: var(--font-caption);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+}
+.tag-online {
+  background: var(--color-success-light);
+  color: var(--color-success);
+}
+.tag-offline {
+  background: var(--color-bg-page);
+  color: var(--color-text-tertiary);
+}
+.tag-danger {
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+}
+
+/* ===== Tab 栏 ===== */
+/* device-detail 的 5 个 tab 横向切换 */
+.tab-bar {
+  display: flex;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: var(--space-md) 0;
+  font-size: var(--font-body);
+  color: var(--color-text-secondary);
+}
+.tab-item.active {
+  color: var(--color-primary);
+  font-weight: 500;
+  border-bottom: 2px solid var(--color-primary);
+}
+
+/* ===== 空状态 ===== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-caption);
+}

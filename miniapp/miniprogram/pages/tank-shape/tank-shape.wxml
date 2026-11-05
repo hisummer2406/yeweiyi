@@ -1,0 +1,13 @@
+<!-- 设计稿「罐表设置15」：选罐体形状，点一张卡片进入对应的尺寸页（卧罐16 / 立罐17 / 长方体18）。 -->
+<view class="ts-grid">
+  <view
+    wx:for="{{shapes}}"
+    wx:key="key"
+    class="ts-card"
+    data-key="{{item.key}}"
+    bindtap="onShapeTap"
+  >
+    <image class="ts-card-img" src="/assets/illustrations/tankshape-card-{{item.key}}.png" mode="aspectFit" />
+    <text class="ts-card-label">{{item.label}}</text>
+  </view>
+</view>

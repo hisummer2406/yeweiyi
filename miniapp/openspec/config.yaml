@@ -1,0 +1,75 @@
+schema: spec-driven
+
+context: |
+  Language: zh-CN
+  All artifacts must be written in zh-CN.
+  Keep OpenSpec structural headings and SHALL/MUST keywords in English.
+
+  # 项目
+  安卓液位仪（com.sansen.yeweiyi）的微信小程序前端，对应需求B（小程序远程数据监控）。
+  用户在手机上查看油罐实时数据、报警记录、出入库记录，并对不在本地网络的设备下发远程控制命令。
+  只做前端：只调用 yeweiyi-cloud 的 REST/WebSocket API，不直接访问 ThingsBoard 或设备。
+
+  # 技术栈
+  原生微信小程序（WXML/WXSS + TypeScript），无打包器、无 UI 组件库、无状态管理库。
+  唯一的自动检查是 `npm run typecheck`（tsc --noEmit），尚无测试运行器。
+  token 存 wx.storage，各页面在 onLoad/onShow 自行加载数据。
+
+  # 契约来源（重要）
+  API 契约的权威来源是 ~/Developer/yeweiyi-cloud（其 CLAUDE.md、internal/api/*.go、internal/protocol/*.go），
+  不是本仓库。miniprogram/types/api.d.ts 是手抄副本，会漂移。
+  - spec 与 proposal 只描述本客户端的行为与界面需求，不要复制或重新定义云端的接口字段、状态码、枚举。
+  - 需要引用接口时写"依据 yeweiyi-cloud 的 <路由/文件>"，并在 design 中标注已核对的云端版本或提交。
+  - 涉及接口形状的变更，必须先对照云端 main 重新核对 api.d.ts，tsc 通过不代表形状正确（get<T>() 只是类型断言）。
+
+  # 兄弟仓库
+  - ~/Developer/yeweiyi-cloud：云端后端，REST/WS 契约。
+  - ~/Developer/zhongchengyeweiyi：Android 设备端，仅作背景（例如为何物理控制命令被拒、出入库历史为何不完整）。
+  - ~/Developer/yeweiyi-admin：桌面端，/console/* 与本小程序应覆盖同一套客户能力（设备列表、详情/遥测、下发命令、出入库）。
+    新增或改名页面时需检查两端是否一致。
+
+  # 必须遵守的行为约束（来自云端协议，不是本端可自行决定的）
+  - 除 /api/login 外都需要 Bearer JWT；401 清 token 并回登录页；403 只有响应体恰好是 `not authorized`（用户被删或停用）才清 token 回登录页，`not authorized for this device`（设备归属检查，未绑定与不存在同一响应）不清。
+  - 不展示设备的 is_online。云端每 30 秒按 ThingsBoard 的 active 标志同步它（internal/ingest/online.go），但设备掉线后要等 ThingsBoard 的不活动超时（默认 10 分钟）才变，所以会滞后；是否展示是产品决定，目前不展示。
+  - /api/alarms 返回裸数组；/api/oil-in-out 返回 {rows, parsed, unparsable, legacySkipped, ...} 信封，
+    且 200 与 502 同一信封。出入库页必须显示 unparsable/legacySkipped，不得把不完整列表当完整列表展示。
+  - 控制命令：POST 返回 202；ACK 不等于成功，只有 terminal 为 true 才算结束，以服务端 terminal 标志为准，
+    不得在客户端硬编码状态集合；物理类命令（泵/阀/重启）默认被云端关闭，返回 409 属预期。
+  - 实时数据 telemetry/latest 返回 404 表示"已授权、已配置、从未上报"，是正常状态而非错误。
+  - /ws/alarms 用 query 传 JWT，服务端无心跳，客户端需断线重连。
+  - 微信限制：wx.showActionSheet 最多 6 项（超过需分页；记录页已不再选择设备）。
+
+  # 明确不做（云端没有对应能力，不要自行设计）
+  - 交班记录（设备协议 V1 无交班上行）。
+  - 出入库记录修正（无设计，需基于 yeweiyi-cloud/internal/control 另行设计）。
+  - 罐/探头配置写入（config.setTank/config.setProbe 的参数结构在云端有意未定义）。
+  - 油站分组、邀请/共享设备（云端没有这层概念）。
+  现有的 tank-config、tank-shape、calibration、backfill、record-settings、report-settings、org 页面
+  是按设计稿做的静态界面，未接后端；提案处理这些页面时，必须先说明是保留为演示、接入后端、还是移除。
+
+  # 现状
+  已接入云端：login、devices（含扫码绑定）、device-detail、issue-command、records。
+  从未在 WeChat DevTools 或真机上运行过，所有页面都应视为初版。
+
+rules:
+  proposal:
+    - 必须写明"不在范围内"的内容。
+    - 涉及云端接口的变更，必须注明依据的云端文件或提交，并说明是否需要云端配合修改。
+    - 涉及"明确不做"清单中的能力时，先说明云端是否已有设计，没有就不要在提案里发明。
+  specs:
+    - 只写客户端可观察的行为与界面需求，不复制云端的字段表、状态码表和枚举定义。
+    - 每条需求至少给出一个场景，错误与降级路径（401/403/404/409/502）也要有场景。
+  design:
+    - 注明已对照的云端版本，并列出 types/api.d.ts 中需要同步的类型。
+  tasks:
+    - 涉及接口的任务要包含"对照云端 main 重新核对 api.d.ts"这一步。
+    - 每个任务以 `npm run typecheck` 通过为最低验收；涉及运行时行为的任务另写手动验证步骤。
+
+operations:
+  apply:
+    guidance:
+      - 完成后运行 npm run typecheck，并如实说明哪些行为尚未在 WeChat DevTools 或真机验证。
+      - 纯函数放进 utils/，便于在 Node 中单独验证。
+  archive:
+    guidance:
+      - 归档前确认 CLAUDE.md 中的页面清单、tabBar 描述与实际一致。
