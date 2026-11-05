@@ -1,0 +1,39 @@
+# 为 ThingsBoard 的设备 MQTT 启用 TLS。
+#
+#   ./deploy/gen-certs.sh <设备将要连接的主机名或IP> [更多...]
+#   docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+#                  -f docker-compose.thingsboard-tls.yml up -d
+#
+# ⚠️ **启用 TLS 不会关闭明文 1883。** ThingsBoard 的 SSL 是 8883 上的独立监听器，与明文监听器
+# 并存（已核对其 thingsboard.yml：mqtt.bind_port 与 mqtt.ssl.bind_port 是两个独立配置）。
+# 要真正做到“只允许 TLS”，必须同时**不发布**明文端口——本文件通过把 1884 的映射改成只绑
+# 127.0.0.1 来实现：本机仍可用明文做联调，但网络上的设备只能走 TLS。
+# 若连本机明文也不需要，把那一行整个删掉即可。
+services:
+  thingsboard:
+    # !override 是必需的，不是讲究：Compose 对 ports 列表是**追加**合并而非替换，
+    # 不加它就会同时保留基础文件的 "1884:1883" 和这里的 "127.0.0.1:1884:1883"，
+    # 两条规则抢同一个端口，容器直接起不来（address already in use）。
+    ports: !override
+      # 明文 MQTT 收回到环回地址：仅本机可用，设备够不着。
+      - "127.0.0.1:1884:1883"
+      # 设备 MQTT over TLS。
+      - "8883:8883"
+      # 控制台仍只绑环回。这里必须重复写：!override 会整体替换基础文件的 ports，漏写就等于撤销。
+      - "127.0.0.1:8081:9090"
+    environment:
+      MQTT_SSL_ENABLED: "true"
+      MQTT_SSL_BIND_PORT: "8883"
+      # TLSv1.2 是 ThingsBoard 的默认值，此处显式写出以免升级时静默改变。
+      # 设备端 Android 版本较老，提高到 1.3 之前需先确认设备侧支持。
+      MQTT_SSL_PROTOCOL: "TLSv1.2"
+      MQTT_SSL_CREDENTIALS_TYPE: PEM
+      MQTT_SSL_PEM_CERT: /ssl/mqttserver.pem
+      MQTT_SSL_PEM_KEY: /ssl/mqttserver_key.pem
+      # 私钥为 PKCS#8 且**不加口令**，故此处留空。实测 ThingsBoard 读不了 PKCS#1，
+      # 也读不了加口令的 PKCS#8——两种情况都只报 "Unable to load private key"，
+      # 不提示格式问题。详见 deploy/gen-certs.sh 里的说明。
+      # 加口令并不更安全：口令得写在本文件里服务才起得来，等于钥匙和锁放同一个抽屉。
+      MQTT_SSL_PEM_KEY_PASSWORD: ""
+    volumes:
+      - ./deploy/certs:/ssl:ro

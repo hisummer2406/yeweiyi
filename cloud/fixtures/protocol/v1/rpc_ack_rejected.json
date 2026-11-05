@@ -1,0 +1,7 @@
+{
+  "commandId": "c1a7e3d8-5b62-4d19-8f30-1e9a4c77b201",
+  "status": "rejected",
+  "errorCode": "INTERLOCK_BLOCKED",
+  "reason": "1号罐液位低于下限，设备端联锁禁止启泵",
+  "tsMs": 1756713600418
+}

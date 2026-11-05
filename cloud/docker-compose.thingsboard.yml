@@ -1,0 +1,70 @@
+# ThingsBoard CE — the device connectivity platform for this project (GitHub issue #1/#9).
+#
+# Kept in its own compose file rather than merged into docker-compose.yml because ThingsBoard is
+# heavy (it wants ~2 GB of heap on its own) and most day-to-day work on internal/api or
+# internal/store does not need it running. Bring it up alongside the app stack with:
+#
+#	docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml up -d
+#
+# or on its own with:
+#
+#	docker compose -f docker-compose.thingsboard.yml up -d
+#
+# Version pinning: 4.2.1.1 is fixed on purpose, never `latest`. ThingsBoard migrates its own schema
+# in place on first boot of a new version, so an unpinned tag would silently upgrade a developer's
+# data volume the next time they pulled. See docs/thingsboard-ce-baseline.md for the license and
+# provenance record.
+#
+# Image choice: `tb-postgres` is the single-node CE monolith with PostgreSQL bundled — Apache 2.0,
+# no Cassandra, no license check, no outbound network requirement. It keeps its data in its own
+# volume, entirely separate from this project's business PostgreSQL (see the data-boundary section
+# of docs/thingsboard-ce-baseline.md: telemetry lives in ThingsBoard, business records live in ours).
+
+services:
+  thingsboard:
+    image: thingsboard/tb-postgres:4.2.1.1
+    container_name: yeweiyi-thingsboard
+    restart: unless-stopped
+    ports:
+      # HTTP/REST/WebSocket. Host 8081, not 8080, because cmd/server's own LISTEN_ADDR defaults
+      # to :8080 and both need to run at once during development.
+      # 只绑环回：这是 ThingsBoard 管理控制台，不该对网络开放（见 deploy/README.md）。Go 后台与
+      # 运维工具都跑在同一台机器上，用 localhost 访问；要从别处看控制台，用 SSH 隧道。
+      - "127.0.0.1:8081:9090"
+      # Device MQTT. Host 1884, not 1883, because docker-compose.yml's legacy mosquitto service
+      # still holds 1883 until GitHub issue #10 removes the old Alink/Paho stack. Production uses
+      # 8883/TLS — see docs/protocol-v1.md §1.
+      - "1884:1883"
+      # CoAP and LwM2M are unused by this project; deliberately not published.
+    environment:
+      TB_QUEUE_TYPE: in-memory
+      # Bounded so a dev laptop running Postgres, Redis and the Go server alongside it stays
+      # usable. Production sizing is a separate question — see the ECS note in CLAUDE.md.
+      JAVA_OPTS: "-Xms1G -Xmx2G"
+      # 原始遥测保留期（issue #23）。ThingsBoard 默认 0 = 永不过期，磁盘会无限增长。
+      # 秒为单位；本项目默认 0（不清理）：出入库、报警、小时汇总尚未落业务库（#29、#30），
+      # 现在开启会把它们永久删除。落库完成后设为 604800（7 天）。
+      # 实测：清理按行删除（8 天前的点被删、6 天前的保留），每 EXECUTION_INTERVAL 毫秒跑一次，
+      # 默认一天一次，所以过期数据最多多留约一天。只作用于时序；属性、业务库不受影响。
+      # 已知限制：每个 key 的“最新值”（ts_kv_latest）不随 TTL 清除，见 deploy/README.md。
+      SQL_TTL_TS_TS_KEY_VALUE_TTL: "${TS_RETENTION_SECONDS:-0}"
+      # 清理间隔（毫秒），默认一天；仅用于缩短后验证 TTL，见 deploy/README.md。
+      SQL_TTL_TS_EXECUTION_INTERVAL: "${TS_CLEANUP_INTERVAL_MS:-86400000}"
+    volumes:
+      - thingsboard_data:/data
+      - thingsboard_logs:/var/log/thingsboard
+    healthcheck:
+      # wget, not curl: this image ships wget and has no curl at all. The original version of this
+      # healthcheck used curl and therefore failed every single time — 7190 consecutive failures
+      # before it was noticed, because the service itself was fine and nothing depended on the
+      # health status. A check that can never pass is worse than none: it trains people to ignore
+      # "unhealthy", and any future `depends_on: condition: service_healthy` would hang forever.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/login || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 300s
+
+volumes:
+  thingsboard_data:
+  thingsboard_logs:
