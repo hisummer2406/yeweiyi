@@ -22,9 +22,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 跨仓库契约测试：Android 产出的报文必须跟 {@code yeweiyi-cloud/fixtures/protocol/v1/} 的共享
- * fixture 逐 key 相等（副本在 {@code src/test/resources/protocol/v1/}，来源与同步方法见该目录
- * README.md）。出入库事件的比对在 {@link StockEventMapperTest}，这里不重复。
+ * 两端契约测试：Android 产出的报文必须跟单仓库 {@code cloud/fixtures/protocol/v1/} 的共享
+ * fixture 逐 key 相等（直接读该目录，无副本；覆盖情况见该目录 ANDROID.md）。出入库事件的比对在 {@link StockEventMapperTest}，这里不重复。
  * <p>
  * <b>已知缺口</b>：Android 目前还做不到跟 fixture 完全一致的字段，从逐 key 比对里排除，并由
  * {@code knownGap_*} 测试固定当前行为。缺口补上后对应测试会变红——那时删掉它，并把字段加回比对。

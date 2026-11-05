@@ -6,11 +6,11 @@
   "frozenNote": "尚未冻结。仍待双方负责人确认的条目见 docs/protocol-v1-open-items.md；在那份清单清空之前，不要往任一侧的协议实现里新增字段。",
   "openItems": "docs/protocol-v1-open-items.md",
   "enforcement": {
-    "crossRepoGate": false,
-    "_comment": "这批校验目前只在云端跑，因此还不是跨仓库门禁——它是云端的准备工作。Android 尚未引入本目录、没有 Gradle/CI 校验、其测试也还没消费这批字节，所以任一侧的改动并不会让两侧构建一起失败。接入步骤见 docs/protocol-v1-open-items.md §C。",
-    "cloud": "enforced: internal/protocol/manifest_test.go + verify-manifest.sh",
-    "android": "not wired yet: no fixture import, no Gradle/CI check, tests still consume the repo's own fixtures",
-    "androidVerifiedAt": ""
+    "crossRepoGate": true,
+    "_comment": "2026-11-06 起两端在同一个单仓库：Android 单测直接读本目录（android/app/build.gradle 挂到测试 classpath，无副本），Android CI 在 android/** 或 cloud/fixtures/** 变动时先跑 verify-manifest.sh 再跑单测，Cloud CI 跑 manifest_test.go。限制：私有仓库当前没有分支保护，CI 变红不会在技术上阻止合并；Android 侧仍是逐 key 比对 JSON，不是字节比对。",
+    "cloud": "enforced: internal/protocol/manifest_test.go + verify-manifest.sh (Cloud CI)",
+    "android": "enforced: tests read cloud/fixtures directly + verify-manifest.sh (Android CI, .github/workflows/android-ci.yml)",
+    "androidVerifiedAt": "hisummer2406/yeweiyi@ead2ee2, Android CI run 42111474770 (363 tests, 0 failures)"
   },
   "source": "yeweiyi-cloud/fixtures/protocol/v1",
   "updated": "2026-11-04",

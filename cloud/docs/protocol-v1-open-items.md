@@ -265,10 +265,10 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 | 步骤 | 状态 |
 |---|---|
 | 云端清单 + 校验脚本 + 契约测试 | ✅ 已完成 |
-| Android 引入共享 fixture（替换现有四份自定义 fixture） | 🟡 PR #38 已放入原样副本并由 `ProtocolV1ContractTest` 读取；副本落后于 #14（缺标定属性），无 `MANIFEST.json` |
-| Android 构建期挂 `verify-manifest.sh` | ⬜ 未开始 |
+| Android 引入共享 fixture（替换现有四份自定义 fixture） | ✅ 2026-11-06 单仓库后直接读 `cloud/fixtures`，副本已删；暴露的标定属性缺口登记为 `GAP_CALIBRATION` |
+| Android 构建期挂 `verify-manifest.sh` | ✅ 在 Android CI 里跑（未挂到本机 Gradle 任务） |
 | Android 的 builder 测试改为断言"产出字节 == fixture" | ⬜ 未开始 |
-| 两侧接上 CI，使校验真正成为门禁（本仓库目前无 CI） | ⬜ 未开始 |
+| 两侧接上 CI，使校验真正成为门禁 | 🟡 Cloud CI + Android CI 都已接上；没有分支保护，红了不会阻止合并 |
 | 一次真实设备到云端的端到端验证（含 A-1 的终态上行） | ⬜ 未开始，被 A-1 阻塞 |
 
 ---
@@ -403,4 +403,4 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 - 新事件 `shiftEvent`、`stockRecord`（§2.1/§2.2），走设备端独立 outbox，不占报警补投队列。
 - 既有事件新增**可选、向后兼容**字段：`stockEvent.deliveredWeightKg`、`stockEvent.oilTypeIndex`、`alarm.oilType`、`alarm.oilTypeIndex`。
 - 共享 fixture 已由设备端起草、云端收录（2026-11-03，8 份，见 MANIFEST），两端已按其实现并测试。仍待：设备端分支合并、
-  真机联调；Android 侧 fixture 仍是副本，未接入校验和门禁（同 §C-1）。
+  真机联调；Android 侧 fixture 已与云端共用一份并接入 CI（同 §C-1）。

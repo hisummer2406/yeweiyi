@@ -1,7 +1,7 @@
 # 设备协议 V1 共享 fixture
 
-这批文件是 **yeweiyi-cloud 与 zhongchengyeweiyi 的共同契约**，不是云端的测试数据。
-两侧的测试都应当读**同一批字节**：任一侧改了字段名或单位，两个仓库的构建应该同时变红，
+这批文件是 **云端（`cloud/`）与设备端（`android/`）的共同契约**，不是云端的测试数据。
+两侧的测试都应当读**同一批字节**：任一侧改了字段名或单位，两端的构建应该同时变红，
 而不是等到真实设备上才发现。
 
 > **为什么要有这份 README 和 `MANIFEST.json`。** 2026-09-01 两个仓库在同一天各自实现了
@@ -10,12 +10,9 @@
 > 挡不住这件事重演；能挡住的是一个双方都跑、且改动必须显式同步的校验。
 > 完整经过见 [`../../../docs/protocol-v1-reconciliation.md`](../../../docs/protocol-v1-reconciliation.md)。
 
-> **当前状态：这还不是跨仓库门禁，只是云端的准备工作。**
-> 下面的校验**只在 yeweiyi-cloud 跑**。Android 还没有引入本目录、没有构建期校验、其测试也还没
-> 消费这批字节，因此任一侧的改动**不会**让两侧构建一起失败。缺的步骤和验收清单见
-> [`docs/protocol-v1-open-items.md`](../../../docs/protocol-v1-open-items.md) §C / §C-1。
-> `MANIFEST.json` 的 `enforcement` 字段如实记录这个状态，且不能在没有证据的情况下被改成
-> "两侧都已生效"。
+> **当前状态（2026-11-06 起）：两端共用这一份。** 合并为单仓库后，Android 单测直接读本目录（无副本），
+> Android CI 与 Cloud CI 都会校验 `MANIFEST.json`，改 fixture 会同时触发两端测试。
+> 限制：私有仓库没有分支保护，CI 变红不会在技术上阻止合并。Android 侧覆盖情况见 [`ANDROID.md`](ANDROID.md)。
 
 **协议尚未冻结。** 仍待双方负责人确认的条目见
 [`docs/protocol-v1-open-items.md`](../../../docs/protocol-v1-open-items.md)。
@@ -35,18 +32,9 @@
 `manifest_test.go` 校验清单与文件一一对应、校验和一致，并且**每个 fixture 确实被某个测试读过**
 ——没有人读的 fixture 钉不住任何东西，只会悄悄烂掉。
 
-**Android（未接入）：** 把本目录引入 `app/src/test/resources/thingsboard/`（submodule 或构建期拷贝），
-并在 `test` 任务前挂上校验：
-
-```gradle
-task verifyProtocolFixtures(type: Exec) {
-    commandLine 'sh', "$projectDir/src/test/resources/thingsboard/verify-manifest.sh"
-}
-test.dependsOn verifyProtocolFixtures
-```
-
-然后让 builder 的测试断言**产出的字节与 fixture 一致**，而不是与自己的结构体一致——
-后者只能证明代码和自己达成了一致。
+**Android（已接入）：** `android/app/build.gradle` 把 `cloud/fixtures` 挂到测试 classpath，
+`FixtureLoader.loadProtocolV1` 按 `/protocol/v1/<name>` 读取；Android CI 先跑 `verify-manifest.sh` 再跑单测。
+Android 的契约测试逐 key 比对产出与 fixture，尚未缺口的 key 以 `GAP_*` 显式登记。
 
 **手动：**
 
@@ -59,7 +47,7 @@ sh fixtures/protocol/v1/verify-manifest.sh
 1. 改 `*.json`；
 2. 重算并更新 `MANIFEST.json` 里那一条的 `sha256`
    （`shasum -a 256 <file>` 或 `sha256sum <file>`）；
-3. 在**两个仓库**同时提交对应改动。
+3. 在同一个 PR 里改好两端代码，让 Cloud CI 与 Android CI 都通过。
 
 第 2 步刻意没有做成自动生成。这点摩擦就是机制本身：它保证一次单方面的改名不会悄无声息地通过。
 
