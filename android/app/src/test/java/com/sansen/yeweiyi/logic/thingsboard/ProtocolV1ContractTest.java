@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
+import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcRequestEnvelope;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcResultStatus;
@@ -12,6 +14,7 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -151,18 +154,29 @@ public class ProtocolV1ContractTest {
             "deviceModel", "hardwareVersion", "localControlMode", "current_fw_title", "current_fw_version");
     /** probeType 取值待跟云端约定：Android 发通讯协议名（ZHONGCHENG/LD/LD2），fixture 写的是测量原理。 */
     private static final List<String> GAP_PROBE_TYPE = Arrays.asList("tank1.probeType", "tank2.probeType");
-    /**
-     * 标定表属性（cloud#14 / zhongchengyeweiyi#42 待办1）：云端 fixture 已收录、设备端尚未上报。
-     * 原先的副本落后于 #14，没暴露出这个缺口；改读单仓库唯一的 fixture 后显式登记在这里。
-     */
-    private static final List<String> GAP_CALIBRATION = Arrays.asList(
-            "tank1.calibrationHeightMm", "tank1.calibrationVolumeL");
 
+    /**
+     * 跟 {@code ThingsBoardManager} 发布客户端属性时同样拼装：基础属性 + 标定表
+     * （{@link TankCalibrationAttributeBuilder}，cloud#14）。fixture 里 tank1 有标定表、tank2 没有，
+     * 这里让 tank2 启用但没有对应的表，覆盖"没有标定属性"的情况。
+     */
     private static JsonObject clientAttributesLikeFixture() {
-        Map<String, Object> attributes = ClientAttributesBuilder.build(Arrays.asList(
+        Map<String, Object> attributes = new LinkedHashMap<>(ClientAttributesBuilder.build(Arrays.asList(
                 new ClientAttributesBuilder.Tank(1, "01", 0, 30000),
-                new ClientAttributesBuilder.Tank(2, "02", 0, 30000)));
+                new ClientAttributesBuilder.Tank(2, "02", 0, 30000))));
+        OilCanTable tank1Table = new OilCanTable();
+        tank1Table.setHeightstrarray("0 500 1000");
+        tank1Table.setVolumstrarray("0.0 14225.1 28450.2");
+        attributes.putAll(TankCalibrationAttributeBuilder.build(
+                Arrays.asList(enabledTank(1), enabledTank(2)), Collections.singletonList(tank1Table)));
         return GSON.toJsonTree(attributes).getAsJsonObject();
+    }
+
+    private static OilCanSet enabledTank(int position) {
+        OilCanSet set = new OilCanSet();
+        set.setPk_oilCanId(position);
+        set.setEnable(1);
+        return set;
     }
 
     @Test
@@ -171,9 +185,6 @@ public class ProtocolV1ContractTest {
         JsonObject actual = clientAttributesLikeFixture();
 
         for (String key : GAP_UNSOURCED_ATTRIBUTES) {
-            expected.remove(key);
-        }
-        for (String key : GAP_CALIBRATION) {
             expected.remove(key);
         }
         for (String key : GAP_PROBE_TYPE) {
@@ -188,16 +199,6 @@ public class ProtocolV1ContractTest {
         JsonObject actual = clientAttributesLikeFixture();
         for (String key : GAP_UNSOURCED_ATTRIBUTES) {
             assertFalse("有了数据来源后删除本测试，并把 " + key + " 加回逐 key 比对", actual.has(key));
-        }
-    }
-
-    @Test
-    public void knownGap_calibrationAttributesNotPublished() {
-        JsonObject expected = FixtureLoader.loadProtocolV1("client_attributes.json");
-        JsonObject actual = clientAttributesLikeFixture();
-        for (String key : GAP_CALIBRATION) {
-            assertTrue("fixture 里应有 " + key, expected.has(key));
-            assertFalse("设备端开始上报标定表后删除本测试，并把 " + key + " 加回逐 key 比对", actual.has(key));
         }
     }
 

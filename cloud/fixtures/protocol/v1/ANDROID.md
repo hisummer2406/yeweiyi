@@ -34,7 +34,7 @@ Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/f
 | `telemetry_snapshot.json` | 编码 | ✅（`waterRatioPct` 暂不上报，为已知缺口） |
 | `alarm_active.json` / `alarm_cleared.json` | 编码 | ✅ |
 | `stock_event_in.json` / `stock_event_out.json` | 编码 | ✅ |
-| `client_attributes.json` | 编码 | ✅（`deviceModel`/`hardwareVersion`/`localControlMode`/`current_fw_*` 无数据来源不发；`probeType` 取值待约定——均为已知缺口） |
+| `client_attributes.json` | 编码 | ✅ 含 #14 标定表 `tank1.calibration*`（`TankCalibrationAttributeBuilder`）；（`deviceModel`/`hardwareVersion`/`localControlMode`/`current_fw_*` 无数据来源不发；`probeType` 取值待约定——均为已知缺口） |
 | `rpc_request.json` | 解码 | ✅ |
 | `rpc_ack_received/rejected/duplicate.json` | 编码 | ✅ |
 | `cmd_result_succeeded/failed.json` | 编码 | ✅ |

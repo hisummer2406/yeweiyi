@@ -38,8 +38,8 @@
 - PR #38 未合并；设备端自述"零真机验证"（273 个 JVM 测试，没连过真实 ThingsBoard 与硬件）。
 - 物理命令（`pump.*`、`valve.*`、`device.reboot`）在设备端只有占位，等真机（设备端 #34）。
 - 设备端称云端没有"为真实设备创建 ThingsBoard 身份"的接口，装机拿不到凭据（**云端待核实**）。
-- 设备端 fixture 副本拷贝自 `26fb6b6`，缺 #14 标定属性；设备端实际会发 `tank{N}.calibrationHeightMm`/
-  `calibrationVolumeL`，该属性目前无契约测试覆盖。
+- ~~设备端 fixture 副本缺 #14 标定属性、无契约测试覆盖~~：2026-11-06 副本已删，`ProtocolV1ContractTest` 按实际上报路径
+  拼装（基础属性 + `TankCalibrationAttributeBuilder`），`tank{N}.calibrationHeightMm`/`calibrationVolumeL` 已与共享 fixture 逐 key 比对。
 - 设备端文档称 `source` "云端没有这个字段、不需要"，与事实不符：云端 `internal/protocol/stock.go` 已解析
   `source`（#15）。设备端补录仍发 `MANUAL`，云端可消费，仅文档过时，需设备端更正。
 - A-7：设备端确认恢复事件复用产生事件的 `alarmId`；补投后是否可能先收到 `CLEARED` 仍未答复。
@@ -265,7 +265,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 | 步骤 | 状态 |
 |---|---|
 | 云端清单 + 校验脚本 + 契约测试 | ✅ 已完成 |
-| Android 引入共享 fixture（替换现有四份自定义 fixture） | ✅ 2026-11-06 单仓库后直接读 `cloud/fixtures`，副本已删；暴露的标定属性缺口登记为 `GAP_CALIBRATION` |
+| Android 引入共享 fixture（替换现有四份自定义 fixture） | ✅ 2026-11-06 单仓库后直接读 `cloud/fixtures`，副本已删；#14 标定属性（`TankCalibrationAttributeBuilder`）随之纳入逐 key 比对 |
 | Android 构建期挂 `verify-manifest.sh` | ✅ 在 Android CI 里跑（未挂到本机 Gradle 任务） |
 | Android 的 builder 测试改为断言"产出字节 == fixture" | ⬜ 未开始 |
 | 两侧接上 CI，使校验真正成为门禁 | 🟡 Cloud CI + Android CI 都已接上；没有分支保护，红了不会阻止合并 |
