@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS control_commands;
+
+ALTER TABLE users DROP COLUMN IF EXISTS role;

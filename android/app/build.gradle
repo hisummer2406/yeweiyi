@@ -55,6 +55,11 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+    // 协议 V1 共享 fixture 只有一份，在单仓库的 cloud/fixtures/protocol/v1/（云端 MANIFEST 校验和管着它）。
+    // 直接挂到测试 classpath，测试仍按 /protocol/v1/<name> 读取；不要再在 android/ 下放副本。
+    sourceSets {
+        test.resources.srcDirs += [rootProject.file('../cloud/fixtures')]
+    }
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.sansen.yeweiyi"

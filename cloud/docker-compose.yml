@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: yeweiyi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: yeweiyi
+      POSTGRES_PASSWORD: yeweiyi
+      POSTGRES_DB: yeweiyi
+    ports:
+      # 只绑环回：业务库不该被网络上的其他机器直接连。开发时 go run、migrate、psql 都在本机，不受
+      # 影响；需要远程连时用 SSH 隧道，而不是改成 0.0.0.0。
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yeweiyi"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: yeweiyi-redis
+    restart: unless-stopped
+    # 设置了 REDIS_PASSWORD 才启用 requirepass，不设则与以前一样无密码（开发用）。密码走环境变量而
+    # 不是命令行参数，这样 `docker inspect` 的 Args 和进程列表里看不到它。生产必须设置，见
+    # docker-compose.prod.yml（那里把它设为必填）。
+    command:
+      - sh
+      - -c
+      - 'if [ -n "$$REDIS_PASSWORD" ]; then exec redis-server --requirepass "$$REDIS_PASSWORD"; else exec redis-server; fi'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      # 带密码时 redis-cli 用 REDISCLI_AUTH 认证；没设密码时不能带，否则空 AUTH 会被服务端拒绝。
+      test: ["CMD-SHELL", 'if [ -n "$$REDIS_PASSWORD" ]; then export REDISCLI_AUTH="$$REDIS_PASSWORD"; fi; redis-cli ping | grep -q PONG']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:

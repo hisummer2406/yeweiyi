@@ -1,0 +1,92 @@
+<view wx:if="{{!devicesLoaded}}" class="empty">{{text.loading}}</view>
+
+<!-- 没有任何可查看的设备（员工尚未被分配油罐，或账号下确实没有设备）：首次使用的空状态 -->
+<view wx:elif="{{deviceTotal === 0 && !listError}}" class="center-page">
+  <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+  <view class="brand-title">{{text.emptyTitle}}</view>
+  <view class="brand-subtitle">{{text.emptySubtitle}}</view>
+  <button class="btn-primary center-card" bindtap="onScanDevice">{{text.scan}}</button>
+</view>
+
+<view wx:elif="{{deviceTotal === 0 && listError}}" class="empty">
+  <view>{{listError}}</view>
+  <button class="btn-primary" size="mini" bindtap="loadHome" style="margin-top:24rpx;">{{text.retry}}</button>
+</view>
+
+<view wx:else>
+  <!-- 对应设计稿「首页-卧罐01」顶部：品牌栏 + 油站行。云端有油站数据时左侧是当前油站名加下拉标记，
+       点击进入油站选择页；没有油站数据（旧版云端、油站接口失败、没有设备属于任何油站）时不出下拉，
+       左侧写"我的设备"。不要用客户名或本地写死的油站名冒充油站。 -->
+  <view class="home-header" style="padding-top:{{statusBarRpx}}rpx;">
+    <view class="home-brand">
+      <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+      <text class="home-brand-title">{{text.title}}</text>
+    </view>
+    <view class="home-station">
+      <view wx:if="{{hasStations}}" class="home-station-pick" bindtap="onPickStation">
+        <text class="home-station-name">{{stationName}}</text>
+        <view class="home-station-arrow"></view>
+      </view>
+      <text wx:else class="home-station-name">{{text.myDevices}}</text>
+      <view class="home-plus" bindtap="onMoreActions">
+        <image src="/assets/icons/add.png" mode="aspectFit" style="width:42rpx;height:42rpx;" />
+      </view>
+    </view>
+  </view>
+
+  <view class="home-list">
+    <view wx:if="{{stationNotice}}" class="empty">{{stationNotice}}</view>
+    <view wx:if="{{groups.length === 0}}" class="empty">{{text.noDevicesInStation}}</view>
+    <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
+      <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
+      <view class="group-head" wx:if="{{showSingleDeviceHeader || g.ts}}">
+        <text class="group-name" wx:if="{{showSingleDeviceHeader}}">{{g.deviceName}}</text>
+        <text class="group-ts tabular-nums" wx:if="{{g.ts}}">{{text.reportedAt}} {{g.ts}}</text>
+      </view>
+
+      <view wx:if="{{g.staleText}}" class="card banner-warning" style="margin:0 20rpx 12rpx;">
+        <text class="text-warning">{{g.staleText}}</text>
+      </view>
+
+      <view wx:if="{{g.state === 'loading'}}" class="group-note">{{text.loading}}</view>
+      <view wx:elif="{{g.state === 'never'}}" class="group-note">{{g.note || text.neverReported}}</view>
+      <view wx:elif="{{g.state === 'error'}}" class="group-note">
+        <view class="text-danger">{{g.error}}</view>
+        <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">{{text.retry}}</button>
+      </view>
+
+      <!-- 罐形状来自设备配置（设备端 gunType），云端尚未透出，见 yeweiyi-cloud#45；在此之前一律卧罐图 -->
+      <view
+        wx:for="{{g.tanks}}"
+        wx:for-item="t"
+        wx:key="key"
+        class="tank-row"
+        data-device="{{g.deviceName}}"
+        data-tank="{{t.index}}"
+        bindtap="onTapTank"
+      >
+        <view class="home-tank">
+          <image class="home-tank-img" src="/assets/illustrations/tank-horizontal-home.png" mode="aspectFit" />
+          <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化 -->
+          <view class="home-tank-body">
+            <view class="fill fill-water" style="height:{{t.fillWaterPct}}%"></view>
+            <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%"></view>
+          </view>
+        </view>
+        <view class="tank-info">
+          <view class="tank-tag-row">
+            <text class="tank-tag">{{t.tankNoLabel}} {{t.oilType || '--'}}</text>
+            <text class="badge badge-failed" wx:if="{{t.alarmState === 'ALARM'}}">{{t.alarmStateLabel}}</text>
+            <text class="badge badge-offline" wx:elif="{{t.alarmState === 'FAULT'}}">{{t.alarmStateLabel}}</text>
+          </view>
+          <view class="hs-row"><text class="hs-label">{{text.level}}</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.volume}}</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">{{text.unitL}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
+          <view class="hs-probe-off" wx:if="{{!t.probeConnected}}">{{text.probeOff}}</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

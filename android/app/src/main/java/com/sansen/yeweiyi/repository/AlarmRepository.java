@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * 报警数据的唯一读写入口，取代对 {@code DBDataManager} 报警相关方法的直接调用。
- * 见 openspec/changes/layer-data-and-hardware-boundaries §5。
+ * 见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries §5。
  */
 public interface AlarmRepository {
 

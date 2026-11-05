@@ -1,0 +1,36 @@
+/* 数值取自设计稿「罐表设置15」PNG：卡片 324×300、#F5F6F8、横向间距 30、纵向 31，左缘 x=38；
+   插画占卡片上 230，标签 26rpx、行心在卡片内 y=257。 */
+page {
+  background-color: #ffffff;
+}
+
+.ts-grid {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 36rpx 0 0 38rpx;
+}
+
+.ts-card {
+  width: 323rpx;
+  height: 300rpx;
+  margin: 0 30rpx 31rpx 0;
+  overflow: hidden;
+  background-color: #f5f6f8;
+  border-radius: 16rpx;
+}
+
+.ts-card-img {
+  display: block;
+  width: 323rpx;
+  height: 230rpx;
+}
+
+.ts-card-label {
+  display: block;
+  height: 44rpx;
+  margin-top: 7rpx;
+  line-height: 44rpx;
+  text-align: center;
+  font-size: 32rpx;
+  color: #131313;
+}

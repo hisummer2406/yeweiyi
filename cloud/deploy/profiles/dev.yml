@@ -1,0 +1,10 @@
+# 开发环境：单机跑全套，够用即可。
+#
+#   docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml \
+#                  -f deploy/profiles/dev.yml up -d
+#
+# 与 docker-compose.thingsboard.yml 的默认值相同，单独成文件是为了让三档规格并列可比。
+services:
+  thingsboard:
+    environment:
+      JAVA_OPTS: "-Xms1G -Xmx2G"

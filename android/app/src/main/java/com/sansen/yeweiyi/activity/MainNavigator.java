@@ -18,7 +18,7 @@ import com.sansen.yeweiyi.fragment.MainFragment;
  * 57+ 处直接读写这些字段（如 {@code main.switchContent(main.mContent, main.xxxFragment)}），
  * 搬移会波及全项目 fragment/ 包下数十个文件，超出本组"搬 Fragment 切换机制"的范围；
  * MainActivity.switchContent 保留为委托方法，外部调用方式不变。
- * 见 openspec/changes/split-main-activity §2。
+ * 见 openspec/changes/archive/2026-11-02-split-main-activity §2。
  */
 public class MainNavigator {
 

@@ -1,0 +1,55 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/language/language",
+    "pages/devices/devices",
+    "pages/records/records",
+    "pages/record-list/record-list",
+    "pages/more/more",
+    "pages/device-detail/device-detail",
+    "pages/device-add/device-add",
+    "pages/station-select/station-select",
+    "pages/issue-command/issue-command",
+    "pages/profile/profile",
+    "pages/tank-config/tank-config",
+    "pages/calibration/calibration",
+    "pages/tank-shape/tank-shape",
+    "pages/tank-shape-edit/tank-shape-edit",
+    "pages/record-settings/record-settings",
+    "pages/report-settings/report-settings",
+    "pages/backfill/backfill"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "Level monitor",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#edf0f7"
+  },
+  "tabBar": {
+    "color": "#131313",
+    "selectedColor": "#066daa",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/devices/devices",
+        "text": "Home",
+        "iconPath": "assets/tabbar/home.png",
+        "selectedIconPath": "assets/tabbar/home-active.png"
+      },
+      {
+        "pagePath": "pages/records/records",
+        "text": "Records",
+        "iconPath": "assets/tabbar/record.png",
+        "selectedIconPath": "assets/tabbar/record-active.png"
+      },
+      {
+        "pagePath": "pages/more/more",
+        "text": "Settings",
+        "iconPath": "assets/tabbar/settings.png",
+        "selectedIconPath": "assets/tabbar/settings-active.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json",
+  "style": "v2"
+}

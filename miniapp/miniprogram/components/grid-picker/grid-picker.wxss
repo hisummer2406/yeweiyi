@@ -1,0 +1,63 @@
+/* 数值取自设计稿「参数修正-罐号选择08」「罐表设置-长方体选择罐号19」PNG 的像素实测：
+   面板 x35–714（宽 680）、圆角约 16；药丸 202×57、行距 77、列间距 14；选中 #0066A2，未选中 #F5F6F8；
+   遮罩把 #EDF0F7 压成 #CACCD2（约 15% 黑）；标题栏浅灰蓝 #D3DAE1，标题约 34rpx。 */
+.gp-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.15);
+}
+
+.gp-panel {
+  position: absolute;
+  margin-top: -4rpx; /* 设计稿里面板压住被点的那一行底边 4 */
+  left: 35rpx;
+  width: 680rpx;
+  box-sizing: border-box;
+  background-color: #ffffff;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.gp-title {
+  height: 62rpx;
+  line-height: 62rpx;
+  text-align: center;
+  font-size: 42rpx;
+  color: #131313;
+  background-color: #d3dae1;
+}
+
+.gp-grid {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 42rpx 23rpx 22rpx;
+}
+
+.gp-title + .gp-grid {
+  padding-bottom: 27rpx;
+}
+
+.gp-item {
+  width: 202rpx;
+  height: 57rpx;
+  line-height: 57rpx;
+  margin: 0 14rpx 20rpx 0;
+  text-align: center;
+  font-size: 32rpx;
+  color: #131313;
+  background-color: #f5f6f8;
+  border-radius: 29rpx;
+}
+
+.gp-item:nth-child(3n) {
+  margin-right: 0;
+}
+
+.gp-item-on {
+  color: #ffffff;
+  background-color: #0066a2;
+}

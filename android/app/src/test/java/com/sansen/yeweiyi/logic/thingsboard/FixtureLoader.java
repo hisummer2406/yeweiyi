@@ -12,8 +12,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * 测试专用 fixture 读取。两个目录：
  * <ul>
- *   <li>{@code src/test/resources/protocol/v1/}：yeweiyi-cloud 的共享 fixture 原样副本，
- *       跨仓库契约以这里为准（{@link #loadProtocolV1}，见该目录 README.md）；</li>
+ *   <li>{@code /protocol/v1/}：单仓库 {@code cloud/fixtures/protocol/v1/} 的共享 fixture，由 build.gradle
+ *       挂到测试 classpath，没有副本（{@link #loadProtocolV1}，见该目录 ANDROID.md）；</li>
  *   <li>{@code src/test/resources/thingsboard/}：Android 侧自己的样例和 TLS 证书
  *       （{@link #loadText}/{@link #openStream}）。</li>
  * </ul>
@@ -23,7 +23,7 @@ public final class FixtureLoader {
     private FixtureLoader() {
     }
 
-    /** 读取 yeweiyi-cloud 共享 fixture，去掉 {@code _comment}。 */
+    /** 读取 cloud/fixtures 下的共享 fixture，去掉 {@code _comment}。 */
     public static JsonObject loadProtocolV1(String resourceName) {
         String text = readResource("/protocol/v1/" + resourceName);
         JsonElement element = new JsonParser().parse(text);

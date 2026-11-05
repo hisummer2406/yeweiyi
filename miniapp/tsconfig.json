@@ -1,0 +1,17 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "target": "es2018",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2020"],
+    "strict": true,
+    "noImplicitAny": false,
+    "experimentalDecorators": true,
+    "typeRoots": ["node_modules/@types", "node_modules"],
+    "types": ["miniprogram-api-typings"],
+    "noEmit": true
+  },
+  "include": ["miniprogram/**/*.ts"],
+  "exclude": ["node_modules", "miniprogram/miniprogram_npm"]
+}

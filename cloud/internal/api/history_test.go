@@ -1,0 +1,374 @@
+package api_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"math"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"yeweiyi-cloud/internal/protocol"
+)
+
+// seedHistory publishes one tank1.oilLevelMm sample every 30 s for two hours starting at base,
+// valued at "minutes since base", except for a 10-minute hole at minutes 90–100 (a device that was
+// offline). Returns the values keyed by minute offset so tests can compute expectations from the
+// data rather than from remembered constants.
+func seedHistory(t *testing.T, token string, base time.Time) map[float64]float64 {
+	t.Helper()
+	key := protocol.TankKey(1, protocol.KeyOilLevelMm)
+	samples := map[float64]float64{}
+	var batch []map[string]any
+	for i := 0; i < 240; i++ {
+		min := float64(i) / 2
+		if min >= 90 && min < 100 {
+			continue
+		}
+		samples[min] = min
+		batch = append(batch, map[string]any{
+			"ts":     base.Add(time.Duration(i) * 30 * time.Second).UnixMilli(),
+			"values": map[string]any{key: min},
+		})
+	}
+	for start := 0; start < len(batch); start += 60 {
+		end := min(start+60, len(batch))
+		payload, err := json.Marshal(batch[start:end])
+		if err != nil {
+			t.Fatal(err)
+		}
+		postDeviceTelemetry(t, token, payload)
+	}
+	return samples
+}
+
+type historyBody struct {
+	Series map[string][]struct {
+		Time  time.Time `json:"time"`
+		Value float64   `json:"value"`
+	} `json:"series"`
+	BeginTime time.Time `json:"beginTime"`
+	EndTime   time.Time `json:"endTime"`
+}
+
+func fetchHistory(t *testing.T, env *testEnv, device string, q url.Values, want int) historyBody {
+	t.Helper()
+	path := "/api/devices/" + device + "/telemetry/history?" + q.Encode()
+	rec := env.authed("GET", path, nil)
+	if rec.Code != want {
+		t.Fatalf("GET %s: expected %d, got %d: %s", path, want, rec.Code, rec.Body.String())
+	}
+	var out historyBody
+	if want == http.StatusOK {
+		if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+			t.Fatalf("decode: %v (%s)", err, rec.Body.String())
+		}
+	}
+	return out
+}
+
+func TestTelemetryHistory_AggregatesAgainstRealThingsBoard(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+	// The fixture device was assigned to its customer just now, which would clip away the
+	// backdated samples seeded below; this test is about aggregation, not the assignment clip.
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device); err != nil {
+		t.Fatal(err)
+	}
+
+	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
+	samples := seedHistory(t, token, base)
+	field := protocol.KeyOilLevelMm
+
+	query := func(interval, agg string) url.Values {
+		q := url.Values{
+			"tank": {"1"}, "fields": {field}, "interval": {interval},
+			// Deliberately unaligned: the API must widen to bucket boundaries.
+			"beginTime": {base.Add(7 * time.Second).Format(time.RFC3339)},
+			"endTime":   {base.Add(2*time.Hour - 7*time.Second).Format(time.RFC3339)},
+		}
+		if agg != "" {
+			q.Set("agg", agg)
+		}
+		return q
+	}
+
+	wantAvg := func(i int) float64 {
+		lo, hi := float64(i*60), float64(i*60+60)
+		var sum, n float64
+		for m, v := range samples {
+			if m >= lo && m < hi {
+				sum += v
+				n++
+			}
+		}
+		return sum / n
+	}
+
+	// Data is eventually visible through ThingsBoard's read path. Wait until both buckets hold
+	// *all* their samples, not merely until both buckets exist: a bucket appears as soon as its
+	// first sample is readable, so on a slow machine a half-written hour would be read and
+	// compared against the full set.
+	var got historyBody
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		got = fetchHistory(t, env, device, query("1h", ""), http.StatusOK)
+		pts := got.Series[field]
+		if len(pts) == 2 && math.Abs(pts[0].Value-wantAvg(0)) < 1e-9 && math.Abs(pts[1].Value-wantAvg(1)) < 1e-9 {
+			break
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	if !got.BeginTime.Equal(base) || !got.EndTime.Equal(base.Add(2*time.Hour)) {
+		t.Errorf("window = [%v, %v), want it widened to [%v, %v)", got.BeginTime, got.EndTime, base, base.Add(2*time.Hour))
+	}
+	pts := got.Series[field]
+	if len(pts) != 2 {
+		t.Fatalf("1h buckets = %d, want 2: %+v", len(pts), pts)
+	}
+	// Bucket START, not ThingsBoard's midpoint.
+	if !pts[0].Time.Equal(base) || !pts[1].Time.Equal(base.Add(time.Hour)) {
+		t.Errorf("bucket times = %v, %v; want %v, %v", pts[0].Time, pts[1].Time, base, base.Add(time.Hour))
+	}
+	for i, p := range pts {
+		if want := wantAvg(i); math.Abs(p.Value-want) > 1e-9 {
+			t.Errorf("hour %d avg = %v, want %v computed from the seeded samples", i, p.Value, want)
+		}
+	}
+
+	// min / max reduce rather than average.
+	if mx := fetchHistory(t, env, device, query("1h", "max"), http.StatusOK).Series[field]; len(mx) != 2 || mx[0].Value != 59.5 {
+		t.Errorf("1h max = %+v, want first bucket 59.5", mx)
+	}
+	if mn := fetchHistory(t, env, device, query("1h", "min"), http.StatusOK).Series[field]; len(mn) != 2 || mn[0].Value != 0 || mn[1].Value != 60 {
+		t.Errorf("1h min = %+v, want 0 and 60", mn)
+	}
+
+	// The offline hole must be absent, not a zero: 5-minute buckets at minutes 90 and 95 have no
+	// samples, so 24 buckets in the window become 22.
+	five := fetchHistory(t, env, device, query("5m", ""), http.StatusOK).Series[field]
+	if len(five) != 22 {
+		t.Fatalf("5m buckets = %d, want 22 (24 minus the 2 empty ones)", len(five))
+	}
+	for _, p := range five {
+		off := p.Time.Sub(base)
+		if off >= 90*time.Minute && off < 100*time.Minute {
+			t.Errorf("bucket at +%v exists but the device sent nothing then: %+v", off, p)
+		}
+		if p.Value == 0 && off != 0 {
+			t.Errorf("bucket at +%v is a fabricated zero", off)
+		}
+	}
+}
+
+func TestTelemetryHistory_RejectsBadParameters(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+
+	ok := func() url.Values {
+		return url.Values{"tank": {"1"}, "fields": {"oilLevelMm"}, "interval": {"1h"}}
+	}
+	cases := map[string]func(url.Values){
+		"missing tank":       func(q url.Values) { q.Del("tank") },
+		"tank zero":          func(q url.Values) { q.Set("tank", "0") },
+		"tank above ceiling": func(q url.Values) { q.Set("tank", fmt.Sprint(protocol.MaxTankCount+1)) },
+		"missing fields":     func(q url.Values) { q.Del("fields") },
+		"string field":       func(q url.Values) { q.Set("fields", "oilType") },
+		"unknown field":      func(q url.Values) { q.Set("fields", "oilLevelMm,bogus") },
+		"free-form interval": func(q url.Values) { q.Set("interval", "7s") },
+		"missing interval":   func(q url.Values) { q.Del("interval") },
+		"unknown agg":        func(q url.Values) { q.Set("agg", "median") },
+		"begin after end": func(q url.Values) {
+			q.Set("beginTime", "2026-01-02T00:00:00Z")
+			q.Set("endTime", "2026-01-01T00:00:00Z")
+		},
+		// Raw data is gone beyond the retention, so a sub-hour interval cannot be answered there.
+		"minute interval beyond the retention": func(q url.Values) {
+			q.Set("interval", "5m")
+			q.Set("beginTime", "2026-01-01T00:00:00Z")
+			q.Set("endTime", "2026-01-01T06:00:00Z")
+		},
+		"too many buckets": func(q url.Values) {
+			q.Set("interval", "1m")
+			q.Set("beginTime", "2026-01-01T00:00:00Z")
+			q.Set("endTime", "2026-01-04T00:00:00Z")
+		},
+		"bad time": func(q url.Values) { q.Set("beginTime", "yesterday") },
+	}
+	for name, mutate := range cases {
+		t.Run(strings.ReplaceAll(name, " ", "_"), func(t *testing.T) {
+			q := ok()
+			mutate(q)
+			fetchHistory(t, env, device, q, http.StatusBadRequest)
+		})
+	}
+}
+
+// TestTelemetryHistory_BucketCeilingMatchesThingsBoard pins the boundary: exactly the platform's
+// 700 intervals is served, one more is refused by us (with a 400) instead of being passed on to
+// ThingsBoard to fail there.
+func TestTelemetryHistory_BucketCeilingMatchesThingsBoard(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+
+	begin := time.Now().UTC().Truncate(time.Minute).Add(-24 * time.Hour)
+	q := func(minutes int) url.Values {
+		return url.Values{
+			"tank": {"1"}, "fields": {"oilLevelMm"}, "interval": {"1m"},
+			"beginTime": {begin.Format(time.RFC3339)},
+			"endTime":   {begin.Add(time.Duration(minutes) * time.Minute).Format(time.RFC3339)},
+		}
+	}
+	fetchHistory(t, env, device, q(700), http.StatusOK)
+	fetchHistory(t, env, device, q(701), http.StatusBadRequest)
+}
+
+// A device moved to another customer must not expose the previous customer's history: ThingsBoard
+// telemetry carries no customer, so the query is clipped at devices.customer_assigned_at.
+func TestTelemetryHistory_ClippedToCurrentCustomerAssignment(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+
+	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
+	seedHistory(t, token, base)
+	field := protocol.KeyOilLevelMm
+	q := url.Values{
+		"tank": {"1"}, "fields": {field}, "interval": {"5m"},
+		"beginTime": {base.Format(time.RFC3339)},
+		"endTime":   {base.Add(2 * time.Hour).Format(time.RFC3339)},
+	}
+
+	// Assigned mid-bucket at +61m: the straddling 60–65m bucket mixes owners, and one more bucket is
+	// held back for the gap between the UPDATE and the commit, so the window starts at +70m.
+	assigned := base.Add(61 * time.Minute)
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = $2 WHERE device_name = $1", device, assigned); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = env.pool.Exec(context.Background(), "UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device)
+	})
+
+	wantBegin := base.Add(70 * time.Minute)
+	var got historyBody
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		got = fetchHistory(t, env, device, q, http.StatusOK)
+		if len(got.Series[field]) > 0 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if !got.BeginTime.Equal(wantBegin) {
+		t.Errorf("beginTime = %v, want %v (assignment rounded up to a bucket, plus one)", got.BeginTime, wantBegin)
+	}
+	if len(got.Series[field]) == 0 {
+		t.Fatal("no points after the assignment time")
+	}
+	for _, p := range got.Series[field] {
+		if p.Time.Before(wantBegin) {
+			t.Errorf("point at %v predates the assignment (%v)", p.Time, assigned)
+		}
+	}
+
+	// A window entirely before the assignment is empty, not an error and not the old data.
+	q.Set("endTime", base.Add(30*time.Minute).Format(time.RFC3339))
+	got = fetchHistory(t, env, device, q, http.StatusOK)
+	if n := len(got.Series[field]); n != 0 {
+		t.Errorf("window before assignment returned %d points, want 0", n)
+	}
+	if got.BeginTime.After(got.EndTime) {
+		t.Errorf("empty response window is inverted: [%v, %v]", got.BeginTime, got.EndTime)
+	}
+}
+
+// The bucket in progress is never returned: the window ends at the last bucket boundary before the
+// authorization instant, so a reassignment during the request cannot expose the new owner's samples
+// that share a bucket with the old owner's.
+func TestTelemetryHistory_ExcludesTheBucketInProgress(t *testing.T) {
+	env, _, device, _ := newStockEnv(t)
+	// The fixture device was assigned just now, which would turn the answer into the empty-window
+	// branch; this test is about the cap, not the assignment clip.
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device); err != nil {
+		t.Fatal(err)
+	}
+	q := url.Values{
+		"tank": {"1"}, "fields": {protocol.KeyOilLevelMm}, "interval": {"1h"},
+		"beginTime": {time.Now().UTC().Add(-3 * time.Hour).Format(time.RFC3339)},
+		"endTime":   {time.Now().UTC().Add(time.Hour).Format(time.RFC3339)}, // future end is accepted
+	}
+	before := time.Now().UTC()
+	got := fetchHistory(t, env, device, q, http.StatusOK)
+	after := time.Now().UTC()
+	// The request instant lies between before and after; the cap is the hour boundary at or below it.
+	if !got.EndTime.Equal(before.Truncate(time.Hour)) && !got.EndTime.Equal(after.Truncate(time.Hour)) {
+		t.Errorf("endTime = %v, want the hour boundary at or below the request instant (%v)", got.EndTime, before.Truncate(time.Hour))
+	}
+}
+
+// A reassignment that lands after the request was authorized has a cutoff in the future relative to
+// the authorization instant; a window reaching past that instant must come back empty rather than
+// carry the new owner's data to the previous owner.
+func TestTelemetryHistory_WindowIsCappedAtAuthorizationInstant(t *testing.T) {
+	env, _, device, token := newStockEnv(t)
+	base := time.Now().UTC().Truncate(time.Hour).Add(-3 * time.Hour)
+	seedHistory(t, token, base)
+	field := protocol.KeyOilLevelMm
+	// Simulates a reassignment just after authorization.
+	if _, err := env.pool.Exec(context.Background(),
+		"UPDATE devices SET customer_assigned_at = now() + interval '1 second' WHERE device_name = $1", device); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = env.pool.Exec(context.Background(), "UPDATE devices SET customer_assigned_at = NULL WHERE device_name = $1", device)
+	})
+	q := url.Values{
+		"tank": {"1"}, "fields": {field}, "interval": {"1m"},
+		"beginTime": {base.Format(time.RFC3339)},
+		"endTime":   {time.Now().UTC().Add(30 * time.Minute).Format(time.RFC3339)}, // future end is accepted
+	}
+	got := fetchHistory(t, env, device, q, http.StatusOK)
+	if n := len(got.Series[field]); n != 0 {
+		t.Errorf("returned %d points although the cutoff is later than the authorization instant", n)
+	}
+	if got.BeginTime.After(got.EndTime) {
+		t.Errorf("empty response window is inverted: [%v, %v]", got.BeginTime, got.EndTime)
+	}
+}
+
+// The assignment time must be taken when the UPDATE runs, not at transaction start: reassignment
+// first waits on the device row lock, and telemetry produced meanwhile belongs to the old customer.
+func TestDeviceAssignedAt_IsNotTransactionStart(t *testing.T) {
+	env := newTestEnv(t)
+	ctx := context.Background()
+	const dev = "assigned-at-clock-test"
+	t.Cleanup(func() { _, _ = env.pool.Exec(ctx, "DELETE FROM devices WHERE device_name = $1", dev) })
+	if _, err := env.pool.Exec(ctx, "INSERT INTO devices (device_name) VALUES ($1)", dev); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := env.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var txStart time.Time
+	if err := tx.QueryRow(ctx, "SELECT now()").Scan(&txStart); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_sleep(1.2)"); err != nil {
+		t.Fatal(err)
+	}
+	var assigned time.Time
+	if err := tx.QueryRow(ctx, `UPDATE devices SET customer_id = (SELECT min(id) FROM customers)
+		WHERE device_name = $1 RETURNING customer_assigned_at`, dev).Scan(&assigned); err != nil {
+		t.Fatal(err)
+	}
+	if got := assigned.Sub(txStart); got < time.Second {
+		t.Errorf("customer_assigned_at is only %v after transaction start; it looks like now(), not clock_timestamp()", got)
+	}
+}

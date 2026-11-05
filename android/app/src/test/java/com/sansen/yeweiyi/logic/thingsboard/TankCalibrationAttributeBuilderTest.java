@@ -14,9 +14,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
 /**
- * 这是一个新增的、尚未跨仓库确认的 attribute（见 {@link TankCalibrationAttributeBuilder}
- * 类注释）——没有 yeweiyi-cloud 共享 fixture 可对，所以这里的期望值是自己构造的，
- * 只验证"扁平键+启用过滤+下标对应关系"这套已有约定被正确复用，不是在校验云端契约。
+ * 这里只验证"扁平键+启用过滤+下标对应关系"这套已有约定被正确复用，期望值是自己构造的。
+ * 与共享 fixture（{@code client_attributes.json}）的逐 key 比对在 {@link ProtocolV1ContractTest}。
  */
 public class TankCalibrationAttributeBuilderTest {
 

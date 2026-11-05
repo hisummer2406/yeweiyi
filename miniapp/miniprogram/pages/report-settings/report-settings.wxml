@@ -1,0 +1,9 @@
+<!-- 设计稿「报表设置22」。云端目前没有把这些记录导出成文件的接口，开关只是展示，切换时说明（见 .ts）。 -->
+<view class="fc" style="padding:1rpx 0 7rpx;">
+  <view class="sr" wx:for="{{items}}" wx:key="key">
+    <text>{{item.label}}</text>
+    <view class="sw {{item.on ? 'sw-on' : ''}}" data-key="{{item.key}}" bindtap="onToggle">
+      <view class="sw-knob"></view>
+    </view>
+  </view>
+</view>

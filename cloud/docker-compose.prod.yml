@@ -1,0 +1,93 @@
+# 生产部署覆盖：强制设置数据库与 Redis 密码。
+#
+# 使用方式（文件顺序有意义，后面的覆盖前面的）：
+#   docker compose --env-file .env.prod \
+#                  -f docker-compose.yml -f docker-compose.prod.yml \
+#                  -f docker-compose.thingsboard.yml -f docker-compose.thingsboard-tls.yml up -d
+#
+# 端口隔离不在本文件里做，而是基础文件的默认值：
+#   - 5432 / 6379 / 8081（PostgreSQL / Redis / ThingsBoard 控制台）只绑 127.0.0.1；
+#   - 1884 明文 MQTT 由 docker-compose.thingsboard-tls.yml 收回到 127.0.0.1；
+#   - 对外只有 8883（设备 MQTT over TLS），以及 Go 后台自己监听的业务 API 端口。
+# 不要在本文件里再写一遍 ports：Compose 对 ports 是追加合并，重复声明同一个端口会让容器起不来，
+# 而且一旦写成 0.0.0.0 就会悄悄撤销隔离。部署后必须在**另一台机器**上实测 5432/6379/8081 不可达，
+# 见 deploy/README.md“生产部署”一节。
+#
+# 业务 API（Go 后台）以容器运行（下面的 api 服务），镜像由 .github/workflows/image.yml 构建并推送到
+# GHCR；api 启动前由 migrate 服务跑完数据库迁移。HTTPS 由前置反向代理提供，或给 api 设置
+# TLS_CERT_FILE / TLS_KEY_FILE 并挂载证书。仍想用 systemd 跑二进制的部署见 deploy/README.md“服务托管”，
+# 那时不要启用本文件里的 api 与 migrate 服务。
+#
+# 凭据放 .env.prod（不要提交到 git，也不要写在命令行里）：
+#   API_IMAGE=ghcr.io/hisummer2406/yeweiyi/cloud:sha-xxxxxxx   必须固定到具体 tag，不要用 latest
+#   POSTGRES_PASSWORD=...      业务库密码（会拼进 DATABASE_URL，不要含 @ : / ? # 等需转义的字符）
+#   REDIS_PASSWORD=...         Redis 密码
+#   JWT_SECRET=...             至少 32 字符的强随机值
+#   TB_PASSWORD=...            ThingsBoard 租户管理员密码（TB_USERNAME 默认 tenant@thingsboard.org）
+#   TOKEN_TTL=24h              可选：登录令牌有效期
+#   TOKEN_MAX_SESSION_AGE=720h 可选：滑动续期的绝对上限，到点必须重新输入密码；不得小于 TOKEN_TTL
+#
+# ⚠️ POSTGRES_PASSWORD 只在**数据卷第一次初始化**时生效。已有数据卷的机器改这个值不会改库里账号
+# 的密码，会造成“compose 里是新密码、库里还是旧密码”。已有卷要改密码，先在库里执行
+#   ALTER USER yeweiyi PASSWORD '新密码';
+# 再改 .env.prod 与 DATABASE_URL。
+
+services:
+  postgres:
+    environment:
+      # :? 让缺失时直接报错，而不是悄悄用一个弱默认值起来。
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?生产部署必须设置 POSTGRES_PASSWORD}
+
+  redis:
+    environment:
+      # 基础文件的 command 在 REDIS_PASSWORD 非空时启用 requirepass；这里把它设为必填。
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?生产部署必须设置 REDIS_PASSWORD}
+
+  # 数据库迁移：跑一次就退出。tag 必须与 deploy/images.txt 里的一致（离线机器没有别的可拉）。
+  # 迁移文件取自仓库的 db/migrations；离线包里该目录叫 migrations，用 MIGRATIONS_DIR 指过去。
+  migrate:
+    image: migrate/migrate:v4.18.1
+    restart: "no"
+    command:
+      - -path=/m
+      - -database=postgres://yeweiyi:${POSTGRES_PASSWORD}@postgres:5432/yeweiyi?sslmode=disable
+      - up
+    volumes:
+      - ${MIGRATIONS_DIR:-./db/migrations}:/m:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ${API_IMAGE:?生产部署必须设置 API_IMAGE，固定到具体 tag}
+    container_name: yeweiyi-api
+    restart: unless-stopped
+    # distroless 镜像没有 shell 与 wget，容器内放不了 healthcheck；探活用外部请求 GET /healthz。
+    ports:
+      # 业务 API 对外端口。要加 HTTPS 就改成前置反向代理，并把这里收回到 127.0.0.1。
+      - "127.0.0.1:8080:8080"
+    environment:
+      DATABASE_URL: postgres://yeweiyi:${POSTGRES_PASSWORD}@postgres:5432/yeweiyi?sslmode=disable
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?生产部署必须设置 REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?生产部署必须设置 JWT_SECRET}
+      # 登录令牌有效期与滑动续期的绝对上限（自上次输入密码起）；maxSessionAge 不得小于 tokenTTL。
+      TOKEN_TTL: ${TOKEN_TTL:-24h}
+      TOKEN_MAX_SESSION_AGE: ${TOKEN_MAX_SESSION_AGE:-720h}
+      # 微信登录默认关闭；密钥仅从服务器环境文件注入。
+      WECHAT_ENABLED: ${WECHAT_ENABLED:-false}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+      # 容器内用服务名和 ThingsBoard 的容器端口 9090，不是宿主上的 8081。
+      TB_BASE_URL: http://thingsboard:9090
+      TB_USERNAME: ${TB_USERNAME:-tenant@thingsboard.org}
+      TB_PASSWORD: ${TB_PASSWORD:?生产部署必须设置 TB_PASSWORD}
+      ALLOW_PHYSICAL_COMMANDS: "false"
+      ALLOW_CONFIG_COMMANDS: "false"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      thingsboard:
+        condition: service_healthy

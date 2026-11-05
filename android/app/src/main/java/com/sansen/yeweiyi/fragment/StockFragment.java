@@ -19,6 +19,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.sansen.yeweiyi.logic.thingsboard.StockRecordMapper;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.adapter.StockSaveAdapter;
 import com.sansen.yeweiyi.application.MyApplication;
@@ -168,7 +169,7 @@ public class StockFragment extends BaseFragment implements StockSaveAdapter.OnIt
 	// 走到这行 toast，是可达的。
 	protected void processClick(View v) {
 		if (v.getId()==R.id.ly_saveStock){
-			myApplication.getmSaveOilManager().SaveOilDB();
+			myApplication.getmSaveOilManager().saveStock(StockRecordMapper.TRIGGER_MANUAL);
 			SystemUtils.showRsToast(R.string.main_toast_savesuccess);
 
 		}

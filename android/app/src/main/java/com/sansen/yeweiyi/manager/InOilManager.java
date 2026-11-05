@@ -227,7 +227,9 @@ public class InOilManager {
 
         // 发给云端的必须是 StockEventMapper 产出的结构化 JSON，不能是 toString() 调试字符串——
         // 后者不是 JSON，云端完全解析不了，见 zhongchengyeweiyi#42 待办3。
-        String stockEventJson = GsonUtil.toJsonStr(StockEventMapper.build(detailInoutRecord, isIn));
+        // oilTypeIndex 与 deliveredWeightKg（按关闭时刻密度）见 StockEventMapper，zhongchengyeweiyi#49
+        String stockEventJson = GsonUtil.toJsonStr(
+                StockEventMapper.build(detailInoutRecord, isIn, oilCan.getOilType(), density));
         SocketManager.getInstance(MyApplication.getInstance()).sendUnloadOil(stockEventJson);
 
         OilMessage oilMessage = new OilMessage();

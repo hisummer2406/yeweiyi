@@ -1,0 +1,35 @@
+<!-- 设计稿「首页-设置05」。账号行是设计稿没有的（退出登录需要入口），放在菜单上方单独一块。
+     各入口暂未接云端时点击统一提示「功能开发中」（见 more.ts），原因不写在界面上。语言入口也是设计稿没有的，放在菜单下方，点进独立的语言页。 -->
+<view class="menu-list" style="margin-bottom:20rpx;">
+  <view class="menu-row" bindtap="onAccountTap">
+    <image class="avatar" style="margin-right:19rpx;" src="/assets/icons/avatar-logo.png" mode="aspectFit" />
+    <view class="menu-title">
+      <text>{{account || '--'}}</text>
+      <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>
+    </view>
+    <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+  </view>
+</view>
+
+<view class="menu-list">
+  <view
+    wx:for="{{items}}"
+    wx:key="titleKey"
+    class="menu-row"
+    bindtap="onItemTap"
+    data-page="{{item.page}}"
+  >
+    <image class="menu-icon" src="/assets/icons/{{item.icon}}.png" mode="aspectFit" />
+    <text class="menu-title">{{item.title}}</text>
+    <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+  </view>
+</view>
+
+<view class="menu-list" style="margin-top:20rpx;">
+  <view class="menu-row" bindtap="onLanguageTap">
+    <image class="menu-icon" src="/assets/icons/settings-language.png" mode="aspectFit" />
+    <text class="menu-title">{{langLabel}}</text>
+    <text class="muted" style="margin-right:12rpx;">{{langName}}</text>
+    <image class="menu-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+  </view>
+</view>

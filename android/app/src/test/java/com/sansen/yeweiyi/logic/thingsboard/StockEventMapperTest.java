@@ -16,8 +16,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 对照 {@code yeweiyi-cloud} 的共享 fixture（{@code src/test/resources/protocol/v1/} 下的
- * {@code stock_event_in.json}/{@code stock_event_out.json}，原样副本）——不是 Android 单方面定义的样例。
+ * 对照 {@code cloud/fixtures/protocol/v1/} 的共享 fixture（{@code stock_event_in.json}/
+ * {@code stock_event_out.json}，两端共用的同一份）——不是 Android 单方面定义的样例。
  * <p>
  * {@link StockEventMapper#build} 把 {@code DetailInoutRecord.beginTime}/{@code endTime}
  * （{@code yyyy-MM-dd HH:mm[:ss]} 本地时间字符串，无时区）反解成 epoch 毫秒，结果依赖 JVM 默认
@@ -184,5 +184,33 @@ public class StockEventMapperTest {
         record.setSource(StockEventMapper.SOURCE_MANUAL);
         Map<String, Object> event = StockEventMapper.build(record, true);
         assertEquals(StockEventMapper.SOURCE_MANUAL, event.get("source"));
+    }
+
+    // ---- zhongchengyeweiyi#49：deliveredWeightKg / oilTypeIndex（可选字段）----
+
+    @Test
+    public void inEventWithDensityAndOilTypeIndexMatchesFixture() {
+        JsonObject actual = GSON.toJsonTree(StockEventMapper.wrapAsTelemetry(
+                StockEventMapper.build(inRecord(), true, 1, 0.84), 1756717200000L)).getAsJsonObject();
+        assertEquals(FixtureLoader.loadProtocolV1("stock_event_in_delivered_weight.json"), actual);
+    }
+
+    @Test
+    public void outEventDeliveredWeightIsPositive() {
+        Map<String, Object> event = StockEventMapper.build(outRecord(), false, 1, 0.84);
+        // −(−5000.0) × 0.84
+        assertEquals(4200.0, (Double) event.get("deliveredWeightKg"), 1e-9);
+    }
+
+    @Test
+    public void withoutDensityTheNewFieldsAreOmitted() {
+        Map<String, Object> event = StockEventMapper.build(inRecord(), true, null, null);
+        assertFalse(event.containsKey("deliveredWeightKg"));
+        assertFalse(event.containsKey("oilTypeIndex"));
+    }
+
+    @Test
+    public void nonPositiveDensityIsTreatedAsUnknown() {
+        assertFalse(StockEventMapper.build(inRecord(), true, 1, 0.0).containsKey("deliveredWeightKg"));
     }
 }

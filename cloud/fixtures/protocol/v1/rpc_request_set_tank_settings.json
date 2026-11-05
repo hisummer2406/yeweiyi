@@ -1,0 +1,14 @@
+{
+  "_comment": "config.setTankSettings 的请求体（云端 POST 给 ThingsBoard /api/rpc/twoway/{deviceId}）。args 字段名与设备上报的客户端属性相同（见 client_attributes_tank_settings.json），只改出现的字段；取值范围见设备端 docs/远程配置下发-字段清单.md。cloud#71，未冻结。",
+  "method": "config.setTankSettings",
+  "params": {
+    "commandId": "5d0f7b0e-2a4c-4f7e-9d34-6a1b8c2e9f10",
+    "protocolVersion": 1,
+    "args": { "tank": 1, "alarmHighLevelMm": 2700, "density": 0.7, "oilTypeIndex": 3, "capacityL": 40000 },
+    "issuedAtMs": 1756713600000,
+    "expiresAtMs": 1756713660000,
+    "operator": "13800000001",
+    "reason": "调整高液位报警阈值"
+  },
+  "timeout": 10000
+}

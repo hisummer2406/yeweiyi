@@ -1,0 +1,16 @@
+<view class="ss-page">
+  <view class="ss-search">
+    <image class="ss-search-icon" src="/assets/icons/org-search.png" mode="aspectFit" />
+    <input class="ss-search-input" placeholder="{{text.search}}" value="{{query}}" bindinput="onInput" confirm-type="search" />
+  </view>
+
+  <view wx:if="{{shown.length === 0}}" class="empty">{{text.none}}</view>
+
+  <view wx:for="{{shown}}" wx:key="key" class="ss-item" data-key="{{item.key}}" bindtap="onPick">
+    <view class="ss-item-main">
+      <view class="ss-item-name {{item.key === current ? 'ss-item-on' : ''}}">{{item.name}}</view>
+      <view wx:if="{{item.address}}" class="ss-item-addr">{{item.address}}</view>
+    </view>
+    <text wx:if="{{item.key === current}}" class="ss-item-check">✓</text>
+  </view>
+</view>

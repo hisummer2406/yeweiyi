@@ -1,0 +1,95 @@
+<view>
+  <view wx:if="{{liveAlarm}}" class="card banner-danger">
+    <text class="text-danger">{{text.liveAlarm}}: {{liveAlarm}}</text>
+  </view>
+
+  <view wx:if="{{notice}}" class="empty">{{notice}}</view>
+  <view wx:if="{{infoNotice}}" class="card banner-warning">
+    <text class="text-warning">{{infoNotice}}</text>
+  </view>
+
+  <!-- Live alarms are not arriving (the connection is down and being retried): silence is not "no alarms". -->
+  <view wx:if="{{deviceActive && socketDown}}" class="card banner-warning">
+    <text class="text-warning">{{text.socketDown}}</text>
+  </view>
+
+  <!-- 当前罐：首页点中的罐；可在可见罐之间切换，实时数据与实时报警只看这个罐（单罐时只显示罐名）。 -->
+  <view class="tank-bar" wx:if="{{deviceActive && snapshotLoaded}}">
+    <view wx:if="{{currentTankLabel}}" class="tank-bar-current">{{currentTankLabel}}</view>
+    <view wx:if="{{tankless && activeTab !== 'snapshot'}}" class="muted">{{tankless}}</view>
+    <view wx:if="{{tankOptions.length > 1}}" class="range-chips">
+      <view
+        wx:for="{{tankOptions}}"
+        wx:key="tank"
+        class="range-chip {{currentTank === item.tank ? 'range-chip-on' : ''}}"
+        data-tank="{{item.tank}}"
+        bindtap="onPickTank"
+      >{{item.label}}</view>
+    </view>
+  </view>
+
+  <!-- 只剩一个页签（实时数据）时不显示页签栏；报警、出入库记录只从「我的记录」进入 -->
+  <view class="tabs" wx:if="{{deviceActive && tabs.length > 1}}">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="key"
+      class="tab-item {{activeTab === item.key ? 'tab-item-active' : ''}}"
+      data-tab="{{item.key}}"
+      bindtap="onSwitchTab"
+    >
+      {{item.label}}
+    </view>
+  </view>
+
+  <view class="container" wx:if="{{deviceActive}}">
+    <!-- The last refresh of this tab failed; what is below is the previous read. -->
+    <view wx:if="{{stale[activeTab]}}" class="card banner-warning">
+      <text class="text-warning">{{stale[activeTab]}}</text>
+    </view>
+
+    <!-- 实时数据：GET /api/devices/:device/telemetry/latest -->
+    <view wx:if="{{activeTab === 'snapshot'}}">
+      <view wx:if="{{snapshotError}}" class="empty">
+        <view class="text-danger">{{snapshotError}}</view>
+        <button class="btn-primary" size="mini" bindtap="refreshActiveTab" style="margin-top:24rpx;">{{text.retry}}</button>
+      </view>
+      <view wx:if="{{!loading && snapshotLoaded && tanks.length === 0}}" class="empty empty-art">
+        <image class="empty-art-img" src="/assets/illustrations/empty-data.png" mode="aspectFit" />
+        <view>{{emptyNote || tankless || text.neverReported}}</view>
+      </view>
+      <view class="muted" wx:if="{{snapshotTs}}" style="margin-bottom:12rpx;">{{text.reportedAt}} {{snapshotTs}}</view>
+      <!-- 当前罐的全部读数（不画罐图）：状态与探针在上，读数两列排开，缺失值为「—」 -->
+      <view wx:for="{{tanks}}" wx:key="key" class="card">
+        <view class="dt-head">
+          <text class="tag">{{item.tankNoLabel}}　{{item.oilType || '--'}}</text>
+          <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel || '—'}}</text>
+        </view>
+        <view class="dt-probe {{item.probeConnected ? '' : 'dt-probe-off'}}">
+          {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}
+        </view>
+        <view class="dt-grid">
+          <view wx:for="{{tankFields}}" wx:for-item="f" wx:key="label" class="dt-cell">
+            <view class="dt-label">{{f.label}}</view>
+            <view class="dt-value {{f.strong ? 'dt-value-strong' : ''}}">{{f.value}}<text class="dt-unit">{{f.unit}}</text></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 控制命令：POST /api/devices/:device/commands 下发，GET 轮询结果 -->
+    <view wx:if="{{activeTab === 'commands'}}">
+      <button class="btn-primary" size="mini" bindtap="onIssueCommand" style="margin-bottom:16rpx;">{{text.cmdIssue}}</button>
+      <view wx:if="{{!loading && commandsLoaded && commands.length === 0}}" class="empty">{{text.cmdNone}}</view>
+      <view wx:for="{{commands}}" wx:key="commandId" class="card">
+        <view class="row">
+          <text>{{item.methodLabel}}</text>
+          <text class="badge {{item.status === 'succeeded' ? 'badge-online' : (item.status === 'failed' || item.status === 'rejected' || item.status === 'expired' ? 'badge-failed' : (item.terminal ? 'badge-offline' : 'badge-pending'))}}">{{item.statusLabel}}</text>
+        </view>
+        <view class="muted" style="margin-top:8rpx;">{{text.cmdReason}}: {{item.reason}}</view>
+        <view class="muted tabular-nums">{{text.cmdOperator}} {{item.operator}}　{{item.issuedAt}}</view>
+        <view class="muted text-danger" wx:if="{{item.errorReason}}">{{item.errorReason}}</view>
+        <view class="muted" wx:if="{{!item.terminal}}">{{text.cmdNotTerminal}}</view>
+      </view>
+    </view>
+  </view>
+</view>

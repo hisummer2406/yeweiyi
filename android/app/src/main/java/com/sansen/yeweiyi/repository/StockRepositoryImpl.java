@@ -21,7 +21,7 @@ import java.util.List;
 /**
  * {@link StockRepository} 的实现：内部直接调用现有的 {@code DaoHelp}/{@code DbUtils}，
  * 与 {@code DBDataManager} 当前访问的是同一套存储，不改表结构、不改行为。
- * 迁移方式见 openspec/changes/layer-data-and-hardware-boundaries/design.md 决策1（绞杀者模式）。
+ * 迁移方式见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries/design.md 决策1（绞杀者模式）。
  */
 public class StockRepositoryImpl implements StockRepository {
 
@@ -151,6 +151,20 @@ public class StockRepositoryImpl implements StockRepository {
     @Override
     public void saveStockRecord(StockSave stockSave) {
         save(stockSave);
+    }
+
+    @Override
+    public boolean saveStockBatchNow(List<StockSave> records) {
+        if (records == null || records.isEmpty()) {
+            return false;
+        }
+        try {
+            db.saveAll(records);
+            return true;
+        } catch (DbException e) {
+            Log.e(TAG, "saveStockBatchNow 数据库操作失败", e);
+            return false;
+        }
     }
 
     @Override

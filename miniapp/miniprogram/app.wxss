@@ -1,0 +1,581 @@
+/* 色板/字号/圆角来自 docs/智能液位仪-小程序.psd 的解析结果，见发布的《液位仪视觉规范》。
+   画板设计宽度 750px = 小程序 750rpx 基准，PSD 里量出的像素值可以直接当 rpx 数值用。
+
+   适老化（miniapp#13，2026-10-26）：全小程序字号统一按设计稿 ×1.25 放大（取最近偶数），所有页面与组件
+   用同一张对照表，层级关系不变：
+     设计稿 20 22 24 25 26 27 28 30 32 34 36
+     现在   26 28 30 32 32 34 36 38 40 42 46
+   新增样式请直接用右列的值；写死 height/line-height 的文字要按新字号留够高度。
+   底部 tabBar 与导航栏标题由微信绘制，字号不受这里控制。 */
+
+page {
+  background-color: #edf0f7;
+  color: #131313;
+  font-size: 36rpx;
+  box-sizing: border-box;
+}
+
+.container {
+  padding: 24rpx;
+}
+
+/* 整屏居中容器：用于登录页、"扫码绑定设备"这类没有列表内容、
+   只有一组表单/按钮的页面，避免内容顶在屏幕最上方。 */
+.center-page {
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx 48rpx 120rpx;
+}
+
+/* 品牌标志：直接用公司 LOGO 切图（docs/公司LOGO(7)），不是 CSS 画的方块 */
+.brand-logo {
+  width: 96rpx;
+  height: 96rpx;
+  margin-bottom: 24rpx;
+}
+
+.brand-title {
+  font-size: 42rpx;
+  font-weight: 600;
+  color: #131313;
+  margin-bottom: 8rpx;
+  text-align: center;
+}
+
+.brand-subtitle {
+  font-size: 30rpx;
+  color: #8697a4;
+  margin-bottom: 48rpx;
+  text-align: center;
+}
+
+.center-card {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.card {
+  background-color: #ffffff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+  border: 1rpx solid #ededed;
+  box-shadow: 0 2rpx 12rpx rgba(20, 32, 43, 0.05);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.muted {
+  color: #606060;
+  font-size: 30rpx;
+}
+
+.empty {
+  text-align: center;
+  color: #8697a4;
+  padding: 80rpx 0;
+  font-size: 32rpx;
+}
+
+/* 空状态配图：.empty 之上的一张示意图（目前用在实时数据页没有上报过数据时） */
+.empty-art {
+  padding-top: 120rpx;
+}
+
+.empty-art-img {
+  display: block;
+  width: 360rpx;
+  height: 270rpx;
+  margin: 0 auto 24rpx;
+}
+
+.text-danger {
+  color: #b23b3b;
+}
+
+.text-warning {
+  color: #9c6b00;
+}
+
+.banner-danger {
+  background-color: #fbe7e7;
+  border: 1rpx solid #f3b4b4;
+}
+
+.banner-warning {
+  background-color: #fff3d6;
+  border: 1rpx solid #f0d48a;
+}
+
+.tag {
+  display: inline-block;
+  background-color: #05507c;
+  color: #ffffff;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+button.btn-primary {
+  background: linear-gradient(135deg, #05507c, #0066a2);
+  color: #ffffff;
+  border-radius: 999rpx;
+  font-size: 38rpx;
+  font-weight: 600;
+  line-height: 2.6;
+}
+
+button.btn-primary::after {
+  border: none;
+}
+
+button.btn-secondary {
+  background-color: #ffffff;
+  color: #b23b3b;
+  border: 1rpx solid #e1e1e1;
+  border-radius: 999rpx;
+  font-size: 38rpx;
+  line-height: 2.6;
+}
+
+button.btn-secondary::after {
+  border: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 6rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.badge-online {
+  background-color: #e4f5ec;
+  color: #1e7a4c;
+}
+
+.badge-offline {
+  background-color: #ededed;
+  color: #606060;
+}
+
+.badge-pending {
+  background-color: #e4f1fb;
+  color: #0066a2;
+}
+
+.badge-failed {
+  background-color: #fbe7e7;
+  color: #b23b3b;
+}
+
+.tabs {
+  display: flex;
+  background-color: #ffffff;
+  border-bottom: 1rpx solid #ededed;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 20rpx 0;
+  font-size: 32rpx;
+  color: #606060;
+}
+
+.tab-item-active {
+  color: #05507c;
+  font-weight: 600;
+  border-bottom: 4rpx solid #05507c;
+}
+
+.field {
+  margin-bottom: 20rpx;
+}
+
+.field-label {
+  font-size: 32rpx;
+  color: #606060;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.field-input {
+  background-color: #f7f8fa;
+  border: 1rpx solid #e1e1e1;
+  border-radius: 12rpx;
+  padding: 16rpx;
+  font-size: 36rpx;
+  color: #131313;
+}
+
+/* 列表行：图标 + 文本 + 右侧箭头，对应设计稿里"设置/我的记录"弹层的菜单行样式 */
+.list-row {
+  display: flex;
+  align-items: center;
+  padding: 28rpx 8rpx;
+  border-bottom: 1rpx solid #ededed;
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+.list-row-icon {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 16rpx;
+  background-color: #e4f1fb;
+  color: #05507c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+/* 默认头像：公司 logo 的圆形标志 */
+.avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+/* 无底色的图标行，用于「设置/我的记录」菜单——设计稿里这些图标是直接放在白底上的，没有色块背景 */
+.list-row-icon-plain {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.list-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.list-row-chevron {
+  width: 28rpx;
+  height: 28rpx;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+/* 选中态勾选标记：PSD 里"油站选择"没有导出专门的勾选图层，就是个状态符号，非插画 */
+.text-selected-mark {
+  color: #05507c;
+  font-size: 40rpx;
+  font-weight: 700;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+/* 罐体读数行：标签 + 加粗数值 + 单位，对应设计稿"液位 1666.8 毫米"的样式 */
+.stat-row {
+  display: flex;
+  align-items: baseline;
+  font-size: 32rpx;
+  color: #606060;
+  padding: 6rpx 0;
+}
+
+.stat-row-label {
+  width: 96rpx;
+  flex-shrink: 0;
+}
+
+.stat-row-value {
+  font-weight: 600;
+  color: #131313;
+  font-variant-numeric: tabular-nums;
+  margin-right: 8rpx;
+}
+
+.stat-row-unit {
+  color: #8697a4;
+  font-size: 28rpx;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 卧罐插画：从设计稿 PSD 里直接裁切导出（首页-卧罐01 画板），非 CSS 绘制 */
+.tank-illustration {
+  width: 112rpx;
+  height: 148rpx;
+  flex-shrink: 0;
+  margin-right: 20rpx;
+}
+
+.tank-card-head {
+  display: flex;
+  align-items: flex-start;
+}
+
+.tank-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-title {
+  font-size: 32rpx;
+  color: #606060;
+  font-weight: 600;
+  margin: 24rpx 0 12rpx;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
+/* 菜单列表：「我的记录」「设置」。数值取自设计稿「首页-我的记录04」「首页-设置05」PNG 的像素实测
+   （设计稿里它们是半屏弹层，这里按"保留独立页面"处理，只对齐行内的尺寸与颜色）：
+   行距约 118；图标 64×64 的 2x 切图按 32 显示，字形左缘 x=52；文字 x=101，28rpx #131313；
+   箭头 32 显示，字形右缘距屏幕右 51；行与行之间没有分隔线。 */
+.menu-list {
+  background-color: #ffffff;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  height: 118rpx;
+  padding: 0 42rpx 0 50rpx;
+}
+
+.menu-icon {
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 19rpx;
+  flex-shrink: 0;
+}
+
+.menu-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 36rpx;
+  color: #131313;
+}
+
+.menu-chevron {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+}
+
+/* ===== 表单件：「参数修正」「储罐设置」「补录记录」等设计稿页面共用 =====
+   数值取自对应 PNG 的像素实测：白卡片 x20–729、圆角约 16；一行 81（储罐设置 90）；
+   标签 28rpx #131313；值 28rpx，空值/占位 #919191；选择项右侧箭头（32rpx 的 2x 切图）。 */
+.fc {
+  margin: 20rpx 20rpx 0;
+  background-color: #ffffff;
+  border-radius: 16rpx;
+}
+
+.fr {
+  display: flex;
+  align-items: center;
+  height: 81rpx;
+  padding: 0 37rpx 0 51rpx;
+  font-size: 36rpx;
+  color: #131313;
+}
+
+/* 储罐设置那种更紧的列：行高 90，标签 x=53、值 x=316 */
+.fr-b {
+  height: 90rpx;
+  padding: 0 26rpx 0 32rpx;
+}
+
+.fl {
+  width: 233rpx;
+  flex-shrink: 0;
+}
+
+.fr-b .fl {
+  width: 263rpx;
+}
+
+.fv {
+  flex: 1;
+  min-width: 0;
+}
+
+.fv-ph {
+  color: #919191;
+}
+
+.fi {
+  width: 69rpx;
+  height: 60rpx;
+  font-size: 36rpx;
+  color: #131313;
+}
+
+.fu {
+  margin-left: 5rpx;
+  color: #919191;
+  flex: 1;
+}
+
+.fc-chevron {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+}
+
+/* 药丸按钮：313×88，文字 36rpx；颜色按设计稿各页分别取值 */
+.pill-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 36rpx;
+}
+
+button.pill {
+  width: 313rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 44rpx;
+  font-size: 46rpx;
+  color: #ffffff;
+}
+
+button.pill::after {
+  border: none;
+}
+
+.pill-lite {
+  background-color: #3b7aef;
+}
+
+.pill-deep {
+  background-color: #0068e9;
+}
+
+.pill-main {
+  background-color: #0066a2;
+}
+
+.pill-green {
+  background-color: #0f846c;
+}
+
+.pill-indigo {
+  background-color: #3b68e9;
+}
+
+/* 开关与开关行：「记录设置」「报表设置」共用。数值取自设计稿「报表设置22」PNG：
+   开关 92×46，开 #0066A2 / 关 #C3C9D4，白色滑块；一行 120，标签 x=56、开关右缘距卡片右 39。 */
+.sw {
+  position: relative;
+  top: 4rpx; /* 设计稿里开关比标签行心低约 4 */
+  width: 94rpx;
+  height: 47rpx;
+  border-radius: 24rpx;
+  background-color: #c3c9d4;
+  flex-shrink: 0;
+}
+
+.sw-on {
+  background-color: #0066a2;
+}
+
+.sw-knob {
+  position: absolute;
+  top: 4rpx;
+  left: 4rpx;
+  width: 39rpx;
+  height: 39rpx;
+  border-radius: 50%;
+  background-color: #ffffff;
+}
+
+.sw-on .sw-knob {
+  left: 51rpx;
+}
+
+.sr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 120rpx;
+  padding: 0 38rpx 0 36rpx;
+  font-size: 36rpx;
+  color: #131313;
+}
+
+/* 记录列表的时间范围条（设备详情报警页签、我的记录列表页共用）；罐号筛选与罐切换也用同一套 chip */
+.range-bar {
+  margin-bottom: 16rpx;
+}
+
+.range-chips {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.range-chip {
+  margin: 0 16rpx 12rpx 0;
+  padding: 10rpx 24rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  border: 1rpx solid #d9dee8;
+  font-size: 32rpx;
+  color: #131313;
+}
+
+.range-chip-on {
+  background: #066daa;
+  border-color: #066daa;
+  color: #ffffff;
+}
+
+.range-custom {
+  display: flex;
+  align-items: center;
+  margin-top: 4rpx;
+}
+
+.range-date {
+  min-width: 220rpx;
+  padding: 12rpx 20rpx;
+  border-radius: 12rpx;
+  background: #ffffff;
+  border: 1rpx solid #d9dee8;
+  font-size: 32rpx;
+  text-align: center;
+}
+
+.range-sep {
+  margin: 0 16rpx;
+  color: #8a8a8a;
+  font-size: 32rpx;
+}
+
+.range-hint {
+  margin-top: 8rpx;
+}
+
+/* 列表底部：加载中 / 没有更多了 / 加载失败，点击重试 */
+.list-footer {
+  padding: 24rpx 0 32rpx;
+  text-align: center;
+  font-size: 32rpx;
+  color: #8a8a8a;
+}

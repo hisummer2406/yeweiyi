@@ -1,0 +1,120 @@
+name: Cloud Deploy
+
+# 私有仓库当前计划不支持分支保护；在工作流里强制核对同一 main 提交的 CI 与镜像。
+# 首次生产运行前需完成部署目录、基础服务、HTTPS 和业务验收。
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "已通过 main Cloud CI/Cloud Image 的完整 40 位提交 SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  packages: read
+
+defaults:
+  run:
+    working-directory: cloud
+
+concurrency:
+  group: cloud-deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # 固定 24.04：ubuntu-latest 换成 26.04 后 Runner 的 docker image inspect .Id 与服务器 docker load 后不一致，
+    # 「远端预载镜像标识不一致」门禁误拦（2026-11-02）。换回 latest 前先确认两端 .Id 口径一致。
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HOST: ${{ secrets.CLOUD_DEPLOY_HOST }}
+      TARGET_USER: ${{ secrets.CLOUD_DEPLOY_USER }}
+      TARGET_PORT: ${{ secrets.CLOUD_DEPLOY_PORT }}
+      DEPLOY_DIR: ${{ secrets.CLOUD_DEPLOY_PATH }}
+    steps:
+      - name: 仅允许从 main 手动发布
+        # 此时还没 checkout，cloud/ 不存在，不能用默认工作目录。
+        working-directory: .
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          [[ "$REF_NAME" == main ]] || { echo '仅 main 可发起生产部署'; exit 1; }
+          [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo '需要完整提交 SHA'; exit 1; }
+          [[ "$TARGET_HOST" =~ ^[A-Za-z0-9.-]+$ && "$TARGET_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || exit 1
+          [[ "${TARGET_PORT:-22}" =~ ^[0-9]+$ && "$DEPLOY_DIR" =~ ^/[A-Za-z0-9_/-]+$ ]] || exit 1
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: 校验版本与 CI/Image 门禁
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/main
+          # 单仓库按目录触发：只改别的目录的提交不会跑 Cloud CI/Image，选 SHA 时要选改过 cloud/ 的提交。
+          for wf in "Cloud CI" "Cloud Image"; do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&event=push&per_page=100")"
+            printf '%s' "$runs" | jq -e --arg wf "$wf" '
+              [.workflow_runs[] | select(.name == $wf and .head_branch == "main")]
+              | sort_by(.run_number) | last | .conclusion == "success"' >/dev/null
+          done
+          git checkout --detach "$RELEASE_SHA"
+      - name: 部署配置检查
+        run: bash deploy/check-compose.sh
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: 将已构建镜像固定到 digest
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
+          docker pull "$image"
+          digest_image="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
+          [[ "$digest_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || exit 1
+          echo "DEPLOY_IMAGE=$digest_image" >> "$GITHUB_ENV"
+      - name: 配置 SSH
+        env:
+          KEY: ${{ secrets.CLOUD_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.CLOUD_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [[ -n "$KEY" && -n "$KNOWN_HOSTS" ]] || { echo 'SSH 密钥或主机公钥未设置'; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: 经 SSH 预载已验证 API 镜像
+        run: |
+          set -o pipefail
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
+          expected="$(docker image inspect "$DEPLOY_IMAGE" --format '{{.Id}}')"
+          [[ "$expected" =~ ^sha256:[a-f0-9]{64}$ ]]
+          # ECS 跨境下载大层缓慢；Runner 已按 digest 拉取，通过 SSH 预热缓存。
+          # 远端仍 pull 原 digest，镜像身份与版本门禁不变。
+          docker save "$image" | gzip | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" 'gzip -dc | sudo -n docker load'
+          actual="$("${SSH[@]}" "$TARGET_USER@$TARGET_HOST" "sudo -n docker image inspect '$image' --format '{{.Id}}'")"
+          [[ "$actual" == "$expected" ]] || { echo '远端预载镜像标识不一致'; exit 1; }
+      - name: 同步同一提交的部署文件
+        run: |
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          tar -czf - docker-compose.yml docker-compose.prod.yml docker-compose.thingsboard.yml \
+            docker-compose.thingsboard-tls.yml db/migrations deploy/remote-deploy.sh deploy/profiles/small.yml \
+            | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" "test -f '$DEPLOY_DIR/.env.prod' && tar -xzf - -C '$DEPLOY_DIR'"
+      - name: 临时鉴权并部署
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: |
+          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          TARGET="$TARGET_USER@$TARGET_HOST"
+          AUTH_DIR="$DEPLOY_DIR/.docker-ci"
+          trap '"${SSH[@]}" "$TARGET" "sudo -n rm -rf -- '\''$AUTH_DIR'\''" || true' EXIT
+          "${SSH[@]}" "$TARGET" "mkdir -p '$AUTH_DIR' && chmod 700 '$AUTH_DIR'"
+          printf '%s' "$REGISTRY_TOKEN" | "${SSH[@]}" "$TARGET" \
+            "sudo -n docker --config '$AUTH_DIR' login ghcr.io -u '$REGISTRY_USER' --password-stdin"
+          "${SSH[@]}" "$TARGET" \
+            "DOCKER_CONFIG='$AUTH_DIR' bash '$DEPLOY_DIR/deploy/remote-deploy.sh' '$DEPLOY_DIR' '$DEPLOY_IMAGE'"

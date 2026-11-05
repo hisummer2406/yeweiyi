@@ -1,0 +1,14 @@
+<view wx:if="{{show}}" class="gp-mask" catchtap="onClose">
+  <view class="gp-panel" style="top:{{top}}px;" catchtap="noop">
+    <view class="gp-title" wx:if="{{title}}">{{title}}</view>
+    <view class="gp-grid">
+      <view
+        wx:for="{{options}}"
+        wx:key="*this"
+        class="gp-item {{index === value ? 'gp-item-on' : ''}}"
+        data-index="{{index}}"
+        bindtap="onPick"
+      >{{item}}</view>
+    </view>
+  </view>
+</view>

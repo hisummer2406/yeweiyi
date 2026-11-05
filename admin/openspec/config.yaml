@@ -1,0 +1,52 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+context: |
+  yeweiyi-admin — 液位仪云平台的 Web 前端，Ant Design Pro (UmiJS)，一个仓库两个分区靠路由和
+  角色区分（不是两个仓库、两次部署）：
+    - `/ops/*` 运维/管理控制台，仅 `platform_admin` 角色可见（`src/access.ts` 的
+      `canPlatformAdmin`），对应后端 `yeweiyi-cloud` 的 `openspec/changes/add-admin-console`
+      提案。
+    - `/console/*` 客户 PC 监控台，是微信小程序 `yeweiyi-miniapp` 的桌面版，面向
+      `customer_admin`/`customer_user`（`platform_admin` 也能进，见 `canConsole`）。
+  两个分区共用同一套登录、同一份 JWT、同一个 `yeweiyi-cloud` 后端。
+
+  唯一的后端是 `../cloud/`（Go/gin），本仓库要对接的一切 API 都在那里，写请求
+  函数前必须先读它的 `CLAUDE.md` 与 `internal/api/router.go`，不能凭记忆假设接口形状；
+  `/ops/*` 的行为规格来自它的 `openspec/changes/add-admin-console/specs/*/spec.md`。这是
+  两个独立仓库、各自的 openspec 配置，不共享同一份 config。
+
+  当前状态（2026-09-05）：刚从官方模板裁剪出页面骨架，`src/services/ant-design-pro/*` 里的
+  类型和请求函数还是模板自带的示例，尚未替换成 `yeweiyi-cloud` 真实的接口类型——这是多数改动
+  的前置阻塞项，动手前确认目标页面的类型是否已经对齐。
+
+  技术栈：UmiJS + Ant Design Pro、TypeScript、biome（lint/format）、vitest。
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

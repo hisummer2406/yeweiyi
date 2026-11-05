@@ -20,6 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import com.sansen.yeweiyi.logic.thingsboard.StockRecordMapper;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseActivity;
@@ -177,7 +178,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         // 临时按钮 表示当前主页处于哪个页面，并且该按钮不可被点击；初始无高亮（首页无对应可视按钮）
         tempButton = null;
 
-        // 底部导航栏点击绑定（原为 android:onClick 反射绑定，见 openspec/changes/split-main-activity §1）
+        // 底部导航栏点击绑定（原为 android:onClick 反射绑定，见 openspec/changes/archive/2026-11-02-split-main-activity §1）
         findViewById(R.id.btn_jieJing).setOnClickListener(alarmCoordinator::btn_jieJing);
         findViewById(R.id.ly_bar_but_alarm).setOnClickListener(this::bar_but_alarm);
         findViewById(R.id.ly_bar_but_saveoil).setOnClickListener(this::bar_but_saveoil);
@@ -398,7 +399,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
 
     private void saveStock() {
-        myApplication.getmSaveOilManager().SaveOilDB();
+        myApplication.getmSaveOilManager().saveStock(StockRecordMapper.TRIGGER_SCHEDULED);
     }
 
     private void inOutOilDection(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse) {
@@ -473,7 +474,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
     /**
      * 取消当前高亮态但不设新的高亮目标（用于返回主页/设置——这两处没有可见的
-     * 底部栏按钮与之对应，见 openspec/changes/split-main-activity §1）。
+     * 底部栏按钮与之对应，见 openspec/changes/archive/2026-11-02-split-main-activity §1）。
      * 非 private：MainActions（§4）在密码校验通过后导航到设置页时需要调用。
      */
     public void clearButtonState() {

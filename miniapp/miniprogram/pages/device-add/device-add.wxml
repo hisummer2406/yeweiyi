@@ -1,0 +1,9 @@
+<view class="add-page">
+  <view class="add-title">{{text.title}}</view>
+  <view class="add-subtitle">{{text.subtitle}}</view>
+  <view class="add-card">
+    <view class="add-card-title">{{text.cardTitle}}</view>
+    <view class="add-card-desc">{{text.cardDesc}}</view>
+    <button class="add-scan" bindtap="onScan">{{text.scan}}</button>
+  </view>
+</view>
