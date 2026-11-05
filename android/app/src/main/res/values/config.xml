@@ -1,0 +1,7 @@
+<resources>
+    <!--
+      OTA 升级配置文件地址，被 logic/LoginHelper.java 通过 R.string.apkurl 读取。
+      同文件原有的 baseinfo / android_phone_qrcode / last_user 三项确认无任何引用，已移除。
+    -->
+    <string name="apkurl">http://203.171.228.177:8080/SanSenLPL/SanSen/YeWeiYi/Update/update.xml</string>
+</resources>

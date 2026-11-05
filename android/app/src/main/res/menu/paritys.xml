@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--波特率-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/item_n"
+        android:title="n"
+        />
+    <item
+        android:id="@+id/item_o"
+        android:title="o"
+        />
+    <item
+        android:id="@+id/item_e"
+        android:title="e"
+        />
+    <item
+        android:id="@+id/item_m"
+        android:title="m"
+        />
+    <item
+        android:id="@+id/item_s"
+        android:title="s"
+        />
+</menu>

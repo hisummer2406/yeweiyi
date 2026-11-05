@@ -1,0 +1,214 @@
+apply plugin: 'com.android.application'
+
+// ---------------------------------------------------------------------------
+// 敏感配置：构建期从 local.properties 注入，不再硬编码进源码。
+// local.properties 不进版本库；新环境照 local.properties.template 填写。
+// ---------------------------------------------------------------------------
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def secretField = { String propertyName ->
+    def value = localProperties.getProperty(propertyName)
+    if (value == null || value.trim().isEmpty()) {
+        logger.warn("[配置缺失] local.properties 中没有 ${propertyName}，" +
+                "将编译为空字符串，相关功能(MQTT上报/接口加密)会失效。参见 local.properties.template")
+        value = ""
+    }
+    return "\"${value}\""
+}
+// 开关类配置：与 secretField 走同一条 local.properties -> BuildConfig 通道，
+// 但缺失时不告警 —— 缺失就是默认值 false，是正常状态而非配置遗漏。
+def flagField = { String propertyName ->
+    def value = localProperties.getProperty(propertyName)
+    return Boolean.parseBoolean(value == null ? "false" : value.trim()).toString()
+}
+
+// ---------------------------------------------------------------------------
+// 正式包签名：keystore 文件本体固定放在 app/keystore/release.jks（.gitignore 排除，
+// 不进版本库），用 tools/generate-release-keystore.sh 生成；密码/别名和其余敏感配置
+// 一样走 local.properties。三项有一项缺失就不装配 signingConfig —— release 构建仍然
+// 能跑（供本机验证编译用），只是产物不签名、装不到设备，而不是静默用错误的 key 签出去。
+// ---------------------------------------------------------------------------
+def releaseKeystoreFile = rootProject.file('app/keystore/release.jks')
+def releaseStorePassword = localProperties.getProperty('sansen.releaseStorePassword')
+def releaseKeyAlias = localProperties.getProperty('sansen.releaseKeyAlias')
+def releaseKeyPassword = localProperties.getProperty('sansen.releaseKeyPassword')
+def releaseSigningReady = releaseKeystoreFile.exists() &&
+        releaseStorePassword?.trim() && releaseKeyAlias?.trim() && releaseKeyPassword?.trim()
+if (!releaseSigningReady) {
+    logger.warn("[配置缺失] 正式签名未就绪：app/keystore/release.jks 不存在，或 local.properties 中 " +
+            "sansen.releaseStorePassword / sansen.releaseKeyAlias / sansen.releaseKeyPassword 有缺失。" +
+            "release 产物将不签名，无法安装到设备。先跑 tools/generate-release-keystore.sh，" +
+            "再按 local.properties.template 填密码。")
+}
+
+android {
+    compileSdkVersion 27
+    defaultConfig {
+        applicationId "com.sansen.yeweiyi"
+        minSdkVersion 21
+        targetSdkVersion 27
+        versionCode 5
+        versionName "1.0.5-C"
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        buildConfigField "String", "PRODUCT_KEY", secretField('sansen.productKey')
+        buildConfigField "String", "PRODUCT_SECRET", secretField('sansen.productSecret')
+        buildConfigField "String", "REQUEST_ENCRYPT_KEY", secretField('sansen.requestEncryptKey')
+        buildConfigField "String", "BASE_URL", secretField('sansen.baseUrl')
+        // 探头报文录制开关，默认关闭。见 manager/ProbeTrafficRecorder。
+        buildConfigField "boolean", "PROBE_RECORDING", flagField('sansen.probeRecording')
+        // ThingsBoard MQTT 是否走 TLS，默认关闭（明文，方便本地/开发环境联调）。
+        // 生产部署应开启；每台设备的连接凭据是运行期配网写入的 access token，
+        // 不走这条构建期通道——见 manager/ThingsBoardCredentialStore。
+        buildConfigField "boolean", "THINGSBOARD_USE_TLS", flagField('sansen.thingsboardUseTls')
+        // ThingsBoard 设备自助注册（Provisioning）用的 key/secret，同型号设备共用；
+        // 设备只凭它和手输的编号领自己的 access token，见 ThingsBoardManager。
+        buildConfigField "String", "PROVISION_DEVICE_KEY", secretField('sansen.provisionDeviceKey')
+        buildConfigField "String", "PROVISION_DEVICE_SECRET", secretField('sansen.provisionDeviceSecret')
+        externalNativeBuild {
+            cmake {
+                cppFlags "-frtti -fexceptions"
+            }
+        }
+        multiDexEnabled true
+    }
+    /**
+     * 忽略 9patch
+     */
+    aaptOptions {
+        cruncherEnabled = false
+        useNewCruncher = false
+    }
+
+    packagingOptions {
+        exclude 'META-INF/NOTICE' // will not include NOTICE file
+        exclude 'META-INF/LICENSE' // will not include LICENSE file
+        exclude 'META-INF/DEPENDENCIES'
+    }
+//    //自动追加版本号和版本名称
+    android.applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "app_" + defaultConfig.versionName + "_" + new Date().format("yyyy-MM-dd") + "_" + buildType.name + ".apk"
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+
+    dexOptions {
+        jumboMode = true
+        javaMaxHeapSize "4g"
+    }
+
+//    afterEvaluate {
+//        tasks.matching {
+//            it.name.startsWith('dex')
+//        }.each { dx ->
+//            if (dx.additionalParameters == null) {
+//                dx.additionalParameters = ['--multi-dex']
+//            } else {
+//                dx.additionalParameters += '--multi-dex'
+//            }
+//        }
+//    }
+
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile releaseKeystoreFile
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+
+    //导入dataBinding支持
+    dataBinding {
+        enabled true
+    }
+
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+    implementation 'com.android.support:design:27.1.1'
+    implementation files('libs\\xzjh_interface_20260204.jar')
+    androidTestImplementation('com.android.support.test.espresso:espresso-core:2.2.2', {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    testImplementation 'junit:junit:4.12'
+    implementation project(':xutilslibrary')
+    implementation 'com.android.support:recyclerview-v7:27.1.1'
+    implementation 'com.android.support:appcompat-v7:27.1.1'
+    implementation 'com.android.support:multidex:1.0.0'
+    implementation 'com.android.support:support-v4:27.1.1'
+    implementation 'com.google.code.gson:gson:2.2.2'
+    implementation files('libs/Baidu_Mtj_3.7.4.9.jar')
+    implementation files('libs/commons-codec-1.3.jar')
+    implementation files('libs/commons-lang3-3.0-beta.jar')
+      implementation files('libs/poi-3.10-FINAL-20140208.jar')
+    implementation files('libs/poi-excelant-3.10-FINAL-20140208.jar')
+    implementation files('libs/poi-scratchpad-3.10-FINAL-20140208.jar')
+    implementation files('libs/pushservice-5.2.0.12.jar')
+    implementation files('libs/universal-image-loader-1.9.5.jar')
+       implementation files('libs/httpclient-4.5.3.jar')
+    implementation files('libs/httpcore-4.4.6.jar')
+    implementation files('libs/mina-core-2.0.16.jar')
+    implementation files('libs/slf4j-api-1.7.21.jar')
+    implementation files('libs/locSDK_6.13.jar')
+    implementation files('libs/andserver-1.1.0.jar')
+    implementation files('libs/httpcore-4.4.8.jar')
+    implementation files('libs/fileupload-1.3.3.jar')
+    implementation files('libs/sun.misc.BASE64Decoder.jar')
+    implementation files('libs/com.baidu.tts_2.3.1.20170808_e39ea89.jar')
+    debugImplementation 'com.squareup.leakcanary:leakcanary-android:1.3'
+    releaseImplementation 'com.squareup.leakcanary:leakcanary-android-no-op:1.3'
+    //日志框架
+    implementation 'com.orhanobut:logger:1.15'
+    implementation 'com.android.support.test.espresso:espresso-core:2.2.2'
+    implementation 'com.android.support:multidex-instrumentation:1.0.1'
+    implementation 'io.reactivex.rxjava2:rxjava:2.1.7'
+    implementation 'io.reactivex.rxjava2:rxandroid:2.0.1'
+    implementation files('libs/tbs_sdk_thirdapp_v3.2.0.1104_43200_sharewithdownload_withfilereader_withoutGame_obfs_20170609_115346.jar')
+    implementation files('libs/mqtt-client-0.4.0.jar')
+    implementation 'com.squareup.retrofit2:retrofit:2.4.0'
+    implementation 'com.squareup.retrofit2:converter-gson:2.4.0'
+    implementation 'com.squareup.retrofit2:adapter-rxjava:2.4.0'
+    implementation 'com.github.bumptech.glide:glide:3.7.0'
+    implementation 'com.lzy.net:okgo:3.0.4'
+    //以下三个选择添加，okrx和okrx2不能同时使用
+    implementation 'com.lzy.net:okrx:1.0.2'
+    implementation 'com.lzy.net:okrx2:2.0.2'
+    implementation 'com.lzy.net:okserver:2.0.5'
+    implementation 'com.google.zxing:core:3.2.1'
+    implementation 'com.alibaba:fastjson:1.2.73'
+    implementation 'com.youth.banner:banner:1.4.10'
+   // implementation 'com.contrarywind:Android-PickerView:3.2.6'
+    implementation 'com.contrarywind:Android-PickerView:4.1.9'
+    // 滚轮选择器（时分滚动）
+    //implementation "com.google.android.material:material:1.6.0"
+
+   // implementation 'com.wdullaer:materialdatetimepicker:4.2.3'
+}

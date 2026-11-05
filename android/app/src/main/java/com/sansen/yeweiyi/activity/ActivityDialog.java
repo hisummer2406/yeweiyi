@@ -1,0 +1,110 @@
+package com.sansen.yeweiyi.activity;
+
+import android.app.Activity;
+import android.content.Context;
+import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.BaseAdapter;
+import android.widget.GridView;
+import android.widget.TextView;
+
+import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.languageUtil.LanguageUtil;
+
+public class ActivityDialog extends Activity implements OnItemClickListener {
+
+	private GridView activity_dialog_gridview;
+	String[]  valueData = null;
+	private int value;
+
+	@Override
+	protected void attachBaseContext(Context newBase) {
+		super.attachBaseContext(LanguageUtil.wrap(newBase));
+	}
+
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		// TODO Auto-generated method stub
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_dialog);
+		value = getIntent().getIntExtra("value", 0);
+		 if (value == 0) {
+			setTitle(R.string.oilCanSelect);
+			valueData=getResources().getStringArray(R.array.oilcanArray);
+		}else if(value == 1){
+			setTitle(R.string.oil_type);
+			valueData= getResources().getStringArray(R.array.oiltypeArray);//DataUtils.getOilType();
+		// [不可达-2026-09-21] value==5/6/7 这三个分支：全仓库穷举了所有
+		// new Intent(..., ActivityDialog.class) 的调用点，传的 value 只有 0、1，或者压根没
+		// putExtra("value",...)（走默认值 0）。没有任何调用方传 5/6/7（西语翻译覆盖率核查时发现）。
+		// oilcanset_info/oilcantable_info 这两个字符串虽然已经有西语翻译（历史遗留，不算错，
+		// 只是翻了不会显示的分支），sensor_settings 还没翻——三个都不用优先翻。
+		}else if (value==5) {
+			setTitle(R.string.oilcanset_info);
+			// [已屏蔽-2026-09-24] oilcanSetArray 不可达（value==5 无调用方传入，见上方注释）。
+			// valueData = getResources().getStringArray(R.array.oilcanSetArray);
+		}else if (value==6) {
+			setTitle(R.string.oilcantable_info);
+			// [已屏蔽-2026-09-24] oilcanTableArray 不可达（value==6 无调用方传入，见上方注释）。
+			// valueData = getResources().getStringArray(R.array.oilcanTableArray);
+		}
+		else if (value == 7) {
+			// [已屏蔽-2026-09-23] sensor_settings 已删除（value==7 无调用方传入，不可达，见上方注释）。
+			// setTitle(R.string.sensor_settings);
+			// [已屏蔽-2026-09-24] tanZhenTableArray 不可达（value==7 无调用方传入，同上）。
+			// valueData=getResources().getStringArray(R.array.tanZhenTableArray);
+		}
+		
+		overridePendingTransition(0,0);
+		initView();
+	}
+
+	private void initView() {
+		activity_dialog_gridview = (GridView)findViewById(R.id.activity_dialog_gridview);
+		activity_dialog_gridview.setAdapter(new MyAdapter());
+		activity_dialog_gridview.setOnItemClickListener(this);
+	}
+	class MyAdapter extends BaseAdapter {
+
+		@Override
+		public int getCount() {
+			return valueData.length;
+		}
+
+		@Override
+		public Object getItem(int position) {
+			return null;
+		}
+
+		@Override
+		public long getItemId(int position) {
+			// TODO Auto-generated method stub
+			return 0;
+		}
+
+		@Override
+		public View getView(int position, View convertView, ViewGroup parent) {
+			View v = LayoutInflater.from(ActivityDialog.this).inflate(R.layout.iteam_activity_dialog_gridview, null);
+			TextView tv=(TextView) v.findViewById(R.id.item_activity_dialog_tv);
+			tv.setText(valueData[position]);
+			return v;
+		}
+	}
+	@Override
+	public void onItemClick(AdapterView<?> parent, View view, int position,
+							long id) {
+		//由于点击框的外面默认返回为0，因此在这里不能返回0应该在此基础上+上某些数字
+		setResult(position+100);
+		finish();
+	}
+	@Override
+	protected void onPause() {
+		// TODO Auto-generated method stub
+		super.onPause();
+		overridePendingTransition(0,0);
+	}
+}

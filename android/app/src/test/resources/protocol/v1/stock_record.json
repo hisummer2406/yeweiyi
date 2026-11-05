@@ -1,0 +1,33 @@
+{
+  "_comment": "一次库存保存（手动或周期），一条消息携带当时全部启用的罐。recordId = stock-{tsMs}，tsMs 到秒，同一次保存的各罐共用；同一秒的两次保存折叠为一条，trigger 取胜出的那份。trigger：SCHEDULED（按『库存生成时间』周期自动保存）| MANUAL（库存页手动保存）。单位：levelMm/waterLevelMm 毫米，volumeL 升，tempC 摄氏度，weightKg 千克。oilType 为保存当时的介质显示名，oilTypeIndex 为油品表下标（见 oil_type_index.json）。该罐某项缺失时对应键不出现。",
+  "ts": 1762153200000,
+  "values": {
+    "stockRecord": {
+      "recordId": "stock-1762153200000",
+      "trigger": "SCHEDULED",
+      "tsMs": 1762153200000,
+      "tanks": [
+        {
+          "tank": 1,
+          "oilType": "92#",
+          "oilTypeIndex": 5,
+          "levelMm": 1498.0,
+          "volumeL": 17960.2,
+          "waterLevelMm": 12.0,
+          "tempC": 18.6,
+          "weightKg": 13290.5
+        },
+        {
+          "tank": 2,
+          "oilType": "0#",
+          "oilTypeIndex": 1,
+          "levelMm": 960.0,
+          "volumeL": 10790.0,
+          "waterLevelMm": 0.0,
+          "tempC": 17.9,
+          "weightKg": 9063.6
+        }
+      ]
+    }
+  }
+}

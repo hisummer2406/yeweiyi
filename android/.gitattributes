@@ -1,0 +1,23 @@
+# 换行符规范
+#
+# 本项目最初在 Windows 上开发，仓库里长期是 CRLF；2026-08 的阶段 4 批处理脚本
+# 又把改到的 67 个文件转成了 LF，造成 CRLF/LF 混排，diff 与 blame 被整文件改写淹没。
+# 此处统一到 LF，并由 `git add --renormalize .` 一次性归一（见对应提交）。
+#
+# eol=lf 表示无论在哪个平台检出，工作区都是 LF —— 不依赖各人的 core.autocrlf 设置。
+
+* text=auto eol=lf
+
+# Windows 批处理保留 CRLF：部分 cmd.exe 对 LF 结尾的 .bat 解析异常
+*.bat text eol=crlf
+
+# 二进制显式标注，避免 text=auto 误判后损坏内容
+*.png  binary
+*.jpg  binary
+*.jar  binary
+*.ttc  binary
+*.mp3  binary
+*.so   binary
+*.apk  binary
+*.jks  binary
+*.keystore binary

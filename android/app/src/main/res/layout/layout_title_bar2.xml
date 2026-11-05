@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout>
+
+    <data>
+        <import type="com.sansen.yeweiyi.bean.SerialPortEntrity" />
+        <variable
+            name="viewModel"
+            type="com.sansen.yeweiyi.bean.SerialPortEntrity" />
+
+    </data>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/title_bar"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/dp_83"
+    android:background="#004873"
+     >
+    <TextView
+        android:id="@+id/tv_title"
+        android:layout_centerInParent="true"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:textSize="@dimen/sp_30"
+        android:gravity="center"
+        android:textColor="@color/white"
+        android:text="@{viewModel.title}"
+       />
+    <ImageView
+        android:layout_toLeftOf="@+id/main_time"
+        android:id="@+id/iv_time"
+        android:layout_width="@dimen/dp_30"
+        android:layout_height="match_parent"
+        android:layout_marginRight="@dimen/dp_5"
+        android:src="@drawable/sj_1"
+        />
+
+
+    <TextView
+        android:layout_alignParentEnd="true"
+        android:gravity="center"
+        android:id="@+id/main_time"
+        android:layout_marginRight="@dimen/dp_30"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:textColor="@color/white"
+        android:text="@{viewModel.time}"
+        android:hint="20260122"
+        android:textSize="@dimen/sp_24" />
+</RelativeLayout>
+</layout>

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#EDF0F7"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/title_bar"
+        layout="@layout/layout_title_bar2" />
+
+    <LinearLayout
+        android:layout_marginLeft="@dimen/dp_104"
+        android:layout_marginRight="@dimen/dp_104"
+        android:layout_marginTop="@dimen/dp_50"
+        android:layout_marginBottom="@dimen/dp_50"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#e6eeff"
+        android:orientation="vertical"
+        android:padding="@dimen/dp_54">
+
+        <!-- 串口2设置 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/serial_port_2_settings"
+            android:textColor="#1a1a1a"
+            android:textSize="22sp"
+           />
+
+        <RadioGroup
+            android:id="@+id/rg_serial2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rb_serial2_zhongcheng"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/zhongcheng_probe_protocol"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+
+            <RadioButton
+                android:id="@+id/rb_serial2_modbus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="80dp"
+                android:text="@string/standard_modbus_protocol"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+            <RadioButton
+                android:id="@+id/rb_serial2_mA"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="80dp"
+                android:text="4-20mA"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+        </RadioGroup>
+
+   <!--         android:button="@drawable/radiobutton_selector"-->
+
+
+
+        <!-- 串口4设置 -->
+        <TextView
+            android:layout_marginTop="@dimen/dp_80"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/serial_port_4_settings"
+            android:textColor="#1a1a1a"
+            android:textSize="22sp"
+             />
+
+        <RadioGroup
+            android:id="@+id/rg_serial4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rb_serial4_oil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/zhongcheng_anti_spill_cabinet"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+
+            <RadioButton
+                android:id="@+id/rb_serial4_modbus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="80dp"
+                android:text="@string/standard_modbus_protocol"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+        </RadioGroup>
+
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_marginBottom="@dimen/dp_60"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/ly_upper_page"
+            android:layout_width="wrap_content"
+            android:minWidth="@dimen/dp_150"
+            android:paddingLeft="@dimen/dp_6"
+            android:paddingRight="@dimen/dp_6"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/dp_20"
+            android:layout_marginRight="@dimen/dp_40"
+            android:layout_marginBottom="@dimen/dp_20"
+            android:background="#0066A2"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:src="@drawable/fh" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/dp_15"
+                android:layout_marginBottom="@dimen/dp_15"
+                android:text="@string/previous_page"
+                android:textColor="@color/white"
+                android:textSize="@dimen/sp_20" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

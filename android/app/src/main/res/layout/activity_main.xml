@@ -1,0 +1,258 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main_main_main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#E8E5E4"
+     >
+	
+    <LinearLayout
+        android:id="@+id/radio_bar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/dp_80"
+        android:background="@drawable/bg_bottom"
+        android:paddingTop="@dimen/dp_30"
+        android:layout_alignParentBottom="true" >
+
+        <!-- [不可达-2026-09-21] 这个容器恒为 visibility="gone"，全仓库没有任何地方把它切回可见
+             （西语翻译覆盖率核查时发现，跟 CLAUDE.md 记录的 menu_right 同类）。AlarmCoordinator 仍会
+             调用 bar_main_alram.setText(...) 写入文案，只是用户永远看不到。@string/onLoading 不用优先翻。 -->
+        <LinearLayout
+            android:id="@+id/alarm_info"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1.5"
+            android:background="@drawable/sansen_dibu_text"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/bar_main_alram"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/sansen_dibu_text"
+                android:gravity="center"
+                android:textColor="@color/main_boom_alarm" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:id="@+id/btn_jieJing"
+            android:background="@drawable/but_selector_bg"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_jj" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/jiejing"
+                
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/ly_bar_but_alarm"
+            android:background="@drawable/but_selector_bg"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_bj" />
+
+            <TextView
+                android:id="@+id/bar_but_alarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+                android:text="@string/baojingjilu"
+                
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/ly_bar_but_saveoil"
+            android:background="@drawable/but_selector_bg"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_ck" />
+
+            <TextView
+                
+                android:id="@+id/bar_but_saveoil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+
+                android:text="@string/chukujilu"
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/ly_bar_but_inoil"
+            android:background="@drawable/but_selector_bg"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_rk" />
+
+            <TextView
+                
+                android:id="@+id/bar_but_inoil"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+
+                android:text="@string/rukujilu"
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/ly_bar_but_commitwork"
+            android:background="@drawable/but_selector_bg"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_jb" />
+            <TextView
+                
+                android:id="@+id/bar_but_commitwork"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+
+                android:text="@string/jiaobanjilu"
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/btn_kuCunRecord"
+            android:background="@drawable/but_selector_bg"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_bb" />
+
+            <TextView
+                
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/inventory"
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ly_main_but_set"
+            android:background="@drawable/but_selector_bg"
+            android:paddingLeft="@dimen/dp_5"
+            android:paddingRight="@dimen/dp_5"
+            android:layout_width="@dimen/dp_0"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="@dimen/dp_27"
+                android:layout_height="@dimen/dp_28"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_sz" />
+
+            <TextView
+                
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/shezhi"
+                android:textColor="@color/white"
+                android:textSize="@dimen/dp_24" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <include
+        android:id="@+id/title_bar"
+        layout="@layout/layout_title_bar" />
+<!--    <FrameLayout-->
+<!--        android:id="@+id/fragment_container"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--      />-->
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/title_bar"
+       	android:layout_above="@id/radio_bar" />
+<!--	<AbsoluteLayout-->
+<!--	    android:layout_width="match_parent"-->
+<!--	    android:layout_height="match_parent"-->
+<!--	    >-->
+<!--	    <TextView-->
+<!--	        android:id="@+id/main_time"-->
+<!--	        android:layout_x="@dimen/main_time_x"-->
+<!--	        android:layout_y="@dimen/main_time_y"-->
+<!--            android:visibility="gone"-->
+<!--	        android:layout_width="wrap_content"-->
+<!--	        android:layout_height="wrap_content"-->
+<!--	        android:text="12/2/12/555"/>-->
+<!--	</AbsoluteLayout>-->
+</RelativeLayout>

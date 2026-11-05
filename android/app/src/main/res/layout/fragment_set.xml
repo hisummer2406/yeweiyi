@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/set_frame"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/title_bar"
+        layout="@layout/layout_title_bar2" />
+
+    <GridView
+        android:layout_gravity="center"
+        android:layout_marginLeft="@dimen/dp_200"
+        android:layout_marginRight="@dimen/dp_200"
+        android:id="@+id/set_gridview_info"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/dp_74"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:horizontalSpacing="@dimen/dp_60"
+        android:verticalSpacing="@dimen/dp_64"
+        android:numColumns="3"
+        android:stretchMode="columnWidth"
+        ></GridView>
+
+    <LinearLayout
+        android:id="@+id/ly_backHome"
+        android:layout_width="wrap_content"
+        android:minWidth="@dimen/dp_150"
+        android:paddingLeft="@dimen/dp_6"
+        android:paddingRight="@dimen/dp_6"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="@dimen/dp_20"
+        android:layout_marginBottom="@dimen/dp_60"
+        android:background="#0066A2"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/fh" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/dp_15"
+            android:layout_marginBottom="@dimen/dp_15"
+            android:text="@string/previous_page"
+            android:textColor="@color/white"
+            android:textSize="@dimen/sp_20" />
+    </LinearLayout>
+
+
+</LinearLayout>

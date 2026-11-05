@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [不可达-2026-09-21] 唯二入口 BaseFragment.showInputDialog()/getSaveListener() 全仓库零调用者
+     （西语翻译覆盖率核查时发现）。里面的字符串资源不用优先翻。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+   
+    android:orientation="vertical"
+    android:background="@drawable/shape_top_corner_no_bottom_line"
+  >
+
+    <RelativeLayout
+        android:id="@+id/rl_dialog_content"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginLeft="40dp"
+        android:layout_marginRight="40dp"
+        android:padding="8dp"
+        android:focusable="true"
+    	android:focusableInTouchMode="true"
+        >
+
+
+        <TextView
+            android:id="@+id/main_dialog_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:gravity="center"
+            android:singleLine="true"
+            android:textSize="18sp" />
+
+        <EditText
+            android:id="@+id/main_dialog_remark"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/main_dialog_title"
+            android:inputType="textNoSuggestions"
+            android:imeOptions="actionDone"
+            />
+
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:gravity="center"
+            android:orientation="horizontal" >
+
+            <Button
+                android:id="@+id/main_dialog_ok"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                />
+
+            <Button
+                android:id="@+id/main_dialog_cancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="5dp"
+                android:layout_weight="1"
+/>
+        </LinearLayout>
+    </RelativeLayout>
+
+</LinearLayout>

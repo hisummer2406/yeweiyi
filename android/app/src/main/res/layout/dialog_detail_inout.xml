@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [不可达-2026-09-21] 唯一入口 InOilFragment.onClick(int) 是死代码：InOutAdapter 给列表项设的
+     短按监听器是空实现，从来没有调用回来（西语翻译覆盖率核查时发现，详见
+     InOutAdapter.java/InOilFragment.java 里的注释）。这里的 17 个字符串资源不用优先翻。 -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <LinearLayout
+        android:id="@+id/head"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="5dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/fontSize"
+/>
+
+        <TextView
+            android:id="@+id/inout_detail_oil_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="@dimen/fontSize"
+            android:text="1" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            android:textSize="@dimen/fontSize"
+/>
+
+        <TextView
+            android:id="@+id/inout_detail_oil_product"
+            android:layout_width="wrap_content"
+            android:textSize="@dimen/fontSize"
+            android:layout_height="wrap_content"
+            android:text="-20#" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:textSize="@dimen/fontSize"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="20dp"
+            />
+        <TextView
+            android:id="@+id/inout_detail_oil_state"
+            android:layout_width="wrap_content"
+            android:textSize="@dimen/fontSize"
+            android:layout_height="wrap_content"
+            />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/head">
+
+        <RelativeLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_margin="5dp"
+            >
+
+            <TextView
+                android:id="@+id/start"
+                android:layout_width="match_parent"
+                android:textSize="@dimen/fontSize"
+                android:layout_height="wrap_content"
+/>
+
+            <TextView
+                android:id="@+id/begin_date"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="@dimen/fontSize"
+                android:layout_below="@id/start"
+                android:text="26/06/2019 11:48:57" />
+
+            <TableLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/begin_date"
+                android:layout_marginTop="10dp"
+                android:stretchColumns="*">
+
+                <TableRow>
+
+                    <TextView
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:textSize="@dimen/fontSize"
+/>
+
+                    <TextView
+                        android:id="@+id/detail_begin_height"
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3mm" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:layout_width="1dp"
+                        android:textSize="@dimen/fontSize"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:id="@+id/detail_begin_volume"
+                        android:layout_width="1dp"
+                        android:textSize="@dimen/fontSize"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3L" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:layout_width="1dp"
+                        android:textSize="@dimen/fontSize"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_begin_tc_volume"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3L" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_begin_water"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3mm" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_begin_water_volume"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3L" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:id="@+id/detail_begin_weight"
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3kg" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/inoil_temp" />
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_begin_temp"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3kg" />
+                </TableRow>
+            </TableLayout>
+
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_margin="5dp"
+            >
+
+            <TextView
+                android:textSize="@dimen/fontSize"
+                android:id="@+id/end"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+/>
+
+            <TextView
+                android:textSize="@dimen/fontSize"
+                android:id="@+id/end_date"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/end"
+                android:text="26/06/2019 11:48:57" />
+
+            <TableLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/end_date"
+                android:layout_marginTop="10dp"
+                android:stretchColumns="*">
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_height"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3mm" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_volume"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3L" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_tc_volume"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3L" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_water"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3mm" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_water_volume"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3L" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+/>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_weight"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="1539.3kg" />
+                </TableRow>
+
+                <TableRow>
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="@string/inoil_temp" />
+
+                    <TextView
+                        android:textSize="@dimen/fontSize"
+                        android:id="@+id/detail_end_temp"
+                        android:layout_width="1dp"
+                        android:layout_height="wrap_content"
+                        android:text="" />
+                </TableRow>
+            </TableLayout>
+        </RelativeLayout>
+        <RelativeLayout
+            android:layout_weight="0.6"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            >
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView
+                    android:id="@+id/inout_msg"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/fontSize"
+                    />
+                <android.support.v7.widget.AppCompatEditText
+                    android:id="@+id/inout_sale_volume"
+                    android:layout_width="150dp"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/fontSize"
+                    android:hint="0.0"
+                    android:inputType="numberDecimal"
+                    android:digits="0123456789.-"
+                    android:layout_below="@id/inout_msg"
+                    />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignBaseline="@id/inout_sale_volume"
+                    android:layout_toRightOf="@id/inout_sale_volume"
+                    android:textSize="@dimen/fontSize"
+                    android:text="L"/>
+                <TextView
+                    android:id="@+id/inout_msg2"
+                    android:layout_marginTop="20dp"
+                    android:layout_below="@id/inout_sale_volume"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="@dimen/fontSize"
+                    />
+                <TextView
+                    android:id="@+id/inout_toal_delivery"
+                    android:layout_below="@id/inout_msg2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="0.0"
+                    android:textSize="@dimen/fontSize"
+                    />
+            </RelativeLayout>
+
+        </RelativeLayout>
+    </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_below="@+id/center"
+        android:layout_marginTop="10dp">
+
+        <RelativeLayout
+            android:layout_weight="1"
+            android:gravity="center"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <android.support.v7.widget.AppCompatButton
+                android:id="@+id/inout_continue"
+                android:layout_height="wrap_content"
+                android:layout_width="120dp"
+                android:textSize="18sp"
+                />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_weight="1"
+            android:gravity="center"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <android.support.v7.widget.AppCompatButton
+                android:id="@+id/inout_stop"
+                android:layout_height="wrap_content"
+                android:layout_width="120dp"
+                android:textSize="18sp"
+                />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_weight="1"
+            android:gravity="center"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content">
+            <android.support.v7.widget.AppCompatButton
+                android:id="@+id/inout_save"
+                android:layout_height="wrap_content"
+                android:layout_width="120dp"
+                android:textSize="18sp"
+                />
+        </RelativeLayout>
+
+
+
+        <RelativeLayout
+            android:layout_weight="1"
+            android:layout_width="0dp"
+            android:gravity="center"
+            android:layout_height="wrap_content">
+            <android.support.v7.widget.AppCompatButton
+                android:id="@+id/inout_quit"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:textSize="18sp"
+                />
+        </RelativeLayout>
+    </LinearLayout>
+</RelativeLayout>

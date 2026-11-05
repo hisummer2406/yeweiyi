@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="center"
+    android:background="@color/transparent"
+    android:gravity="center">
+
+    <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="@dimen/dp_992"
+        android:layout_height="@dimen/dp_456"
+        android:background="@drawable/bj">
+
+        <LinearLayout
+            android:layout_width="@dimen/dp_354"
+            android:layout_height="@dimen/dp_328"
+            android:layout_alignParentRight="true"
+            android:layout_centerInParent="true"
+            android:layout_gravity="center"
+            android:layout_marginRight="@dimen/dp_72"
+            android:background="@color/white"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dp_72"
+                android:gravity="center"
+                android:text="@string/welcome"
+                android:textColor="@color/black"
+                android:textSize="@dimen/sp_30"
+                android:textStyle="bold" />
+
+            <EditText
+                android:id="@+id/et_psw_input"
+                android:layout_width="@dimen/dp_256"
+                android:layout_height="@dimen/dp_48"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/dp_30"
+                android:background="@drawable/shap_login_pwd"
+                android:hint="@string/login_tv_password"
+                android:inputType="numberPassword"
+                android:imeOptions="actionDone"
+                android:paddingLeft="@dimen/dp_20"
+                android:textSize="@dimen/sp_20" />
+
+            <Button
+                android:id="@+id/btn_enter"
+                android:layout_width="@dimen/dp_250"
+                android:layout_height="@dimen/dp_45"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/dp_30"
+                android:background="@drawable/shap_login_enter"
+                android:textSize="@dimen/sp_22"
+                android:text="@string/click_to_enter"
+
+                android:textColor="@color/white" />
+
+
+        </LinearLayout>
+    </RelativeLayout>
+
+
+</LinearLayout>

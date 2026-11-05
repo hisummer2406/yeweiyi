@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- [已更正-2026-09-24] 之前这里的说明说"其余 16 个 string-array 都没有可靠西语来源，全部
+         留空回退中文"——是错的，同一个"只查了 producer 没查全部 consumer"的老毛病：这 16 个里有
+         8 个其实是可达的（Java/XML 里有真实读取点，见下方各数组前的注释），其中 5 个的内容跟
+         strings.xml 里已经人工/设计稿核实过的 key 完全同义，直接复用；oilcanArray 是"N号罐"这种
+         纯数字模板，套用 oilcan_short_label_format 已用的"Tanque %d"文案套路；oilcanItem、
+         oiltypeArray 没有现成同义 key，AI 新译，标 review。真正没有引用、才应该留空回退中文的，只有
+         prints/data_manager/data_service/oilCurItem/mqttAddress（这 5 个全仓库 Java/XML 零引用）
+         和 oilcanTableArray/tanZhenTableArray/oilcanSetArray（唯一读取点是 ActivityDialog.java 的
+         value==5/6/7 分支，全仓库没有调用方传这三个值，已在 strings.xml 那边的清理里确认不可达）。
+         详细的可达性判断和对照表见 temp/Android_strings/多语言文案对照表_2026-09-23.xlsx
+         「数组文案对照」sheet。 -->
+    <string-array name="language">
+        <item>Chino</item>
+        <item>Inglés</item>
+        <item>Español</item>
+    </string-array>
+
+    <!-- [已翻译-2026-09-24] SetFragment 左侧设置菜单（SetAdapter 读取），全仓库唯一读取点，可达。
+         6 项分别跟 strings.xml 的 oilcanset/oilcantableset/password_settings/base_set_title/
+         record_settings/advanced_settings 同义，直接复用那几个已核实的译文，不用再 review。 -->
+    <string-array name="set_array">
+        <item>Config. Tanques</item>
+        <item>Config. de Tanques</item>
+        <item>Contraseña</item>
+        <item>Básico</item>
+        <item>Registros</item>
+        <item>Avanzado</item>
+    </string-array>
+
+    <!-- [已翻译-2026-09-24] fragment_oilcanset.xml 里储罐类型下拉框（卧罐/立罐），可达。跟
+         createtable_horizontal_tank/createtable_vertical_tank 同义，直接复用，不用再 review。 -->
+    <string-array name="guan_type">
+        <item>Tanque Horiz.</item>
+        <item>Tanque Vert.</item>
+    </string-array>
+
+    <!-- [已翻译-2026-09-24] fragment_base_set.xml 里的单位选择下拉框（液位/容积/质量单位），
+         SetBaseFragment 读取，可达。跟 mm/unit_m、unit_l/unit_cubic、unit_kg/unit_ton 同义，
+         直接复用，不用再 review。
+         [已翻译-2026-09-27] rongji_unit 新增第 3 项"加仑"（美制加仑，1升≈0.26417加仑），文案
+         "G" 是用户直接指定的，不是 AI 猜的。三个界面语言（中/英/西）都加了这一项，条目数保持一致
+         （都是 3 项），详见 UnitPref.Volume 的 GALLON 枚举值和 SetBaseFragment.java 里的
+         ordinal()/values() 映射注释。 -->
+    <string-array name="yewei_unit">
+        <item>mm</item>
+        <item>m</item>
+    </string-array>
+    <string-array name="rongji_unit">
+        <item>L</item>
+        <item>m³</item>
+        <item>G</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>kg</item>
+        <item>t</item>
+    </string-array>
+
+    <!-- [AI待review-2026-09-24] BuLuFragment（补录记录页）选储罐下拉框 + ActivityDialog value==0
+         （oilCanSelect 弹窗）共用，两处都可达。"N号罐"是纯数字模板，套用 oilcan_short_label_format
+         已核实的"Tanque %d"文案风格生成，风险低，但还是标了 review。 -->
+    <string-array name="oilcanArray">
+        <item>Tanque 1</item>
+        <item>Tanque 2</item>
+        <item>Tanque 3</item>
+        <item>Tanque 4</item>
+        <item>Tanque 5</item>
+        <item>Tanque 6</item>
+        <item>Tanque 7</item>
+        <item>Tanque 8</item>
+        <item>Tanque 9</item>
+        <item>Tanque 10</item>
+        <item>Tanque 11</item>
+        <item>Tanque 12</item>
+    </string-array>
+
+    <!-- [AI待review-2026-09-24] 首页储罐图标可自定义展示字段（MinOilCanView.initData()，读用户在
+         SharePrefUtil.MIN_ITEM_SELECT 里存的自选字段下标）。只有用户在设置里自定义过展示字段时才会
+         真正用到这个数组，但确实可达，不是恒死代码。strings.xml 里没有完全同义的现成 key，AI 新译，
+         需要 review：注意"重量"这里译的是 Peso（重量/weight），跟别处质量类文案统一用的 Masa
+         （质量/mass，见 oil_weight_language 等）不是同一个词，是否要跟那边统一，请文案同学定夺。 -->
+    <string-array name="oilcanItem">
+        <item>Producto</item>
+        <item>Nivel</item>
+        <item>Volumen</item>
+        <item>Peso</item>
+        <item>Vacío</item>
+        <item>Agua</item>
+        <item>Vol. Agua</item>
+        <item>Temp.</item>
+    </string-array>
+
+    <!-- [AI待review-2026-09-24] 油品/介质类型全列表——ActivityDialog value==1（可达）和
+         DataUtils.getOilType() 共用，后者被 OilCanFragment/OilCanSetFragment/InOilFragment/
+         AlarmDetection 等一大批活页面直接拿来显示储罐介质类型，是全仓库调用面最广的数组之一。
+         ⚠️ 翻译时按中文（values/array.xml）逐项对出来的，因为发现 values-en/array.xml 自己数据
+         就有错位，不能当权威基准抄：第 3 项中文是"-10#"，英文却写成"Sulfuric Acid"（跟第 12 项
+         重复）；第 11 项中文是"米糠油"（米糠榨的油），英文却写成"Kerosene"（煤油，完全不同的
+         东西）。这两处错位是这次核查西语数组时顺带发现的，不属于这次任务范围，建议另外找人核实
+         values-en/array.xml 该怎么改，这里只是不要把英文的错误也抄进西语。
+         [已更正-2026-11-04] 英文这两项已改为 -10# Diesel / Rice Bran Oil（issue #52），中英西现已逐项对应。 -->
+    <string-array name="oiltypeArray">
+        <item>No configurado</item>
+        <item>Diésel 0#</item>
+        <item>Diésel -10#</item>
+        <item>Diésel -20#</item>
+        <item>Diésel -35#</item>
+        <item>Gasolina 92#</item>
+        <item>Gasolina 95#</item>
+        <item>Gasolina 98#</item>
+        <item>Metanol</item>
+        <item>Tolueno</item>
+        <item>Aceite de Salvado de Arroz</item>
+        <item>Ácido Sulfúrico</item>
+        <item>Xileno</item>
+        <item>n-Butilo</item>
+        <item>sec-Butilo</item>
+        <item>Metilo</item>
+        <item>Dimetilo</item>
+        <item>Aceite Disolvente</item>
+        <item>En blanco</item>
+    </string-array>
+
+    <!-- 以下数组不翻，会自动回退到默认 values/array.xml（中文）显示：
+         - prints/data_manager/data_service/oilCurItem/mqttAddress：全仓库 Java/XML 零引用，查无
+           调用方，比"确认不可达"更进一步——压根没人读过。
+         - oilcanTableArray/tanZhenTableArray/oilcanSetArray：唯一读取点是 ActivityDialog.java 的
+           value==6/7/5 分支，全仓库没有任何调用方传这三个 value（详见 ActivityDialog.java 里的
+           [不可达-2026-09-21]/[已屏蔽-2026-09-23] 注释），跟 strings.xml 里同批确认不可达的
+           oilcanset_info/oilcantable_info/sensor_settings 是同一组死代码。 -->
+</resources>

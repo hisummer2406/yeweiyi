@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- [不可达-2026-09-24] prints/data_manager/data_service 全仓库 Java/XML 零引用（西语数组
+         可达性核查时发现），压根没人读过，比"确认不可达"更进一步。不用翻译；对照见
+         temp/Android_strings/多语言文案对照表_2026-09-23.xlsx「说明」sheet。 -->
+    <string-array name="prints">
+        <item>粗略信息</item>
+        <item>详细信息</item>
+        <item>进出油记录</item>
+        <item>存油记录</item>
+        <item>交班记录</item>
+        <item>测漏记录</item>
+    </string-array>
+    <string-array name="data_manager">
+        <item>清空报警记录</item>
+        <item>清空进出油记录</item>
+        <item>清空温度记录</item>
+        <item>清空存油记录</item>
+        <item>清空交班记录</item>
+        <item>清空测漏记录</item>
+        <item>清空所有记录</item>
+    </string-array>
+
+    <string-array name="data_service">
+        <item>保存配置信息到云端</item>
+        <item>从云端读取配置信息</item>
+        <item>保存到U盘</item>
+        <item>从U盘读取数据</item>
+    </string-array>
+
+    <string-array name="set_array">
+        <item>储罐设置</item>
+        <item>罐表设置</item>
+        <item>密码设置</item>
+        <item>基础设置</item>
+        <item>记录设置</item>
+        <item>高级设置</item>
+    </string-array>
+
+
+    <!-- 油罐类型 -->
+    <string-array name="oiltypeArray">
+        <item>未设置</item>
+        <item>0#</item>
+        <item>-10#</item>
+        <item>-20#</item>
+        <item>-35#</item>
+        <item>92#</item>
+        <item>95#</item>
+        <item>98#</item>
+        <item>甲醇</item>
+        <item>甲苯</item>
+        <item>米糠油</item>
+        <item>硫酸</item>
+        <item>二甲苯</item>
+        <item>正丁酯</item>
+        <item>仲丁酯</item>
+        <item>甲酯</item>
+        <item>二甲酯</item>
+        <item>溶剂油</item>
+        <item>空白</item>
+    </string-array>
+
+    <string-array name="oilcanArray">
+        <item>1号罐</item>
+        <item>2号罐</item>
+        <item>3号罐</item>
+        <item>4号罐</item>
+        <item>5号罐</item>
+        <item>6号罐</item>
+        <item>7号罐</item>
+        <item>8号罐</item>
+        <item>9号罐</item>
+        <item>10号罐</item>
+        <item>11号罐</item>
+        <item>12号罐</item>
+    </string-array>
+
+    <!-- [不可达-2026-09-24] 唯一读取点是 ActivityDialog.java 的 value==6 分支，全仓库没有调用方
+         传这个 value（见 ActivityDialog.java 里的注释，Java 侧引用已屏蔽），跟 oilcantable_info 是
+         同一批死代码。不用翻译。 -->
+    <string-array name="oilcanTableArray">
+        <item>1号罐表</item>
+        <item>2号罐表</item>
+        <item>3号罐表</item>
+        <item>4号罐表</item>
+        <item>5号罐表</item>
+        <item>6号罐表</item>
+        <item>7号罐表</item>
+        <item>8号罐表</item>
+        <item>9号罐表</item>
+        <item>10号罐表</item>
+        <item>11号罐表</item>
+        <item>12号罐表</item>
+        <item>13号罐表</item>
+        <item>14号罐表</item>
+        <item>15号罐表</item>
+        <item>16号罐表</item>
+    </string-array>
+    <!-- [不可达-2026-09-24] 唯一读取点是 ActivityDialog.java 的 value==7 分支，全仓库没有调用方
+         传这个 value（Java 侧引用已屏蔽），跟 sensor_settings 是同一批死代码。不用翻译。 -->
+    <string-array name="tanZhenTableArray">
+        <item>1号探针</item>
+        <item>2号探针</item>
+        <item>3号探针</item>
+        <item>4号探针</item>
+        <item>5号探针</item>
+        <item>6号探针</item>
+        <item>7号探针</item>
+        <item>8号探针</item>
+        <item>9号探针</item>
+        <item>10号探针</item>
+        <item>11号探针</item>
+        <item>12号探针</item>
+        <item>13号探针</item>
+        <item>14号探针</item>
+        <item>15号探针</item>
+        <item>16号探针</item>
+    </string-array>
+
+    <!-- [不可达-2026-09-24] 唯一读取点是 ActivityDialog.java 的 value==5 分支，全仓库没有调用方
+         传这个 value（Java 侧引用已屏蔽），跟 oilcanset_info 是同一批死代码。不用翻译。 -->
+    <string-array name="oilcanSetArray">
+        <item>1号油罐设置表</item>
+        <item>2号油罐设置表</item>
+        <item>3号油罐设置表</item>
+        <item>4号油罐设置表</item>
+        <item>5号油罐设置表</item>
+        <item>6号油罐设置表</item>
+        <item>7号油罐设置表</item>
+        <item>8号油罐设置表</item>
+        <item>9号油罐设置表</item>
+        <item>10号油罐设置表</item>
+        <item>11号油罐设置表</item>
+        <item>12号油罐设置表</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>油品</item>
+        <item>油位</item>
+        <item>体积</item>
+        <item>重量</item>
+        <item>空油量</item>
+        <item>水位</item>
+        <item>水体积</item>
+        <item>温度</item>
+    </string-array>
+
+    <!-- [不可达-2026-09-24] oilCurItem/mqttAddress 全仓库 Java/XML 零引用（西语数组可达性核查时
+         发现），压根没人读过。不用翻译。 -->
+    <string-array name="oilCurItem">
+        <item>油品</item>
+        <item>油位</item>
+        <item>油体积</item>
+        <item>存油重量</item>
+        <item>温度</item>
+    </string-array>
+    <string-array name="mqttAddress">
+        <item>服务器01</item>
+        <item>服务器02</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>卧罐</item>
+        <item>立罐</item>
+    </string-array>
+    <string-array name="language">
+        <item>中文</item>
+        <item>英文</item>
+        <item>西班牙语</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>毫米</item>
+        <item>米</item>
+    </string-array>
+    <string-array name="rongji_unit">
+        <item>升</item>
+        <item>立方</item>
+        <item>加仑</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>千克</item>
+        <item>吨</item>
+    </string-array>
+</resources>

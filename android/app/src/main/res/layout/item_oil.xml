@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_marginRight="@dimen/dp_30"
+    android:layout_height="@dimen/dp_300"
+    android:layout_marginTop="@dimen/dp_20"
+     >
+
+
+    <com.sansen.yeweiyi.view.MinOilCanView
+        android:id="@+id/min_oil"
+        android:layout_width="@dimen/dp_284"
+        android:layout_height="@dimen/dp_145"
+        android:layout_centerInParent="true"
+        />
+</RelativeLayout>
