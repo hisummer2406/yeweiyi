@@ -72,7 +72,7 @@ The WeChat mini-program (微信小程序) frontend for **需求B（PC 端 / 小�
 安卓液位仪 (Android Liquid Level Meter, package `com.sansen.yeweiyi`) — the client the field/office
 user opens on their phone to view oil-tank monitoring data and issue remote control commands for
 devices that aren't on their local network. This repo is the frontend only. It consumes the
-REST/WebSocket API exposed by `~/Developer/yeweiyi-cloud` — it does not talk to ThingsBoard or the
+REST/WebSocket API exposed by `../cloud/` — it does not talk to ThingsBoard or the
 device directly, and it does not implement any backend logic.
 
 This project was split out of `yeweiyi-cloud` on 2026-08-20, matching the existing pattern where
@@ -82,18 +82,18 @@ shared code).
 
 ## Sibling repos — read before designing anything
 
-- `~/Developer/yeweiyi-cloud` — the cloud backend this mini-program talks to. **Its `CLAUDE.md` is
+- `../cloud/` — the cloud backend this mini-program talks to. **Its `CLAUDE.md` is
   the authoritative source for the current REST/WS surface — read it, not just this summary, before
   wiring up an API call**, and re-check `types/api.d.ts` against its handler structs
   (`internal/api/*.go`) and protocol structs (`internal/protocol/*.go`) before trusting either if
   enough time has passed that the two could have drifted; there is no shared code or generated
   client between the two repos, so nothing catches a drift automatically except `npm run
   typecheck` failing on a call site once someone notices and fixes the type.
-- `~/Developer/zhongchengyeweiyi` — the Android device-side repo. Not needed for wiring up API calls
+- `../android/` — the Android device-side repo. Not needed for wiring up API calls
   (that's `yeweiyi-cloud`'s job to mediate), but relevant background if a screen's behavior depends
   on device-side reality — e.g. why a physical control command is refused, or why 出入库 history can
   come back partial.
-- `~/Developer/yeweiyi-admin` — the desktop equivalent of this app: one Ant Design Pro project with
+- `../admin/` — the desktop equivalent of this app: one Ant Design Pro project with
   an `/ops/*` section (platform_admin only) and a `/console/*` section that is meant to cover the
   same capability set this mini-program covers (device list, device detail/telemetry, issue-command,
   oil-in-out) for the same customer roles. If a capability is added here, it should end up on both

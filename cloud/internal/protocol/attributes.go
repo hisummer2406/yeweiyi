@@ -53,7 +53,7 @@ const (
 // the Client* keys back.
 //
 // Scope caveat carried over from CLAUDE.md: ThingsBoard's OTA feature is the distribution half only.
-// The device-side download/verify/flash client does not exist in ~/Developer/zhongchengyeweiyi today,
+// The device-side download/verify/flash client does not exist in ../android/ today,
 // and adopting ThingsBoard does not create it.
 const (
 	SharedFwTitle             = "fw_title"

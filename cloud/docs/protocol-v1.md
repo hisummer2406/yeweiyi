@@ -250,7 +250,7 @@ ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttrib
 上报：`current_fw_title`、`current_fw_version`、`fw_state`
 
 > **OTA 的范围提醒：** ThingsBoard 的 OTA 只做云端分发那一半（存包、版本、分组、进度）。设备端接收、
-> 校验、刷写的客户端逻辑在 `~/Developer/zhongchengyeweiyi` 中**目前完全不存在**，选用 ThingsBoard
+> 校验、刷写的客户端逻辑在 `../android/` 中**目前完全不存在**，选用 ThingsBoard
 > 并不会凭空产生它。这仍是设备侧的待办工作。
 
 ---

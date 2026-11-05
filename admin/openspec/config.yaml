@@ -18,7 +18,7 @@ context: |
       `customer_admin`/`customer_user`（`platform_admin` 也能进，见 `canConsole`）。
   两个分区共用同一套登录、同一份 JWT、同一个 `yeweiyi-cloud` 后端。
 
-  唯一的后端是 `~/Developer/yeweiyi-cloud`（Go/gin），本仓库要对接的一切 API 都在那里，写请求
+  唯一的后端是 `../cloud/`（Go/gin），本仓库要对接的一切 API 都在那里，写请求
   函数前必须先读它的 `CLAUDE.md` 与 `internal/api/router.go`，不能凭记忆假设接口形状；
   `/ops/*` 的行为规格来自它的 `openspec/changes/add-admin-console/specs/*/spec.md`。这是
   两个独立仓库、各自的 openspec 配置，不共享同一份 config。

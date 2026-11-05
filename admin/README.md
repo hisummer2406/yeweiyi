@@ -8,9 +8,9 @@
 
 ## 关联仓库
 
-- 后端：`~/Developer/yeweiyi-cloud`（本仓库的全部 API 都来自这里）
-- 微信小程序：`~/Developer/yeweiyi-miniapp`（`/console/*` 的移动端等价物）
-- Android 设备端：`~/Developer/zhongchengyeweiyi`
+- 后端：`../cloud/`（本仓库的全部 API 都来自这里）
+- 微信小程序：`../miniapp/`（`/console/*` 的移动端等价物）
+- Android 设备端：`../android/`
 
 ## 技术栈
 

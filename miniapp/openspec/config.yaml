@@ -16,16 +16,16 @@ context: |
   token 存 wx.storage，各页面在 onLoad/onShow 自行加载数据。
 
   # 契约来源（重要）
-  API 契约的权威来源是 ~/Developer/yeweiyi-cloud（其 CLAUDE.md、internal/api/*.go、internal/protocol/*.go），
+  API 契约的权威来源是 ../cloud/（其 CLAUDE.md、internal/api/*.go、internal/protocol/*.go），
   不是本仓库。miniprogram/types/api.d.ts 是手抄副本，会漂移。
   - spec 与 proposal 只描述本客户端的行为与界面需求，不要复制或重新定义云端的接口字段、状态码、枚举。
   - 需要引用接口时写"依据 yeweiyi-cloud 的 <路由/文件>"，并在 design 中标注已核对的云端版本或提交。
   - 涉及接口形状的变更，必须先对照云端 main 重新核对 api.d.ts，tsc 通过不代表形状正确（get<T>() 只是类型断言）。
 
   # 兄弟仓库
-  - ~/Developer/yeweiyi-cloud：云端后端，REST/WS 契约。
-  - ~/Developer/zhongchengyeweiyi：Android 设备端，仅作背景（例如为何物理控制命令被拒、出入库历史为何不完整）。
-  - ~/Developer/yeweiyi-admin：桌面端，/console/* 与本小程序应覆盖同一套客户能力（设备列表、详情/遥测、下发命令、出入库）。
+  - ../cloud/：云端后端，REST/WS 契约。
+  - ../android/：Android 设备端，仅作背景（例如为何物理控制命令被拒、出入库历史为何不完整）。
+  - ../admin/：桌面端，/console/* 与本小程序应覆盖同一套客户能力（设备列表、详情/遥测、下发命令、出入库）。
     新增或改名页面时需检查两端是否一致。
 
   # 必须遵守的行为约束（来自云端协议，不是本端可自行决定的）

@@ -25,7 +25,7 @@
 云端协议有改动时，重新整目录拷贝，然后跑测试：
 
 ```bash
-cp ../yeweiyi-cloud/fixtures/protocol/v1/*.json app/src/test/resources/protocol/v1/
+cp ../cloud/fixtures/protocol/v1/*.json app/src/test/resources/protocol/v1/
 ./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest
 ```
 

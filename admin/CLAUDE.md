@@ -245,15 +245,15 @@ yeweiyi-cloud (Go 后端，唯一的业务 REST/WS 网关)
              platform_admin 走 /ops/*，客户角色走 /console/*）
 ```
 
-- `~/Developer/zhongchengyeweiyi` — Android 设备端。本仓库不直接对接它；它的行为通过
+- `../android/` — Android 设备端。本仓库不直接对接它；它的行为通过
   `yeweiyi-cloud` 中转。只有在某个 `/console/*` 页面的数据看起来"设备侧才能解释"时才需要读它
   （例如控制指令为什么被拒绝、出入库记录为什么缺失）。
-- `~/Developer/yeweiyi-cloud` — **唯一的后端，本仓库要对接的一切 API 都在这里**。它的
+- `../cloud/` — **唯一的后端，本仓库要对接的一切 API 都在这里**。它的
   `CLAUDE.md` 是 REST/WS 接口的权威来源，路由列表见该仓库 `internal/api/router.go`；写任何
   请求函数前先读一遍，不要凭记忆假设接口形状。它的 `openspec/changes/add-admin-console/
   specs/*/spec.md` 记录了 `/ops/*` 对应的账号管理与设备全量视图两块能力的行为约定
   （谁能调、失败时返回什么、审计覆盖哪些结果）——这是 `/ops/*` 页面唯一的规格来源。
-- `~/Developer/yeweiyi-miniapp` — 同一批客户角色（`customer_admin`/`customer_user`）的
+- `../miniapp/` — 同一批客户角色（`customer_admin`/`customer_user`）的
   微信小程序客户端。`/console/*` 是它的 PC 端等价物，理应覆盖相同的业务能力集合（设备列表、
   设备详情/遥测、下发指令、进销存记录）——加新页面或改交互前，看一眼它的 `pages/` 目录，
   两端的信息架构不需要照抄 UI，但覆盖的能力集合应该一致，不要一端有一端没有。

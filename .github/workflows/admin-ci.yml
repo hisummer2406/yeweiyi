@@ -1,13 +1,19 @@
-name: CI/CD
+name: Admin CI/CD
 
 on:
   push:
     branches: [main]
+    paths: ["admin/**", ".github/workflows/admin-ci.yml"]
   pull_request:
+    paths: ["admin/**", ".github/workflows/admin-ci.yml"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: admin
 
 # 不取消正在切换线上版本的发布；旧提交在部署前检查是否仍为 main 最新版本。
 concurrency:
@@ -24,6 +30,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: admin/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run test
@@ -48,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: admin-dist
-          path: admin-dist.tar.gz
+          path: admin/admin-dist.tar.gz
           retention-days: 14
           if-no-files-found: error
 
@@ -60,15 +67,17 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_SHA: ${{ github.sha }}
-      TARGET_HOST: ${{ secrets.DEPLOY_HOST }}
-      TARGET_USER: ${{ secrets.DEPLOY_USER }}
-      TARGET_PORT: ${{ secrets.DEPLOY_PORT }}
+      TARGET_HOST: ${{ secrets.ADMIN_DEPLOY_HOST }}
+      TARGET_USER: ${{ secrets.ADMIN_DEPLOY_USER }}
+      TARGET_PORT: ${{ secrets.ADMIN_DEPLOY_PORT }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: admin-dist
-          path: artifact
+          path: admin/artifact
       - name: 解包构建产物
         run: |
           mkdir dist
@@ -76,8 +85,11 @@ jobs:
       - name: 校验 main 版本及配置
         id: gate
         run: |
+          # 单仓库里 main 之后可能只有别的目录的提交，它们不会再触发本工作流；
+          # 只要 admin/ 在 RELEASE_SHA 之后没变，本次仍是最新的后台版本。
           latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
-          if [[ "$latest" != "$RELEASE_SHA" ]]; then
+          git fetch -q origin main
+          if ! git diff --quiet "$RELEASE_SHA" "$latest" -- . ../.github/workflows/admin-ci.yml; then
             echo 'main 已更新，跳过旧版本发布'
             echo 'current=false' >> "$GITHUB_OUTPUT"
             exit 0
@@ -90,8 +102,8 @@ jobs:
       - name: 配置专用 SSH 密钥
         if: steps.gate.outputs.current == 'true'
         env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          KEY: ${{ secrets.ADMIN_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ADMIN_DEPLOY_KNOWN_HOSTS }}
         run: |
           [[ -n "$KEY" && -n "$KNOWN_HOSTS" ]]
           install -m 700 -d ~/.ssh

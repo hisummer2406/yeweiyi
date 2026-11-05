@@ -1,11 +1,12 @@
-name: Image
+name: Cloud Image
 
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    paths: ["cloud/**", ".github/workflows/cloud-image.yml"]
+    tags: ["cloud-v*"]
   pull_request:
-    paths: [Dockerfile, .dockerignore, go.mod, go.sum, "cmd/**", "internal/**", ".github/workflows/image.yml"]
+    paths: ["cloud/Dockerfile", "cloud/.dockerignore", "cloud/go.mod", "cloud/go.sum", "cloud/cmd/**", "cloud/internal/**", ".github/workflows/cloud-image.yml"]
 
 permissions:
   contents: read
@@ -29,14 +30,15 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}
+          # 镜像名沿用合并前的 yeweiyi-cloud，部署文档与服务器不用改。
+          images: ghcr.io/${{ github.repository_owner }}/yeweiyi-cloud
           tags: |
             type=sha
-            type=ref,event=tag
+            type=match,pattern=cloud-(v.*),group=1
             type=raw,value=latest,enable={{is_default_branch}}
       - uses: docker/build-push-action@v7
         with:
-          context: .
+          context: cloud
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

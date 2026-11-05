@@ -1,15 +1,21 @@
-name: CI
+name: Cloud CI
 
 on:
   push:
     branches: [main]
+    paths: ["cloud/**", ".github/workflows/cloud-ci.yml"]
   pull_request:
+    paths: ["cloud/**", ".github/workflows/cloud-ci.yml"]
 
 permissions:
   contents: read
 
+defaults:
+  run:
+    working-directory: cloud
+
 concurrency:
-  group: ci-${{ github.ref }}
+  group: cloud-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,7 +25,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: cloud/go.mod
       - name: gofmt
         run: |
           out=$(gofmt -l .)
@@ -48,7 +54,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: cloud/go.mod
       # 版本固定：@latest 会让某天 sqlc 一升级，没人改过任何代码 CI 就变红（或悄悄生成不同的输出）。
       # sqlc 与本地生成输出的版本一致；migrate 与 deploy/images.txt、docker-compose.prod.yml 里的镜像一致。
       # 要升级就改这里，并在同一个提交里重新生成 internal/store/db。
@@ -95,7 +101,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: cloud/go.mod
       - name: 安装 migrate（固定版本，与 sqlc-and-migrations 作业一致）
         run: go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
       - name: 启动 PostgreSQL / Redis / ThingsBoard

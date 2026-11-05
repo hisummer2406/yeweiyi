@@ -1,4 +1,4 @@
-name: Deploy
+name: Cloud Deploy
 
 # 私有仓库当前计划不支持分支保护；在工作流里强制核对同一 main 提交的 CI 与镜像。
 # 首次生产运行前需完成部署目录、基础服务、HTTPS 和业务验收。
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: "已通过 main CI/Image 的完整 40 位提交 SHA"
+        description: "已通过 main Cloud CI/Cloud Image 的完整 40 位提交 SHA"
         required: true
         type: string
 
@@ -15,8 +15,12 @@ permissions:
   actions: read
   packages: read
 
+defaults:
+  run:
+    working-directory: cloud
+
 concurrency:
-  group: deploy-production
+  group: cloud-deploy-production
   cancel-in-progress: false
 
 jobs:
@@ -28,10 +32,10 @@ jobs:
     env:
       RELEASE_SHA: ${{ inputs.release_sha }}
       GH_TOKEN: ${{ github.token }}
-      TARGET_HOST: ${{ secrets.DEPLOY_HOST }}
-      TARGET_USER: ${{ secrets.DEPLOY_USER }}
-      TARGET_PORT: ${{ secrets.DEPLOY_PORT }}
-      DEPLOY_DIR: ${{ secrets.DEPLOY_PATH }}
+      TARGET_HOST: ${{ secrets.CLOUD_DEPLOY_HOST }}
+      TARGET_USER: ${{ secrets.CLOUD_DEPLOY_USER }}
+      TARGET_PORT: ${{ secrets.CLOUD_DEPLOY_PORT }}
+      DEPLOY_DIR: ${{ secrets.CLOUD_DEPLOY_PATH }}
     steps:
       - name: 仅允许从 main 手动发布
         env:
@@ -48,7 +52,8 @@ jobs:
         run: |
           git fetch origin main
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
-          for wf in CI Image; do
+          # 单仓库按目录触发：只改别的目录的提交不会跑 Cloud CI/Image，选 SHA 时要选改过 cloud/ 的提交。
+          for wf in "Cloud CI" "Cloud Image"; do
             runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&event=push&per_page=100")"
             printf '%s' "$runs" | jq -e --arg wf "$wf" '
               [.workflow_runs[] | select(.name == $wf and .head_branch == "main")]
@@ -64,16 +69,15 @@ jobs:
           password: ${{ github.token }}
       - name: 将已构建镜像固定到 digest
         run: |
-          repository="${GITHUB_REPOSITORY,,}"
-          image="ghcr.io/$repository:sha-${RELEASE_SHA:0:7}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi-cloud:sha-${RELEASE_SHA:0:7}"
           docker pull "$image"
           digest_image="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           [[ "$digest_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || exit 1
           echo "DEPLOY_IMAGE=$digest_image" >> "$GITHUB_ENV"
       - name: 配置 SSH
         env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          KEY: ${{ secrets.CLOUD_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.CLOUD_DEPLOY_KNOWN_HOSTS }}
         run: |
           [[ -n "$KEY" && -n "$KNOWN_HOSTS" ]] || { echo 'SSH 密钥或主机公钥未设置'; exit 1; }
           install -m 700 -d ~/.ssh
@@ -84,7 +88,7 @@ jobs:
         run: |
           set -o pipefail
           SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
-          image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${RELEASE_SHA:0:7}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi-cloud:sha-${RELEASE_SHA:0:7}"
           expected="$(docker image inspect "$DEPLOY_IMAGE" --format '{{.Id}}')"
           [[ "$expected" =~ ^sha256:[a-f0-9]{64}$ ]]
           # ECS 跨境下载大层缓慢；Runner 已按 digest 拉取，通过 SSH 预热缓存。
