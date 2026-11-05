@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
+import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.db.OilCanTable;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcRequestEnvelope;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcResultStatus;
@@ -12,6 +14,7 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,9 +25,8 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * 跨仓库契约测试：Android 产出的报文必须跟 {@code yeweiyi-cloud/fixtures/protocol/v1/} 的共享
- * fixture 逐 key 相等（副本在 {@code src/test/resources/protocol/v1/}，来源与同步方法见该目录
- * README.md）。出入库事件的比对在 {@link StockEventMapperTest}，这里不重复。
+ * 两端契约测试：Android 产出的报文必须跟单仓库 {@code cloud/fixtures/protocol/v1/} 的共享
+ * fixture 逐 key 相等（直接读该目录，无副本；覆盖情况见该目录 ANDROID.md）。出入库事件的比对在 {@link StockEventMapperTest}，这里不重复。
  * <p>
  * <b>已知缺口</b>：Android 目前还做不到跟 fixture 完全一致的字段，从逐 key 比对里排除，并由
  * {@code knownGap_*} 测试固定当前行为。缺口补上后对应测试会变红——那时删掉它，并把字段加回比对。
@@ -153,11 +155,28 @@ public class ProtocolV1ContractTest {
     /** probeType 取值待跟云端约定：Android 发通讯协议名（ZHONGCHENG/LD/LD2），fixture 写的是测量原理。 */
     private static final List<String> GAP_PROBE_TYPE = Arrays.asList("tank1.probeType", "tank2.probeType");
 
+    /**
+     * 跟 {@code ThingsBoardManager} 发布客户端属性时同样拼装：基础属性 + 标定表
+     * （{@link TankCalibrationAttributeBuilder}，cloud#14）。fixture 里 tank1 有标定表、tank2 没有，
+     * 这里让 tank2 启用但没有对应的表，覆盖"没有标定属性"的情况。
+     */
     private static JsonObject clientAttributesLikeFixture() {
-        Map<String, Object> attributes = ClientAttributesBuilder.build(Arrays.asList(
+        Map<String, Object> attributes = new LinkedHashMap<>(ClientAttributesBuilder.build(Arrays.asList(
                 new ClientAttributesBuilder.Tank(1, "01", 0, 30000),
-                new ClientAttributesBuilder.Tank(2, "02", 0, 30000)));
+                new ClientAttributesBuilder.Tank(2, "02", 0, 30000))));
+        OilCanTable tank1Table = new OilCanTable();
+        tank1Table.setHeightstrarray("0 500 1000");
+        tank1Table.setVolumstrarray("0.0 14225.1 28450.2");
+        attributes.putAll(TankCalibrationAttributeBuilder.build(
+                Arrays.asList(enabledTank(1), enabledTank(2)), Collections.singletonList(tank1Table)));
         return GSON.toJsonTree(attributes).getAsJsonObject();
+    }
+
+    private static OilCanSet enabledTank(int position) {
+        OilCanSet set = new OilCanSet();
+        set.setPk_oilCanId(position);
+        set.setEnable(1);
+        return set;
     }
 
     @Test

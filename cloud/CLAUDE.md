@@ -207,9 +207,8 @@ docs/                 当前规范与历史归档
   被清扫成 `expired`。实测见 `internal/tbclient/rpc_response_channel_test.go`（保留，防平台升级改变行为）。
   设备端 PR #38 已改为终态走 `cmdResult` 遥测，只发一条 RPC 响应；**在真实设备 + ThingsBoard 上跑通前，
   不得宣称闭环已通**，见 open-items A-1。
-- 共享 fixture 的校验（`fixtures/protocol/v1/MANIFEST.json` + `verify-manifest.sh` +
-  `internal/protocol/manifest_test.go`）**只在云端跑，还不是跨仓库门禁**；Android 侧只有一份原样副本（`ProtocolV1ContractTest` 读它，无校验和清单、无构建期校验、副本落后于 #14），
-  见 open-items §C-1。
+- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 与 Android CI 都校验
+  `MANIFEST.json`。改 fixture 要在同一个 PR 里让两端测试都通过；没有分支保护，CI 红了不会阻止合并，见 open-items §C-1。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
 - 多租户**阶段 1（隔离）与阶段 2（管理 API）均已落地**：`customers` 表；非平台管理员用户恰好属于一个

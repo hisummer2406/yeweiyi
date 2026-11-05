@@ -16,8 +16,9 @@ import java.util.Map;
  * 封头高度等）只是 {@code CreateOilTableFragment} 算表用的临时变量，从未落库，所以不报；
  * 储罐类型（{@code OilCanSet.gunType}）由 {@link TankSettingsAttributeBuilder} 上报。
  * <p>
- * 新增字段，云端目前没有对应的 attribute 消费逻辑，需要跨仓库确认后云端才能落地存储/展示
- * （见 CLAUDE.md「协议还未冻结」的约定），不是本次改动单方面冻结的协议。
+ * 云端已消费（cloud#14：镜像表 {@code tank_calibration}），共享 fixture {@code client_attributes.json} 收录了这两个键，
+ * 由 {@code ProtocolV1ContractTest} 比对。数组形状/单位与"变更时是否主动重发"仍待确认（open-items #14 追加），
+ * 协议未冻结。
  * <p>
  * 体积为 NaN/Infinity 的点连同对应高度一起去掉：JSON 不能表示这两种值，Gson 遇到会抛异常，
  * 整条属性消息都发不出去（{@code EllipseTable} 生成的罐表最后一点曾出现 NaN）。
