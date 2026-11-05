@@ -49,12 +49,12 @@ while read -r image digest; do
 done < "$HERE/images.txt"
 
 # 1b) 业务 API 镜像：每次发布的摘要都不同，不能像第三方镜像那样把摘要写死在 images.txt。
-# 改为打包时指定 API_IMAGE（必须是具体 tag，如 ghcr.io/hisummer2406/yeweiyi-cloud:sha-1234567），
+# 改为打包时指定 API_IMAGE（必须是具体 tag，如 ghcr.io/hisummer2406/yeweiyi/cloud:sha-1234567），
 # 拉取后取实际摘要，写入**包内**的 images.txt 副本——仓库里的 images.txt 不变。
 # GHCR 的包默认私有，打包机需先 `docker login ghcr.io`（令牌要有 read:packages）。
 API_IMAGE="${API_IMAGE:-}"
 if [[ -z "$API_IMAGE" ]]; then
-  echo "!!! 未设置 API_IMAGE，例如：API_IMAGE=ghcr.io/hisummer2406/yeweiyi-cloud:sha-1234567 $0" >&2
+  echo "!!! 未设置 API_IMAGE，例如：API_IMAGE=ghcr.io/hisummer2406/yeweiyi/cloud:sha-1234567 $0" >&2
   exit 1
 fi
 if [[ "$API_IMAGE" == *:latest || "$API_IMAGE" != *:* ]]; then

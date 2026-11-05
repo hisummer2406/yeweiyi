@@ -30,8 +30,8 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          # 镜像名沿用合并前的 yeweiyi-cloud，部署文档与服务器不用改。
-          images: ghcr.io/${{ github.repository_owner }}/yeweiyi-cloud
+          # 单仓库自己的包（随本仓库创建、自动授权）；合并前的旧镜像在 ghcr.io/<owner>/yeweiyi-cloud。
+          images: ghcr.io/${{ github.repository_owner }}/yeweiyi/cloud
           tags: |
             type=sha
             type=match,pattern=cloud-(v.*),group=1

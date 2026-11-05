@@ -19,7 +19,7 @@
 # 那时不要启用本文件里的 api 与 migrate 服务。
 #
 # 凭据放 .env.prod（不要提交到 git，也不要写在命令行里）：
-#   API_IMAGE=ghcr.io/hisummer2406/yeweiyi-cloud:sha-xxxxxxx   必须固定到具体 tag，不要用 latest
+#   API_IMAGE=ghcr.io/hisummer2406/yeweiyi/cloud:sha-xxxxxxx   必须固定到具体 tag，不要用 latest
 #   POSTGRES_PASSWORD=...      业务库密码（会拼进 DATABASE_URL，不要含 @ : / ? # 等需转义的字符）
 #   REDIS_PASSWORD=...         Redis 密码
 #   JWT_SECRET=...             至少 32 字符的强随机值

@@ -69,7 +69,7 @@ jobs:
           password: ${{ github.token }}
       - name: 将已构建镜像固定到 digest
         run: |
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi-cloud:sha-${RELEASE_SHA:0:7}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
           docker pull "$image"
           digest_image="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           [[ "$digest_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || exit 1
@@ -88,7 +88,7 @@ jobs:
         run: |
           set -o pipefail
           SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi-cloud:sha-${RELEASE_SHA:0:7}"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
           expected="$(docker image inspect "$DEPLOY_IMAGE" --format '{{.Id}}')"
           [[ "$expected" =~ ^sha256:[a-f0-9]{64}$ ]]
           # ECS 跨境下载大层缓慢；Runner 已按 digest 拉取，通过 SSH 预热缓存。
