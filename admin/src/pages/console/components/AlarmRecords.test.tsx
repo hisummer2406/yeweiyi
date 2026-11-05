@@ -1,0 +1,224 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import zhPages from '@/locales/zh-CN/pages';
+
+const listAlarms = vi.fn();
+
+vi.mock('@umijs/max', () => ({
+  useIntl: () => ({
+    formatMessage: ({ id }: { id: string }, values?: Record<string, string>) =>
+      ((zhPages as Record<string, string>)[id] ?? id).replace(
+        /\{(\w+)\}/g,
+        (_, k) => values?.[k] ?? '',
+      ),
+  }),
+}));
+vi.mock('@/services/ant-design-pro/alarms', () => ({ listAlarms }));
+const getDeviceTanks = vi.fn(async () => ({
+  deviceName: 'D1',
+  reported: true,
+  tanks: [{ index: 1 }, { index: 2 }],
+}));
+vi.mock('@/services/ant-design-pro/tankGrants', () => ({ getDeviceTanks }));
+
+const { default: AlarmRecords } = await import('./AlarmRecords');
+const { ApiError } = await import('@/services/ant-design-pro/apiError');
+
+const alarm = (i: number, p: Partial<API.Alarm> = {}): API.Alarm => ({
+  alarmId: `a${i}`,
+  tank: 1,
+  type: 'HIGH_LEVEL',
+  severity: 'CRITICAL',
+  status: 'ACTIVE',
+  text: `text-${i}`,
+  time: new Date(Date.UTC(2026, 9, 6, 0, i)).toISOString(),
+  ...p,
+});
+const list = (
+  n: number,
+  partial = false,
+  truncated = false,
+  from = 0,
+): API.AlarmList => ({
+  rows: Array.from({ length: n }, (_, i) => alarm(from + i)),
+  partial,
+  truncated,
+});
+
+beforeEach(() => vi.clearAllMocks());
+afterEach(cleanup);
+
+describe('AlarmRecords', () => {
+  it('requests the given device for the last 24 hours', async () => {
+    listAlarms.mockResolvedValue(list(1));
+    render(<AlarmRecords device="D1" />);
+    await screen.findByText('text-0');
+    const q: API.RecordsQuery = listAlarms.mock.calls[0][0];
+    expect(q.device).toBe('D1');
+    expect(Date.parse(q.endTime) - Date.parse(q.beginTime)).toBe(86_400_000);
+  });
+
+  it('shows the Chinese labels of known enums', async () => {
+    listAlarms.mockResolvedValue({ rows: [alarm(0)], partial: false });
+    render(<AlarmRecords device="D1" />);
+    await screen.findByText('text-0');
+    expect(screen.getByText('高液位')).toBeTruthy();
+    expect(screen.getByText('紧急')).toBeTruthy();
+    expect(screen.getByText('报警中')).toBeTruthy();
+  });
+
+  it('shows an unknown type as itself, never blank', async () => {
+    listAlarms.mockResolvedValue({
+      rows: [alarm(0, { type: 'NEW_TYPE' })],
+      partial: false,
+    });
+    render(<AlarmRecords device="D1" />);
+    expect(await screen.findByText('NEW_TYPE')).toBeTruthy();
+  });
+
+  it('shows -- when an alarm has no value', async () => {
+    listAlarms.mockResolvedValue({ rows: [alarm(0)], partial: false });
+    render(<AlarmRecords device="D1" />);
+    const row = (await screen.findByText('text-0')).closest(
+      'tr',
+    ) as HTMLElement;
+    expect(within(row).getByText('--')).toBeTruthy();
+  });
+
+  it('medium comes from the alarm itself (cloud#85); none is a dash', async () => {
+    listAlarms.mockResolvedValue({
+      rows: [
+        alarm(0, { oilType: 'Sulfuric Acid', oilTypeIndex: 2 }),
+        alarm(1, { oilType: '自定义', oilTypeIndex: 20 }),
+        alarm(2, { oilType: null, oilTypeIndex: null }),
+      ],
+      partial: false,
+    });
+    render(<AlarmRecords device="D1" />);
+    const row = async (i: number) =>
+      (await screen.findByText(`text-${i}`)).closest('tr') as HTMLElement;
+    expect(within(await row(0)).getByText('-10#')).toBeTruthy();
+    expect(within(await row(1)).getByText('自定义')).toBeTruthy();
+    expect(within(await row(2)).getByText('—')).toBeTruthy();
+  });
+
+  it('pages on the cloud: next asks for the next offset, previous goes back', async () => {
+    listAlarms
+      .mockResolvedValueOnce(list(20, false, true))
+      .mockResolvedValueOnce(list(5, false, false, 20))
+      .mockResolvedValueOnce(list(20, false, true));
+    render(<AlarmRecords device="D1" />);
+    await screen.findByText('text-0');
+    expect(listAlarms.mock.calls[0][0]).toMatchObject({ limit: 20, offset: 0 });
+    expect(screen.getByText('第 1 页')).toBeTruthy();
+    expect(
+      (screen.getByText('上一页').closest('button') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText('下一页'));
+    expect(await screen.findByText('text-20')).toBeTruthy();
+    expect(listAlarms.mock.calls[1][0]).toMatchObject({ offset: 20 });
+    expect(screen.getByText('第 2 页')).toBeTruthy();
+    expect(
+      (screen.getByText('下一页').closest('button') as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText('上一页'));
+    expect(await screen.findByText('text-0')).toBeTruthy();
+    expect(listAlarms.mock.calls[2][0]).toMatchObject({ offset: 0 });
+  });
+
+  it('a single page has no pager', async () => {
+    listAlarms.mockResolvedValue(list(3));
+    render(<AlarmRecords device="D1" />);
+    await screen.findByText('text-0');
+    expect(screen.queryByText('下一页')).toBeNull();
+  });
+
+  it('shows no notice for a complete short list', async () => {
+    listAlarms.mockResolvedValue(list(37));
+    render(<AlarmRecords device="D1" />);
+    await screen.findByText('text-0');
+    expect(screen.queryByText(/首次同步尚未完成/)).toBeNull();
+  });
+
+  it('says the records may be incomplete when the response is partial, and still shows the rows', async () => {
+    listAlarms.mockResolvedValue(list(2, true));
+    render(<AlarmRecords device="D1" />);
+    expect(
+      await screen.findByText(/首次同步尚未完成，记录可能不完整/),
+    ).toBeTruthy();
+    expect(screen.getByText('text-0')).toBeTruthy();
+  });
+
+  it('an empty complete window shows the empty state', async () => {
+    listAlarms.mockResolvedValue(list(0));
+    render(<AlarmRecords device="D1" />);
+    expect(await screen.findByText('该时间范围内没有报警')).toBeTruthy();
+  });
+
+  it('an empty PARTIAL window does not say there are no alarms', async () => {
+    listAlarms.mockResolvedValue(list(0, true));
+    render(<AlarmRecords device="D1" />);
+    expect(await screen.findByText(/首次同步尚未完成/)).toBeTruthy();
+    expect(screen.queryByText('该时间范围内没有报警')).toBeNull();
+  });
+
+  it('a failure shows an error with retry, not the empty state', async () => {
+    listAlarms.mockRejectedValueOnce(new ApiError(500, 'boom'));
+    render(<AlarmRecords device="D1" />);
+    expect(await screen.findByText('记录加载失败')).toBeTruthy();
+    expect(screen.queryByText('该时间范围内没有报警')).toBeNull();
+    listAlarms.mockResolvedValue(list(1));
+    fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
+    expect(await screen.findByText('text-0')).toBeTruthy();
+  });
+
+  it('stays silent when the auth failure was already handled', async () => {
+    listAlarms.mockRejectedValue(new ApiError(401, undefined, true));
+    render(<AlarmRecords device="D1" />);
+    await waitFor(() => expect(listAlarms).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByText('记录加载失败')).toBeNull();
+    expect(screen.queryByText('该时间范围内没有报警')).toBeNull();
+  });
+
+  it('always shows the note about records from before the transfer', async () => {
+    listAlarms.mockResolvedValue(list(0));
+    render(<AlarmRecords device="D1" />);
+    expect(
+      await screen.findByText('设备转移给当前客户之前的记录不会显示。'),
+    ).toBeTruthy();
+  });
+
+  it('switching device requests the new one and drops the old rows', async () => {
+    listAlarms.mockImplementation((q: API.RecordsQuery) =>
+      Promise.resolve({
+        rows: [alarm(0, { text: `of-${q.device}` })],
+        partial: false,
+      }),
+    );
+    const { rerender } = render(<AlarmRecords device="D1" />);
+    await screen.findByText('of-D1');
+    rerender(<AlarmRecords device="D2" />);
+    expect(await screen.findByText('of-D2')).toBeTruthy();
+    expect(screen.queryByText('of-D1')).toBeNull();
+  });
+
+  it('a picked tank is asked of the cloud, not filtered from the first page (#84)', async () => {
+    listAlarms.mockResolvedValue({ rows: [alarm(1)], partial: false });
+    render(<AlarmRecords device="D1" />);
+    await waitFor(() => expect(listAlarms).toHaveBeenCalled());
+    expect(listAlarms.mock.calls[0][0].tank).toBeUndefined();
+    fireEvent.mouseDown(await screen.findByLabelText('油罐'));
+    fireEvent.click(await screen.findByText('2号罐'));
+    await waitFor(() => expect(listAlarms.mock.calls.at(-1)?.[0].tank).toBe(2));
+  });
+});
