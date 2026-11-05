@@ -38,6 +38,8 @@ jobs:
       DEPLOY_DIR: ${{ secrets.CLOUD_DEPLOY_PATH }}
     steps:
       - name: 仅允许从 main 手动发布
+        # 此时还没 checkout，cloud/ 不存在，不能用默认工作目录。
+        working-directory: .
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
