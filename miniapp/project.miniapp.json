@@ -1,11 +1,19 @@
 {
   "miniVersion": "v2",
   "name": "%name%",
-  "version": "0.0.1",
-  "versionCode": 100,
+  "version": "1.0.0",
+  "versionCode": 101,
   "i18nFilePath": "i18n",
   "mini-ohos": {
-    "sdkVersion": "0.5.1"
+    "sdkVersion": "0.5.1",
+    "icons": {
+      "foreground": "miniapp/ohos/icons/foreground.png",
+      "background": "miniapp/ohos/icons/background.png"
+    },
+    "splashscreen": {
+      "startWindowIcon": "miniapp/ohos/icons/foreground.png",
+      "startWindowBackground": "#FFFFFF"
+    }
   },
   "mini-android": {
     "resourcePath": "miniapp/android/nativeResources",
@@ -19,17 +27,17 @@
       "xweb": false
     },
     "icons": {
-      "hdpi": "",
-      "xhdpi": "",
-      "xxhdpi": "",
-      "xxxhdpi": ""
+      "hdpi": "miniapp/android/icons/icon-hdpi.png",
+      "xhdpi": "miniapp/android/icons/icon-xhdpi.png",
+      "xxhdpi": "miniapp/android/icons/icon-xxhdpi.png",
+      "xxxhdpi": "miniapp/android/icons/icon-xxxhdpi.png"
     },
     "splashscreen": {
       "hdpi": "",
       "xhdpi": "",
       "xxhdpi": ""
     },
-    "enableVConsole": "open",
+    "enableVConsole": "close",
     "privacy": {
       "enable": true
     }
