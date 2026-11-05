@@ -152,6 +152,12 @@ public class ProtocolV1ContractTest {
             "deviceModel", "hardwareVersion", "localControlMode", "current_fw_title", "current_fw_version");
     /** probeType 取值待跟云端约定：Android 发通讯协议名（ZHONGCHENG/LD/LD2），fixture 写的是测量原理。 */
     private static final List<String> GAP_PROBE_TYPE = Arrays.asList("tank1.probeType", "tank2.probeType");
+    /**
+     * 标定表属性（cloud#14 / zhongchengyeweiyi#42 待办1）：云端 fixture 已收录、设备端尚未上报。
+     * 原先的副本落后于 #14，没暴露出这个缺口；改读单仓库唯一的 fixture 后显式登记在这里。
+     */
+    private static final List<String> GAP_CALIBRATION = Arrays.asList(
+            "tank1.calibrationHeightMm", "tank1.calibrationVolumeL");
 
     private static JsonObject clientAttributesLikeFixture() {
         Map<String, Object> attributes = ClientAttributesBuilder.build(Arrays.asList(
@@ -168,6 +174,9 @@ public class ProtocolV1ContractTest {
         for (String key : GAP_UNSOURCED_ATTRIBUTES) {
             expected.remove(key);
         }
+        for (String key : GAP_CALIBRATION) {
+            expected.remove(key);
+        }
         for (String key : GAP_PROBE_TYPE) {
             expected.remove(key);
             actual.remove(key);
@@ -180,6 +189,16 @@ public class ProtocolV1ContractTest {
         JsonObject actual = clientAttributesLikeFixture();
         for (String key : GAP_UNSOURCED_ATTRIBUTES) {
             assertFalse("有了数据来源后删除本测试，并把 " + key + " 加回逐 key 比对", actual.has(key));
+        }
+    }
+
+    @Test
+    public void knownGap_calibrationAttributesNotPublished() {
+        JsonObject expected = FixtureLoader.loadProtocolV1("client_attributes.json");
+        JsonObject actual = clientAttributesLikeFixture();
+        for (String key : GAP_CALIBRATION) {
+            assertTrue("fixture 里应有 " + key, expected.has(key));
+            assertFalse("设备端开始上报标定表后删除本测试，并把 " + key + " 加回逐 key 比对", actual.has(key));
         }
     }
 

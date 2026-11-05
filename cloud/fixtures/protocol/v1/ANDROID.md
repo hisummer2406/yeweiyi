@@ -1,10 +1,16 @@
-# 协议 V1 共享 fixture（来自 yeweiyi-cloud）
+# 协议 V1 共享 fixture 的 Android 覆盖情况
 
-本目录下的 `*.json` 是 `yeweiyi-cloud/fixtures/protocol/v1/` 的**原样副本**，不要在这里改内容。
+Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/fixtures` 挂到测试 classpath，
+按 `/protocol/v1/<name>` 读取），**不再有副本**，也就不需要同步。改这里的 fixture 后两端测试都要跑：
 
-- 来源：`yeweiyi-cloud@26fb6b6`（协议代码与 `5ff243b` 相同）
-- 拷贝日期：2026-10-04
-- 使用方：`app/src/test/java/com/sansen/yeweiyi/logic/thingsboard/ProtocolV1ContractTest.java`、`StockEventMapperTest.java`
+```bash
+(cd cloud && go test ./internal/protocol/)
+(cd android && ./gradlew :app:testDebugUnitTest)
+```
+
+测试变红说明两边协议出现漂移，先跟另一端负责人确认再改代码，不要改 fixture 迁就代码。
+使用方：`android/app/src/test/java/com/sansen/yeweiyi/logic/thingsboard/` 下的
+`ProtocolV1ContractTest`、`StockEventMapperTest` 等。
 
 ## 设备端起草、待云端收录的 fixture（zhongchengyeweiyi#49 / cloud#85）
 
@@ -20,16 +26,6 @@
 | `alarm_active_oil_type.json` | alarm 新增 `oilType`、`oilTypeIndex` | `ProtocolV1ContractTest` |
 | `oil_type_index.json` | `oilTypeIndex` 对照表（字典，不是报文） | `OilTypeIndexFixtureTest`（与 `res/values*/array.xml` 比对） |
 
-## 同步方法
-
-云端协议有改动时，重新整目录拷贝，然后跑测试：
-
-```bash
-cp ../cloud/fixtures/protocol/v1/*.json app/src/test/resources/protocol/v1/
-./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest
-```
-
-测试变红说明两边协议出现漂移，先跟云端确认再改代码，不要改 fixture 迁就代码。拷贝后更新上面的来源 commit。
 
 ## 各 fixture 在 Android 侧的覆盖情况
 
