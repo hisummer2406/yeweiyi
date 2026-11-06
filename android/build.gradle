@@ -11,6 +11,9 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:4.2.1'
+        // Gradle 6.7.1 最高只支持 Kotlin 1.7.x（1.8 起要求 Gradle 6.8.3+）。
+        // Android Studio 4.2 自带的 Kotlin 插件只有 1.5，用它打开会大面积标红，请用 Panda 等新版 IDE
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.7.22'
         classpath 'org.greenrobot:greendao-gradle-plugin:3.2.2'
 
     }

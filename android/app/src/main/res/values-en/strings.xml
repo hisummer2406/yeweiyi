@@ -591,4 +591,17 @@
 
     <!-- MainFragment 罐列表 canvas 绘制的罐号标签 -->
     <string name="oilcan_short_label_format">No.%1$d </string>
+
+    <!-- LogSetFragment 日志诊断页（AI 翻译，待 review） -->
+    <string name="log_set_entry">Log Diagnostics</string>
+    <string name="log_enable_label">Logging</string>
+    <string name="log_level_label">Log Level</string>
+    <string name="log_level_hint">When off, only errors (E) are recorded; level D returns to W automatically after 24 hours</string>
+    <string name="log_status_format">Current level: %1$s (%2$s)</string>
+    <string name="log_size_format">Log size: %1$s</string>
+    <string name="log_export">Export Logs</string>
+    <string name="log_export_done">Exported to: %1$s</string>
+    <string name="log_clear">Clear Logs</string>
+    <string name="log_cleared">Logs cleared</string>
+    <string name="log_op_failed">Operation failed, see the log for details</string>
 </resources>

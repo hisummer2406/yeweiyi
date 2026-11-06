@@ -13,6 +13,7 @@ import android.widget.Toast;
 
 import com.lzy.okgo.model.Progress;
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.AppLog;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
 import java.io.BufferedWriter;
@@ -118,6 +119,8 @@ public abstract class CrashAppLog implements Thread.UncaughtExceptionHandler{
     @Override
     public void uncaughtException(Thread thread, Throwable throwable) {
 
+        // 先同步写进 SYSTEM 日志（不走队列），原有的 /sdcard/crashLog 流程不变
+        AppLog.crashSync(thread, throwable);
         try {
 
             if (!hanlderException(throwable) && mUncaughtExceptionHandler != null) {

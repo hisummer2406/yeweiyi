@@ -9,6 +9,7 @@ import android.util.SparseBooleanArray;
 import android.util.SparseIntArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.ProbeLog;
 import com.sansen.yeweiyi.bean.BrandBean;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.bean.OilMessage;
@@ -289,10 +290,13 @@ public class SerialPortManager implements IParseDataListener {
                                         askChangDu = (visit == 1);
                                     }
                                     for (int i = 0; i < 5; i++) { //0x01,0x06,0x00,0x01,0x00,0x02修改波特率
+                                        // 只给日志用：发 42 前 askChangDu 已被置 false，事后判断不出请求类型
+                                        String reqKind = String.valueOf(probeType);
                                         switch (probeType) {
                                             case 0:
                                                 Log.e("TAG探针地址",i+"===");
                                                 if (i == 0 && isMyWenDuTurn) {
+                                                    reqKind = "45";
                                                     oilCanData = ZhongChengCompany.getInstance().sendWenDuInfo("FEFE", mOilCan.getProbeAddressHex(), mContext);
                                                 } else if (askChangDu) {
                                                     // 本次轮询只问一次长度。
@@ -303,17 +307,21 @@ public class SerialPortManager implements IParseDataListener {
                                                     // 故障提前一次触发。历史版本（8ff8d69 起）一直如此，2026-09-27 核对后决定
                                                     // 暂不修改，如需修正要连同通讯故障计数一起在真机上验证。
                                                     askChangDu = false;
+                                                    reqKind = "42";
                                                     oilCanData = ZhongChengCompany.getInstance().sendChangDuInfo("FEFE", mOilCan.getProbeAddressHex(), mContext);
                                                 } else {
+                                                    reqKind = "44";
                                                     oilCanData = ZhongChengCompany.getInstance().sendProbeInfo("FEFE", mOilCan.getProbeAddressHex(), mContext);
                                                 }
                                                 break;
                                             case 1:
+                                                reqKind = "LD";
                                                 oilCanData = LDCompany.getInstance().sendProbeInfo("", mOilCan.getProbeAddressHex(), mContext);
                                                 //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
                                                 break;
 
                                             case 2:
+                                                reqKind = "LD2";
                                                 oilCanData = LD2Company.getInstance().sendProbeInfo("", ld2ChannelCountHex, mContext);
                                                 //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
                                                 break;
@@ -340,6 +348,8 @@ public class SerialPortManager implements IParseDataListener {
                                             // golden master 录制入口（默认关闭）。录在这里而不是更上游的
                                             // serialPort.receiveData()，因为 data 才是 probeInfoPase 真正吃进去的东西。
                                             ProbeTrafficRecorder.recordRequest(data, mOilCan.getProbeType(), mOilCan.getOilCanPos());
+                                            // 只给日志用：isRight 在循环外声明、解析抛异常时不会被重置，不能代表本次结果
+                                            boolean parsedThisTime = false;
 
                                             switch (mOilCan.getProbeType()) {
                                                 case 0:
@@ -348,6 +358,7 @@ public class SerialPortManager implements IParseDataListener {
                                                         isRight = ZhongChengCompany
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
+                                                        parsedThisTime = isRight;
 
                                                     } catch (Exception e) {
                                                         Log.e(TAG, "中诚协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
@@ -360,6 +371,7 @@ public class SerialPortManager implements IParseDataListener {
                                                         isRight = LDCompany
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
+                                                        parsedThisTime = isRight;
                                                     } catch (Exception e) {
                                                         Log.e(TAG, "LD协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
                                                                 + " 原始报文=" + data, e);
@@ -378,6 +390,7 @@ public class SerialPortManager implements IParseDataListener {
                                                         isRight = LD2Company
                                                                 .getInstance()
                                                                 .probeInfoPase(data, SerialPortManager.this);
+                                                        parsedThisTime = isRight;
                                                     } catch (Exception e) {
                                                         Log.e(TAG, "LD2协议解析失败, 油罐位=" + mOilCan.getOilCanPos()
                                                                 + " 原始报文=" + data, e);
@@ -392,6 +405,7 @@ public class SerialPortManager implements IParseDataListener {
                                                             + ", 本次不解析。请核对探针配置表。");
                                                     break;
                                             }
+                                            ProbeLog.onResponse(mOilCan.getOilCanPos(), reqKind, data, parsedThisTime);
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
                                             if (isRight) {
                                                 mOilCan.setErrorTimes(0);
@@ -417,6 +431,7 @@ public class SerialPortManager implements IParseDataListener {
                                                 //  Log.w(TAG, "串口CRC错误时: "+mOilCan.getErrorTimes()+"==="+data);
                                             }
                                         } else {
+                                            ProbeLog.onResponse(mOilCan.getOilCanPos(), reqKind, null, false);
                                             mOilCan.setErrorTimes(mOilCan.getErrorTimes() + 1);
                                             // Log.w(TAG, "串口为空时: "+mOilCan.getErrorTimes());
                                         }

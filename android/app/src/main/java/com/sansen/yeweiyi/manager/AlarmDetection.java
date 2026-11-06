@@ -5,6 +5,8 @@ import android.util.Log;
 import com.alibaba.fastjson.JSONObject;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.AlarmLog;
+import com.sansen.yeweiyi.applog.SoundLightLog;
 import com.sansen.yeweiyi.bean.AlarmRecord;
 import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -63,6 +65,7 @@ public class AlarmDetection {
                 cloud.onRecovered(pos, OilMessage.HHEIGHT_OIL_ALARM, oilCan.getOilLevel());
                 if (!Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {//如果当前的所有油罐为非报警
                     Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]=true;
+                    SoundLightLog.onClose(oilCan.getOilCanPos(), "高液位");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
                     oilCan.setAlarmState(0);
                 } else if (!Singleton.getInstance().isHHightAlarm[oilCan.getOilCanPos()]) {
@@ -79,6 +82,7 @@ public class AlarmDetection {
                 if (!Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]) {
                     Log.e("TAG", "打开报警oilLowDection======"+"----------"+oilCan.getOilLevel()+"----"+oilCan.getOilCanPos());
                     Singleton.getInstance().isLowAlarms[oilCan.getOilCanPos()]=true;
+                    SoundLightLog.onClose(oilCan.getOilCanPos(), "低液位");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
                     oilCan.setAlarmState(0);
                 }
@@ -96,6 +100,7 @@ public class AlarmDetection {
                 cloud.onRecovered(pos, OilMessage.HEIGHT_WATER, oilCan.getWaterLevel());
                 if (!Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]) {
                     Log.e("关闭警报灯", "警报灯03");
+                    SoundLightLog.onClose(oilCan.getOilCanPos(), "高水位");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
                     oilCan.setAlarmState(0);
                     Singleton.getInstance().isWaterAlarm[oilCan.getOilCanPos()]=true;
@@ -111,7 +116,9 @@ public class AlarmDetection {
                 cloud.onRecovered(pos, OilMessage.HEIGHT_TEMPER, oilCan.getTemper());
                 if (!Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]) {
                     Log.e("关闭警报灯", "警报灯04");
+                    AlarmLog.onHighTempRecovered(oilCan);
                     Singleton.getInstance().isTemperAlarm[oilCan.getOilCanPos()]=true;
+                    SoundLightLog.onClose(oilCan.getOilCanPos(), "高温");
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
                     oilCan.setAlarmState(0);
               }
@@ -169,6 +176,7 @@ public class AlarmDetection {
             if ( Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]) {
                 Singleton.getInstance().SoundLightAlarm[oilCan.getOilCanPos()]=false;
                 isHHeightAlarm = false;
+                SoundLightLog.onOpen(oilCan.getOilCanPos(), "高液位");
                 SoundLightManager.getInstance().openHeightAlarm(oilCan.getOilCanPos(), isHHeightAlarm);
 
                 oilMessage = new OilMessage();
@@ -280,6 +288,7 @@ public class AlarmDetection {
                     oilCan.setAlarmState(2);
                     oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.low_oil_alarm);
 
+                    SoundLightLog.onOpen(oilCan.getOilCanPos(), "低液位");
                     SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), isLLowAlarm);
                     if (alarmStates.containsKey(oilCan.getOilCanPos())) {
                         alarmState = alarmStates.get(oilCan.getOilCanPos());
@@ -366,6 +375,7 @@ public class AlarmDetection {
             alarmState.setHeightWaterError(0);
         }
         Log.e("TAG", "打开报警waterHeightDection");
+        SoundLightLog.onOpen(oilCan.getOilCanPos(), "高水位");
         SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), false);
     }
 
@@ -376,6 +386,7 @@ public class AlarmDetection {
      */
     private void tempHeightDection(OilCan oilCan) {
 
+        AlarmLog.onHighTempRaised(oilCan);
         AlarmState alarmState;
         oilMessage = new OilMessage();
         oilMessage.setOilCanId(oilCan.getOilCanPos());
@@ -397,6 +408,7 @@ public class AlarmDetection {
             alarmState.setHeightTempError(0);
         }
         Log.e("TAG", "打开报警tempHeightDection");
+        SoundLightLog.onOpen(oilCan.getOilCanPos(), "高温");
         SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), false);
     }
 

@@ -272,4 +272,17 @@
          没有设计稿来源，未经审校。 -->
     <string name="oil_Communication_interrupt">Interrumpido</string>
     <string name="main_toast_savesuccess">Guardado correctamente, consúltelo en el registro de almacenamiento</string>
+
+    <!-- LogSetFragment 日志诊断页（AI 翻译，待 review） -->
+    <string name="log_set_entry">Diagnóstico de registros</string>
+    <string name="log_enable_label">Registro de logs</string>
+    <string name="log_level_label">Nivel de registro</string>
+    <string name="log_level_hint">Desactivado: solo se registran errores (E); el nivel D vuelve a W automáticamente tras 24 horas</string>
+    <string name="log_status_format">Nivel actual: %1$s (%2$s)</string>
+    <string name="log_size_format">Espacio de registros: %1$s</string>
+    <string name="log_export">Exportar registros</string>
+    <string name="log_export_done">Exportado a: %1$s</string>
+    <string name="log_clear">Borrar registros</string>
+    <string name="log_cleared">Registros borrados</string>
+    <string name="log_op_failed">Operación fallida, consulte el registro para más detalles</string>
 </resources>
