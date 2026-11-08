@@ -26,6 +26,7 @@ import com.sansen.yeweiyi.logic.thingsboard.TankSettingsAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.UniqueTimestampAllocator;
+import com.sansen.yeweiyi.applog.CloudCmdLog;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.ProcessedCommandStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcDispatcher;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
@@ -205,7 +206,7 @@ public final class ThingsBoardManager {
         registry.register(HighRiskActionHandler.METHOD_DEVICE_REBOOT, highRiskActionHandler);
 
         this.rpcDispatcher = new RpcDispatcher(registry, commandStore, this::publishRpcAck, this::publishRpcResult,
-                System::currentTimeMillis);
+                System::currentTimeMillis, CloudCmdLog.INSTANCE);
 
         this.telemetryScheduler = new TelemetryScheduler(this::buildAndPublishSnapshot, TELEMETRY_PERIOD_MILLIS,
                 error -> Log.e(TAG, "30 秒快照发布失败", error));
@@ -217,7 +218,7 @@ public final class ThingsBoardManager {
         }
         int recovered = commandStore.recoverAfterRestart(System.currentTimeMillis());
         if (recovered > 0) {
-            Log.w(TAG, "重启恢复：" + recovered + " 条未完成命令按 FAILED 处理");
+            CloudCmdLog.onRecoveredAfterRestart(recovered);
         }
         telemetryScheduler.start();
         // 罐配置变更（保存罐设置、RPC 改阈值等都会 refresh）后：清理已删除/停用罐的报警，并立即重发
@@ -583,11 +584,15 @@ public final class ThingsBoardManager {
      * {@code newPeriodMillis} 为 {@code null}（缺失/非法/非正）时什么都不做，保持当前周期——
      * 由 {@link SharedAttributesParser} 保证只有合法的正数才会走到这里。
      */
-    private void applySharedAttributes(Long newPeriodMillis) {
+    private void applySharedAttributes(Long newPeriodMillis, String source) {
         if (newPeriodMillis == null) {
             return;
         }
-        Log.i(TAG, "共享属性下发 reportIntervalSec，快照周期改为 " + newPeriodMillis + "ms");
+        long oldPeriodMillis = telemetryScheduler.getPeriodMillis();
+        if (oldPeriodMillis != newPeriodMillis) {
+            // 每次重连都会拉一次，值没变不记
+            CloudCmdLog.onSharedAttributeApplied("reportIntervalSec", oldPeriodMillis + "ms", newPeriodMillis + "ms", source);
+        }
         telemetryScheduler.updatePeriod(newPeriodMillis);
     }
 
@@ -601,12 +606,12 @@ public final class ThingsBoardManager {
     private final class SharedAttributesListener implements ThingsBoardMqttConnection.AttributesListener {
         @Override
         public void onSharedAttributesPush(String payloadJson) {
-            applySharedAttributes(SharedAttributesParser.parsePushedReportIntervalMillis(payloadJson));
+            applySharedAttributes(SharedAttributesParser.parsePushedReportIntervalMillis(payloadJson), "push");
         }
 
         @Override
         public void onAttributesResponse(String requestId, String payloadJson) {
-            applySharedAttributes(SharedAttributesParser.parseResponseReportIntervalMillis(payloadJson));
+            applySharedAttributes(SharedAttributesParser.parseResponseReportIntervalMillis(payloadJson), "response");
         }
     }
 
@@ -635,7 +640,13 @@ public final class ThingsBoardManager {
      * 下一条 MQTT 消息（PR #38 Codex 第三轮审核 P1）。
      */
     private void onRpcRequest(String mqttRequestId, String payloadJson) {
-        rpcDispatchExecutor.execute(guarded("RPC 处理", () -> rpcDispatcher.dispatch(mqttRequestId, payloadJson)));
+        rpcDispatchExecutor.execute(() -> {
+            try {
+                rpcDispatcher.dispatch(mqttRequestId, payloadJson);
+            } catch (RuntimeException e) {
+                CloudCmdLog.onDispatchCrashed(mqttRequestId, e);
+            }
+        });
     }
 
     /**
@@ -647,7 +658,9 @@ public final class ThingsBoardManager {
     private void publishRpcAck(String mqttRequestId, String commandId, RpcResultStatus status,
                                 RpcErrorCode errorCode, String message, boolean duplicate, long tsMillis) {
         Map<String, Object> ack = RpcWirePayloads.ack(commandId, status, errorCode, message, duplicate, tsMillis);
-        connection.publishRpcAck(mqttRequestId, gson.toJson(ack));
+        if (!connection.publishRpcAck(mqttRequestId, gson.toJson(ack))) {
+            CloudCmdLog.onAckPublishFailed(mqttRequestId, commandId, status, errorCode);
+        }
     }
 
     /**

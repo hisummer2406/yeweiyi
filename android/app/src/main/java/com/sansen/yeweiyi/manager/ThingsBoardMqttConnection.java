@@ -336,8 +336,8 @@ public final class ThingsBoardMqttConnection {
         return publish(ThingsBoardTopics.TELEMETRY, payloadJson, QOS_AT_LEAST_ONCE);
     }
 
-    public void publishRpcAck(String mqttRequestId, String payloadJson) {
-        publish(ThingsBoardTopics.rpcResponse(mqttRequestId), payloadJson, QOS_AT_LEAST_ONCE);
+    public boolean publishRpcAck(String mqttRequestId, String payloadJson) {
+        return publish(ThingsBoardTopics.rpcResponse(mqttRequestId), payloadJson, QOS_AT_LEAST_ONCE);
     }
 
     public boolean publishAttributes(String payloadJson) {
