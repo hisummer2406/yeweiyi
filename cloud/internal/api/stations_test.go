@@ -262,6 +262,9 @@ func TestStations_Create(t *testing.T) {
 	} else if _, ghost := tn.apiStation(t, tn.adminA, map[string]any{"customerId": 999999999, "name": uniqueName("x")}); ghost.Code != rec.Code || ghost.Body.String() != rec.Body.String() {
 		t.Errorf("another customer's customerId vs a missing one: %d %q vs %d %q, want identical",
 			rec.Code, rec.Body.String(), ghost.Code, ghost.Body.String())
+	} else if !strings.Contains(rec.Body.String(), `"code":"unknown_customer"`) {
+		// Same code as the platform admin's "no such customer" answer (#79): the code adds nothing to probe with.
+		t.Errorf("another customer's customerId must carry code unknown_customer: %q", rec.Body.String())
 	}
 	if _, rec := tn.apiStation(t, tn.userA, map[string]any{"name": uniqueName("x")}); rec.Code != http.StatusForbidden {
 		t.Errorf("customer user creating: got %d, want 403", rec.Code)

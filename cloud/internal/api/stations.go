@@ -122,8 +122,8 @@ func createStationHandler(deps Deps) gin.HandlerFunc {
 			return
 		}
 		if !mayManageCustomer(actor, customerID) {
-			refuseObject(c, deps, actor, "station.create", "another customer", map[string]any{"customerId": customerID},
-				http.StatusBadRequest, "unknown customerId")
+			refuseObjectCode(c, deps, actor, "station.create", "another customer", map[string]any{"customerId": customerID},
+				http.StatusBadRequest, "unknown customerId", "unknown_customer")
 			return
 		}
 		name, address, ok := validStationFields(req.Name, req.Address)

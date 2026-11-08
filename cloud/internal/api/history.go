@@ -92,7 +92,7 @@ func telemetryHistoryHandler(deps Deps) gin.HandlerFunc {
 
 		tank, err := strconv.Atoi(c.Query("tank"))
 		if err != nil || tank < 1 || tank > protocol.MaxTankCount {
-			bad("tank must be an integer between 1 and " + strconv.Itoa(protocol.MaxTankCount))
+			badCode("invalid_tank", "tank must be an integer between 1 and "+strconv.Itoa(protocol.MaxTankCount))
 			return
 		}
 
