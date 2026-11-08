@@ -33,14 +33,14 @@ Within `app/src/main/java` itself there are also several non-namespaced top-leve
 
 ### Toolchain is present on this machine — but still verify before claiming a build passed
 
-This macOS checkout builds with JDK 11 (Temurin, unpacked tarball at `~/jdks/jdk-11.0.31+11/Contents/Home`) plus an Android SDK at `~/Library/Android/sdk`, with `local.properties` pointing at it. As of 2026-11-02 (main `23f4a48`), `assembleDebug` succeeds and the unit tests run 312 cases, 0 failures, 7 skipped (the probe-replay tests, which skip until field captures exist).
+This macOS checkout builds with JDK 11 (Oracle 11.0.2 at `/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home`; the earlier `~/jdks/jdk-11.0.31+11` tarball no longer exists as of 2026-11-08) plus an Android SDK at `~/Library/Android/sdk`, with `local.properties` pointing at it. As of 2026-11-02 (main `23f4a48`), `assembleDebug` succeeds and the unit tests run 312 cases, 0 failures, 7 skipped (the probe-replay tests, which skip until field captures exist).
 
 ```bash
-JAVA_HOME=~/jdks/jdk-11.0.31+11/Contents/Home ./gradlew :app:assembleDebug
+JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home ./gradlew :app:assembleDebug
 ```
 
 Three caveats that have already bitten:
-- **The JDK 11 is invisible to `/usr/libexec/java_home`**, which only lists the system Temurin 17. Gradle 6.7.1 fails on 17 (`Unsupported class file major version 61`), so always set `JAVA_HOME` as above. Concluding "no JDK 11 here" from `java_home` alone got PR #38 merged without a build on 2026-11-02 (verified only afterwards).
+- **Always set `JAVA_HOME` explicitly, and don't judge which JDKs exist from `/usr/libexec/java_home` alone.** The JDK installed here has changed (2026-11-02 `java_home` listed only a Temurin 17 while the JDK 11 was an unregistered tarball; 2026-11-08 it lists only the Oracle 11.0.2 above). Gradle 6.7.1 fails on 17 (`Unsupported class file major version 61`). Concluding "no JDK 11 here" from `java_home` alone got PR #38 merged without a build on 2026-11-02 (verified only afterwards).
 - Commits `6ae4e3f` through `ada562e` (阶段 0 and 阶段 1) were written *before* the toolchain existed and were merged unverified. Later commits are compile-verified.
 - `testDebugUnitTest` reports `UP-TO-DATE` and prints nothing when inputs haven't changed — a stale pass looks identical to a fresh one. Run `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest`, or read `app/build/test-results/testDebugUnitTest/*.xml`, before claiming tests passed.
 
