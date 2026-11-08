@@ -20,7 +20,13 @@ vi.mock('@umijs/max', () => ({
       ),
   }),
 }));
-vi.mock('@/services/ant-design-pro/stock', () => ({ listStockEvents }));
+const addManualStockEvent = vi.fn();
+const deleteManualStockEvent = vi.fn();
+vi.mock('@/services/ant-design-pro/stock', () => ({
+  listStockEvents,
+  addManualStockEvent,
+  deleteManualStockEvent,
+}));
 const getDeviceTanks = vi.fn();
 vi.mock('@/services/ant-design-pro/tankGrants', () => ({ getDeviceTanks }));
 
@@ -330,5 +336,88 @@ describe('StockRecords', () => {
     await waitFor(() =>
       expect(listStockEvents.mock.calls.at(-1)?.[0].tank).toBeUndefined(),
     );
+  });
+});
+
+describe('StockRecords manual entry (cloud#69)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getDeviceTanks.mockResolvedValue({
+      deviceName: 'D1',
+      reported: true,
+      tanks: [{ index: 1 }, { index: 2 }],
+    });
+  });
+
+  it('offers revoke only on cloud entries and shows null amounts as dashes', async () => {
+    listStockEvents.mockResolvedValue(
+      result({
+        rows: [
+          ev('dev-1'),
+          ev('manual-1', {
+            origin: 'cloud',
+            source: 'MANUAL',
+            endLevelMm: null,
+            beginVolumeL: null,
+            endVolumeL: null,
+          }),
+        ],
+      }),
+    );
+    deleteManualStockEvent.mockResolvedValue(undefined);
+    render(<StockRecords device="D1" />);
+    const revoke = await screen.findAllByRole('button', { name: /撤\s*销/ });
+    expect(revoke).toHaveLength(1);
+    expect(screen.getByText('100.0 → —')).toBeTruthy();
+    fireEvent.click(revoke[0]);
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*定|OK/ }));
+    await waitFor(() =>
+      expect(deleteManualStockEvent).toHaveBeenCalledWith('D1', 'manual-1'),
+    );
+  });
+
+  it('submits a fixed-direction entry with a requestId and retries a timeout with the same one', async () => {
+    listStockEvents.mockResolvedValue(result());
+    addManualStockEvent
+      .mockRejectedValueOnce(new ApiError(0))
+      .mockResolvedValue({ row: ev('manual-2'), replayed: true });
+    render(<StockRecords device="D1" direction="OUT" />);
+    fireEvent.click(await screen.findByRole('button', { name: /补\s*录/ }));
+    const dialog = await screen.findByRole('dialog');
+    // Tank
+    fireEvent.mouseDown(within(dialog).getByLabelText('罐号'));
+    fireEvent.click(await screen.findByTitle('2 号罐'));
+    // Time: type into the picker input
+    const timeInput = within(dialog).getByPlaceholderText(/请选择|Select/);
+    fireEvent.mouseDown(timeInput);
+    fireEvent.change(timeInput, { target: { value: '2026-11-01 08:30' } });
+    fireEvent.keyDown(timeInput, { key: 'Enter', code: 'Enter' });
+    fireEvent.change(within(dialog).getByLabelText('前高度'), {
+      target: { value: '1333' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('升数（正数）'), {
+      target: { value: '540' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('补录原因'), {
+      target: { value: '断电漏记' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存补录' }));
+    await waitFor(() => expect(addManualStockEvent).toHaveBeenCalledTimes(1));
+    const [device, body] = addManualStockEvent.mock.calls[0];
+    expect(device).toBe('D1');
+    expect(body).toMatchObject({
+      direction: 'OUT',
+      tank: 2,
+      beforeLevelMm: 1333,
+      volumeL: 540,
+      reason: '断电漏记',
+    });
+    expect(body.time).toMatch(/^2026-11-01T08:30:00[+-]\d{2}:\d{2}$/);
+    expect(body.requestId).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
+    fireEvent.click(
+      await within(dialog).findByRole('button', { name: '用同一提交编号重试' }),
+    );
+    await waitFor(() => expect(addManualStockEvent).toHaveBeenCalledTimes(2));
+    expect(addManualStockEvent.mock.calls[1][1].requestId).toBe(body.requestId);
   });
 });

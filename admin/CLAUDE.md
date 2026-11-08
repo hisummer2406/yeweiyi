@@ -111,6 +111,11 @@
   文案 `pages.console.oil.N`，以中文表为准，设备英文表有错位 zhongchengyeweiyi#52），其余显示 `oilType` 原文，再没有就「—」。
   出入库多一列「实际进出量(kg)」= `deliveredWeightKg`，null 显示「—」，**不能用前后重量差代替**；报警多一列「介质」，取报警自带的值，不拿罐当前油品代替。
 - 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送。
+- **云端补录（cloud#69，契约 `cloud/docs/stock-manual-entry-contract.md`）**：出入库记录（入库/出库页、设备详情出入库页签）工具栏有「补录」，
+  `ManualStockEntryModal` 发 `POST /api/devices/:device/stock-events`（方向在入库/出库页固定；罐号来自 `/tanks`；时间不晚于现在，带时区
+  RFC 3339；原因必填）。打开弹窗生成一次 `requestId`，超时（status 0）只给「用同一提交编号重试」（云端重放 200，不会重复保存）。只有
+  `origin === 'cloud'` 的行有「撤销」（`DELETE .../stock-events/:eventId`，软删除）；设备上报的记录（含设备端补录）不能撤销。
+  补录行没有的量是 null，显示「—」。只有 mock 测试，未对真实云端联调。
 
 **油站（`/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。
 油站页只管油站增删改（对平台管理员和客户管理员开放，`access.canManageAssets`）；给设备分配油站在设备页。云端契约：

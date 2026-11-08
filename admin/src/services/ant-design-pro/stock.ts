@@ -66,3 +66,51 @@ export async function listStockEvents(
     throw toApiError(err);
   }
 }
+
+/** POST /api/devices/:device/stock-events 的请求体（cloud docs/stock-manual-entry-contract.md） */
+export type ManualStockEntry = {
+  direction: 'IN' | 'OUT';
+  tank: number;
+  /** 带时区的完整 RFC 3339，不得晚于现在 */
+  time: string;
+  beforeLevelMm: number;
+  /** 两个方向都填正数 */
+  volumeL: number;
+  reason: string;
+  /** 本次确认的幂等键：同一 (设备, requestId) 永远是同一条记录，重试复用 */
+  requestId: string;
+};
+
+/**
+ * 云端补录一条漏报的出入库记录（cloud#69）。201 新建、200 同一 requestId 的重放；两者都返回该行。
+ * 只有平台/客户管理员可用。失败抛 ApiError（code：time_in_future、time_before_visible、request_id_reused…）。
+ */
+export async function addManualStockEvent(
+  device: string,
+  body: ManualStockEntry,
+): Promise<{ row: API.StockEvent; replayed: boolean }> {
+  try {
+    const res = (await request<API.StockEvent>(
+      `/api/devices/${encodeURIComponent(device)}/stock-events`,
+      { method: 'POST', data: body, getResponse: true, skipErrorHandler: true } as Record<string, unknown>,
+    )) as unknown as { data: API.StockEvent; status: number };
+    return { row: res.data, replayed: res.status === 200 };
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+/** DELETE /api/devices/:device/stock-events/:eventId：撤销一条云端补录（软删除，重复撤销也是 204）。设备上报的记录 409。 */
+export async function deleteManualStockEvent(
+  device: string,
+  eventId: string,
+): Promise<void> {
+  try {
+    await request(
+      `/api/devices/${encodeURIComponent(device)}/stock-events/${encodeURIComponent(eventId)}`,
+      { method: 'DELETE', skipErrorHandler: true },
+    );
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
