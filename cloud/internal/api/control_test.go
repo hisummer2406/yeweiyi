@@ -557,21 +557,12 @@ func configBody(t *testing.T, method string, args map[string]any) []byte {
 		"requestId": fmt.Sprintf("t%d-%d", time.Now().UnixNano(), configRequestSeq.Add(1)), "expectedStationId": nil})
 }
 
-// openConfigGate opens the per-device config-command gate directly in the database.
-func (e *testEnv) openConfigGate(device string) {
-	e.t.Helper()
-	if _, err := e.pool.Exec(context.Background(), `UPDATE devices SET config_commands_enabled_at = now() WHERE device_name = $1`, device); err != nil {
-		e.t.Fatal(err)
-	}
-}
-
 // cloud#71: config.setTankSettings is open to customer administrators, config.setDeviceSettings only to
 // platform administrators, bad args are a precise 400 and never reach ThingsBoard.
 func TestIssueCommand_ConfigSettings(t *testing.T) {
 	env, sender := newControlEnv(t, control.Config{AllowConfigCommands: true})
 	device := "ctl-api-config"
 	env.ownDevice(device)
-	env.openConfigGate(device)
 	url := "/api/devices/" + device + "/commands"
 
 	env.setRole(control.RoleCustomerAdmin)

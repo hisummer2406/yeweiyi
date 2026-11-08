@@ -380,9 +380,6 @@ type deviceResponse struct {
 	// GrantedTanks is the tank numbers an employee may view on this device, null for administrators
 	// (who see every tank). It is what the client shows as "your tanks"; the server filters anyway.
 	GrantedTanks []int `json:"granted_tanks"`
-	// ConfigCommandsEnabled is the per-device config-command gate (config-command-delivery), present
-	// only for administrators; employees' rows do not carry it.
-	ConfigCommandsEnabled *bool `json:"config_commands_enabled,omitempty"`
 }
 
 // adminDeviceResponse is a row for a platform admin: the same fields plus the customer the device is
@@ -430,10 +427,6 @@ func listDevicesHandler(deps Deps) gin.HandlerFunc {
 				LastOfflineAt: r.LastOfflineAt,
 				UpdatedAt:     r.UpdatedAt,
 				StationID:     int8Ptr(r.StationID),
-			}
-			if role != control.RoleCustomerUser {
-				enabled := r.ConfigCommandsEnabledAt.Valid
-				row.ConfigCommandsEnabled = &enabled
 			}
 			if role == control.RoleCustomerUser {
 				row.GrantedTanks = granted[r.DeviceName]

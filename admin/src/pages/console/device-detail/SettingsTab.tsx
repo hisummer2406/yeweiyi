@@ -4,8 +4,6 @@ import {
   Button,
   Card,
   Collapse,
-  Input,
-  Modal,
   message,
   Segmented,
   Space,
@@ -20,7 +18,6 @@ import {
   getDeviceSettings,
   getTankCalibration,
   getTankSettings,
-  setConfigGate,
 } from '@/services/ant-design-pro/deviceConfig';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
@@ -47,7 +44,7 @@ const fmtTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString() : '—';
 
 /**
- * 参数设置页签（#4，cloud config-command-contract）：设备上报的当前配置 → 业务表单 → 确认下发 → 跟踪命令 → 核对回显。
+ * 参数设置页签（#4，cloud config-command-contract）。管理员直接修改，没有逐台开放（2026-11-09）：设备上报的当前配置 → 业务表单 → 确认下发 → 跟踪命令 → 核对回显。
  * 设备是配置的权威来源：页面只显示设备回报，不乐观更新；命令成功后也要读到一致的回报才说"已一致"。
  */
 const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
@@ -67,9 +64,6 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
   const [tankNo, setTankNo] = useState<number>();
   const [request, setRequest] = useState<SubmitRequest>();
   const [tracked, setTracked] = useState<Tracked>();
-  const [gateModal, setGateModal] = useState<boolean>();
-  const [gateReason, setGateReason] = useState('');
-  const [gateBusy, setGateBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -147,11 +141,10 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
   const tank = data?.tanks.find((x) => x.tank === tankNo);
   const stationKnown =
     data?.row !== undefined && data.row.station_id !== undefined;
-  const gateKnown = typeof data?.row?.config_commands_enabled === 'boolean';
-  const gateOpen = data?.row?.config_commands_enabled === true;
   const busyCommand =
     tracker.command !== undefined && !tracker.command.terminal;
-  const canSubmitBase = stationKnown && gateOpen && !busyCommand;
+  // 没有设备级开放步骤（2026-11-09 用户决定）：管理员直接修改；系统总闸关闭时提交会得到 config_commands_disabled
+  const canSubmitBase = stationKnown && !busyCommand;
 
   const openSubmit = (
     fields: FieldDef[],
@@ -176,30 +169,6 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
     });
   };
 
-  const toggleGate = async () => {
-    const why = gateReason.trim();
-    if (!why || gateModal === undefined) return;
-    setGateBusy(true);
-    try {
-      await setConfigGate(device, gateModal, why);
-      message.success(
-        t(
-          gateModal
-            ? 'pages.console.settings.gate.opened'
-            : 'pages.console.settings.gate.closed',
-        ),
-      );
-      setGateModal(undefined);
-      setReload((n) => n + 1);
-    } catch (err) {
-      if (!(err instanceof ApiError && err.authHandled)) {
-        message.error(t('pages.console.settings.gate.failed'));
-      }
-    } finally {
-      setGateBusy(false);
-    }
-  };
-
   if (loading && !data) return <Spin />;
   if (loadError && !data) {
     return (
@@ -217,44 +186,18 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
   }
   if (!data) return null;
 
-  const gateAlert = (
+  const stationAlert = !stationKnown && (
     <Alert
       style={{ marginBottom: 16 }}
-      type={gateOpen ? 'success' : 'info'}
+      type="warning"
       showIcon
-      message={
-        !gateKnown
-          ? t('pages.console.settings.gate.unknown')
-          : gateOpen
-            ? t('pages.console.settings.gate.open')
-            : t('pages.console.settings.gate.closedHint')
-      }
-      description={
-        !stationKnown ? t('pages.console.settings.stationUnknown') : undefined
-      }
-      action={
-        isPlatform && gateKnown ? (
-          <Button
-            size="small"
-            onClick={() => {
-              setGateReason('');
-              setGateModal(!gateOpen);
-            }}
-          >
-            {t(
-              gateOpen
-                ? 'pages.console.settings.gate.close'
-                : 'pages.console.settings.gate.openAction',
-            )}
-          </Button>
-        ) : undefined
-      }
+      message={t('pages.console.settings.stationUnknown')}
     />
   );
 
   return (
     <div>
-      {gateAlert}
+      {stationAlert}
       <CommandProgress
         {...tracker}
         onRefreshEcho={tracker.refreshEcho}
@@ -395,38 +338,6 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
           setReload((n) => n + 1);
         }}
       />
-
-      <Modal
-        open={gateModal !== undefined}
-        title={t(
-          gateModal
-            ? 'pages.console.settings.gate.openTitle'
-            : 'pages.console.settings.gate.closeTitle',
-        )}
-        okButtonProps={{ disabled: !gateReason.trim(), loading: gateBusy }}
-        onOk={toggleGate}
-        onCancel={() => setGateModal(undefined)}
-        destroyOnHidden
-      >
-        <Typography.Paragraph>
-          {t(
-            gateModal
-              ? 'pages.console.settings.gate.openWarn'
-              : 'pages.console.settings.gate.closeWarn',
-            {
-              device,
-            },
-          )}
-        </Typography.Paragraph>
-        <Input.TextArea
-          value={gateReason}
-          onChange={(e) => setGateReason(e.target.value)}
-          maxLength={200}
-          showCount
-          aria-label={t('pages.console.settings.submit.reason')}
-          placeholder={t('pages.console.settings.submit.reason')}
-        />
-      </Modal>
     </div>
   );
 };

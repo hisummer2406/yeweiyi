@@ -70,15 +70,7 @@ SELECT * FROM devices WHERE device_name = $1 FOR UPDATE;
 -- name: SetDeviceCustomer :exec
 -- The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
 -- would otherwise refuse the change.
--- The per-device config-command gate (config-command-delivery) is cleared when the customer actually
--- changes: the new customer's devices are not open until a platform admin opens them again.
-UPDATE devices
-SET customer_id = $2,
-    station_id = NULL,
-    config_commands_enabled_at = CASE WHEN customer_id IS DISTINCT FROM $2 THEN NULL ELSE config_commands_enabled_at END,
-    config_commands_enabled_by = CASE WHEN customer_id IS DISTINCT FROM $2 THEN NULL ELSE config_commands_enabled_by END,
-    updated_at = now()
-WHERE device_name = $1;
+UPDATE devices SET customer_id = $2, station_id = NULL, updated_at = now() WHERE device_name = $1;
 
 -- name: RegisterDeviceForCustomer :one
 -- Idempotent operator registration (POST /api/devices). Same ownership rule as
@@ -99,20 +91,3 @@ RETURNING customer_id, (xmax = 0) AS inserted;
 -- a different customer (23503) and the CHECK rejects a device with no customer (23514); the handler
 -- checks both first so those are the answers it gives, and the database is the backstop for a race.
 UPDATE devices SET station_id = sqlc.narg('station_id'), updated_at = now() WHERE device_name = sqlc.arg('device_name');
-
--- name: SetDeviceConfigCommandsEnabled :one
--- Platform admin only (checked by the caller). Idempotent: opening an open device keeps the original
--- time and admin; returns the previous state so the audit row can record before/after.
-WITH prev AS (
-    SELECT p.device_name AS name, p.config_commands_enabled_at AS before_at
-    FROM devices p WHERE p.device_name = sqlc.arg('device_name')::TEXT FOR UPDATE
-)
-UPDATE devices d
-SET config_commands_enabled_at = CASE WHEN sqlc.arg('enabled')::BOOLEAN
-                                      THEN COALESCE(d.config_commands_enabled_at, now()) END,
-    config_commands_enabled_by = CASE WHEN sqlc.arg('enabled')::BOOLEAN
-                                      THEN COALESCE(d.config_commands_enabled_by, sqlc.narg('admin_id')::BIGINT) END,
-    updated_at = now()
-FROM prev
-WHERE d.device_name = prev.name
-RETURNING (prev.before_at IS NOT NULL)::BOOLEAN AS was_enabled, d.config_commands_enabled_at, d.config_commands_enabled_by;

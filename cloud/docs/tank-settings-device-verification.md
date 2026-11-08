@@ -4,8 +4,8 @@
 设备端 PR #38 已于 2026-11-02 合并。**2026-11-08 首次真机下行验证通过 B1–B4 与重启持久化**（见文末"验证记录"），
 其余各项仍未验证。
 
-> 注意：生产没有独立测试环境。`control.allowConfigCommands` 是全局开关，打开期间所有客户管理员都能经 API 下发配置；
-> 验证时只在短窗口内打开（改 `docker-compose.prod.yml` 并部署），只对测试设备发命令，完成后立即关回并部署。
+> 注意：生产没有独立测试环境。自 2026-11-09 起 `control.allowConfigCommands` 在生产常开（用户决定），所有客户管理员都能下发配置；
+> 验证时只对测试设备发命令。
 
 ## 前置
 
@@ -29,9 +29,7 @@
 用平台管理员或客户管理员发 `POST /api/devices/:device/commands`，`method=config.setTankSettings`，先发**一个**字段：
 `{"tank":1,"alarmHighLevelMm":<比当前值大 50>}`。
 
-> **2026-11-08 起（#3）**：除打开部署级开关外，还要先由平台管理员开放测试设备：
-> `PUT /api/devices/:device/config-commands` `{"enabled":true,"reason":"真机验证"}`，验证完关回 `{"enabled":false,...}`。
-> 请求体必须带 `requestId`（每次新取，如 `verify-<时间戳>`）与 `expectedStationId`（设备当前油站 id，不在油站则 `null`），
+> **2026-11-09 起（#3）**：生产配置开关常开，没有设备级开放步骤。请求体必须带 `requestId`（每次新取，如 `verify-<时间戳>`）与 `expectedStationId`（设备当前油站 id，不在油站则 `null`），
 > 见 [config-command-contract.md](config-command-contract.md)。
 
 | # | 操作 | 期望现象 | 要看什么 |

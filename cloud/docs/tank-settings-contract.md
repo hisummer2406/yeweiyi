@@ -94,7 +94,7 @@
 沿用 `POST /api/devices/:device/commands`（`202`、`terminal` 标志、审计、`GET .../commands` 轮询，**ACK 不等于成功，
 成功以 `cmdResult` 为准**），新增两个方法：
 
-> **2026-11-08 起（#3）**：两个配置方法的提交还必须带 `requestId` 与 `expectedStationId`，并受设备级开关约束；幂等、找回、
+> **2026-11-08 起（#3）**：两个配置方法的提交还必须带 `requestId` 与 `expectedStationId`；幂等、找回、
 > 受理时油站复核、同目标在途互斥、整机设置镜像见 [config-command-contract.md](config-command-contract.md)。
 
 | 方法 | 权限 | 说明 |
@@ -103,7 +103,7 @@
 | `config.setDeviceSettings` | **仅平台管理员** | 改整机出入库判定阈值；客户管理员 403 |
 
 不属于物理动作，不受 `allowPhysicalCommands` 影响；但受独立闸门 `control.allowConfigCommands`（环境变量
-`ALLOW_CONFIG_COMMANDS`，默认 false）**与设备级开关**共同约束：任一关闭时返回 `409 code=config_commands_disabled`（带 `scope`，
+`ALLOW_CONFIG_COMMANDS`，默认 false；生产自 2026-11-09 常开）约束：关闭时返回 `409 code=config_commands_disabled`（`scope=deployment`，
 见 [config-command-contract.md](config-command-contract.md) §1.4）。旧方法 `config.setAlarmThresholds` 保留不动（语义不同：
 要求四级严格递减、不能设 0），新代码请用 `config.setTankSettings`。
 

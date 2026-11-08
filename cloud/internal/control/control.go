@@ -244,21 +244,6 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		return db.ControlCommand{}, false, fmt.Errorf("%w: %w", ErrInvalidArgs, err)
 	}
 
-	// The per-device gate, after the role decision (a caller who may not issue the method learns
-	// nothing about which devices are open). The insert re-checks it under the device row lock.
-	if isConfigWriteMethod(req.Method) {
-		open, err := s.deviceGateOpen(ctx, req.DeviceName)
-		if err != nil {
-			return db.ControlCommand{}, false, fmt.Errorf("read device gate: %w", err)
-		}
-		if !open {
-			err := &ConfigDisabledError{Scope: GateScopeDevice}
-			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
-				map[string]any{"method": req.Method, "error": err.Error()})
-			return db.ControlCommand{}, false, err
-		}
-	}
-
 	if err := checkSubmissionFields(req); err != nil {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
@@ -324,13 +309,12 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		Operator:   req.Actor.Username,
 		Reason:     req.Reason,
 		// Both timestamps come from this one clock reading — see CreateControlCommand's comment.
-		IssuedAt:             pgtype.Timestamptz{Time: issuedAt, Valid: true},
-		ExpiresAt:            pgtype.Timestamptz{Time: expiresAt, Valid: true},
-		RequestID:            pgtype.Text{String: req.RequestID, Valid: req.RequestID != ""},
-		ExpectedStationID:    req.ExpectedStationID,
-		ConfigTarget:         target,
-		RequiredLevel:        requiredLevel(spec.Permission),
-		RequireDeviceEnabled: isConfigWriteMethod(req.Method),
+		IssuedAt:          pgtype.Timestamptz{Time: issuedAt, Valid: true},
+		ExpiresAt:         pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		RequestID:         pgtype.Text{String: req.RequestID, Valid: req.RequestID != ""},
+		ExpectedStationID: req.ExpectedStationID,
+		ConfigTarget:      target,
+		RequiredLevel:     requiredLevel(spec.Permission),
 	}
 	var cmd db.ControlCommand
 	if isConfigWriteMethod(req.Method) {
@@ -351,7 +335,7 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 			}
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			// The insert re-checks the access rule, the method tier and the device gate in the same
+			// The insert re-checks the access rule and the method tier in the same
 			// statement and found the user no longer allowed — they were moved, demoted or disabled, or
 			// the device changed hands, between the early decision and now. Nothing was recorded or sent.
 			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",

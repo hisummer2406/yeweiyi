@@ -373,16 +373,16 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 ## Remote configuration and 补录 (miniapp#6, 2026-11-08; openspec `tank-settings-remote-apply`)
 
 Cloud contracts: `yeweiyi-cloud docs/config-command-contract.md` (cloud PR #13: `requestId`, `expectedStationId`,
-per-device gate, single-command lookup) and `docs/stock-manual-entry-contract.md` (#69). Scope: configuration only,
+single-command lookup; the per-device gate was removed 2026-11-09) and `docs/stock-manual-entry-contract.md` (#69). Scope: configuration only,
 **density read-only**; no action commands. Pure rules in `utils/remoteConfig.ts` (Node-checked,
 `scripts/remote-config.check.mjs`), requests in `utils/remoteConfigApi.ts`, the send flow in `utils/configSubmit.ts`.
 
 - `tank-config` shows **设备当前回报** (`GET /api/devices/:device/tank-settings` + `reportedAt`, read-only) next to the
-  phone draft; 「导入设备值」 is the only way device values enter the form. Administrators (not `customer_user`) with
-  `config_commands_enabled === true` on the device row get 「下发到设备」: only filled fields that differ from the
+  phone draft; 「导入设备值」 is the only way device values enter the form. Administrators (not `customer_user`) get
+  「下发到设备」 directly (no per-device opening since 2026-11-09; only the cloud's deployment switch, which answers
+  `config_commands_disabled` when off): only filled fields that differ from the
   report and are open (`TANK_SEND_FIELDS`: 4 level alarms, high water, high temp, capacity) are sent; density, height,
-  low water, low temp, colour and the free-text medium never are. A missing `config_commands_enabled` (older cloud)
-  means no sending.
+  low water, low temp, colour and the free-text medium never are.
 - `calibration` uses the same station → device → visible tank; shows the device's corrections; 「保存到控制器」 sends
   the three corrections the same way. 「保存到手机」 keeps one local draft (`calibration-draft`, tied to device + tank,
   cleared at logout).

@@ -45,26 +45,24 @@ WHERE u.id = $12
   AND user_may_access_device(u.id, $2)
   AND u.role IN ('platform_admin', 'customer_admin')
   AND ($13::TEXT <> 'platform' OR u.role = 'platform_admin')
-  AND (NOT $14::BOOLEAN OR d.config_commands_enabled_at IS NOT NULL)
 ON CONFLICT (operator_id, device_name, request_id) WHERE request_id IS NOT NULL DO NOTHING
 RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target
 `
 
 type CreateControlCommandParams struct {
-	CommandID            pgtype.UUID        `json:"command_id"`
-	DeviceName           string             `json:"device_name"`
-	Method               string             `json:"method"`
-	Args                 []byte             `json:"args"`
-	Operator             string             `json:"operator"`
-	Reason               string             `json:"reason"`
-	IssuedAt             pgtype.Timestamptz `json:"issued_at"`
-	ExpiresAt            pgtype.Timestamptz `json:"expires_at"`
-	RequestID            pgtype.Text        `json:"request_id"`
-	ExpectedStationID    pgtype.Int8        `json:"expected_station_id"`
-	ConfigTarget         pgtype.Text        `json:"config_target"`
-	OperatorID           int64              `json:"operator_id"`
-	RequiredLevel        string             `json:"required_level"`
-	RequireDeviceEnabled bool               `json:"require_device_enabled"`
+	CommandID         pgtype.UUID        `json:"command_id"`
+	DeviceName        string             `json:"device_name"`
+	Method            string             `json:"method"`
+	Args              []byte             `json:"args"`
+	Operator          string             `json:"operator"`
+	Reason            string             `json:"reason"`
+	IssuedAt          pgtype.Timestamptz `json:"issued_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	RequestID         pgtype.Text        `json:"request_id"`
+	ExpectedStationID pgtype.Int8        `json:"expected_station_id"`
+	ConfigTarget      pgtype.Text        `json:"config_target"`
+	OperatorID        int64              `json:"operator_id"`
+	RequiredLevel     string             `json:"required_level"`
 }
 
 // issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
@@ -92,8 +90,6 @@ type CreateControlCommandParams struct {
 // config-command-delivery (#3) adds three more checks to the same statement, for the same reason:
 //   - the method's permission tier against the user's *current* role (required_level) — Go's
 //     authorize() decides the error message, this decides whether a row exists;
-//   - the per-device config-command gate (require_device_enabled), so a device closed between the
-//     check and the insert gets nothing;
 //   - ON CONFLICT on the request_id index: a concurrent duplicate submission inserts nothing and
 //     the caller reads the existing row instead (zero rows back). The in-flight index is NOT an
 //     arbiter, so a second command for a busy target raises a unique violation the caller maps to
@@ -113,7 +109,6 @@ func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCom
 		arg.ConfigTarget,
 		arg.OperatorID,
 		arg.RequiredLevel,
-		arg.RequireDeviceEnabled,
 	)
 	var i ControlCommand
 	err := row.Scan(
@@ -317,17 +312,6 @@ func (q *Queries) GetControlCommandVisibleToUser(ctx context.Context, arg GetCon
 		&i.ConfigTarget,
 	)
 	return i, err
-}
-
-const getDeviceConfigCommandsEnabled = `-- name: GetDeviceConfigCommandsEnabled :one
-SELECT (config_commands_enabled_at IS NOT NULL)::BOOLEAN AS enabled FROM devices WHERE device_name = $1
-`
-
-func (q *Queries) GetDeviceConfigCommandsEnabled(ctx context.Context, deviceName string) (bool, error) {
-	row := q.db.QueryRow(ctx, getDeviceConfigCommandsEnabled, deviceName)
-	var enabled bool
-	err := row.Scan(&enabled)
-	return enabled, err
 }
 
 const getInFlightConfigCommand = `-- name: GetInFlightConfigCommand :one
@@ -595,21 +579,16 @@ func (q *Queries) ListDevicesWithOpenControlCommandsUnscoped(ctx context.Context
 }
 
 const lockDeviceForCommand = `-- name: LockDeviceForCommand :one
-SELECT station_id, config_commands_enabled_at FROM devices WHERE device_name = $1 FOR SHARE
+SELECT station_id FROM devices WHERE device_name = $1 FOR SHARE
 `
-
-type LockDeviceForCommandRow struct {
-	StationID               pgtype.Int8        `json:"station_id"`
-	ConfigCommandsEnabledAt pgtype.Timestamptz `json:"config_commands_enabled_at"`
-}
 
 // Holds the device row while the command is created, so a station change cannot commit between the
 // expectedStationId check and the insert.
-func (q *Queries) LockDeviceForCommand(ctx context.Context, deviceName string) (LockDeviceForCommandRow, error) {
+func (q *Queries) LockDeviceForCommand(ctx context.Context, deviceName string) (pgtype.Int8, error) {
 	row := q.db.QueryRow(ctx, lockDeviceForCommand, deviceName)
-	var i LockDeviceForCommandRow
-	err := row.Scan(&i.StationID, &i.ConfigCommandsEnabledAt)
-	return i, err
+	var station_id pgtype.Int8
+	err := row.Scan(&station_id)
+	return station_id, err
 }
 
 const lockStationShared = `-- name: LockStationShared :one

@@ -156,10 +156,6 @@ type Device struct {
 	CustomerAssignedAt pgtype.Timestamptz `json:"customer_assigned_at"`
 	// 所属油站，空 = 未分组/待安装。必须属于 devices.customer_id 同一客户（复合外键 + CHECK 保证）；同一非空油站至多一台设备（devices_station_id_key，cloud#61）。设备换客户时由 SetDeviceCustomer 同时清空。
 	StationID pgtype.Int8 `json:"station_id"`
-	// 平台管理员开放该设备接收远程配置命令的时刻；NULL = 未开放。与部署级 allowConfigCommands 同时为真才放行。换客户时清空。
-	ConfigCommandsEnabledAt pgtype.Timestamptz `json:"config_commands_enabled_at"`
-	// 开放该设备配置命令的平台管理员。
-	ConfigCommandsEnabledBy pgtype.Int8 `json:"config_commands_enabled_by"`
 }
 
 // 设备配对密钥（哈希），与 ThingsBoard 设备凭据完全隔离，仅用于验证 /api/devices/bind 请求

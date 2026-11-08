@@ -23,9 +23,9 @@ import { getTankSettings } from '../../utils/remoteConfigApi';
 import { confirmAndSend } from '../../utils/configSubmit';
 
 // 储罐设置（miniapp#18，#6）：按设计稿排的表单。「本机草稿」只保存在本手机；「设备当前回报」来自云端镜像
-// （GET /api/devices/:device/tank-settings），两者分开显示，草稿只能由「导入设备值」明确导入。管理员在设备已开放
-// 远程配置时可「下发到设备」：只发与设备回报不同、且云端开放的字段（utils/remoteConfig.ts TANK_SEND_FIELDS）；
-// 密度、罐高、低水位、低温、物料颜色、介质文本不下发。员工没有下发入口。
+// （GET /api/devices/:device/tank-settings），两者分开显示，草稿只能由「导入设备值」明确导入。管理员可直接
+// 「下发到设备」：只发与设备回报不同、且云端开放的字段（utils/remoteConfig.ts TANK_SEND_FIELDS）；
+// 密度、罐高、低水位、低温、物料颜色、介质文本不下发。没有逐台开放步骤（2026-11-09）。员工没有下发入口。
 //
 // The object being edited is shown on top — the home page's current station, its one device, and one of
 // the tanks this user can see on it (not a fixed 1–12 list). 保存 writes a draft keyed by account + device
@@ -113,7 +113,6 @@ Page({
   tanks: [] as number[],
   mirrors: [] as TankSettings[],
   stationId: null as number | null,
-  deviceRow: undefined as { config_commands_enabled?: boolean } | undefined,
   // The draft as last saved (or empty), to tell whether the form has unsaved changes.
   saved: emptyDraft(),
   seq: 0,
@@ -143,7 +142,6 @@ Page({
         }
         const device = ctx.device.device_name;
         this.stationId = ctx.device.station_id ?? null;
-        this.deviceRow = ctx.device;
         this.setData({ stationName: ctx.stationName });
         this.updateSendable();
         if (device === this.data.device && this.data.state === 'ok') {
@@ -217,11 +215,11 @@ Page({
   updateSendable() {
     const token = getToken();
     const admin = !!token && !isReadOnlyRole(roleFromToken(token));
-    const gate = this.deviceRow ? this.deviceRow.config_commands_enabled : undefined;
     const mirrorReady = this.data.mirrorState === 'ok' || this.data.mirrorState === 'none';
     this.setData({
-      canSend: admin && gate === true && mirrorReady,
-      sendHint: !admin ? '' : gate === undefined ? t('tankCfg.gateUnknown') : gate ? '' : t('tankCfg.gateClosed'),
+      // 没有逐台开放（2026-11-09）：管理员直接下发；系统总闸关闭时云端答 config_commands_disabled
+      canSend: admin && mirrorReady,
+      sendHint: '',
     });
   },
 

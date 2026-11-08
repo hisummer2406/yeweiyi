@@ -26,8 +26,11 @@ import (
 //   - expectedStationId: re-checked inside the transaction that creates the command, so a confirmation
 //     made against one station's device cannot land after the station was re-equipped;
 //   - one non-terminal command per config target (tank:N / device), so a result and the mirror that
-//     follows can be attributed;
-//   - a per-device gate on top of the deployment-wide AllowConfigCommands.
+//     follows can be attributed.
+//
+// The only gate is the deployment-wide AllowConfigCommands. A per-device whitelist existed briefly
+// (migration 000038) and was removed on the user's decision (2026-11-09, migration 000039): an
+// administrator opening the settings page can change it directly.
 
 var (
 	// ErrRequestIDRequired: a configuration method was submitted without requestId.
@@ -49,12 +52,9 @@ var (
 	ErrTransactionsUnavailable = errors.New("control: configuration commands need Config.Pool")
 )
 
-// Config-command gate scopes, reported to the client so it can say "not open on this system" versus
-// "not open on this device".
-const (
-	GateScopeDeployment = "deployment"
-	GateScopeDevice     = "device"
-)
+// GateScopeDeployment is the scope reported with config_commands_disabled (the deployment switch is the
+// only gate; the field is kept so clients written against the per-device version still parse it).
+const GateScopeDeployment = "deployment"
 
 // ConfigDisabledError is ErrConfigCommandsDisabled with the gate that refused.
 type ConfigDisabledError struct{ Scope string }
@@ -188,17 +188,8 @@ func (s *Service) replay(ctx context.Context, existing db.ControlCommand, req Is
 	return existing, true, nil
 }
 
-// deviceGateOpen reads the per-device gate. A device row that does not exist reads as closed.
-func (s *Service) deviceGateOpen(ctx context.Context, deviceName string) (bool, error) {
-	open, err := s.q.GetDeviceConfigCommandsEnabled(ctx, deviceName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, nil
-	}
-	return open, err
-}
-
 // createConfigCommand creates a configuration command inside one transaction: station row (FOR SHARE)
-// → device row (FOR SHARE) → compare station and per-device gate → insert. The lock order is the one
+// → device row (FOR SHARE) → compare station → insert. The lock order is the one
 // replace-device uses, so the two serialize rather than deadlock: either the re-equip commits first and
 // the check here fails, or this commits first and the command goes to the device the user confirmed.
 //
@@ -221,19 +212,16 @@ func (s *Service) createConfigCommand(ctx context.Context, params db.CreateContr
 			return db.ControlCommand{}, fmt.Errorf("lock station: %w", err)
 		}
 	}
-	dev, err := q.LockDeviceForCommand(ctx, req.DeviceName)
+	stationID, err := q.LockDeviceForCommand(ctx, req.DeviceName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.ControlCommand{}, fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
 		}
 		return db.ControlCommand{}, fmt.Errorf("lock device: %w", err)
 	}
-	if dev.StationID.Valid != req.ExpectedStationID.Valid ||
-		(dev.StationID.Valid && dev.StationID.Int64 != req.ExpectedStationID.Int64) {
-		return db.ControlCommand{}, &StationChangedError{Current: dev.StationID}
-	}
-	if !dev.ConfigCommandsEnabledAt.Valid {
-		return db.ControlCommand{}, &ConfigDisabledError{Scope: GateScopeDevice}
+	if stationID.Valid != req.ExpectedStationID.Valid ||
+		(stationID.Valid && stationID.Int64 != req.ExpectedStationID.Int64) {
+		return db.ControlCommand{}, &StationChangedError{Current: stationID}
 	}
 
 	cmd, err := q.CreateControlCommand(ctx, params)

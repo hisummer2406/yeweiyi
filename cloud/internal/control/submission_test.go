@@ -23,13 +23,6 @@ import (
 
 var configOn = control.Config{AllowConfigCommands: true}
 
-func (f *fixture) openGate(t *testing.T) {
-	t.Helper()
-	if _, err := f.pool.Exec(context.Background(), `UPDATE devices SET config_commands_enabled_at = now() WHERE device_name = $1`, f.device); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func newRequestID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
@@ -54,7 +47,6 @@ func (f *fixture) auditCount(t *testing.T, action string) int {
 
 func TestConfigSubmission_ReplayReturnsTheSameCommandWithoutResending(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	rid := newRequestID()
 
@@ -103,7 +95,6 @@ func (c *concurrentSender) SendCommand(ctx context.Context, id, method string, e
 
 func TestConfigSubmission_ConcurrentDuplicatesCreateOneCommand(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	sender := &concurrentSender{}
 	cfg := configOn
 	cfg.Pool = f.pool
@@ -139,7 +130,6 @@ func TestConfigSubmission_ConcurrentDuplicatesCreateOneCommand(t *testing.T) {
 
 func TestConfigSubmission_RequiredFields(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	args := `{"tank":1,"alarmHighLevelMm":610}`
 
@@ -167,7 +157,6 @@ func TestConfigSubmission_RequiredFields(t *testing.T) {
 
 func TestConfigSubmission_StationMustMatch(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	var station int64
 	if err := f.pool.QueryRow(ctx, `INSERT INTO stations (customer_id, name) VALUES ((SELECT id FROM customers WHERE name = 'default'), $1) RETURNING id`,
@@ -206,7 +195,6 @@ func TestConfigSubmission_StationMustMatch(t *testing.T) {
 
 func TestConfigSubmission_OneInFlightCommandPerTarget(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 
 	first, err := f.svc.Issue(ctx, tankReq(f, `{"tank":1,"alarmHighLevelMm":610}`, newRequestID()))
@@ -233,39 +221,41 @@ func TestConfigSubmission_OneInFlightCommandPerTarget(t *testing.T) {
 	}
 }
 
-func TestConfigSubmission_TwoLevelGate(t *testing.T) {
+// The deployment switch is the only gate (per-device whitelist removed 2026-11-09, migration 000039):
+// with it open, an administrator's configuration command goes straight to the device.
+func TestConfigSubmission_DeploymentGateOnly(t *testing.T) {
 	ctx := context.Background()
 	args := `{"tank":1,"alarmHighLevelMm":610}`
 
-	// Deployment closed.
 	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
-	f.openGate(t)
 	var gate *control.ConfigDisabledError
 	if _, err := f.svc.Issue(ctx, tankReq(f, args, newRequestID())); !errors.As(err, &gate) || gate.Scope != control.GateScopeDeployment {
 		t.Errorf("deployment closed: %v", err)
-	}
-
-	// Deployment open, device not opened.
-	f = newFixture(t, control.RoleCustomerAdmin, configOn)
-	if _, err := f.svc.Issue(ctx, tankReq(f, args, newRequestID())); !errors.As(err, &gate) || gate.Scope != control.GateScopeDevice {
-		t.Errorf("device closed: %v", err)
 	}
 	if f.sender.calls != 0 {
 		t.Error("a gated command reached ThingsBoard")
 	}
 
-	// An employee is refused by role whatever the gates say.
-	f = newFixture(t, control.RoleCustomerUser, control.Config{})
+	f = newFixture(t, control.RoleCustomerAdmin, configOn)
+	if _, err := f.svc.Issue(ctx, tankReq(f, args, newRequestID())); err != nil {
+		t.Errorf("deployment open, no per-device opening: %v", err)
+	}
+	if f.sender.calls != 1 {
+		t.Errorf("sender calls = %d, want 1", f.sender.calls)
+	}
+
+	// An employee is refused by role whatever the switch says.
+	f = newFixture(t, control.RoleCustomerUser, configOn)
 	if _, err := f.svc.Issue(ctx, tankReq(f, args, newRequestID())); !errors.Is(err, control.ErrForbidden) {
 		t.Errorf("employee: %v, want ErrForbidden", err)
 	}
 }
 
-// The insert itself refuses a method tier the user's current role does not have, and a closed device.
-func TestConfigSubmission_InsertRechecksTierAndDeviceGate(t *testing.T) {
+// The insert itself refuses a method tier the user's current role does not have.
+func TestConfigSubmission_InsertRechecksTier(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
 	ctx := context.Background()
-	insert := func(level string, gate bool) error {
+	insert := func(level string) error {
 		id := pgtype.UUID{Valid: true}
 		_, _ = rand.Read(id.Bytes[:])
 		now := time.Now()
@@ -273,25 +263,20 @@ func TestConfigSubmission_InsertRechecksTierAndDeviceGate(t *testing.T) {
 			CommandID: id, DeviceName: f.device, Method: protocol.MethodConfigDeviceSettings, Args: []byte(`{}`),
 			OperatorID: f.actor.UserID, Operator: f.actor.Username, Reason: "r",
 			IssuedAt: pgtype.Timestamptz{Time: now, Valid: true}, ExpiresAt: pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true},
-			RequiredLevel: level, RequireDeviceEnabled: gate,
+			RequiredLevel: level,
 		})
 		return err
 	}
-	if err := insert(string(protocol.PermPlatform), false); !errors.Is(err, pgx.ErrNoRows) {
+	if err := insert(string(protocol.PermPlatform)); !errors.Is(err, pgx.ErrNoRows) {
 		t.Errorf("customer admin, platform tier: %v, want no row", err)
 	}
-	if err := insert(string(protocol.PermAdmin), true); !errors.Is(err, pgx.ErrNoRows) {
-		t.Errorf("device gate closed: %v, want no row", err)
-	}
-	f.openGate(t)
-	if err := insert(string(protocol.PermAdmin), true); err != nil {
-		t.Errorf("admin tier, gate open: %v", err)
+	if err := insert(string(protocol.PermAdmin)); err != nil {
+		t.Errorf("admin tier: %v", err)
 	}
 }
 
 func TestConfigSubmission_ReplayRechecksAuthorization(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	rid := newRequestID()
 	if _, err := f.svc.Issue(ctx, tankReq(f, `{"tank":1,"alarmHighLevelMm":610}`, rid)); err != nil {
@@ -307,7 +292,6 @@ func TestConfigSubmission_ReplayRechecksAuthorization(t *testing.T) {
 
 func TestApplyResult_LateResultIsAuditedOnceWithoutChangingState(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	cmd, err := f.svc.Issue(ctx, tankReq(f, `{"tank":1,"alarmHighLevelMm":610}`, newRequestID()))
 	if err != nil {
@@ -344,7 +328,6 @@ func TestApplyResult_LateResultIsAuditedOnceWithoutChangingState(t *testing.T) {
 // while the device really was on the station the client named.
 func TestConfigSubmission_ConcurrentWithReequipDoesNotDeadlock(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	var station int64
 	if err := f.pool.QueryRow(ctx, `INSERT INTO stations (customer_id, name) VALUES ((SELECT id FROM customers WHERE name = 'default'), $1) RETURNING id`,
@@ -426,7 +409,6 @@ func TestConfigSubmission_ConcurrentWithReequipDoesNotDeadlock(t *testing.T) {
 // replaying its requestId returns that record and sends nothing — expired does not prove "not executed".
 func TestConfigSubmission_ReplayOfExpiredCommandSendsNothing(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	rid := newRequestID()
 	cmd, err := f.svc.Issue(ctx, tankReq(f, `{"tank":1,"alarmHighLevelMm":610}`, rid))
@@ -450,7 +432,6 @@ func TestConfigSubmission_ReplayOfExpiredCommandSendsNothing(t *testing.T) {
 // "1", or it would slip past the in-flight index.
 func TestConfigSubmission_IntegralTankSpellingsShareOneTarget(t *testing.T) {
 	f := newFixture(t, control.RoleCustomerAdmin, configOn)
-	f.openGate(t)
 	ctx := context.Background()
 	first, err := f.svc.Issue(ctx, tankReq(f, `{"tank":1.0,"alarmHighLevelMm":610}`, newRequestID()))
 	if err != nil {

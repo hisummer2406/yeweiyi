@@ -56,8 +56,6 @@ type Querier interface {
 	// config-command-delivery (#3) adds three more checks to the same statement, for the same reason:
 	//   * the method's permission tier against the user's *current* role (required_level) — Go's
 	//     authorize() decides the error message, this decides whether a row exists;
-	//   * the per-device config-command gate (require_device_enabled), so a device closed between the
-	//     check and the insert gets nothing;
 	//   * ON CONFLICT on the request_id index: a concurrent duplicate submission inserts nothing and
 	//     the caller reads the existing row instead (zero rows back). The in-flight index is NOT an
 	//     arbiter, so a second command for a busy target raises a unique violation the caller maps to
@@ -124,7 +122,6 @@ type Querier interface {
 	// Completing onboarding locks the row so the readiness check and the status write see one state.
 	GetCustomerForUpdate(ctx context.Context, id int64) (Customer, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
-	GetDeviceConfigCommandsEnabled(ctx context.Context, deviceName string) (bool, error)
 	// Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
 	// both win.
 	GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error)
@@ -269,7 +266,7 @@ type Querier interface {
 	ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User, error)
 	// Holds the device row while the command is created, so a station change cannot commit between the
 	// expectedStationId check and the insert.
-	LockDeviceForCommand(ctx context.Context, deviceName string) (LockDeviceForCommandRow, error)
+	LockDeviceForCommand(ctx context.Context, deviceName string) (pgtype.Int8, error)
 	// config-command-delivery: taken before LockDeviceForCommand, the same station → device order as
 	// replace-device (which takes FOR UPDATE), so the two serialize instead of deadlocking.
 	LockStationShared(ctx context.Context, id int64) (int64, error)
@@ -353,13 +350,8 @@ type Querier interface {
 	ResolveDeviceForNavigation(ctx context.Context, arg ResolveDeviceForNavigationParams) (string, error)
 	// 再次发起：failed → running，保留 step，从断点继续。
 	RestartDevicePurge(ctx context.Context, id int64) (DevicePurge, error)
-	// Platform admin only (checked by the caller). Idempotent: opening an open device keeps the original
-	// time and admin; returns the previous state so the audit row can record before/after.
-	SetDeviceConfigCommandsEnabled(ctx context.Context, arg SetDeviceConfigCommandsEnabledParams) (SetDeviceConfigCommandsEnabledRow, error)
 	// The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
 	// would otherwise refuse the change.
-	// The per-device config-command gate (config-command-delivery) is cleared when the customer actually
-	// changes: the new customer's devices are not open until a platform admin opens them again.
 	SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error
 	// station_id NULL puts the device back to "ungrouped". The composite foreign key rejects a station of
 	// a different customer (23503) and the CHECK rejects a device with no customer (23514); the handler
