@@ -136,7 +136,10 @@ public class SharePrefUtil {
      * @param key
      * @param value
      */
-    public static void saveInt(Context context, String key, int value) {
+    // saveInt / saveIntChecked / saveIntsChecked share the class lock: the remote batch write (RPC thread) takes its
+    // snapshot, commits and — on failure — rolls back as one unit, so a local save on the UI thread (基础设置页) can
+    // never land in between and be undone by the rollback (Codex review, PR #17).
+    public static synchronized void saveInt(Context context, String key, int value) {
         //Log.i(TAG, "saveInt: "+key);
         if (sp == null)
             sp = context.getSharedPreferences(SP_NAME, 0);
@@ -180,7 +183,7 @@ public class SharePrefUtil {
      * @return
      */
     /** 同 {@link #saveInt}，但返回 commit() 是否成功写盘（读回不能证明落盘：内存缓存先于磁盘更新）。 */
-    public static boolean saveIntChecked(Context context, String key, int value) {
+    public static synchronized boolean saveIntChecked(Context context, String key, int value) {
         if (sp == null)
             sp = context.getSharedPreferences(SP_NAME, 0);
         return sp.edit().putInt(key, value).commit();
@@ -192,10 +195,11 @@ public class SharePrefUtil {
      * <p>
      * commit 失败时，SharedPreferences 的内存缓存<b>已经</b>是新值（它先改内存再写盘），这里把内存改回旧值，
      * 让本进程读到的与磁盘一致；恢复本身也写不进去时，下次进程启动从磁盘读到的仍是旧值。
+     * 与 {@link #saveInt}/{@link #saveIntChecked} 共用类锁，快照—提交—回滚之间不会插入本地保存。
      *
      * @return 是否已写盘
      */
-    public static boolean saveIntsChecked(Context context, java.util.Map<String, Integer> values) {
+    public static synchronized boolean saveIntsChecked(Context context, java.util.Map<String, Integer> values) {
         if (sp == null)
             sp = context.getSharedPreferences(SP_NAME, 0);
         java.util.Map<String, Integer> before = new java.util.HashMap<>();
