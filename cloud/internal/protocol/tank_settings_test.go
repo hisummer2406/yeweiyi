@@ -146,7 +146,7 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		`{"tank":1,"alarmHighLevelMm":650}`,
 		`{"tank":16,"density":2}`,
 		`{"tank":1,"alarmLowLowLevelMm":0,"alarmLowLevelMm":0,"alarmHighLevelMm":500,"alarmHighHighLevelMm":600}`, // 0 = off, no order
-		`{"tank":2,"alarmHighTempC":-50,"levelCorrectionMm":-100,"tempCorrectionC":10,"oilTypeIndex":25,"capacityL":0}`,
+		`{"tank":2,"alarmHighTempC":-50,"levelCorrectionMm":-100,"tempCorrectionC":10,"oilTypeIndex":39,"capacityL":0}`,
 		`{"tank":1,"alarmHighLevelMm":650.0}`, // integral value written with a fraction is still an integer
 	} {
 		if err := protocol.ValidateArgs(m, json.RawMessage(ok)); err != nil {
@@ -175,7 +175,7 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		{`{"tank":1,"alarmHighLevelMm":-1}`, "alarmHighLevelMm", protocol.ArgInvalidValue},
 		{`{"tank":1,"alarmHighTempC":101}`, "alarmHighTempC", protocol.ArgInvalidValue},
 		{`{"tank":1,"tempCorrectionC":-10.1}`, "tempCorrectionC", protocol.ArgInvalidValue},
-		{`{"tank":1,"oilTypeIndex":26}`, "oilTypeIndex", protocol.ArgInvalidValue},
+		{`{"tank":1,"oilTypeIndex":40}`, "oilTypeIndex", protocol.ArgInvalidValue},
 		{`{"tank":1,"capacityL":1000001}`, "capacityL", protocol.ArgInvalidValue},
 		{`{"tank":1,"alarmHighLevelMm":null}`, "alarmHighLevelMm", protocol.ArgInvalidValue},
 		{`{"tank":1,"alarmLowLevelMm":900,"alarmHighLevelMm":800}`, "alarmLevels", protocol.ArgLevelOrder},

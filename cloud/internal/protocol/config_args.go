@@ -39,7 +39,7 @@ const (
 	ArgNothingToChange   = "no_editable_fields"    // only `tank` (or nothing) was sent
 	ArgLevelOrder        = "level_order_violation" // 低低 < 低 < 高 < 高高 broken
 	capacityLMax         = 1_000_000
-	maxOilTypeIndex      = 25
+	maxOilTypeIndex      = 39 // 0 未设置，1–31 内置，32–39 自定义（#11）
 	deviceThresholdMaxMm = 10000
 	deviceThresholdMaxS  = 86400
 )

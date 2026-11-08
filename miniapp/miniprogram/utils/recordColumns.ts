@@ -79,11 +79,25 @@ function text(v: unknown): string {
   return typeof v === 'string' && v.trim() ? v : DASH;
 }
 
-// The device's built-in oil list (yeweiyi-cloud fixtures/protocol/v1/oil_type_index.json): 1–17 have a
-// fixed meaning and are shown in the app's language (locales `oil.N`, translated from the Chinese names:
-// the device's own English list is misaligned, zhongchengyeweiyi#52). 0 is "not set"; 18–25 are names the
-// station typed on the device, so only the device's text (`oilType`) can show them.
-export const BUILTIN_OIL_MAX = 17;
+// The device's built-in oil list (cloud/fixtures/protocol/v1/oil_type_index.json): 1–31 have a fixed
+// meaning and are shown in the app's language (locales `oil.N`, translated from the Chinese names: the
+// device's own English list is misaligned, zhongchengyeweiyi#52, and abbreviated). 0 is "not set"; 32–39 are
+// names the station typed on the device, so only the device's text (`oilType`) can show them.
+// Firmware before test build E used 18–25 for those custom names (#11) and nothing on the wire tells the
+// firmware apart: in 18–25 the built-in name is used only when the device text is that index's name on the
+// newer firmware (Chinese or the device's English abbreviation, from oil_type_index.json — keep in sync);
+// anything else is treated as a custom name (shown as is, or a dash when empty).
+export const BUILTIN_OIL_MAX = 31;
+const LEGACY_CUSTOM_DEVICE_NAMES: Record<number, readonly string[]> = {
+  18: ['丙二醇', 'PG'],
+  19: ['乙醇', 'Ethanol'],
+  20: ['大豆油', 'Soy Oil'],
+  21: ['棕榈油', 'Palm Oil'],
+  22: ['轮胎油', 'Tire Oil'],
+  23: ['石蜡', 'Paraffin'],
+  24: ['二氯甲烷', 'DCM'],
+  25: ['二厂盐酸', 'P2 HCl'],
+};
 
 export function oilTypeKey(index: unknown): string | null {
   return typeof index === 'number' && Number.isInteger(index) && index >= 1 && index <= BUILTIN_OIL_MAX ? `oil.${index}` : null;
@@ -92,7 +106,9 @@ export function oilTypeKey(index: unknown): string | null {
 // 介质 cell: by oilTypeIndex first, else the device's text as is, else a dash. `tr` renders an i18n key.
 export function mediumText(index: unknown, raw: unknown, tr: (key: string) => string): string {
   const key = oilTypeKey(index);
-  return key ? tr(key) : text(raw);
+  const deviceNames = typeof index === 'number' ? LEGACY_CUSTOM_DEVICE_NAMES[index] : undefined;
+  const legacyCustom = deviceNames !== undefined && !(typeof raw === 'string' && deviceNames.includes(raw.trim()));
+  return key && !legacyCustom ? tr(key) : text(raw);
 }
 
 export interface CellFormat {

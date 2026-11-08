@@ -61,7 +61,13 @@ const f = { time: (iso) => `t(${iso})`, tr: zt };
 
 test('medium: builtin index in the app language, else the device text, else a dash', () => {
   assert.equal(oilTypeKey(0), null);
-  assert.equal(oilTypeKey(18), null);
+  assert.equal(oilTypeKey(32), null);
+  assert.equal(oilTypeKey(18), 'oil.18');
+  assert.equal(mediumText(18, 'PG', (k) => en[k]), 'Propylene Glycol');
+  assert.equal(mediumText(31, '', zt), '西排水');
+  assert.equal(mediumText(22, '', zt), DASH); // old-firmware custom slot (#11)
+  assert.equal(mediumText(20, 'Soy Oil', zt), '大豆油');
+  assert.equal(mediumText(33, '自定义B', zt), '自定义B');
   assert.equal(oilTypeKey(1.5), null);
   assert.equal(oilTypeKey(null), null);
   assert.equal(mediumText(5, 'whatever', zt), '92#');

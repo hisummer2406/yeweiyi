@@ -297,7 +297,7 @@ func (d *Device) applyTankSettings(rawArgs json.RawMessage) (map[string]any, str
 				err = fmt.Errorf("density 必须大于 0")
 			}
 		case "oilTypeIndex":
-			next.OilTypeIndex, err = intIn(f, 0, 25)
+			next.OilTypeIndex, err = intIn(f, 0, 39)
 		case "capacityL":
 			next.CapacityL, err = intIn(f, 0, 1_000_000)
 		default:

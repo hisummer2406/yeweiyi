@@ -61,7 +61,7 @@
 |---|---|
 | `reportedAt` | 该罐配置属性在 ThingsBoard 的最近更新时间（设备上报时刻），RFC 3339 UTC |
 | `tankShape` | 0 卧罐 / 1 立罐（覆盖 #45 的云端部分） |
-| `oilTypeIndex` | 0 未设置，1–17 内置，18–25 自定义；**以它为准** |
+| `oilTypeIndex` | 0 未设置，1–31 内置，32–39 自定义（旧固件 18–25 为自定义，见 #11）；**以它为准** |
 | `oilType` | 设备界面语言下的名称，仅供展示。**云端不内置名称表**（产品决定 2026-10-17） |
 | `alarm*Mm` / `alarmHighTempC` | `0` = 不启用 |
 | `alarmLowTempC` | 设备上报，但设备端低温检测从未被调用，**改了不生效** |
@@ -123,7 +123,7 @@
 | `levelCorrectionMm` `waterCorrectionMm` | number, mm | −100～100 | |
 | `tempCorrectionC` | number, ℃ | −10～10 | |
 | `density` | number | > 0 且 ≤ 2 | **单位未对齐，原样写入**，云端不换算 |
-| `oilTypeIndex` | int | 0～25 | 1–17 内置，18–25 自定义；自定义油品为空时是否允许由设备决定（产品未定） |
+| `oilTypeIndex` | int | 0～39 | 1–31 内置，32–39 自定义；自定义油品为空时是否允许由设备决定（产品未定）。旧固件把 18–25 当自定义，向旧固件下发 18–31 的含义不同（#11） |
 | `capacityL` | int, L | 0～1,000,000 | 只影响空容/可添油量计算 |
 
 **认识但不开放远程修改的字段会被拒绝，不是忽略**：`alarmLowTempC`（设备低温检测从未被调用）、`tankHeightMm`、
