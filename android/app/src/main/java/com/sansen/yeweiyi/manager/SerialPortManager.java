@@ -3,6 +3,7 @@ package com.sansen.yeweiyi.manager;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
@@ -21,6 +22,7 @@ import com.sansen.yeweiyi.applog.ExternalLog;
 import com.sansen.yeweiyi.factory.PCDataFactory;
 import com.sansen.yeweiyi.factory.VR350Factory;
 import com.sansen.yeweiyi.factory.ZhongChengCompany;
+import com.sansen.yeweiyi.logic.probe.AdaptiveReceive;
 import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.Constans;
@@ -31,6 +33,8 @@ import com.sansen.yeweiyi.utils.SharePrefUtil;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.Arrays;
+
+import kotlin.Unit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -202,10 +206,25 @@ public class SerialPortManager implements IParseDataListener {
         private int wenDuTurnPos = -1;
         //IoBufferManager buffManager;
 
+        private final AdaptiveReceive probeReceiver;
+
         public RequestThread(String name, SerialPortHelper serialPort) {
             super(name);
             this.name = name;
             this.serialPort = serialPort;
+            // 中断照旧只记日志、不恢复中断位（恢复属行为变更，需真机验证停机流程）。
+            this.probeReceiver = new AdaptiveReceive(
+                    serialPort::receiveData,
+                    ms -> {
+                        try {
+                            Thread.sleep(ms);
+                        } catch (InterruptedException e) {
+                            Log.w(TAG, "收包等待被中断", e);
+                        }
+                        return Unit.INSTANCE;
+                    },
+                    SystemClock::elapsedRealtime,
+                    AdaptiveReceive.POLL_MS, AdaptiveReceive.IDLE_POLLS, AdaptiveReceive.MAX_WAIT_MS);
         }
 
         public void run() {
@@ -342,17 +361,10 @@ public class SerialPortManager implements IParseDataListener {
                                         }
                                         serialPort.sendData(DataUtils.HexString2Bytes(oilCanData));
                                 Log.i(TAG, "发送到串口数据" + oilCanData);
-                                        try {
-                                            Thread.sleep(100);
-                                        } catch (InterruptedException e1) {
-                                            // 注：此处未调用 Thread.currentThread().interrupt() 恢复中断位。
-                                            // 恢复后本轮循环内后续的 sleep 会立即抛异常，属于行为变更，
-                                            // 需在真机上验证停机流程后再定。当前仅记录，便于排查。
-                                            Log.w(TAG, "发送后等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e1);
-                                        }
 
+                                        // 自适应收包替代"固定睡 100ms 读一次"（issue #8），三种探针共用。
                                         data = null;
-                                        byte[] bytes = serialPort.receiveData();
+                                        byte[] bytes = probeReceiver.receive();
 
                                         if (bytes != null) {
                                             data = DataUtils.bytesToHexString(bytes, bytes.length);
