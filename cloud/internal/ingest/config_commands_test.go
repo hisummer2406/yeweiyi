@@ -22,6 +22,7 @@ func (s *stack) issue(t *testing.T, actor control.Actor, method, args string) (d
 	t.Helper()
 	return s.ctl.Issue(context.Background(), control.IssueRequest{
 		DeviceName: s.device, Method: method, Args: json.RawMessage(args), Reason: "端到端验证", Actor: actor,
+		RequestID: fmt.Sprintf("e2e-%d", time.Now().UnixNano()), ExpectedStationSet: true, // the test device is on no station
 	})
 }
 
@@ -197,5 +198,23 @@ func TestConfigDeviceSettings_PlatformAdminOnly(t *testing.T) {
 	}
 	if got := s.sim.DeviceThresholds(); got.OutHeightMm != 30 || got.OutTimeSec != 90 || got.InHeightMm != 20 {
 		t.Errorf("device thresholds = %+v", got)
+	}
+
+	// config-command-delivery: the device re-publishes its attributes after the write and the
+	// device-level mirror follows what the device reports (never what the command asked for).
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		s.ing.SyncTankSettingsForTest(context.Background(), s.device, s.tbDevID)
+		got, err := s.q.GetDeviceSettings(context.Background(), s.device)
+		if err == nil && got.OutStockHeightThresholdMm.Int32 == 30 && got.OutStockTimeThresholdSec.Int32 == 90 {
+			if !got.InStockHeightThresholdMm.Valid || got.InStockHeightThresholdMm.Int32 != 20 {
+				t.Errorf("in-stock height in mirror = %+v, want 20 (untouched)", got.InStockHeightThresholdMm)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("device settings mirror = %+v, err = %v; want outStock 30 mm / 90 s", got, err)
+		}
+		time.Sleep(300 * time.Millisecond)
 	}
 }

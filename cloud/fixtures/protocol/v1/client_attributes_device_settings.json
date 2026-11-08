@@ -1,0 +1,7 @@
+{
+  "_comment": "整机设置（基础设置页）作为顶层客户端属性上报（设备端 DeviceSettingsAttributeBuilder）：出入库判定的高度/时间阈值，键名与 config.setDeviceSettings 的参数同名。0 = 未配置，原样上报。云端镜像 config-command-delivery（#3），尚未冻结：键名取自设备端代码，待设备端负责人确认（docs/protocol-v1-open-items.md）。",
+  "inStockHeightThresholdMm": 20,
+  "inStockTimeThresholdSec": 60,
+  "outStockHeightThresholdMm": 30,
+  "outStockTimeThresholdSec": 0
+}

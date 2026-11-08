@@ -20,18 +20,63 @@
 -- snapshot, i.e. the command logically happens before any transfer that commits after it started,
 -- and records the customer it was authorized under. What remains — the command being *sent* after
 -- the device changed hands — happens after this statement and no lock here could prevent it.
+--
+-- config-command-delivery (#3) adds three more checks to the same statement, for the same reason:
+--   * the method's permission tier against the user's *current* role (required_level) — Go's
+--     authorize() decides the error message, this decides whether a row exists;
+--   * the per-device config-command gate (require_device_enabled), so a device closed between the
+--     check and the insert gets nothing;
+--   * ON CONFLICT on the request_id index: a concurrent duplicate submission inserts nothing and
+--     the caller reads the existing row instead (zero rows back). The in-flight index is NOT an
+--     arbiter, so a second command for a busy target raises a unique violation the caller maps to
+--     config_command_in_flight.
 INSERT INTO control_commands (
     command_id, device_name, method, args,
-    operator_id, operator, reason, issued_at, expires_at, customer_id
+    operator_id, operator, reason, issued_at, expires_at, customer_id,
+    request_id, expected_station_id, config_target
 )
 SELECT sqlc.arg('command_id'), sqlc.arg('device_name'), sqlc.arg('method'), sqlc.arg('args'),
        u.id, sqlc.arg('operator'), sqlc.arg('reason'), sqlc.arg('issued_at'), sqlc.arg('expires_at'),
-       COALESCE(u.customer_id, d.customer_id)
+       COALESCE(u.customer_id, d.customer_id),
+       sqlc.narg('request_id'), sqlc.narg('expected_station_id'), sqlc.narg('config_target')
 FROM users u
 LEFT JOIN devices d ON d.device_name = sqlc.arg('device_name')
 WHERE u.id = sqlc.arg('operator_id')
   AND user_may_access_device(u.id, sqlc.arg('device_name'))
+  AND u.role IN ('platform_admin', 'customer_admin')
+  AND (sqlc.arg('required_level')::TEXT <> 'platform' OR u.role = 'platform_admin')
+  AND (NOT sqlc.arg('require_device_enabled')::BOOLEAN OR d.config_commands_enabled_at IS NOT NULL)
+ON CONFLICT (operator_id, device_name, request_id) WHERE request_id IS NOT NULL DO NOTHING
 RETURNING *;
+
+-- name: GetControlCommandByRequestID :one
+-- INTERNAL: the caller has already authorized the user for the device. The key includes the
+-- operator, so one admin can never "recover" another admin's submission.
+SELECT * FROM control_commands
+WHERE operator_id = sqlc.arg('operator_id')
+  AND device_name = sqlc.arg('device_name')
+  AND request_id = sqlc.arg('request_id');
+
+-- name: GetInFlightConfigCommand :one
+-- INTERNAL: the command currently holding control_commands_config_in_flight_key for a target.
+SELECT * FROM control_commands
+WHERE device_name = sqlc.arg('device_name')
+  AND config_target = sqlc.arg('config_target')
+  AND status IN ('pending', 'sent', 'received', 'executing')
+LIMIT 1;
+
+-- name: LockStationShared :one
+-- config-command-delivery: taken before LockDeviceForCommand, the same station → device order as
+-- replace-device (which takes FOR UPDATE), so the two serialize instead of deadlocking.
+SELECT id FROM stations WHERE id = $1 FOR SHARE;
+
+-- name: LockDeviceForCommand :one
+-- Holds the device row while the command is created, so a station change cannot commit between the
+-- expectedStationId check and the insert.
+SELECT station_id, config_commands_enabled_at FROM devices WHERE device_name = $1 FOR SHARE;
+
+-- name: GetDeviceConfigCommandsEnabled :one
+SELECT (config_commands_enabled_at IS NOT NULL)::BOOLEAN AS enabled FROM devices WHERE device_name = $1;
 
 -- name: GetControlCommand :one
 SELECT * FROM control_commands WHERE command_id = $1;
@@ -147,3 +192,32 @@ FROM control_commands
 WHERE status IN ('pending', 'sent', 'received', 'executing')
   AND expires_at > now()
 GROUP BY device_name;
+
+-- name: GetControlCommandVisibleToUser :one
+-- One command, by id, under exactly the visibility rule of ListControlCommandsVisibleToUser.
+SELECT c.*
+FROM control_commands c
+JOIN users u ON u.id = sqlc.arg('user_id')
+WHERE c.command_id = sqlc.arg('command_id')
+  AND c.device_name = sqlc.arg('device_name')
+  AND user_may_access_device(u.id, sqlc.arg('device_name'))
+  AND u.role <> 'customer_user'
+  AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id);
+
+-- name: GetOwnControlCommandByRequestIDVisible :one
+-- The caller's own submission by requestId, with the same visibility rule (a user moved to another
+-- customer no longer sees what they filed under the old one).
+SELECT c.*
+FROM control_commands c
+JOIN users u ON u.id = sqlc.arg('user_id')
+WHERE c.request_id = sqlc.arg('request_id')
+  AND c.operator_id = u.id
+  AND c.device_name = sqlc.arg('device_name')
+  AND user_may_access_device(u.id, sqlc.arg('device_name'))
+  AND u.role <> 'customer_user'
+  AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id);
+
+-- name: CommandAuditExists :one
+SELECT EXISTS (
+    SELECT 1 FROM audit_log WHERE command_id = sqlc.arg('command_id') AND action = sqlc.arg('action')::TEXT
+)::BOOLEAN AS found;

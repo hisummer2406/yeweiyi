@@ -351,6 +351,13 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 		"GET /api/devices/:device/telemetry/latest":  {build: path("/telemetry/latest")},
 		"GET /api/devices/:device/telemetry/history": {build: path("/telemetry/history?tank=1&fields=oilLevelMm&interval=1h")},
 		"GET /api/devices/:device/commands":          {build: path("/commands")},
+		// config-command-delivery: one command (an unknown id is 404 for those who pass the device check),
+		// the device-level settings mirror (administrators only), the per-device gate (platform admin only).
+		"GET /api/devices/:device/commands/:commandId": {build: path("/commands/00000000-0000-0000-0000-000000000000")},
+		"GET /api/devices/:device/device-settings":     {customerUserDenied: true, build: path("/device-settings")},
+		"PUT /api/devices/:device/config-commands": {adminOnly: true, build: func(device, _ string) (string, []byte) {
+			return "/api/devices/" + device + "/config-commands", []byte(`{"enabled":false,"reason":"tenancy walk"}`)
+		}},
 		"POST /api/devices/:device/commands": {customerUserDenied: true, build: func(device, _ string) (string, []byte) {
 			return "/api/devices/" + device + "/commands", cmdBody
 		}},
@@ -1037,8 +1044,9 @@ func TestTenancy_CommandInsertEnforcesAccessItself(t *testing.T) {
 		allowed bool
 		want    int64
 	}{
-		"customer admin on their device":        {tn.adminAID, tn.devA1, true, tn.custA},
-		"bound customer user":                   {tn.userAID, tn.devA1, true, tn.custA},
+		"customer admin on their device": {tn.adminAID, tn.devA1, true, tn.custA},
+		// Employees issue no command at all (roleAllows); since config-command-delivery the insert says so too.
+		"bound customer user":                   {tn.userAID, tn.devA1, false, 0},
 		"platform admin: the device's customer": {tn.platformID, tn.devA1, true, tn.custA},
 		"unbound customer user":                 {tn.userAID, tn.devA2, false, 0},
 		"another customer's admin":              {tn.adminBID, tn.devA1, false, 0},

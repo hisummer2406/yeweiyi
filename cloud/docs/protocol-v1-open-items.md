@@ -409,6 +409,13 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 `GET /api/devices/:device/tanks/:tank/calibration`，见 [tank-settings-contract.md](tank-settings-contract.md)）。仍待设备端确认：
 数组形状/单位；设备只在 MQTT 重连时重发（现场改表后云端滞后到下次重连）；是否需要变更时主动重发。
 
+**#3 追加（整机设置镜像，2026-11-08）：** 云端开始消费设备端 `DeviceSettingsAttributeBuilder` 已上报的顶层客户端属性
+`inStockHeightThresholdMm` `inStockTimeThresholdSec` `outStockHeightThresholdMm` `outStockTimeThresholdSec`（镜像表
+`device_settings`，`GET /api/devices/:device/device-settings`，契约 [config-command-contract.md](config-command-contract.md) §4）。
+这是云端只做消费的可选字段，**Refs 而非 Closes**。新增共享 fixture `client_attributes_device_settings.json`。待设备端确认：
+键名与单位；整机设置变更后是否即时重发属性。另：设备没有"现场手动模式"，`LOCAL_MODE_LOCKED` / `localControlMode`
+在协议里保留但不会出现（#9）。
+
 ## F. 交班、库存记录与介质字段（cloud#85 / zhongchengyeweiyi#49）—— 两端已实现，待真机验证
 
 契约见 [shift-stock-records-contract](shift-stock-records-contract.md)（v0.3）。新增的协议内容（产品 2026-11-03 决定，设备端会话已同意形状）：
