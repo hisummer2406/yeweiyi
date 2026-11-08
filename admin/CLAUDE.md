@@ -2,7 +2,7 @@
 
 `AGENTS.md` 是本文件的符号链接。只编辑本文件，不要将该链接替换为普通文件。
 
-## 项目状态：2026-10-08 登录、/ops 管理页、/console 设备总览/详情/报警/出入库记录、「资产管理」（客户·油站·设备）已对齐 yeweiyi-cloud，远程控制等未接
+## 项目状态：2026-10-08 登录、/ops 管理页、/console 设备总览/详情/报警/出入库记录、「资产管理」（客户·油站·设备）已对齐 yeweiyi-cloud；2026-11-08 远程配置（参数设置/操作记录）已接，未联调
 
 结构沿用 2026-09-05 从 `ant-design/ant-design-pro` 裁剪出的骨架（`/ops/*`、`/console/*` 空页面，
 路由与 `access.ts` 已就位）。**登录链路已对齐真实后端**（OpenSpec 变更 `align-login-with-cloud`）：
@@ -110,7 +110,20 @@
   同一班/同一次库存的行同底色、相邻交替（`groupStripes`）。**介质**（含报警、出入库）按 `oilTypeIndex` 1–17 显示本地名称（`utils/oilType.ts`，
   文案 `pages.console.oil.N`，以中文表为准，设备英文表有错位 zhongchengyeweiyi#52），其余显示 `oilType` 原文，再没有就「—」。
   出入库多一列「实际进出量(kg)」= `deliveredWeightKg`，null 显示「—」，**不能用前后重量差代替**；报警多一列「介质」，取报警自带的值，不拿罐当前油品代替。
-- 未做：历史趋势图（没装图表库）、远程控制与指令列表、WebSocket 报警推送。
+- 未做：历史趋势图（没装图表库）、WebSocket 报警推送。
+- **远程配置（#4，云端契约 `cloud/docs/config-command-contract.md` 与 `tank-settings-contract.md`，依赖 cloud PR #13；OpenSpec
+  `device-parameter-settings`）**：设备详情新增「参数设置」（`?tab=settings`）、「操作记录」（`?tab=commands`）；菜单「远程控制」
+  （`/console/issue-command`）是设备列表入口。本期只有配置类，动作类（消音/清警/重启/泵阀）不提供入口；**密度只读**。
+  - 当前值只来自设备回报（`tank-settings` / `device-settings` + `reportedAt`），null 显示「—」、0 照常显示，**不乐观更新**。
+  - 设备级开关：`GET /api/devices` 行的 `config_commands_enabled`（字段缺失 = 旧版云端 → 不能下发）；只有平台管理员能开/关
+    （`PUT /api/devices/:device/config-commands`，原因必填）。整机设置只有平台管理员能改。
+  - 只发改动字段；本地预检在 `utils/deviceConfig.ts`（范围同云端 `config_args.go`，四级液位顺序用当前值+改动合并，0 = 不启用），云端/设备才是裁决。
+  - 提交（`ConfigSubmitModal`）：打开确认弹窗生成一次 `requestId`，这次确认的重试都复用；确认时重读设备列表，油站变了就不发并刷新；
+    `expectedStationId` 发**表单打开时**的值。超时/`command_delivery_unconfirmed`：先 `?requestId=` 找回，找不到只给「用同一提交编号重试」，
+    **绝不换新编号自动重发**。`config_command_in_flight` 跳到在途命令。
+  - 跟踪（`useCommandTracker`）：轮询以 `terminal` 停止，页面隐藏不发请求；`succeeded` 后读回镜像，`reportedAt` 不早于命令 `issuedAt`
+    且字段相等才显示「设备回报值已一致」；`expired` 显示「结果无法确认」。
+  - 只有 mock/组件测试，**没有在浏览器里对真实云端联调，也没有真机验证**。
 
 **油站（`/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。
 油站页只管油站增删改（对平台管理员和客户管理员开放，`access.canManageAssets`）；给设备分配油站在设备页。云端契约：
@@ -307,7 +320,7 @@ src/services/           对接后端的请求函数（登录、设备、客户�
   但外网 HTTPS 当前连接失败，不能视为可用。发布/回滚见 `deploy/README.md`。GitHub Actions `.github/workflows/ci.yml` 在 PR 上执行检查与构建，
   main 更新后通过检查自动部署同一构建产物；部署失败恢复前一静态版本。依赖锁文件必须提交，CI 使用 `npm ci`。
   `config/proxy.ts` 的 `test`/`pre` 仅用于本地开发，仍是占位符，与生产 Nginx 无关。
-- `/console/*` 的趋势图、远程控制（`/console/issue-command`）、报警实时推送还没做；图表和告警的展示形式需要产品侧
+- `/console/*` 的趋势图、报警实时推送还没做（远程配置已接，见上文「远程配置」）；图表和告警的展示形式需要产品侧
   决定，不要自己臆造。
 - 本仓库已接入 OpenSpec（`openspec/config.yaml`，变更放在 `openspec/changes/`），与 `yeweiyi-cloud` 各用各的配置，
   不共享。
