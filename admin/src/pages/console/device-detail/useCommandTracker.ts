@@ -110,7 +110,7 @@ export function useCommandTracker(
       try {
         const mirror = await readRef.current();
         if (cancelled) return;
-        const echo = echoState(mirror, tracked.args, tracked.command.issuedAt);
+        const echo = echoState(mirror, tracked.args, state.command?.finishedAt);
         const timedOut =
           echo === 'waiting' && Date.now() - started >= echoWaitMs;
         setState((s) => ({
@@ -133,7 +133,15 @@ export function useCommandTracker(
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, succeeded, echoMs, echoWaitMs, echoKick]);
+  }, [
+    device,
+    id,
+    succeeded,
+    state.command?.finishedAt,
+    echoMs,
+    echoWaitMs,
+    echoKick,
+  ]);
 
   return { ...state, refreshEcho: () => setEchoKick((n) => n + 1) };
 }

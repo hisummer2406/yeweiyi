@@ -129,6 +129,18 @@ describe('echoState', () => {
       ),
     ).toBe('mismatch');
   });
+  it('cannot claim a match without a valid completion time', () => {
+    const mirror = {
+      reportedAt: '2026-11-08T14:00:07Z',
+      alarmHighLevelMm: 610,
+    };
+    expect(echoState(mirror, { alarmHighLevelMm: 610 }, undefined)).toBe(
+      'waiting',
+    );
+    expect(echoState(mirror, { alarmHighLevelMm: 610 }, 'invalid')).toBe(
+      'waiting',
+    );
+  });
 });
 
 describe('classifySubmitError', () => {

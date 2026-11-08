@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { message } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
@@ -68,6 +69,10 @@ const result = (p: Partial<API.StockList> = {}): API.StockList => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // antd 的静态 message 自建渲染根，cleanup 卸不掉，动画定时器会在环境拆除后才触发（CI 上报 window is not defined）
+  for (const m of ['success', 'error', 'warning'] as const) {
+    vi.spyOn(message, m).mockImplementation((() => {}) as never);
+  }
   getDeviceTanks.mockResolvedValue({
     deviceName: 'D1',
     reported: true,
@@ -417,11 +422,15 @@ describe('StockRecords manual entry (cloud#69)', () => {
     // Codex review PR #16: closing and reopening keeps the unresolved submission (same id, same body),
     // and the retry sends that snapshot even if a field was edited meanwhile.
     await within(dialog).findByRole('button', { name: '用同一提交编号重试' });
-    fireEvent.click(within(dialog).getByRole('button', { name: /取\s*消|Cancel/ }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /取\s*消|Cancel/ }),
+    );
     fireEvent.click(await screen.findByRole('button', { name: /补\s*录/ }));
     const reopened = await screen.findByRole('dialog');
     fireEvent.click(
-      await within(reopened).findByRole('button', { name: '用同一提交编号重试' }),
+      await within(reopened).findByRole('button', {
+        name: '用同一提交编号重试',
+      }),
     );
     await waitFor(() => expect(addManualStockEvent).toHaveBeenCalledTimes(2));
     expect(addManualStockEvent.mock.calls[1][1]).toEqual(body);
