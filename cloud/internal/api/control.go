@@ -194,6 +194,10 @@ func writeControlError(c *gin.Context, err error) {
 			"code":  codePhysicalDisabled,
 			"hint":  "physical control actions are disabled until device-side interlocks are verified on real hardware",
 		})
+	case errors.Is(err, control.ErrMethodRetired):
+		// 410: the method name is still in the protocol table (devices keep their handlers), but this entry
+		// point no longer sends it (issue #18 F1). Not 400 unknown_method: a client can tell it apart.
+		c.JSON(http.StatusGone, gin.H{"error": err.Error(), "code": "method_retired", "use": protocol.MethodConfigTankSettings})
 	case errors.Is(err, control.ErrConfigCommandsDisabled):
 		scope := control.GateScopeDeployment
 		var gate *control.ConfigDisabledError

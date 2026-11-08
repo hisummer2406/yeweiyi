@@ -57,6 +57,11 @@
 判定在角色之后：员工一律先得 403。**生产自 2026-11-09 起常开**（用户决定：管理员打开参数页即可直接修改）。
 曾有的设备级白名单（迁移 000038、`PUT /api/devices/:device/config-commands`、设备行 `config_commands_enabled`）已于同日删除（迁移 000039）。
 
+旧配置方法 `config.setAlarmThresholds` / `config.setTank` / `config.setProbe` 不再经本接口下发（#18 F1，2026-11-09）：判定在角色之后、
+不论开关，一律 `410 {"code":"method_retired","use":"config.setTankSettings"}`，写 `denied` 审计，不派发。原因：其参数云端读不出目标罐，
+无法共用本节总闸与 §1 的 `requestId`、油站复核、同罐在途互斥。协议方法表与设备端 handler 不变（兼容影响：仅云端 REST；admin/小程序
+均未调用）。
+
 ### 1.5 错误码（新增部分）
 
 | HTTP | `code` | 何时 |
@@ -66,6 +71,7 @@
 | 409 | `request_id_reused` | 同 `requestId` 不同内容 |
 | 409 | `device_station_changed` | 受理时油站关系已变（带 `currentStationId`） |
 | 409 | `config_command_in_flight` | 同目标已有未终态命令（带 `commandId`） |
+| 410 | `method_retired` | 旧配置方法 `config.setAlarmThresholds` / `setTank` / `setProbe`（#18 F1） |
 | 409 | `config_commands_disabled` | 部署级开关关闭，`scope=deployment` |
 
 既有错误（`403`、`invalid_args`+`fields`、`reason_required`、`command_delivery_unconfirmed` 等）不变。

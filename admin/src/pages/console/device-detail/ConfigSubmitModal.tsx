@@ -11,7 +11,11 @@ import {
 } from '@/services/ant-design-pro/deviceConfig';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { decodeToken, getToken } from '@/utils/auth';
-import { classifySubmitError, newRequestId } from '@/utils/deviceConfig';
+import {
+  classifySubmitError,
+  newRequestId,
+  pendingSettledBy,
+} from '@/utils/deviceConfig';
 
 export type ChangeRow = {
   field: string;
@@ -68,6 +72,8 @@ function readPending(key: string): PendingSubmission | undefined {
  * - 未确认提交按账号和设备保存快照；关闭、换页或刷新后恢复同一请求，不能换编号重复下发。
  * - 确认时先重读设备列表：设备不可见或油站变了，就不发，交给调用方刷新。expectedStationId 仍发表单打开时的值，由云端裁决。
  * - 请求超时或云端答交付未确认：先按 requestId 找回；找不到只给「用同一编号重试」，绝不换新编号自动重发。
+ * - 恢复的旧快照不做油站预检，原样重发同一编号：云端先重放、再复核油站；油站已变（409）即了结并交调用方刷新，
+ *   之后按当前归属重新确认（#18 F6）。
  * - 同目标在途：取在途命令交给跟踪器。错误按 code 归类，不显示云端原文。
  */
 const ConfigSubmitModal: React.FC<Props> = ({
@@ -150,22 +156,27 @@ const ConfigSubmitModal: React.FC<Props> = ({
           return;
         }
       }
-      // 换机/改归属预检：列表可能过期，云端事务才是裁决，这里只为不把明知过期的确认发出去
-      let row: API.DeviceRow | undefined;
-      try {
-        row = (await listDevices()).find((r) => r.device_name === device);
-      } catch (err) {
-        if (!(err instanceof ApiError && err.authHandled)) fail('unavailable');
-        return;
-      }
-      if (
-        !row ||
-        row.station_id === undefined ||
-        row.station_id !== body.expectedStationId
-      ) {
-        fail('stationChanged');
-        onStale();
-        return;
+      // 换机/改归属预检：列表可能过期，云端事务才是裁决，这里只为不把明知过期的确认发出去。
+      // 只对新确认做：未确认的旧快照可能已被云端受理，必须原样重发同一编号，由云端先按 requestId 重放、
+      // 再复核 expectedStationId（#18 F6）。在这里拦下旧快照会让它永远留着、反复恢复、挡住新提交。
+      if (!pending) {
+        let row: API.DeviceRow | undefined;
+        try {
+          row = (await listDevices()).find((r) => r.device_name === device);
+        } catch (err) {
+          if (!(err instanceof ApiError && err.authHandled))
+            fail('unavailable');
+          return;
+        }
+        if (
+          !row ||
+          row.station_id === undefined ||
+          row.station_id !== body.expectedStationId
+        ) {
+          fail('stationChanged');
+          onStale();
+          return;
+        }
       }
       if (!sameActor()) return;
       // 发出前保存：即使请求中途刷新页面，恢复时也只重放这一份快照。
@@ -203,7 +214,9 @@ const ConfigSubmitModal: React.FC<Props> = ({
         fail('unconfirmed');
         return;
       }
-      if (!pending) savePending(undefined);
+      // 新确认失败：什么都没受理，丢掉快照。旧快照：只有云端在 requestId 重放之后给出的结论才算了结
+      // （pendingSettledBy），其余（总闸关闭、403、5xx…）结果仍未知，继续保留。
+      if (!pending || pendingSettledBy(kind)) savePending(undefined);
       if (kind === 'inFlight') {
         const holder = apiErr.data?.commandId;
         if (typeof holder === 'string' && holder) {

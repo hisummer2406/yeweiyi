@@ -996,8 +996,10 @@ func TestTenancy_DemotedAdminLosesAdminMethodsImmediately(t *testing.T) {
 	tn := newTenancy(t)
 	tn.bind(t, tn.adminAID, tn.devA1)
 
-	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusAccepted {
-		t.Fatalf("precondition: a customer admin may issue %s, got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
+	// config.setTank is retired (#18 F1): an admin passes the role gate and is refused only as retired (410),
+	// an employee is refused by role (403) first — which is what this test is about.
+	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusGone {
+		t.Fatalf("precondition: a customer admin passes the role gate for %s (410 retired), got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
 	}
 	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user', password_hash = NULL WHERE id = $1`, tn.adminAID); err != nil {
 		t.Fatal(err)

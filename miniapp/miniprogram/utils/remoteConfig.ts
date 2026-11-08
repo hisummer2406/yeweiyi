@@ -127,18 +127,20 @@ export function commandPhase(status: string): Phase {
 
 export type Echo = 'matched' | 'waiting' | 'mismatch';
 
-// After succeeded: a report older than the command is still the old one (waiting); a fresh one with every
-// submitted field equal is matched; fresh but different is mismatch (changed on site, or rounded).
+// After succeeded: only a report strictly later than the command's finishedAt can be the device's answer
+// to it (config-command-contract §6.5). Older or same-time is still the old mirror (waiting); a missing or
+// unreadable finishedAt cannot be compared, so it stays waiting too (issue #18 F3). A later report with
+// every submitted field equal is matched; later but different is mismatch (changed on site, or rounded).
 export function echoState(
   mirror: Record<string, unknown> | null | undefined,
   args: Record<string, unknown>,
-  issuedAt: string | undefined,
+  finishedAt: string | undefined,
 ): Echo {
   const reportedAt = mirror ? mirror.reportedAt : undefined;
-  if (typeof reportedAt !== 'string') return 'waiting';
+  if (typeof reportedAt !== 'string' || typeof finishedAt !== 'string') return 'waiting';
   const reported = Date.parse(reportedAt);
-  const issued = issuedAt ? Date.parse(issuedAt) : Number.NaN;
-  if (!Number.isFinite(reported) || (Number.isFinite(issued) && reported < issued)) return 'waiting';
+  const finished = Date.parse(finishedAt);
+  if (!Number.isFinite(reported) || !Number.isFinite(finished) || reported <= finished) return 'waiting';
   for (const k of Object.keys(args)) {
     if (k === 'tank') continue;
     if (mirror?.[k] !== args[k]) return 'mismatch';
@@ -256,4 +258,72 @@ export function buildBackfill(
       requestId,
     },
   };
+}
+
+// ---- 结果未确认的提交 (issue #18 F2) ----
+// A submission whose outcome is unknown (timeout / command_delivery_unconfirmed, lookup found nothing)
+// is kept on the phone, per account, per target (device + tank: the cloud's in-flight lock is per tank
+// too). Before anything new is sent to that target the kept one is looked up again and, if still not
+// found, only resent *as it was* with its own requestId — the cloud replays it if it had taken it.
+
+export type PendingSubmit = {
+  requestId: string;
+  device: string;
+  stationId: number | null;
+  tank: number;
+  args: Record<string, number>;
+  reason: string;
+  lines: { label: string; before: string; after: string }[];
+  savedAt: number;
+};
+
+export function pendingStorageKey(userKey: string): string {
+  return `cfg-pending:${userKey || 'anon'}`;
+}
+
+export function pendingTargetKey(device: string, tank: number): string {
+  return `${device}#${tank}`;
+}
+
+function isNumberRecord(v: unknown): v is Record<string, number> {
+  return !!v && typeof v === 'object' && Object.values(v as object).every((x) => typeof x === 'number' && Number.isFinite(x));
+}
+
+// Reads one kept submission out of a stored map, dropping anything malformed (an unreadable entry
+// cannot be resent safely, and keeping it would block the target for ever).
+export function readPending(store: unknown, device: string, tank: number): PendingSubmit | undefined {
+  if (!store || typeof store !== 'object') return undefined;
+  const p = (store as Record<string, unknown>)[pendingTargetKey(device, tank)] as Partial<PendingSubmit> | undefined;
+  if (!p || typeof p !== 'object') return undefined;
+  if (typeof p.requestId !== 'string' || !p.requestId) return undefined;
+  if (p.device !== device || p.tank !== tank) return undefined;
+  if (!(p.stationId === null || (typeof p.stationId === 'number' && Number.isFinite(p.stationId)))) return undefined;
+  if (!isNumberRecord(p.args) || typeof p.reason !== 'string' || !Array.isArray(p.lines)) return undefined;
+  return p as PendingSubmit;
+}
+
+export function withPending(store: unknown, p: PendingSubmit): Record<string, PendingSubmit> {
+  const base = store && typeof store === 'object' ? { ...(store as Record<string, PendingSubmit>) } : {};
+  base[pendingTargetKey(p.device, p.tank)] = p;
+  return base;
+}
+
+export function withoutPending(store: unknown, device: string, tank: number): Record<string, PendingSubmit> {
+  const base = store && typeof store === 'object' ? { ...(store as Record<string, PendingSubmit>) } : {};
+  delete base[pendingTargetKey(device, tank)];
+  return base;
+}
+
+// After an attempt: keep the snapshot or drop it. A first send that failed with anything but "unconfirmed"
+// was not taken (nothing to protect). A retry of a kept snapshot is settled only by an answer given after the
+// cloud's requestId replay lookup (station changed, in flight for another command, id used for other
+// content) or by args the original could not have passed either; the deployment switch, a 403, a 5xx come
+// before that lookup and say nothing about the id, so the snapshot stays (same rule as admin pendingSettledBy).
+export function pendingAfter(kind: SubmitError | 'ok' | 'notSent', retry = false): 'keep' | 'clear' {
+  if (kind === 'ok' || kind === 'notSent') return 'clear';
+  if (kind === 'unconfirmed') return 'keep';
+  if (!retry) return 'clear';
+  return kind === 'stationChanged' || kind === 'inFlight' || kind === 'requestIdReused' || kind === 'invalidArgs'
+    ? 'clear'
+    : 'keep';
 }

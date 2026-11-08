@@ -13,6 +13,11 @@ import {
   newRequestId,
   offsetAtLocal,
   backfillFingerprint,
+  pendingAfter,
+  pendingStorageKey,
+  readPending,
+  withPending,
+  withoutPending,
 } from '../miniprogram/utils/remoteConfig.ts';
 
 let n = 0;
@@ -75,11 +80,25 @@ test('phase: ACK is not success', () => {
 });
 
 test('echo: waiting until a fresh equal report', () => {
-  const issued = '2026-11-08T14:00:05Z';
+  const issued = '2026-11-08T14:00:05Z'; // used as finishedAt
   assert.equal(echoState({ ...mirror, reportedAt: '2026-11-08T13:00:00Z' }, { tank: 1, alarmHighLevelMm: 600 }, issued), 'waiting');
   assert.equal(echoState(mirror, { tank: 1, alarmHighLevelMm: 600 }, issued), 'matched');
   assert.equal(echoState(mirror, { tank: 1, alarmHighLevelMm: 610 }, issued), 'mismatch');
   assert.equal(echoState(null, { alarmHighLevelMm: 610 }, issued), 'waiting');
+});
+
+test('echo: judged against finishedAt, not issuedAt (#18 F3)', () => {
+  const m = (reportedAt, v = 600) => ({ ...mirror, reportedAt, alarmHighLevelMm: v });
+  const a = { tank: 1, alarmHighLevelMm: 600 };
+  // issued 00:00:00, report 00:00:05, finished 00:00:10: the report predates completion
+  assert.equal(echoState(m('2026-11-08T00:00:05Z'), a, '2026-11-08T00:00:10Z'), 'waiting');
+  assert.equal(echoState(m('2026-11-08T00:00:10Z'), a, '2026-11-08T00:00:10Z'), 'waiting');
+  assert.equal(echoState(m('2026-11-08T00:00:11Z'), a, '2026-11-08T00:00:10Z'), 'matched');
+  assert.equal(echoState(m('2026-11-08T00:00:11Z', 610), a, '2026-11-08T00:00:10Z'), 'mismatch');
+  // missing / invalid finishedAt: cannot confirm
+  assert.equal(echoState(m('2026-11-08T00:00:11Z'), a, undefined), 'waiting');
+  assert.equal(echoState(m('2026-11-08T00:00:11Z'), a, 'garbage'), 'waiting');
+  assert.equal(echoState(m('garbage'), a, '2026-11-08T00:00:10Z'), 'waiting');
 });
 
 test('submit errors by code; no answer is unconfirmed', () => {
@@ -130,6 +149,35 @@ test('the same typed entry has the same fingerprint; any changed field changes i
   assert.equal(backfillFingerprint(0, e, 'r'), backfillFingerprint(0, { ...e, volume: ' 540 ' }, ' r '));
   assert.notEqual(backfillFingerprint(0, e, 'r'), backfillFingerprint(1, e, 'r'));
   assert.notEqual(backfillFingerprint(0, e, 'r'), backfillFingerprint(0, { ...e, time: '08:31' }, 'r'));
+});
+
+test('pending submission: per account key, per device+tank, malformed dropped (#18 F2)', () => {
+  assert.equal(pendingStorageKey('u12'), 'cfg-pending:u12');
+  assert.notEqual(pendingStorageKey('u12'), pendingStorageKey('u34'));
+  const p = { requestId: 'mp-1', device: 'D', stationId: 7, tank: 1, args: { alarmHighLevelMm: 700 }, reason: 'r', lines: [], savedAt: 1 };
+  const st = withPending(undefined, p);
+  assert.deepEqual(readPending(st, 'D', 1), p);
+  assert.equal(readPending(st, 'D', 2), undefined);
+  assert.equal(readPending(st, 'E', 1), undefined);
+  assert.equal(readPending(withoutPending(st, 'D', 1), 'D', 1), undefined);
+  assert.deepEqual(readPending(withPending(st, { ...p, tank: 2 }), 'D', 1), p);
+  assert.deepEqual(readPending(withPending(undefined, { ...p, stationId: null }), 'D', 1).stationId, null);
+  for (const bad of [{ ...p, requestId: '' }, { ...p, args: { a: 'x' } }, { ...p, stationId: '7' }, { ...p, lines: null }]) {
+    assert.equal(readPending({ 'D#1': bad }, 'D', 1), undefined);
+  }
+  assert.equal(readPending('', 'D', 1), undefined);
+});
+
+test('pending submission: kept while unknown; a retry is settled only by a verdict on its id', () => {
+  assert.equal(pendingAfter('ok'), 'clear');
+  assert.equal(pendingAfter('notSent'), 'clear');
+  assert.equal(pendingAfter('unconfirmed'), 'keep');
+  assert.equal(pendingAfter('unconfirmed', true), 'keep');
+  for (const k of ['stationChanged', 'inFlight', 'invalidArgs', 'requestIdReused', 'deploymentDisabled', 'other']) {
+    assert.equal(pendingAfter(k), 'clear', `first send ${k}`);
+  }
+  for (const k of ['stationChanged', 'inFlight', 'invalidArgs', 'requestIdReused']) assert.equal(pendingAfter(k, true), 'clear', k);
+  for (const k of ['deploymentDisabled', 'deviceDisabled', 'other']) assert.equal(pendingAfter(k, true), 'keep', k);
 });
 
 console.log(`${n} checks passed`);

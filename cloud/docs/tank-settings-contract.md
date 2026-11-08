@@ -104,8 +104,9 @@
 
 不属于物理动作，不受 `allowPhysicalCommands` 影响；但受独立闸门 `control.allowConfigCommands`（环境变量
 `ALLOW_CONFIG_COMMANDS`，默认 false；生产自 2026-11-09 常开）约束：关闭时返回 `409 code=config_commands_disabled`（`scope=deployment`，
-见 [config-command-contract.md](config-command-contract.md) §1.4）。旧方法 `config.setAlarmThresholds` 保留不动（语义不同：
-要求四级严格递减、不能设 0），新代码请用 `config.setTankSettings`。
+见 [config-command-contract.md](config-command-contract.md) §1.4）。旧方法 `config.setAlarmThresholds`（及 `config.setTank`/`config.setProbe`）自 2026-11-09 起不再经
+`POST /api/devices/:device/commands` 下发，一律 `410 code=method_retired`（#18 F1：它们的参数云端读不出目标罐，无法共用
+`requestId`、油站复核、同罐在途互斥与部署总闸）；协议方法表与设备端 handler 不变。请用 `config.setTankSettings`。
 
 请求（`reason` 必填，同其他命令）：
 

@@ -9,6 +9,7 @@ import {
   describeLoginFailure,
   isNotOnboarded,
   sessionDecision,
+  renewedTokenToAdopt,
   maskPhone,
   buildPasswordLogin,
   noticeFromQuery,
@@ -164,6 +165,27 @@ test('sessionDecision: an answer for a replaced session never clears the new one
   assert.deepEqual(sessionDecision({ ...signedInAgain, status: 401, body: {} }), { end: false });
   // a request that went out bare answers 401 after a new sign-in
   assert.deepEqual(sessionDecision({ ...base, sentToken: '', currentToken: 'new', status: 401, body: {} }), { end: false });
+});
+
+test('renewedTokenToAdopt: a late answer for another account or after logout never replaces the session (#18 F5)', () => {
+  const h = { 'X-Renewed-Token': 'renewed-account-A' };
+  // A sent, then signed in as B: A's renewal is dropped
+  assert.equal(renewedTokenToAdopt(h, 'account-A', 'account-B'), '');
+  // A sent, then logged out: dropped (no token resurrected)
+  assert.equal(renewedTokenToAdopt(h, 'account-A', ''), '');
+  // a bare request never adopts one
+  assert.equal(renewedTokenToAdopt(h, '', ''), '');
+});
+
+test('renewedTokenToAdopt: same session renews; parallel answers keep the first renewal', () => {
+  assert.equal(renewedTokenToAdopt({ 'x-renewed-token': 'T1' }, 'T', 'T'), 'T1');
+  assert.equal(renewedTokenToAdopt({ 'X-RENEWED-TOKEN': 'T1' }, 'T', 'T'), 'T1');
+  assert.equal(renewedTokenToAdopt({}, 'T', 'T'), '');
+  assert.equal(renewedTokenToAdopt(undefined, 'T', 'T'), '');
+  // second parallel request of the same session answers after T1 was stored: T1 stays
+  assert.equal(renewedTokenToAdopt({ 'x-renewed-token': 'T2' }, 'T', 'T1'), '');
+  // a request sent with T1 renews again normally
+  assert.equal(renewedTokenToAdopt({ 'x-renewed-token': 'T3' }, 'T1', 'T1'), 'T3');
 });
 
 test('sessionDecision: still signed out, a bare queued request still ends the session', () => {

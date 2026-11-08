@@ -154,3 +154,21 @@ export function sessionDecision(i: SessionEndInput): SessionDecision {
   if (i.sentToken !== i.currentToken) return { end: false };
   return notOnboarded ? { end: true, notice: NOT_ONBOARDED_CODE } : { end: true };
 }
+
+// Sliding renewal (yeweiyi-cloud#51) answer for one request: the replacement token to store, or ''.
+// Only a session that is still the stored one may be renewed — an answer that arrives after a logout or
+// a sign-in as someone else carries the old account's token and must not overwrite the new state
+// (issue #18 F5). Parallel requests of one session: the first renewal replaces the stored token, so
+// the later ones no longer match and are dropped; the token already stored is just as fresh and valid.
+// Header names are matched case-insensitively (wx.request keeps the transport's casing; HTTP/2 lowercases).
+export function renewedTokenToAdopt(
+  header: Record<string, string> | undefined,
+  sentToken: string,
+  currentToken: string,
+): string {
+  if (!header || !sentToken || sentToken !== currentToken) return '';
+  for (const name of Object.keys(header)) {
+    if (name.toLowerCase() === 'x-renewed-token' && header[name]) return header[name];
+  }
+  return '';
+}

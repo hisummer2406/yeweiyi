@@ -275,6 +275,102 @@ describe('SettingsTab', () => {
     expect(issueConfigCommand.mock.calls[1][1]).toEqual(original);
   });
 
+  // #18 F6：旧快照（油站 7）结果未知，设备随后换到油站 8。旧快照不再被前端油站预检挡住、反复恢复；
+  // 原样重发同一编号，由云端裁决。
+  async function leaveUnconfirmedOnStation7() {
+    issueConfigCommand.mockRejectedValueOnce(new ApiError(0));
+    findCommandByRequestId.mockResolvedValue(undefined);
+    const first = render(<SettingsTab device="D1" />);
+    await editHighLevel('610');
+    await confirm(await openConfirm());
+    const original = issueConfigCommand.mock.calls[0][1];
+    first.unmount();
+    listDevices.mockResolvedValue([deviceRow({ station_id: 8 })]);
+    listStations.mockResolvedValue([
+      { id: 7, name: '一号站', customer_id: 1 },
+      { id: 8, name: '二号站', customer_id: 1 },
+    ]);
+    return original;
+  }
+
+  it('settles a never-received old snapshot after the device moved station, then allows a fresh confirmation', async () => {
+    const original = await leaveUnconfirmedOnStation7();
+    const stale = new ApiError(409, undefined, false, 'device_station_changed');
+    stale.data = { code: 'device_station_changed', currentStationId: 8 };
+    issueConfigCommand.mockRejectedValueOnce(stale);
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('620');
+    const dialog = await openConfirm();
+    expect(await within(dialog).findByText(/结果未确认/)).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: /用同一提交编号重试/ }),
+      );
+    });
+    // 原样重发，没被前端预检拦下
+    expect(issueConfigCommand).toHaveBeenCalledTimes(2);
+    expect(issueConfigCommand.mock.calls[1][1]).toEqual(original);
+    expect(sessionStorage.length).toBe(0);
+
+    // 之后按当前归属（油站 8）重新确认：新编号、新内容
+    issueConfigCommand.mockResolvedValue({
+      command: command(),
+      replayed: false,
+    });
+    cleanup();
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('620');
+    const fresh = await openConfirm();
+    expect(within(fresh).queryByText(/结果未确认/)).toBeNull();
+    await confirm(fresh);
+    expect(issueConfigCommand).toHaveBeenCalledTimes(3);
+    const body = issueConfigCommand.mock.calls[2][1];
+    expect(body.requestId).not.toBe(original.requestId);
+    expect(body.expectedStationId).toBe(8);
+    expect(body.args.alarmHighLevelMm).toBe(620);
+  });
+
+  it('tracks an old snapshot the cloud had actually accepted (replay), sending nothing new', async () => {
+    const original = await leaveUnconfirmedOnStation7();
+    issueConfigCommand.mockResolvedValueOnce({
+      command: command(),
+      replayed: true,
+    });
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('620');
+    const dialog = await openConfirm();
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: /用同一提交编号重试/ }),
+      );
+    });
+    expect(issueConfigCommand).toHaveBeenCalledTimes(2);
+    expect(issueConfigCommand.mock.calls[1][1]).toEqual(original);
+    expect(await screen.findByText('设备已接收，等待执行结果')).toBeTruthy();
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('keeps an old snapshot when the answer says nothing about its requestId', async () => {
+    await leaveUnconfirmedOnStation7();
+    const gate = new ApiError(
+      409,
+      undefined,
+      false,
+      'config_commands_disabled',
+    );
+    gate.data = { code: 'config_commands_disabled', scope: 'deployment' };
+    issueConfigCommand.mockRejectedValueOnce(gate);
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('620');
+    const dialog = await openConfirm();
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: /用同一提交编号重试/ }),
+      );
+    });
+    expect(sessionStorage.length).toBe(1);
+  });
+
   it('keeps an unconfirmed submission isolated from a different account', async () => {
     issueConfigCommand.mockRejectedValueOnce(new ApiError(0));
     findCommandByRequestId.mockResolvedValue(undefined);

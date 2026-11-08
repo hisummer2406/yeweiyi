@@ -200,6 +200,18 @@ func TestIssueCommand_ForbiddenForUnownedDevice(t *testing.T) {
 	}
 }
 
+// TestIssueCommand_LegacyConfigMethodRetired (#18 F1): 410 method_retired, not 202, for an administrator.
+func TestIssueCommand_LegacyConfigMethodRetired(t *testing.T) {
+	env, _ := newControlEnv(t, control.Config{AllowConfigCommands: true})
+	device := "ctl-api-retired"
+	env.ownDevice(device)
+	env.setRole(control.RoleCustomerAdmin)
+	rec := env.authed("POST", "/api/devices/"+device+"/commands", issueBody(t, protocol.MethodConfigAlarmThreshold, "调阈值"))
+	if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), `"code":"method_retired"`) {
+		t.Fatalf("got %d %s, want 410 method_retired", rec.Code, rec.Body.String())
+	}
+}
+
 // TestIssueCommand_RoleGatesAdminMethods: a plain customer user may not change alarm thresholds.
 func TestIssueCommand_RoleGatesAdminMethods(t *testing.T) {
 	env, _ := newControlEnv(t, control.Config{})
