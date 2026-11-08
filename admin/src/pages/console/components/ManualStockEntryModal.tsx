@@ -1,6 +1,7 @@
 import { useIntl } from '@umijs/max';
 import {
   Alert,
+  Button,
   DatePicker,
   Form,
   Input,
@@ -15,7 +16,10 @@ import dayjs from 'dayjs';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
-import { addManualStockEvent } from '@/services/ant-design-pro/stock';
+import {
+  addManualStockEvent,
+  type ManualStockEntry,
+} from '@/services/ant-design-pro/stock';
 import { getDeviceTanks } from '@/services/ant-design-pro/tankGrants';
 
 type Props = {
@@ -49,6 +53,14 @@ const KNOWN_CODES = [
   'device_purge_in_progress',
 ];
 
+/**
+ * 结果未确认的提交（超时）按设备记在这里，跨关闭/重新打开保留：再打开时恢复同一份请求体与 requestId，
+ * 重试发送的是这份快照而不是表单当前值，所以既不会换编号重复保存，也不会因改了字段被判 request_id_reused
+ * （Codex 评审 PR #16）。只有成功、或用户明确「放弃」才清掉。
+ */
+type Pending = { body: ManualStockEntry; values: Values };
+const pendingByDevice = new Map<string, Pending>();
+
 const newRequestId = () =>
   `admbf-${Date.now().toString(36)}-${Math.floor(Math.random() * 36 ** 8)
     .toString(36)
@@ -79,11 +91,19 @@ const ManualStockEntryModal: React.FC<Props> = ({
 
   useEffect(() => {
     if (!open) return;
-    requestId.current = newRequestId();
-    setError(undefined);
-    setUnconfirmed(false);
+    const pending = pendingByDevice.get(device);
     form.resetFields();
-    if (direction) form.setFieldValue('direction', direction);
+    if (pending) {
+      requestId.current = pending.body.requestId;
+      form.setFieldsValue(pending.values);
+      setUnconfirmed(true);
+      setError(t('pages.console.manual.error.unconfirmed'));
+    } else {
+      requestId.current = newRequestId();
+      setError(undefined);
+      setUnconfirmed(false);
+      if (direction) form.setFieldValue('direction', direction);
+    }
     let live = true;
     getDeviceTanks(device)
       .then((res) => {
@@ -99,30 +119,41 @@ const ManualStockEntryModal: React.FC<Props> = ({
   }, [open, device, direction, form]);
 
   const submit = async () => {
-    let v: Values;
-    try {
-      v = await form.validateFields();
-    } catch {
-      return;
+    // 未确认的重试：发原样快照
+    const pending = pendingByDevice.get(device);
+    let body: ManualStockEntry;
+    let values: Values;
+    if (unconfirmed && pending) {
+      body = pending.body;
+      values = pending.values;
+    } else {
+      try {
+        values = await form.validateFields();
+      } catch {
+        return;
+      }
+      body = {
+        direction: values.direction,
+        tank: values.tank,
+        time: values.time.second(0).millisecond(0).format(),
+        beforeLevelMm: values.beforeLevelMm,
+        volumeL: values.volumeL,
+        reason: values.reason.trim(),
+        requestId: requestId.current,
+      };
     }
     setBusy(true);
     setError(undefined);
     try {
-      await addManualStockEvent(device, {
-        direction: v.direction,
-        tank: v.tank,
-        time: v.time.second(0).millisecond(0).format(),
-        beforeLevelMm: v.beforeLevelMm,
-        volumeL: v.volumeL,
-        reason: v.reason.trim(),
-        requestId: requestId.current,
-      });
+      await addManualStockEvent(device, body);
+      pendingByDevice.delete(device);
       onSaved();
       onClose();
     } catch (err) {
       const e = err instanceof ApiError ? err : new ApiError(0);
       if (e.authHandled) return;
       if (e.status === 0) {
+        pendingByDevice.set(device, { body, values });
         setUnconfirmed(true);
         setError(t('pages.console.manual.error.unconfirmed'));
         return;
@@ -164,7 +195,7 @@ const ManualStockEntryModal: React.FC<Props> = ({
             { required: true, message: t('pages.console.manual.required') },
           ]}
         >
-          <Radio.Group disabled={!!direction}>
+          <Radio.Group disabled={!!direction || busy || unconfirmed}>
             <Radio value="IN">{t('pages.console.manual.in')}</Radio>
             <Radio value="OUT">{t('pages.console.manual.out')}</Radio>
           </Radio.Group>
@@ -267,6 +298,23 @@ const ManualStockEntryModal: React.FC<Props> = ({
           type={unconfirmed ? 'warning' : 'error'}
           showIcon
           message={error}
+          action={
+            unconfirmed ? (
+              <Button
+                size="small"
+                disabled={busy}
+                onClick={() => {
+                  // 用户已在记录里确认没有保存时才用：清掉快照，换新编号重新填写
+                  pendingByDevice.delete(device);
+                  requestId.current = newRequestId();
+                  setUnconfirmed(false);
+                  setError(undefined);
+                }}
+              >
+                {t('pages.console.manual.abandon')}
+              </Button>
+            ) : undefined
+          }
         />
       )}
     </Modal>

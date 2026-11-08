@@ -679,4 +679,5 @@ export default {
     'Records reported by the device cannot be revoked',
   'pages.console.manual.error.revokeFailed':
     'Failed to revoke, please try again later',
+  'pages.console.manual.abandon': "Not saved — start over",
 };

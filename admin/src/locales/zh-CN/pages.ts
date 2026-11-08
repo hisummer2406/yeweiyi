@@ -694,4 +694,5 @@ export default {
   'pages.console.manual.error.other': '补录失败，请稍后重试',
   'pages.console.manual.error.notDeletable': '设备上报的记录不能撤销',
   'pages.console.manual.error.revokeFailed': '撤销失败，请稍后重试',
+  'pages.console.manual.abandon': "已确认未保存，重新填写",
 };
