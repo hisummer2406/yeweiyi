@@ -274,16 +274,25 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 	// the whole point is that a retry does not reach the device again. Authorization above ran
 	// against the current database state, so a revoked operator cannot read their old submission.
 	if req.RequestID != "" {
-		existing, err := s.q.GetControlCommandByRequestID(ctx, db.GetControlCommandByRequestIDParams{
-			OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: true}, DeviceName: req.DeviceName,
-			RequestID: pgtype.Text{String: req.RequestID, Valid: true},
-		})
-		if err == nil {
-			return s.replay(ctx, existing, req, args)
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+		existing, found, hidden, err := s.lookupOwnSubmission(ctx, req)
+		if err != nil {
 			return db.ControlCommand{}, false, fmt.Errorf("look up requestId: %w", err)
 		}
+		if found {
+			return s.replay(ctx, existing, req, args)
+		}
+		if hidden {
+			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+				map[string]any{"method": req.Method, "requestId": req.RequestID, "error": "requestId belongs to a command no longer visible"})
+			return db.ControlCommand{}, false, ErrRequestIDReused
+		}
+	}
+
+	target, ok := configTarget(req.Method, args)
+	if !ok {
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": "no configuration target"})
+		return db.ControlCommand{}, false, fmt.Errorf("%w: tank must be an integer 1..%d", ErrInvalidArgs, protocol.MaxDeviceTankSettings)
 	}
 
 	dev, err := s.tb.GetDeviceByName(ctx, req.DeviceName)
@@ -319,7 +328,7 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		ExpiresAt:            pgtype.Timestamptz{Time: expiresAt, Valid: true},
 		RequestID:            pgtype.Text{String: req.RequestID, Valid: req.RequestID != ""},
 		ExpectedStationID:    req.ExpectedStationID,
-		ConfigTarget:         configTarget(req.Method, args),
+		ConfigTarget:         target,
 		RequiredLevel:        requiredLevel(spec.Permission),
 		RequireDeviceEnabled: isConfigWriteMethod(req.Method),
 	}
@@ -332,13 +341,13 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) && req.RequestID != "" {
 			// Either a concurrent submission with the same requestId won the insert (ON CONFLICT DO
-			// NOTHING), or access changed. The first is answered as a replay.
-			existing, lookErr := s.q.GetControlCommandByRequestID(ctx, db.GetControlCommandByRequestIDParams{
-				OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: true}, DeviceName: req.DeviceName,
-				RequestID: pgtype.Text{String: req.RequestID, Valid: true},
-			})
-			if lookErr == nil {
+			// NOTHING), or access changed. The first is answered as a replay, under the same visibility.
+			existing, found, hidden, lookErr := s.lookupOwnSubmission(ctx, req)
+			if lookErr == nil && found {
 				return s.replay(ctx, existing, req, args)
+			}
+			if lookErr == nil && hidden {
+				return db.ControlCommand{}, false, ErrRequestIDReused
 			}
 		}
 		if errors.Is(err, pgx.ErrNoRows) {

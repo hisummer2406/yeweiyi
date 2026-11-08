@@ -445,3 +445,59 @@ func TestConfigSubmission_ReplayOfExpiredCommandSendsNothing(t *testing.T) {
 		t.Error("replaying an expired command sent it again")
 	}
 }
+
+// Codex review PR #13 (P1): an integral non-literal tank ("1.0", "1e0") must land on the same target as
+// "1", or it would slip past the in-flight index.
+func TestConfigSubmission_IntegralTankSpellingsShareOneTarget(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, configOn)
+	f.openGate(t)
+	ctx := context.Background()
+	first, err := f.svc.Issue(ctx, tankReq(f, `{"tank":1.0,"alarmHighLevelMm":610}`, newRequestID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ConfigTarget.String != "tank:1" {
+		t.Fatalf("config_target = %+v, want tank:1", first.ConfigTarget)
+	}
+	_, err = f.svc.Issue(ctx, tankReq(f, `{"tank":1e0,"alarmHighLevelMm":620}`, newRequestID()))
+	var fe *control.InFlightError
+	if !errors.As(err, &fe) {
+		t.Fatalf("1e0 while 1.0 is in flight: %v, want InFlightError", err)
+	}
+}
+
+// Codex review PR #13 (P2): after the operator and the device both move to another customer, replaying an
+// old requestId must not return the command filed under the previous customer.
+func TestConfigSubmission_ReplayIsCustomerScoped(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, configOn)
+	ctx := context.Background()
+	rid := newRequestID()
+	req := issueReq(f, protocol.MethodAlarmMute)
+	req.RequestID = rid
+	if _, err := f.svc.Issue(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	var other int64
+	if err := f.pool.QueryRow(ctx, `INSERT INTO customers (name, onboarding_status, onboarded_at) VALUES ($1, 'active', now()) RETURNING id`,
+		"ctl-replay-"+f.device).Scan(&other); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		c := context.Background()
+		f.pool.Exec(c, `UPDATE devices SET customer_id = (SELECT id FROM customers WHERE name = 'default') WHERE device_name = $1`, f.device)
+		f.pool.Exec(c, `UPDATE users SET customer_id = (SELECT id FROM customers WHERE name = 'default') WHERE id = $1`, f.actor.UserID)
+		f.pool.Exec(c, `DELETE FROM audit_log WHERE customer_id = $1`, other)
+		f.pool.Exec(c, `DELETE FROM control_commands WHERE customer_id = $1`, other)
+		f.pool.Exec(c, `DELETE FROM customers WHERE id = $1`, other)
+	})
+	if _, err := f.pool.Exec(ctx, `UPDATE devices SET customer_id = $1 WHERE device_name = $2`, other, f.device); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(ctx, `UPDATE users SET customer_id = $1 WHERE id = $2`, other, f.actor.UserID); err != nil {
+		t.Fatal(err)
+	}
+	cmd, replayed, err := f.svc.IssueDetailed(ctx, req)
+	if !errors.Is(err, control.ErrRequestIDReused) || replayed || cmd.CommandID.Valid {
+		t.Fatalf("replay across customers: replayed=%v cmd=%v err=%v, want ErrRequestIDReused and nothing returned", replayed, cmd.CommandID.Valid, err)
+	}
+}

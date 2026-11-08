@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -105,23 +106,56 @@ func checkSubmissionFields(req IssueRequest) error {
 	return nil
 }
 
-// configTarget is tank:<n> or device for the configuration methods, NULL otherwise. args has already
-// passed protocol.ValidateArgs, so tank is a valid integer.
-func configTarget(method string, args json.RawMessage) pgtype.Text {
+// configTarget is tank:<n> or device for the configuration methods, NULL for every other method. args has
+// already passed protocol.ValidateArgs, which accepts any integral JSON number for tank (1, 1.0, 1e0), so
+// the value is read as a number, not as text — reading it as text once let "1.0" yield NULL and slip past
+// the in-flight index (Codex review, PR #13). ok=false for a configuration method means no target could
+// be derived; the caller refuses rather than issuing an unprotected command.
+func configTarget(method string, args json.RawMessage) (pgtype.Text, bool) {
 	switch method {
 	case protocol.MethodConfigDeviceSettings:
-		return pgtype.Text{String: "device", Valid: true}
+		return pgtype.Text{String: "device", Valid: true}, true
 	case protocol.MethodConfigTankSettings:
 		var v struct {
-			Tank json.Number `json:"tank"`
+			Tank *float64 `json:"tank"`
 		}
-		if json.Unmarshal(args, &v) == nil {
-			if n, err := strconv.Atoi(v.Tank.String()); err == nil {
-				return pgtype.Text{String: "tank:" + strconv.Itoa(n), Valid: true}
-			}
+		if json.Unmarshal(args, &v) != nil || v.Tank == nil {
+			return pgtype.Text{}, false
 		}
+		n := *v.Tank
+		if n != math.Trunc(n) || n < 1 || n > float64(protocol.MaxDeviceTankSettings) {
+			return pgtype.Text{}, false
+		}
+		return pgtype.Text{String: "tank:" + strconv.Itoa(int(n)), Valid: true}, true
 	}
-	return pgtype.Text{}
+	return pgtype.Text{}, true
+}
+
+// lookupOwnSubmission finds the caller's earlier command for this requestId under the same visibility rule
+// as GET .../commands?requestId= (customer-scoped: a user moved to another customer no longer sees what they
+// filed under the old one — Codex review, PR #13). found=false, hidden=true: a command with this key exists
+// but is not visible to the caller any more; it is answered as request_id_reused, never with its content.
+func (s *Service) lookupOwnSubmission(ctx context.Context, req IssueRequest) (cmd db.ControlCommand, found, hidden bool, err error) {
+	rid := pgtype.Text{String: req.RequestID, Valid: true}
+	cmd, err = s.q.GetOwnControlCommandByRequestIDVisible(ctx, db.GetOwnControlCommandByRequestIDVisibleParams{
+		UserID: req.Actor.UserID, RequestID: rid, DeviceName: req.DeviceName,
+	})
+	if err == nil {
+		return cmd, true, false, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return db.ControlCommand{}, false, false, err
+	}
+	_, err = s.q.GetControlCommandByRequestID(ctx, db.GetControlCommandByRequestIDParams{
+		OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: true}, DeviceName: req.DeviceName, RequestID: rid,
+	})
+	if err == nil {
+		return db.ControlCommand{}, false, true, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.ControlCommand{}, false, false, nil
+	}
+	return db.ControlCommand{}, false, false, err
 }
 
 // sameSubmission compares what a replay must match: method, args (as JSON values, so key order and
