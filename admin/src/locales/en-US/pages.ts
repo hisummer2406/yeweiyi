@@ -815,4 +815,5 @@ export default {
   'pages.console.commands.status.rejected': 'Refused',
   'pages.console.commands.status.expired': 'Result unknown',
   'pages.console.commands.status.unknown': 'Unknown',
+  'pages.console.settings.deviceLoadFailed': "Failed to load device settings",
 };

@@ -298,4 +298,36 @@ describe('SettingsTab', () => {
     // 0 stays 0; it is "not configured", not missing.
     await waitFor(() => expect(screen.getByText('0 s')).toBeTruthy());
   });
+
+  // Codex review PR #14 (P1): after the station changed, the old draft must not be sendable under the new station.
+  it('discards the draft when the station changed under the form', async () => {
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('610');
+    const dialog = await openConfirm();
+    listDevices.mockResolvedValue([deviceRow({ station_id: 8 })]);
+    await confirm(dialog);
+    expect(issueConfigCommand).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText('高液位报警') as HTMLInputElement).value,
+      ).toBe(''),
+    );
+    expect(
+      screen
+        .getAllByRole('button', { name: '下发到设备' })[0]
+        .hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  // Codex review PR #14 (P2): a failed read is not "never reported".
+  it('shows a device-settings read failure instead of an empty editable form', async () => {
+    role = 'platform_admin';
+    getDeviceSettings.mockRejectedValue(
+      new ApiError(500, undefined, false, undefined),
+    );
+    render(<SettingsTab device="D1" />);
+    expect(await screen.findByText('读取整机设置失败')).toBeTruthy();
+    expect(screen.queryByText('设备尚未上报整机设置。')).toBeNull();
+    expect(screen.queryByLabelText('入库判定高度')).toBeNull();
+  });
 });

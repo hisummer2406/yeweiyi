@@ -815,4 +815,5 @@ export default {
   'pages.console.commands.status.rejected': '被设备拒绝',
   'pages.console.commands.status.expired': '结果无法确认',
   'pages.console.commands.status.unknown': '未知',
+  'pages.console.settings.deviceLoadFailed': "读取整机设置失败",
 };

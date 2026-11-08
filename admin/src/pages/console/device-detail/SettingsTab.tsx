@@ -39,6 +39,8 @@ type Loaded = {
   stationLabel: string;
   tanks: API.TankSettings[];
   deviceSettings: API.DeviceSettings | null;
+  /** 整机镜像读取失败（不是"未上报"）：不显示空表单，给重试 */
+  deviceSettingsFailed: boolean;
 };
 
 const fmtTime = (iso?: string | null) =>
@@ -60,6 +62,8 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
   const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  // 编辑会话：油站关系变化（onStale）时加一，两个表单的草稿随之清空，旧油站下的改动不会按新油站发出（Codex 评审 PR #14）
+  const [session, setSession] = useState(0);
   const [tankNo, setTankNo] = useState<number>();
   const [request, setRequest] = useState<SubmitRequest>();
   const [tracked, setTracked] = useState<Tracked>();
@@ -77,7 +81,13 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
           listDevices(),
           getTankSettings(device),
           // 旧版云端没有整机镜像接口：退化为未上报，不影响罐设置
-          getDeviceSettings(device).catch(() => null),
+          // 只有旧版云端（没有该接口，裸 404）才退化为未上报；其他失败如实显示，不当成"从未上报"
+          getDeviceSettings(device).catch((err) => {
+            if (err instanceof ApiError && err.authHandled) throw err;
+            if (err instanceof ApiError && err.status === 404 && !err.code)
+              return null;
+            return 'failed' as const;
+          }),
         ]);
         const row = rows.find((r) => r.device_name === device);
         let stationLabel = t('pages.console.stations.devices.station.unknown');
@@ -92,7 +102,13 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
             `#${row.station_id}`;
         }
         if (!alive) return;
-        setData({ row, stationLabel, tanks, deviceSettings });
+        setData({
+          row,
+          stationLabel,
+          tanks,
+          deviceSettings: deviceSettings === 'failed' ? null : deviceSettings,
+          deviceSettingsFailed: deviceSettings === 'failed',
+        });
         setTankNo((cur) =>
           cur !== undefined && tanks.some((x) => x.tank === cur)
             ? cur
@@ -283,7 +299,7 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
                 tank={tank}
                 canEdit={canSubmitBase}
                 readOnlyNote="pages.console.settings.readOnlyNote"
-                resetKey={`${tank.tank}-${tank.reportedAt}`}
+                resetKey={`${session}-${data.row?.station_id}-${tank.tank}-${tank.reportedAt}`}
                 onSubmit={(args) =>
                   openSubmit(
                     TANK_FIELDS,
@@ -319,31 +335,48 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
           )
         }
       >
-        {!data.deviceSettings && (
+        {data.deviceSettingsFailed && (
+          <Alert
+            type="error"
+            showIcon
+            message={t('pages.console.settings.deviceLoadFailed')}
+            action={
+              <Button size="small" onClick={() => setReload((n) => n + 1)}>
+                {t('pages.console.settings.retry')}
+              </Button>
+            }
+          />
+        )}
+        {!data.deviceSettings && !data.deviceSettingsFailed && (
           <Typography.Paragraph type="secondary">
             {t('pages.console.settings.deviceNotReported')}
           </Typography.Paragraph>
         )}
-        <SettingsForm
-          fields={DEVICE_FIELDS}
-          current={
-            (data.deviceSettings as unknown as Record<string, unknown>) ?? null
-          }
-          canEdit={isPlatform && canSubmitBase}
-          readOnlyNote={
-            isPlatform ? undefined : 'pages.console.settings.devicePlatformOnly'
-          }
-          resetKey={data.deviceSettings?.reportedAt ?? 'none'}
-          onSubmit={(args) =>
-            openSubmit(
-              DEVICE_FIELDS,
+        {!data.deviceSettingsFailed && (
+          <SettingsForm
+            fields={DEVICE_FIELDS}
+            current={
               (data.deviceSettings as unknown as Record<string, unknown>) ??
-                null,
-              args,
-              'config.setDeviceSettings',
-            )
-          }
-        />
+              null
+            }
+            canEdit={isPlatform && canSubmitBase}
+            readOnlyNote={
+              isPlatform
+                ? undefined
+                : 'pages.console.settings.devicePlatformOnly'
+            }
+            resetKey={`${session}-${data.row?.station_id}-${data.deviceSettings?.reportedAt ?? 'none'}`}
+            onSubmit={(args) =>
+              openSubmit(
+                DEVICE_FIELDS,
+                (data.deviceSettings as unknown as Record<string, unknown>) ??
+                  null,
+                args,
+                'config.setDeviceSettings',
+              )
+            }
+          />
+        )}
       </Card>
 
       <ConfigSubmitModal
@@ -355,6 +388,7 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
         onTracked={(command, args) => setTracked({ command, args })}
         onStale={() => {
           setRequest(undefined);
+          setSession((n) => n + 1);
           message.warning(
             t('pages.console.settings.submit.error.stationChanged'),
           );
