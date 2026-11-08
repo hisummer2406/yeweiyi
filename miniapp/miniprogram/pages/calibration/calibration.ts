@@ -25,6 +25,8 @@ type Saved = { device?: string; tank?: number; levelOffset?: string; waterOffset
 
 Page({
   data: {
+    // 「下发」流程进行中（确认框、发送、查回、同编号重试）：按钮禁用并显示加载，#18 F4
+    sending: false,
     text: texts('calibration'),
     form: texts('form'),
     state: 'loading' as State,
@@ -218,6 +220,7 @@ Page({
 
   // 保存到控制器 = 下发三项修正（只发与设备不同的值）
   onSaveDevice() {
+    if (this.data.sending) return;
     if (!this.data.canSend) {
       wx.showToast({ title: this.data.sendHint || t('cfgSend.notAllowed'), icon: 'none', duration: 3000 });
       return;
@@ -243,6 +246,7 @@ Page({
       const before = mirror ? mirror[f.cloud] : undefined;
       return { label: t(`calibration.${f.form}`), before: typeof before === 'number' ? String(before) : DASH, after: String(args[f.cloud]) };
     });
+    this.setData({ sending: true });
     confirmAndSend({
       device: this.data.device as string,
       stationId: this.stationId,
@@ -250,7 +254,7 @@ Page({
       args,
       reason,
       lines,
-    });
+    }).finally(() => this.setData({ sending: false }));
   },
 
   onGoHome() {

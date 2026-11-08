@@ -129,6 +129,15 @@ describe('echoState', () => {
       ),
     ).toBe('mismatch');
   });
+  it('a report at the very completion time is not yet the answer (contract §6.5: later than finishedAt)', () => {
+    const at = { reportedAt: issued, alarmHighLevelMm: 610 };
+    expect(echoState(at, { alarmHighLevelMm: 610 }, issued)).toBe('waiting');
+    const after = {
+      reportedAt: '2026-11-08T14:00:05.001Z',
+      alarmHighLevelMm: 610,
+    };
+    expect(echoState(after, { alarmHighLevelMm: 610 }, issued)).toBe('matched');
+  });
   it('cannot claim a match without a valid completion time', () => {
     const mirror = {
       reportedAt: '2026-11-08T14:00:07Z',
