@@ -76,6 +76,8 @@ function readStored(key: string): TankDraft | null {
 
 Page({
   data: {
+    // 「下发」流程进行中（确认框、发送、查回、同编号重试）：按钮禁用并显示加载，#18 F4
+    sending: false,
     text: texts('tankCfg'),
     form: texts('form'),
     state: 'loading' as State,
@@ -239,6 +241,7 @@ Page({
 
   // 下发到设备：只发与设备回报不同的开放字段。
   onSend() {
+    if (this.data.sending) return;
     if (!this.data.canSend || this.data.tankIndex < 0) return;
     const values: Record<string, string> = {};
     for (const f of this.data.fields as FieldView[]) values[f.key] = f.value;
@@ -262,6 +265,7 @@ Page({
       const before = mirror ? mirror[f.cloud] : undefined;
       return { label: t(`tankCfg.${f.form}`), before: typeof before === 'number' ? String(before) : DASH, after: String(args[f.cloud]) };
     });
+    this.setData({ sending: true });
     confirmAndSend({
       device: this.data.device as string,
       stationId: this.stationId,
@@ -269,7 +273,7 @@ Page({
       args,
       reason,
       lines,
-    });
+    }).finally(() => this.setData({ sending: false }));
   },
 
   storageKey(index: number): string {

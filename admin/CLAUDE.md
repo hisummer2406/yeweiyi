@@ -128,8 +128,8 @@
     **绝不换新编号自动重发**。`config_command_in_flight` 跳到在途命令。
     恢复的旧快照**不做前端油站预检**，原样重发同一编号（云端先重放、再复核油站）；只有重放之后的结论（`device_station_changed`、在途、
     `request_id_reused`）或 `invalid_args` 才了结它（`pendingSettledBy`），总闸关闭/403/5xx 仍保留（#18 F6，否则换站后旧快照会反复恢复、挡住新提交）。
-  - 跟踪（`useCommandTracker`）：轮询以 `terminal` 停止，页面隐藏不发请求；`succeeded` 后读回镜像，`reportedAt` 不早于命令 `issuedAt`
-    且字段相等才显示「设备回报值已一致」；`expired` 显示「结果无法确认」。
+  - 跟踪（`useCommandTracker`）：轮询以 `terminal` 停止，页面隐藏不发请求；`succeeded` 后读回镜像，`reportedAt` 严格晚于命令 `finishedAt`
+    且字段相等才显示「设备回报值已一致」（`finishedAt` 缺失/非法一直等待，同小程序与契约 §6.5）；`expired` 显示「结果无法确认」。
   - 只有 mock/组件测试，**没有在浏览器里对真实云端联调，也没有真机验证**。
 
 **油站（`/assets/stations`，GitHub issue #6，云端 yeweiyi-cloud#53）**：油站是 客户 → 油站 → 设备 的中间一层，只存在云端业务库。

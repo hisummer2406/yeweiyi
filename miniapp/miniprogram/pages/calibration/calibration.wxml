@@ -64,7 +64,7 @@
 
   <view class="pill-row" style="margin-top:80rpx;">
     <button class="pill pill-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
-    <button class="pill pill-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
+    <button class="pill pill-deep" bindtap="onSaveDevice" disabled="{{sending}}" loading="{{sending}}">{{form.saveDevice}}</button>
   </view>
 </block>
 

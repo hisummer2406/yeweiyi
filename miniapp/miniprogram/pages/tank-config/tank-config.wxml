@@ -96,7 +96,7 @@
     <button class="pill pill-main" bindtap="onSave">{{text.saveDraft}}</button>
   </view>
   <view wx:if="{{canSend}}" class="pill-row" style="margin-top:16rpx;">
-    <button class="pill pill-deep" bindtap="onSend">{{text.send}}</button>
+    <button class="pill pill-deep" bindtap="onSend" disabled="{{sending}}" loading="{{sending}}">{{text.send}}</button>
   </view>
 </view>
 
