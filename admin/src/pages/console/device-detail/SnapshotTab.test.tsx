@@ -153,8 +153,10 @@ describe('SnapshotTab one tank at a time', () => {
     query = 'tank=3';
     getLatestTelemetry.mockResolvedValue(twoTanks());
     render(<SnapshotTab device="D" />);
-    expect(await screen.findByText(/3号罐 0#柴油/)).toBeTruthy();
-    expect(screen.queryByText(/1号罐 92#/)).toBeNull();
+    expect(
+      await screen.findByRole('heading', { name: '3号 0#柴油' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: '1号 92#' })).toBeNull();
     // 全部读数：液位、容积、质量、温度、水高、水体积、空容、油品占比、水占比
     for (const label of [
       '液位',
@@ -169,15 +171,23 @@ describe('SnapshotTab one tank at a time', () => {
     ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
-    expect(screen.getByText('300.0 mm')).toBeTruthy(); // 3 号罐的液位，不是 1 号罐的 100
-    expect(screen.getByText('900.0 L')).toBeTruthy();
+    // 3 号罐的液位、容积，不是 1 号罐的；显示器样式「标签 数值 单位」（#21）
+    const main = screen
+      .getAllByRole('row')
+      .map((r) => Array.from(r.children, (c) => c.textContent).join(' '));
+    expect(main[0]).toBe('液位 300.0 毫米');
+    expect(main[1]).toBe('容积 500.0 升');
+    expect(screen.getByText('更多读数')).toBeTruthy();
+    expect(screen.getByText('900.0 L')).toBeTruthy(); // 空容在「更多读数」里
   });
 
   it('without ?tank= shows the lowest tank', async () => {
     getLatestTelemetry.mockResolvedValue(twoTanks());
     render(<SnapshotTab device="D" />);
-    expect(await screen.findByText(/1号罐 92#/)).toBeTruthy();
-    expect(screen.queryByText(/3号罐 0#柴油/)).toBeNull();
+    expect(
+      await screen.findByRole('heading', { name: '1号 92#' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: '3号 0#柴油' })).toBeNull();
   });
 
   it('says so and shows the lowest tank when the requested one is not visible', async () => {
@@ -187,14 +197,14 @@ describe('SnapshotTab one tank at a time', () => {
     expect(
       await screen.findByText(/9号罐当前不可查看.*改为显示 1号罐/),
     ).toBeTruthy();
-    expect(screen.getByText(/1号罐 92#/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '1号 92#' })).toBeTruthy();
   });
 
   it('switching tank only changes ?tank= (replace)', async () => {
     query = 'tank=1&station=7';
     getLatestTelemetry.mockResolvedValue(twoTanks());
     render(<SnapshotTab device="D" />);
-    await screen.findByText(/1号罐 92#/);
+    await screen.findByRole('heading', { name: '1号 92#' });
     fireEvent.click(screen.getByText('3号 0#柴油'));
     expect(setParams).toHaveBeenCalledTimes(1);
     const [next, opts] = setParams.mock.calls[0];
@@ -209,8 +219,9 @@ describe('SnapshotTab one tank at a time', () => {
       tanks: [tank(2, '95#')],
     });
     render(<SnapshotTab device="D" />);
-    await screen.findByText(/2号罐 95#/);
-    expect(screen.queryByText('2号 95#')).toBeNull();
+    await screen.findByRole('heading', { name: '2号 95#' });
+    expect(screen.queryByRole('radiogroup')).toBeNull();
+    expect(document.querySelector('.ant-segmented')).toBeNull();
   });
 
   it('keeps alarm and probe state as text, and a missing value as --', async () => {
@@ -225,7 +236,7 @@ describe('SnapshotTab one tank at a time', () => {
       ],
     });
     render(<SnapshotTab device="D" />);
-    await screen.findByText(/1号罐 92#/);
+    await screen.findByRole('heading', { name: '1号 92#' });
     expect(screen.getByText(/报警状态：/)).toBeTruthy();
     expect(screen.getByText(/探针：未连接/)).toBeTruthy();
     expect(screen.getAllByText('--').length).toBeGreaterThan(0);
