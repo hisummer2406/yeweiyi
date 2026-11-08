@@ -5,10 +5,10 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Message;
-import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.ExternalLog;
 import com.sansen.yeweiyi.bean.OilCan;
 import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SerialPortManager.PCPortThread;
@@ -54,7 +54,7 @@ public class VR350Factory implements PCDataFactory {
 					try {
 						initData((String) msg.obj);
 					} catch (Exception e) {
-						Log.e("VR350Factory", "PC协议解析失败, 原始报文=" + msg.obj, e);
+						ExternalLog.onPcParseFailed(msg.obj, e);
 					}
 					break;
 
@@ -126,14 +126,24 @@ public class VR350Factory implements PCDataFactory {
 
 	/** 对外 Modbus（《中成液位modbus协议》）：按请求的起始地址和寄存器数量应答 */
 	private void backOilcanData2(ZhongChengModbusSlave.Request request) {
-		SparseArray<OilCan> mOilcanData = mOilcanDataManager.getData();
+		byte[] response = buildModbusResponse(mOilcanDataManager, request);
+		mSerialPort.sendData(response);
+		ExternalLog.onSerialRequest(request, response);
+	}
+
+	/** 串口 5 与 Modbus TCP（{@link ModbusTcpServer}）共用的应答组帧，保证两条通道数据口径一致 */
+	public static byte[] buildModbusResponse(OilcanDataManager oilcanDataManager,
+			ZhongChengModbusSlave.Request request) {
+		SparseArray<OilCan> mOilcanData = oilcanDataManager.getData();
 		Map<Integer, float[]> tanks = new HashMap<>();
 		int maxTank = MODBUS_DOC_TANK_COUNT;
 		for (int i = 0; i < mOilcanData.size(); i++) {
 			OilCan oilCan = mOilcanData.valueAt(i);
 			int pos = oilCan.getOilCanPos();
 			maxTank = Math.max(maxTank, pos);
-			// oilVolume 是油面高度对应的总体积(含水)，与 MinOilCanView 的"油体积 = 体积-水体积"口径一致
+			// 油体积按"油水体积 − 水体积"算。但探针解析（ZhongCheng/LD/LD2Company）从不算 waterVolume，
+			// 唯一会算的 MinOilCanView 只改演示数据（getTestData，另一份对象），这里读的是 getData()，
+			// 所以水体积恒为 0、油体积 = 油水体积（2026-10-18 真机确认）
 			double totalVolume = oilCan.getOilVolume();
 			double waterVolume = oilCan.getWaterVolume();
 			tanks.put(pos, new float[]{
@@ -143,13 +153,10 @@ public class VR350Factory implements PCDataFactory {
 					(float) oilCan.getTemper(),              // 温度 ℃
 					(float) totalVolume,                     // 油水体积 L
 					(float) Math.max(0, totalVolume - waterVolume), // 油体积 L
-					(float) waterVolume,                     // 水体积 L
+					(float) waterVolume,                     // 水体积 L（目前恒为 0）
 			});
 		}
-		byte[] response = ZhongChengModbusSlave.buildResponse(request, tanks, maxTank);
-		Log.i("VR350Factory", "Modbus 请求 start=" + request.start + " qty=" + request.quantity
-				+ " 应答=" + DataUtils.bytesToHexString(response, response.length));
-		mSerialPort.sendData(response);
+		return ZhongChengModbusSlave.buildResponse(request, tanks, maxTank);
 	}
 
 	public void transportData(String data) {

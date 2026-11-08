@@ -131,7 +131,7 @@ public class SetTankSettingsHandlerTest {
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighWaterMm\":2001}")); // 超过罐高
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighTempC\":101}"));
         assertRejectedWithoutWrite(call("{\"tank\":1,\"tempCorrectionC\":10.5}"));
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":26}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":40}"));
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":\"650\"}")); // 字符串
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":650.5}")); // 整数字段带小数
     }

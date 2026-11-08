@@ -5,7 +5,6 @@ import android.databinding.Observable;
 import android.databinding.Observable.OnPropertyChangedCallback;
 import android.databinding.ObservableField;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.widget.LinearLayoutManager;
@@ -19,8 +18,6 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.sansen.yeweiyi.bean.OilCan;
-import com.sansen.yeweiyi.logic.shift.ShiftExportRows;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.adapter.OilCommitWorkAdapter;
 import com.sansen.yeweiyi.application.MyApplication;
@@ -29,28 +26,23 @@ import com.sansen.yeweiyi.bean.OilWork;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.CommitWork;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
-import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
-import com.sansen.yeweiyi.logic.ExportExcel;
-import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.repository.ShiftRepository;
 import com.sansen.yeweiyi.repository.ShiftRepositoryImpl;
 import com.sansen.yeweiyi.utils.Constans;
-import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
-import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
+import com.sansen.yeweiyi.logic.export.RecordExportColumns;
+import com.sansen.yeweiyi.utils.RecordExportUi;
+import com.sansen.yeweiyi.utils.CurrentTankLookup;
+import com.sansen.yeweiyi.manager.DBDataManager;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
+import java.util.Collections;
 
 public class CommitWorkRecortFragment extends BaseFragment implements OilCommitWorkAdapter.OnItemClickListener{
 
@@ -74,54 +66,12 @@ public class CommitWorkRecortFragment extends BaseFragment implements OilCommitW
 	@Override
 	protected void processClick(View v) {
 		if (v.getId()==R.id.ly_jiaoBanData){
-//			runOnUiThread(() -> {
-//				// 主线程操作
-//				ly_jiaoBanData.setVisibility(View.GONE);
-//			});
-//			SaveOutOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
-			// 按 id 倒序取数（与 findAllSorted 已有排序口径一致），与界面列表（isSort=true）顺序保持一致
-			lists = shiftRepository.findAllSorted(true);
-			// 每次导出重新组装：原来 dataset 是字段且从不清空，每行还被加两遍，罐删了会 NPE
-			dataset = ShiftExportRows.build(lists, tank -> {
-				OilCan oilCan = OilcanDataManager.getInstance(MyApplication.getInstance()).getData(tank);
-				return oilCan == null ? null : Const.getOilType(oilCan.getOilType());
-			});
-			SaveCommitOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
-
-
+			// 列定义见 RecordExportColumns（与列表表头一致，RecordExportHeadersTest 核对）；按 id 倒序取数，与界面列表（isSort=true）一致
+			RecordExportUi.export(main, "Oil_Shilt_record", RecordExportColumns.shift(CurrentTankLookup.INSTANCE),
+					() -> RecordExportColumns.shiftTankRows(shiftRepository.findAllSorted(true),
+							info -> info == null ? Collections.<OilWork>emptyList() : DBDataManager.stringToArray(info, OilWork[].class)));
 		}
 
-	}
-	private List<OilWork> dataset = new ArrayList<>();
-	private void SaveCommitOIl(String path) {
-		Log.e("TAG 路径",path);
-		ExportExcel<OilWork> exportExcel = new ExportExcel<OilWork>();
-		String headers[] = { "介质",SystemUtils.getRsStr(R.string.tank_no),"开始时间", "结束时间",SystemUtils.getRsStr(R.string.beginHeight), SystemUtils.getRsStr(R.string.endHeight), "前量", "后量","出库量l","出库量kg"};
-		// = MyApplication.getInstance().getmDBManager().findAllObject(OilWork.class);
-		File file = new File(path);
-		if (!file.exists())
-			file.mkdir();
-		OutputStream out = null;
-		try {
-			file = new File(path + "/" + "Oil_Shilt_record" + ".xls");
-			out = new FileOutputStream(file);
-			exportExcel.exportExcel(headers, dataset,
-					new OilWork().getParams(), out, new ExcelListener() {
-						@Override
-						public void Success(boolean isTrue) {
-							runOnUiThread(() -> {
-								// 主线程操作
-								ly_jiaoBanData.setVisibility(View.VISIBLE);
-							});
-
-						}
-					});
-			out.close();
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
 	}
 	@Override
 	protected void initData(Bundle savedInstanceState) {

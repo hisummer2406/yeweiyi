@@ -3,7 +3,9 @@ package asynmsg.manage;
 import android.databinding.ObservableField;
 import android.util.Log;
 
+import com.sansen.yeweiyi.applog.RelayLog;
 import com.sansen.yeweiyi.bean.Relay;
+import com.sansen.yeweiyi.logic.relay.Serial4Frame;
 import com.sansen.yeweiyi.intf.IHardIntf;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.CRCheck;
@@ -223,35 +225,17 @@ public class AsyManager implements IHardIntf {
 
     @Override
     public void openOne(int relayNo, int isAutoClose, ObservableManager.ReciveListener reciveListener) {
+        byte chain = (byte) getChainNumber().shortValue();
+        byte[] frame;
         if (Singleton.getInstance().ChuanKou4){
-            byte chain = (byte) getChainNumber().shortValue();
-            byte[] bytes = new byte[1];
-            bytes[0] = (byte) relayNo;
-            StringBuffer sb = new StringBuffer();
-            // sb.append(command);
-            sb.append( "01");
-            sb.append("0600");
-
-            sb.append(String.format("%02d", relayNo-1));
-            sb.append("00");
-            sb.append(String.format("%02d", isAutoClose));
-            String crc = getString(CRCheck.crc162(DataUtils.HexString2Bytes(sb.toString())));
-            sb.append(crc);
-            manager.sendData( new byte[]{0, chain},DataUtils.HexString2Bytes(sb.toString()), 3000, reciveListener);
+            frame = Serial4Frame.modbusWrite(relayNo, isAutoClose);
+            RelayLog.onCommand(relayNo, "Modbus", isAutoClose, frame);
         }
         else {
-            byte chain = (byte) getChainNumber().shortValue();
-            byte[] bytes = new byte[1];
-            bytes[0] = (byte) relayNo;
-            StringBuffer sb = new StringBuffer();
-            // sb.append(command);
-            sb.append("FEFE0101");
-            sb.append(String.format("%02d", relayNo+2) );
-            sb.append(String.format("%02d", isAutoClose));
-            String crc = getString(CRCheck.crc12(sb.toString().length(),DataUtils.HexString2Bytes(sb.toString())));
-            sb.append(crc);
-            manager.sendData( new byte[]{0, chain},DataUtils.HexString2Bytes(sb.toString()), 3000, reciveListener);
+            frame = Serial4Frame.overflowValve(relayNo, isAutoClose);
+            RelayLog.onCommand(relayNo, "防溢柜", isAutoClose, frame);
         }
+        manager.sendData(new byte[]{0, chain}, frame, 3000, reciveListener);
 
         // System.out.println("CRC:" + crc+"---"+sb.toString());
 

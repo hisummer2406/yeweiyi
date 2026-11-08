@@ -55,6 +55,22 @@
         <item>Methyl</item>
         <item>Dimethyl</item>
         <item>Solvent Oil</item>
+        <item>PG</item>
+        <item>Ethanol</item>
+        <item>Soy Oil</item>
+        <item>Palm Oil</item>
+        <item>Tire Oil</item>
+        <!-- 以下 6 项 2026-11-02 AI 翻译，待 review；P2/З2/Z2 = 二厂 -->
+        <item>Paraffin</item>
+        <item>DCM</item>
+        <item>P2 HCl</item>
+        <item>P2 Etch Acid</item>
+        <item>P2 NaOH</item>
+        <item>P2 H₂SO₄</item>
+        <!-- 以下 3 项 2026-11-04 AI 翻译，待 review -->
+        <item>Drainer</item>
+        <item>E. Drain</item>
+        <item>W. Drain</item>
         <item>Blank</item>
     </string-array>
 
@@ -149,11 +165,6 @@
     <string-array name="guan_type">
         <item>Horizontal Tank</item>
         <item>Vertical Tank</item>
-    </string-array>
-    <string-array name="language">
-        <item>Chinese</item>
-        <item>English</item>
-        <item>Spanish</item>
     </string-array>
     <string-array name="yewei_unit">
         <item>mm</item>

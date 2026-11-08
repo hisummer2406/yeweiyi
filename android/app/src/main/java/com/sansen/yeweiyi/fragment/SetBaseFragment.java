@@ -38,9 +38,9 @@ import java.util.Locale;
  */
 public class SetBaseFragment extends BaseFragment implements OnItemClickListener, TextWatcher, AdapterView.OnItemSelectedListener {
 
-    // 顺序必须跟 R.array.language（中文/英文/西班牙语）的 item 顺序一一对应，
+    // 顺序必须跟 R.array.language（中文/英文/西班牙语/俄语/乌兹别克语）的 item 顺序一一对应，
     // Spinner 的下标直接映射这里的下标
-    private static final String[] LANGUAGE_CODES = {"zh", "en", "es"};
+    private static final String[] LANGUAGE_CODES = {"zh", "en", "es", "ru", "uz"};
 
     private Spinner sp_yuyan, sp_yewei, sp_rongji, sp_zhiliang;
     private EditText et_outTime, et_outHight, et_inTime, et_inHight;
@@ -146,7 +146,7 @@ public class SetBaseFragment extends BaseFragment implements OnItemClickListener
         return lists;
     }
 
-    // LANGUAGE_CODES 里找不到（理论上不会发生，未来万一系统语言不在这三者之内）时落回中文
+    // LANGUAGE_CODES 里找不到（理论上不会发生，未来万一系统语言不在这几种之内）时落回中文
     private static int languageCodeToIndex(String languageCode) {
         for (int i = 0; i < LANGUAGE_CODES.length; i++) {
             if (LANGUAGE_CODES[i].equals(languageCode)) {

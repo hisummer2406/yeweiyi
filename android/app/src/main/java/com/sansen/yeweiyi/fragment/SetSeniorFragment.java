@@ -72,7 +72,7 @@ public class SetSeniorFragment extends BaseFragment {
                 main.switchContent(main.mContent, thingsBoardSetFragment);
                 break;
             case R.id.ly_export_log:
-                LogExportUi.exportAndToast();
+                LogExportUi.exportAndToast(main);
                 break;
             case R.id.ly_upper_page:
                 if (main.setFragment == null) {

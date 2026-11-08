@@ -85,7 +85,7 @@ type StockEvent struct {
 	// BeginWeightKg/EndWeightKg cannot stand in for it: their difference includes what was sold during
 	// a delivery. Absent on manual entries (no density snapshot) and on older firmware (cloud#85).
 	DeliveredWeightKg *float64 `json:"deliveredWeightKg,omitempty"`
-	// OilTypeIndex is the device's oil table index (0 unset, 1–17 built in, 18–25 custom), independent
+	// OilTypeIndex is the device's oil table index (0 unset, 1–31 built in, 32–39 custom; firmware before test build E used 18–25 for custom, #11), independent
 	// of the display language OilType was rendered in. Absent on manual entries and older firmware.
 	OilTypeIndex *int `json:"oilTypeIndex,omitempty"`
 

@@ -233,6 +233,9 @@
          （不是英文那边的"End socket A"），所以译文跟着字段标签走，不是逐字翻英文。 -->
     <string name="createtable_a_nonull">R no puede estar vacío</string>
     <string name="createtable_import_success">Importado al tanque Nº %1$d</string>
+    <string name="createtable_multi_import_confirm">Se sobrescribirán las tablas de los tanques %1$s. ¿Importar?</string>
+    <string name="createtable_multi_import_success">Tablas importadas para los tanques %1$s</string>
+    <string name="createtable_sheet_name_invalid">Hoja \"%1$s\" no válida: use Nº de tanque 1–%2$d. No se importó nada.</string>
     <string name="datamanager_chek_out">La ruta no existe, verifique el dispositivo externo</string>
     <string name="view_tank_chart">Ver Tabla del Tanque</string>
     <string name="height_oil_alarm">Alarma Nivel Alto</string>

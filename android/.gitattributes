@@ -21,3 +21,6 @@
 *.apk  binary
 *.jks  binary
 *.keystore binary
+*.doc  binary
+*.docx binary
+*.pdf  binary

@@ -60,6 +60,8 @@ public class SharePrefUtil {
     // 做不到"每台设备独立凭据"。
     public static final String TB_DEVICE_ID = "tbDeviceId";
     public static final String TB_ACCESS_TOKEN = "tbAccessToken";
+    /** 连接成功过的编号，配网页据此锁定编号和令牌，见 ThingsBoardCredentialStore#markConnected。 */
+    public static final String TB_CONNECTED_DEVICE_ID = "tbConnectedDeviceId";
 
     public static final String BrandSet = "BrandSet";
     private static SharedPreferences sp;

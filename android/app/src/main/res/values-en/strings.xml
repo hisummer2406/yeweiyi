@@ -216,6 +216,9 @@
     <string name="createtable_daorudao">Import to</string>
     <string name="createtable_tanksucess">tank</string>
     <string name="createtable_import_success">Imported to tank No.%1$d</string>
+    <string name="createtable_multi_import_confirm">The tank charts of tank(s) %1$s will be overwritten. Import?</string>
+    <string name="createtable_multi_import_success">Tank charts imported for tank(s) %1$s</string>
+    <string name="createtable_sheet_name_invalid">Invalid sheet name \"%1$s\": use tank No. 1–%2$d. Nothing imported.</string>
     <string name="oilcantable_copy_success">Copy successfully</string>
     <string name="oilcan_height">Tank height H：</string>
     <string name="oilcan_length">Tank length L：</string>

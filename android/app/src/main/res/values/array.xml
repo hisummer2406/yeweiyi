@@ -58,6 +58,20 @@
         <item>甲酯</item>
         <item>二甲酯</item>
         <item>溶剂油</item>
+        <item>丙二醇</item>
+        <item>乙醇</item>
+        <item>大豆油</item>
+        <item>棕榈油</item>
+        <item>轮胎油</item>
+        <item>石蜡</item>
+        <item>二氯甲烷</item>
+        <item>二厂盐酸</item>
+        <item>二厂酸蚀</item>
+        <item>二厂液碱</item>
+        <item>二厂硫酸</item>
+        <item>排水器</item>
+        <item>东排水</item>
+        <item>西排水</item>
         <item>空白</item>
     </string-array>
 
@@ -162,10 +176,14 @@
         <item>卧罐</item>
         <item>立罐</item>
     </string-array>
-    <string-array name="language">
+    <!-- 语言选择下拉框（SetBaseFragment.LANGUAGE_CODES 与之一一对应）：每种语言固定显示本语言自称，
+         不随界面语言变，所以只在这里定义、不进任何 values-xx 覆盖。 -->
+    <string-array name="language" translatable="false">
         <item>中文</item>
-        <item>英文</item>
-        <item>西班牙语</item>
+        <item>English</item>
+        <item>Español</item>
+        <item>Русский</item>
+        <item>O‘zbekcha</item>
     </string-array>
     <string-array name="yewei_unit">
         <item>毫米</item>

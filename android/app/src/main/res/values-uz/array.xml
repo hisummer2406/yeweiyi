@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 乌兹别克语数组：来源 temp/new_strings/中成系统多语言文案对照表_2026-09-23 (1).xlsx「数组文案对照」。
+         只放可达的数组（同 values-es）；数组按整组替换，条数必须与 values/array.xml 一致。
+         language 是 translatable="false"，不在这里覆盖。 -->
+    <string-array name="set_array">
+        <item>Bak sozlamalari</item>
+        <item>Jadval sozlamalari</item>
+        <item>Parol sozlamalari</item>
+        <item>Asosiy sozlamalar</item>
+        <item>Yozuvlar sozlamalari</item>
+        <item>Kengaytirilgan sozlamalar</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>Gorizontal idish</item>
+        <item>Vertikal idish</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>mm</item>
+        <item>m</item>
+    </string-array>
+    <!-- 下标 2（加仑）工作簿原缺失，AI 补「gallon」待 review，已补回在线表格并标红 -->
+    <string-array name="rongji_unit">
+        <item>L</item>
+        <item>m³</item>
+        <item>gallon</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>kg</item>
+        <item>t</item>
+    </string-array>
+    <string-array name="oilcanArray">
+        <item>1-bak</item>
+        <item>2-bak</item>
+        <item>3-bak</item>
+        <item>4-bak</item>
+        <item>5-bak</item>
+        <item>6-bak</item>
+        <item>7-bak</item>
+        <item>8-bak</item>
+        <item>9-bak</item>
+        <item>10-bak</item>
+        <item>11-bak</item>
+        <item>12-bak</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>Mahsulot</item>
+        <item>Sathi</item>
+        <item>Hajmi</item>
+        <item>Og\'irligi</item>
+        <item>Bo\'sh hajm</item>
+        <item>Suv sathi</item>
+        <item>Suv hajmi</item>
+        <item>Harorat</item>
+    </string-array>
+    <string-array name="oiltypeArray">
+        <item>Sozlanmagan</item>
+        <item>0#</item>
+        <item>-10#</item>
+        <item>-20#</item>
+        <item>-35#</item>
+        <item>92#</item>
+        <item>95#</item>
+        <item>98#</item>
+        <item>Metanol</item>
+        <item>Toluol</item>
+        <item>Guruch kepagi moyi</item>
+        <item>Sulfat kislota</item>
+        <item>Ksilol</item>
+        <item>n-butil</item>
+        <item>sek-butil</item>
+        <item>Metil</item>
+        <item>Dimetil</item>
+        <item>Solvent</item>
+        <item>PG</item>
+        <item>Etanol</item>
+        <item>Soya moyi</item>
+        <item>Palma moyi</item>
+        <item>Shina moyi</item>
+        <!-- 以下 6 项 2026-11-02 AI 翻译，待 review；P2/З2/Z2 = 二厂 -->
+        <item>Parafin</item>
+        <item>DXM</item>
+        <item>Z2 HCl</item>
+        <item>Z2 Xurish k-ta</item>
+        <item>Z2 NaOH</item>
+        <item>Z2 H₂SO₄</item>
+        <!-- 以下 3 项 2026-11-04 AI 翻译，待 review -->
+        <item>Drenaj q-ma</item>
+        <item>Sharq. drenaj</item>
+        <item>G\'arb. drenaj</item>
+        <item>Bo\'sh</item>
+    </string-array>
+</resources>

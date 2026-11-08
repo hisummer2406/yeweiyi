@@ -81,6 +81,15 @@ object AlarmLog {
             "threshold", can.highTempAlarm)
     }
 
+    /** 超高温阈值但没持续满确认时长就回落（HighTempConfirmer.DISMISSED），没有报警。 */
+    @JvmStatic
+    fun onHighTempDismissed(can: OilCan?, overMs: Long) = logSafely(TAG) {
+        if (can == null) return@logSafely
+        AppLog.w(LogModule.ALARM, "高温未确认", "pos", can.oilCanPos, "overMs", overMs,
+            "tempNow", can.temper, "threshold", can.highTempAlarm)
+        ProbeLog.dumpRecentFrames(can.oilCanPos, "高温未确认")
+    }
+
     /**
      * 主界面"解警"按钮（AlarmCoordinator.btn_jieJing）：在复位各罐标志之前调用，记下当时有哪些罐在报警。
      * 解警只消声光、不代表报警条件消失，所以单独记一条，不当作恢复。

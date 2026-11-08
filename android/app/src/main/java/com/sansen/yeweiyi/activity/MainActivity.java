@@ -67,6 +67,7 @@ import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.SystemUtils;
+import com.sansen.yeweiyi.utils.StoragePermission;
 import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.web.handler.ServerManager;
 
@@ -236,7 +237,7 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
                     oilCan.setOilVolume(DataUtils.doubleFoment(oilVolume));
                     oilCan.setOilWeight(DataUtils.doubleFoment(oilCan
                             .getDensity() * oilCan.getOilVolume()));
-                    oilCan.setTemper(BigDecimal.valueOf(oilTest.getTemp()).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
+                    oilCan.setTemperRead(BigDecimal.valueOf(oilTest.getTemp()).add(BigDecimal.valueOf(oilCan.getTempCorrection())).doubleValue());
                     oilRoate = (int) ((oilCan.getOilLevel() / oilCan
                             .getMaxHeight()) * 100);
 
@@ -316,6 +317,12 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
         }
 
     }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        StoragePermission.onRequestResult(this, requestCode, grantResults);
+    }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -383,7 +390,8 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
     public void refreshData(OilCan oilCan, int errorTimesAtParse, double oilLevelAtParse) {
         if (oilCan != null) {
             inOutOilDection(oilCan, errorTimesAtParse, oilLevelAtParse);
-            if (Singleton.getInstance().StockTime > 0) {
+            // 只有"生成库存记录"选是且生成时间 > 0 小时才定时生成；不满足时清零起点，重新满足后从头计时
+            if (Singleton.getInstance().IsCreatStock && Singleton.getInstance().StockTime > 0) {
                 currenTime = System.currentTimeMillis() / 1000;
                 if (currenTime - startTime > Singleton.getInstance().StockTime) {
                     if (startTime != 0) {
@@ -393,6 +401,8 @@ public class MainActivity extends BaseActivity implements DataResolveListener {
 
                 }
 
+            } else {
+                startTime = 0;
             }
         }
     }

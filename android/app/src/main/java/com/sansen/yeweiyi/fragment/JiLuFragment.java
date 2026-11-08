@@ -293,14 +293,10 @@ public class JiLuFragment extends BaseFragment implements CompoundButton.OnCheck
             @Override
             public void afterTextChanged(Editable editable) {
                 String et = editable.toString().trim();
-                if (!et.isEmpty()) {
-                    time = Integer.parseInt(editable.toString().trim());
-                    if (time > 0) {
-
-                        SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.StockTime, time);
-                        Singleton.getInstance().getSetData(Constans.StockTime);
-                    }
-                }
+                // 0 和清空都按 0 小时保存（不生成），否则会沿用上次的间隔继续生成
+                time = et.isEmpty() ? 0 : Integer.parseInt(et);
+                SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.StockTime, time);
+                Singleton.getInstance().getSetData(Constans.StockTime);
 
 
             }

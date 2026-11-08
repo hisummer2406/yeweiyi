@@ -16,6 +16,8 @@ import com.sansen.yeweiyi.bean.OilMessage;
 import com.sansen.yeweiyi.factory.IParseDataListener;
 import com.sansen.yeweiyi.factory.LD2Company;
 import com.sansen.yeweiyi.factory.LDCompany;
+import com.sansen.yeweiyi.factory.ModbusTcpServer;
+import com.sansen.yeweiyi.applog.ExternalLog;
 import com.sansen.yeweiyi.factory.PCDataFactory;
 import com.sansen.yeweiyi.factory.VR350Factory;
 import com.sansen.yeweiyi.factory.ZhongChengCompany;
@@ -84,6 +86,7 @@ public class SerialPortManager implements IParseDataListener {
     private Context mContext;
 
     private OilcanDataManager mOilCanDataManager;
+    private ModbusTcpServer modbusTcpServer;
 
     private boolean isStopProbe = true;
     private SerialPortHelper Censtar;
@@ -160,6 +163,17 @@ public class SerialPortManager implements IParseDataListener {
 
         requestThread_2 = new RequestThread("Request02", serialPortS2);
         requestThread_2.start();
+
+        startModbusTcpServer();
+    }
+
+    /** 对外 Modbus 的 TCP 通道（端口 5020，RTU over TCP 和标准 Modbus TCP 都支持），与串口 5 并行，不受后台协议选择影响 */
+    private void startModbusTcpServer() {
+        final OilcanDataManager dataManager = mOilCanDataManager;
+        modbusTcpServer = new ModbusTcpServer(ModbusTcpServer.DEFAULT_PORT,
+                request -> VR350Factory.buildModbusResponse(dataManager, request),
+                ExternalLog.INSTANCE);
+        modbusTcpServer.start();
     }
 
     public void stopProbeThread() {

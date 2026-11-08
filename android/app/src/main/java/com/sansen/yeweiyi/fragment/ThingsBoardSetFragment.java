@@ -31,9 +31,13 @@ import bean.IPBean;
  */
 public class ThingsBoardSetFragment extends BaseFragment {
 
+    /** 贴纸编号的固定前缀（如 ZCT000001），未配置时预填，现场只需补数字。 */
+    private static final String DEVICE_ID_PREFIX = "ZCT";
+
     private EditText et_broker_host, et_broker_port, et_device_id, et_access_token;
     private TextView tv_connection_status;
     private LinearLayout ly_saveData, ly_upper_page;
+    private boolean credentialsLocked;
 
     @Override
     protected View initView(LayoutInflater inflater) {
@@ -71,7 +75,8 @@ public class ThingsBoardSetFragment extends BaseFragment {
         et_broker_host.setText(ipBean.getIp());
         et_broker_port.setText(String.valueOf(ipBean.getPort()));
         DeviceCredentials credentials = new ThingsBoardCredentialStore(main.getApplicationContext()).load();
-        et_device_id.setText(credentials.getDeviceId());
+        et_device_id.setText(TextUtils.isEmpty(credentials.getDeviceId())
+                ? DEVICE_ID_PREFIX : credentials.getDeviceId());
         et_access_token.setText(credentials.getAccessToken());
         updateConnectionStatus();
 
@@ -89,6 +94,7 @@ public class ThingsBoardSetFragment extends BaseFragment {
         ThingsBoardManager.ProvisionStatus status = manager.getProvisionStatus();
         String provision = describeProvisionStatus(status);
         tv_connection_status.setText(provision == null ? text : text + "\n" + provision);
+        lockCredentialsIfConnectedBefore();
         if (status.state == ThingsBoardManager.ProvisionState.SUCCESS) {
             fillProvisionedToken();
         }
@@ -102,6 +108,25 @@ public class ThingsBoardSetFragment extends BaseFragment {
         DeviceCredentials stored = new ThingsBoardCredentialStore(main.getApplicationContext()).load();
         if (stored.isValid() && stored.getDeviceId().equals(et_device_id.getText().toString().trim())) {
             et_access_token.setText(stored.getAccessToken());
+        }
+    }
+
+    /**
+     * 当前编号连接成功过就锁定编号和令牌，断网、重启后同样锁：换编号会覆盖旧编号的令牌，而云端每个编号
+     * 只允许领一次，换回去必然领取失败。令牌解不开时不锁，留给现场手填令牌恢复。
+     */
+    private void lockCredentialsIfConnectedBefore() {
+        if (credentialsLocked) {
+            return;
+        }
+        ThingsBoardCredentialStore store = new ThingsBoardCredentialStore(main.getApplicationContext());
+        if (!store.hasConnected() || store.hasUnreadableToken()) {
+            return;
+        }
+        credentialsLocked = true;
+        for (EditText et : new EditText[]{et_device_id, et_access_token}) {
+            et.setEnabled(false);
+            et.setAlpha(0.5f);
         }
     }
 
@@ -166,7 +191,8 @@ public class ThingsBoardSetFragment extends BaseFragment {
             ToastUtils.showToast(SystemUtils.getRsStr(R.string.tb_port_out_of_range), 5);
             return;
         }
-        if (TextUtils.isEmpty(deviceId)) {
+        // 只有预填的前缀等于没填
+        if (TextUtils.isEmpty(deviceId) || deviceId.equalsIgnoreCase(DEVICE_ID_PREFIX)) {
             ToastUtils.showToast(SystemUtils.getRsStr(R.string.tb_device_id_empty), 5);
             return;
         }

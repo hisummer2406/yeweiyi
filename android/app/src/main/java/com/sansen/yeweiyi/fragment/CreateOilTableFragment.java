@@ -2,6 +2,7 @@ package com.sansen.yeweiyi.fragment;
 
 
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
@@ -16,6 +17,8 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -25,24 +28,28 @@ import android.widget.TextView;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.activity.ActivityDialog;
 import com.sansen.yeweiyi.adapter.GuanBiaoAdapter;
+import com.sansen.yeweiyi.applog.AppLog;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.GuanBiaoData;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.db.OilCanTable;
-import com.sansen.yeweiyi.db.OilTable;
 import com.sansen.yeweiyi.factory.EllipseTable;
 import com.sansen.yeweiyi.factory.ICreateTable;
 import com.sansen.yeweiyi.listener.EndLessOnScrollListener;
-import com.sansen.yeweiyi.listener.ExcelListener;
 import com.sansen.yeweiyi.logic.Const;
-import com.sansen.yeweiyi.logic.ExportExcel;
+import com.sansen.yeweiyi.logic.applog.LogModule;
+import com.sansen.yeweiyi.logic.export.RecordExportColumns;
+import com.sansen.yeweiyi.logic.oiltable.MultiSheetAssignment;
+import com.sansen.yeweiyi.logic.oiltable.OilTableSheet;
+import com.sansen.yeweiyi.logic.oiltable.OilTableSheetReader;
 import com.sansen.yeweiyi.manager.RecyclerViewNoBugLinearLayoutManager;
 import com.sansen.yeweiyi.repository.OilTankRepository;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.manager.ThreadManager;
 import com.sansen.yeweiyi.utils.DateUtils;
-import com.sansen.yeweiyi.utils.FileSizeUtil;
 import com.sansen.yeweiyi.utils.KeyboardAdjustHelper;
+import com.sansen.yeweiyi.utils.RecordExportUi;
+import com.sansen.yeweiyi.utils.StoragePermission;
 import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.ToastUtils;
 import com.sansen.yeweiyi.view.MyDecoration;
@@ -51,11 +58,10 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import kotlin.Pair;
 
 import static com.lzy.okgo.utils.HttpUtils.runOnUiThread;
 
@@ -206,20 +212,14 @@ public class CreateOilTableFragment extends BaseFragment {
     protected void processClick(View v) {
         switch (v.getId()) {
             case R.id.createtable_bt_writeoilcan:
-
-                if (temps!=null&&temps.size()>0){
-                    dataset.clear();
-                    for (int i=0;i<temps.size();i++){
-                        OilTable oilTable=new OilTable();
-                        oilTable.setHeight(temps.get(i).getHight());
-                        oilTable.setVolum(temps.get(i).getRongJi());
-                        dataset.add(oilTable);
-
-                    }
-                    SaveTable(Environment.getExternalStorageDirectory().getAbsolutePath());
+                if (temps == null || temps.isEmpty()) {
+                    SystemUtils.showRsToast(R.string.createtable_createbable);
+                    break;
                 }
-
-
+                // 同记录页导出：loading + 后台写 /sdcard/Oil_Table_record.xls + 结果提示（权限在 RecordExportUi 内申请）。
+                // temps 会被 setMyAdapter 在主线程清空重填，先拷一份给后台线程
+                List<GuanBiaoData> rows = new ArrayList<>(temps);
+                RecordExportUi.export(main, "Oil_Table_record", RecordExportColumns.OIL_TABLE, () -> rows);
                 break;
             case R.id.createtable_bt_build:
                 createtable_bt_build(v);
@@ -228,7 +228,10 @@ public class CreateOilTableFragment extends BaseFragment {
             case R.id.createtable_bt_saveoilcan:
                // SaveInOIl(Environment.getExternalStorageDirectory().getAbsolutePath());
                 Log.e("TAG", "导入罐表");
-                readLocation();
+                // 没有存储权限时先申请，授权后自动接着读 U 盘；授权回来时页面可能已切走
+                StoragePermission.ensure(main, () -> {
+                    if (isAdded()) readLocation();
+                });
                 break;
             case R.id.ly_upper_page:
 
@@ -255,37 +258,6 @@ public class CreateOilTableFragment extends BaseFragment {
                 break;
         }
     }
-    List<OilTable> dataset =new ArrayList<>();
-    private void SaveTable(String path) {
-        Log.e("TAG 路径", path);
-        ExportExcel<OilTable> exportExcel = new ExportExcel<OilTable>();
-        String headers[] = { "高度", "容积"};
-      //  List<OilTable> dataset = MyApplication.getInstance().getmDBManager().findAllObject(OilInOut.class);
-        File file = new File(path);
-        if (!file.exists())
-            file.mkdir();
-        OutputStream out = null;
-        try {
-            file = new File(path + "/" + "Oil_Table_record" + ".xls");
-            out = new FileOutputStream(file);
-            exportExcel.exportExcel(headers, dataset,
-                    new OilTable().getParams(), out, new ExcelListener() {
-                        @Override
-                        public void Success(boolean isTrue) {
-                            runOnUiThread(() -> {
-                                // 主线程操作
-                               // ly_ruKu.setVisibility(View.VISIBLE);
-                            });
-                        }
-                    });
-            out.close();
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        double size = FileSizeUtil.getFileOrFilesSize(file.getAbsolutePath(), FileSizeUtil.SIZETYPE_KB);
-    }
-
     public void readLocation() {
 
         ThreadManager.getLongPool().execute(readRunnable);
@@ -329,18 +301,22 @@ public class CreateOilTableFragment extends BaseFragment {
         int score = 100;
         System.out.println(score);
 
-        ExportExcel<Object> excel = new ExportExcel<Object>();
         // String path = "/storage/usbhost1";
-        InputStream is = null;
         File file = new File(path + "/" + "Oil_Table_record" + ".xls");
         try {
             if (file.exists()) {
 
-                is = new FileInputStream(file);
-
                 Log.e("TAG","导入罐表");
-                createOilCanTalbe = excel
-                        .readExcelOilCanTableContent(is);
+                List<OilTableSheet> sheets = OilTableSheetReader.read(new FileInputStream(file));
+                // 多 sheet：sheet 名称即罐号，确认后批量写入
+                if (OilTableSheetReader.isMultiSheet(sheets)) {
+                    MultiSheetAssignment assignment = OilTableSheetReader.assignByName(sheets);
+                    runOnUiThread(() -> onMultiSheetRead(assignment));
+                    return;
+                }
+                // 单 sheet（或多个 sheet 但全是空的）：原流程，预览后再"复制到"某个罐；取值同原实现（最后一个 sheet）
+                createOilCanTalbe = sheets.isEmpty() ? new OilCanTable()
+                        : sheets.get(sheets.size() - 1).toOilCanTable(sheets.size());
 
                 runOnUiThread(new Runnable() {
                     @Override
@@ -349,7 +325,6 @@ public class CreateOilTableFragment extends BaseFragment {
                     }
                 });
 
-                is.close();
                 ToastUtils.showToastLong("Read Success");
             } else {
                 ToastUtils.showToastLong(R.string.datamanager_chek_out);
@@ -361,6 +336,57 @@ public class CreateOilTableFragment extends BaseFragment {
         }
 
     }
+    /** 多 sheet 导入：有 sheet 名称不合规则整份不导入；否则弹框确认后按罐号逐个写入（写法同"复制到"）。 */
+    private void onMultiSheetRead(MultiSheetAssignment assignment) {
+        // 读文件在后台线程，回到主线程时页面可能已离开，此时 getResources() 会抛异常
+        if (!isAdded()) return;
+        if (assignment instanceof MultiSheetAssignment.InvalidName) {
+            String sheetName = ((MultiSheetAssignment.InvalidName) assignment).getSheetName();
+            ToastUtils.showToastLong(SystemUtils.getRsStr(R.string.createtable_sheet_name_invalid,
+                    sheetName, OilTableSheetReader.MAX_TANK_NO));
+            return;
+        }
+        List<Pair<Integer, OilTableSheet>> tanks = ((MultiSheetAssignment.Ok) assignment).getTanks();
+        // 调用方已用 isMultiSheet 保证至少一个 sheet 有数据，这里再兜底：空列表时后面的 get(0) 会越界
+        if (tanks.isEmpty()) return;
+        String tankNos = OilTableSheetReader.joinTankNos(tanks);
+
+        View customView = LayoutInflater.from(main).inflate(R.layout.dialog_custom_alert, null);
+        TextView title = customView.findViewById(R.id.tv_alert_title);
+        TextView message = customView.findViewById(R.id.tv_alert_message);
+        title.setText(R.string.usb_import);
+        message.setText(SystemUtils.getRsStr(R.string.createtable_multi_import_confirm, tankNos));
+        AlertDialog dialog = new AlertDialog.Builder(main)
+                .setView(customView)
+                .create();
+        customView.findViewById(R.id.btn_cancel).setOnClickListener(view -> dialog.dismiss());
+        customView.findViewById(R.id.btn_confirm).setOnClickListener(view -> {
+            dialog.dismiss();
+            writeTankTables(tanks, tankNos);
+        });
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            // 同 AlarmFragment 的确认框：宽度固定、高度随内容
+            int width = (int) (540 + 2 * getResources().getDisplayMetrics().density);
+            window.setLayout(width, WindowManager.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private void writeTankTables(List<Pair<Integer, OilTableSheet>> tanks, String tankNos) {
+        for (Pair<Integer, OilTableSheet> tank : tanks) {
+            OilCanTable table = tank.getSecond().toOilCanTable(tank.getFirst());
+            table.setGmt_modified(DateUtils.getYYYMMddHHmmss());
+            oilTankRepository.updateOilCanTable(table);
+        }
+        AppLog.w(LogModule.SYSTEM, "罐表多sheet导入", "file", "Oil_Table_record.xls",
+                "points", OilTableSheetReader.describePoints(tanks));
+        SystemUtils.showRsToast(SystemUtils.getRsStr(R.string.createtable_multi_import_success, tankNos));
+        // 列表预览第一个导入的罐，便于核对
+        createOilCanTalbe = tanks.get(0).getSecond().toOilCanTable(tanks.get(0).getFirst());
+        setMyAdapter();
+    }
+
     private void setMyAdapter (){
         showTemps.clear();
         temps.clear();

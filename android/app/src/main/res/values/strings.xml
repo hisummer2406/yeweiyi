@@ -216,6 +216,9 @@
     <string name="createtable_daorudao">导入到</string>
     <string name="createtable_tanksucess">号储罐 </string>
     <string name="createtable_import_success">导入到%1$d号储罐 </string>
+    <string name="createtable_multi_import_confirm">将覆盖 %1$s 号罐的罐表，确定导入？</string>
+    <string name="createtable_multi_import_success">已导入 %1$s 号罐的罐表</string>
+    <string name="createtable_sheet_name_invalid">Sheet 名称“%1$s”无效，应为 1～%2$d 的罐号，未导入</string>
     <string name="oilcantable_copy_success">复制成功</string>
     <string name="oilcan_height">H：</string>
     <string name="oilcan_length">L：</string>

@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Rect;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
 import android.location.Location;
@@ -21,6 +22,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
@@ -591,24 +593,29 @@ public abstract class BaseActivity extends FragmentActivity implements
             return false;
         }
 
-        // 如果点击的是EditText那么就不隐藏
         if (v instanceof EditText) {
-
-            // int[] l = { 0, 0 };
-            // v.getLocationInWindow(l);
-            // int left = l[0], top = l[1], bottom = top + v.getHeight(), right
-            // = left
-            // + v.getWidth();
-            // if (event.getX() > left && event.getX() < right
-            // && event.getY() > top && event.getY() < bottom) {
-            //
-            // }
-            return false;
+            // 点在任意输入框上不收（含切到另一个输入框，否则键盘会先收再弹闪一下），点其它地方才收
+            return !isTouchOnEditText(getWindow().getDecorView(), (int) event.getX(), (int) event.getY());
         } else {
             return true;
         }
-        // 如果焦点不是EditText则忽略，这个发生在视图刚绘制完，第一个焦点不在EditText上，和用户用轨迹球选择其他的焦点
+    }
 
+    /** x/y 是 decorView 坐标系（dispatchTouchEvent 收到的事件已扣除 adjustPan 的平移）。 */
+    private static boolean isTouchOnEditText(View view, int x, int y) {
+        if (view instanceof EditText) {
+            Rect r = new Rect();
+            return view.getGlobalVisibleRect(r) && r.contains(x, y);
+        }
+        if (view instanceof ViewGroup && view.getVisibility() == View.VISIBLE) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (isTouchOnEditText(group.getChildAt(i), x, y)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

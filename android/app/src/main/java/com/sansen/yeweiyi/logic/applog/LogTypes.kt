@@ -7,8 +7,10 @@ enum class LogModule(val defaultMaxBytes: Long) {
     PROBE(80 * LogConfig.MB),
     ALARM(30 * LogConfig.MB),
     CLOUD(30 * LogConfig.MB),
-    STOCK(30 * LogConfig.MB),
-    SYSTEM(30 * LogConfig.MB);
+    STOCK(10 * LogConfig.MB),
+    SYSTEM(30 * LogConfig.MB),
+    /** 对外协议：串口 5 后台协议 + Modbus TCP。上限从 STOCK 匀出，合计仍为 200MB */
+    EXTERNAL(20 * LogConfig.MB);
 
     /** 文件名前缀，如 `probe`。 */
     val fileTag: String get() = name.lowercase(Locale.US)

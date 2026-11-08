@@ -7,6 +7,7 @@ import android.util.SparseArray;
 import com.example.x6.gpioctl.GpioUtils;
 import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.applog.RelayLog;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.Singleton;
 import com.sansen.yeweiyi.utils.ToastUtils;
@@ -119,6 +120,9 @@ public class SoundLightManager {
 
     public void FYFL(int oilCanId, boolean isLLowAlarm) {
         if (!Singleton.getInstance().ChuanKou4) {
+            if (isLLowAlarm) {
+                RelayLog.onSkipped(oilCanId, "低低液位", "防溢柜协议下低低不下发");
+            }
             return;
         } else {
             modeType = 1;
@@ -275,11 +279,13 @@ public class SoundLightManager {
         AsyManager.getInstance().openOne(oilCanId, mod, new ObservableManager.ReciveListener() {
             @Override
             public void recive(int id, IAsyData object) {
+                RelayLog.onResult(oilCanId, true, Singleton.getInstance().ChuanKou4);
                 ToastUtils.showToastLong("Open Success " + oilCanId);
             }
 
             @Override
             public void error(int id) {
+                RelayLog.onResult(oilCanId, false, Singleton.getInstance().ChuanKou4);
                 ToastUtils.showToastLong("Open error " + oilCanId);
             }
         });

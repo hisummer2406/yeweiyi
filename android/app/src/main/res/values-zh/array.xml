@@ -48,6 +48,20 @@
         <item>甲酯</item>
         <item>二甲酯</item>
         <item>溶剂油</item>
+        <item>丙二醇</item>
+        <item>乙醇</item>
+        <item>大豆油</item>
+        <item>棕榈油</item>
+        <item>轮胎油</item>
+        <item>石蜡</item>
+        <item>二氯甲烷</item>
+        <item>二厂盐酸</item>
+        <item>二厂酸蚀</item>
+        <item>二厂液碱</item>
+        <item>二厂硫酸</item>
+        <item>排水器</item>
+        <item>东排水</item>
+        <item>西排水</item>
         <item>空白</item>
     </string-array>
     <string-array name="oilcanArray">

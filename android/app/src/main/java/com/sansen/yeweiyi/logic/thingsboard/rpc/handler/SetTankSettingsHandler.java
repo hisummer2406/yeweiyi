@@ -27,7 +27,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
 
     public static final String METHOD = "config.setTankSettings";
     static final int MAX_TANK = 16;
-    static final int MAX_OIL_TYPE_INDEX = 25;
+    static final int MAX_OIL_TYPE_INDEX = 39; // = oiltypeArray 条数 - 2（去掉"未设置""空白"）+ 8 个自定义位，改数组要同步
     /** 认识但不开放远程修改的字段：拒绝而不是忽略，云端发了是期望生效的，静默忽略会误以为改成功了。 */
     static final Set<String> CLOSED_FIELDS = new HashSet<>(Arrays.asList(
             "alarmLowTempC", "tankHeightMm", "probeAddress", "tankShape", "sensorLengthMm"));

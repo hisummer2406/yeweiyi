@@ -2,6 +2,7 @@ package asynmsg.manage;
 
 import android.util.Log;
 
+import com.sansen.yeweiyi.applog.RelayLog;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.DataUtils;
 
@@ -93,6 +94,9 @@ public class ObservableManager {
     private void sendMsg(byte[] bytes) {
         if (mainSerialPort == null) {
             throw new RuntimeException();
+        }
+        if (bytes != null && bytes.length > 0) {
+            RelayLog.onWrite(bytes, mainSerialPort.isOpen);
         }
         if (bytes != null && bytes.length > 0 && mainSerialPort.isOpen) {
             mainSerialPort.sendData(bytes);

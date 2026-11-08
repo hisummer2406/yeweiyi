@@ -1,14 +1,26 @@
 ---
 name: add-language
-description: Add a new UI language (locale) to 安卓液位仪 (com.sansen.yeweiyi), or refresh/finish an already-added non-Chinese/English language. Reads and updates the master workbook (temp/Android_strings/*.xlsx — 文案对照 + 数组文案对照 sheets), regenerates values-<lang>/strings.xml and array.xml, wires the language switcher (R.array.language + SetBaseFragment.LANGUAGE_CODES), and surfaces the 3 locale-specific images (sansen_logo/sw_true/sw_false) that need real design assets, not translation. Use whenever the user asks to add support for a new language, resume adding one that's partly done, or update an existing added language's translations.
+description: Add a new UI language (locale) to 安卓液位仪 (com.sansen.yeweiyi), or refresh/finish an already-added non-Chinese/English language. Reads and updates the master workbook — the online Tencent Docs sheet (https://docs.qq.com/sheet/DS2trbXdua0JPRWF1, via the tencent-docs MCP; not a downloaded .xlsx) — 文案对照 + 数组文案对照 sheets, regenerates values-<lang>/strings.xml and array.xml, wires the language switcher (R.array.language + SetBaseFragment.LANGUAGE_CODES), and surfaces the 3 locale-specific images (sansen_logo/sw_true/sw_false) that need real design assets, not translation. Use whenever the user asks to add support for a new language, resume adding one that's partly done, or update an existing added language's translations.
 metadata:
   author: session-2026-09-i18n-spanish
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Adding a language to 安卓液位仪
 
 This skill exists because Spanish (`es`) took a very long, expensive session to get right — multiple rounds of reachability auditing, two rounds of "you marked the wrong thing as unreachable," a missed resource *type* (`array.xml`, not just `strings.xml`), and two rounds of "the Excel highlighting convention is wrong." Every language after Spanish should be cheap by comparison, because the expensive part — figuring out *which* of the ~600 raw string keys and 17 arrays are actually reachable — is **already done and does not need to be redone.**
+
+## The workbook lives online — read and write it through the tencent-docs MCP (since 2026-10-18)
+
+The master workbook is the Tencent Docs sheet **https://docs.qq.com/sheet/DS2trbXdua0JPRWF1** (`file_id` = `DS2trbXdua0JPRWF1`). The user maintains it there and shares it with translators; local `.xlsx` files under `temp/` are stale downloads — **never read them as the source, never edit them**. If the user gives a different link, use that one (the `file_id` is the path segment after `/sheet/`).
+
+- Load tools with `ToolSearch` (`select:mcp__tencent-docs__sheet_get_sheet_info,mcp__tencent-docs__sheet_get_cell_data,mcp__tencent-docs__sheet_set_range_value,mcp__tencent-docs__sheet_set_cell_style,mcp__tencent-docs__sheet_insert_dimension`). If the MCP isn't connected, stop and ask the user to connect it — don't fall back to a local file.
+- `sheet_get_sheet_info` → sheet ids (as of 2026-10-18: `000001` 说明, `000002` 文案对照, `000004` 数组文案对照, `000003` 已确认不可达, `000005` 数组-已确认不可达 — re-check, don't hardcode). Read with `sheet_get_cell_data` + `return_csv: true`; rows/cols are 0-based, row 0 is the header.
+- Locate rows by the Key / 数组名+下标 columns of a fresh read, never by row numbers remembered from an earlier read or a local file — rows get inserted.
+- Write with `sheet_set_range_value` (batch), insert rows with `sheet_insert_dimension`, then **read the range back** to confirm.
+- "标红" (flagging a cell the user should look at — anything you changed or AI-filled): `sheet_set_cell_style` with `bg_color: FFF8CBAD`, `font_color: FFC00000`, `bold: true`, on that language's cells only (see Step 3).
+
+**Known defects in translator-supplied cells — the code's XML wins:** format specifiers come back mangled (`%1 $ d`, `%1 dd s`, `%1 d−raqamlid−raqamli s`, `%1$d` turned into `%1$s`), and cells carry stray trailing `\n` or leading tabs. When generating `values-<lang>/strings.xml`, restore the placeholders to match `values/strings.xml` (same indices and types — a wrong type crashes `String.format` at runtime) and trim whitespace; then write the corrected text back into the online cell and mark it red, so the sheet and the code agree.
 
 ## Scope: what this skill does NOT need to do
 
@@ -28,11 +40,11 @@ Ask the user (don't guess):
    - A design-draft export (Blue Lake / PSD) for this language — if one exists, re-extracting real UI copy from it beats AI translation every time. See `temp/Android_strings/README.md` and `PSD重新提取_核对报告.md` for the extraction methodology used for Spanish (`psd-tools`, board-relative coordinate matching, majority-vote dedup) if a new PSD needs the same treatment.
    - A user-provided batch of already-translated text (pasted directly, or a file) — apply verbatim, no AI involved, mark reviewed/trusted.
    - No source at all → AI-translate every row, but every single one must be flagged for human review (see "Status and highlighting" below). Never silently AI-fill without flagging — that produced three real bugs this session (`hour_unit`, `tank_density`, `tank_empty_capacity` all got marked "trusted" by mistake; ask the user for the `add-language` retrospective in this project's memory if you want the details).
-3. Confirm the current workbook filename — it's dated (`多语言文案对照表_YYYY-MM-DD.xlsx`) and gets regenerated over the project's life. `ls temp/Android_strings/*.xlsx` and use the most recent one; don't hardcode a filename.
+3. Confirm the workbook link — default is the online sheet above; ask only if the user mentions a new/different document.
 
 ## Step 1 — read the workbook, find where you are
 
-Open the workbook (`openpyxl`, not a rewrite from scratch) and inspect both live sheets' headers. As of the Spanish pass they are:
+Read both live sheets' headers from the online workbook (see "The workbook lives online" above). As of the Spanish pass they were (as of 2026-10-18 `乌兹别克斯坦语 | 俄语` columns follow `状态` without their own status columns — flag their AI/corrected cells by red highlighting instead):
 
 - `文案对照`: `Key | 所在页面 | 通俗页面说明 | 中文 | 英文 | 西班牙语 | 状态`
 - `数组文案对照`: `数组名 (string-array) | 下标 | 所在页面/消费者 | 通俗说明 | 中文 | 英文 | 西班牙语 | 状态`
@@ -80,7 +92,7 @@ Do **not** invent your own highlighting scheme. Copy the *exact* style — not j
 
 Apply that combined style **only to the new language's own translation column**, for rows whose new-language status is `AI待review`. Every other column in that row — Key, 所在页面, 中文, 英文, the *other* languages' columns and their statuses — stays plain/white, even if some other language's cell in that same row happens to also be under review. Highlighting is per-language-column, never per-row. (`文案对照` and `数组文案对照` were both wrongly whole-row-red at one point this session; if you ever see a row where non-translation columns are colored, that's the bug recurring — fix it the same way.)
 
-If you need to flag something about a cell *without* putting it in the translation value itself (e.g., "this English source text doesn't match Chinese, heads up") — use a native Excel comment (`openpyxl.comments.Comment`) attached to the relevant cell, never text concatenated into a value column. Concatenating a warning into a value corrupts data a copywriter or a script might read literally, and it happened once already this session (`oiltypeArray`'s English column had literal warning text glued onto "Sulfuric Acid").
+If you need to flag something about a cell *without* putting it in the translation value itself (e.g., "this English source text doesn't match Chinese, heads up") — mark the cell red and tell the user in chat (or ask them to add a comment in Tencent Docs), never text concatenated into a value column. Concatenating a warning into a value corrupts data a copywriter or a script might read literally, and it happened once already this session (`oiltypeArray`'s English column had literal warning text glued onto "Sulfuric Acid").
 
 ## Step 4 — generate values-\<lang\>/strings.xml and array.xml
 
@@ -107,9 +119,9 @@ Adding resource files alone does not make the new language selectable. Two more 
 
 `LanguageUtil.java` and `DataUtils.getOilType()` are already generic (the latter was fixed earlier this session specifically so a non-zh/non-en locale falls back safely instead of NPE-ing) — no changes needed there for a new language, but it's worth a quick read of `DataUtils.java`'s `getOilType()` comment to confirm that's still true before assuming it.
 
-## Step 6 — the 3 images that are NOT a translation task
+## Step 6 — the 3 images with baked-in text (`sansen_logo`/`sw_true`/`sw_false`)
 
-`app/src/main/res/drawable-<lang>-mdpi/{sansen_logo,sw_true,sw_false}.png` are graphic assets with text baked into the pixels (the logo carries a tagline; the two switch-toggle images carry on/off-style labels) — they cannot be produced by translating a string. Check whether they exist for the new language code; if they don't, **say so explicitly to the user and stop treating the language as complete until real artwork is supplied** — do not leave the directory empty and let it silently fall back to another locale's (or the default's) images, and do not attempt to fake them by cropping/relabeling another locale's PNG yourself. Compare against `drawable-mdpi/` (Chinese default) and `drawable-en-mdpi/`/`drawable-es-mdpi/` for the expected dimensions (`sansen_logo.png` ~650×50–90px depending on whether the language needs a taller image for a two-line tagline; `sw_true.png`/`sw_false.png` are 52×25) — flag a size mismatch as a sign the wrong asset was dropped in.
+These PNGs carry text in the pixels (the logo's tagline, the switch's on/off labels), so they can't be translated as strings. **Layout since 2026-10-18 (user decision):** the default `drawable-mdpi/` holds the **English** artwork, Chinese lives in `drawable-zh-mdpi/`, and Spanish keeps its own `drawable-es-mdpi/sw_true.png`/`sw_false.png` (its logo was identical to English, so it falls back to the default). Every other language — `en`, `ru`, `uz` and any future one — falls back to the English default automatically. So a new language needs **no** image directory: don't create `drawable-<lang>-mdpi/` unless the user supplies real localized artwork for it. If they do, compare dimensions with `drawable-mdpi/` (`sansen_logo.png` ~650×50–90px, `sw_true.png`/`sw_false.png` 52×25) and flag a mismatch. Never fake localized artwork by editing another locale's PNG.
 
 ## Step 7 — verify
 
