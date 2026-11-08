@@ -1,31 +1,66 @@
 <!-- 设计稿「参数修正07/08/09」。这是传感器读数的校准偏移量，不是修正已有出入库记录。
-     "保存到手机"是纯本地存储；"保存到控制器"协议里没有对应方法，点击时说明（见 calibration.ts）。 -->
-<view class="fc" style="padding:20rpx 0 18rpx;">
-  <view class="fr" id="row-tank" bindtap="onOpenTank">
-    <text class="fl">{{form.tankNo}}</text>
-    <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? form.select : tankOptions[tankIndex]}}</text>
-    <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
-  </view>
-  <view class="fr">
-    <text class="fl">{{text.levelOffset}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{levelOffset}}" bindinput="onLevelInput" />
-    <text class="fu">{{form.mm}}</text>
-  </view>
-  <view class="fr">
-    <text class="fl">{{text.waterOffset}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{waterOffset}}" bindinput="onWaterInput" />
-    <text class="fu">{{form.mm}}</text>
-  </view>
-  <view class="fr">
-    <text class="fl">{{text.tempOffset}}</text>
-    <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{tempOffset}}" bindinput="onTempInput" />
-    <text class="fu">℃</text>
-  </view>
+     「保存到手机」只存本机；「保存到控制器」= 管理员在设备开放远程配置时下发三项修正（#6，见 calibration.ts）。 -->
+<view wx:if="{{state !== 'ok' && state !== 'loading'}}" class="card banner-warning" style="margin:16rpx 24rpx 0;">
+  <text class="text-warning">{{notice}}</text>
+  <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
+  <button wx:if="{{state === 'error'}}" class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
 </view>
 
-<view class="pill-row" style="margin-top:134rpx;">
-  <button class="pill pill-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
-  <button class="pill pill-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
-</view>
+<block wx:if="{{state === 'ok'}}">
+  <view class="fc" style="padding:20rpx 0 18rpx;">
+    <view class="fr">
+      <text class="fl">{{text.device}}</text>
+      <text class="fv">{{stationName}} · {{device}}</text>
+    </view>
+    <view class="fr" id="row-tank" bindtap="onOpenTank">
+      <text class="fl">{{form.tankNo}}</text>
+      <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}">{{tankIndex < 0 ? form.select : tankOptions[tankIndex]}}</text>
+      <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+    </view>
+  </view>
+
+  <!-- 设备当前修正值（云端镜像，只读） -->
+  <view class="fc" style="margin-top:18rpx;padding:20rpx 0 18rpx;">
+    <view class="fr">
+      <text class="fl">{{text.current}}</text>
+      <button wx:if="{{mirrorKnown}}" class="btn-primary" size="mini" bindtap="onImport">{{text.import}}</button>
+    </view>
+    <view class="fr"><text class="fl">{{text.levelOffset}}</text><text class="fv">{{current.levelOffset}}</text><text class="fu">{{form.mm}}</text></view>
+    <view class="fr"><text class="fl">{{text.waterOffset}}</text><text class="fv">{{current.waterOffset}}</text><text class="fu">{{form.mm}}</text></view>
+    <view class="fr"><text class="fl">{{text.tempOffset}}</text><text class="fv">{{current.tempOffset}}</text><text class="fu">℃</text></view>
+    <view class="muted" style="padding:8rpx 53rpx 0;">{{currentTime}}</view>
+  </view>
+
+  <view wx:if="{{sendHint}}" class="card banner-warning" style="margin:16rpx 24rpx 0;">
+    <text class="text-warning">{{sendHint}}</text>
+  </view>
+
+  <view class="fc" style="margin-top:18rpx;padding:20rpx 0 18rpx;">
+    <view class="fr">
+      <text class="fl">{{text.levelOffset}}</text>
+      <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{levelOffset}}" bindinput="onLevelInput" />
+      <text class="fu">{{form.mm}}</text>
+    </view>
+    <view class="fr">
+      <text class="fl">{{text.waterOffset}}</text>
+      <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{waterOffset}}" bindinput="onWaterInput" />
+      <text class="fu">{{form.mm}}</text>
+    </view>
+    <view class="fr">
+      <text class="fl">{{text.tempOffset}}</text>
+      <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{tempOffset}}" bindinput="onTempInput" />
+      <text class="fu">℃</text>
+    </view>
+    <view wx:if="{{canSend}}" class="fr">
+      <text class="fl">{{text.reason}}</text>
+      <input class="fi" style="width:auto;flex:1;" type="text" maxlength="200" placeholder="{{text.reasonPlaceholder}}" placeholder-class="fv-ph" value="{{reason}}" bindinput="onReasonInput" />
+    </view>
+  </view>
+
+  <view class="pill-row" style="margin-top:80rpx;">
+    <button class="pill pill-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
+    <button class="pill pill-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
+  </view>
+</block>
 
 <grid-picker show="{{pickerShow}}" top="{{pickerTop}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />

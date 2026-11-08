@@ -1,153 +1,214 @@
-import { describeError } from '../../utils/errors';
-import { commandOutcomeUnknown } from '../../utils/failureState';
-import { setNavTitle, t, texts } from '../../utils/i18n';
-import { ApiError, get, post } from '../../utils/request';
-import { commandGuard, stationIdFromKey } from '../../utils/stationDevice';
-import { COMMAND_STATUS_KEYS, CONTROL_METHODS, label, type ControlMethodSpec } from '../../utils/labels';
 import { roleFromToken } from '../../utils/auth';
+import { describeError } from '../../utils/errors';
+import { formatLocalTime } from '../../utils/format';
+import { currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
+import { commandPhase, echoState, type Echo } from '../../utils/remoteConfig';
+import { getCommand, getTankSettings, listCommands } from '../../utils/remoteConfigApi';
+import { ApiError } from '../../utils/request';
+import { isReadOnlyRole } from '../../utils/roles';
+import { loadRecordsContext } from '../../utils/stationPref';
 import { getToken } from '../../utils/storage';
-import type { ControlCommand, Device } from '../../types/api';
+import type { ControlCommand } from '../../types/api';
 
-// customer_user may only issue PermControl methods (yeweiyi-cloud internal/protocol.PermControl);
-// everything flagged adminOnly here needs customer_admin or platform_admin. Filtering client-side
-// is a UX convenience only — the real check is server-side (control.Service.authorize) and a
-// filtered-out method would still 403 if called directly, this just avoids offering a button that
-// is guaranteed to fail.
-function methodsForRole(role: string): ControlMethodSpec[] {
-  if (role === 'customer_admin' || role === 'platform_admin') {
-    return CONTROL_METHODS;
-  }
-  return CONTROL_METHODS.filter((m) => !m.adminOnly);
+// 操作记录（#6；原「发送控制命令」通用 JSON 表单已移除）：本次命令的进度与回显 + 该设备最近的命令。
+// 只读，不发命令。打开方式：储罐设置/参数修正下发后 ?device=&commandId=&tank=；或从设置页进入（首页当前油站的设备）。
+// - 是否继续轮询只看云端 terminal；received 不是完成。
+// - succeeded 后读回设备镜像：回报时间不早于下发且字段相等才算"已一致"。
+// - expired / 交付未确认：结果无法确认，设备可能已执行。
+// - 页面隐藏（onHide/onUnload）停止所有轮询，回来（onShow）继续。员工看不到命令历史（云端也不给）。
+
+const POLL_MS = 2000;
+const ECHO_MS = 5000;
+const ECHO_WAIT_MS = 3 * 60 * 1000;
+
+type Row = { id: string; time: string; method: string; target: string; args: string; status: string; phase: string; error: string; operator: string };
+
+function methodLabel(m: string): string {
+  if (m === 'config.setTankSettings') return t('cmdLog.method.tank');
+  if (m === 'config.setDeviceSettings') return t('cmdLog.method.device');
+  return m;
 }
 
-// The last check before sending refused the command (the station's device changed, or the check itself could
-// not be made): not an API error, so it carries its own i18n key.
-class Blocked extends Error {
-  messageKey: string;
-
-  constructor(messageKey: string) {
-    super(messageKey);
-    this.messageKey = messageKey;
-  }
+function fieldLabel(k: string): string {
+  const key = `cmdLog.field.${k}`;
+  const s = t(key);
+  return s === key ? k : s;
 }
 
-type MethodRow = ControlMethodSpec & { label: string };
+function toRow(c: ControlCommand): Row {
+  const tank = /^tank:(\d+)$/.exec(c.configTarget || '');
+  const args = Object.keys(c.args || {})
+    .filter((k) => k !== 'tank')
+    .map((k) => `${fieldLabel(k)}=${String((c.args as Record<string, unknown>)[k])}`)
+    .join(t('common.listSep'));
+  const phase = commandPhase(c.status);
+  return {
+    id: c.commandId,
+    time: c.issuedAt ? formatLocalTime(c.issuedAt, currentLocale()) : '—',
+    method: methodLabel(c.method),
+    target: tank ? t('tank.no', { n: Number(tank[1]) }) : c.configTarget === 'device' ? t('cmdLog.wholeDevice') : '—',
+    args: args || '—',
+    status: t(`cmdLog.phase.${phase}`),
+    phase,
+    error: c.errorReason || c.errorCode || '',
+    operator: c.operator,
+  };
+}
 
 Page({
-  // Station the detail page was opened under (see device-detail onIssueCommand); undefined when it was
-  // opened by device name alone.
-  stationId: undefined as number | null | undefined,
-
   data: {
+    text: texts('cmdLog'),
     device: '',
-    text: texts('issueCmd'),
-    methods: [] as MethodRow[],
-    methodIndex: 0,
-    reason: '',
-    // Raw JSON textarea for args, same pattern the retired oil-can-set page used for its opaque
-    // schema. Not incidental here either: config.setTank/config.setProbe's argument shapes are
-    // deliberately undefined on the cloud side until the device implements a handler for them
-    // (yeweiyi-cloud docs/protocol-v1.md §12), so this app cannot build a typed form for them
-    // without guessing at a shape nobody has settled on.
-    argsText: '{}',
-    submitting: false,
-    errorMsg: '',
+    readOnly: false,
+    error: '',
+    // 本次命令
+    tracked: null as null | { row: Row; message: string; tone: 'info' | 'ok' | 'warn' | 'bad'; terminal: boolean },
+    rows: [] as Row[],
+    listError: '',
   },
 
+  commandId: '',
+  tank: 0,
+  cmd: undefined as ControlCommand | undefined,
+  echo: undefined as Echo | undefined,
+  echoStarted: 0,
+  timer: 0 as number,
+  seq: 0,
+
   onLoad(query: Record<string, string>) {
-    const token = getToken();
-    const role = token ? roleFromToken(token) : '';
-    this.stationId = stationIdFromKey(query.station);
-    this.setData({
-      device: query.device || '',
-      methods: methodsForRole(role).map((m) => ({ ...m, label: t(m.labelKey) })),
-    });
+    this.commandId = query.commandId ? decodeURIComponent(query.commandId) : '';
+    this.tank = Number(query.tank) || 0;
+    if (query.device) this.setData({ device: decodeURIComponent(query.device) });
   },
 
   onShow() {
-    setNavTitle('issueCmd.navTitle');
-  },
-
-  onMethodChange(e: WechatMiniprogram.PickerChange) {
-    this.setData({ methodIndex: Number(e.detail.value) });
-  },
-
-  onReasonInput(e: WechatMiniprogram.Input) {
-    this.setData({ reason: e.detail.value });
-  },
-
-  onArgsInput(e: WechatMiniprogram.Input) {
-    this.setData({ argsText: e.detail.value });
-  },
-
-  onSubmit() {
-    const method = this.data.methods[this.data.methodIndex];
-    if (!method) {
-      this.setData({ errorMsg: t('issueCmd.errPick') });
-      return;
-    }
-    // Required by the protocol, the database constraint, and internal/control — a whitespace-only
-    // reason is rejected server-side too, checked here only so the round trip isn't wasted.
-    const reason = this.data.reason.trim();
-    if (!reason) {
-      this.setData({ errorMsg: t('issueCmd.errReason') });
-      return;
-    }
-    let args: Record<string, unknown> | undefined;
-    const text = this.data.argsText.trim();
-    if (text) {
-      try {
-        args = JSON.parse(text);
-      } catch {
-        this.setData({ errorMsg: t('issueCmd.errJson') });
-        return;
-      }
-    }
-
-    if (this.data.submitting) return;
-    this.setData({ submitting: true, errorMsg: '' });
-    const device = this.data.device as string;
-    // Only a failure of the POST itself can leave the outcome unknown: if the device-list read below fails,
-    // nothing was sent, and telling the user to check the command history would be wrong.
-    let posted = false;
-    // Re-read the device list first: the station's device may have been replaced while this form was
-    // open, and the replaced device can still be visible to this user. If it cannot be confirmed, the
-    // command is not sent (a control command is not something to send on a guess).
-    get<{ rows: Device[] }>('/api/devices')
-      .then((res) => {
-        const guard = commandGuard(res.rows, device, this.stationId);
-        if (!guard.ok) throw new Blocked(guard.messageKey);
-        posted = true;
-        return post<ControlCommand>(`/api/devices/${encodeURIComponent(device)}/commands`, {
-          method: method.method,
-          reason,
-          args,
-        });
-      })
-      .then((cmd) => {
-        // 202 Accepted server-side (yeweiyi-cloud CLAUDE.md: "202, never 200" — this only reports
-        // how far the command got synchronously, not that it finished). Report that state honestly
-        // rather than a blanket "success".
-        wx.showToast({
-          title: t('issueCmd.submitted', { status: label(COMMAND_STATUS_KEYS, cmd.status) }),
-          icon: 'none',
-        });
-        wx.navigateBack();
-      })
-      .catch((err: Error) => {
-        if (err instanceof Blocked) {
-          this.setData({ errorMsg: t(err.messageKey) });
-        } else if (posted && err instanceof ApiError && commandOutcomeUnknown(err.status, err.body)) {
-          // The device may be acting on it (yeweiyi-cloud invariant 2): send the user to the command list,
-          // never suggest sending it again.
-          this.setData({ errorMsg: t('issueCmd.unconfirmed') });
-        } else if (err instanceof ApiError && err.status === 409) {
-          // The cloud refused it in the current state, e.g. a physical action that stays disabled.
-          this.setData({ errorMsg: t('issueCmd.refused') });
-        } else {
-          this.setData({ errorMsg: describeError(err) });
+    setNavTitle('cmdLog.navTitle');
+    const token = getToken();
+    const readOnly = !token || isReadOnlyRole(roleFromToken(token));
+    this.setData({ text: texts('cmdLog'), readOnly });
+    if (readOnly) return;
+    const seq = ++this.seq;
+    const start = this.data.device
+      ? Promise.resolve(this.data.device as string)
+      : loadRecordsContext().then((ctx) => (ctx.kind === 'ok' ? ctx.device.device_name : ''));
+    start
+      .then((device) => {
+        if (seq !== this.seq) return;
+        if (!device) {
+          this.setData({ error: t('records.noStation') });
+          return;
         }
+        this.setData({ device, error: '' });
+        this.loadList();
+        if (this.commandId) this.tick(seq);
       })
-      .finally(() => this.setData({ submitting: false }));
+      .catch((err) => {
+        if (seq === this.seq) this.setData({ error: describeError(err) });
+      });
+  },
+
+  onHide() {
+    this.stop();
+  },
+  onUnload() {
+    this.stop();
+  },
+
+  stop() {
+    this.seq++;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = 0;
+  },
+
+  later(seq: number, ms: number) {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.tick(seq), ms) as unknown as number;
+  },
+
+  // One step of tracking: the command until terminal, then (if succeeded) the device's report.
+  tick(seq: number) {
+    if (seq !== this.seq) return;
+    const device = this.data.device as string;
+    if (!this.cmd || !this.cmd.terminal) {
+      getCommand(device, this.commandId)
+        .then((cmd) => {
+          if (seq !== this.seq) return;
+          this.cmd = cmd;
+          const m = /^tank:(\d+)$/.exec(cmd.configTarget || '');
+          if (m) this.tank = Number(m[1]);
+          this.show();
+          if (!cmd.terminal) this.later(seq, POLL_MS);
+          else {
+            this.loadList();
+            if (cmd.status === 'succeeded') {
+              this.echoStarted = Date.now();
+              this.later(seq, 0);
+            }
+          }
+        })
+        .catch((err) => {
+          if (seq !== this.seq) return;
+          if (err instanceof ApiError && err.status === 404) {
+            this.setData({ error: t('cmdLog.notFound') });
+            return;
+          }
+          this.later(seq, POLL_MS); // keep the last state, try again
+        });
+      return;
+    }
+    if (this.cmd.status !== 'succeeded' || !this.tank) return;
+    getTankSettings(device)
+      .then((tanks) => {
+        if (seq !== this.seq || !this.cmd) return;
+        const mirror = tanks.find((x) => x.tank === this.tank);
+        this.echo = echoState(mirror as unknown as Record<string, unknown>, this.cmd.args || {}, this.cmd.issuedAt);
+        this.show();
+        if (this.echo === 'waiting' && Date.now() - this.echoStarted < ECHO_WAIT_MS) this.later(seq, ECHO_MS);
+      })
+      .catch(() => {
+        if (seq === this.seq && Date.now() - this.echoStarted < ECHO_WAIT_MS) this.later(seq, ECHO_MS);
+      });
+  },
+
+  show() {
+    const cmd = this.cmd;
+    if (!cmd) return;
+    const phase = commandPhase(cmd.status);
+    let message = t(`cmdLog.progress.${phase}`);
+    let tone: 'info' | 'ok' | 'warn' | 'bad' = 'info';
+    if (phase === 'succeeded') {
+      if (this.echo === 'matched') {
+        message = t('cmdLog.echo.matched');
+        tone = 'ok';
+      } else if (this.echo === 'mismatch') {
+        message = t('cmdLog.echo.mismatch');
+        tone = 'warn';
+      } else {
+        const timedOut = Date.now() - this.echoStarted >= ECHO_WAIT_MS;
+        message = t(timedOut ? 'cmdLog.echo.timedOut' : 'cmdLog.echo.waiting');
+        tone = timedOut ? 'warn' : 'info';
+      }
+    } else if (phase === 'rejected' || phase === 'failed') tone = 'bad';
+    else if (phase === 'expired') tone = 'warn';
+    this.setData({ tracked: { row: toRow(cmd), message, tone, terminal: cmd.terminal } });
+  },
+
+  loadList() {
+    const device = this.data.device as string;
+    listCommands(device, 20)
+      .then((cmds) => this.setData({ rows: cmds.map(toRow), listError: '' }))
+      .catch((err) => this.setData({ listError: describeError(err) }));
+  },
+
+  onRefreshEcho() {
+    this.echoStarted = Date.now();
+    this.later(this.seq, 0);
+  },
+
+  onPullDownRefresh() {
+    this.loadList();
+    wx.stopPullDownRefresh();
   },
 });
+
+export {};

@@ -1,39 +1,30 @@
+<!-- 操作记录（#6）：本次命令进度与回显 + 该设备最近命令。只读，不发命令（见 issue-command.ts）。 -->
 <view class="container">
-  <view class="card" wx:if="{{methods.length === 0}}">
-    <text class="muted">{{text.noPermission}}</text>
+  <view class="card" wx:if="{{readOnly}}">
+    <text class="muted">{{text.readOnly}}</text>
+  </view>
+  <view class="card banner-warning" wx:if="{{error}}">
+    <text class="text-warning">{{error}}</text>
   </view>
 
-  <view class="card" wx:else>
-    <view class="field">
-      <text class="field-label">{{text.command}}</text>
-      <picker mode="selector" range="{{methods}}" range-key="label" value="{{methodIndex}}" bindchange="onMethodChange">
-        <view class="field-input">{{methods[methodIndex].label}}</view>
-      </picker>
-      <view class="muted text-warning" wx:if="{{methods[methodIndex].physical}}" style="margin-top:8rpx;">
-        {{text.physicalWarning}}
-      </view>
-    </view>
-
-    <view class="field">
-      <text class="field-label">{{text.reasonLabel}}</text>
-      <input class="field-input" value="{{reason}}" bindinput="onReasonInput" placeholder="{{text.reasonPlaceholder}}" />
-    </view>
-
-    <view class="field">
-      <text class="field-label">{{text.argsLabel}}</text>
-      <textarea
-        class="field-input"
-        style="width:100%;height:200rpx;"
-        value="{{argsText}}"
-        bindinput="onArgsInput"
-      />
-    </view>
-
-    <button class="btn-primary" loading="{{submitting}}" bindtap="onSubmit">{{text.submit}}</button>
-    <view wx:if="{{errorMsg}}" class="muted text-danger" style="margin-top:16rpx;">{{errorMsg}}</view>
+  <view class="card {{tracked.tone === 'bad' || tracked.tone === 'warn' ? 'banner-warning' : ''}}" wx:if="{{tracked}}">
+    <view style="font-weight:600;margin-bottom:8rpx;">{{text.current}}</view>
+    <view class="{{tracked.tone === 'bad' || tracked.tone === 'warn' ? 'text-warning' : ''}}">{{tracked.message}}</view>
+    <view class="muted" style="margin-top:8rpx;">{{tracked.row.method}} · {{tracked.row.target}}</view>
+    <view class="muted">{{tracked.row.args}}</view>
+    <view class="muted" wx:if="{{tracked.row.error}}">{{text.deviceSays}}{{tracked.row.error}}</view>
+    <view class="muted">{{text.commandId}}{{tracked.row.id}}</view>
+    <button wx:if="{{tracked.terminal && tracked.row.phase === 'succeeded'}}" class="btn-primary" size="mini" style="margin-top:12rpx;" bindtap="onRefreshEcho">{{text.refreshEcho}}</button>
   </view>
 
-  <view class="card muted">
-    {{text.note}}
+  <view class="card" wx:if="{{!readOnly && device}}">
+    <view style="font-weight:600;margin-bottom:8rpx;">{{text.recent}}{{device}}</view>
+    <view class="muted" wx:if="{{listError}}">{{listError}}</view>
+    <view class="muted" wx:if="{{!listError && rows.length === 0}}">{{text.empty}}</view>
+    <view wx:for="{{rows}}" wx:key="id" style="padding:12rpx 0;border-top:1rpx solid #eee;">
+      <view>{{item.time}} · {{item.method}} · {{item.target}}</view>
+      <view class="muted">{{item.args}}</view>
+      <view class="{{item.phase === 'failed' || item.phase === 'rejected' || item.phase === 'expired' ? 'text-warning' : 'muted'}}">{{item.status}}{{item.error ? '：' + item.error : ''}} · {{item.operator}}</view>
+    </view>
   </view>
 </view>

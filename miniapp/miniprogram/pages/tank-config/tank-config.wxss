@@ -6,7 +6,7 @@
 }
 
 .tc-page {
-  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(320rpx + env(safe-area-inset-bottom));
 }
 
 .tc-banner {

@@ -359,7 +359,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     tab bar is hidden), plus the live-alarm banner from `AlarmSocket` for that tank only. **No alarm or stock
     record tab**: records have one entry only, 我的记录 (2026-10-26); polls the command list every 3s while any command is non-terminal;
     **no 出入库 tab** — an old `tab=oilInOut` link moves to `record-list` when its station is verified,
-    otherwise stays and says where the records went), `issue-command` (one control command, raw-JSON args).
+    otherwise stays and says where the records went), `issue-command` (操作记录, see "Remote configuration" below).
     The record lists have a time range bar and page by scrolling to the bottom
     (`onReachBottom`). Without it the cloud's default window is the last 24h and the app used to show
     only the newest 50 of that, i.e. nothing older was reachable. The window never starts before the
@@ -370,29 +370,51 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     pages and keep going (bounded) until enough rows were added; only the cloud's end ends them. Times are shown in the phone's local zone (`formatLocalTime`),
     not as the cloud's raw UTC strings. Page behaviour is **not verified in DevTools**.
 
+## Remote configuration and 补录 (miniapp#6, 2026-11-08; openspec `tank-settings-remote-apply`)
+
+Cloud contracts: `yeweiyi-cloud docs/config-command-contract.md` (cloud PR #13: `requestId`, `expectedStationId`,
+per-device gate, single-command lookup) and `docs/stock-manual-entry-contract.md` (#69). Scope: configuration only,
+**density read-only**; no action commands. Pure rules in `utils/remoteConfig.ts` (Node-checked,
+`scripts/remote-config.check.mjs`), requests in `utils/remoteConfigApi.ts`, the send flow in `utils/configSubmit.ts`.
+
+- `tank-config` shows **设备当前回报** (`GET /api/devices/:device/tank-settings` + `reportedAt`, read-only) next to the
+  phone draft; 「导入设备值」 is the only way device values enter the form. Administrators (not `customer_user`) with
+  `config_commands_enabled === true` on the device row get 「下发到设备」: only filled fields that differ from the
+  report and are open (`TANK_SEND_FIELDS`: 4 level alarms, high water, high temp, capacity) are sent; density, height,
+  low water, low temp, colour and the free-text medium never are. A missing `config_commands_enabled` (older cloud)
+  means no sending.
+- `calibration` uses the same station → device → visible tank; shows the device's corrections; 「保存到控制器」 sends
+  the three corrections the same way. 「保存到手机」 keeps one local draft (`calibration-draft`, tied to device + tank,
+  cleared at logout).
+- Send flow: the reason is a form row (no `showModal` `editable`); the confirm dialog lists before → after; then
+  `commandGuard` re-reads `GET /api/devices` (station's device changed → stop); one `requestId` per confirmation,
+  `expectedStationId` always sent (null allowed). Timeout/`command_delivery_unconfirmed`: look up `?requestId=`; not
+  found → only 「用同一编号重试」, never a new id. Success opens `issue-command?device=&commandId=&tank=`.
+- `issue-command` is now **操作记录** (the raw-JSON command form is gone): tracks one command by `terminal`, then reads
+  the mirror back (`reportedAt` ≥ `issuedAt` and equal fields = 已一致), lists the device's last 20 commands; polling
+  stops in `onHide`/`onUnload`. Entry: 设置 → 操作记录 (administrators only).
+- `backfill` posts `POST /api/devices/:device/stock-events` (administrators): date + time (phone offset → RFC 3339,
+  not in the future), level, volume, reason, one `requestId` per confirmation (a retry reuses it; the cloud replays).
+- **Not verified in DevTools, in the app, or against a real cloud/device.**
+
 ## Static design-draft pages (not wired to the cloud — on purpose)
 
-`tank-config`, `tank-shape` (+ `tank-shape-edit`), `calibration`, `backfill`, `record-settings`,
-`report-settings` are laid out from the design draft (checked against the exported artboard PNGs by
+`tank-shape` (+ `tank-shape-edit`), `record-settings`, `report-settings` (and the draft half of `tank-config` /
+`calibration`) are laid out from the design draft (checked against the exported artboard PNGs by
 measuring pixels, see `openspec/changes/home-by-station/tasks.md` 3.8–3.10) and say "暂未开放 /
 云端没有对应接口" when saved. Shared pieces: form/button/switch styles in `app.wxss`,
 `components/grid-picker` (3-column tank-number sheet) and `components/side-picker` (type dropdown,
 12-colour palette). Do not make them send requests until the cloud side exists:
 
 - `config.setTank` / `config.setProbe` / `config.setAlarmThresholds` have method names but no
-  argument schema (`yeweiyi-cloud/docs/miniprogram-design-gaps.md` §1).
-- Calibration push, tank-table push, record clearing, report export, stock backfill, shift and
-  stock records have no cloud method or endpoint at all (same document §2).
-- Device configuration is meant to be **station-administrator only**, and the cloud has no such
-  role (`yeweiyi-cloud#44`). Do not stand in `customer_admin` for it.
-- `calibration` saves to the phone's own storage only; nothing it stores affects any display.
-- `tank-config` (miniapp#18) is a **phone draft**: it edits the home page's current station → its device →
-  one of the tanks this user can see (`GET /api/devices/:device/tanks`, not a fixed 1–12 list), and 保存
-  writes a draft keyed by account + device + tank (`utils/tankDraft.ts`, Node-checked). It reads and sends
-  no controller setting; "not set" is not 0; 恢复默认 only empties the form. Because the key carries the
-  account, these drafts are not cleared at logout (another account cannot open them). Reading/writing the
-  controller's settings waits for cloud#70/#71 (implemented on cloud branch `feat/tank-settings-70-71`,
-  not merged).
+  argument schema (`yeweiyi-cloud/docs/miniprogram-design-gaps.md` §1); remote configuration uses
+  `config.setTankSettings` only (see above).
+- Tank-table push, record clearing/generation switches, report export have no cloud method or endpoint
+  (and no device field to carry them).
+- Who may configure: cloud#44's latest decision — no station-administrator role; platform and customer
+  administrators may send tank settings, employees are read-only.
+- The `tank-config` phone draft (miniapp#18) stays: keyed by account + device + tank (`utils/tankDraft.ts`),
+  "not set" is not 0, 恢复默认 only empties the form, not cleared at logout (the key carries the account).
 
 ## Spec workflow
 
