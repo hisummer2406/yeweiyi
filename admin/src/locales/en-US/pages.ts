@@ -210,6 +210,13 @@ export default {
   'pages.console.detail.snapshot.noTank':
     'This device has no tank you can view.',
   'pages.console.detail.snapshot.switch': 'Switch tank',
+  'pages.console.tank.title': 'Tank {index} · {medium}',
+  'pages.console.tank.readings': 'Main readings',
+  'pages.console.tank.unit.mm': 'mm',
+  'pages.console.tank.unit.L': 'L',
+  'pages.console.tank.unit.C': '℃',
+  'pages.console.tank.unit.kg': 'kg',
+  'pages.console.detail.snapshot.more': 'More readings',
   'pages.console.detail.snapshot.field.oilLevel': 'Oil level',
   'pages.console.detail.snapshot.field.oilVolume': 'Volume',
   'pages.console.detail.snapshot.field.oilWeight': 'Mass',
