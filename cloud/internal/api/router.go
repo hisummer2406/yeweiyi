@@ -129,6 +129,9 @@ func NewRouter(deps Deps) *gin.Engine {
 		// command got synchronously; the outcome is read back through the GET.
 		authorized.POST("/devices/:device/commands", issueCommandHandler(deps))
 		authorized.GET("/devices/:device/commands", listDeviceCommandsHandler(deps))
+		authorized.GET("/devices/:device/commands/:commandId", getDeviceCommandHandler(deps))
+		authorized.PUT("/devices/:device/config-commands", setConfigCommandsGateHandler(deps))
+		authorized.GET("/devices/:device/device-settings", deviceSettingsHandler(deps))
 		authorized.GET("/audit", listAuditHandler(deps))
 
 		// Tenant administration (admin.go). Who may do what is decided inside each handler from the

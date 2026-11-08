@@ -89,7 +89,8 @@ SELECT
     (SELECT COUNT(*) FROM user_devices u WHERE u.device_name = $1::TEXT)::BIGINT           AS user_devices,
     (SELECT COUNT(*) FROM device_pairing_secrets s WHERE s.device_name = $1::TEXT)::BIGINT AS pairing_secrets,
     (SELECT COUNT(*) FROM tank_settings t WHERE t.device_name = $1::TEXT)::BIGINT AS tank_settings,
-    (SELECT COUNT(*) FROM tank_calibration c2 WHERE c2.device_name = $1::TEXT)::BIGINT AS tank_calibration
+    (SELECT COUNT(*) FROM tank_calibration c2 WHERE c2.device_name = $1::TEXT)::BIGINT AS tank_calibration,
+    (SELECT COUNT(*) FROM device_settings s2 WHERE s2.device_name = $1::TEXT)::BIGINT AS device_settings
 `
 
 type CountDeviceCascadesRow struct {
@@ -99,6 +100,7 @@ type CountDeviceCascadesRow struct {
 	PairingSecrets  int64 `json:"pairing_secrets"`
 	TankSettings    int64 `json:"tank_settings"`
 	TankCalibration int64 `json:"tank_calibration"`
+	DeviceSettings  int64 `json:"device_settings"`
 }
 
 func (q *Queries) CountDeviceCascades(ctx context.Context, deviceName string) (CountDeviceCascadesRow, error) {
@@ -111,6 +113,7 @@ func (q *Queries) CountDeviceCascades(ctx context.Context, deviceName string) (C
 		&i.PairingSecrets,
 		&i.TankSettings,
 		&i.TankCalibration,
+		&i.DeviceSettings,
 	)
 	return i, err
 }
@@ -133,6 +136,7 @@ SELECT
   + (SELECT COUNT(*) FROM device_pairing_secrets x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM tank_settings x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM tank_calibration x WHERE x.device_name = $1::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM device_settings x WHERE x.device_name = $1::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM devices x WHERE x.device_name = $1::TEXT)::BIGINT AS remnants
 `
 
@@ -487,7 +491,7 @@ DELETE FROM stock_events WHERE device_name = $1
 `
 
 // 以下按设备编号删除业务库数据，全部在 business 步骤的同一事务里执行。设备行最后删，级联带走
-// control_commands、user_tank_grants、user_devices、device_pairing_secrets（先计数再删）。
+// control_commands、user_tank_grants、user_devices、device_pairing_secrets、tank_settings、tank_calibration、device_settings（先计数再删）。
 func (q *Queries) PurgeStockEvents(ctx context.Context, deviceName string) (int64, error) {
 	result, err := q.db.Exec(ctx, purgeStockEvents, deviceName)
 	if err != nil {

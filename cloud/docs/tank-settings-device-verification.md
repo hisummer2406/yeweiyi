@@ -29,6 +29,11 @@
 用平台管理员或客户管理员发 `POST /api/devices/:device/commands`，`method=config.setTankSettings`，先发**一个**字段：
 `{"tank":1,"alarmHighLevelMm":<比当前值大 50>}`。
 
+> **2026-11-08 起（#3）**：除打开部署级开关外，还要先由平台管理员开放测试设备：
+> `PUT /api/devices/:device/config-commands` `{"enabled":true,"reason":"真机验证"}`，验证完关回 `{"enabled":false,...}`。
+> 请求体必须带 `requestId`（每次新取，如 `verify-<时间戳>`）与 `expectedStationId`（设备当前油站 id，不在油站则 `null`），
+> 见 [config-command-contract.md](config-command-contract.md)。
+
 | # | 操作 | 期望现象 | 要看什么 |
 |---|---|---|---|
 | B1 | 发上面的命令 | 同步返回 `202`，`status=received`（ACK）| **ACK 时机**：设备文档说"received 在写库前后"？看 `ackedAt` 与 `sentAt` 间隔 |
@@ -38,7 +43,7 @@
 | B5 | 发一个越界值（如 `alarmHighLevelMm` > 罐高）| 命令 `rejected`，`errorCode=INVALID_PARAMS`，`reason` 是中文说明 | 设备是否真的拒绝而不是写入 |
 | B6 | 发违反顺序的值（低 > 当前高）| `rejected`，`reason` 说明顺序 | 设备端按合并后的值校验 |
 | B7 | 发 `tankShape` / `tankHeightMm` | **云端直接 400**（`field_not_editable`），不会到设备 | 如需验证设备自身的拒绝，用 ThingsBoard 控制台直接下发 |
-| B8 | 设备切到"现场手动模式" 再发命令 | `rejected`，`errorCode=LOCAL_MODE_LOCKED` | `localControlMode` 属性是否随之变 true |
+| B8 | ~~设备切到"现场手动模式" 再发命令~~ | — | **作废**：设备没有现场手动模式，也不上报 `localControlMode`（#9） |
 | B9 | 设置页开着时远程改，再现场点保存 | 远程值被覆盖（已知限制）| 确认现象，镜像随之回到现场值 |
 | B10 | 再试多字段：`alarm*` + `density` + `oilTypeIndex` + `capacityL` | 全部 `updated` | `density` 写入后设置页显示的单位/数值是否合理 |
 | B11 | 平台管理员发 `config.setDeviceSettings`（改一个出入库阈值）| `succeeded`，`detail.updated` | 设备上报的 `outStockHeightThresholdMm` 等顶层属性随之更新（云端暂不镜像）|

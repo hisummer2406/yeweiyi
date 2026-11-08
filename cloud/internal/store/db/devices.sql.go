@@ -52,7 +52,7 @@ func (q *Queries) EnsureDeviceForCustomer(ctx context.Context, arg EnsureDeviceF
 }
 
 const getDevice = `-- name: GetDevice :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id FROM devices WHERE device_name = $1
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id, config_commands_enabled_at, config_commands_enabled_by FROM devices WHERE device_name = $1
 `
 
 func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, error) {
@@ -67,12 +67,14 @@ func (q *Queries) GetDevice(ctx context.Context, deviceName string) (Device, err
 		&i.CustomerID,
 		&i.CustomerAssignedAt,
 		&i.StationID,
+		&i.ConfigCommandsEnabledAt,
+		&i.ConfigCommandsEnabledBy,
 	)
 	return i, err
 }
 
 const getDeviceForUpdate = `-- name: GetDeviceForUpdate :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id FROM devices WHERE device_name = $1 FOR UPDATE
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id, config_commands_enabled_at, config_commands_enabled_by FROM devices WHERE device_name = $1 FOR UPDATE
 `
 
 // Reassignment locks the row so two concurrent reassignments cannot both clear bindings and then
@@ -89,6 +91,8 @@ func (q *Queries) GetDeviceForUpdate(ctx context.Context, deviceName string) (De
 		&i.CustomerID,
 		&i.CustomerAssignedAt,
 		&i.StationID,
+		&i.ConfigCommandsEnabledAt,
+		&i.ConfigCommandsEnabledBy,
 	)
 	return i, err
 }
@@ -201,8 +205,51 @@ func (q *Queries) RegisterDeviceForCustomer(ctx context.Context, arg RegisterDev
 	return i, err
 }
 
+const setDeviceConfigCommandsEnabled = `-- name: SetDeviceConfigCommandsEnabled :one
+WITH prev AS (
+    SELECT p.device_name AS name, p.config_commands_enabled_at AS before_at
+    FROM devices p WHERE p.device_name = $3::TEXT FOR UPDATE
+)
+UPDATE devices d
+SET config_commands_enabled_at = CASE WHEN $1::BOOLEAN
+                                      THEN COALESCE(d.config_commands_enabled_at, now()) END,
+    config_commands_enabled_by = CASE WHEN $1::BOOLEAN
+                                      THEN COALESCE(d.config_commands_enabled_by, $2::BIGINT) END,
+    updated_at = now()
+FROM prev
+WHERE d.device_name = prev.name
+RETURNING (prev.before_at IS NOT NULL)::BOOLEAN AS was_enabled, d.config_commands_enabled_at, d.config_commands_enabled_by
+`
+
+type SetDeviceConfigCommandsEnabledParams struct {
+	Enabled    bool        `json:"enabled"`
+	AdminID    pgtype.Int8 `json:"admin_id"`
+	DeviceName string      `json:"device_name"`
+}
+
+type SetDeviceConfigCommandsEnabledRow struct {
+	WasEnabled              bool               `json:"was_enabled"`
+	ConfigCommandsEnabledAt pgtype.Timestamptz `json:"config_commands_enabled_at"`
+	ConfigCommandsEnabledBy pgtype.Int8        `json:"config_commands_enabled_by"`
+}
+
+// Platform admin only (checked by the caller). Idempotent: opening an open device keeps the original
+// time and admin; returns the previous state so the audit row can record before/after.
+func (q *Queries) SetDeviceConfigCommandsEnabled(ctx context.Context, arg SetDeviceConfigCommandsEnabledParams) (SetDeviceConfigCommandsEnabledRow, error) {
+	row := q.db.QueryRow(ctx, setDeviceConfigCommandsEnabled, arg.Enabled, arg.AdminID, arg.DeviceName)
+	var i SetDeviceConfigCommandsEnabledRow
+	err := row.Scan(&i.WasEnabled, &i.ConfigCommandsEnabledAt, &i.ConfigCommandsEnabledBy)
+	return i, err
+}
+
 const setDeviceCustomer = `-- name: SetDeviceCustomer :exec
-UPDATE devices SET customer_id = $2, station_id = NULL, updated_at = now() WHERE device_name = $1
+UPDATE devices
+SET customer_id = $2,
+    station_id = NULL,
+    config_commands_enabled_at = CASE WHEN customer_id IS DISTINCT FROM $2 THEN NULL ELSE config_commands_enabled_at END,
+    config_commands_enabled_by = CASE WHEN customer_id IS DISTINCT FROM $2 THEN NULL ELSE config_commands_enabled_by END,
+    updated_at = now()
+WHERE device_name = $1
 `
 
 type SetDeviceCustomerParams struct {
@@ -212,6 +259,8 @@ type SetDeviceCustomerParams struct {
 
 // The station belongs to the old customer and must go in the same statement: devices_station_customer_fk
 // would otherwise refuse the change.
+// The per-device config-command gate (config-command-delivery) is cleared when the customer actually
+// changes: the new customer's devices are not open until a platform admin opens them again.
 func (q *Queries) SetDeviceCustomer(ctx context.Context, arg SetDeviceCustomerParams) error {
 	_, err := q.db.Exec(ctx, setDeviceCustomer, arg.DeviceName, arg.CustomerID)
 	return err

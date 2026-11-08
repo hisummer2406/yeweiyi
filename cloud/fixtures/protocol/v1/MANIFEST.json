@@ -13,7 +13,7 @@
     "androidVerifiedAt": "hisummer2406/yeweiyi@ead2ee2, Android CI run 42111474770 (363 tests, 0 failures)"
   },
   "source": "yeweiyi-cloud/fixtures/protocol/v1",
-  "updated": "2026-11-04",
+  "updated": "2026-11-08",
   "fixtures": [
     {
       "file": "telemetry_snapshot.json",
@@ -56,6 +56,12 @@
       "sha256": "dfdeaa239d887b9077147d3c283d0debc35c55c29bb479e2f873100b5b40b40a",
       "direction": "uplink",
       "pins": "罐设置客户端属性 tank{N}.*（cloud#70，未冻结）：罐高/形状/油品序号/报警阈值/修正值/密度；0 = 不启用"
+    },
+    {
+      "file": "client_attributes_device_settings.json",
+      "sha256": "301d8ca2b826ee5e99862c16f3f20c2f87f94e08eb7cd1cffa54530726661f40",
+      "direction": "uplink",
+      "pins": "整机设置（出入库判定阈值）作为顶层客户端属性，键名同 config.setDeviceSettings 参数；0 = 未配置，原样保存（config-command-delivery）"
     },
     {
       "file": "alarm_active.json",
