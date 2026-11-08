@@ -94,13 +94,17 @@
 沿用 `POST /api/devices/:device/commands`（`202`、`terminal` 标志、审计、`GET .../commands` 轮询，**ACK 不等于成功，
 成功以 `cmdResult` 为准**），新增两个方法：
 
+> **2026-11-08 起（#3）**：两个配置方法的提交还必须带 `requestId` 与 `expectedStationId`，并受设备级开关约束；幂等、找回、
+> 受理时油站复核、同目标在途互斥、整机设置镜像见 [config-command-contract.md](config-command-contract.md)。
+
 | 方法 | 权限 | 说明 |
 |---|---|---|
 | `config.setTankSettings` | 平台管理员、客户管理员（本客户设备） | 改单个罐。员工（`customer_user`）一律 403 |
 | `config.setDeviceSettings` | **仅平台管理员** | 改整机出入库判定阈值；客户管理员 403 |
 
 不属于物理动作，不受 `allowPhysicalCommands` 影响；但受独立闸门 `control.allowConfigCommands`（环境变量
-`ALLOW_CONFIG_COMMANDS`，默认 false）约束：关闭时两个方法返回 `409 code=config_commands_disabled`，设备端处理真机验证后再打开。旧方法 `config.setAlarmThresholds` 保留不动（语义不同：
+`ALLOW_CONFIG_COMMANDS`，默认 false）**与设备级开关**共同约束：任一关闭时返回 `409 code=config_commands_disabled`（带 `scope`，
+见 [config-command-contract.md](config-command-contract.md) §1.4）。旧方法 `config.setAlarmThresholds` 保留不动（语义不同：
 要求四级严格递减、不能设 0），新代码请用 `config.setTankSettings`。
 
 请求（`reason` 必填，同其他命令）：
@@ -133,8 +137,8 @@
 ### `config.setDeviceSettings` args
 
 `inStockHeightThresholdMm` / `outStockHeightThresholdMm`（int，1～10000 mm）、`inStockTimeThresholdSec` /
-`outStockTimeThresholdSec`（int，1～86400 s）；至少一个。本次不提供整机设置的读取镜像，结果以 `cmdResult.detail.updated`
-为准。
+`outStockTimeThresholdSec`（int，1～86400 s）；至少一个。当前值读 `GET /api/devices/:device/device-settings`（#3 起镜像，见
+[config-command-contract.md](config-command-contract.md) §4）。
 
 ## 错误
 
@@ -143,7 +147,8 @@
   `invalid_args`。校验在授权之后、记录/发送之前：无权的调用者看不到参数问题，被拒的参数不产生命令行、不发给 ThingsBoard
   （写一条 `denied` 审计）。
 - 设备拒绝（ACK 阶段，`status=rejected`）：`errorCode` + `reason` 在命令里，例如 `INVALID_PARAMS`（超过罐高、
-  与设备现存阈值合并后顺序不对）、`LOCAL_MODE_LOCKED`（设备处于现场手动模式）、`EXPIRED`。小程序直接展示 `reason`。
+  与设备现存阈值合并后顺序不对）、`EXPIRED`。（`LOCAL_MODE_LOCKED` 在协议里保留，但**设备当前没有"现场手动模式"这一状态**，
+也不上报 `localControlMode`，实际不会出现，#9。）小程序直接展示 `reason`。
 - 成功：`status=succeeded`，`resultDetail` 为设备的 `detail`：`{"tank":1,"updated":[...],"ignored":[...]}`。
   线上字段名是 `detail`（设备端字段清单文档里写的 `data` 不对，见 open-items §E）。
 

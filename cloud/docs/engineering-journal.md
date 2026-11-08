@@ -2443,3 +2443,22 @@ Codex 担心的"命令在设备易主之后才被**发送**"发生在插入**之
   与删除完成时刻比较。已知限制：设备时钟落后会误丢新记录。
 - `tank_settings`（合并时改号为 000033）、`tank_calibration`（000035）也按设备编号存数据，**已在合并时加入删除清单与**
   `CountDeviceRemnants`，否则 verify 不会发现它们。
+
+### 2026-11-08 — 配置命令提交保护（#3，openspec `config-command-delivery`）
+
+当前规范：[config-command-contract.md](config-command-contract.md)。背景：远程配置在生产真机走通一次后，要交给后台/小程序
+作为可交付功能，客户端缺几样自己补不了的保护。用户决定（2026-11-08）：本期只做配置类；密度只读；开关改为按设备白名单。
+
+- **`requestId` 作用域含操作人**：`(operator_id, device_name, request_id)`。没有选出入库补录（#69）那样的 `(device, requestId)`——
+  补录是"一条记录"，命令是"某人的一次确认"，两个管理员不应互相找回对方的提交。配置方法必填；其他方法可选以免破坏旧调用。
+- **重放先重新授权**：找回走与首次提交相同的授权链，撤权/停用后旧 `requestId` 不能读命令。重放不访问 ThingsBoard。
+- **`expectedStationId` 用事务 + `FOR SHARE`**，锁序与 `replace-device` 相同（油站 → 设备）。曾考虑放进 INSERT 的单条语句，
+  但 CTE 的加锁顺序不受保证，可能与换机互锁；为此 `control.Config` 增加 `Pool`。剩余窗口（建单后到 RPC 发出）写进契约。
+- **在途互斥用部分唯一索引**而不是 Go 里先查后插；`ON CONFLICT` 只以 `request_id` 索引为仲裁，在途索引冲突照常报错再映射为 409。
+- **两级开关**：保留部署级总闸（物理命令同理不动），新增设备列而不是新表——随设备行删除，免改删除清单；换客户清空。
+  总闸是否常开是单独的发布决定。
+- **INSERT 内复核方法等级**：原来只复核访问规则，方法等级只在 Go 判定；现在员工（`customer_user`）的 INSERT 在 SQL 层也为 0 行
+  （`TestTenancy_CommandInsertEnforcesAccessItself` 的预期随之改为拒绝）。
+- **迟到结果只写审计**：守卫拒绝后若命令存在、属于该设备、且设备报告的终态与已存状态不同，写一次 `control.result_late`；
+  状态不变（约束 4）。重复投递同一终态不算迟到。
+- **整机设置镜像** `device_settings` 加入删除清单与 `CountDeviceRemnants`。键名取自设备端代码，属云端只消费的可选字段，见 open-items §E。

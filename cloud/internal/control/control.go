@@ -113,6 +113,11 @@ type Config struct {
 	// the device-side handler is verified on real hardware. Defaults to false.
 	AllowConfigCommands bool
 
+	// Pool lets configuration commands be created inside a transaction that holds the station and
+	// device rows (config-command-delivery). Without it configuration methods fail with
+	// ErrTransactionsUnavailable; other methods do not need it.
+	Pool Beginner
+
 	// Logf receives what must not go unnoticed: audit rows that could not be written, and database
 	// errors while applying a device's result. Defaults to log.Printf; never silent, because the
 	// whole point of this record is that someone can see when it is incomplete.
@@ -157,6 +162,14 @@ type IssueRequest struct {
 	// into the audit record.
 	Reason string
 	Actor  Actor
+
+	// RequestID is the client's submission id: one (operator, device, RequestID) is at most one
+	// command. Required for configuration methods, optional otherwise.
+	RequestID string
+	// ExpectedStationID is the station the client saw the device on (Valid=false: no station);
+	// ExpectedStationSet says the client sent the field at all. Required for configuration methods.
+	ExpectedStationID  pgtype.Int8
+	ExpectedStationSet bool
 }
 
 // Issue authorizes, records, sends and applies the ACK for one control command.
@@ -165,13 +178,20 @@ type IssueRequest struct {
 // not a Go error — the call worked, and the resulting row has status "rejected" with the device's
 // reason — because a refusal is information the operator must see, not a transport failure.
 func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlCommand, error) {
+	cmd, _, err := s.IssueDetailed(ctx, req)
+	return cmd, err
+}
+
+// IssueDetailed is Issue that also reports whether the answer is a replay of an earlier submission
+// with the same requestId (nothing was sent this time).
+func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.ControlCommand, bool, error) {
 	// Decided first, and in one statement: the answer to "may this user touch this device" and the
 	// customer everything below is filed under must come from the same database state, so a transfer
 	// that lands mid-command cannot authorize against one customer and record under another. Doing
 	// it up front also means even the earliest denial below is audited under a customer.
 	allowed, customerID, err := s.resolveAccess(ctx, req.Actor.UserID, req.DeviceName)
 	if err != nil {
-		return db.ControlCommand{}, err
+		return db.ControlCommand{}, false, err
 	}
 	req.Actor.CustomerID = customerID
 
@@ -182,14 +202,14 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		err := fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
-		return db.ControlCommand{}, err
+		return db.ControlCommand{}, false, err
 	}
 
 	spec, known := protocol.Methods[req.Method]
 	if !known {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": "unknown method"})
-		return db.ControlCommand{}, fmt.Errorf("%w: %q", ErrUnknownMethod, req.Method)
+		return db.ControlCommand{}, false, fmt.Errorf("%w: %q", ErrUnknownMethod, req.Method)
 	}
 
 	// Trim before checking: Gin's `binding:"required"` on the HTTP request only rejects a literally
@@ -203,7 +223,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	if req.Reason == "" {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": "missing reason"})
-		return db.ControlCommand{}, ErrReasonRequired
+		return db.ControlCommand{}, false, ErrReasonRequired
 	}
 
 	// Authorization is checked before existence, everywhere. A caller who is not permitted must
@@ -213,7 +233,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	if err := s.authorize(req.Actor, spec); err != nil {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
-		return db.ControlCommand{}, err
+		return db.ControlCommand{}, false, err
 	}
 
 	// Checked after authorization (a caller who may not issue the method learns nothing about its
@@ -221,7 +241,58 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	if err := protocol.ValidateArgs(req.Method, req.Args); err != nil {
 		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 			map[string]any{"method": req.Method, "error": err.Error()})
-		return db.ControlCommand{}, fmt.Errorf("%w: %w", ErrInvalidArgs, err)
+		return db.ControlCommand{}, false, fmt.Errorf("%w: %w", ErrInvalidArgs, err)
+	}
+
+	// The per-device gate, after the role decision (a caller who may not issue the method learns
+	// nothing about which devices are open). The insert re-checks it under the device row lock.
+	if isConfigWriteMethod(req.Method) {
+		open, err := s.deviceGateOpen(ctx, req.DeviceName)
+		if err != nil {
+			return db.ControlCommand{}, false, fmt.Errorf("read device gate: %w", err)
+		}
+		if !open {
+			err := &ConfigDisabledError{Scope: GateScopeDevice}
+			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+				map[string]any{"method": req.Method, "error": err.Error()})
+			return db.ControlCommand{}, false, err
+		}
+	}
+
+	if err := checkSubmissionFields(req); err != nil {
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": err.Error()})
+		return db.ControlCommand{}, false, err
+	}
+
+	args := req.Args
+	if len(args) == 0 {
+		args = json.RawMessage(`{}`)
+	}
+
+	// A requestId seen before is answered from the record, before ThingsBoard is asked anything:
+	// the whole point is that a retry does not reach the device again. Authorization above ran
+	// against the current database state, so a revoked operator cannot read their old submission.
+	if req.RequestID != "" {
+		existing, found, hidden, err := s.lookupOwnSubmission(ctx, req)
+		if err != nil {
+			return db.ControlCommand{}, false, fmt.Errorf("look up requestId: %w", err)
+		}
+		if found {
+			return s.replay(ctx, existing, req, args)
+		}
+		if hidden {
+			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+				map[string]any{"method": req.Method, "requestId": req.RequestID, "error": "requestId belongs to a command no longer visible"})
+			return db.ControlCommand{}, false, ErrRequestIDReused
+		}
+	}
+
+	target, ok := configTarget(req.Method, args)
+	if !ok {
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": "no configuration target"})
+		return db.ControlCommand{}, false, fmt.Errorf("%w: tank must be an integer 1..%d", ErrInvalidArgs, protocol.MaxDeviceTankSettings)
 	}
 
 	dev, err := s.tb.GetDeviceByName(ctx, req.DeviceName)
@@ -231,25 +302,20 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 			// between the two device registries, not the caller's fault.
 			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "failed",
 				map[string]any{"method": req.Method, "error": "device not provisioned in ThingsBoard"})
-			return db.ControlCommand{}, fmt.Errorf("device %q is not provisioned in ThingsBoard: %w", req.DeviceName, err)
+			return db.ControlCommand{}, false, fmt.Errorf("device %q is not provisioned in ThingsBoard: %w", req.DeviceName, err)
 		}
-		return db.ControlCommand{}, fmt.Errorf("%w: %v", ErrPlatformUnavailable, err)
+		return db.ControlCommand{}, false, fmt.Errorf("%w: %v", ErrPlatformUnavailable, err)
 	}
 
 	commandID, err := newUUID()
 	if err != nil {
-		return db.ControlCommand{}, err
-	}
-
-	args := req.Args
-	if len(args) == 0 {
-		args = json.RawMessage(`{}`)
+		return db.ControlCommand{}, false, err
 	}
 
 	issuedAt := time.Now()
 	expiresAt := issuedAt.Add(s.cfg.CommandTTL)
 
-	cmd, err := s.q.CreateControlCommand(ctx, db.CreateControlCommandParams{
+	params := db.CreateControlCommandParams{
 		CommandID:  commandID,
 		DeviceName: req.DeviceName,
 		Method:     req.Method,
@@ -258,19 +324,49 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		Operator:   req.Actor.Username,
 		Reason:     req.Reason,
 		// Both timestamps come from this one clock reading — see CreateControlCommand's comment.
-		IssuedAt:  pgtype.Timestamptz{Time: issuedAt, Valid: true},
-		ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
-	})
+		IssuedAt:             pgtype.Timestamptz{Time: issuedAt, Valid: true},
+		ExpiresAt:            pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		RequestID:            pgtype.Text{String: req.RequestID, Valid: req.RequestID != ""},
+		ExpectedStationID:    req.ExpectedStationID,
+		ConfigTarget:         target,
+		RequiredLevel:        requiredLevel(spec.Permission),
+		RequireDeviceEnabled: isConfigWriteMethod(req.Method),
+	}
+	var cmd db.ControlCommand
+	if isConfigWriteMethod(req.Method) {
+		cmd, err = s.createConfigCommand(ctx, params, req)
+	} else {
+		cmd, err = s.q.CreateControlCommand(ctx, params)
+	}
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) && req.RequestID != "" {
+			// Either a concurrent submission with the same requestId won the insert (ON CONFLICT DO
+			// NOTHING), or access changed. The first is answered as a replay, under the same visibility.
+			existing, found, hidden, lookErr := s.lookupOwnSubmission(ctx, req)
+			if lookErr == nil && found {
+				return s.replay(ctx, existing, req, args)
+			}
+			if lookErr == nil && hidden {
+				return db.ControlCommand{}, false, ErrRequestIDReused
+			}
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
-			// The insert re-checks the access rule in the same statement and found the user no
-			// longer allowed — they were moved, demoted or disabled, or the device changed hands,
-			// between the early decision and now. Nothing was recorded or sent.
+			// The insert re-checks the access rule, the method tier and the device gate in the same
+			// statement and found the user no longer allowed — they were moved, demoted or disabled, or
+			// the device changed hands, between the early decision and now. Nothing was recorded or sent.
 			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
 				map[string]any{"method": req.Method, "error": "access changed while the command was being issued"})
-			return db.ControlCommand{}, fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
+			return db.ControlCommand{}, false, fmt.Errorf("%w: device %q", ErrForbidden, req.DeviceName)
 		}
-		return db.ControlCommand{}, fmt.Errorf("record command: %w", err)
+		var stationErr *StationChangedError
+		var gateErr *ConfigDisabledError
+		var flightErr *InFlightError
+		if errors.As(err, &stationErr) || errors.As(err, &gateErr) || errors.As(err, &flightErr) || errors.Is(err, ErrForbidden) {
+			s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+				map[string]any{"method": req.Method, "requestId": req.RequestID, "error": err.Error()})
+			return db.ControlCommand{}, false, err
+		}
+		return db.ControlCommand{}, false, fmt.Errorf("record command: %w", err)
 	}
 	// From here on everything — this audit row, the ACK, the send audit — is filed under the customer
 	// the command row itself carries, which was decided in the same statement that authorized it.
@@ -282,8 +378,9 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	// the only one that can still stop a command from going out unrecorded. The command row stays
 	// 'pending' and the expiry sweep closes it, so nothing is left half-open.
 	if err := s.auditRequired(ctx, req.Actor, "control.issue", req.DeviceName, commandID, "allowed",
-		map[string]any{"method": req.Method, "reason": req.Reason, "args": json.RawMessage(args)}); err != nil {
-		return cmd, fmt.Errorf("%w: %v", ErrAuditUnavailable, err)
+		map[string]any{"method": req.Method, "reason": req.Reason, "args": json.RawMessage(args),
+			"requestId": req.RequestID, "expectedStationId": req.ExpectedStationID}); err != nil {
+		return cmd, false, fmt.Errorf("%w: %v", ErrAuditUnavailable, err)
 	}
 
 	env := protocol.Envelope{
@@ -298,7 +395,8 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 
 	ack, err := s.tb.SendCommand(ctx, dev.ID.ID, req.Method, env, s.cfg.AckTimeout.Milliseconds())
 	if err != nil {
-		return s.handleSendFailure(ctx, cmd, req, err)
+		cmd, err := s.handleSendFailure(ctx, cmd, req, err)
+		return cmd, false, err
 	}
 
 	// ThingsBoard accepted the call and the device answered, so the command was definitely sent.
@@ -322,7 +420,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 		ErrorReason: text(ack.Reason),
 	})
 	if err != nil {
-		return s.ackGuardRefused(ctx, cmd, req, status), nil
+		return s.ackGuardRefused(ctx, cmd, req, status), false, nil
 	}
 
 	outcome := "allowed"
@@ -332,7 +430,7 @@ func (s *Service) Issue(ctx context.Context, req IssueRequest) (db.ControlComman
 	s.audit(ctx, req.Actor, "control.ack", req.DeviceName, commandID, outcome,
 		map[string]any{"status": status, "errorCode": ack.ErrorCode, "reason": ack.Reason, "duplicate": ack.Duplicate})
 
-	return acked, nil
+	return acked, false, nil
 }
 
 // ackGuardRefused handles MarkControlCommandAcked matching zero rows: the row is no longer in a
@@ -453,7 +551,9 @@ func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protoc
 		if errors.Is(err, pgx.ErrNoRows) {
 			// No such command, its status guard refused the move because it is already terminal, or
 			// deviceName didn't match the command's owner (a device reporting a foreign commandId).
-			// All three are normal or actively adversarial; none should abort ingestion.
+			// All three are normal or actively adversarial; none should abort ingestion. A result for a
+			// command that is already closed is kept as a diagnostic audit row (config-command-delivery).
+			s.recordLateResult(ctx, deviceName, commandID, res)
 			return db.ControlCommand{}, false, nil
 		}
 		// Anything else is the database failing, not the guard refusing: the result was valid and is
@@ -526,13 +626,14 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 		return fmt.Errorf("%w: %s", ErrPhysicalCommandsDisabled, spec.Method)
 	}
 
-	if !s.cfg.AllowConfigCommands && isConfigWriteMethod(spec.Method) {
-		return fmt.Errorf("%w: %s", ErrConfigCommandsDisabled, spec.Method)
-	}
-
-	// The role gates *which methods*; the device decision gates *which devices*.
+	// The role gates *which methods*; the device decision gates *which devices*. Checked before the
+	// config gate so that an employee is told 403, not "the system has not opened this" (#3).
 	if !roleAllows(actor.Role, spec.Permission) {
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
+	}
+
+	if !s.cfg.AllowConfigCommands && isConfigWriteMethod(spec.Method) {
+		return &ConfigDisabledError{Scope: GateScopeDeployment}
 	}
 	return nil
 }

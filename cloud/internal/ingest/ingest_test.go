@@ -112,7 +112,7 @@ func newStack(t *testing.T, cfg control.Config) *stack {
 	if err := q.EnsureDevice(ctx, deviceName); err != nil {
 		t.Fatalf("seed device: %v", err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE devices SET customer_id = (SELECT id FROM customers WHERE name = 'default') WHERE device_name = $1`, deviceName); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE devices SET customer_id = (SELECT id FROM customers WHERE name = 'default'), config_commands_enabled_at = now() WHERE device_name = $1`, deviceName); err != nil {
 		t.Fatalf("assign device to default customer: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO user_devices (user_id, device_name) VALUES ($1,$2)`, userID, deviceName); err != nil {
@@ -142,6 +142,9 @@ func newStack(t *testing.T, cfg control.Config) *stack {
 	}
 	t.Cleanup(sim.Disconnect)
 
+	if cfg.Pool == nil {
+		cfg.Pool = pool
+	}
 	ctl := control.New(q, tb, cfg)
 	ing := ingest.New(ingest.Config{
 		TB: tb, Control: ctl, Redis: rdb, Queries: q,

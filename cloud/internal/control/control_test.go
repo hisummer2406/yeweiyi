@@ -88,6 +88,7 @@ func (f *fakeSender) SendCommand(_ context.Context, _ string, method string, env
 }
 
 type fixture struct {
+	pool   *pgxpool.Pool
 	svc    *control.Service
 	q      *db.Queries
 	sender *fakeSender
@@ -142,7 +143,11 @@ func newFixture(t *testing.T, role string, cfg control.Config) *fixture {
 	})
 
 	sender := &fakeSender{}
+	if cfg.Pool == nil {
+		cfg.Pool = pool
+	}
 	return &fixture{
+		pool:   pool,
 		svc:    control.New(q, sender, cfg),
 		q:      q,
 		sender: sender,

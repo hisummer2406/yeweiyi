@@ -58,7 +58,33 @@ func (i *Ingester) syncTankSettings(ctx context.Context, deviceName, deviceID st
 			i.cfg.Logf("ingest: %s: save tank %d settings: %v", deviceName, t.Tank, err)
 		}
 	}
+	// Device-level settings (config-command-delivery) come from the same read: same source, same
+	// cadence, same "the device is the source of truth" rule.
+	if ds, ok, skipped := protocol.ParseDeviceSettings(attrs); ok {
+		if len(skipped) > 0 {
+			i.cfg.Logf("ingest: %s: device settings: skipped unusable attributes %v", deviceName, skipped)
+		}
+		if err := SaveDeviceSettings(ctx, i.cfg.Queries, deviceName, ds); err != nil {
+			i.cfg.Logf("ingest: %s: save device settings: %v", deviceName, err)
+		}
+	}
 	return len(tanks)
+}
+
+// SaveDeviceSettings upserts the device-level mirror. Idempotent: same reportedAt is a no-op.
+func SaveDeviceSettings(ctx context.Context, q *db.Queries, deviceName string, s protocol.DeviceSettings) error {
+	reported := time.Now()
+	if s.ReportedAtMs > 0 {
+		reported = time.UnixMilli(s.ReportedAtMs)
+	}
+	return q.UpsertDeviceSettings(ctx, db.UpsertDeviceSettingsParams{
+		DeviceName:                deviceName,
+		InStockHeightThresholdMm:  int4(s.InStockHeightThresholdMm),
+		InStockTimeThresholdSec:   int4(s.InStockTimeThresholdSec),
+		OutStockHeightThresholdMm: int4(s.OutStockHeightThresholdMm),
+		OutStockTimeThresholdSec:  int4(s.OutStockTimeThresholdSec),
+		ReportedAt:                pgtype.Timestamptz{Time: reported, Valid: true},
+	})
 }
 
 // SaveTankSettings upserts one tank's mirror. Idempotent: a repeat with the same reportedAt is a no-op.

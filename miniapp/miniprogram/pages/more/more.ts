@@ -4,11 +4,13 @@ import { getProfile, getToken } from '../../utils/storage';
 import { showComingSoon } from '../../utils/comingSoon';
 import { LOCALE_NAMES, applyTabBar, currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
 import { ROLE_KEYS, label } from '../../utils/labels';
+import { isReadOnlyRole } from '../../utils/roles';
 
 type MoreItem = {
   titleKey: string;
   icon: string; // /assets/icons/{icon}.png，直接从设计稿 PSD 的「组17」画板抠出来的切图
   page?: string;
+  adminOnly?: boolean;
 };
 
 // 对应设计稿「首页-设置05」画板，就这 6 项——交班/库存记录属于「我的记录」画板，
@@ -23,6 +25,8 @@ const ITEMS: MoreItem[] = [
   // 设计稿里报表设置复用的就是罐表设置那个图标，不是我漏抠
   { titleKey: 'more.reportSettings', icon: 'settings-tankshape', page: '/pages/report-settings/report-settings' },
   { titleKey: 'more.backfill', icon: 'settings-backfill', page: '/pages/backfill/backfill' },
+  // 设计稿没有：远程配置下发后的命令进度与历史（#6），只给管理员（员工看不到命令历史）
+  { titleKey: 'more.cmdLog', icon: 'settings-records', page: '/pages/issue-command/issue-command', adminOnly: true },
 ];
 
 Page({
@@ -43,7 +47,7 @@ Page({
     const profile = token ? getProfile() : undefined;
     this.setData({
       text: texts('more'),
-      items: ITEMS.map((i) => ({ titleKey: i.titleKey, title: t(i.titleKey), icon: i.icon, page: i.page })),
+      items: ITEMS.filter((i) => !i.adminOnly || (role && !isReadOnlyRole(role))).map((i) => ({ titleKey: i.titleKey, title: t(i.titleKey), icon: i.icon, page: i.page })),
       account: maskPhone(profile?.phone) || profile?.username || '',
       roleLabel: role ? label(ROLE_KEYS, role) : '',
       langLabel: t('lang.label'),

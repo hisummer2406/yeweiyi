@@ -208,6 +208,13 @@ docs/                 当前规范与历史归档
   单字段 `config.setTankSettings` 已验证 ACK→`cmdResult`→属性回显→重启持久化，见
   [docs/tank-settings-device-verification.md](docs/tank-settings-device-verification.md#验证记录)。其余方法、客户管理员、离线/超时
   路径仍未真机验证；`allowConfigCommands` 在生产保持关闭，只在验证短窗口内打开。
+- 配置命令提交保护（#3，契约见 [docs/config-command-contract.md](docs/config-command-contract.md)，迁移 000038）：两个配置方法
+  **必须**带 `requestId`（同一操作人+设备+id 至多一条命令，重放 `200` 不再派发，改内容 `409 request_id_reused`）与
+  `expectedStationId`（受理事务内按油站行 → 设备行加共享锁复核，不符 `409 device_station_changed`）；同一罐/整机至多一条未终态
+  命令（部分唯一索引，`409 config_command_in_flight`）。开关是**两级**：部署级 `allowConfigCommands` 且设备级
+  `devices.config_commands_enabled_at`（仅平台管理员经 `PUT /api/devices/:device/config-commands` 开关，换客户自动关闭）。命令
+  INSERT 语句内再判访问规则、方法等级与设备级开关。迟到的 `cmdResult` 只写一次 `control.result_late` 审计，不改状态。
+  整机设置镜像 `device_settings`（`GET /api/devices/:device/device-settings`，仅管理员）。**未真机验证。**
 - 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 与 Android CI 都校验
   `MANIFEST.json`。改 fixture 要在同一个 PR 里让两端测试都通过；没有分支保护，CI 红了不会阻止合并，见 open-items §C-1。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；

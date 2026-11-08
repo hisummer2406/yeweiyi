@@ -8,10 +8,20 @@ import InventoryRecords from '../components/InventoryRecords';
 import ShiftRecords from '../components/ShiftRecords';
 import StockRecords from '../components/StockRecords';
 import { useStationCurrentDevice } from '../components/useStationCurrentDevice';
+import CommandsTab from './CommandsTab';
 import DeviceOwnership from './DeviceOwnership';
+import SettingsTab from './SettingsTab';
 import SnapshotTab from './SnapshotTab';
 
-const TAB_KEYS = ['snapshot', 'alarms', 'stock', 'shift', 'inventory'] as const;
+const TAB_KEYS = [
+  'snapshot',
+  'alarms',
+  'stock',
+  'shift',
+  'inventory',
+  'settings',
+  'commands',
+] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
 /** `?tab=` 取值之外（缺省、拼错）一律回到实时数据。 */
@@ -21,8 +31,8 @@ const parseTab = (v: string | null): TabKey =>
     : 'snapshot';
 
 /**
- * 设备详情——PC 端对应小程序 pages/device-detail 的页签：实时数据、报警记录、出入库记录、交班记录、库存记录
- * （控制命令页签随远程控制另做）。设备名取自路由 `:deviceName`（路由库已解码），
+ * 设备详情——PC 端对应小程序 pages/device-detail 的页签：实时数据、报警记录、出入库记录、交班记录、库存记录，
+ * 以及参数设置、操作记录（#4，远程配置；后台只对管理员开放，所以不再按角色隐藏）。设备名取自路由 `:deviceName`（路由库已解码），
  * 记录页签复用与记录页相同的组件，设备来自路由所以不显示设备选择。
  * 非活动页签不挂载，避免三个页签同时轮询。
  * 页签内容按设备编号做 key：路由从一台设备换到另一台（如换机后改看新设备）时整体重建，
@@ -90,6 +100,16 @@ const ConsoleDeviceDetail: React.FC = () => {
             key: 'inventory',
             label: t('pages.console.detail.tab.inventory'),
             children: <InventoryRecords key={deviceName} device={deviceName} />,
+          },
+          {
+            key: 'settings',
+            label: t('pages.console.detail.tab.settings'),
+            children: <SettingsTab key={deviceName} device={deviceName} />,
+          },
+          {
+            key: 'commands',
+            label: t('pages.console.detail.tab.commands'),
+            children: <CommandsTab key={deviceName} device={deviceName} />,
           },
         ]}
       />

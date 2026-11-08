@@ -3,9 +3,12 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"yeweiyi-cloud/internal/api"
 	"yeweiyi-cloud/internal/control"
@@ -52,6 +55,9 @@ func newControlEnv(t *testing.T, cfg control.Config) (*testEnv, *stubSender) {
 	t.Helper()
 	sender := &stubSender{}
 	env := newTestEnvWith(t, func(d *api.Deps) {
+		if cfg.Pool == nil {
+			cfg.Pool = d.Pool
+		}
 		d.Control = control.New(d.Queries, sender, cfg)
 	})
 	t.Cleanup(func() {
@@ -541,9 +547,22 @@ func TestCommandStatusReflectsAsynchronousResult(t *testing.T) {
 	_ = db.ControlCommand{}
 }
 
+var configRequestSeq atomic.Int64
+
+// configBody is a configuration submission with a fresh requestId and expectedStationId null (the test
+// devices are on no station).
 func configBody(t *testing.T, method string, args map[string]any) []byte {
 	t.Helper()
-	return jsonBody(t, map[string]any{"method": method, "args": args, "reason": "调整配置"})
+	return jsonBody(t, map[string]any{"method": method, "args": args, "reason": "调整配置",
+		"requestId": fmt.Sprintf("t%d-%d", time.Now().UnixNano(), configRequestSeq.Add(1)), "expectedStationId": nil})
+}
+
+// openConfigGate opens the per-device config-command gate directly in the database.
+func (e *testEnv) openConfigGate(device string) {
+	e.t.Helper()
+	if _, err := e.pool.Exec(context.Background(), `UPDATE devices SET config_commands_enabled_at = now() WHERE device_name = $1`, device); err != nil {
+		e.t.Fatal(err)
+	}
 }
 
 // cloud#71: config.setTankSettings is open to customer administrators, config.setDeviceSettings only to
@@ -552,6 +571,7 @@ func TestIssueCommand_ConfigSettings(t *testing.T) {
 	env, sender := newControlEnv(t, control.Config{AllowConfigCommands: true})
 	device := "ctl-api-config"
 	env.ownDevice(device)
+	env.openConfigGate(device)
 	url := "/api/devices/" + device + "/commands"
 
 	env.setRole(control.RoleCustomerAdmin)
