@@ -635,4 +635,185 @@ export default {
     'This device has not reported within the data retention period. Last report: {time}',
   'pages.console.detail.snapshot.notProvisioned':
     'This device is not fully set up on the platform yet. Contact the platform administrator.',
+  'pages.console.detail.tab.settings': 'Settings',
+  'pages.console.detail.tab.commands': 'Operations',
+  'pages.console.control.title': 'Remote control',
+  'pages.console.control.scope':
+    'Only parameter settings are available for now (alarm thresholds, corrections, medium, capacity, in/out-stock thresholds). Mute, clear, reboot, pumps and valves are not offered. Pick a device to open its Settings.',
+  'pages.console.control.col.station': 'Station',
+  'pages.console.control.col.device': 'Device',
+  'pages.console.control.col.gate': 'Remote config',
+  'pages.console.control.gate.open': 'Enabled',
+  'pages.console.control.gate.closed': 'Not enabled',
+  'pages.console.settings.gate.open':
+    'Remote configuration is enabled for this device',
+  'pages.console.settings.gate.closedHint':
+    'Remote configuration is not enabled for this device; values are read-only. A platform administrator must enable it first.',
+  'pages.console.settings.gate.unknown':
+    'Cannot tell whether remote configuration is enabled (older cloud version); sending is unavailable.',
+  'pages.console.settings.gate.openAction': 'Enable remote config',
+  'pages.console.settings.gate.close': 'Disable remote config',
+  'pages.console.settings.gate.openTitle': 'Enable remote configuration',
+  'pages.console.settings.gate.closeTitle': 'Disable remote configuration',
+  'pages.console.settings.gate.openWarn':
+    "Once enabled, platform administrators and this customer's administrators can send parameter changes to device {device}. Please give a reason.",
+  'pages.console.settings.gate.closeWarn':
+    'Once disabled, nobody can send parameter changes to device {device}; commands already sent are not affected. Please give a reason.',
+  'pages.console.settings.gate.opened': 'Remote configuration enabled',
+  'pages.console.settings.gate.closed': 'Remote configuration disabled',
+  'pages.console.settings.gate.failed': 'Failed, please try again later',
+  'pages.console.settings.stationUnknown':
+    'Cannot tell which station the device is on (older cloud version); sending is unavailable.',
+  'pages.console.settings.loadFailed': 'Failed to load device parameters',
+  'pages.console.settings.retry': 'Retry',
+  'pages.console.settings.tankTitle': 'Tank parameters',
+  'pages.console.settings.deviceTitle':
+    'Device settings (in/out-stock detection)',
+  'pages.console.settings.reportedAt': 'Reported by the device at {time}',
+  'pages.console.settings.notReported':
+    'The device has not reported tank settings yet.',
+  'pages.console.settings.deviceNotReported':
+    'The device has not reported its device settings yet.',
+  'pages.console.settings.devicePlatformOnly':
+    'Only platform administrators can change device settings.',
+  'pages.console.settings.tankN': 'Tank {tank}',
+  'pages.console.settings.col.field': 'Parameter',
+  'pages.console.settings.col.current': 'Device value',
+  'pages.console.settings.col.new': 'New value',
+  'pages.console.settings.readOnly': '(read-only)',
+  'pages.console.settings.readOnlyNote':
+    'Read-only parameters cannot be changed remotely: tank height, shape and sensor length are set on the device; the density unit is not yet confirmed with the device; the low-temperature alarm has no effect on the device.',
+  'pages.console.settings.send': 'Send to device',
+  'pages.console.settings.reset': 'Clear changes',
+  'pages.console.settings.aboveTankHeight':
+    '{fields} exceed the tank height; the device may refuse.',
+  'pages.console.settings.problem.range': 'Out of range ({min}–{max})',
+  'pages.console.settings.problem.integer': 'Must be an integer',
+  'pages.console.settings.problem.order':
+    'Must be low-low < low < high < high-high (0 = off)',
+  'pages.console.settings.oil.unset': 'Not set',
+  'pages.console.settings.oil.custom': 'Custom {n}',
+  'pages.console.settings.shape.horizontal': 'Horizontal',
+  'pages.console.settings.shape.vertical': 'Vertical',
+  'pages.console.settings.field.alarmHighHighLevelMm': 'High-high level alarm',
+  'pages.console.settings.field.alarmHighLevelMm': 'High level alarm',
+  'pages.console.settings.field.alarmLowLevelMm': 'Low level alarm',
+  'pages.console.settings.field.alarmLowLowLevelMm': 'Low-low level alarm',
+  'pages.console.settings.field.alarmHighWaterMm': 'High water alarm',
+  'pages.console.settings.field.alarmHighTempC': 'High temperature alarm',
+  'pages.console.settings.field.alarmLowTempC': 'Low temperature alarm',
+  'pages.console.settings.field.levelCorrectionMm': 'Level correction',
+  'pages.console.settings.field.waterCorrectionMm': 'Water correction',
+  'pages.console.settings.field.tempCorrectionC': 'Temperature correction',
+  'pages.console.settings.field.oilTypeIndex': 'Medium',
+  'pages.console.settings.field.capacityL': 'Capacity',
+  'pages.console.settings.field.tankHeightMm': 'Tank height',
+  'pages.console.settings.field.tankShape': 'Tank shape',
+  'pages.console.settings.field.sensorLengthMm': 'Sensor length',
+  'pages.console.settings.field.density': 'Density',
+  'pages.console.settings.field.inStockHeightThresholdMm':
+    'In-stock height threshold',
+  'pages.console.settings.field.inStockTimeThresholdSec':
+    'In-stock time threshold',
+  'pages.console.settings.field.outStockHeightThresholdMm':
+    'Out-stock height threshold',
+  'pages.console.settings.field.outStockTimeThresholdSec':
+    'Out-stock time threshold',
+  'pages.console.settings.submit.title': 'Confirm parameter change',
+  'pages.console.settings.submit.ok': 'Send',
+  'pages.console.settings.submit.retrySame':
+    'Retry with the same submission ID',
+  'pages.console.settings.submit.device': 'Device',
+  'pages.console.settings.submit.station': 'Station',
+  'pages.console.settings.submit.target': 'Target',
+  'pages.console.settings.submit.targetTank': 'Tank {tank}',
+  'pages.console.settings.submit.targetDevice': 'Whole device',
+  'pages.console.settings.submit.col.field': 'Parameter',
+  'pages.console.settings.submit.col.before': 'Before',
+  'pages.console.settings.submit.col.after': 'After',
+  'pages.console.settings.submit.note':
+    'The device writes the settings and reports them back. Saving settings on the device itself overrides remote changes.',
+  'pages.console.settings.submit.reason': 'Reason (required)',
+  'pages.console.settings.submit.error.deploymentDisabled':
+    'Remote configuration is not enabled on this system.',
+  'pages.console.settings.submit.error.deviceDisabled':
+    'Remote configuration is not enabled for this device.',
+  'pages.console.settings.submit.error.stationChanged':
+    "The device's station has changed (it may have just been replaced). Data reloaded; please check before trying again.",
+  'pages.console.settings.submit.error.inFlight':
+    'A command for this target is still running; showing its progress. Submit again after it finishes.',
+  'pages.console.settings.submit.error.requestIdReused':
+    'Submission ID conflict; close the dialog and confirm again.',
+  'pages.console.settings.submit.error.invalidArgs': 'Invalid parameters: ',
+  'pages.console.settings.submit.error.unconfirmed':
+    'Result not confirmed: the device may already have received it. Check Operations first; retrying with the same submission ID will not send it twice.',
+  'pages.console.settings.submit.error.forbidden':
+    'You are not allowed to send this change.',
+  'pages.console.settings.submit.error.purging': 'The device is being deleted.',
+  'pages.console.settings.submit.error.unavailable':
+    'Service unavailable, please try again later.',
+  'pages.console.settings.submit.error.other':
+    'Failed to send, please try again later.',
+  'pages.console.settings.phase.accepted':
+    'Accepted, waiting for the device to acknowledge',
+  'pages.console.settings.phase.received':
+    'Received by the device, waiting for the result',
+  'pages.console.settings.phase.executing': 'Running on the device',
+  'pages.console.settings.phase.succeeded': 'Applied by the device',
+  'pages.console.settings.phase.failed': 'Failed on the device',
+  'pages.console.settings.phase.rejected': 'Refused by the device',
+  'pages.console.settings.phase.expired':
+    'Result unknown (timed out): the device may have applied it; check its current values',
+  'pages.console.settings.phase.unknown': 'Unknown status',
+  'pages.console.settings.echo.waiting':
+    'Applied, waiting for the device to report back',
+  'pages.console.settings.echo.matched': 'Device now reports the same values',
+  'pages.console.settings.echo.mismatch':
+    'The device reports different values; they may have been changed on site. Please check.',
+  'pages.console.settings.echo.timedOut':
+    'Applied, but no report from the device for a while; refresh later',
+  'pages.console.settings.echo.refresh': 'Refresh report',
+  'pages.console.settings.result.ignored': 'Ignored by the device: {fields}',
+  'pages.console.settings.commandId': 'Command {id}',
+  'pages.console.settings.pollFailing': 'Failed to read status, retrying…',
+  'pages.console.settings.dismiss': 'Close',
+  'pages.console.settings.calibration.title': 'Calibration table (read-only)',
+  'pages.console.settings.calibration.none':
+    'The device has not reported a calibration table.',
+  'pages.console.settings.calibration.failed':
+    'Failed to load the calibration table',
+  'pages.console.settings.calibration.meta':
+    '{n} points, reported at {time} (the device only reports it on reconnect)',
+  'pages.console.settings.calibration.height': 'Height (mm)',
+  'pages.console.settings.calibration.volume': 'Volume (L)',
+  'pages.console.commands.col.time': 'Issued',
+  'pages.console.commands.col.method': 'Operation',
+  'pages.console.commands.col.target': 'Target',
+  'pages.console.commands.col.args': 'Parameters',
+  'pages.console.commands.col.operator': 'Operator',
+  'pages.console.commands.col.reason': 'Reason',
+  'pages.console.commands.col.status': 'Status',
+  'pages.console.commands.empty': 'No operations yet',
+  'pages.console.commands.loadFailed': 'Failed to load operations',
+  'pages.console.commands.prev': 'Previous',
+  'pages.console.commands.next': 'Next',
+  'pages.console.commands.refresh': 'Refresh',
+  'pages.console.commands.method.config.setTankSettings':
+    'Change tank parameters',
+  'pages.console.commands.method.config.setDeviceSettings':
+    'Change device settings',
+  'pages.console.commands.method.config.setAlarmThresholds':
+    'Change alarm thresholds (legacy)',
+  'pages.console.commands.method.alarm.mute': 'Mute',
+  'pages.console.commands.method.alarm.clear': 'Clear alarm',
+  'pages.console.commands.method.device.reboot': 'Reboot device',
+  'pages.console.commands.status.accepted': 'Accepted',
+  'pages.console.commands.status.received': 'Received',
+  'pages.console.commands.status.executing': 'Running',
+  'pages.console.commands.status.succeeded': 'Succeeded',
+  'pages.console.commands.status.failed': 'Failed',
+  'pages.console.commands.status.rejected': 'Refused',
+  'pages.console.commands.status.expired': 'Result unknown',
+  'pages.console.commands.status.unknown': 'Unknown',
+  'pages.console.settings.deviceLoadFailed': "Failed to load device settings",
 };
