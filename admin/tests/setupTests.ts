@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup } from '@testing-library/react';
-import { afterEach, vi } from 'vitest';
+import { afterAll, afterEach, vi } from 'vitest';
 
 const store: Record<string, string> = {};
 
@@ -116,3 +116,8 @@ afterEach(async () => {
     await new Promise<void>((resolve) => setImmediate(resolve));
   });
 });
+
+// antd 的 Tooltip/Popconfirm 悬停延迟计时器（约 100ms）若在环境拆除后才触发，会抛 `window is not defined`，
+// vitest 把它当未处理错误而使整个命令失败（CI 偶发，哪个测试文件撞上是随机的，#27）；每个文件结束前等它们先触发完。
+// 与上面的 afterEach 并存：afterEach 排空 React 调度，这里兜住组件之外的定时器。
+afterAll(() => new Promise((resolve) => setTimeout(resolve, 200)));
