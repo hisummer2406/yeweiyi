@@ -79,7 +79,18 @@ Page({
         this.gate = ctx.device.config_commands_enabled;
         this.setData({ stationName: ctx.stationName });
         if (device === this.data.device && this.data.state === 'ok') {
-          this.updateSendable();
+          // Same device: keep what is typed, re-read the device's corrections (Codex review, PR #15)
+          getTankSettings(device)
+            .then((m) => {
+              if (seq !== this.seq) return;
+              this.mirrors = m;
+              this.mirrorLoaded = true;
+              this.showCurrent();
+            })
+            .catch(() => {
+              if (seq !== this.seq) return;
+              this.updateSendable();
+            });
           return undefined;
         }
         return get<DeviceTanksResponse>(`/api/devices/${encodeURIComponent(device)}/tanks`).then((res) => {

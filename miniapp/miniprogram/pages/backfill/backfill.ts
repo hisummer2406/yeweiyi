@@ -1,7 +1,7 @@
 import { roleFromToken } from '../../utils/auth';
 import { describeError } from '../../utils/errors';
 import { setNavTitle, t, texts } from '../../utils/i18n';
-import { buildBackfill, newRequestId } from '../../utils/remoteConfig';
+import { backfillFingerprint, buildBackfill, newRequestId, offsetAtLocal } from '../../utils/remoteConfig';
 import { addStockEvent } from '../../utils/remoteConfigApi';
 import { ApiError, get } from '../../utils/request';
 import { isReadOnlyRole } from '../../utils/roles';
@@ -17,6 +17,11 @@ import type { DeviceTanksResponse } from '../../types/api';
 type Kind = 'inbound' | 'outbound';
 type Entry = { tankIndex: number; date: string; time: string; beforeLevel: string; volume: string; reason: string };
 type State = 'loading' | 'ok' | 'no-station' | 'blocked' | 'no-tanks' | 'error';
+
+// A submission whose answer never came (timeout), per device + direction, kept for this app session even after
+// the dialog is dismissed or the page is left: saving the same entry again resends this body with its requestId,
+// so the cloud replays instead of creating a second record (Codex review, PR #15). Cleared on success.
+const pending = new Map<string, { body: Record<string, unknown>; fingerprint: string }>();
 
 const emptyEntry = (): Entry => ({ tankIndex: -1, date: '', time: '', beforeLevel: '', volume: '', reason: '' });
 
@@ -142,7 +147,17 @@ Page({
     if (!this.data.canSubmit || this.data.state !== 'ok' || this.data.submitting) return;
     const entry = this.data[kind] as Entry;
     const tank = entry.tankIndex >= 0 ? this.tanks[entry.tankIndex] : undefined;
+    const device = this.data.device as string;
+    const key = `${device}/${kind}`;
+    const fingerprint = backfillFingerprint(entry.tankIndex, entry, entry.reason);
+    const unresolved = pending.get(key);
+    if (unresolved && unresolved.fingerprint === fingerprint) {
+      // Same entry as the unanswered one: resend it as it was (same requestId)
+      this.submit(kind, device, unresolved.body, key, fingerprint);
+      return;
+    }
     const requestId = newRequestId('mpbf');
+    const offset = offsetAtLocal(entry.date, entry.time);
     const built = buildBackfill(
       kind === 'inbound' ? 'IN' : 'OUT',
       tank,
@@ -150,14 +165,13 @@ Page({
       entry.reason,
       requestId,
       Date.now(),
-      new Date().getTimezoneOffset(),
+      offset === null ? new Date().getTimezoneOffset() : offset,
     );
     if (!built.body) {
       wx.showToast({ title: t(`backfill.bad.${built.problem}`), icon: 'none', duration: 3000 });
       return;
     }
     const body = built.body;
-    const device = this.data.device as string;
     wx.showModal({
       title: t(kind === 'inbound' ? 'backfill.confirmIn' : 'backfill.confirmOut'),
       content: t('backfill.confirmBody', {
@@ -168,16 +182,17 @@ Page({
         volume: String(body.volumeL),
       }),
       success: (r) => {
-        if (r.confirm) this.submit(kind, device, body as unknown as Record<string, unknown>);
+        if (r.confirm) this.submit(kind, device, body as unknown as Record<string, unknown>, key, fingerprint);
       },
     });
   },
 
   // Same body (same requestId) on retry: the cloud keeps one record.
-  submit(kind: Kind, device: string, body: Record<string, unknown>) {
+  submit(kind: Kind, device: string, body: Record<string, unknown>, key: string, fingerprint: string) {
     this.setData({ submitting: kind });
     addStockEvent(device, body)
       .then(() => {
+        pending.delete(key);
         this.setData({ submitting: '', [kind]: emptyEntry() });
         wx.showToast({ title: t('backfill.done'), icon: 'none', duration: 3000 });
       })
@@ -186,13 +201,14 @@ Page({
         const status = err instanceof ApiError ? err.status : 0;
         const code = err instanceof ApiError ? (err.body as { code?: string } | undefined)?.code : undefined;
         if (status === 0) {
+          pending.set(key, { body, fingerprint });
           wx.showModal({
             title: t('backfill.unconfirmedTitle'),
             content: t('backfill.unconfirmedBody'),
             confirmText: t('cfgSend.retrySame'),
             cancelText: t('cfgSend.later'),
             success: (r) => {
-              if (r.confirm) this.submit(kind, device, body);
+              if (r.confirm) this.submit(kind, device, body, key, fingerprint);
             },
           });
           return;

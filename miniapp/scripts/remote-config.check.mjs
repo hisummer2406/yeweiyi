@@ -11,6 +11,8 @@ import {
   localRfc3339,
   mirrorToForm,
   newRequestId,
+  offsetAtLocal,
+  backfillFingerprint,
 } from '../miniprogram/utils/remoteConfig.ts';
 
 let n = 0;
@@ -107,6 +109,27 @@ test('backfill validation', () => {
   assert.equal(buildBackfill('IN', 1, { ...ok, volume: '0' }, 'r', 'x', now, -480).problem, 'volume');
   assert.equal(buildBackfill('IN', 1, { ...ok, beforeLevel: '-1' }, 'r', 'x', now, -480).problem, 'level');
   assert.equal(buildBackfill('IN', 1, ok, '  ', 'x', now, -480).problem, 'reason');
+});
+
+test('the offset is the one at the chosen local time, not today (daylight saving)', () => {
+  const saved = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  try {
+    assert.equal(offsetAtLocal('2026-07-01', '08:30'), 240); // EDT, UTC-4
+    assert.equal(offsetAtLocal('2026-11-15', '08:30'), 300); // EST, UTC-5
+    assert.equal(localRfc3339('2026-07-01', '08:30', offsetAtLocal('2026-07-01', '08:30')), '2026-07-01T08:30:00-04:00');
+    assert.equal(offsetAtLocal('2026-07-01', ''), null);
+  } finally {
+    if (saved === undefined) delete process.env.TZ;
+    else process.env.TZ = saved;
+  }
+});
+
+test('the same typed entry has the same fingerprint; any changed field changes it', () => {
+  const e = { date: '2026-11-07', time: '08:30', beforeLevel: '1333.3', volume: '540' };
+  assert.equal(backfillFingerprint(0, e, 'r'), backfillFingerprint(0, { ...e, volume: ' 540 ' }, ' r '));
+  assert.notEqual(backfillFingerprint(0, e, 'r'), backfillFingerprint(1, e, 'r'));
+  assert.notEqual(backfillFingerprint(0, e, 'r'), backfillFingerprint(0, { ...e, time: '08:31' }, 'r'));
 });
 
 console.log(`${n} checks passed`);

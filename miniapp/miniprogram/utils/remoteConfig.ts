@@ -199,6 +199,21 @@ export function localRfc3339(date: string, time: string, offsetMinutes: number):
   return `${date}T${time}:00${sign}${hh}:${mm}`;
 }
 
+// The offset (Date#getTimezoneOffset convention, minutes behind UTC) that applied at that local date and time on
+// this phone — not today's: under daylight saving a July entry made in November differs by an hour (Codex review,
+// PR #15). null for an unparsable date/time.
+export function offsetAtLocal(date: string, time: string): number | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const t = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!d || !t) return null;
+  return new Date(Number(d[1]), Number(d[2]) - 1, Number(d[3]), Number(t[1]), Number(t[2])).getTimezoneOffset();
+}
+
+// Same entry as typed (for keeping an unresolved submission): every field that goes into the body.
+export function backfillFingerprint(tankIndex: number, entry: BackfillEntry, reason: string): string {
+  return JSON.stringify([tankIndex, entry.date, entry.time, entry.beforeLevel.trim(), entry.volume.trim(), reason.trim()]);
+}
+
 export type BackfillBody = {
   direction: 'IN' | 'OUT';
   tank: number;

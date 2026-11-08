@@ -146,7 +146,12 @@ Page({
         this.deviceRow = ctx.device;
         this.setData({ stationName: ctx.stationName });
         this.updateSendable();
-        if (device === this.data.device && this.data.state === 'ok') return undefined;
+        if (device === this.data.device && this.data.state === 'ok') {
+          // Same device (e.g. back from 操作记录 after a send): keep the draft, but re-read the device's report so
+          // the next comparison is against what the device has now, not the first load (Codex review, PR #15).
+          this.loadMirror(seq, device);
+          return undefined;
+        }
         return this.loadTanks(seq, device);
       })
       .catch((err: Error) => {
