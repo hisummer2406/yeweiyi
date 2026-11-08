@@ -149,11 +149,23 @@ func (s *Service) lookupOwnSubmission(ctx context.Context, req IssueRequest) (cm
 	_, err = s.q.GetControlCommandByRequestID(ctx, db.GetControlCommandByRequestIDParams{
 		OperatorID: pgtype.Int8{Int64: req.Actor.UserID, Valid: true}, DeviceName: req.DeviceName, RequestID: rid,
 	})
-	if err == nil {
-		return db.ControlCommand{}, false, true, nil
-	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return db.ControlCommand{}, false, false, nil
+	}
+	if err != nil {
+		return db.ControlCommand{}, false, false, err
+	}
+	// The row exists. A concurrent duplicate may have committed between the scoped read above and the
+	// unscoped one, so read the scoped view once more (a fresh statement sees the committed row): only if
+	// it is still invisible is it really another customer's (integration test caught this race).
+	cmd, err = s.q.GetOwnControlCommandByRequestIDVisible(ctx, db.GetOwnControlCommandByRequestIDVisibleParams{
+		UserID: req.Actor.UserID, RequestID: rid, DeviceName: req.DeviceName,
+	})
+	if err == nil {
+		return cmd, true, false, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.ControlCommand{}, false, true, nil
 	}
 	return db.ControlCommand{}, false, false, err
 }
