@@ -10,6 +10,7 @@ import {
   issueConfigCommand,
 } from '@/services/ant-design-pro/deviceConfig';
 import { listDevices } from '@/services/ant-design-pro/devices';
+import { decodeToken, getToken } from '@/utils/auth';
 import { classifySubmitError, newRequestId } from '@/utils/deviceConfig';
 
 export type ChangeRow = {
@@ -46,9 +47,25 @@ type Props = {
 
 const MAX_REASON = 200;
 
+type PendingSubmission = {
+  body: ConfigSubmission;
+  request: SubmitRequest;
+  stationLabel: string;
+};
+
+function readPending(key: string): PendingSubmission | undefined {
+  try {
+    const raw = sessionStorage.getItem(key);
+    const saved = raw ? JSON.parse(raw) : undefined;
+    return saved?.body?.requestId && saved?.request?.rows ? saved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * 配置下发的二次确认（cloud config-command-contract §1、§6）：
- * - 打开时生成本次确认的 requestId，这次确认的所有重试复用它；关掉弹窗再确认就是新的确认、新的编号。
+ * - 未确认提交按账号和设备保存快照；关闭、换页或刷新后恢复同一请求，不能换编号重复下发。
  * - 确认时先重读设备列表：设备不可见或油站变了，就不发，交给调用方刷新。expectedStationId 仍发表单打开时的值，由云端裁决。
  * - 请求超时或云端答交付未确认：先按 requestId 找回；找不到只给「用同一编号重试」，绝不换新编号自动重发。
  * - 同目标在途：取在途命令交给跟踪器。错误按 code 归类，不显示云端原文。
@@ -70,57 +87,99 @@ const ConfigSubmitModal: React.FC<Props> = ({
   const [error, setError] = useState<string>();
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const [unconfirmed, setUnconfirmed] = useState(false);
+  const [pending, setPending] = useState<PendingSubmission>();
   const requestId = useRef('');
   const inFlight = useRef(false);
+  const userId = decodeToken(getToken())?.userId;
+  const sameActor = () => decodeToken(getToken())?.userId === userId;
+  const pendingKey = `yeweiyi-config-pending:${userId ?? 'anonymous'}:${device}`;
+
+  const savePending = (value: PendingSubmission | undefined) => {
+    setPending(value);
+    try {
+      if (value) sessionStorage.setItem(pendingKey, JSON.stringify(value));
+      else sessionStorage.removeItem(pendingKey);
+    } catch {
+      // 禁用浏览器存储时仍保留当前弹窗的快照。
+    }
+  };
 
   useEffect(() => {
     if (!request) return;
-    requestId.current = newRequestId();
-    setReason('');
-    setError(undefined);
+    const saved = readPending(pendingKey);
+    setPending(saved);
+    requestId.current = saved?.body.requestId ?? newRequestId();
+    setReason(saved?.body.reason ?? '');
+    setError(
+      saved ? t('pages.console.settings.submit.error.unconfirmed') : undefined,
+    );
     setFieldErrors([]);
-    setUnconfirmed(false);
+    setUnconfirmed(!!saved);
     inFlight.current = false;
-  }, [request]);
+  }, [request, pendingKey]);
+
+  const activeRequest = pending?.request ?? request;
 
   const fail = (id: string) =>
     setError(t(`pages.console.settings.submit.error.${id}`));
 
   const submit = async () => {
-    if (!request || inFlight.current) return;
+    if (!activeRequest || inFlight.current) return;
     const why = reason.trim();
     if (!why) return;
     inFlight.current = true;
     setBusy(true);
     setError(undefined);
     setFieldErrors([]);
+    const body: ConfigSubmission = pending?.body ?? {
+      method: activeRequest.method,
+      args: activeRequest.args,
+      reason: why,
+      requestId: requestId.current,
+      expectedStationId,
+    };
     try {
+      if (pending) {
+        const found = await findCommandByRequestId(device, body.requestId);
+        if (found) {
+          savePending(undefined);
+          if (sameActor()) {
+            onTracked(found, body.args);
+            onClose();
+          }
+          return;
+        }
+      }
       // 换机/改归属预检：列表可能过期，云端事务才是裁决，这里只为不把明知过期的确认发出去
       let row: API.DeviceRow | undefined;
       try {
         row = (await listDevices()).find((r) => r.device_name === device);
-      } catch {
-        // 读不到列表不阻止提交：云端仍会按 expectedStationId 复核
-        row = {
-          device_name: device,
-          station_id: expectedStationId,
-        } as API.DeviceRow;
+      } catch (err) {
+        if (!(err instanceof ApiError && err.authHandled)) fail('unavailable');
+        return;
       }
-      if (!row || (row.station_id ?? null) !== expectedStationId) {
+      if (
+        !row ||
+        row.station_id === undefined ||
+        row.station_id !== body.expectedStationId
+      ) {
         fail('stationChanged');
         onStale();
         return;
       }
-      const body: ConfigSubmission = {
-        method: request.method,
-        args: request.args,
-        reason: why,
-        requestId: requestId.current,
-        expectedStationId,
-      };
+      if (!sameActor()) return;
+      // 发出前保存：即使请求中途刷新页面，恢复时也只重放这一份快照。
+      savePending({
+        body,
+        request: activeRequest,
+        stationLabel: pending?.stationLabel ?? stationLabel,
+      });
       const { command } = await issueConfigCommand(device, body);
-      onTracked(command, request.args);
-      onClose();
+      savePending(undefined);
+      if (sameActor()) {
+        onTracked(command, body.args);
+        onClose();
+      }
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : new ApiError(0);
       if (apiErr.authHandled) return;
@@ -128,10 +187,13 @@ const ConfigSubmitModal: React.FC<Props> = ({
       if (kind === 'unconfirmed') {
         // 结果未知：先找回，找不到也不自动重发
         try {
-          const found = await findCommandByRequestId(device, requestId.current);
+          const found = await findCommandByRequestId(device, body.requestId);
           if (found) {
-            onTracked(found, request.args);
-            onClose();
+            savePending(undefined);
+            if (sameActor()) {
+              onTracked(found, body.args);
+              onClose();
+            }
             return;
           }
         } catch {
@@ -141,6 +203,7 @@ const ConfigSubmitModal: React.FC<Props> = ({
         fail('unconfirmed');
         return;
       }
+      if (!pending) savePending(undefined);
       if (kind === 'inFlight') {
         const holder = apiErr.data?.commandId;
         if (typeof holder === 'string' && holder) {
@@ -178,8 +241,10 @@ const ConfigSubmitModal: React.FC<Props> = ({
   };
 
   const target =
-    request?.tank !== undefined
-      ? t('pages.console.settings.submit.targetTank', { tank: request.tank })
+    activeRequest?.tank !== undefined
+      ? t('pages.console.settings.submit.targetTank', {
+          tank: activeRequest.tank,
+        })
       : t('pages.console.settings.submit.targetDevice');
 
   return (
@@ -206,7 +271,7 @@ const ConfigSubmitModal: React.FC<Props> = ({
           </Typography.Text>
         </Descriptions.Item>
         <Descriptions.Item label={t('pages.console.settings.submit.station')}>
-          {stationLabel}
+          {pending?.stationLabel ?? stationLabel}
         </Descriptions.Item>
         <Descriptions.Item label={t('pages.console.settings.submit.target')}>
           {target}
@@ -216,7 +281,7 @@ const ConfigSubmitModal: React.FC<Props> = ({
         size="small"
         pagination={false}
         rowKey="field"
-        dataSource={request?.rows ?? []}
+        dataSource={activeRequest?.rows ?? []}
         columns={[
           {
             title: t('pages.console.settings.submit.col.field'),

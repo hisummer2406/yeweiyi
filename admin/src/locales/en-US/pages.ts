@@ -635,6 +635,51 @@ export default {
     'This device has not reported within the data retention period. Last report: {time}',
   'pages.console.detail.snapshot.notProvisioned':
     'This device is not fully set up on the platform yet. Contact the platform administrator.',
+  'pages.console.manual.open': 'Add entry',
+  'pages.console.manual.title': 'Add a stock entry',
+  'pages.console.manual.ok': 'Save entry',
+  'pages.console.manual.retrySame': 'Retry with the same submission ID',
+  'pages.console.manual.note':
+    'Adds a record the device {device} missed (power cut, fault). Records reported by the device are not changed; cloud entries can be revoked.',
+  'pages.console.manual.direction': 'Direction',
+  'pages.console.manual.in': 'Stock in',
+  'pages.console.manual.out': 'Stock out',
+  'pages.console.manual.tank': 'Tank',
+  'pages.console.manual.tankN': 'Tank {tank}',
+  'pages.console.manual.noTanks': 'The device has not reported tanks',
+  'pages.console.manual.time': 'Time',
+  'pages.console.manual.level': 'Level before',
+  'pages.console.manual.volume': 'Volume (positive)',
+  'pages.console.manual.reason': 'Reason',
+  'pages.console.manual.required': 'Required',
+  'pages.console.manual.saved': 'Entry added',
+  'pages.console.manual.revoke': 'Revoke',
+  'pages.console.manual.revokeConfirm':
+    'Revoke this cloud entry? It leaves the list; the audit log keeps it.',
+  'pages.console.manual.revoked': 'Revoked',
+  'pages.console.manual.col.action': 'Action',
+  'pages.console.manual.error.unconfirmed':
+    'Result not confirmed: the cloud may have saved it. Retrying with the same submission ID will not save it twice.',
+  'pages.console.manual.error.time_in_future':
+    'The time cannot be in the future',
+  'pages.console.manual.error.time_before_visible':
+    'That time is before the device joined this customer; the entry would not be visible',
+  'pages.console.manual.error.time_invalid': 'Invalid time',
+  'pages.console.manual.error.tank_invalid': 'Invalid tank',
+  'pages.console.manual.error.level_invalid': 'Invalid level',
+  'pages.console.manual.error.volume_invalid': 'Volume must be greater than 0',
+  'pages.console.manual.error.reason_required': 'Enter a reason',
+  'pages.console.manual.error.request_id_reused':
+    'Submission ID conflict; close and add the entry again',
+  'pages.console.manual.error.device_purge_in_progress':
+    'The device is being deleted',
+  'pages.console.manual.error.other':
+    'Failed to add the entry, please try again later',
+  'pages.console.manual.error.notDeletable':
+    'Records reported by the device cannot be revoked',
+  'pages.console.manual.error.revokeFailed':
+    'Failed to revoke, please try again later',
+  'pages.console.manual.abandon': "Not saved — start over",
   'pages.console.detail.tab.settings': 'Settings',
   'pages.console.detail.tab.commands': 'Operations',
   'pages.console.control.title': 'Remote control',

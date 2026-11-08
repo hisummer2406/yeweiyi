@@ -297,7 +297,7 @@ export function commandPhase(
 export type EchoState = 'matched' | 'waiting' | 'mismatch';
 
 /**
- * 配置命令成功后，读回的镜像是否已反映提交值。镜像的 reportedAt 早于命令下发时刻 = 还是旧回报（waiting）；
+ * 配置命令成功后，读回的镜像是否已反映提交值。镜像的 reportedAt 早于命令完成时刻 = 还是旧回报（waiting）；
  * 新回报且提交字段全部相等 = matched；新回报但有字段不等 = mismatch（可能被现场覆盖，或设备换算/取整）。
  * "已一致"只说明读到了相同的回报，不证明一定由本命令造成（没有配置版本）。
  */
@@ -307,14 +307,15 @@ export function echoState(
     | null
     | undefined,
   args: Record<string, unknown>,
-  issuedAt: string | undefined,
+  finishedAt: string | undefined,
 ): EchoState {
   if (!mirror?.reportedAt) return 'waiting';
   const reported = Date.parse(mirror.reportedAt);
-  const issued = issuedAt ? Date.parse(issuedAt) : Number.NaN;
+  const finished = finishedAt ? Date.parse(finishedAt) : Number.NaN;
   if (
     !Number.isFinite(reported) ||
-    (Number.isFinite(issued) && reported < issued)
+    !Number.isFinite(finished) ||
+    reported < finished
   ) {
     return 'waiting';
   }

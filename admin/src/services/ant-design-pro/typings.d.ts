@@ -278,16 +278,19 @@ declare namespace API {
     direction: 'IN' | 'OUT' | string;
     oilType?: string;
     source: 'AUTO' | 'MANUAL' | string;
+    /** device = 设备上报（含设备端补录），cloud = 云端补录（cloud#69，只有它能撤销）；旧云端没有该字段 */
+    origin?: 'device' | 'cloud' | string;
     beginTime: string;
     endTime: string;
-    beginLevelMm: number;
-    endLevelMm: number;
-    beginVolumeL: number;
-    endVolumeL: number;
-    beginTempC: number;
-    endTempC: number;
-    beginWeightKg: number;
-    endWeightKg: number;
+    /** 云端补录只知道前高度和升数，其余量为 null（不是 0） */
+    beginLevelMm: number | null;
+    endLevelMm: number | null;
+    beginVolumeL: number | null;
+    endVolumeL: number | null;
+    beginTempC: number | null;
+    endTempC: number | null;
+    beginWeightKg: number | null;
+    endWeightKg: number | null;
     netVolumeL: number;
     duringDeliveryVolumeL?: number;
     deliveredVolumeL: number;

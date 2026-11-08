@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { message } from 'antd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 import { ApiError } from '@/services/ant-design-pro/apiError';
@@ -21,6 +22,12 @@ const getCommand = vi.fn();
 const findCommandByRequestId = vi.fn();
 const setConfigGate = vi.fn();
 let role = 'customer_admin';
+let actorId = 1;
+
+vi.mock('@/utils/auth', () => ({
+  getToken: () => 'test-token',
+  decodeToken: () => ({ userId: actorId }),
+}));
 
 vi.mock('@umijs/max', () => ({
   useAccess: () => ({ canPlatformAdmin: role === 'platform_admin' }),
@@ -92,12 +99,19 @@ const command = (
   status: 'received',
   terminal: false,
   issuedAt: '2026-11-08T14:00:05Z',
+  finishedAt: over.status === 'succeeded' ? '2026-11-08T14:00:06Z' : undefined,
   configTarget: 'tank:1',
   ...over,
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // antd 的静态 message 自建渲染根，cleanup 卸不掉，动画定时器会在环境拆除后才触发（CI 上报 window is not defined）
+  for (const m of ['success', 'error', 'warning'] as const) {
+    vi.spyOn(message, m).mockImplementation((() => {}) as never);
+  }
+  sessionStorage.clear();
+  actorId = 1;
   role = 'customer_admin';
   listDevices.mockResolvedValue([deviceRow()]);
   listStations.mockResolvedValue([{ id: 7, name: '一号站', customer_id: 1 }]);
@@ -175,6 +189,16 @@ describe('SettingsTab', () => {
     expect(issueConfigCommand).not.toHaveBeenCalled();
   });
 
+  it('does not submit when the last station check fails', async () => {
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('610');
+    const dialog = await openConfirm();
+    listDevices.mockRejectedValueOnce(new ApiError(0));
+    await confirm(dialog);
+    expect(issueConfigCommand).not.toHaveBeenCalled();
+    expect(await within(dialog).findByRole('alert')).toBeTruthy();
+  });
+
   it('recovers a timed-out submission by requestId instead of resending', async () => {
     issueConfigCommand.mockRejectedValue(new ApiError(0));
     findCommandByRequestId.mockResolvedValue(command());
@@ -222,6 +246,77 @@ describe('SettingsTab', () => {
     await confirm(await openConfirm());
     expect(getCommand).toHaveBeenCalledWith('D1', 'busy-1');
     expect(await screen.findByText('设备执行中')).toBeTruthy();
+  });
+
+  it('restores an unconfirmed submission after remount and retries the original snapshot', async () => {
+    issueConfigCommand.mockRejectedValueOnce(new ApiError(0));
+    findCommandByRequestId.mockResolvedValue(undefined);
+    const first = render(<SettingsTab device="D1" />);
+    await editHighLevel('610');
+    await confirm(await openConfirm(), '原始原因');
+    const original = issueConfigCommand.mock.calls[0][1];
+    first.unmount();
+
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('620');
+    const dialog = await openConfirm();
+    expect(await within(dialog).findByText(/结果未确认/)).toBeTruthy();
+    expect(within(dialog).getByText('610 mm')).toBeTruthy();
+    expect(within(dialog).queryByText('620 mm')).toBeNull();
+    expect(within(dialog).getByLabelText('修改原因（必填）')).toHaveValue(
+      '原始原因',
+    );
+    issueConfigCommand.mockResolvedValue({
+      command: command(),
+      replayed: true,
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: /用同一提交编号重试/ }),
+      );
+    });
+    expect(issueConfigCommand.mock.calls[1][1]).toEqual(original);
+  });
+
+  it('keeps an unconfirmed submission isolated from a different account', async () => {
+    issueConfigCommand.mockRejectedValueOnce(new ApiError(0));
+    findCommandByRequestId.mockResolvedValue(undefined);
+    const first = render(<SettingsTab device="D1" />);
+    await editHighLevel('610');
+    await confirm(await openConfirm());
+    const originalId = issueConfigCommand.mock.calls[0][1].requestId;
+    first.unmount();
+    actorId = 2;
+    issueConfigCommand.mockResolvedValue({
+      command: command(),
+      replayed: false,
+    });
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('620');
+    await confirm(await openConfirm());
+    expect(issueConfigCommand.mock.calls[1][1].requestId).not.toBe(originalId);
+    expect(issueConfigCommand.mock.calls[1][1].args.alarmHighLevelMm).toBe(620);
+  });
+
+  it('does not confirm a matching mirror that predates command completion', async () => {
+    issueConfigCommand.mockResolvedValue({
+      command: command({
+        status: 'succeeded',
+        terminal: true,
+        finishedAt: '2026-11-08T14:00:10Z',
+      }),
+      replayed: false,
+    });
+    getTankSettings
+      .mockResolvedValueOnce([tank1])
+      .mockResolvedValue([
+        { ...tank1, alarmHighLevelMm: 610, reportedAt: '2026-11-08T14:00:07Z' },
+      ]);
+    render(<SettingsTab device="D1" />);
+    await editHighLevel('610');
+    await confirm(await openConfirm());
+    expect(await screen.findByText('执行成功，等待设备回报')).toBeTruthy();
+    expect(screen.queryByText('设备回报值已一致')).toBeNull();
   });
 
   it('says applied-but-waiting until a fresh matching report arrives', async () => {

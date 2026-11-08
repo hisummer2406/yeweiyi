@@ -110,6 +110,11 @@
   同一班/同一次库存的行同底色、相邻交替（`groupStripes`）。**介质**（含报警、出入库）按 `oilTypeIndex` 1–17 显示本地名称（`utils/oilType.ts`，
   文案 `pages.console.oil.N`，以中文表为准，设备英文表有错位 zhongchengyeweiyi#52），其余显示 `oilType` 原文，再没有就「—」。
   出入库多一列「实际进出量(kg)」= `deliveredWeightKg`，null 显示「—」，**不能用前后重量差代替**；报警多一列「介质」，取报警自带的值，不拿罐当前油品代替。
+- **云端补录（cloud#69，契约 `cloud/docs/stock-manual-entry-contract.md`）**：出入库记录（入库/出库页、设备详情出入库页签）工具栏有「补录」，
+  `ManualStockEntryModal` 发 `POST /api/devices/:device/stock-events`（方向在入库/出库页固定；罐号来自 `/tanks`；时间不晚于现在，带时区
+  RFC 3339；原因必填）。打开弹窗生成一次 `requestId`，超时（status 0）只给「用同一提交编号重试」（云端重放 200，不会重复保存）。只有
+  `origin === 'cloud'` 的行有「撤销」（`DELETE .../stock-events/:eventId`，软删除）；设备上报的记录（含设备端补录）不能撤销。
+  补录行没有的量是 null，显示「—」。只有 mock 测试，未对真实云端联调。
 - 未做：历史趋势图（没装图表库）、WebSocket 报警推送。
 - **远程配置（#4，云端契约 `cloud/docs/config-command-contract.md` 与 `tank-settings-contract.md`，依赖 cloud PR #13；OpenSpec
   `device-parameter-settings`）**：设备详情新增「参数设置」（`?tab=settings`）、「操作记录」（`?tab=commands`）；菜单「远程控制」
