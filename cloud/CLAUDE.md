@@ -227,8 +227,9 @@ docs/                 当前规范与历史归档
   升级固件**不会**转换 ThingsBoard 里已有的旧记录，因此车队升级后必须设置
   `stock.legacyFormatBefore`，否则回看历史的查询会永久 502。该分类依赖设备把生成时刻写进信封
   `ts` 且补投原样保留——这是协议硬要求，见 `docs/protocol-v1-stock-event.md` §3 与 `deploy/README.md`。
-- **小程序与云端 REST 的契约自 PR #11 起全面不兼容**（行内字段、已删端点、`/api/alarms` 的信封
-  形状），尚未获小程序负责人确认。清单见 `docs/protocol-v1-open-items.md` §D。
+- 小程序与云端 REST 的契约自 PR #11 起曾全面不兼容（行内字段、已删端点、`/api/alarms` 的信封
+  形状）；小程序已按 V1 重写并经负责人确认（2026-09-04），`/api/alarms` 仍刻意保持裸数组。清单见
+  `docs/protocol-v1-open-items.md` §D。
 - OTA、生产 MQTT TLS、租户隔离与容量结论都必须在真实环境验证后才能宣称完成。
 
 ## 延伸阅读

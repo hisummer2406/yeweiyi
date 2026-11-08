@@ -1,12 +1,12 @@
 # 设备协议 V1：最终待确认清单
 
-**状态：未冻结。** 2026-10-06 复核设备端（见下方"2026-10-06 复核"）：A-1 至 A-6 在设备端
-`feature/thingsboard-device-protocol`（PR #38，未合并）上已对齐，**待合并与真机联调**。2026-09-04
-逐项对照两侧当前代码重新核对，取代
+**状态：未冻结。** 设备端 PR #38 已于 2026-11-02 合入 Android `main`（提交 `ad41510`）；A-1 至 A-6 在设备端
+代码上已对齐，**仍待真机联调**（2026-10-06 复核见下方；2026-11-08 校对了本文各节的时效，见各节标注）。
+2026-09-04 逐项对照两侧代码核对，取代
 [`protocol-v1-reconciliation.md`](protocol-v1-reconciliation.md) 中"建议的下一步"一节的时效性
 内容（那份文档仍是差异的完整背景，本文档是**待办清单**）。
 
-核对基准：
+核对基准（**历史**：两个提交在合并前的原仓库里，单仓库后不再对应当前代码；现状以 `cloud/`、`android/` 当前代码为准）：
 
 | 仓库 | 版本 | 核对时间 |
 |---|---|---|
@@ -21,8 +21,9 @@
 
 ## 2026-10-06 复核：设备端 PR #38
 
-核对基准：zhongchengyeweiyi `origin/feature/thingsboard-device-protocol`@`d2a44ac`（领先其 `main` 27 个
-提交）。设备端 `main`@`2a2e0ee` **没有任何 ThingsBoard 代码**，下列对齐都只存在于未合并的 PR #38。
+核对基准：zhongchengyeweiyi `origin/feature/thingsboard-device-protocol`@`d2a44ac`（当时领先其 `main` 27 个
+提交，设备端 `main`@`2a2e0ee` 尚无 ThingsBoard 代码）。**此后 PR #38 已于 2026-11-02 合入 `main`**，下列对齐现在
+都在 `main` 上，但仍无真机验证。
 
 | 项 | 复核结果 | 依据 |
 |---|---|---|
@@ -35,7 +36,7 @@
 
 仍未完成，且云端不得因此宣称兼容：
 
-- PR #38 未合并；设备端自述"零真机验证"（273 个 JVM 测试，没连过真实 ThingsBoard 与硬件）。
+- ~~PR #38 未合并~~（2026-11-02 已合并）；设备端自述"零真机验证"（273 个 JVM 测试，没连过真实 ThingsBoard 与硬件）。
 - 物理命令（`pump.*`、`valve.*`、`device.reboot`）在设备端只有占位，等真机（设备端 #34）。
 - 设备端称云端没有"为真实设备创建 ThingsBoard 身份"的接口，装机拿不到凭据（**云端待核实**）。
 - ~~设备端 fixture 副本缺 #14 标定属性、无契约测试覆盖~~：2026-11-06 副本已删，`ProtocolV1ContractTest` 按实际上报路径
@@ -49,7 +50,7 @@
 
 ## A. 阻塞项：按今天的两份代码，链路走不通
 
-### A-1 设备没有 `cmdResult` 上行通道，命令永远到不了终态 ⛔（旧实现已实测；PR #38 已改，待真机验证）
+### A-1 设备没有 `cmdResult` 上行通道，命令永远到不了终态 ⛔（旧实现已实测；PR #38 已改并已合并，待真机验证）
 
 **这是本次核对新发现的一条，先前的对账文档没有记。** 它比 A-2 的字段改名严重，因为它不是
 "解析不出来"，而是"整条反馈通道不存在"。**2026-09-04 已用真实 ThingsBoard 实测确认**（见下）。
@@ -100,7 +101,7 @@ ThingsBoard 的双向 RPC 在收到**第一条**响应时就把该 requestId 的
 
 **决定人：** Android 负责人（形状已由云端 fixture 定义，本条不是取舍，是缺失）。
 
-### A-2 ACK 载荷缺 `commandId`，云端无法关联（PR #38 已对齐，待合并）
+### A-2 ACK 载荷缺 `commandId`，云端无法关联（PR #38 已对齐并合并，待真机验证）
 
 设备发的 ACK（`ThingsBoardManager.java:205-211`）：
 
@@ -126,7 +127,7 @@ ThingsBoard 的双向 RPC 在收到**第一条**响应时就把该 requestId 的
 
 **决定人：** 双方（2–4 是命名取舍，1、5 是缺失）。
 
-### A-3 遥测结构：扁平键 vs 嵌套数组（PR #38 已对齐，待合并）
+### A-3 遥测结构：扁平键 vs 嵌套数组（PR #38 已对齐并合并，待真机验证）
 
 云端 `tank1.oilLevelMm` 扁平键；设备 `tanks: [{id, oilLevel, …}]` + 单独的 `units` 对象
 （`app/src/test/resources/thingsboard/telemetry_snapshot.json`，本次核对时仍是原样）。
@@ -138,7 +139,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 
 **决定人：** Android 负责人执行迁移；结论本身已有证据支持。
 
-### A-4 报警事件：键名与全部字段都不一致（PR #38 已对齐，待合并）
+### A-4 报警事件：键名与全部字段都不一致（PR #38 已对齐并合并，待真机验证）
 
 | 语义 | 云端 | 设备 |
 |---|---|---|
@@ -160,7 +161,11 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 
 **决定人：** 双方。
 
-### A-5 RPC 请求信封：字段名与方法命名（PR #38 基本对齐，待合并）
+### A-5 RPC 请求信封：字段名与方法命名（PR #38 基本对齐并合并，待真机验证）
+
+> 下表"设备"列是 2026-09-04 的旧状态，**已被顶部"2026-10-06 复核"取代**（现为整数 `protocolVersion`、点号方法名、
+> `config.setAlarmThresholds` 已实现）。`config.setTank`/`config.setProbe` 仍无 handler（B-2）；另已新增
+> `config.setTankSettings`、`config.setDeviceSettings`（见 §E）。
 
 | 语义 | 云端 | 设备 | 建议 |
 |---|---|---|---|
@@ -186,9 +191,9 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 所以没有顺手做。需要设备端确认：同一次报警的 `ACTIVE`/`CLEARED` 是否保证共用 `alarmId`、补投后是否
 可能先收到 `CLEARED`（落库对顺序不敏感，但合并展示会）。
 
-### A-6 出入库 `stockEvent`（PR #38 已改结构化 JSON，待合并）
+### A-6 出入库 `stockEvent`（PR #38 已改结构化 JSON 并合并，待真机验证）
 
-设备仍以 `DetailInoutRecord.toString()` 上报（Java 调试字符串）。完整的字段映射、所需的设备端
+设备原以 `DetailInoutRecord.toString()` 上报（Java 调试字符串），PR #38 已改为结构化 JSON。完整的字段映射、所需的设备端
 改动、以及仍待确认的四点，见 [`protocol-v1-stock-event.md`](protocol-v1-stock-event.md)。
 
 云端已改为在解析失败时返回 502 而非 200 + 空数组，所以这一条不再会静默地看起来像正常。
@@ -203,17 +208,22 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 |---|---|---|
 | B-1 | **单位（mm / L / kg / °C）** | 按行业惯例推断，**从未与设备真实寄存器标度核对**。对出入库尤其致命：体积差一个数量级，对账全错 |
 | B-2 | `config.setTank` / `config.setProbe` 的参数形状 | 刻意未定义——设备端没有对应 handler。不要凭空补 |
-| B-3 | `alarmState` 的取值 | 云端写了 `NORMAL`/`ALARM`/`FAULT`，设备侧该字段恒为 `null` |
-| B-4 | `oilRatioPct` / `waterRatioPct` / `nullVolumeL` / `snapshotSeq` | 云端定义了，设备侧没有。需确认设备能否提供；`snapshotSeq` 建议保留（丢帧检测） |
-| B-5 | `probeAddress` 放遥测还是客户端属性 | 建议属性：它只在改配置时变，放遥测等于每天存 2880 次常量 |
-| B-6 | `deviceTime` / `connectionState` 是否删除 | 建议都删：两个时间源必然有一天对不上；设备自报"我在线"没有信息量，离线时它正好发不出来 |
-| B-7 | 交班（`CommitWork`）是否纳入本期 | 两侧都没有上行通道。云端 `/api/shifts` 已删除，不是遗漏 |
+| B-3 | `alarmState` 的取值 | 云端写了 `NORMAL`/`ALARM`/`FAULT`，设备侧该字段恒为 `null`（**2026-11-08 未重新核实**） |
+| B-4 | `oilRatioPct` / `waterRatioPct` / `nullVolumeL` / `snapshotSeq` | 云端定义了，设备侧没有。需确认设备能否提供；`snapshotSeq` 建议保留（丢帧检测）。**2026-11-08：`NetOilCan` 已有 `oilRatioPct`，其余三项未核实** |
+| B-5 | `probeAddress` 放遥测还是客户端属性 | 建议属性：它只在改配置时变，放遥测等于每天存 2880 次常量（**2026-11-08 未重新核实**） |
+| B-6 | `deviceTime` / `connectionState` 是否删除 | 建议都删：两个时间源必然有一天对不上；设备自报"我在线"没有信息量，离线时它正好发不出来（**2026-11-08 未重新核实**） |
+| B-7 | 交班（`CommitWork`）是否纳入本期 | **已决定纳入（产品 2026-11-03）**，见 §F：`shiftEvent`/`stockRecord` 两端已实现，新接口 `/api/shift-records`、`/api/stock-records`。旧 `/api/shifts` 仍是已删除状态，不是遗漏 |
 | B-8 | ThingsBoard 里已堆积的不可解析出入库记录如何处理 | 见 `protocol-v1-stock-event.md` §4.4 |
 | B-9 | `stockEvent` 补录后用同一 `eventId` 重发：重发的信封 `ts` 是否一定更晚、`eventId` 是否一定不变；是否需要显式 `revision` 字段 | 云端目前按信封 `ts` 折叠（issue #13，`protocol-v1-stock-event.md` "同一 `eventId` 可上报多次"），**暂行、未经 Android 确认**。决定人：Android 负责人 |
 
 ---
 
-## C. 共用 fixture 的机制（**这是云端的准备工作，目前还不是跨仓库门禁**）
+## C. 共用 fixture 的机制（2026-11-06 起已成为门禁，**但无分支保护**）
+
+> **2026-11-08 校对：** 本节下面的正文是 2026-09 的原文，保留作背景；其中"Android 尚未引入""14 个 fixture"
+> "Android 侧需要做的三步"都已过时。现状：fixture 共 25 份、单仓库内只有 `cloud/fixtures/protocol/v1/` 一份，
+> Android 单测直接读它（`android/app/build.gradle` 挂到测试 classpath），Android CI 先跑 `verify-manifest.sh`；
+> `MANIFEST.json` 的 `crossRepoGate` 已为 `true`。现状以 C-1 表为准。
 
 对账文档给出的做法是"以 `yeweiyi-cloud/fixtures/protocol/v1/` 为准，Android 侧通过 submodule
 或构建期拷贝引入"。**做法对，但缺一步**：光是拷贝一遍，无法保证之后两侧读的还是同一批字节——
@@ -267,7 +277,7 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 | 云端清单 + 校验脚本 + 契约测试 | ✅ 已完成 |
 | Android 引入共享 fixture（替换现有四份自定义 fixture） | ✅ 2026-11-06 单仓库后直接读 `cloud/fixtures`，副本已删；#14 标定属性（`TankCalibrationAttributeBuilder`）随之纳入逐 key 比对 |
 | Android 构建期挂 `verify-manifest.sh` | ✅ 在 Android CI 里跑（未挂到本机 Gradle 任务） |
-| Android 的 builder 测试改为断言"产出字节 == fixture" | ⬜ 未开始 |
+| Android 的 builder 测试改为断言"产出字节 == fixture" | 🟡 契约测试已按实际上报路径拼装并**逐 key 比对 JSON**（不是字节比对）；是否升级为字节比对待定 |
 | 两侧接上 CI，使校验真正成为门禁 | 🟡 Cloud CI + Android CI 都已接上；没有分支保护，红了不会阻止合并 |
 | 一次真实设备到云端的端到端验证（含 A-1 的终态上行） | ⬜ 未开始，被 A-1 阻塞 |
 
@@ -359,13 +369,16 @@ openspec 变更 `implement-multitenant-support-with-customer-isolation` 的阶�
 | 设备行不暴露 `customer_id` | 两个仓库全文搜索 `customer_id` / `customerId` | 无人读取，保持不暴露 |
 | `pairing-secret` 必填 `customerId` | 小程序不调它（只调 `bind`）；`yeweiyi-admin` 的"配对密钥"页面目前只是只有标题的空壳 | 没有现存调用方会坏。实现该页面时请求体必须带 `{customerId}` |
 
-另有一件**与本次变更无关**、但同样会让小程序对不上云端的事：小程序 `main` 的扫码绑定只发
-`{ deviceName }`，没有 `pairingToken`，从 PR #11 起就被云端拒绝。修复已在远端分支
-`origin/rebuild/thingsboard-single-stack`（`a34afc4`，尚未合入 `main`），不属于本变更的范围，记在这里以免被遗忘。
+~~另有一件与本次变更无关的事：小程序 `main` 的扫码绑定只发 `{ deviceName }`……修复在 `rebuild/thingsboard-single-stack`，尚未合入。~~
+**已过时（2026-11-08）：** 云端 `POST /api/devices/bind` 已停用，恒 `410 bind_removed`；改用 `POST /api/devices/resolve`
+扫码定位 + 平台管理员授权罐（见 `cloud/CLAUDE.md` "油罐授权与扫码"、[tank-grants-contract.md](tank-grants-contract.md)）。
 
 ---
 
-## 建议的推进顺序
+## 建议的推进顺序（**历史，2026-09 原文**）
+
+> 2026-11-08：第 1 至 4 步的代码部分已完成（A-1 至 A-6 对齐并合并、共享 fixture 已接入）；剩下的只有真机联调
+> 与 §A-7、§B、§E、§F 的待确认项。
 
 1. ~~先验 A-1~~ **A-1 已实测，结论成立**：第二条 RPC 响应云端收不到，控制闭环在真实设备上是断的。
    因此设备端补上 `cmdResult` 遥测上行是第一优先，比所有改名都靠前。
