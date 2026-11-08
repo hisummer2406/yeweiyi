@@ -202,11 +202,12 @@ docs/                 当前规范与历史归档
   open-items §A），但真机联调前仍不得视为兼容。清单清空前，云端不要**自行发起**新增协议字段。例外：设备端负责人已在跨仓库 issue 中提出、云端只做
   消费的**可选、向后兼容**字段（如 #14 标定属性、#15 `source`），可先落地，但必须在 PR 里写明
   "Refs 而非 Closes"，并在 open-items 登记待设备端同步的 fixture；字段名、单位、形状仍以设备端确认为准。
-- **真实设备上的控制闭环：旧实现是断的（已实测），新实现待真机验证。** 旧设备把终态发成第二条 RPC
-  响应，而 ThingsBoard 的双向 RPC 只把第一条交给调用方，云端永远收不到结果，命令停在 `received` 直到
-  被清扫成 `expired`。实测见 `internal/tbclient/rpc_response_channel_test.go`（保留，防平台升级改变行为）。
-  设备端 PR #38 已改为终态走 `cmdResult` 遥测，只发一条 RPC 响应；**在真实设备 + ThingsBoard 上跑通前，
-  不得宣称闭环已通**，见 open-items A-1。
+- **真实设备上的控制闭环：旧实现是断的（已实测），新实现已在真机上走通一次（2026-11-08）。** 旧设备把终态发成第二条 RPC
+  响应，而 ThingsBoard 的双向 RPC 只把第一条交给调用方，云端永远收不到结果。实测见
+  `internal/tbclient/rpc_response_channel_test.go`（保留，防平台升级改变行为）。新实现终态走 `cmdResult` 遥测：生产 ZCT000001
+  单字段 `config.setTankSettings` 已验证 ACK→`cmdResult`→属性回显→重启持久化，见
+  [docs/tank-settings-device-verification.md](docs/tank-settings-device-verification.md#验证记录)。其余方法、客户管理员、离线/超时
+  路径仍未真机验证；`allowConfigCommands` 在生产保持关闭，只在验证短窗口内打开。
 - 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 与 Android CI 都校验
   `MANIFEST.json`。改 fixture 要在同一个 PR 里让两端测试都通过；没有分支保护，CI 红了不会阻止合并，见 open-items §C-1。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
