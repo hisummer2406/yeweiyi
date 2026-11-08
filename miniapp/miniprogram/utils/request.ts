@@ -1,5 +1,5 @@
 import { BASE_URL } from '../config/env';
-import { sessionDecision } from './loginFlow';
+import { renewedTokenToAdopt, sessionDecision } from './loginFlow';
 import { loginUrlForSession } from './sceneEntry';
 import { clearToken, getToken, setToken } from './storage';
 
@@ -47,20 +47,9 @@ export class ApiError extends Error {
 // unbound device answers the same 403 as one that does not exist at all; its body is
 // "not authorized for this device") and must NOT log the user out.
 // Sliding renewal (yeweiyi-cloud#51): once a token is past half its life, a successful authorized
-// response carries a replacement in X-Renewed-Token. Overwriting the stored token is all the client
-// does; the cloud caps the whole chain at authAt + auth.maxSessionAge, after which the next 401
-// sends the user back to login as usual. Header names are matched case-insensitively because
-// wx.request hands back whatever casing the transport used (HTTP/2 lowercases).
-function adoptRenewedToken(header: Record<string, string> | undefined) {
-  if (!header) return;
-  for (const name of Object.keys(header)) {
-    if (name.toLowerCase() === 'x-renewed-token' && header[name]) {
-      setToken(header[name]);
-      return;
-    }
-  }
-}
-
+// response carries a replacement in X-Renewed-Token. Storing it is all the client does; the cloud caps
+// the whole chain at authAt + auth.maxSessionAge, after which the next 401 sends the user back to login
+// as usual. Only an answer for the still-current session may store it (renewedTokenToAdopt, loginFlow.ts).
 let loggingOut = false;
 // The reason the session was last ended, kept until a request goes out with a token again. Requests
 // already queued when the token is cleared go out bare and answer 401; without this they would
@@ -107,7 +96,10 @@ export function request<T>(options: RequestOptions): Promise<T> {
       success: (res) => {
         const status = res.statusCode;
         if (status >= 200 && status < 300) {
-          if (needAuth) adoptRenewedToken(res.header as Record<string, string>);
+          if (needAuth) {
+            const renewed = renewedTokenToAdopt(res.header as Record<string, string>, sentToken, getToken());
+            if (renewed) setToken(renewed);
+          }
           resolve(res.data as T);
           return;
         }

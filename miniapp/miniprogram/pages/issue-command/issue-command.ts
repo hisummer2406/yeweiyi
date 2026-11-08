@@ -161,7 +161,7 @@ Page({
       .then((tanks) => {
         if (seq !== this.seq || !this.cmd) return;
         const mirror = tanks.find((x) => x.tank === this.tank);
-        this.echo = echoState(mirror as unknown as Record<string, unknown>, this.cmd.args || {}, this.cmd.issuedAt);
+        this.echo = echoState(mirror as unknown as Record<string, unknown>, this.cmd.args || {}, this.cmd.finishedAt);
         this.show();
         if (this.echo === 'waiting' && Date.now() - this.echoStarted < ECHO_WAIT_MS) this.later(seq, ECHO_MS);
       })

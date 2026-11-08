@@ -369,6 +369,21 @@ export function classifySubmitError(err: {
   return 'other';
 }
 
+/**
+ * 重发一份未确认的旧快照（同一 requestId）失败后，这份快照是否已了结（#18 F6）。
+ * 云端先校验角色/总闸/参数，再按 requestId 重放，之后才复核油站与在途互斥。所以只有重放之后的结论
+ * （油站已变、同目标被别的命令占用、编号被别的内容用过）以及参数本身不合法（原提交同样不可能被受理）
+ * 能说明这份快照没有被受理；超时、总闸关闭、403、5xx 等仍是未知，保留快照。
+ */
+export function pendingSettledBy(kind: SubmitErrorKind): boolean {
+  return (
+    kind === 'stationChanged' ||
+    kind === 'inFlight' ||
+    kind === 'requestIdReused' ||
+    kind === 'invalidArgs'
+  );
+}
+
 /** 命令的 configTarget（tank:N / device）显示用 */
 export function targetTank(
   target: string | null | undefined,

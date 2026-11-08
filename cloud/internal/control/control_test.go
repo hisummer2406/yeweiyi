@@ -283,13 +283,39 @@ func TestIssue_RoleGatesAdminMethods(t *testing.T) {
 			f := newFixture(t, tc.role, control.Config{})
 			_, err := f.svc.Issue(context.Background(), issueReq(f, protocol.MethodConfigAlarmThreshold))
 
-			if tc.allowed && err != nil {
-				t.Fatalf("%s should be allowed to set thresholds: %v", tc.role, err)
+			// The method is retired (#18 F1): an allowed role gets past the role gate and is refused only as
+			// retired; a disallowed one is told 403 first.
+			if tc.allowed && !errors.Is(err, control.ErrMethodRetired) {
+				t.Fatalf("%s should pass the role gate (then ErrMethodRetired): %v", tc.role, err)
 			}
 			if !tc.allowed && !errors.Is(err, control.ErrForbidden) {
 				t.Fatalf("%s got %v, want ErrForbidden", tc.role, err)
 			}
 		})
+	}
+}
+
+// TestIssue_LegacyConfigMethodsRetired (#18 F1): the configuration writes without a cloud-readable target
+// (config.setAlarmThresholds / setTank / setProbe) are refused for every role and with the deployment config
+// switch on or off, so none of them can bypass AllowConfigCommands, requestId replay, the expectedStationId
+// re-check or the per-tank in-flight lock. Nothing reaches ThingsBoard; the refusal is audited.
+func TestIssue_LegacyConfigMethodsRetired(t *testing.T) {
+	for _, allow := range []bool{false, true} {
+		for _, role := range []string{control.RoleCustomerAdmin, control.RolePlatformAdmin} {
+			for _, m := range []string{protocol.MethodConfigAlarmThreshold, protocol.MethodConfigTank, protocol.MethodConfigProbe} {
+				f := newFixture(t, role, control.Config{AllowConfigCommands: allow})
+				req := issueReq(f, m)
+				req.RequestID = "legacy-1"
+				req.ExpectedStationSet = true
+				if _, err := f.svc.Issue(context.Background(), req); !errors.Is(err, control.ErrMethodRetired) {
+					t.Fatalf("allow=%v %s %s: got %v, want ErrMethodRetired", allow, role, m, err)
+				}
+				if f.sender.calls != 0 {
+					t.Fatalf("allow=%v %s %s: a retired method reached ThingsBoard", allow, role, m)
+				}
+				assertAudit(t, f, "control.issue", "denied")
+			}
+		}
 	}
 }
 

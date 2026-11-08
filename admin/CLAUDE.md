@@ -126,6 +126,8 @@
   - 提交（`ConfigSubmitModal`）：打开确认弹窗生成一次 `requestId`，这次确认的重试都复用；确认时重读设备列表，油站变了就不发并刷新；
     `expectedStationId` 发**表单打开时**的值。超时/`command_delivery_unconfirmed`：先 `?requestId=` 找回，找不到只给「用同一提交编号重试」，
     **绝不换新编号自动重发**。`config_command_in_flight` 跳到在途命令。
+    恢复的旧快照**不做前端油站预检**，原样重发同一编号（云端先重放、再复核油站）；只有重放之后的结论（`device_station_changed`、在途、
+    `request_id_reused`）或 `invalid_args` 才了结它（`pendingSettledBy`），总闸关闭/403/5xx 仍保留（#18 F6，否则换站后旧快照会反复恢复、挡住新提交）。
   - 跟踪（`useCommandTracker`）：轮询以 `terminal` 停止，页面隐藏不发请求；`succeeded` 后读回镜像，`reportedAt` 不早于命令 `issuedAt`
     且字段相等才显示「设备回报值已一致」；`expired` 显示「结果无法确认」。
   - 只有 mock/组件测试，**没有在浏览器里对真实云端联调，也没有真机验证**。

@@ -390,8 +390,18 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
   `commandGuard` re-reads `GET /api/devices` (station's device changed → stop); one `requestId` per confirmation,
   `expectedStationId` always sent (null allowed). Timeout/`command_delivery_unconfirmed`: look up `?requestId=`; not
   found → only 「用同一编号重试」, never a new id. Success opens `issue-command?device=&commandId=&tank=`.
+  **The confirmed snapshot is kept on the phone** (`cfg-pending:<userKey>`, per device + tank, written before the
+  request goes out; issue #18 F2) until the cloud answers anything but "unconfirmed". The next send to that tank
+  first looks it up again, else offers only a retry of the *kept* content with its id (no client station guard
+  on that retry: the cloud's replay lookup precedes its `expectedStationId` check); the new form waits. Not
+  cleared at logout (the key carries the account). One send flow at a time (module lock in `confirmAndSend`, #18 F4):
+  a second tap while the confirm dialog / send / lookup / same-id retry is open is ignored.
+- Sliding renewal is adopted only when the request's token is still the stored one (`renewedTokenToAdopt`,
+  `loginFlow.ts`; #18 F5): a late answer after logout or an account switch never overwrites the new session.
+- `scripts/config-flow.check.mjs` runs the real `request.ts` / `configSubmit.ts` against an in-memory `wx`
+  stand-in (F5/F2 flows). It is not DevTools or device acceptance.
 - `issue-command` is now **操作记录** (the raw-JSON command form is gone): tracks one command by `terminal`, then reads
-  the mirror back (`reportedAt` ≥ `issuedAt` and equal fields = 已一致), lists the device's last 20 commands; polling
+  the mirror back (`reportedAt` strictly later than the command's `finishedAt` and equal fields = 已一致; no valid `finishedAt` = still waiting, #18 F3), lists the device's last 20 commands; polling
   stops in `onHide`/`onUnload`. Entry: 设置 → 操作记录 (administrators only).
 - `backfill` posts `POST /api/devices/:device/stock-events` (administrators): date + time (phone offset → RFC 3339,
   not in the future), level, volume, reason, one `requestId` per confirmation (a retry reuses it; the cloud replays).

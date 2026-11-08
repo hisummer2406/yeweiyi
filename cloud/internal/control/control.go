@@ -59,6 +59,13 @@ var (
 	// ErrConfigCommandsDisabled is returned for config.setTankSettings / config.setDeviceSettings while
 	// Config.AllowConfigCommands is off.
 	ErrConfigCommandsDisabled = errors.New("control: device configuration commands are disabled on this deployment")
+	// ErrMethodRetired: a legacy configuration method (config.setAlarmThresholds / config.setTank /
+	// config.setProbe) that the REST issue path no longer sends. They carry no argument shape the cloud
+	// can read a target from, so they could not share requestId replay, the expectedStationId re-check
+	// or the per-tank in-flight lock with config.setTankSettings, nor be held by AllowConfigCommands as
+	// one family (issue #18 F1). The method table (protocol.Methods) and the device handlers are
+	// unchanged; only this cloud entry point refuses them.
+	ErrMethodRetired = errors.New("control: this configuration method is retired; use config.setTankSettings")
 	// ErrPlatformUnavailable means ThingsBoard could not be reached, so the command was never
 	// handed over. The command row stays pending and will expire.
 	ErrPlatformUnavailable = errors.New("control: device platform unavailable")
@@ -616,6 +623,10 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 		return fmt.Errorf("%w: role %q may not issue %s", ErrForbidden, actor.Role, spec.Method)
 	}
 
+	if isRetiredConfigMethod(spec.Method) {
+		return fmt.Errorf("%w: %s", ErrMethodRetired, spec.Method)
+	}
+
 	if !s.cfg.AllowConfigCommands && isConfigWriteMethod(spec.Method) {
 		return &ConfigDisabledError{Scope: GateScopeDeployment}
 	}
@@ -624,6 +635,17 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 
 func isConfigWriteMethod(method string) bool {
 	return method == protocol.MethodConfigTankSettings || method == protocol.MethodConfigDeviceSettings
+}
+
+// isRetiredConfigMethod: the configuration writes that predate config.setTankSettings (see ErrMethodRetired).
+// Refused regardless of AllowConfigCommands, so no writable configuration entry is left outside the gate
+// and the submission protection.
+func isRetiredConfigMethod(method string) bool {
+	switch method {
+	case protocol.MethodConfigAlarmThreshold, protocol.MethodConfigTank, protocol.MethodConfigProbe:
+		return true
+	}
+	return false
 }
 
 func roleAllows(role string, need protocol.PermissionLevel) bool {
