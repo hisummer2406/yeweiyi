@@ -21,7 +21,10 @@ public final class SetDeviceSettingsHandler implements RpcMethodHandler {
 
     public static final String METHOD = "config.setDeviceSettings";
 
-    /** 整机设置的落盘与生效（真机实现写 SharedPreferences 并刷新 Singleton），返回前必须已写入。 */
+    /**
+     * 整机设置的落盘与生效（真机实现写 SharedPreferences 并刷新 Singleton），返回前必须已写入。
+     * <b>必须全有或全无</b>（#9）：抛异常时不得留下部分新值，回执据此说"未修改任何字段"。
+     */
     public interface DeviceSettingsStore {
         void save(Map<String, Integer> values) throws Exception;
     }
@@ -70,7 +73,7 @@ public final class SetDeviceSettingsHandler implements RpcMethodHandler {
         try {
             store.save(values);
         } catch (Exception e) {
-            return RpcResult.failed(RpcErrorCode.INTERNAL_ERROR, "写入整机设置失败: " + e.getMessage());
+            return RpcResult.failed(RpcErrorCode.INTERNAL_ERROR, "写入整机设置失败，未修改任何字段: " + e.getMessage());
         }
 
         Map<String, Object> data = new LinkedHashMap<>();

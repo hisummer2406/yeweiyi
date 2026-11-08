@@ -186,6 +186,45 @@ public class SharePrefUtil {
         return sp.edit().putInt(key, value).commit();
     }
 
+    /**
+     * 一次写入多个 int，<b>全有或全无</b>：所有键放进同一个 Editor、只 commit 一次（SharedPreferences 整个文件经备份文件
+     * 原子替换），所以磁盘上要么全是新值，要么全是旧值（远程整机设置 #9：此前逐项 commit，中途失败会留下一半新值）。
+     * <p>
+     * commit 失败时，SharedPreferences 的内存缓存<b>已经</b>是新值（它先改内存再写盘），这里把内存改回旧值，
+     * 让本进程读到的与磁盘一致；恢复本身也写不进去时，下次进程启动从磁盘读到的仍是旧值。
+     *
+     * @return 是否已写盘
+     */
+    public static boolean saveIntsChecked(Context context, java.util.Map<String, Integer> values) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        java.util.Map<String, Integer> before = new java.util.HashMap<>();
+        java.util.Set<String> absent = new java.util.HashSet<>();
+        for (String key : values.keySet()) {
+            if (sp.contains(key)) {
+                before.put(key, sp.getInt(key, 0));
+            } else {
+                absent.add(key);
+            }
+        }
+        SharedPreferences.Editor editor = sp.edit();
+        for (java.util.Map.Entry<String, Integer> e : values.entrySet()) {
+            editor.putInt(e.getKey(), e.getValue());
+        }
+        if (editor.commit()) {
+            return true;
+        }
+        SharedPreferences.Editor restore = sp.edit();
+        for (java.util.Map.Entry<String, Integer> e : before.entrySet()) {
+            restore.putInt(e.getKey(), e.getValue());
+        }
+        for (String key : absent) {
+            restore.remove(key);
+        }
+        restore.commit();
+        return false;
+    }
+
     public static int getInt(Context context, String key, int defValue) {
         //Log.i(TAG, "getInt: "+key);
         if (sp == null)
