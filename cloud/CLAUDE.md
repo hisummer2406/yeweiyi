@@ -220,8 +220,8 @@ docs/                 当前规范与历史归档
   `pairing-secret` 新增必填 `customerId` 已对照小程序与运维控制台的代码核对，无需改客户端（2026-10-06，见
   open-items §D-租户）；实现运维控制台的"配对密钥"页面时请求体须带 `customerId`。
 - `/api/oil-in-out` 与 `/api/alarms` 读业务库（#29），支持可选的 `tank`（两者）与 `direction`（出入库）筛选，先筛选后分页，
-  指定未授权罐为 `403 tank_not_authorized`（#84，[契约](docs/records-filter-contract.md)）。`/api/oil-in-out` 依赖尚未合并的设备端 JSON 改动
-  （zhongchengyeweiyi#39）。真实设备当前上报的
+  指定未授权罐为 `403 tank_not_authorized`（#84，[契约](docs/records-filter-contract.md)）。设备端 JSON 改动（zhongchengyeweiyi#39，已随 PR #38 合并，#39 于 2026-11-02 关闭）已就位，
+  但**未真机验证**。旧固件上报的
   `DetailInoutRecord.toString()` 解析不了，此时接口返回 502 与 `STOCK_EVENT_FORMAT_UNSUPPORTED`，
   不再以 200 + 空数组冒充成功；两条路径都返回 `{rows, parsed, unparsable, legacySkipped, …}`。
   升级固件**不会**转换 ThingsBoard 里已有的旧记录，因此车队升级后必须设置

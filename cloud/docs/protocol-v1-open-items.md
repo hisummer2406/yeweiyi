@@ -208,10 +208,10 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 |---|---|---|
 | B-1 | **单位（mm / L / kg / °C）** | 按行业惯例推断，**从未与设备真实寄存器标度核对**。对出入库尤其致命：体积差一个数量级，对账全错 |
 | B-2 | `config.setTank` / `config.setProbe` 的参数形状 | 刻意未定义——设备端没有对应 handler。不要凭空补 |
-| B-3 | `alarmState` 的取值 | 云端写了 `NORMAL`/`ALARM`/`FAULT`，设备侧该字段恒为 `null`（**2026-11-08 未重新核实**） |
-| B-4 | `oilRatioPct` / `waterRatioPct` / `nullVolumeL` / `snapshotSeq` | 云端定义了，设备侧没有。需确认设备能否提供；`snapshotSeq` 建议保留（丢帧检测）。**2026-11-08：`NetOilCan` 已有 `oilRatioPct`，其余三项未核实** |
-| B-5 | `probeAddress` 放遥测还是客户端属性 | 建议属性：它只在改配置时变，放遥测等于每天存 2880 次常量（**2026-11-08 未重新核实**） |
-| B-6 | `deviceTime` / `connectionState` 是否删除 | 建议都删：两个时间源必然有一天对不上；设备自报"我在线"没有信息量，离线时它正好发不出来（**2026-11-08 未重新核实**） |
+| B-3 | `alarmState` 的取值 | 云端写了 `NORMAL`/`ALARM`/`FAULT`，设备侧该字段原恒为 `null`。**2026-11-08 已核实：设备端已填 `NORMAL`/`ALARM`/`FAULT`**（`ActiveAlarmTracker.alarmState`，探针断线为 `FAULT`），无数据时不发该 key。取值已对齐，待真机验证 |
+| B-4 | `oilRatioPct` / `waterRatioPct` / `nullVolumeL` / `snapshotSeq` | 云端定义了，设备侧没有。需确认设备能否提供；`snapshotSeq` 建议保留（丢帧检测）。**2026-11-08 已核实：设备端已上报 `snapshotSeq`、`nullVolumeL`、`oilRatioPct`（罐高未配置时不发）；`waterRatioPct` 刻意不上报**（2026-10-04 用户决定：真实模式下水占比从未被计算、恒为 0），但云端协议与 fixture 仍定义了它，需决定云端是否保留 |
+| B-5 | `probeAddress` 放遥测还是客户端属性 | 建议属性：它只在改配置时变，放遥测等于每天存 2880 次常量**2026-11-08 已核实：设备端放在客户端属性（`tank{N}.probeAddress`），与建议一致，已解决** |
+| B-6 | `deviceTime` / `connectionState` 是否删除 | 建议都删：两个时间源必然有一天对不上；设备自报"我在线"没有信息量，离线时它正好发不出来。**2026-11-08 已核实：设备端遥测里已删除 `deviceTime`/`connectionState`/`protocolVersion`，时间只用外层 `ts`，已解决** |
 | B-7 | 交班（`CommitWork`）是否纳入本期 | **已决定纳入（产品 2026-11-03）**，见 §F：`shiftEvent`/`stockRecord` 两端已实现，新接口 `/api/shift-records`、`/api/stock-records`。旧 `/api/shifts` 仍是已删除状态，不是遗漏 |
 | B-8 | ThingsBoard 里已堆积的不可解析出入库记录如何处理 | 见 `protocol-v1-stock-event.md` §4.4 |
 | B-9 | `stockEvent` 补录后用同一 `eventId` 重发：重发的信封 `ts` 是否一定更晚、`eventId` 是否一定不变；是否需要显式 `revision` 字段 | 云端目前按信封 `ts` 折叠（issue #13，`protocol-v1-stock-event.md` "同一 `eventId` 可上报多次"），**暂行、未经 Android 确认**。决定人：Android 负责人 |
