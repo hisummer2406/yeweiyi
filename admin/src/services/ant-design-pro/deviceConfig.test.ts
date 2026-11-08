@@ -67,14 +67,4 @@ describe('deviceConfig services', () => {
     await expect(svc.findCommandByRequestId('D1', 'adm-1')).resolves.toBeUndefined();
     expect(request.mock.calls[0][1].params).toEqual({ requestId: 'adm-1' });
   });
-
-  it('sends the gate change with its reason', async () => {
-    request.mockResolvedValue({ deviceName: 'D1', enabled: true });
-    await svc.setConfigGate('D1', true, '验证');
-    expect(request).toHaveBeenCalledWith('/api/devices/D1/config-commands', {
-      method: 'PUT',
-      data: { enabled: true, reason: '验证' },
-      skipErrorHandler: true,
-    });
-  });
 });

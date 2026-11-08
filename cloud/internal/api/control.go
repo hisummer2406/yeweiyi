@@ -201,9 +201,6 @@ func writeControlError(c *gin.Context, err error) {
 			scope = gate.Scope
 		}
 		hint := "device configuration commands are disabled on this deployment"
-		if scope == control.GateScopeDevice {
-			hint = "device configuration commands have not been enabled for this device by a platform admin"
-		}
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "config_commands_disabled", "scope": scope, "hint": hint})
 	case errors.Is(err, control.ErrRequestIDRequired):
 		apiError(c, http.StatusBadRequest, "request_id_required", err.Error())

@@ -66,7 +66,7 @@ func (q *Queries) GetStation(ctx context.Context, id int64) (Station, error) {
 }
 
 const getStationDevice = `-- name: GetStationDevice :one
-SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id, config_commands_enabled_at, config_commands_enabled_by FROM devices WHERE station_id = $1
+SELECT device_name, is_online, last_online_at, last_offline_at, updated_at, customer_id, customer_assigned_at, station_id FROM devices WHERE station_id = $1
 `
 
 // The one device currently on a station, if any (at most one: devices_station_id_key).
@@ -82,8 +82,6 @@ func (q *Queries) GetStationDevice(ctx context.Context, stationID pgtype.Int8) (
 		&i.CustomerID,
 		&i.CustomerAssignedAt,
 		&i.StationID,
-		&i.ConfigCommandsEnabledAt,
-		&i.ConfigCommandsEnabledBy,
 	)
 	return i, err
 }

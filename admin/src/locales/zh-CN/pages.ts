@@ -694,7 +694,7 @@ export default {
   'pages.console.manual.error.other': '补录失败，请稍后重试',
   'pages.console.manual.error.notDeletable': '设备上报的记录不能撤销',
   'pages.console.manual.error.revokeFailed': '撤销失败，请稍后重试',
-  'pages.console.manual.abandon': "已确认未保存，重新填写",
+  'pages.console.manual.abandon': '已确认未保存，重新填写',
   'pages.console.detail.tab.settings': '参数设置',
   'pages.console.detail.tab.commands': '操作记录',
   'pages.console.control.title': '远程控制',
@@ -856,5 +856,5 @@ export default {
   'pages.console.commands.status.rejected': '被设备拒绝',
   'pages.console.commands.status.expired': '结果无法确认',
   'pages.console.commands.status.unknown': '未知',
-  'pages.console.settings.deviceLoadFailed': "读取整机设置失败",
+  'pages.console.settings.deviceLoadFailed': '读取整机设置失败',
 };

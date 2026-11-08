@@ -139,15 +139,3 @@ export async function listCommands(
   );
   return Array.isArray(res?.commands) ? res.commands : [];
 }
-
-/** PUT /api/devices/:device/config-commands：仅平台管理员，reason 必填，幂等。 */
-export function setConfigGate(
-  device: string,
-  enabled: boolean,
-  reason: string,
-): Promise<API.ConfigGate> {
-  return call<API.ConfigGate>(`${devicePath(device)}/config-commands`, {
-    method: 'PUT',
-    data: { enabled, reason },
-  });
-}

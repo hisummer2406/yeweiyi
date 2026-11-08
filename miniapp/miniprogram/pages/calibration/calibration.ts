@@ -14,8 +14,8 @@ import type { DeviceTanksResponse, TankSettings } from '../../types/api';
 
 // 参数修正（#6）：传感器读数的校准偏移量（液位/水位/温度修正），不是修正已有记录。
 // 对象与储罐设置相同：首页当前油站 → 其唯一设备 → 当前账号可见的罐。上方显示设备当前修正值（云端镜像）；
-// 「保存到手机」只存本机（同一 key，退出登录清除，且只在同一设备同一罐时读回）；「保存到控制器」= 管理员在设备
-// 已开放远程配置时下发 config.setTankSettings 的三项修正，只发与设备回报不同的值。员工只能看。
+// 「保存到手机」只存本机（同一 key，退出登录清除，且只在同一设备同一罐时读回）；「保存到控制器」= 管理员直接
+// 下发 config.setTankSettings 的三项修正，只发与设备回报不同的值。员工只能看。
 
 const STORAGE_KEY = 'calibration-draft';
 const DASH = '—';
@@ -51,7 +51,6 @@ Page({
   mirrors: [] as TankSettings[],
   mirrorLoaded: false,
   stationId: null as number | null,
-  gate: undefined as boolean | undefined,
   seq: 0,
 
   onShow() {
@@ -76,7 +75,6 @@ Page({
         }
         const device = ctx.device.device_name;
         this.stationId = ctx.device.station_id ?? null;
-        this.gate = ctx.device.config_commands_enabled;
         this.setData({ stationName: ctx.stationName });
         if (device === this.data.device && this.data.state === 'ok') {
           // Same device: keep what is typed, re-read the device's corrections (Codex review, PR #15)
@@ -170,8 +168,9 @@ Page({
     const token = getToken();
     const admin = !!token && !isReadOnlyRole(roleFromToken(token));
     this.setData({
-      canSend: admin && this.gate === true && this.mirrorLoaded,
-      sendHint: !admin ? '' : this.gate === undefined ? t('tankCfg.gateUnknown') : this.gate ? '' : t('tankCfg.gateClosed'),
+      // 没有逐台开放（2026-11-09）：管理员直接下发；系统总闸关闭时云端答 config_commands_disabled
+      canSend: admin && this.mirrorLoaded,
+      sendHint: '',
     });
   },
 

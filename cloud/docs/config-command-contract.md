@@ -2,7 +2,7 @@
 
 本文是后台（#4）与小程序（#6）接入远程配置下发的云端契约。方法本身（`config.setTankSettings` /
 `config.setDeviceSettings` 的参数、校验、设备拒绝原因）见 [tank-settings-contract.md](tank-settings-contract.md) 第二阶段；
-本文只定义**提交保护**：幂等、找回、受理时复核、在途互斥、两级开关、迟到结果与整机设置镜像。
+本文只定义**提交保护**：幂等、找回、受理时复核、在途互斥、开关、迟到结果与整机设置镜像。
 设计与取舍见 `openspec/changes/config-command-delivery/design.md`。
 
 标注：【需求】产品/议题要求；【选择】云端在需求内的取舍，可改；【待确认】需负责人决定。
@@ -51,11 +51,11 @@
 `pending`/`sent`/`received`/`executing` 的命令 → `409 {"code":"config_command_in_flight","commandId":"..."}`（`commandId` 是在途
 那条，可能缺省：它恰好在查询前结束时，客户端直接重试即可）。【选择】不同罐之间、罐与整机之间可并行。命令终态或过期后自动释放。
 
-### 1.4 两级开关【需求】
+### 1.4 开关【需求】
 
-部署级 `control.allowConfigCommands`（`ALLOW_CONFIG_COMMANDS`）**且**设备级开关都开才受理；否则
-`409 {"code":"config_commands_disabled","scope":"deployment"|"device"}`。客户端据 `scope` 提示"系统未开放"或"该设备未开放"。
-判定在角色之后：员工一律先得 403。
+只有部署级 `control.allowConfigCommands`（`ALLOW_CONFIG_COMMANDS`）。关闭时 `409 {"code":"config_commands_disabled","scope":"deployment"}`；
+判定在角色之后：员工一律先得 403。**生产自 2026-11-09 起常开**（用户决定：管理员打开参数页即可直接修改）。
+曾有的设备级白名单（迁移 000038、`PUT /api/devices/:device/config-commands`、设备行 `config_commands_enabled`）已于同日删除（迁移 000039）。
 
 ### 1.5 错误码（新增部分）
 
@@ -66,7 +66,7 @@
 | 409 | `request_id_reused` | 同 `requestId` 不同内容 |
 | 409 | `device_station_changed` | 受理时油站关系已变（带 `currentStationId`） |
 | 409 | `config_command_in_flight` | 同目标已有未终态命令（带 `commandId`） |
-| 409 | `config_commands_disabled` | 已有，新增 `scope` |
+| 409 | `config_commands_disabled` | 部署级开关关闭，`scope=deployment` |
 
 既有错误（`403`、`invalid_args`+`fields`、`reason_required`、`command_delivery_unconfirmed` 等）不变。
 
@@ -82,14 +82,6 @@
 | `GET /api/devices/:device/commands?requestId=<id>` | 调用者**本人**这次提交，列表形状 `{"commands":[...]}`，0 或 1 条 |
 
 可见范围同命令列表：先设备级检查（防枚举 403），员工看不到任何命令。
-
-## 3. 设备级开关：`PUT /api/devices/:device/config-commands`
-
-- 仅平台管理员；其他角色在解析请求体前 `403 not authorized`（写 `denied` 审计）。
-- 体：`{"enabled": true|false, "reason": "..."}`，`reason` 必填（≤ 200 字）。幂等（重复开放保留首次时间与操作人）。
-- 响应：`{"deviceName","enabled","enabledAt","enabledBy"}`。审计 `device.config_commands`（含前后值、原因）。
-- 设备**换客户时自动关闭**；换机的新设备天然未开放；未知设备 `404 device_not_found`；删除中 `409 device_purge_in_progress`。
-- `GET /api/devices` 的每行对管理员带 `config_commands_enabled`（布尔），员工的行不带。
 
 ## 4. 整机设置镜像：`GET /api/devices/:device/device-settings`
 
@@ -126,5 +118,5 @@
 
 ## 7. 发布
 
-合并后生产行为与之前相同（总闸关、所有设备未开放）。【待确认·发布】是否把总闸常开、改由平台管理员逐台开放；在此之前真机验证
-仍按 [tank-settings-device-verification.md](tank-settings-device-verification.md) 的短窗口流程，并额外先开放测试设备。
+2026-11-09 起生产 `ALLOW_CONFIG_COMMANDS=true`，没有设备白名单。真机只验证过单字段 `config.setTankSettings`（2026-11-08），其余字段、
+整机设置、失败与离线路径仍待真机验收（#9）。物理命令（泵/阀/重启）仍关闭。

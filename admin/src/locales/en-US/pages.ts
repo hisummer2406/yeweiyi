@@ -679,7 +679,7 @@ export default {
     'Records reported by the device cannot be revoked',
   'pages.console.manual.error.revokeFailed':
     'Failed to revoke, please try again later',
-  'pages.console.manual.abandon': "Not saved — start over",
+  'pages.console.manual.abandon': 'Not saved — start over',
   'pages.console.detail.tab.settings': 'Settings',
   'pages.console.detail.tab.commands': 'Operations',
   'pages.console.control.title': 'Remote control',
@@ -860,5 +860,5 @@ export default {
   'pages.console.commands.status.rejected': 'Refused',
   'pages.console.commands.status.expired': 'Result unknown',
   'pages.console.commands.status.unknown': 'Unknown',
-  'pages.console.settings.deviceLoadFailed': "Failed to load device settings",
+  'pages.console.settings.deviceLoadFailed': 'Failed to load device settings',
 };

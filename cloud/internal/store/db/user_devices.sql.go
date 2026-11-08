@@ -72,7 +72,7 @@ func (q *Queries) DeleteBindingsForUser(ctx context.Context, userID int64) (int6
 }
 
 const listDevicesForUser = `-- name: ListDevicesForUser :many
-SELECT d.device_name, d.is_online, d.last_online_at, d.last_offline_at, d.updated_at, d.customer_id, d.customer_assigned_at, d.station_id, d.config_commands_enabled_at, d.config_commands_enabled_by
+SELECT d.device_name, d.is_online, d.last_online_at, d.last_offline_at, d.updated_at, d.customer_id, d.customer_assigned_at, d.station_id
 FROM devices d
 JOIN users u ON u.id = $1 AND u.disabled_at IS NULL
 WHERE u.role = 'platform_admin'
@@ -113,8 +113,6 @@ func (q *Queries) ListDevicesForUser(ctx context.Context, id int64) ([]Device, e
 			&i.CustomerID,
 			&i.CustomerAssignedAt,
 			&i.StationID,
-			&i.ConfigCommandsEnabledAt,
-			&i.ConfigCommandsEnabledBy,
 		); err != nil {
 			return nil, err
 		}

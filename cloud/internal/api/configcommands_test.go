@@ -25,7 +25,6 @@ func TestConfigCommands_ReplayIs200AndLookupsFindTheCommand(t *testing.T) {
 	env, sender := newControlEnv(t, control.Config{AllowConfigCommands: true})
 	device := "ctl-api-replay"
 	env.ownDevice(device)
-	env.openConfigGate(device)
 	env.setRole(control.RoleCustomerAdmin)
 	url := "/api/devices/" + device + "/commands"
 
@@ -97,7 +96,6 @@ func TestConfigCommands_SubmissionFieldErrors(t *testing.T) {
 	env, _ := newControlEnv(t, control.Config{AllowConfigCommands: true})
 	device := "ctl-api-fields"
 	env.ownDevice(device)
-	env.openConfigGate(device)
 	env.setRole(control.RoleCustomerAdmin)
 	url := "/api/devices/" + device + "/commands"
 	base := func() map[string]any {
@@ -126,71 +124,32 @@ func TestConfigCommands_SubmissionFieldErrors(t *testing.T) {
 	}
 }
 
-func TestConfigCommands_DeviceGate(t *testing.T) {
+// No per-device opening (removed 2026-11-09): the old gate route is gone and device rows no longer carry it.
+func TestConfigCommands_NoPerDeviceGate(t *testing.T) {
 	env, _ := newControlEnv(t, control.Config{AllowConfigCommands: true})
 	device := "ctl-api-gate"
 	env.ownDevice(device)
 	env.setRole(control.RoleCustomerAdmin)
-	cmdURL := "/api/devices/" + device + "/commands"
-	gateURL := "/api/devices/" + device + "/config-commands"
-
-	rec := env.authed("POST", cmdURL, configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "alarmHighLevelMm": 610}))
-	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"scope":"device"`) {
-		t.Fatalf("closed device: %d %s", rec.Code, rec.Body.String())
+	if rec := env.authed("POST", "/api/devices/"+device+"/commands", configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "alarmHighLevelMm": 610})); rec.Code != http.StatusAccepted {
+		t.Errorf("config command without any opening: %d %s", rec.Code, rec.Body.String())
 	}
-
-	// A customer administrator cannot open it; the refusal comes before the body is read.
-	if rec := env.authed("PUT", gateURL, []byte(`not json`)); rec.Code != http.StatusForbidden {
-		t.Errorf("customer admin opening the gate: %d %s", rec.Code, rec.Body.String())
-	}
-
 	platform := env.otherUserToken(control.RolePlatformAdmin)
-	if rec := env.do("PUT", gateURL, []byte(platform), []byte(`{"enabled":true}`)); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "reason_required") {
-		t.Errorf("no reason: %d %s", rec.Code, rec.Body.String())
+	if rec := env.do("PUT", "/api/devices/"+device+"/config-commands", []byte(platform), []byte(`{"enabled":true,"reason":"x"}`)); rec.Code != http.StatusNotFound {
+		t.Errorf("old gate route: %d, want 404", rec.Code)
 	}
-	for i := 0; i < 2; i++ { // idempotent
-		rec := env.do("PUT", gateURL, []byte(platform), []byte(`{"enabled":true,"reason":"真机验证"}`))
-		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"enabled":true`) {
-			t.Fatalf("open %d: %d %s", i, rec.Code, rec.Body.String())
-		}
-	}
-	if rec := env.do("PUT", "/api/devices/no-such-device-xyz/config-commands", []byte(platform), []byte(`{"enabled":true,"reason":"x"}`)); rec.Code != http.StatusNotFound {
-		t.Errorf("unknown device: %d %s", rec.Code, rec.Body.String())
-	}
-	var audits int
-	env.pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_log WHERE device_name = $1 AND action = 'device.config_commands' AND outcome = 'allowed'`, device).Scan(&audits)
-	if audits != 2 {
-		t.Errorf("gate audit rows = %d, want 2", audits)
-	}
-
-	// The device list tells administrators, not employees.
-	rec = env.authed("GET", "/api/devices", nil)
-	if !strings.Contains(rec.Body.String(), `"config_commands_enabled":true`) {
-		t.Errorf("admin device list: %s", rec.Body.String())
-	}
-	if rec := env.authed("POST", cmdURL, configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "alarmHighLevelMm": 610})); rec.Code != http.StatusAccepted {
-		t.Errorf("open device: %d %s", rec.Code, rec.Body.String())
-	}
-
-	// Moving the device to another customer closes it.
-	other := env.newCustomer("gate")
-	t.Cleanup(func() { // before the customer's own cleanup (LIFO)
-		env.pool.Exec(context.Background(), `UPDATE devices SET customer_id = `+defaultCustomerSQL+` WHERE device_name = $1`, device)
-	})
-	if _, err := env.pool.Exec(context.Background(), `DELETE FROM user_tank_grants WHERE device_name = $1`, device); err != nil {
-		t.Fatal(err)
-	}
-	if rec := env.do("PUT", "/api/devices/"+device+"/customer", []byte(platform), jsonBody(t, map[string]any{"customerId": other})); rec.Code != http.StatusOK && rec.Code != http.StatusNoContent {
-		t.Fatalf("transfer: %d %s", rec.Code, rec.Body.String())
-	}
-	var open bool
-	env.pool.QueryRow(context.Background(), `SELECT config_commands_enabled_at IS NOT NULL FROM devices WHERE device_name = $1`, device).Scan(&open)
-	if open {
-		t.Error("the gate survived a customer change")
-	}
-	env.setRole(control.RoleCustomerUser)
 	if rec := env.authed("GET", "/api/devices", nil); strings.Contains(rec.Body.String(), "config_commands_enabled") {
-		t.Errorf("employee device list carries the gate: %s", rec.Body.String())
+		t.Errorf("device list still carries the gate: %s", rec.Body.String())
+	}
+}
+
+func TestConfigCommands_DeploymentSwitchClosed(t *testing.T) {
+	env, _ := newControlEnv(t, control.Config{})
+	device := "ctl-api-gate-off"
+	env.ownDevice(device)
+	env.setRole(control.RoleCustomerAdmin)
+	rec := env.authed("POST", "/api/devices/"+device+"/commands", configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 1, "alarmHighLevelMm": 610}))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"scope":"deployment"`) {
+		t.Errorf("switch closed: %d %s", rec.Code, rec.Body.String())
 	}
 }
 

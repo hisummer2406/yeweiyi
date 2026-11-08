@@ -120,8 +120,8 @@
   `device-parameter-settings`）**：设备详情新增「参数设置」（`?tab=settings`）、「操作记录」（`?tab=commands`）；菜单「远程控制」
   （`/console/issue-command`）是设备列表入口。本期只有配置类，动作类（消音/清警/重启/泵阀）不提供入口；**密度只读**。
   - 当前值只来自设备回报（`tank-settings` / `device-settings` + `reportedAt`），null 显示「—」、0 照常显示，**不乐观更新**。
-  - 设备级开关：`GET /api/devices` 行的 `config_commands_enabled`（字段缺失 = 旧版云端 → 不能下发）；只有平台管理员能开/关
-    （`PUT /api/devices/:device/config-commands`，原因必填）。整机设置只有平台管理员能改。
+  - **没有逐台开放**（2026-11-09 用户决定）：管理员打开参数页即可直接修改；云端只剩部署级总闸，关闭时提交得到
+    `config_commands_disabled`。整机设置只有平台管理员能改。
   - 只发改动字段；本地预检在 `utils/deviceConfig.ts`（范围同云端 `config_args.go`，四级液位顺序用当前值+改动合并，0 = 不启用），云端/设备才是裁决。
   - 提交（`ConfigSubmitModal`）：打开确认弹窗生成一次 `requestId`，这次确认的重试都复用；确认时重读设备列表，油站变了就不发并刷新；
     `expectedStationId` 发**表单打开时**的值。超时/`command_delivery_unconfirmed`：先 `?requestId=` 找回，找不到只给「用同一提交编号重试」，

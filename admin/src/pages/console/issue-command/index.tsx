@@ -1,6 +1,6 @@
 import { PageContainer } from '@ant-design/pro-components';
 import { Link, useIntl } from '@umijs/max';
-import { Alert, Table, Tag } from 'antd';
+import { Alert, Table } from 'antd';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { listDevices } from '@/services/ant-design-pro/devices';
@@ -59,19 +59,6 @@ const ConsoleIssueCommand: React.FC = () => {
                 {r.device_name}
               </Link>
             ),
-          },
-          {
-            title: t('pages.console.control.col.gate'),
-            render: (_, r) =>
-              r.config_commands_enabled === undefined ? (
-                '—'
-              ) : r.config_commands_enabled ? (
-                <Tag color="success">
-                  {t('pages.console.control.gate.open')}
-                </Tag>
-              ) : (
-                <Tag>{t('pages.console.control.gate.closed')}</Tag>
-              ),
           },
         ]}
       />

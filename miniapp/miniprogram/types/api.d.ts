@@ -50,9 +50,6 @@ export interface Device {
   // customer_user rows: the tank numbers granted to this user on the device (yeweiyi-cloud#63). The
   // server already filters every read to these tanks; this is informational. null/missing for admins.
   granted_tanks?: number[] | null;
-  // Per-device remote-configuration gate (yeweiyi-cloud#3, docs/config-command-contract.md §3). Only on
-  // administrators' rows; missing = older cloud or an employee — either way the app offers no sending.
-  config_commands_enabled?: boolean;
 }
 
 // GET /api/devices/:device/tanks (yeweiyi-cloud internal/api/tankgrants.go listDeviceTanksHandler,

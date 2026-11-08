@@ -3,9 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -19,13 +17,7 @@ import (
 //
 //	GET /api/devices/:device/commands/:commandId   one command
 //	GET /api/devices/:device/commands?requestId=   the caller's own submission (0 or 1 rows)
-//	PUT /api/devices/:device/config-commands       per-device gate, platform admin only
 //	GET /api/devices/:device/device-settings       device-level settings mirror, admins only
-
-const (
-	auditConfigCommandsGate = "device.config_commands"
-	maxGateReasonLen        = 200
-)
 
 // getDeviceCommandHandler is GET /api/devices/:device/commands/:commandId. Device check first
 // (invariant 6); after that, a command that does not exist, belongs to another device, is not visible
@@ -75,69 +67,6 @@ func listOwnCommandByRequestID(c *gin.Context, deps Deps, device, requestID stri
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"commands": rows})
-}
-
-type configGateRequest struct {
-	Enabled *bool  `json:"enabled"`
-	Reason  string `json:"reason"`
-}
-
-// setConfigCommandsGateHandler is PUT /api/devices/:device/config-commands. Platform admin only, decided
-// from the database before the body is parsed. Idempotent; every call that passes the role check is
-// audited with the state before and after.
-func setConfigCommandsGateHandler(deps Deps) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		actor, ok := requireAdminActor(c, deps)
-		if !ok {
-			return
-		}
-		device := c.Param("device")
-		if actor.Role != control.RolePlatformAdmin {
-			refuse(c, deps, actor, auditConfigCommandsGate, "platform admin only", map[string]any{"device": device})
-			return
-		}
-		var req configGateRequest
-		if err := c.ShouldBindJSON(&req); err != nil || req.Enabled == nil {
-			apiError(c, http.StatusBadRequest, "invalid_request", "body must be {\"enabled\": bool, \"reason\": string}")
-			return
-		}
-		reason := strings.TrimSpace(req.Reason)
-		if reason == "" || utf8.RuneCountInString(reason) > maxGateReasonLen {
-			apiError(c, http.StatusBadRequest, "reason_required", "reason is required (at most 200 characters)")
-			return
-		}
-		ctx := c.Request.Context()
-		if purging, err := devicePurging(ctx, deps.Queries, device); err == nil && purging {
-			purgeInProgress(c)
-			return
-		}
-		row, err := deps.Queries.SetDeviceConfigCommandsEnabled(ctx, db.SetDeviceConfigCommandsEnabledParams{
-			Enabled: *req.Enabled, AdminID: pgtype.Int8{Int64: actor.ID, Valid: true}, DeviceName: device,
-		})
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				apiError(c, http.StatusNotFound, "device_not_found", "device not found")
-				return
-			}
-			internalError(c, err)
-			return
-		}
-		customer := pgtype.Int8{}
-		if dev, err := deps.Queries.GetDevice(ctx, device); err == nil {
-			customer = dev.CustomerID
-		}
-		_ = auditAdmin(ctx, deps.Queries, actor, auditConfigCommandsGate, device, customer, "allowed",
-			map[string]any{"before": row.WasEnabled, "after": *req.Enabled, "reason": reason})
-		c.JSON(http.StatusOK, configGateView(device, row.ConfigCommandsEnabledAt, row.ConfigCommandsEnabledBy))
-	}
-}
-
-func configGateView(device string, at pgtype.Timestamptz, by pgtype.Int8) gin.H {
-	var enabledAt *time.Time
-	if at.Valid {
-		enabledAt = &at.Time
-	}
-	return gin.H{"deviceName": device, "enabled": at.Valid, "enabledAt": enabledAt, "enabledBy": int8Ptr(by)}
 }
 
 type deviceSettingsView struct {

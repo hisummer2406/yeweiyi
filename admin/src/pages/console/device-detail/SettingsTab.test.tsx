@@ -20,7 +20,6 @@ const getTankCalibration = vi.fn();
 const issueConfigCommand = vi.fn();
 const getCommand = vi.fn();
 const findCommandByRequestId = vi.fn();
-const setConfigGate = vi.fn();
 let role = 'customer_admin';
 let actorId = 1;
 
@@ -49,7 +48,6 @@ vi.mock('@/services/ant-design-pro/deviceConfig', () => ({
   issueConfigCommand,
   getCommand,
   findCommandByRequestId,
-  setConfigGate,
 }));
 
 const { default: SettingsTab } = await import('./SettingsTab');
@@ -83,7 +81,6 @@ const deviceRow = (over: Partial<API.DeviceRow> = {}): API.DeviceRow => ({
   last_offline_at: null,
   updated_at: null,
   station_id: 7,
-  config_commands_enabled: true,
   ...over,
 });
 
@@ -339,41 +336,14 @@ describe('SettingsTab', () => {
     expect(await screen.findByText('设备回报值已一致')).toBeTruthy();
   });
 
-  it('is read-only for a device that is not enabled', async () => {
-    listDevices.mockResolvedValue([
-      deviceRow({ config_commands_enabled: false }),
-    ]);
+  // 2026-11-09: no per-device opening — an administrator can send right away, and there is no gate toggle.
+  it('lets an administrator send without any per-device opening', async () => {
     render(<SettingsTab device="D1" />);
-    expect(await screen.findByText(/该设备未开放远程配置/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '下发到设备' })).toBeNull();
+    expect(
+      await screen.findAllByRole('button', { name: '下发到设备' }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/未开放远程配置/)).toBeNull();
     expect(screen.queryByRole('button', { name: '开放远程配置' })).toBeNull();
-  });
-
-  it('lets only a platform admin open the gate, with a reason', async () => {
-    role = 'platform_admin';
-    listDevices.mockResolvedValue([
-      deviceRow({ config_commands_enabled: false }),
-    ]);
-    setConfigGate.mockResolvedValue({
-      deviceName: 'D1',
-      enabled: true,
-      enabledAt: null,
-      enabledBy: 1,
-    });
-    render(<SettingsTab device="D1" />);
-    fireEvent.click(
-      await screen.findByRole('button', { name: '开放远程配置' }),
-    );
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('修改原因（必填）'), {
-      target: { value: '真机验证' },
-    });
-    await act(async () => {
-      fireEvent.click(
-        within(dialog).getByRole('button', { name: /确\s*定|OK/ }),
-      );
-    });
-    expect(setConfigGate).toHaveBeenCalledWith('D1', true, '真机验证');
   });
 
   it('keeps device settings read-only for a customer admin', async () => {

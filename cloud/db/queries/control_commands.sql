@@ -24,8 +24,6 @@
 -- config-command-delivery (#3) adds three more checks to the same statement, for the same reason:
 --   * the method's permission tier against the user's *current* role (required_level) — Go's
 --     authorize() decides the error message, this decides whether a row exists;
---   * the per-device config-command gate (require_device_enabled), so a device closed between the
---     check and the insert gets nothing;
 --   * ON CONFLICT on the request_id index: a concurrent duplicate submission inserts nothing and
 --     the caller reads the existing row instead (zero rows back). The in-flight index is NOT an
 --     arbiter, so a second command for a busy target raises a unique violation the caller maps to
@@ -45,7 +43,6 @@ WHERE u.id = sqlc.arg('operator_id')
   AND user_may_access_device(u.id, sqlc.arg('device_name'))
   AND u.role IN ('platform_admin', 'customer_admin')
   AND (sqlc.arg('required_level')::TEXT <> 'platform' OR u.role = 'platform_admin')
-  AND (NOT sqlc.arg('require_device_enabled')::BOOLEAN OR d.config_commands_enabled_at IS NOT NULL)
 ON CONFLICT (operator_id, device_name, request_id) WHERE request_id IS NOT NULL DO NOTHING
 RETURNING *;
 
@@ -73,10 +70,8 @@ SELECT id FROM stations WHERE id = $1 FOR SHARE;
 -- name: LockDeviceForCommand :one
 -- Holds the device row while the command is created, so a station change cannot commit between the
 -- expectedStationId check and the insert.
-SELECT station_id, config_commands_enabled_at FROM devices WHERE device_name = $1 FOR SHARE;
+SELECT station_id FROM devices WHERE device_name = $1 FOR SHARE;
 
--- name: GetDeviceConfigCommandsEnabled :one
-SELECT (config_commands_enabled_at IS NOT NULL)::BOOLEAN AS enabled FROM devices WHERE device_name = $1;
 
 -- name: GetControlCommand :one
 SELECT * FROM control_commands WHERE command_id = $1;

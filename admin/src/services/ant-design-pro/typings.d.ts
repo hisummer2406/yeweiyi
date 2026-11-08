@@ -60,8 +60,6 @@ declare namespace API {
     customer_id?: number | null;
     /** 所属油站；null 为未分组，字段缺失 = 旧版云端 */
     station_id?: number | null;
-    /** 设备级远程配置开关（cloud#3）；只有管理员的行带，字段缺失 = 旧版云端 */
-    config_commands_enabled?: boolean;
   };
 
   /**
@@ -482,11 +480,4 @@ declare namespace API {
     configTarget?: string | null;
   };
 
-  /** PUT /api/devices/:device/config-commands 的响应 */
-  type ConfigGate = {
-    deviceName: string;
-    enabled: boolean;
-    enabledAt: string | null;
-    enabledBy: number | null;
-  };
 }

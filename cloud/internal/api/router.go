@@ -130,7 +130,6 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.POST("/devices/:device/commands", issueCommandHandler(deps))
 		authorized.GET("/devices/:device/commands", listDeviceCommandsHandler(deps))
 		authorized.GET("/devices/:device/commands/:commandId", getDeviceCommandHandler(deps))
-		authorized.PUT("/devices/:device/config-commands", setConfigCommandsGateHandler(deps))
 		authorized.GET("/devices/:device/device-settings", deviceSettingsHandler(deps))
 		authorized.GET("/audit", listAuditHandler(deps))
 
