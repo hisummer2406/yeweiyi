@@ -83,8 +83,7 @@ services:
       TB_USERNAME: ${TB_USERNAME:-tenant@thingsboard.org}
       TB_PASSWORD: ${TB_PASSWORD:?生产部署必须设置 TB_PASSWORD}
       ALLOW_PHYSICAL_COMMANDS: "false"
-      # 临时开启（2026-11-08）：ZCT000001 下行真机验证（#3），验证完立即改回 "false"。
-      ALLOW_CONFIG_COMMANDS: "true"
+      ALLOW_CONFIG_COMMANDS: "false"
     depends_on:
       migrate:
         condition: service_completed_successfully
