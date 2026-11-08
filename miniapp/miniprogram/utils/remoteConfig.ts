@@ -1,0 +1,244 @@
+// 远程配置与补录（miniapp#6，总方案 #3）。Pure (no `wx`), checked in Node by `npm run check`.
+//
+// Contracts: yeweiyi-cloud docs/config-command-contract.md (submission protection),
+// docs/tank-settings-contract.md (fields, ranges), docs/stock-manual-entry-contract.md (补录).
+// The cloud and the device decide; the checks here only say "no" earlier.
+
+export type SendField = {
+  // Key in the page form (tankDraft keys for 储罐设置, calibration keys for 参数修正)
+  form: string;
+  // Field name on the wire / in the tank-settings mirror
+  cloud: string;
+  integer: boolean;
+  min: number;
+  max: number;
+};
+
+const INT_MAX = 2147483647;
+
+// 储罐设置 → config.setTankSettings. Not here on purpose: density (unit not aligned with the device,
+// read-only this release), height (the cloud refuses it), waterLow (the device has no such alarm),
+// tempLow (the device never checks it), colour and the free-text medium (no device field).
+export const TANK_SEND_FIELDS: readonly SendField[] = [
+  { form: 'highHigh', cloud: 'alarmHighHighLevelMm', integer: true, min: 0, max: INT_MAX },
+  { form: 'high', cloud: 'alarmHighLevelMm', integer: true, min: 0, max: INT_MAX },
+  { form: 'low', cloud: 'alarmLowLevelMm', integer: true, min: 0, max: INT_MAX },
+  { form: 'lowLow', cloud: 'alarmLowLowLevelMm', integer: true, min: 0, max: INT_MAX },
+  { form: 'waterHigh', cloud: 'alarmHighWaterMm', integer: true, min: 0, max: INT_MAX },
+  { form: 'tempHigh', cloud: 'alarmHighTempC', integer: true, min: -50, max: 100 },
+  { form: 'capacity', cloud: 'capacityL', integer: true, min: 0, max: 1_000_000 },
+];
+
+// Draft fields shown next to the device's value but never sent.
+export const TANK_DISPLAY_ONLY: Readonly<Record<string, string>> = {
+  density: 'density',
+  height: 'tankHeightMm',
+  tempLow: 'alarmLowTempC',
+};
+
+// 参数修正 → config.setTankSettings
+export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
+  { form: 'levelOffset', cloud: 'levelCorrectionMm', integer: false, min: -100, max: 100 },
+  { form: 'waterOffset', cloud: 'waterCorrectionMm', integer: false, min: -100, max: 100 },
+  { form: 'tempOffset', cloud: 'tempCorrectionC', integer: false, min: -10, max: 10 },
+];
+
+const NUMBER = /^-?\d+(\.\d+)?$/;
+
+export type SendProblem = { form: string; reason: 'number' | 'integer' | 'range' | 'order' };
+
+export type BuiltArgs = { args: Record<string, number>; problems: SendProblem[] };
+
+const LEVELS = ['alarmLowLowLevelMm', 'alarmLowLevelMm', 'alarmHighLevelMm', 'alarmHighHighLevelMm'];
+
+// What to send: the filled-in form fields whose value differs from the device's report. An empty field is
+// "leave as is", never 0. The 4-level order is checked on report + changes (0 = not enabled), and only when
+// a level is part of the change — old values that were already out of order are not ours to refuse.
+export function buildArgs(
+  fields: readonly SendField[],
+  values: Record<string, string>,
+  mirror: Record<string, unknown> | null | undefined,
+): BuiltArgs {
+  const args: Record<string, number> = {};
+  const problems: SendProblem[] = [];
+  for (const f of fields) {
+    const raw = (values[f.form] ?? '').trim();
+    if (raw === '') continue;
+    if (!NUMBER.test(raw)) {
+      problems.push({ form: f.form, reason: 'number' });
+      continue;
+    }
+    const n = Number(raw);
+    if (f.integer && !Number.isInteger(n)) {
+      problems.push({ form: f.form, reason: 'integer' });
+      continue;
+    }
+    if (n < f.min || n > f.max) {
+      problems.push({ form: f.form, reason: 'range' });
+      continue;
+    }
+    if (mirror && mirror[f.cloud] === n) continue;
+    args[f.cloud] = n;
+  }
+  if (LEVELS.some((k) => k in args)) {
+    const merged = LEVELS.map((k) => {
+      const v = k in args ? args[k] : mirror?.[k];
+      return { k, v: typeof v === 'number' ? v : 0 };
+    }).filter((x) => x.v !== 0);
+    for (let i = 1; i < merged.length; i++) {
+      if (merged[i].v <= merged[i - 1].v) {
+        const k = merged[i].k in args ? merged[i].k : merged[i - 1].k;
+        const f = fields.find((x) => x.cloud === k);
+        problems.push({ form: f ? f.form : k, reason: 'order' });
+        break;
+      }
+    }
+  }
+  return { args, problems };
+}
+
+// The mirror's value as form text ('' for not reported), for 导入设备值.
+export function mirrorToForm(
+  fields: readonly SendField[],
+  mirror: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of fields) {
+    const v = mirror?.[f.cloud];
+    out[f.form] = typeof v === 'number' ? String(v) : '';
+  }
+  return out;
+}
+
+// One submission id per confirmation (cloud contract §1: 1–64 of [A-Za-z0-9_-]); a retry of the same
+// confirmation reuses it.
+export function newRequestId(prefix = 'mp', now = Date.now(), rand = Math.random): string {
+  const r = Math.floor(rand() * 36 ** 8).toString(36).padStart(8, '0');
+  return `${prefix}-${now.toString(36)}-${r}`;
+}
+
+export type Phase = 'accepted' | 'received' | 'executing' | 'succeeded' | 'failed' | 'rejected' | 'expired' | 'unknown';
+
+export function commandPhase(status: string): Phase {
+  if (status === 'pending' || status === 'sent') return 'accepted';
+  if (['received', 'executing', 'succeeded', 'failed', 'rejected', 'expired'].includes(status)) return status as Phase;
+  return 'unknown';
+}
+
+export type Echo = 'matched' | 'waiting' | 'mismatch';
+
+// After succeeded: a report older than the command is still the old one (waiting); a fresh one with every
+// submitted field equal is matched; fresh but different is mismatch (changed on site, or rounded).
+export function echoState(
+  mirror: Record<string, unknown> | null | undefined,
+  args: Record<string, unknown>,
+  issuedAt: string | undefined,
+): Echo {
+  const reportedAt = mirror ? mirror.reportedAt : undefined;
+  if (typeof reportedAt !== 'string') return 'waiting';
+  const reported = Date.parse(reportedAt);
+  const issued = issuedAt ? Date.parse(issuedAt) : Number.NaN;
+  if (!Number.isFinite(reported) || (Number.isFinite(issued) && reported < issued)) return 'waiting';
+  for (const k of Object.keys(args)) {
+    if (k === 'tank') continue;
+    if (mirror?.[k] !== args[k]) return 'mismatch';
+  }
+  return 'matched';
+}
+
+export type SubmitError =
+  | 'deploymentDisabled'
+  | 'deviceDisabled'
+  | 'stationChanged'
+  | 'inFlight'
+  | 'requestIdReused'
+  | 'invalidArgs'
+  | 'unconfirmed'
+  | 'other';
+
+function codeOf(body: unknown): string | undefined {
+  const c = body && typeof body === 'object' ? (body as { code?: unknown }).code : undefined;
+  return typeof c === 'string' ? c : undefined;
+}
+
+// A failed configuration submission, by the cloud's code. Status 0 (no answer, timeout) is "unconfirmed":
+// the cloud may have taken it.
+export function classifySubmit(status: number, body: unknown): SubmitError {
+  switch (codeOf(body)) {
+    case 'config_commands_disabled':
+      return (body as { scope?: string }).scope === 'device' ? 'deviceDisabled' : 'deploymentDisabled';
+    case 'device_station_changed':
+      return 'stationChanged';
+    case 'config_command_in_flight':
+      return 'inFlight';
+    case 'request_id_reused':
+      return 'requestIdReused';
+    case 'invalid_args':
+      return 'invalidArgs';
+    case 'command_delivery_unconfirmed':
+      return 'unconfirmed';
+  }
+  return status === 0 ? 'unconfirmed' : 'other';
+}
+
+// ---- 补录 (POST /api/devices/:device/stock-events) ----
+
+export type BackfillEntry = { date: string; time: string; beforeLevel: string; volume: string };
+
+export type BackfillProblem = 'tank' | 'time' | 'future' | 'level' | 'volume' | 'reason';
+
+// Local date (YYYY-MM-DD) + time (HH:mm) → RFC 3339 with this phone's offset, e.g. 2026-10-14T08:30:00+08:00.
+export function localRfc3339(date: string, time: string, offsetMinutes: number): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  // getTimezoneOffset is minutes *behind* UTC (UTC+8 → -480)
+  const east = -offsetMinutes;
+  const sign = east >= 0 ? '+' : '-';
+  const abs = Math.abs(east);
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm = String(abs % 60).padStart(2, '0');
+  return `${date}T${time}:00${sign}${hh}:${mm}`;
+}
+
+export type BackfillBody = {
+  direction: 'IN' | 'OUT';
+  tank: number;
+  time: string;
+  beforeLevelMm: number;
+  volumeL: number;
+  reason: string;
+  requestId: string;
+};
+
+// Validates and builds one 补录. The cloud has the last word (e.g. before the device joined the customer).
+export function buildBackfill(
+  direction: 'IN' | 'OUT',
+  tank: number | undefined,
+  entry: BackfillEntry,
+  reason: string,
+  requestId: string,
+  now: number,
+  offsetMinutes: number,
+): { body?: BackfillBody; problem?: BackfillProblem } {
+  if (tank === undefined) return { problem: 'tank' };
+  const time = localRfc3339(entry.date, entry.time, offsetMinutes);
+  if (!time) return { problem: 'time' };
+  // One minute of clock skew, as the cloud allows
+  if (Date.parse(time) > now + 60_000) return { problem: 'future' };
+  const level = entry.beforeLevel.trim();
+  if (!NUMBER.test(level) || Number(level) < 0) return { problem: 'level' };
+  const volume = entry.volume.trim();
+  if (!NUMBER.test(volume) || !(Number(volume) > 0)) return { problem: 'volume' };
+  const why = reason.trim();
+  if (!why) return { problem: 'reason' };
+  return {
+    body: {
+      direction,
+      tank,
+      time,
+      beforeLevelMm: Number(level),
+      volumeL: Number(volume),
+      reason: why,
+      requestId,
+    },
+  };
+}
