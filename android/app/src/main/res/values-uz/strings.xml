@@ -226,4 +226,7 @@
     <string name="log_op_failed">Amal bajarilmadi, tafsilotlar jurnalga yozildi</string>
     <string name="createtable_a_nonull">R bo\'sh bo\'lishi mumkin emas</string>
     <string name="unit_gallon">gallon</string>
+    <!-- 以下 2 项 2026-11-08 AI 翻译，待 review（串口设置页：单罐开关量输出） -->
+    <string name="pump_link_title">Bitta bak diskret chiqishi</string>
+    <string name="pump_link_desc">Juda past sathda ulanadi, juda yuqori sathda uziladi</string>
 </resources>

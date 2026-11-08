@@ -34,6 +34,9 @@ public class SharePrefUtil {
     public static final String AUTO_LOGIN = "autoLogin";//自动登录
     public static final String SHOW_VOLUME = "showVolume";//显示体积
     public static final String TEST_DATA = "isTestData";
+    /** 单罐开关量输出（IO2 联动）开关、绑定罐号（0 = 未选），见 PumpIoManager */
+    public static final String PUMP_LINK_ENABLED = "pumpLinkEnabled";
+    public static final String PUMP_LINK_TANK = "pumpLinkTank";
     public static final String CONNECT_PROBE = "isConnectProbe";
     public static final String LIGHT_TIME = "lightTime";
     public static final String LIGHT_AUTO = "isAutoBlack";

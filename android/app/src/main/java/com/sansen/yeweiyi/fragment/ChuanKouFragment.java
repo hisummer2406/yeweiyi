@@ -1,5 +1,6 @@
 package com.sansen.yeweiyi.fragment;
 
+import android.content.Intent;
 import android.databinding.Observable;
 import android.databinding.ObservableField;
 import android.os.Build;
@@ -8,15 +9,18 @@ import android.support.annotation.RequiresApi;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.activity.ActivityDialog;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
+import com.sansen.yeweiyi.manager.PumpIoManager;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
@@ -27,7 +31,13 @@ import com.sansen.yeweiyi.utils.SharePrefUtil;
 public class ChuanKouFragment extends BaseFragment  {
 
     private RadioGroup rg_serial2, rg_serial4;
+    private CheckBox cb_pump_link;
     private LinearLayout ly_upper_page;
+    private TextView tv_pump_link_tank;
+    /** ActivityDialog 罐号选择；返回值 = 下标 + 100（见 ActivityDialog.onItemClick） */
+    private static final int REQUEST_PUMP_TANK = 0x31;
+    /** 未选罐时打开开关会先弹罐号选择，选中后再打开，取消则开关退回关闭 */
+    private boolean enableAfterPick;
 
 
     @Override
@@ -44,6 +54,10 @@ public class ChuanKouFragment extends BaseFragment  {
     @RequiresApi(api = Build.VERSION_CODES.O)
     @Override
     protected void processClick(View v) {
+        if (v.getId() == R.id.tv_pump_link_tank) {
+            openTankPicker(false);
+            return;
+        }
         if (v.getId()==R.id.ly_upper_page){
             if (main.setSeniorFragment == null) {
                 main.setSeniorFragment = new SetSeniorFragment();
@@ -108,6 +122,7 @@ public class ChuanKouFragment extends BaseFragment  {
                 break;
         }
         rg_serial4.check(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou4, 0) == 0 ? R.id.rb_serial4_oil : R.id.rb_serial4_modbus);
+        initPumpLink();
 
         View headerView = rootView.findViewById(R.id.title_bar);
         // 再从该 View 中 findViewById 获取内部的 TextView
@@ -146,6 +161,57 @@ public class ChuanKouFragment extends BaseFragment  {
             };
 
         }
+    }
+
+    /** 单罐开关量输出（IO2 联动）：先回显再挂监听，避免回显触发一次保存/复位。 */
+    private void initPumpLink() {
+        cb_pump_link = rootView.findViewById(R.id.cb_pump_link);
+        tv_pump_link_tank = rootView.findViewById(R.id.tv_pump_link_tank);
+        tv_pump_link_tank.setOnClickListener(this);
+        showPumpTank(PumpIoManager.getTank());
+        cb_pump_link.setChecked(PumpIoManager.isEnabled());
+        cb_pump_link.setOnCheckedChangeListener((button, on) -> {
+            if (on == PumpIoManager.isEnabled()) return;
+            if (!PumpIoManager.setEnabled(on)) {
+                openTankPicker(true);
+            }
+        });
+    }
+
+    private void openTankPicker(boolean enableAfter) {
+        enableAfterPick = enableAfter;
+        Intent intent = new Intent(main, ActivityDialog.class);
+        intent.putExtra("value", 0);
+        startActivityForResult(intent, REQUEST_PUMP_TANK);
+    }
+
+    private void showPumpTank(int tank) {
+        String[] names = getResources().getStringArray(R.array.oilcanArray);
+        if (tank <= 0 || tank > names.length) {
+            tv_pump_link_tank.setText(tank <= 0 ? getString(R.string.tank_no) : String.valueOf(tank));
+        } else {
+            tv_pump_link_tank.setText(names[tank - 1]);
+        }
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_PUMP_TANK) return;
+        boolean enableAfter = enableAfterPick;
+        enableAfterPick = false;
+        // 点弹窗外面关闭时 resultCode 为 0
+        if (resultCode >= 100) {
+            int tank = resultCode - 100 + 1;
+            if (tank != PumpIoManager.getTank()) {
+                PumpIoManager.setTank(tank);
+            }
+            showPumpTank(tank);
+            if (enableAfter) {
+                PumpIoManager.setEnabled(true);
+            }
+        }
+        cb_pump_link.setChecked(PumpIoManager.isEnabled());
     }
 
     @Override

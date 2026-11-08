@@ -25,6 +25,7 @@ import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.manager.SerialPortManager;
 import com.sansen.yeweiyi.manager.SocketManager;
+import com.sansen.yeweiyi.manager.PumpIoManager;
 import com.sansen.yeweiyi.manager.SoundManager;
 import com.sansen.yeweiyi.utils.CRCheck;
 
@@ -105,6 +106,8 @@ public class MyApplication extends Application {
 
 		mDaoHelp.getInstance(instance);
 		SoundManager.getInstance().init(this);
+		// 开机先断开 IO2（单罐开关量输出），再按设置联动
+		PumpIoManager.init(this);
 
 		mDBManager = DBDataManager.getInstance();
 
