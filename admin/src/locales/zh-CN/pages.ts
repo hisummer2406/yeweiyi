@@ -749,6 +749,7 @@ export default {
   'pages.console.settings.reset': '清空修改',
   'pages.console.settings.aboveTankHeight':
     '{fields} 超过罐高，设备可能会拒绝。',
+  'pages.console.settings.toggleSign': '切换正负号',
   'pages.console.settings.problem.range': '超出范围（{min}～{max}）',
   'pages.console.settings.problem.integer': '必须是整数',
   'pages.console.settings.problem.order':

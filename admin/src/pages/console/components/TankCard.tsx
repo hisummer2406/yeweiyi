@@ -13,12 +13,12 @@ export const TankCard: React.FC<{ tank: API.Tank; onClick: () => void }> = ({
   tank,
   onClick,
 }) => (
-  <ProCard hoverable onClick={onClick}>
-    <Row gutter={[12, 12]} align="middle" wrap>
-      <Col flex="0 0 96px">
-        <TankPicture tank={tank} />
+  <ProCard hoverable onClick={onClick} styles={{ body: { padding: 8 } }}>
+    <Row gutter={[8, 8]} align="middle" wrap>
+      <Col flex="0 0 72px">
+        <TankPicture tank={tank} width={72} />
       </Col>
-      <Col flex="1 1 160px" style={{ minWidth: 0 }}>
+      <Col flex="1 1 170px" style={{ minWidth: 0 }}>
         <TankReadout
           tank={tank}
           extra={

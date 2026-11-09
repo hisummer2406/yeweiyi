@@ -330,6 +330,7 @@ export const en: Record<string, string> = {
   "backfill.previewBody": "Tank {tank}\nTime {time}\nLevel before {level} mm\nVolume {volume} L",
   "backfill.notSelected": "Not selected",
   "calibration.navTitle": "Calibration",
+  "calibration.toggleSign": "Toggle sign",
   "calibration.levelOffset": "Level correction",
   "calibration.waterOffset": "Water level correction",
   "calibration.tempOffset": "Temperature correction",

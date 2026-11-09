@@ -70,6 +70,10 @@ type numRule struct {
 	exclMin  bool // min itself is not allowed (density > 0)
 }
 
+// anyFiniteNumber is for the sensor corrections: the device simply adds them to the reading and its local
+// settings page has no limit either, so the remote path does not invent one (#28).
+var anyFiniteNumber = numRule{-math.MaxFloat64, math.MaxFloat64, false, false}
+
 var tankSettingRules = map[string]numRule{
 	AttrAlarmHighHighLevel: {0, math.MaxInt32, true, false},
 	AttrAlarmHighLevel:     {0, math.MaxInt32, true, false},
@@ -77,9 +81,9 @@ var tankSettingRules = map[string]numRule{
 	AttrAlarmLowLowLevel:   {0, math.MaxInt32, true, false},
 	AttrAlarmHighWater:     {0, math.MaxInt32, true, false},
 	AttrAlarmHighTempC:     {-50, 100, true, false},
-	AttrLevelCorrectionMm:  {-100, 100, false, false},
-	AttrWaterCorrectionMm:  {-100, 100, false, false},
-	AttrTempCorrectionC:    {-10, 10, false, false},
+	AttrLevelCorrectionMm:  anyFiniteNumber,
+	AttrWaterCorrectionMm:  anyFiniteNumber,
+	AttrTempCorrectionC:    anyFiniteNumber,
 	AttrDensity:            {0, 2, false, true},
 	AttrOilTypeIndex:       {0, maxOilTypeIndex, true, false},
 	AttrCapacityL:          {0, capacityLMax, true, false},

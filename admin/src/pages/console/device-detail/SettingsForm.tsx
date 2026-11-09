@@ -16,6 +16,7 @@ import {
   checkArgs,
   type Draft,
   type FieldDef,
+  hasSignToggle,
 } from '@/utils/deviceConfig';
 import { BUILTIN_OIL_MAX, mediumText, oilTypeKey } from '@/utils/oilType';
 import { DASH } from '@/utils/records';
@@ -64,6 +65,8 @@ export function useFormatValue() {
 
 /**
  * 当前回报 + 新值输入的对照表。只把改动过的可编辑字段交给 onSubmit；本地预检（范围、整数、四级液位顺序）不过就不让提交。
+ * InputNumber 故意不传 min/max：传了会在失焦时把越界值静默夹到边界（#28），越界要保留原值、提示并拦截提交；
+ * 也不传小数 step：step=0.1 会把 1000 显示成 1000.0。
  */
 const SettingsForm: React.FC<Props> = ({
   fields,
@@ -164,12 +167,27 @@ const SettingsForm: React.FC<Props> = ({
                       ) : (
                         <InputNumber
                           aria-label={label}
-                          style={{ width: 160 }}
+                          style={{ width: hasSignToggle(f) ? 200 : 160 }}
                           status={status}
-                          min={f.min}
-                          max={f.max}
                           precision={f.kind === 'int' ? 0 : undefined}
-                          step={f.kind === 'int' ? 1 : 0.1}
+                          addonBefore={
+                            hasSignToggle(f) ? (
+                              <Button
+                                type="text"
+                                size="small"
+                                aria-label={`${label} ${t('pages.console.settings.toggleSign')}`}
+                                disabled={typeof draft[f.key] !== 'number'}
+                                onClick={() =>
+                                  setDraft((d) => ({
+                                    ...d,
+                                    [f.key]: -(d[f.key] as number),
+                                  }))
+                                }
+                              >
+                                ±
+                              </Button>
+                            ) : undefined
+                          }
                           addonAfter={f.unit}
                           value={draft[f.key] ?? null}
                           onChange={(v) =>

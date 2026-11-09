@@ -383,7 +383,7 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
   `config_commands_disabled` when off): only filled fields that differ from the
   report and are open (`TANK_SEND_FIELDS`: 4 level alarms, high water, high temp, capacity) are sent; density, height,
   low water, low temp, colour and the free-text medium never are.
-- `calibration` uses the same station → device → visible tank; shows the device's corrections; 「保存到控制器」 sends
+- `calibration` uses the same station → device → visible tank; shows the device's corrections (no range limit, #28; each input has a ± toggle, #30, `toggleSign`); 「保存到控制器」 sends
   the three corrections the same way. 「保存到手机」 keeps one local draft (`calibration-draft`, tied to device + tank,
   cleared at logout).
 - Send flow: the reason is a form row (no `showModal` `editable`); the confirm dialog lists before → after; then

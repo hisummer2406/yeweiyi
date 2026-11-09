@@ -41,18 +41,21 @@
     <view class="fr">
       <text class="fl">{{text.levelOffset}}</text>
       <view class="fv"></view>
+      <view class="cb-sign" data-field="levelOffset" bindtap="onToggleSign" aria-role="button" aria-label="{{text.toggleSign}}">±</view>
       <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{levelOffset}}" bindinput="onLevelInput" />
       <text class="fu">{{form.mm}}</text>
     </view>
     <view class="fr">
       <text class="fl">{{text.waterOffset}}</text>
       <view class="fv"></view>
+      <view class="cb-sign" data-field="waterOffset" bindtap="onToggleSign" aria-role="button" aria-label="{{text.toggleSign}}">±</view>
       <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{waterOffset}}" bindinput="onWaterInput" />
       <text class="fu">{{form.mm}}</text>
     </view>
     <view class="fr">
       <text class="fl">{{text.tempOffset}}</text>
       <view class="fv"></view>
+      <view class="cb-sign" data-field="tempOffset" bindtap="onToggleSign" aria-role="button" aria-label="{{text.toggleSign}}">±</view>
       <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{tempOffset}}" bindinput="onTempInput" />
       <text class="fu">℃</text>
     </view>

@@ -91,6 +91,7 @@ const TankReadout: React.FC<{
               </th>
               <td
                 style={{
+                  whiteSpace: 'nowrap',
                   textAlign: 'right',
                   fontWeight: 600,
                   fontVariantNumeric: 'tabular-nums',

@@ -739,6 +739,7 @@ export default {
   'pages.console.settings.reset': 'Clear changes',
   'pages.console.settings.aboveTankHeight':
     '{fields} exceed the tank height; the device may refuse.',
+  'pages.console.settings.toggleSign': 'Toggle sign',
   'pages.console.settings.problem.range': 'Out of range ({min}–{max})',
   'pages.console.settings.problem.integer': 'Must be an integer',
   'pages.console.settings.problem.order':

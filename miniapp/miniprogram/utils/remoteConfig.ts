@@ -36,12 +36,19 @@ export const TANK_DISPLAY_ONLY: Readonly<Record<string, string>> = {
   tempLow: 'alarmLowTempC',
 };
 
-// 参数修正 → config.setTankSettings
+// 参数修正 → config.setTankSettings. No range limit on purpose (#28): the device just adds them to the reading.
 export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
-  { form: 'levelOffset', cloud: 'levelCorrectionMm', integer: false, min: -100, max: 100 },
-  { form: 'waterOffset', cloud: 'waterCorrectionMm', integer: false, min: -100, max: 100 },
-  { form: 'tempOffset', cloud: 'tempCorrectionC', integer: false, min: -10, max: 10 },
+  { form: 'levelOffset', cloud: 'levelCorrectionMm', integer: false, min: -Infinity, max: Infinity },
+  { form: 'waterOffset', cloud: 'waterCorrectionMm', integer: false, min: -Infinity, max: Infinity },
+  { form: 'tempOffset', cloud: 'tempCorrectionC', integer: false, min: -Infinity, max: Infinity },
 ];
+
+// The ± button beside a correction: some phone keyboards have no usable minus (#30). It only flips the sign of
+// the text — never a step — and '' → '-' lets the user tap first and type after; buildArgs still refuses a bare '-'.
+export function toggleSign(text: string): string {
+  const t = text.trim();
+  return t.startsWith('-') ? t.slice(1) : `-${t}`;
+}
 
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
@@ -69,6 +76,10 @@ export function buildArgs(
       continue;
     }
     const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      problems.push({ form: f.form, reason: 'number' });
+      continue;
+    }
     if (f.integer && !Number.isInteger(n)) {
       problems.push({ form: f.form, reason: 'integer' });
       continue;
