@@ -444,8 +444,9 @@ func TestOnlineStatus_FollowsThingsBoardActive(t *testing.T) {
 		t.Fatal("a freshly seeded device must start offline")
 	}
 
-	// ThingsBoard flips `active` shortly after the device connects, not at the instant of connect.
-	deadline := time.Now().Add(20 * time.Second)
+	// ThingsBoard flips `active` shortly after the device connects, not at the instant of connect, and
+	// noticeably later on a loaded CI runner (20s was not always enough). The loop exits as soon as it flips.
+	deadline := time.Now().Add(60 * time.Second)
 	for {
 		s.ing.SyncOnlineForTest(ctx)
 		if on, _ := online(); on || time.Now().After(deadline) {

@@ -3,12 +3,13 @@ name: Cloud CI
 on:
   push:
     branches: [main]
-    paths: ["cloud/**", ".github/workflows/cloud-ci.yml"]
+    paths: ["cloud/**", "!cloud/docs/**", "!cloud/**/*.md", ".github/workflows/cloud-ci.yml"]
   pull_request:
-    paths: ["cloud/**", ".github/workflows/cloud-ci.yml"]
+    paths: ["cloud/**", "!cloud/docs/**", "!cloud/**/*.md", ".github/workflows/cloud-ci.yml"]
 
 permissions:
   contents: read
+  actions: read
 
 defaults:
   run:
@@ -105,7 +106,25 @@ jobs:
 
   # 集成测试：真实 PostgreSQL / Redis / ThingsBoard CE。这些测试在基础设施缺失时会自行 Skip，
   # 而 Skip 在 CI 里等于“没测”却显示绿色，所以这里把任何 SKIP 都当成失败。
+  integration-reuse:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      reuse: ${{ steps.check.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      # 只有 main 上的代码与 PR 通过时的代码完全相同（合并提交与 PR 头同一棵树）才复用；
+      # 分支落后于 main、查询失败等任何其他情况都照常跑全量。
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ../.github/scripts/cloud-ci-reuse.sh HEAD >> "$GITHUB_OUTPUT"
+
   integration:
+    needs: integration-reuse
+    if: ${{ always() && (github.event_name == 'pull_request' || needs.integration-reuse.outputs.reuse != 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
