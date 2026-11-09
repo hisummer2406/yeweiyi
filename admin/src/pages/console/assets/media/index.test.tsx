@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -65,7 +66,14 @@ beforeEach(() => {
     }),
   ]);
 });
-afterEach(cleanup);
+// 保存后的刷新和弹窗动画要在测试环境销毁前跑完，否则 React 在 window 消失后继续调度
+afterEach(async () => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  });
+  cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+});
 
 async function addPublic(name: string) {
   await screen.findByText('92#');
