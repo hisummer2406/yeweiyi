@@ -17,6 +17,8 @@ type DeviceSettings struct {
 	InStockTimeThresholdSec   *int32
 	OutStockHeightThresholdMm *int32
 	OutStockTimeThresholdSec  *int32
+	// CustomMediaSync is 1 on firmware that accepts medium names with config.setTankSettings (#27); nil on older firmware.
+	CustomMediaSync *int32
 	// ReportedAtMs is the newest last-update time among the keys that were present.
 	ReportedAtMs int64
 }
@@ -36,6 +38,8 @@ func ParseDeviceSettings(attrs []Attribute) (s DeviceSettings, ok bool, skipped 
 			dst = &s.OutStockHeightThresholdMm
 		case ArgOutStockTimeThresholdSec:
 			dst = &s.OutStockTimeThresholdSec
+		case AttrCustomMediaSync:
+			dst = &s.CustomMediaSync
 		default:
 			continue
 		}

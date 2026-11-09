@@ -243,6 +243,12 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		return db.ControlCommand{}, false, err
 	}
 
+	if err := authorizeFields(req.Actor, req.Method, req.Args); err != nil {
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": err.Error()})
+		return db.ControlCommand{}, false, err
+	}
+
 	// Checked after authorization (a caller who may not issue the method learns nothing about its
 	// argument shape) and before anything is recorded or sent.
 	if err := protocol.ValidateArgs(req.Method, req.Args); err != nil {
@@ -629,6 +635,25 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 
 	if !s.cfg.AllowConfigCommands && isConfigWriteMethod(spec.Method) {
 		return &ConfigDisabledError{Scope: GateScopeDeployment}
+	}
+	return nil
+}
+
+// authorizeFields is the per-field tier on top of the per-method one: the medium of a tank is maintained
+// by platform administrators only (#27), while the rest of config.setTankSettings stays open to customer
+// administrators. A mixed submission is refused whole. Malformed args are left to ValidateArgs.
+func authorizeFields(actor Actor, method string, args json.RawMessage) error {
+	if method != protocol.MethodConfigTankSettings || actor.Role == RolePlatformAdmin {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(args, &fields) != nil {
+		return nil
+	}
+	for _, medium := range []string{protocol.AttrOilTypeIndex, protocol.AttrCustomOilName, protocol.AttrCustomOilNameEn} {
+		if _, found := fields[medium]; found {
+			return fmt.Errorf("%w: role %q may not change the medium", ErrForbidden, actor.Role)
+		}
 	}
 	return nil
 }

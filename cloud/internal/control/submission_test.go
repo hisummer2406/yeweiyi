@@ -482,3 +482,33 @@ func TestConfigSubmission_ReplayIsCustomerScoped(t *testing.T) {
 		t.Fatalf("replay across customers: replayed=%v cmd=%v err=%v, want ErrRequestIDReused and nothing returned", replayed, cmd.CommandID.Valid, err)
 	}
 }
+
+// #27: 介质只有平台管理员能改。混合提交整条拒绝，其他字段不受影响。
+func TestConfigSubmission_MediumIsPlatformAdminOnly(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, configOn)
+	ctx := context.Background()
+
+	for _, args := range []string{
+		`{"tank":1,"oilTypeIndex":5}`,
+		`{"tank":1,"alarmHighLevelMm":610,"oilTypeIndex":5}`,
+	} {
+		_, _, err := f.svc.IssueDetailed(ctx, tankReq(f, args, newRequestID()))
+		if !errors.Is(err, control.ErrForbidden) {
+			t.Errorf("customer admin %s: err = %v, want ErrForbidden", args, err)
+		}
+	}
+	if f.sender.calls != 0 {
+		t.Fatalf("refused medium changes were sent %d time(s)", f.sender.calls)
+	}
+
+	if _, _, err := f.svc.IssueDetailed(ctx, tankReq(f, `{"tank":1,"alarmHighLevelMm":610}`, newRequestID())); err != nil {
+		t.Fatalf("customer admin may still change other fields: %v", err)
+	}
+}
+
+func TestConfigSubmission_PlatformAdminMayChangeMedium(t *testing.T) {
+	f := newFixture(t, control.RolePlatformAdmin, configOn)
+	if _, _, err := f.svc.IssueDetailed(context.Background(), tankReq(f, `{"tank":1,"oilTypeIndex":5}`, newRequestID())); err != nil {
+		t.Fatal(err)
+	}
+}

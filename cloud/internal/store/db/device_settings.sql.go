@@ -12,7 +12,7 @@ import (
 )
 
 const getDeviceSettings = `-- name: GetDeviceSettings :one
-SELECT device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec, out_stock_height_threshold_mm, out_stock_time_threshold_sec, reported_at, updated_at FROM device_settings WHERE device_name = $1
+SELECT device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec, out_stock_height_threshold_mm, out_stock_time_threshold_sec, reported_at, updated_at, custom_media_sync FROM device_settings WHERE device_name = $1
 `
 
 func (q *Queries) GetDeviceSettings(ctx context.Context, deviceName string) (DeviceSetting, error) {
@@ -26,6 +26,7 @@ func (q *Queries) GetDeviceSettings(ctx context.Context, deviceName string) (Dev
 		&i.OutStockTimeThresholdSec,
 		&i.ReportedAt,
 		&i.UpdatedAt,
+		&i.CustomMediaSync,
 	)
 	return i, err
 }
@@ -34,16 +35,17 @@ const upsertDeviceSettings = `-- name: UpsertDeviceSettings :exec
 
 INSERT INTO device_settings (
     device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec,
-    out_stock_height_threshold_mm, out_stock_time_threshold_sec, reported_at
+    out_stock_height_threshold_mm, out_stock_time_threshold_sec, custom_media_sync, reported_at
 ) VALUES (
     $1, $2, $3,
-    $4, $5, $6
+    $4, $5, $6, $7
 )
 ON CONFLICT (device_name) DO UPDATE SET
     in_stock_height_threshold_mm = EXCLUDED.in_stock_height_threshold_mm,
     in_stock_time_threshold_sec = EXCLUDED.in_stock_time_threshold_sec,
     out_stock_height_threshold_mm = EXCLUDED.out_stock_height_threshold_mm,
     out_stock_time_threshold_sec = EXCLUDED.out_stock_time_threshold_sec,
+    custom_media_sync = EXCLUDED.custom_media_sync,
     reported_at = EXCLUDED.reported_at,
     updated_at = now()
 WHERE device_settings.reported_at IS DISTINCT FROM EXCLUDED.reported_at
@@ -55,6 +57,7 @@ type UpsertDeviceSettingsParams struct {
 	InStockTimeThresholdSec   pgtype.Int4        `json:"in_stock_time_threshold_sec"`
 	OutStockHeightThresholdMm pgtype.Int4        `json:"out_stock_height_threshold_mm"`
 	OutStockTimeThresholdSec  pgtype.Int4        `json:"out_stock_time_threshold_sec"`
+	CustomMediaSync           pgtype.Int4        `json:"custom_media_sync"`
 	ReportedAt                pgtype.Timestamptz `json:"reported_at"`
 }
 
@@ -67,6 +70,7 @@ func (q *Queries) UpsertDeviceSettings(ctx context.Context, arg UpsertDeviceSett
 		arg.InStockTimeThresholdSec,
 		arg.OutStockHeightThresholdMm,
 		arg.OutStockTimeThresholdSec,
+		arg.CustomMediaSync,
 		arg.ReportedAt,
 	)
 	return err

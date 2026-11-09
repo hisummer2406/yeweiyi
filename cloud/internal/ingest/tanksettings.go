@@ -80,6 +80,7 @@ func SaveDeviceSettings(ctx context.Context, q *db.Queries, deviceName string, s
 	return q.UpsertDeviceSettings(ctx, db.UpsertDeviceSettingsParams{
 		DeviceName:                deviceName,
 		InStockHeightThresholdMm:  int4(s.InStockHeightThresholdMm),
+		CustomMediaSync:           int4(s.CustomMediaSync),
 		InStockTimeThresholdSec:   int4(s.InStockTimeThresholdSec),
 		OutStockHeightThresholdMm: int4(s.OutStockHeightThresholdMm),
 		OutStockTimeThresholdSec:  int4(s.OutStockTimeThresholdSec),

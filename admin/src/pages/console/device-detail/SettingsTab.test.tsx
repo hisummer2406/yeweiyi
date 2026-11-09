@@ -41,6 +41,8 @@ vi.mock('@umijs/max', () => ({
 }));
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
 vi.mock('@/services/ant-design-pro/stations', () => ({ listStations }));
+const getDeviceMediaOptions = vi.hoisted(() => vi.fn());
+vi.mock('@/services/ant-design-pro/media', () => ({ getDeviceMediaOptions }));
 vi.mock('@/services/ant-design-pro/deviceConfig', () => ({
   getTankSettings,
   getDeviceSettings,
@@ -102,6 +104,13 @@ const command = (
 });
 
 beforeEach(() => {
+  getDeviceMediaOptions.mockResolvedValue({
+    public: [],
+    customer: [],
+    customMediaSync: false,
+    slotsUsed: 0,
+    slotsTotal: 8,
+  });
   vi.clearAllMocks();
   // antd 的静态 message 自建渲染根，cleanup 卸不掉，动画定时器会在环境拆除后才触发（CI 上报 window is not defined）
   for (const m of ['success', 'error', 'warning'] as const) {
@@ -219,6 +228,13 @@ describe('SettingsTab', () => {
     expect(input.value).toBe('-1.5');
     fireEvent.click(sign);
     expect(input.value).toBe('1.5');
+  });
+
+  it('never asks a customer admin for media options (#27)', async () => {
+    role = 'customer_admin';
+    render(<SettingsTab device="D1" />);
+    await screen.findByLabelText('液位修正');
+    expect(getDeviceMediaOptions).not.toHaveBeenCalled();
   });
 
   it('sends nothing when the confirmation is cancelled', async () => {
