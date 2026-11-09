@@ -15,6 +15,9 @@ public final class DeviceSettingsAttributeBuilder {
     public static final String KEY_OUT_HEIGHT_MM = "outStockHeightThresholdMm";
     public static final String KEY_OUT_TIME_SEC = "outStockTimeThresholdSec";
 
+    /** 本固件支持随 config.setTankSettings 写入介质名称（#27）；旧固件不上报，云端据此不向其下发新含义编号。 */
+    public static final String KEY_CUSTOM_MEDIA_SYNC = "customMediaSync";
+
     private DeviceSettingsAttributeBuilder() {
     }
 
