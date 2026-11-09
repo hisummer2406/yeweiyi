@@ -283,7 +283,7 @@ export default {
     'Enter a valid 11-digit mainland China mobile number',
   'pages.ops.users.form.password.optional': 'Initial password (optional)',
   'pages.ops.users.form.staff.hint':
-    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (WeChat sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
+    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (phone sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',
@@ -300,7 +300,7 @@ export default {
   'pages.ops.users.edit.passwordHint':
     'Leave blank to keep the current password.',
   'pages.ops.users.changePhone.hint':
-    'The account must sign in with the new number afterwards. Its WeChat binding is removed and must be re-authorized; existing sessions are not affected (disable the account to sign it out).',
+    'The account must sign in with the new number afterwards. Its phone authorization is removed and must be granted again; existing sessions are not affected (disable the account to sign it out).',
   'pages.ops.users.form.submit.move': 'Move',
   'pages.ops.users.move.warning':
     'Moving the account also clears its device bindings; they must be bound again.',
@@ -531,9 +531,9 @@ export default {
   'pages.console.miniCode.error.notFound':
     'Device not found; please refresh the list.',
   'pages.console.miniCode.error.unavailable':
-    'WeChat is not enabled on the cloud; cannot generate the code.',
+    'The mini program service is not enabled on the cloud; cannot generate the code.',
   'pages.console.miniCode.error.upstream':
-    'WeChat service failed; please retry later.',
+    'The mini program code service failed; please retry later.',
   'pages.console.miniCode.error.unknown':
     'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.console.stations.devices.action.replace': 'Replace',
