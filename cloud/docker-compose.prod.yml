@@ -83,7 +83,8 @@ services:
       TB_USERNAME: ${TB_USERNAME:-tenant@thingsboard.org}
       TB_PASSWORD: ${TB_PASSWORD:?生产部署必须设置 TB_PASSWORD}
       ALLOW_PHYSICAL_COMMANDS: "false"
-      ALLOW_CONFIG_COMMANDS: "false"
+      # 用户 2026-11-09 决定常开：管理员可直接远程修改配置（只有部署级开关，无设备白名单）。物理命令仍关闭。
+      ALLOW_CONFIG_COMMANDS: "true"
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -8,7 +8,6 @@ import {
 } from '@testing-library/react';
 import { message } from 'antd';
 import {
-  afterAll,
   afterEach,
   beforeEach,
   describe,

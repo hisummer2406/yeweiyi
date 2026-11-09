@@ -14,6 +14,8 @@ export class ApiError extends Error {
   /** 冲突响应附带的对象信息（station-device-replacement-contract v1.0）：station_occupied 的 occupiedBy、station_device_changed 的 currentDeviceName */
   occupiedBy?: string;
   currentDeviceName?: string;
+  /** 响应体原样（对象时），供需要额外字段的调用方读取，如配置命令冲突的 scope / currentStationId / commandId / fields */
+  data?: Record<string, unknown>;
   authHandled: boolean;
 
   constructor(
@@ -46,8 +48,12 @@ export function toApiError(err: unknown): ApiError {
   const code =
     typeof response?.data?.code === 'string' ? response.data.code : undefined;
   const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
-  return new ApiError(status, response?.data?.error, authHandled, code, {
+  const apiErr = new ApiError(status, response?.data?.error, authHandled, code, {
     occupiedBy: str(response?.data?.occupiedBy),
     currentDeviceName: str(response?.data?.currentDeviceName),
   });
+  if (response?.data && typeof response.data === 'object') {
+    apiErr.data = response.data as Record<string, unknown>;
+  }
+  return apiErr;
 }

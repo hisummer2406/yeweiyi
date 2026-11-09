@@ -351,6 +351,10 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 		"GET /api/devices/:device/telemetry/latest":  {build: path("/telemetry/latest")},
 		"GET /api/devices/:device/telemetry/history": {build: path("/telemetry/history?tank=1&fields=oilLevelMm&interval=1h")},
 		"GET /api/devices/:device/commands":          {build: path("/commands")},
+		// config-command-delivery: one command (an unknown id is 404 for those who pass the device check),
+		// the device-level settings mirror (administrators only).
+		"GET /api/devices/:device/commands/:commandId": {build: path("/commands/00000000-0000-0000-0000-000000000000")},
+		"GET /api/devices/:device/device-settings":     {customerUserDenied: true, build: path("/device-settings")},
 		"POST /api/devices/:device/commands": {customerUserDenied: true, build: func(device, _ string) (string, []byte) {
 			return "/api/devices/" + device + "/commands", cmdBody
 		}},
@@ -992,8 +996,10 @@ func TestTenancy_DemotedAdminLosesAdminMethodsImmediately(t *testing.T) {
 	tn := newTenancy(t)
 	tn.bind(t, tn.adminAID, tn.devA1)
 
-	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusAccepted {
-		t.Fatalf("precondition: a customer admin may issue %s, got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
+	// config.setTank is retired (#18 F1): an admin passes the role gate and is refused only as retired (410),
+	// an employee is refused by role (403) first — which is what this test is about.
+	if rec := tn.issueMethod(t, tn.adminA, tn.devA1, protocol.MethodConfigTank); rec.Code != http.StatusGone {
+		t.Fatalf("precondition: a customer admin passes the role gate for %s (410 retired), got %d %s", protocol.MethodConfigTank, rec.Code, rec.Body.String())
 	}
 	if _, err := tn.env.pool.Exec(context.Background(), `UPDATE users SET role = 'customer_user', password_hash = NULL WHERE id = $1`, tn.adminAID); err != nil {
 		t.Fatal(err)
@@ -1037,8 +1043,9 @@ func TestTenancy_CommandInsertEnforcesAccessItself(t *testing.T) {
 		allowed bool
 		want    int64
 	}{
-		"customer admin on their device":        {tn.adminAID, tn.devA1, true, tn.custA},
-		"bound customer user":                   {tn.userAID, tn.devA1, true, tn.custA},
+		"customer admin on their device": {tn.adminAID, tn.devA1, true, tn.custA},
+		// Employees issue no command at all (roleAllows); since config-command-delivery the insert says so too.
+		"bound customer user":                   {tn.userAID, tn.devA1, false, 0},
 		"platform admin: the device's customer": {tn.platformID, tn.devA1, true, tn.custA},
 		"unbound customer user":                 {tn.userAID, tn.devA2, false, 0},
 		"another customer's admin":              {tn.adminBID, tn.devA1, false, 0},

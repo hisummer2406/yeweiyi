@@ -157,7 +157,9 @@ describe('ConsoleDeviceDetail ownership line (#16 G1)', () => {
 describe('ConsoleDeviceDetail tabs', () => {
   it('opens on the live data tab by default and does not touch the record APIs', async () => {
     at('/console/devices/D1');
-    expect(await screen.findByText(/1号罐 92#/)).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: '1号 92#' }),
+    ).toBeTruthy();
     expect(getLatestTelemetry).toHaveBeenCalledWith('D1');
     expect(listAlarms).not.toHaveBeenCalled();
     expect(listStockEvents).not.toHaveBeenCalled();
@@ -199,13 +201,15 @@ describe('ConsoleDeviceDetail tabs', () => {
 
   it('an invalid tab falls back to live data', async () => {
     at('/console/devices/D1?tab=foo');
-    expect(await screen.findByText(/1号罐 92#/)).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: '1号 92#' }),
+    ).toBeTruthy();
     expect(listAlarms).not.toHaveBeenCalled();
   });
 
   it('switching tabs updates ?tab= (replace) and loads only the newly active tab', async () => {
     at('/console/devices/D1');
-    await screen.findByText(/1号罐 92#/);
+    await screen.findByRole('heading', { name: '1号 92#' });
     fireEvent.click(screen.getByRole('tab', { name: '报警记录' }));
     await screen.findByText('该时间范围内没有报警');
     expect(screen.getByTestId('where').textContent).toBe(
@@ -223,7 +227,7 @@ describe('ConsoleDeviceDetail tabs', () => {
     at('/console/devices/D1?tab=alarms');
     await screen.findByText('该时间范围内没有报警');
     fireEvent.click(screen.getByRole('tab', { name: '实时数据' }));
-    await screen.findByText(/1号罐 92#/);
+    await screen.findByRole('heading', { name: '1号 92#' });
     expect(screen.queryByText('该时间范围内没有报警')).toBeNull();
   });
 
@@ -306,7 +310,9 @@ describe('live data tab states', () => {
     at('/console/devices/D1');
     expect(await screen.findByText('实时数据加载失败')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /重\s*试/ }));
-    expect(await screen.findByText(/1号罐 92#/)).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: '1号 92#' }),
+    ).toBeTruthy();
   });
 });
 
@@ -348,7 +354,7 @@ describe('switching device in place (e.g. after a screen replacement)', () => {
     // 旧设备 A 的响应迟到，不能写进 B 的页面
     resolveA(telemetry);
     await new Promise((r) => setTimeout(r, 30));
-    expect(screen.queryByText(/1号罐 92#/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: '1号 92#' })).toBeNull();
     expect(screen.getByText('该设备还没有上报过数据')).toBeTruthy();
   });
 });
@@ -376,13 +382,15 @@ describe('station entry (?station=) follows a screen replacement (contract §8.1
     );
     // B 尚无数据：空状态，不显示 A 的罐
     expect(await screen.findByText('该设备还没有上报过数据')).toBeTruthy();
-    expect(screen.queryByText(/1号罐 92#/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: '1号 92#' })).toBeNull();
   });
 
   it('without ?station= (independent entry for A) it stays on A', async () => {
     listDevices.mockResolvedValue([row('A', null), row('B', 5)]);
     at('/console/devices/A');
-    expect(await screen.findByText(/1号罐 92#/)).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: '1号 92#' }),
+    ).toBeTruthy();
     // 只有归属行的一次查询；没有 ?station= 时不为「跟随换机」轮询设备列表
     await new Promise((r) => setTimeout(r, 30));
     expect(listDevices).toHaveBeenCalledTimes(1);
@@ -392,7 +400,9 @@ describe('station entry (?station=) follows a screen replacement (contract §8.1
   it('station with several devices (legacy data) or none does not switch', async () => {
     listDevices.mockResolvedValue([row('A', 5), row('B', 5)]);
     at('/console/devices/A?station=5');
-    expect(await screen.findByText(/1号罐 92#/)).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: '1号 92#' }),
+    ).toBeTruthy();
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.getByTestId('where').textContent).toBe(
       '/console/devices/A?station=5',

@@ -315,8 +315,41 @@ export interface ControlCommand {
   sentAt?: string;
   ackedAt?: string;
   finishedAt?: string;
+  // Submission context (yeweiyi-cloud#3); null when submitted without it.
+  requestId?: string | null;
+  expectedStationId?: number | null;
+  configTarget?: string | null;
 }
 
 export interface ListCommandsResponse {
   commands: ControlCommand[];
+}
+
+// GET /api/devices/:device/tank-settings (yeweiyi-cloud docs/tank-settings-contract.md): the device's last
+// report per tank. null = the device did not report that key; 0 is a real value (alarm 0 = off).
+export interface TankSettings {
+  tank: number;
+  reportedAt: string;
+  tankHeightMm: number | null;
+  sensorLengthMm: number | null;
+  tankShape: number | null;
+  oilType: string | null;
+  oilTypeIndex: number | null;
+  alarmHighHighLevelMm: number | null;
+  alarmHighLevelMm: number | null;
+  alarmLowLevelMm: number | null;
+  alarmLowLowLevelMm: number | null;
+  alarmHighWaterMm: number | null;
+  alarmHighTempC: number | null;
+  alarmLowTempC: number | null;
+  levelCorrectionMm: number | null;
+  waterCorrectionMm: number | null;
+  tempCorrectionC: number | null;
+  density: number | null;
+  capacityL: number | null;
+}
+
+export interface TankSettingsResponse {
+  deviceName: string;
+  tanks: TankSettings[];
 }

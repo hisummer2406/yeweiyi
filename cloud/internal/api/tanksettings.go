@@ -29,7 +29,7 @@ type tankSettingsView struct {
 	SensorLengthMm *float64 `json:"sensorLengthMm"`
 	TankShape      *int32   `json:"tankShape"` // 0 卧罐 / 1 立罐
 	// OilType is the name in the device's UI language, for display only; OilTypeIndex is authoritative
-	// (0 未设置, 1–17 内置, 18–25 自定义). The cloud keeps no name table.
+	// (0 未设置, 1–31 内置, 32–39 自定义；旧固件 18–25 为自定义，#11). The cloud keeps no name table.
 	OilType      *string `json:"oilType"`
 	OilTypeIndex *int32  `json:"oilTypeIndex"`
 

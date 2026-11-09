@@ -31,6 +31,27 @@ type issueCommandRequest struct {
 	// constraint, and by internal/control — three layers, because an unexplained remote action on
 	// fuel infrastructure is the thing the audit trail exists to prevent.
 	Reason string `json:"reason" binding:"required"`
+	// RequestID and ExpectedStationID are required for the configuration methods
+	// (config-command-delivery, docs/config-command-contract.md). ExpectedStationID is kept raw so
+	// that a missing field and an explicit null ("the device is on no station") can be told apart.
+	RequestID         string          `json:"requestId"`
+	ExpectedStationID json.RawMessage `json:"expectedStationId"`
+}
+
+// parseExpectedStation reads expectedStationId: absent → not set; null → set, no station; a positive
+// integer → that station.
+func parseExpectedStation(raw json.RawMessage) (pgtype.Int8, bool, error) {
+	if len(raw) == 0 {
+		return pgtype.Int8{}, false, nil
+	}
+	if string(raw) == "null" {
+		return pgtype.Int8{}, true, nil
+	}
+	var id int64
+	if err := json.Unmarshal(raw, &id); err != nil || id <= 0 {
+		return pgtype.Int8{}, false, errors.New("expectedStationId must be a positive integer or null")
+	}
+	return pgtype.Int8{Int64: id, Valid: true}, true, nil
 }
 
 // commandResponse is the wire shape for a control command. It exists rather than returning the sqlc
@@ -53,6 +74,10 @@ type commandResponse struct {
 	SentAt       *time.Time      `json:"sentAt,omitempty"`
 	AckedAt      *time.Time      `json:"ackedAt,omitempty"`
 	FinishedAt   *time.Time      `json:"finishedAt,omitempty"`
+	// Submission context (config-command-delivery). Null when the command was submitted without it.
+	RequestID         *string `json:"requestId"`
+	ExpectedStationID *int64  `json:"expectedStationId"`
+	ConfigTarget      *string `json:"configTarget"`
 }
 
 func toCommandResponse(c db.ControlCommand) commandResponse {
@@ -75,7 +100,18 @@ func toCommandResponse(c db.ControlCommand) commandResponse {
 		SentAt:       timePtr(c.SentAt),
 		AckedAt:      timePtr(c.AckedAt),
 		FinishedAt:   timePtr(c.FinishedAt),
+
+		RequestID:         textPtr(c.RequestID),
+		ExpectedStationID: int8Ptr(c.ExpectedStationID),
+		ConfigTarget:      textPtr(c.ConfigTarget),
 	}
+}
+
+func textPtr(t pgtype.Text) *string {
+	if !t.Valid {
+		return nil
+	}
+	return &t.String
 }
 
 // issueCommandHandler is POST /api/devices/:device/commands.
@@ -112,19 +148,34 @@ func issueCommandHandler(deps Deps) gin.HandlerFunc {
 			}
 		}
 
-		cmd, err := deps.Control.Issue(c.Request.Context(), control.IssueRequest{
-			DeviceName: c.Param("device"),
-			Method:     req.Method,
-			Args:       req.Args,
-			Reason:     req.Reason,
-			Actor:      actor,
+		station, stationSet, err := parseExpectedStation(req.ExpectedStationID)
+		if err != nil {
+			apiError(c, http.StatusBadRequest, "expected_station_invalid", err.Error())
+			return
+		}
+
+		cmd, replayed, err := deps.Control.IssueDetailed(c.Request.Context(), control.IssueRequest{
+			DeviceName:         c.Param("device"),
+			Method:             req.Method,
+			Args:               req.Args,
+			Reason:             req.Reason,
+			Actor:              actor,
+			RequestID:          req.RequestID,
+			ExpectedStationID:  station,
+			ExpectedStationSet: stationSet,
 		})
 		if err != nil {
 			writeControlError(c, err)
 			return
 		}
 
-		c.JSON(http.StatusAccepted, toCommandResponse(cmd))
+		// A replay of an earlier submission is 200: nothing was accepted this time, the body is the
+		// stored command as it stands now.
+		status := http.StatusAccepted
+		if replayed {
+			status = http.StatusOK
+		}
+		c.JSON(status, toCommandResponse(cmd))
 	}
 }
 
@@ -143,12 +194,42 @@ func writeControlError(c *gin.Context, err error) {
 			"code":  codePhysicalDisabled,
 			"hint":  "physical control actions are disabled until device-side interlocks are verified on real hardware",
 		})
+	case errors.Is(err, control.ErrMethodRetired):
+		// 410: the method name is still in the protocol table (devices keep their handlers), but this entry
+		// point no longer sends it (issue #18 F1). Not 400 unknown_method: a client can tell it apart.
+		c.JSON(http.StatusGone, gin.H{"error": err.Error(), "code": "method_retired", "use": protocol.MethodConfigTankSettings})
 	case errors.Is(err, control.ErrConfigCommandsDisabled):
-		c.JSON(http.StatusConflict, gin.H{
-			"error": err.Error(),
-			"code":  "config_commands_disabled",
-			"hint":  "device configuration commands are disabled until the device-side handler is verified on real hardware",
-		})
+		scope := control.GateScopeDeployment
+		var gate *control.ConfigDisabledError
+		if errors.As(err, &gate) {
+			scope = gate.Scope
+		}
+		hint := "device configuration commands are disabled on this deployment"
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "config_commands_disabled", "scope": scope, "hint": hint})
+	case errors.Is(err, control.ErrRequestIDRequired):
+		apiError(c, http.StatusBadRequest, "request_id_required", err.Error())
+	case errors.Is(err, control.ErrRequestIDInvalid):
+		apiError(c, http.StatusBadRequest, "request_id_invalid", err.Error())
+	case errors.Is(err, control.ErrExpectedStationRequired):
+		apiError(c, http.StatusBadRequest, "expected_station_required", err.Error())
+	case errors.Is(err, control.ErrRequestIDReused):
+		apiError(c, http.StatusConflict, "request_id_reused", err.Error())
+	case errors.Is(err, control.ErrDeviceStationChanged):
+		var sc *control.StationChangedError
+		_ = errors.As(err, &sc)
+		var current *int64
+		if sc != nil {
+			current = int8Ptr(sc.Current)
+		}
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error(), "code": "device_station_changed", "currentStationId": current})
+	case errors.Is(err, control.ErrConfigCommandInFlight):
+		var fe *control.InFlightError
+		_ = errors.As(err, &fe)
+		body := gin.H{"error": control.ErrConfigCommandInFlight.Error(), "code": "config_command_in_flight"}
+		if fe != nil && fe.CommandID != "" {
+			body["commandId"] = fe.CommandID
+		}
+		c.JSON(http.StatusConflict, body)
 	case errors.Is(err, control.ErrInvalidArgs):
 		var ae *protocol.ArgsError
 		if errors.As(err, &ae) {
@@ -181,6 +262,11 @@ func listDeviceCommandsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		device := c.Param("device")
 		if !requireDeviceOwnership(c, deps, device) {
+			return
+		}
+
+		if rid := c.Query("requestId"); rid != "" {
+			listOwnCommandByRequestID(c, deps, device, rid)
 			return
 		}
 

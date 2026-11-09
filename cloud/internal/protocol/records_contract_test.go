@@ -191,10 +191,10 @@ func TestOilTypeIndexTable(t *testing.T) {
 	if err := json.Unmarshal(readFixture(t, "oil_type_index.json"), &table); err != nil {
 		t.Fatal(err)
 	}
-	if table.Unset != 0 || len(table.Builtin) != 17 || table.Custom.From != 18 || table.Custom.To != 25 {
+	if table.Unset != 0 || len(table.Builtin) != 31 || table.Custom.From != 32 || table.Custom.To != 39 {
 		t.Errorf("layout changed: unset=%d builtin=%d custom=%d..%d", table.Unset, len(table.Builtin), table.Custom.From, table.Custom.To)
 	}
-	for idx, zh := range map[string]string{"1": "0#", "5": "92#", "17": "溶剂油"} {
+	for idx, zh := range map[string]string{"1": "0#", "5": "92#", "17": "溶剂油", "18": "丙二醇", "31": "西排水"} {
 		if got := table.Builtin[idx]["zh"]; got != zh {
 			t.Errorf("builtin[%s].zh = %q, want %q", idx, got, zh)
 		}

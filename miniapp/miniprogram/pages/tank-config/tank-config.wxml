@@ -1,4 +1,4 @@
-<!-- 设计稿「储罐设置」（miniapp#18）：只保存为本手机上的草稿，不读取、不下发控制器配置（云端 #70/#71 之后再接）。
+<!-- 设计稿「储罐设置」（miniapp#18，#6）：本机草稿 + 设备当前回报分开显示；管理员在设备开放时可下发。
      编辑对象：首页当前油站 → 其唯一设备 → 当前账号可见的罐。 -->
 <view class="tc-page">
   <view class="card banner-warning tc-banner">
@@ -30,6 +30,28 @@
       <view class="muted tc-saved">{{savedText}}</view>
     </view>
 
+    <!-- 设备当前回报：只读，来自云端镜像；不是草稿 -->
+    <view class="fc" style="margin-top:18rpx;padding:19rpx 0 19rpx;">
+      <view class="fr fr-b">
+        <text class="fl">{{text.deviceTitle}}</text>
+        <button wx:if="{{mirrorState === 'ok'}}" class="btn-primary" size="mini" bindtap="onImport">{{text.import}}</button>
+      </view>
+      <view wx:if="{{mirrorState === 'loading'}}" class="muted tc-saved">{{text.deviceLoading}}</view>
+      <view wx:if="{{mirrorState === 'none'}}" class="muted tc-saved">{{text.deviceNotReported}}</view>
+      <view wx:if="{{mirrorState === 'error'}}" class="muted tc-saved">{{text.deviceLoadFailed}}</view>
+      <block wx:if="{{mirrorState === 'ok'}}">
+        <view class="fr fr-b" wx:for="{{mirrorRows}}" wx:key="key">
+          <text class="fl">{{item.label}}</text>
+          <text class="fv">{{item.value}}</text>
+        </view>
+        <view class="muted tc-saved">{{mirrorTime}}</view>
+      </block>
+    </view>
+
+    <view wx:if="{{sendHint}}" class="card banner-warning tc-banner">
+      <text class="text-warning">{{sendHint}}</text>
+    </view>
+
     <view class="fc" style="margin-top:18rpx;padding:19rpx 0 25rpx;">
       <view class="fr fr-b" id="row-color" data-pick="color" bindtap="onOpenPicker">
         <text class="fl">{{text.color}}</text>
@@ -57,7 +79,13 @@
         />
         <text class="fu">{{item.unit}}</text>
       </view>
+      <!-- 下发原因（二次确认必填），只给可下发的管理员 -->
+      <view wx:if="{{canSend}}" class="fr fr-b">
+        <text class="fl">{{text.reason}}</text>
+        <input class="fi-text" type="text" maxlength="200" placeholder="{{text.reasonPlaceholder}}" placeholder-class="fv-ph" value="{{reason}}" bindinput="onReasonInput" />
+      </view>
     </view>
+    <view wx:if="{{canSend}}" class="muted tc-saved">{{text.sendNote}}</view>
   </block>
 </view>
 
@@ -66,6 +94,9 @@
   <view class="pill-row">
     <button class="pill pill-lite" bindtap="onReset">{{text.reset}}</button>
     <button class="pill pill-main" bindtap="onSave">{{text.saveDraft}}</button>
+  </view>
+  <view wx:if="{{canSend}}" class="pill-row" style="margin-top:16rpx;">
+    <button class="pill pill-deep" bindtap="onSend" disabled="{{sending}}" loading="{{sending}}">{{text.send}}</button>
   </view>
 </view>
 

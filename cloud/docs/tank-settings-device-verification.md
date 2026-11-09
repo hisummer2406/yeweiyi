@@ -1,7 +1,11 @@
 # 油罐配置：真机验证清单（#70 + #71）
 
 模拟设备（`internal/devicesim`）只证明云端与"按设备端文档实现的设备"能跑通；下面这些**只有真机能证实**。
-设备端 PR #38 未合并、零真机验证，合并前不得宣称兼容。建议改一个报警阈值就先走一遍，不要等全做完。
+设备端 PR #38 已于 2026-11-02 合并。**2026-11-08 首次真机下行验证通过 B1–B4 与重启持久化**（见文末"验证记录"），
+其余各项仍未验证。
+
+> 注意：生产没有独立测试环境。自 2026-11-09 起 `control.allowConfigCommands` 在生产常开（用户决定），所有客户管理员都能下发配置；
+> 验证时只对测试设备发命令。
 
 ## 前置
 
@@ -25,6 +29,9 @@
 用平台管理员或客户管理员发 `POST /api/devices/:device/commands`，`method=config.setTankSettings`，先发**一个**字段：
 `{"tank":1,"alarmHighLevelMm":<比当前值大 50>}`。
 
+> **2026-11-09 起（#3）**：生产配置开关常开，没有设备级开放步骤。请求体必须带 `requestId`（每次新取，如 `verify-<时间戳>`）与 `expectedStationId`（设备当前油站 id，不在油站则 `null`），
+> 见 [config-command-contract.md](config-command-contract.md)。
+
 | # | 操作 | 期望现象 | 要看什么 |
 |---|---|---|---|
 | B1 | 发上面的命令 | 同步返回 `202`，`status=received`（ACK）| **ACK 时机**：设备文档说"received 在写库前后"？看 `ackedAt` 与 `sentAt` 间隔 |
@@ -34,7 +41,7 @@
 | B5 | 发一个越界值（如 `alarmHighLevelMm` > 罐高）| 命令 `rejected`，`errorCode=INVALID_PARAMS`，`reason` 是中文说明 | 设备是否真的拒绝而不是写入 |
 | B6 | 发违反顺序的值（低 > 当前高）| `rejected`，`reason` 说明顺序 | 设备端按合并后的值校验 |
 | B7 | 发 `tankShape` / `tankHeightMm` | **云端直接 400**（`field_not_editable`），不会到设备 | 如需验证设备自身的拒绝，用 ThingsBoard 控制台直接下发 |
-| B8 | 设备切到"现场手动模式" 再发命令 | `rejected`，`errorCode=LOCAL_MODE_LOCKED` | `localControlMode` 属性是否随之变 true |
+| B8 | ~~设备切到"现场手动模式" 再发命令~~ | — | **作废**：设备没有现场手动模式，也不上报 `localControlMode`（#9） |
 | B9 | 设置页开着时远程改，再现场点保存 | 远程值被覆盖（已知限制）| 确认现象，镜像随之回到现场值 |
 | B10 | 再试多字段：`alarm*` + `density` + `oilTypeIndex` + `capacityL` | 全部 `updated` | `density` 写入后设置页显示的单位/数值是否合理 |
 | B11 | 平台管理员发 `config.setDeviceSettings`（改一个出入库阈值）| `succeeded`，`detail.updated` | 设备上报的 `outStockHeightThresholdMm` 等顶层属性随之更新（云端暂不镜像）|
@@ -43,5 +50,30 @@
 
 - 字段清单文档把 `cmdResult` 的结果载荷写成 `data`，实际代码和云端协议是 `detail`。
 - `density` 的单位（设置页标 kg/m³，库里存 0.56）。
-- 自定义油品（18–25）为空时能否下发 `oilTypeIndex`。
+- 自定义油品（32–39；旧固件 18–25）为空时能否下发 `oilTypeIndex`。
 - 属性变更是否即时重发（A4）。
+
+## 验证记录
+
+### 2026-11-08：ZCT000001 1 号罐高液位报警（B1–B4 + 重启持久化）
+
+- 环境：生产（`api.zhongchengelec.com`），云端镜像 `sha-e086600`（`ALLOW_CONFIG_COMMANDS=true` 的临时窗口，完成后由 `72af967`
+  关回）；设备 `ZCT000001`（客户"小程序测试账号"，油站"小程序测试站点"），固件版本未记录。操作人 `admin`（平台管理员）。
+- 生产此前从未发过任何命令（`control_commands` 为空），这是第一条真机下行命令。
+
+| 步骤 | commandId | 时间（UTC） | 结果 |
+|---|---|---|---|
+| 600 → 610 下发 | `036a22b3-e8c3-4e7d-aace-0bbb7057edc7` | sent 14:00:05.585 / acked 14:00:05.586 / finished 14:00:05.680 | B1 ✅ `202 received`；B2 ✅ `succeeded`，`detail={"tank":1,"updated":["alarmHighLevelMm"]}`，原因"罐设置已更新" |
+| 设备设置页 | | | B3 ✅ 现场确认显示 610 |
+| 属性回显 | | 设备重发 14:00:07.684；云端镜像 14:01:02 | B4 ✅ 执行后约 2 秒重发属性，镜像按 1 分钟轮询更新为 610，`reportedAt` 前进 |
+| 重启设备 | | | ✅ 重启后设置页仍为 610（持久化） |
+| 610 → 600 改回 | `513afe36-3964-4e2b-a986-0b9cb2dc1c60` | sent 14:14:58.830 / acked 14:14:58.831 | ✅ `succeeded` |
+
+结论：
+
+- A-1 的终态上行已在真机上成立：终态走遥测 `cmdResult`，ThingsBoard 双向 RPC 只收到一条 ACK，命令不再卡在 `received`。
+- `cmdResult` 线上字段名是 `detail`（C 节第一条确认）。
+- 设备在属性变更时即时重发（C 节最后一条 / A4 的远程部分确认），不必等重连。
+- ACK 在写库前就发出（`ackedAt` 比 `sentAt` 晚约 1 毫秒，终态晚约 95 毫秒）。
+
+未覆盖：B5–B11、客户管理员角色、离线/超时路径。

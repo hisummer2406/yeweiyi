@@ -118,6 +118,12 @@ type ControlCommand struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 	// 下发时的客户快照：操作者所属客户，平台管理员操作则取设备当时的客户。设备日后改归属不会改变它。
 	CustomerID pgtype.Int8 `json:"customer_id"`
+	// 客户端提交标识：同一 (操作人, 设备, request_id) 至多一条命令，重试/重放返回原命令且不再次派发。配置方法必填，其他方法可空。
+	RequestID pgtype.Text `json:"request_id"`
+	// 提交时客户端期望设备所在的油站（受理事务内已复核一致）；NULL = 期望设备不在任何油站，或非配置方法。快照，不设外键。
+	ExpectedStationID pgtype.Int8 `json:"expected_station_id"`
+	// 配置命令的目标：tank:<罐号>（config.setTankSettings）或 device（config.setDeviceSettings）；其他方法 NULL。
+	ConfigTarget pgtype.Text `json:"config_target"`
 }
 
 // 客户（租户）。用户与设备各自至多属于一个客户；平台管理员不属于任何客户。
@@ -188,6 +194,22 @@ type DevicePurge struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	// 全部完成的时刻；同编号再次登记后，信封 ts 不晚于它的记录视为旧记录重放，不写入。
 	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+}
+
+// 设备上报的整机设置镜像（出入库判定阈值），由 internal/ingest 从 ThingsBoard 客户端属性写入；云端不改配置值。低频配置，不是连续遥测。
+type DeviceSetting struct {
+	DeviceName string `json:"device_name"`
+	// 入库判定高度阈值，mm。NULL = 设备未上报（或类型不对）；设备以 0 表示未配置，原样保存。
+	InStockHeightThresholdMm pgtype.Int4 `json:"in_stock_height_threshold_mm"`
+	// 入库判定时间阈值，秒。
+	InStockTimeThresholdSec pgtype.Int4 `json:"in_stock_time_threshold_sec"`
+	// 出库判定高度阈值，mm。
+	OutStockHeightThresholdMm pgtype.Int4 `json:"out_stock_height_threshold_mm"`
+	// 出库判定时间阈值，秒。
+	OutStockTimeThresholdSec pgtype.Int4 `json:"out_stock_time_threshold_sec"`
+	// 这些属性在 ThingsBoard 的最近更新时间（取四个键中最新者）。
+	ReportedAt pgtype.Timestamptz `json:"reported_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 // 设备的出入库与报警已从 ThingsBoard 全量回补完成的标记。没有标记的设备，定时回读会做全量回补而不是只读回看窗口。

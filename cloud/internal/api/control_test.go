@@ -3,9 +3,12 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"yeweiyi-cloud/internal/api"
 	"yeweiyi-cloud/internal/control"
@@ -52,6 +55,9 @@ func newControlEnv(t *testing.T, cfg control.Config) (*testEnv, *stubSender) {
 	t.Helper()
 	sender := &stubSender{}
 	env := newTestEnvWith(t, func(d *api.Deps) {
+		if cfg.Pool == nil {
+			cfg.Pool = d.Pool
+		}
 		d.Control = control.New(d.Queries, sender, cfg)
 	})
 	t.Cleanup(func() {
@@ -191,6 +197,18 @@ func TestIssueCommand_ForbiddenForUnownedDevice(t *testing.T) {
 	}
 	if sender.calls != 0 {
 		t.Error("an unauthorized command must never reach ThingsBoard")
+	}
+}
+
+// TestIssueCommand_LegacyConfigMethodRetired (#18 F1): 410 method_retired, not 202, for an administrator.
+func TestIssueCommand_LegacyConfigMethodRetired(t *testing.T) {
+	env, _ := newControlEnv(t, control.Config{AllowConfigCommands: true})
+	device := "ctl-api-retired"
+	env.ownDevice(device)
+	env.setRole(control.RoleCustomerAdmin)
+	rec := env.authed("POST", "/api/devices/"+device+"/commands", issueBody(t, protocol.MethodConfigAlarmThreshold, "调阈值"))
+	if rec.Code != http.StatusGone || !strings.Contains(rec.Body.String(), `"code":"method_retired"`) {
+		t.Fatalf("got %d %s, want 410 method_retired", rec.Code, rec.Body.String())
 	}
 }
 
@@ -541,9 +559,14 @@ func TestCommandStatusReflectsAsynchronousResult(t *testing.T) {
 	_ = db.ControlCommand{}
 }
 
+var configRequestSeq atomic.Int64
+
+// configBody is a configuration submission with a fresh requestId and expectedStationId null (the test
+// devices are on no station).
 func configBody(t *testing.T, method string, args map[string]any) []byte {
 	t.Helper()
-	return jsonBody(t, map[string]any{"method": method, "args": args, "reason": "调整配置"})
+	return jsonBody(t, map[string]any{"method": method, "args": args, "reason": "调整配置",
+		"requestId": fmt.Sprintf("t%d-%d", time.Now().UnixNano(), configRequestSeq.Add(1)), "expectedStationId": nil})
 }
 
 // cloud#71: config.setTankSettings is open to customer administrators, config.setDeviceSettings only to

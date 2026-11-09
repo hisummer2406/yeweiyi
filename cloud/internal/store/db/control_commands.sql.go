@@ -11,31 +11,58 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const commandAuditExists = `-- name: CommandAuditExists :one
+SELECT EXISTS (
+    SELECT 1 FROM audit_log WHERE command_id = $1 AND action = $2::TEXT
+)::BOOLEAN AS found
+`
+
+type CommandAuditExistsParams struct {
+	CommandID pgtype.UUID `json:"command_id"`
+	Action    string      `json:"action"`
+}
+
+func (q *Queries) CommandAuditExists(ctx context.Context, arg CommandAuditExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, commandAuditExists, arg.CommandID, arg.Action)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}
+
 const createControlCommand = `-- name: CreateControlCommand :one
 INSERT INTO control_commands (
     command_id, device_name, method, args,
-    operator_id, operator, reason, issued_at, expires_at, customer_id
+    operator_id, operator, reason, issued_at, expires_at, customer_id,
+    request_id, expected_station_id, config_target
 )
 SELECT $1, $2, $3, $4,
        u.id, $5, $6, $7, $8,
-       COALESCE(u.customer_id, d.customer_id)
+       COALESCE(u.customer_id, d.customer_id),
+       $9, $10, $11
 FROM users u
 LEFT JOIN devices d ON d.device_name = $2
-WHERE u.id = $9
+WHERE u.id = $12
   AND user_may_access_device(u.id, $2)
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
+  AND u.role IN ('platform_admin', 'customer_admin')
+  AND ($13::TEXT <> 'platform' OR u.role = 'platform_admin')
+ON CONFLICT (operator_id, device_name, request_id) WHERE request_id IS NOT NULL DO NOTHING
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target
 `
 
 type CreateControlCommandParams struct {
-	CommandID  pgtype.UUID        `json:"command_id"`
-	DeviceName string             `json:"device_name"`
-	Method     string             `json:"method"`
-	Args       []byte             `json:"args"`
-	Operator   string             `json:"operator"`
-	Reason     string             `json:"reason"`
-	IssuedAt   pgtype.Timestamptz `json:"issued_at"`
-	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
-	OperatorID int64              `json:"operator_id"`
+	CommandID         pgtype.UUID        `json:"command_id"`
+	DeviceName        string             `json:"device_name"`
+	Method            string             `json:"method"`
+	Args              []byte             `json:"args"`
+	Operator          string             `json:"operator"`
+	Reason            string             `json:"reason"`
+	IssuedAt          pgtype.Timestamptz `json:"issued_at"`
+	ExpiresAt         pgtype.Timestamptz `json:"expires_at"`
+	RequestID         pgtype.Text        `json:"request_id"`
+	ExpectedStationID pgtype.Int8        `json:"expected_station_id"`
+	ConfigTarget      pgtype.Text        `json:"config_target"`
+	OperatorID        int64              `json:"operator_id"`
+	RequiredLevel     string             `json:"required_level"`
 }
 
 // issued_at is supplied by the caller rather than defaulted to now(), so that it and expires_at come
@@ -59,6 +86,14 @@ type CreateControlCommandParams struct {
 // snapshot, i.e. the command logically happens before any transfer that commits after it started,
 // and records the customer it was authorized under. What remains — the command being *sent* after
 // the device changed hands — happens after this statement and no lock here could prevent it.
+//
+// config-command-delivery (#3) adds three more checks to the same statement, for the same reason:
+//   - the method's permission tier against the user's *current* role (required_level) — Go's
+//     authorize() decides the error message, this decides whether a row exists;
+//   - ON CONFLICT on the request_id index: a concurrent duplicate submission inserts nothing and
+//     the caller reads the existing row instead (zero rows back). The in-flight index is NOT an
+//     arbiter, so a second command for a busy target raises a unique violation the caller maps to
+//     config_command_in_flight.
 func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error) {
 	row := q.db.QueryRow(ctx, createControlCommand,
 		arg.CommandID,
@@ -69,7 +104,11 @@ func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCom
 		arg.Reason,
 		arg.IssuedAt,
 		arg.ExpiresAt,
+		arg.RequestID,
+		arg.ExpectedStationID,
+		arg.ConfigTarget,
 		arg.OperatorID,
+		arg.RequiredLevel,
 	)
 	var i ControlCommand
 	err := row.Scan(
@@ -91,6 +130,9 @@ func (q *Queries) CreateControlCommand(ctx context.Context, arg CreateControlCom
 		&i.FinishedAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
 	)
 	return i, err
 }
@@ -100,7 +142,7 @@ UPDATE control_commands
 SET status = 'expired', finished_at = now(), updated_at = now()
 WHERE expires_at < now()
   AND status IN ('pending', 'sent', 'received', 'executing')
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target
 `
 
 // The cloud-side half of the validity window: anything past its expiry that never reached a
@@ -134,6 +176,9 @@ func (q *Queries) ExpireStaleControlCommands(ctx context.Context) ([]ControlComm
 			&i.FinishedAt,
 			&i.UpdatedAt,
 			&i.CustomerID,
+			&i.RequestID,
+			&i.ExpectedStationID,
+			&i.ConfigTarget,
 		); err != nil {
 			return nil, err
 		}
@@ -146,7 +191,7 @@ func (q *Queries) ExpireStaleControlCommands(ctx context.Context) ([]ControlComm
 }
 
 const getControlCommand = `-- name: GetControlCommand :one
-SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id FROM control_commands WHERE command_id = $1
+SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target FROM control_commands WHERE command_id = $1
 `
 
 func (q *Queries) GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error) {
@@ -171,12 +216,198 @@ func (q *Queries) GetControlCommand(ctx context.Context, commandID pgtype.UUID) 
 		&i.FinishedAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
+	)
+	return i, err
+}
+
+const getControlCommandByRequestID = `-- name: GetControlCommandByRequestID :one
+SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target FROM control_commands
+WHERE operator_id = $1
+  AND device_name = $2
+  AND request_id = $3
+`
+
+type GetControlCommandByRequestIDParams struct {
+	OperatorID pgtype.Int8 `json:"operator_id"`
+	DeviceName string      `json:"device_name"`
+	RequestID  pgtype.Text `json:"request_id"`
+}
+
+// INTERNAL: the caller has already authorized the user for the device. The key includes the
+// operator, so one admin can never "recover" another admin's submission.
+func (q *Queries) GetControlCommandByRequestID(ctx context.Context, arg GetControlCommandByRequestIDParams) (ControlCommand, error) {
+	row := q.db.QueryRow(ctx, getControlCommandByRequestID, arg.OperatorID, arg.DeviceName, arg.RequestID)
+	var i ControlCommand
+	err := row.Scan(
+		&i.CommandID,
+		&i.DeviceName,
+		&i.Method,
+		&i.Args,
+		&i.OperatorID,
+		&i.Operator,
+		&i.Reason,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorReason,
+		&i.ResultDetail,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.SentAt,
+		&i.AckedAt,
+		&i.FinishedAt,
+		&i.UpdatedAt,
+		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
+	)
+	return i, err
+}
+
+const getControlCommandVisibleToUser = `-- name: GetControlCommandVisibleToUser :one
+SELECT c.command_id, c.device_name, c.method, c.args, c.operator_id, c.operator, c.reason, c.status, c.error_code, c.error_reason, c.result_detail, c.issued_at, c.expires_at, c.sent_at, c.acked_at, c.finished_at, c.updated_at, c.customer_id, c.request_id, c.expected_station_id, c.config_target
+FROM control_commands c
+JOIN users u ON u.id = $1
+WHERE c.command_id = $2
+  AND c.device_name = $3
+  AND user_may_access_device(u.id, $3)
+  AND u.role <> 'customer_user'
+  AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id)
+`
+
+type GetControlCommandVisibleToUserParams struct {
+	UserID     int64       `json:"user_id"`
+	CommandID  pgtype.UUID `json:"command_id"`
+	DeviceName string      `json:"device_name"`
+}
+
+// One command, by id, under exactly the visibility rule of ListControlCommandsVisibleToUser.
+func (q *Queries) GetControlCommandVisibleToUser(ctx context.Context, arg GetControlCommandVisibleToUserParams) (ControlCommand, error) {
+	row := q.db.QueryRow(ctx, getControlCommandVisibleToUser, arg.UserID, arg.CommandID, arg.DeviceName)
+	var i ControlCommand
+	err := row.Scan(
+		&i.CommandID,
+		&i.DeviceName,
+		&i.Method,
+		&i.Args,
+		&i.OperatorID,
+		&i.Operator,
+		&i.Reason,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorReason,
+		&i.ResultDetail,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.SentAt,
+		&i.AckedAt,
+		&i.FinishedAt,
+		&i.UpdatedAt,
+		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
+	)
+	return i, err
+}
+
+const getInFlightConfigCommand = `-- name: GetInFlightConfigCommand :one
+SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target FROM control_commands
+WHERE device_name = $1
+  AND config_target = $2
+  AND status IN ('pending', 'sent', 'received', 'executing')
+LIMIT 1
+`
+
+type GetInFlightConfigCommandParams struct {
+	DeviceName   string      `json:"device_name"`
+	ConfigTarget pgtype.Text `json:"config_target"`
+}
+
+// INTERNAL: the command currently holding control_commands_config_in_flight_key for a target.
+func (q *Queries) GetInFlightConfigCommand(ctx context.Context, arg GetInFlightConfigCommandParams) (ControlCommand, error) {
+	row := q.db.QueryRow(ctx, getInFlightConfigCommand, arg.DeviceName, arg.ConfigTarget)
+	var i ControlCommand
+	err := row.Scan(
+		&i.CommandID,
+		&i.DeviceName,
+		&i.Method,
+		&i.Args,
+		&i.OperatorID,
+		&i.Operator,
+		&i.Reason,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorReason,
+		&i.ResultDetail,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.SentAt,
+		&i.AckedAt,
+		&i.FinishedAt,
+		&i.UpdatedAt,
+		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
+	)
+	return i, err
+}
+
+const getOwnControlCommandByRequestIDVisible = `-- name: GetOwnControlCommandByRequestIDVisible :one
+SELECT c.command_id, c.device_name, c.method, c.args, c.operator_id, c.operator, c.reason, c.status, c.error_code, c.error_reason, c.result_detail, c.issued_at, c.expires_at, c.sent_at, c.acked_at, c.finished_at, c.updated_at, c.customer_id, c.request_id, c.expected_station_id, c.config_target
+FROM control_commands c
+JOIN users u ON u.id = $1
+WHERE c.request_id = $2
+  AND c.operator_id = u.id
+  AND c.device_name = $3
+  AND user_may_access_device(u.id, $3)
+  AND u.role <> 'customer_user'
+  AND (u.role = 'platform_admin' OR c.customer_id = u.customer_id)
+`
+
+type GetOwnControlCommandByRequestIDVisibleParams struct {
+	UserID     int64       `json:"user_id"`
+	RequestID  pgtype.Text `json:"request_id"`
+	DeviceName string      `json:"device_name"`
+}
+
+// The caller's own submission by requestId, with the same visibility rule (a user moved to another
+// customer no longer sees what they filed under the old one).
+func (q *Queries) GetOwnControlCommandByRequestIDVisible(ctx context.Context, arg GetOwnControlCommandByRequestIDVisibleParams) (ControlCommand, error) {
+	row := q.db.QueryRow(ctx, getOwnControlCommandByRequestIDVisible, arg.UserID, arg.RequestID, arg.DeviceName)
+	var i ControlCommand
+	err := row.Scan(
+		&i.CommandID,
+		&i.DeviceName,
+		&i.Method,
+		&i.Args,
+		&i.OperatorID,
+		&i.Operator,
+		&i.Reason,
+		&i.Status,
+		&i.ErrorCode,
+		&i.ErrorReason,
+		&i.ResultDetail,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+		&i.SentAt,
+		&i.AckedAt,
+		&i.FinishedAt,
+		&i.UpdatedAt,
+		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
 	)
 	return i, err
 }
 
 const listControlCommandsForDeviceUnscoped = `-- name: ListControlCommandsForDeviceUnscoped :many
-SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id FROM control_commands
+SELECT command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target FROM control_commands
 WHERE device_name = $1
 ORDER BY issued_at DESC
 LIMIT $3 OFFSET $2
@@ -218,6 +449,9 @@ func (q *Queries) ListControlCommandsForDeviceUnscoped(ctx context.Context, arg 
 			&i.FinishedAt,
 			&i.UpdatedAt,
 			&i.CustomerID,
+			&i.RequestID,
+			&i.ExpectedStationID,
+			&i.ConfigTarget,
 		); err != nil {
 			return nil, err
 		}
@@ -230,7 +464,7 @@ func (q *Queries) ListControlCommandsForDeviceUnscoped(ctx context.Context, arg 
 }
 
 const listControlCommandsVisibleToUser = `-- name: ListControlCommandsVisibleToUser :many
-SELECT c.command_id, c.device_name, c.method, c.args, c.operator_id, c.operator, c.reason, c.status, c.error_code, c.error_reason, c.result_detail, c.issued_at, c.expires_at, c.sent_at, c.acked_at, c.finished_at, c.updated_at, c.customer_id
+SELECT c.command_id, c.device_name, c.method, c.args, c.operator_id, c.operator, c.reason, c.status, c.error_code, c.error_reason, c.result_detail, c.issued_at, c.expires_at, c.sent_at, c.acked_at, c.finished_at, c.updated_at, c.customer_id, c.request_id, c.expected_station_id, c.config_target
 FROM control_commands c
 JOIN users u ON u.id = $1
 WHERE c.device_name = $2
@@ -292,6 +526,9 @@ func (q *Queries) ListControlCommandsVisibleToUser(ctx context.Context, arg List
 			&i.FinishedAt,
 			&i.UpdatedAt,
 			&i.CustomerID,
+			&i.RequestID,
+			&i.ExpectedStationID,
+			&i.ConfigTarget,
 		); err != nil {
 			return nil, err
 		}
@@ -341,6 +578,32 @@ func (q *Queries) ListDevicesWithOpenControlCommandsUnscoped(ctx context.Context
 	return items, nil
 }
 
+const lockDeviceForCommand = `-- name: LockDeviceForCommand :one
+SELECT station_id FROM devices WHERE device_name = $1 FOR SHARE
+`
+
+// Holds the device row while the command is created, so a station change cannot commit between the
+// expectedStationId check and the insert.
+func (q *Queries) LockDeviceForCommand(ctx context.Context, deviceName string) (pgtype.Int8, error) {
+	row := q.db.QueryRow(ctx, lockDeviceForCommand, deviceName)
+	var station_id pgtype.Int8
+	err := row.Scan(&station_id)
+	return station_id, err
+}
+
+const lockStationShared = `-- name: LockStationShared :one
+SELECT id FROM stations WHERE id = $1 FOR SHARE
+`
+
+// config-command-delivery: taken before LockDeviceForCommand, the same station → device order as
+// replace-device (which takes FOR UPDATE), so the two serialize instead of deadlocking.
+func (q *Queries) LockStationShared(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, lockStationShared, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const markControlCommandAcked = `-- name: MarkControlCommandAcked :one
 UPDATE control_commands
 SET status       = $2,
@@ -351,7 +614,7 @@ SET status       = $2,
     updated_at   = now()
 WHERE command_id = $1
   AND status IN ('pending', 'sent')
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target
 `
 
 type MarkControlCommandAckedParams struct {
@@ -390,6 +653,9 @@ func (q *Queries) MarkControlCommandAcked(ctx context.Context, arg MarkControlCo
 		&i.FinishedAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
 	)
 	return i, err
 }
@@ -406,7 +672,7 @@ SET status        = $3,
 WHERE command_id = $1
   AND device_name = $2
   AND status IN ('pending', 'sent', 'received', 'executing')
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target
 `
 
 type MarkControlCommandFinishedParams struct {
@@ -467,6 +733,9 @@ func (q *Queries) MarkControlCommandFinished(ctx context.Context, arg MarkContro
 		&i.FinishedAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
 	)
 	return i, err
 }
@@ -476,7 +745,7 @@ const markControlCommandSent = `-- name: MarkControlCommandSent :one
 UPDATE control_commands
 SET status = 'sent', sent_at = now(), updated_at = now()
 WHERE command_id = $1 AND status = 'pending'
-RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id
+RETURNING command_id, device_name, method, args, operator_id, operator, reason, status, error_code, error_reason, result_detail, issued_at, expires_at, sent_at, acked_at, finished_at, updated_at, customer_id, request_id, expected_station_id, config_target
 `
 
 // Status transitions are all guarded by the *current* status rather than written unconditionally.
@@ -506,6 +775,9 @@ func (q *Queries) MarkControlCommandSent(ctx context.Context, commandID pgtype.U
 		&i.FinishedAt,
 		&i.UpdatedAt,
 		&i.CustomerID,
+		&i.RequestID,
+		&i.ExpectedStationID,
+		&i.ConfigTarget,
 	)
 	return i, err
 }

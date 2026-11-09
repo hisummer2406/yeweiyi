@@ -276,16 +276,19 @@ declare namespace API {
     direction: 'IN' | 'OUT' | string;
     oilType?: string;
     source: 'AUTO' | 'MANUAL' | string;
+    /** device = 设备上报（含设备端补录），cloud = 云端补录（cloud#69，只有它能撤销）；旧云端没有该字段 */
+    origin?: 'device' | 'cloud' | string;
     beginTime: string;
     endTime: string;
-    beginLevelMm: number;
-    endLevelMm: number;
-    beginVolumeL: number;
-    endVolumeL: number;
-    beginTempC: number;
-    endTempC: number;
-    beginWeightKg: number;
-    endWeightKg: number;
+    /** 云端补录只知道前高度和升数，其余量为 null（不是 0） */
+    beginLevelMm: number | null;
+    endLevelMm: number | null;
+    beginVolumeL: number | null;
+    endVolumeL: number | null;
+    beginTempC: number | null;
+    endTempC: number | null;
+    beginWeightKg: number | null;
+    endWeightKg: number | null;
     netVolumeL: number;
     duringDeliveryVolumeL?: number;
     deliveredVolumeL: number;
@@ -398,4 +401,83 @@ declare namespace API {
     snapshotSeq: number;
     tanks: Tank[];
   };
+
+  /**
+   * 设备上报的罐配置镜像（cloud docs/tank-settings-contract.md）。字段 null = 设备未上报，0 = 设备上报的 0（报警阈值 0 = 不启用）。
+   */
+  type TankSettings = {
+    tank: number;
+    reportedAt: string;
+    tankHeightMm: number | null;
+    sensorLengthMm: number | null;
+    tankShape: number | null;
+    oilType: string | null;
+    oilTypeIndex: number | null;
+    alarmHighHighLevelMm: number | null;
+    alarmHighLevelMm: number | null;
+    alarmLowLevelMm: number | null;
+    alarmLowLowLevelMm: number | null;
+    alarmHighWaterMm: number | null;
+    alarmHighTempC: number | null;
+    alarmLowTempC: number | null;
+    levelCorrectionMm: number | null;
+    waterCorrectionMm: number | null;
+    tempCorrectionC: number | null;
+    density: number | null;
+    capacityL: number | null;
+  };
+
+  /** 整机设置镜像（cloud docs/config-command-contract.md §4）；0 = 设备未配置，null = 未上报 */
+  type DeviceSettings = {
+    deviceName: string;
+    reportedAt: string;
+    inStockHeightThresholdMm: number | null;
+    inStockTimeThresholdSec: number | null;
+    outStockHeightThresholdMm: number | null;
+    outStockTimeThresholdSec: number | null;
+  };
+
+  /** 罐标定表（cloud docs/tank-settings-contract.md「罐体标定表」） */
+  type TankCalibration = {
+    deviceName: string;
+    tank: number;
+    reportedAt: string;
+    pointCount: number;
+    heightMm: number[];
+    volumeL: number[];
+  };
+
+  type CommandStatus =
+    | 'pending'
+    | 'sent'
+    | 'received'
+    | 'executing'
+    | 'succeeded'
+    | 'failed'
+    | 'rejected'
+    | 'expired';
+
+  /** 控制命令（cloud internal/api/control.go commandResponse）。terminal 由云端计算，是否继续轮询只看它。 */
+  type ControlCommand = {
+    commandId: string;
+    deviceName: string;
+    method: string;
+    args?: Record<string, unknown>;
+    operator: string;
+    reason: string;
+    status: CommandStatus | string;
+    terminal: boolean;
+    errorCode?: string;
+    errorReason?: string;
+    resultDetail?: { tank?: number; updated?: string[]; ignored?: string[] } & Record<string, unknown>;
+    issuedAt?: string;
+    expiresAt?: string;
+    sentAt?: string;
+    ackedAt?: string;
+    finishedAt?: string;
+    requestId?: string | null;
+    expectedStationId?: number | null;
+    configTarget?: string | null;
+  };
+
 }

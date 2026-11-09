@@ -21,8 +21,11 @@ vi.mock('@umijs/max', () => ({
   history: { push },
   useAccess: () => ({ canPlatformAdmin }),
   useIntl: () => ({
-    formatMessage: ({ id }: { id: string }) =>
-      (zhPages as Record<string, string>)[id] ?? id,
+    formatMessage: ({ id }: { id: string }, v?: Record<string, unknown>) =>
+      ((zhPages as Record<string, string>)[id] ?? id).replace(
+        /\{(\w+)\}/g,
+        (_, k) => String(v?.[k] ?? ''),
+      ),
   }),
   getIntl: () => ({
     formatMessage: ({ id }: { id: string }) =>

@@ -24,6 +24,7 @@ type Querier interface {
 	// The statement start is guaranteed not to be later than the snapshot, so the cap is never later
 	// than what the decision saw.
 	AuthorizeDeviceAccess(ctx context.Context, arg AuthorizeDeviceAccessParams) (AuthorizeDeviceAccessRow, error)
+	CommandAuditExists(ctx context.Context, arg CommandAuditExistsParams) (bool, error)
 	CompleteDevicePurge(ctx context.Context, id int64) (DevicePurge, error)
 	CountDeviceCascades(ctx context.Context, deviceName string) (CountDeviceCascadesRow, error)
 	// verify 步骤：清单里每一类都应为 0。
@@ -51,6 +52,14 @@ type Querier interface {
 	// snapshot, i.e. the command logically happens before any transfer that commits after it started,
 	// and records the customer it was authorized under. What remains — the command being *sent* after
 	// the device changed hands — happens after this statement and no lock here could prevent it.
+	//
+	// config-command-delivery (#3) adds three more checks to the same statement, for the same reason:
+	//   * the method's permission tier against the user's *current* role (required_level) — Go's
+	//     authorize() decides the error message, this decides whether a row exists;
+	//   * ON CONFLICT on the request_id index: a concurrent duplicate submission inserts nothing and
+	//     the caller reads the existing row instead (zero rows back). The in-flight index is NOT an
+	//     arbiter, so a second command for a busy target raises a unique violation the caller maps to
+	//     config_command_in_flight.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
 	// 设备彻底删除（cloud#83，迁移 000032，契约 docs/device-purge-contract.md）。
@@ -104,6 +113,11 @@ type Querier interface {
 	ExpireStaleControlCommands(ctx context.Context) ([]ControlCommand, error)
 	FailDevicePurge(ctx context.Context, arg FailDevicePurgeParams) (DevicePurge, error)
 	GetControlCommand(ctx context.Context, commandID pgtype.UUID) (ControlCommand, error)
+	// INTERNAL: the caller has already authorized the user for the device. The key includes the
+	// operator, so one admin can never "recover" another admin's submission.
+	GetControlCommandByRequestID(ctx context.Context, arg GetControlCommandByRequestIDParams) (ControlCommand, error)
+	// One command, by id, under exactly the visibility rule of ListControlCommandsVisibleToUser.
+	GetControlCommandVisibleToUser(ctx context.Context, arg GetControlCommandVisibleToUserParams) (ControlCommand, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
 	// Completing onboarding locks the row so the readiness check and the status write see one state.
 	GetCustomerForUpdate(ctx context.Context, id int64) (Customer, error)
@@ -113,7 +127,13 @@ type Querier interface {
 	GetDeviceForUpdate(ctx context.Context, deviceName string) (Device, error)
 	GetDevicePairingSecretHash(ctx context.Context, deviceName string) (string, error)
 	GetDevicePurge(ctx context.Context, id int64) (DevicePurge, error)
+	GetDeviceSettings(ctx context.Context, deviceName string) (DeviceSetting, error)
+	// INTERNAL: the command currently holding control_commands_config_in_flight_key for a target.
+	GetInFlightConfigCommand(ctx context.Context, arg GetInFlightConfigCommandParams) (ControlCommand, error)
 	GetOpenDevicePurge(ctx context.Context, deviceName string) (DevicePurge, error)
+	// The caller's own submission by requestId, with the same visibility rule (a user moved to another
+	// customer no longer sees what they filed under the old one).
+	GetOwnControlCommandByRequestIDVisible(ctx context.Context, arg GetOwnControlCommandByRequestIDVisibleParams) (ControlCommand, error)
 	GetStation(ctx context.Context, id int64) (Station, error)
 	// The one device currently on a station, if any (at most one: devices_station_id_key).
 	GetStationDevice(ctx context.Context, stationID pgtype.Int8) (Device, error)
@@ -244,6 +264,12 @@ type Querier interface {
 	// customer_id NULL means no filter, which only a platform admin may ask for; the handler pins
 	// everyone else to their own customer.
 	ListUsers(ctx context.Context, customerID pgtype.Int8) ([]User, error)
+	// Holds the device row while the command is created, so a station change cannot commit between the
+	// expectedStationId check and the insert.
+	LockDeviceForCommand(ctx context.Context, deviceName string) (pgtype.Int8, error)
+	// config-command-delivery: taken before LockDeviceForCommand, the same station → device order as
+	// replace-device (which takes FOR UPDATE), so the two serialize instead of deadlocking.
+	LockStationShared(ctx context.Context, id int64) (int64, error)
 	// Applies the device's ACK: 'received' (accepted, not yet done) or 'rejected' (terminal).
 	// Only a command we have actually sent can be acked.
 	MarkControlCommandAcked(ctx context.Context, arg MarkControlCommandAckedParams) (ControlCommand, error)
@@ -293,7 +319,7 @@ type Querier interface {
 	// 罐行随表头级联删除。
 	PurgeShiftRecords(ctx context.Context, deviceName string) (int64, error)
 	// 以下按设备编号删除业务库数据，全部在 business 步骤的同一事务里执行。设备行最后删，级联带走
-	// control_commands、user_tank_grants、user_devices、device_pairing_secrets（先计数再删）。
+	// control_commands、user_tank_grants、user_devices、device_pairing_secrets、tank_settings、tank_calibration、device_settings（先计数再删）。
 	PurgeStockEvents(ctx context.Context, deviceName string) (int64, error)
 	PurgeStockRecords(ctx context.Context, deviceName string) (int64, error)
 	PurgeTelemetryHourly(ctx context.Context, deviceName string) (int64, error)
@@ -369,6 +395,9 @@ type Querier interface {
 	// customer cannot use and silently invalidate the new owner's. Zero rows back means ownership
 	// changed (or never held), and the handler answers 409.
 	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
+	// 设备上报的整机设置镜像（迁移 000038，config-command-delivery）。只由 internal/ingest 写入，API 只读。
+	// 整行以设备最新上报为准；reported_at 没变就不写。
+	UpsertDeviceSettings(ctx context.Context, arg UpsertDeviceSettingsParams) error
 	// 交班与库存记录（迁移 000037，cloud#85，契约 docs/shift-stock-records-contract.md）。写入全部幂等：
 	// 表头按信封 ts 最大者胜（相同则保留先写入的），罐行随后由 Sync*RecordTanks 与表头载荷对齐。
 	// 返回 1 = 本份胜出（新插入或替换了更旧的一份）；0 = 已有同样新或更新的一份，表头不变。之后调用方一律执行 SyncShiftRecordTanks。

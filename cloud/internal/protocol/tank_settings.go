@@ -18,7 +18,7 @@ const (
 	AttrSensorLengthMm     = "sensorLengthMm"       // number, mm, 传感器长度
 	AttrTankShape          = "tankShape"            // int, 0 卧罐 / 1 立罐
 	AttrOilType            = "oilType"              // string, 油品名称；随设备界面语言变化，仅供展示
-	AttrOilTypeIndex       = "oilTypeIndex"         // int, 0 未设置 / 1–17 内置 / 18–25 自定义；读写以它为准
+	AttrOilTypeIndex       = "oilTypeIndex"         // int, 0 未设置 / 1–31 内置 / 32–39 自定义（旧固件 18–25 为自定义，#11）；读写以它为准
 	AttrAlarmHighHighLevel = "alarmHighHighLevelMm" // int, mm, 0 = 不启用
 	AttrAlarmHighLevel     = "alarmHighLevelMm"     // int, mm, 0 = 不启用
 	AttrAlarmLowLevel      = "alarmLowLevelMm"      // int, mm, 0 = 不启用

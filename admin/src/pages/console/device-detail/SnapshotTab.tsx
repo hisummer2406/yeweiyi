@@ -176,13 +176,7 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
               }}
             />
           )}
-          <Typography.Title level={5} style={{ margin: 0 }}>
-            {intl.formatMessage(
-              { id: 'pages.console.detail.snapshot.tank' },
-              { index: tank.index },
-            )}{' '}
-            {tank.oilType || '--'}
-          </Typography.Title>
+          {/* 罐号 + 介质在 TankDetail 的显示器样式标题条里（#21），这里不再重复一行标题 */}
           <TankDetail tank={tank} />
         </Space>
       );

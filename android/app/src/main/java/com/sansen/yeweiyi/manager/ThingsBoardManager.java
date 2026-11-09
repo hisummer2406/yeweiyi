@@ -328,16 +328,24 @@ public final class ThingsBoardManager {
      * {@code config.setDeviceSettings} 的落盘：写基础设置页同一份 SharedPreferences，按 commit() 结果确认
      * 写盘，再刷新 {@link Singleton}（出入库检测读它），最后重发客户端属性回显新值。
      */
+    /**
+     * 整机设置落盘：全部字段一次 commit（{@link SharePrefUtil#saveIntsChecked}），要么全写入要么都不改（#9）。
+     * 写入成功后才刷新 Singleton 并重发客户端属性；失败时什么都没改，回执 FAILED。
+     */
     private void saveDeviceSettings(Map<String, Integer> values) {
         Context context = MyApplication.getInstance().getApplicationContext();
+        Map<String, Integer> prefs = new java.util.LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : values.entrySet()) {
             String prefKey = DEVICE_SETTING_PREF_KEYS.get(entry.getKey());
             if (prefKey == null) {
                 throw new IllegalStateException("没有对应的本地配置项: " + entry.getKey());
             }
-            if (!SharePrefUtil.saveIntChecked(context, prefKey, entry.getValue())) {
-                throw new IllegalStateException("写入配置失败: " + entry.getKey());
-            }
+            prefs.put(prefKey, entry.getValue());
+        }
+        if (!SharePrefUtil.saveIntsChecked(context, prefs)) {
+            throw new IllegalStateException("写入配置失败，未修改任何字段");
+        }
+        for (String prefKey : prefs.keySet()) {
             Singleton.getInstance().getSetData(prefKey);
         }
         requestClientAttributesPublish();

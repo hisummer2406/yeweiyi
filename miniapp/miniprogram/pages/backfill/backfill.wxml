@@ -1,6 +1,13 @@
-<!-- 设计稿「补录记录」：手工新增一条历史上漏报的出入库记录，和"修正已有记录"是两件事。
-     云端没有对应的新增接口，保存/预览不会提交，保存时说明（见 backfill.ts）。 -->
-<view style="padding-top:45rpx;">
+<!-- 设计稿「补录记录」：手工新增一条设备漏报的出入库记录（yeweiyi-cloud#69），和"修正已有记录"是两件事。
+     管理员可提交；员工只能预览（见 backfill.ts）。 -->
+<view wx:if="{{state !== 'ok' && state !== 'loading'}}" class="card banner-warning" style="margin:16rpx 24rpx 0;">
+  <text class="text-warning">{{notice}}</text>
+  <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
+  <button wx:if="{{state === 'error'}}" class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
+</view>
+<view wx:if="{{state === 'ok'}}" style="padding-top:45rpx;">
+  <view class="muted" style="padding:0 53rpx 24rpx;">{{text.target}}{{stationName}} · {{device}}</view>
+  <view wx:if="{{!canSubmit}}" class="muted" style="padding:0 53rpx 24rpx;">{{text.readOnly}}</view>
   <view class="bf-title">{{text.inTitle}}</view>
   <view class="fc" style="margin-top:0;padding:19rpx 0 18rpx;">
     <view class="fr" id="row-inbound-tank" data-kind="inbound" bindtap="onOpenTank">
@@ -8,26 +15,37 @@
       <text class="fv {{inbound.tankIndex < 0 ? 'fv-ph' : ''}}">{{inbound.tankIndex < 0 ? form.select : tankOptions[inbound.tankIndex]}}</text>
       <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
     </view>
-    <picker mode="date" value="{{inbound.date}}" bindchange="onInboundDateChange">
+    <picker mode="date" end="{{maxDate}}" value="{{inbound.date}}" data-kind="inbound" data-field="date" bindchange="onField">
       <view class="fr">
         <text class="fl">{{text.inTime}}</text>
         <text class="fv {{inbound.date ? '' : 'fv-ph'}}">{{inbound.date || form.select}}</text>
         <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
     </picker>
+    <picker mode="time" value="{{inbound.time}}" data-kind="inbound" data-field="time" bindchange="onField">
+      <view class="fr">
+        <text class="fl">{{text.clock}}</text>
+        <text class="fv {{inbound.time ? '' : 'fv-ph'}}">{{inbound.time || form.select}}</text>
+        <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+      </view>
+    </picker>
     <view class="fr">
       <text class="fl">{{text.inBefore}}</text>
-      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{inbound.beforeLevel}}" bindinput="onInboundLevelInput" />
+      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{inbound.beforeLevel}}" data-kind="inbound" data-field="beforeLevel" bindinput="onField" />
       <text class="fu">{{form.mm}}</text>
     </view>
     <view class="fr">
       <text class="fl">{{text.inVolume}}</text>
-      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{inbound.volume}}" bindinput="onInboundVolumeInput" />
+      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{inbound.volume}}" data-kind="inbound" data-field="volume" bindinput="onField" />
       <text class="fu">{{form.liter}}</text>
+    </view>
+    <view wx:if="{{canSubmit}}" class="fr">
+      <text class="fl">{{text.reason}}</text>
+      <input class="fi" style="width:auto;flex:1;" type="text" maxlength="200" placeholder="{{text.reasonPlaceholder}}" placeholder-class="fv-ph" value="{{inbound.reason}}" data-kind="inbound" data-field="reason" bindinput="onField" />
     </view>
   </view>
   <view class="pill-row" style="margin-top:55rpx;">
-    <button class="pill pill-green" data-kind="inbound" bindtap="onSave">{{form.save}}</button>
+    <button wx:if="{{canSubmit}}" class="pill pill-green" data-kind="inbound" loading="{{submitting === 'inbound'}}" disabled="{{!!submitting}}" bindtap="onSave">{{text.submit}}</button>
     <button class="pill pill-indigo" data-kind="inbound" bindtap="onPreview">{{text.preview}}</button>
   </view>
   <view style="height:102rpx;"></view>
@@ -38,26 +56,37 @@
       <text class="fv {{outbound.tankIndex < 0 ? 'fv-ph' : ''}}">{{outbound.tankIndex < 0 ? form.select : tankOptions[outbound.tankIndex]}}</text>
       <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
     </view>
-    <picker mode="date" value="{{outbound.date}}" bindchange="onOutboundDateChange">
+    <picker mode="date" end="{{maxDate}}" value="{{outbound.date}}" data-kind="outbound" data-field="date" bindchange="onField">
       <view class="fr">
         <text class="fl">{{text.outTime}}</text>
         <text class="fv {{outbound.date ? '' : 'fv-ph'}}">{{outbound.date || form.select}}</text>
         <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
       </view>
     </picker>
+    <picker mode="time" value="{{outbound.time}}" data-kind="outbound" data-field="time" bindchange="onField">
+      <view class="fr">
+        <text class="fl">{{text.clock}}</text>
+        <text class="fv {{outbound.time ? '' : 'fv-ph'}}">{{outbound.time || form.select}}</text>
+        <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
+      </view>
+    </picker>
     <view class="fr">
       <text class="fl">{{text.outBefore}}</text>
-      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{outbound.beforeLevel}}" bindinput="onOutboundLevelInput" />
+      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{outbound.beforeLevel}}" data-kind="outbound" data-field="beforeLevel" bindinput="onField" />
       <text class="fu">{{form.mm}}</text>
     </view>
     <view class="fr">
       <text class="fl">{{text.outVolume}}</text>
-      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{outbound.volume}}" bindinput="onOutboundVolumeInput" />
+      <input class="fi" type="digit" placeholder="0" placeholder-class="fv-ph" value="{{outbound.volume}}" data-kind="outbound" data-field="volume" bindinput="onField" />
       <text class="fu">{{form.liter}}</text>
+    </view>
+    <view wx:if="{{canSubmit}}" class="fr">
+      <text class="fl">{{text.reason}}</text>
+      <input class="fi" style="width:auto;flex:1;" type="text" maxlength="200" placeholder="{{text.reasonPlaceholder}}" placeholder-class="fv-ph" value="{{outbound.reason}}" data-kind="outbound" data-field="reason" bindinput="onField" />
     </view>
   </view>
   <view class="pill-row" style="margin-top:55rpx;">
-    <button class="pill pill-green" data-kind="outbound" bindtap="onSave">{{form.save}}</button>
+    <button wx:if="{{canSubmit}}" class="pill pill-green" data-kind="outbound" loading="{{submitting === 'outbound'}}" disabled="{{!!submitting}}" bindtap="onSave">{{text.submit}}</button>
     <button class="pill pill-indigo" data-kind="outbound" bindtap="onPreview">{{text.preview}}</button>
   </view>
 </view>

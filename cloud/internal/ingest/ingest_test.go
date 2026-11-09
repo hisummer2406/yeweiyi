@@ -142,6 +142,9 @@ func newStack(t *testing.T, cfg control.Config) *stack {
 	}
 	t.Cleanup(sim.Disconnect)
 
+	if cfg.Pool == nil {
+		cfg.Pool = pool
+	}
 	ctl := control.New(q, tb, cfg)
 	ing := ingest.New(ingest.Config{
 		TB: tb, Control: ctl, Redis: rdb, Queries: q,

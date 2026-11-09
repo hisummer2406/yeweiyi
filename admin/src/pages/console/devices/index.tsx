@@ -222,23 +222,34 @@ const ConsoleDevices: React.FC = () => {
     <ProCard
       key={g.device.device_name}
       headerBordered
+      // 窄屏下标题与上报时间整块换行，而不是把油站名、设备编号、在线状态逐字挤碎（#21 残留）
+      styles={{
+        header: { flexWrap: 'wrap', rowGap: 4 },
+        title: { flex: '1 1 auto', minWidth: 0 },
+      }}
       title={
-        <Space>
+        <Space wrap size={[8, 0]}>
           {typeof g.device.station_id === 'number' ? (
             <>
               <Typography.Text strong>
                 {sf.labelOf(g.device.station_id)}
               </Typography.Text>
-              <Typography.Text type="secondary">
+              <Typography.Text
+                type="secondary"
+                style={{ whiteSpace: 'nowrap' }}
+              >
                 {g.device.device_name}
               </Typography.Text>
             </>
           ) : (
-            <Typography.Text strong>{g.device.device_name}</Typography.Text>
+            <Typography.Text strong style={{ whiteSpace: 'nowrap' }}>
+              {g.device.device_name}
+            </Typography.Text>
           )}
           <Badge
             status={g.device.is_online ? 'success' : 'default'}
             text={g.device.is_online ? '在线' : '离线'}
+            style={{ whiteSpace: 'nowrap' }}
           />
         </Space>
       }

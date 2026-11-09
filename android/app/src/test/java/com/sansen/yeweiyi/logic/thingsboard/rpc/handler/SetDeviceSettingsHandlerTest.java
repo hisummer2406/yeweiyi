@@ -70,4 +70,21 @@ public class SetDeviceSettingsHandlerTest {
         assertEquals(RpcResultStatus.FAILED, result.getStatus());
         assertEquals(RpcErrorCode.INTERNAL_ERROR, result.getErrorCode());
     }
+
+    /** #9：整机多字段一次交给存储（真机实现一次 commit，全有或全无）；存储失败时回执 FAILED 且说明未修改任何字段。 */
+    @Test
+    public void allFieldsGoToTheStoreInOneCallAndAFailureChangesNothing() {
+        final int[] calls = {0};
+        SetDeviceSettingsHandler handler = new SetDeviceSettingsHandler(values -> {
+            calls[0]++;
+            assertEquals(4, values.size());
+            throw new IllegalStateException("写入配置失败，未修改任何字段");
+        });
+        RpcResult result = call(handler, "{\"inStockHeightThresholdMm\":20,\"inStockTimeThresholdSec\":60,"
+                + "\"outStockHeightThresholdMm\":30,\"outStockTimeThresholdSec\":90}");
+        assertEquals(1, calls[0]);
+        assertEquals(RpcResultStatus.FAILED, result.getStatus());
+        assertEquals(RpcErrorCode.INTERNAL_ERROR, result.getErrorCode());
+        org.junit.Assert.assertTrue(result.getMessage().contains("未修改任何字段"));
+    }
 }
