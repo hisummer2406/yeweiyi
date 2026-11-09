@@ -265,7 +265,7 @@ export default {
   'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
   'pages.ops.users.form.password.optional': '初始密码（可选）',
   'pages.ops.users.form.staff.hint':
-    '员工不能登录网页后台，密码仅用于小程序／App；手机号员工可不设密码（只能微信登录）。忘记密码请由平台管理员重置。创建后在「资产管理 → 员工授权」为其分配油罐。',
+    '员工不能登录网页后台，密码仅用于小程序／App；手机号员工可不设密码（只能手机号快捷登录）。忘记密码请由平台管理员重置。创建后在「资产管理 → 员工授权」为其分配油罐。',
   'pages.ops.users.form.password.label': '初始密码',
   'pages.ops.users.form.password.new': '新密码',
   'pages.ops.users.form.password.required': '请输入密码',
@@ -281,7 +281,7 @@ export default {
   'pages.ops.users.edit.nothing': '没有需要保存的修改',
   'pages.ops.users.edit.passwordHint': '不修改密码请留空。',
   'pages.ops.users.changePhone.hint':
-    '修改后该账号须用新手机号登录；已有的微信绑定会被清除，需重新用微信授权登录；已签发的登录状态不受影响（要让其下线请停用账号）。',
+    '修改后该账号须用新手机号登录；已有的手机号授权会被清除，需重新授权登录；已签发的登录状态不受影响（要让其下线请停用账号）。',
   'pages.ops.users.form.submit.move': '确认换客户',
   'pages.ops.users.move.warning':
     '换客户会同时清掉该账号已绑定的设备，需要重新绑定。',
@@ -560,8 +560,8 @@ export default {
   'pages.console.miniCode.action': '下载小程序码',
   'pages.console.miniCode.error.notFound': '设备不存在，请刷新列表。',
   'pages.console.miniCode.error.unavailable':
-    '云端未启用微信，无法生成小程序码。',
-  'pages.console.miniCode.error.upstream': '微信服务返回失败，请稍后重试。',
+    '云端未启用小程序服务，无法生成小程序码。',
+  'pages.console.miniCode.error.upstream': '小程序码服务返回失败，请稍后重试。',
   'pages.console.miniCode.error.unknown':
     '下载小程序码失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.console.stations.devices.action.replace': '换机',
