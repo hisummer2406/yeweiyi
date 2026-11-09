@@ -99,6 +99,13 @@ public class SharePrefUtil {
 
     }
 
+    /** 需要自己 commit 并判断是否落盘时使用。 */
+    public static SharedPreferences preferences(Context context) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        return sp;
+    }
+
     /** 多个键值一次 commit 写入，读方不会看到只写了一半的组合。参数按 key, value, key, value… 排列。 */
     public static void saveStrings(Context context, String... keyValues) {
         if (sp == null)

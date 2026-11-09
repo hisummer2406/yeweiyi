@@ -10,6 +10,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -37,7 +39,49 @@ public class SetTankSettingsHandlerTest {
         tank1.setDensity(0.56);
         repo.byId.put(1, tank1);
         refreshCount = 0;
-        handler = new SetTankSettingsHandler(repo, () -> refreshCount++);
+        names = new FakeNames();
+        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names);
+    }
+
+    private static final class FakeNames implements CustomOilNameStore {
+        final Map<Integer, String[]> saved = new HashMap<>();
+        int writes;
+
+        @Override
+        public String[] save(int index, String zh, String en) {
+            writes++;
+            String[] old = saved.getOrDefault(index, new String[]{"", ""});
+            saved.put(index, new String[]{zh, en});
+            return old;
+        }
+    }
+
+    private FakeNames names;
+
+    @Test
+    public void writesTheNameAndTheIndexTogether() {
+        RpcResult result = call("{\"tank\":1,\"oilTypeIndex\":32,\"customOilName\":\"二厂盐酸\",\"customOilNameEn\":\"HCl\"}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(32, repo.lastSaved.getOilType());
+        assertEquals("二厂盐酸", names.saved.get(32)[0]);
+        assertEquals("HCl", names.saved.get(32)[1]);
+    }
+
+    @Test
+    public void refusesANameWithoutACustomIndex() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":5,\"customOilName\":\"盐酸\"}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"density\":0.8,\"customOilName\":\"盐酸\"}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":32,\"customOilName\":\" \"}"));
+        assertEquals(0, names.writes);
+    }
+
+    @Test
+    public void restoresTheOldNameWhenTheTankWriteFails() {
+        names.saved.put(33, new String[]{"旧", "Old"});
+        repo.failNextSave = true;
+        RpcResult result = call("{\"tank\":1,\"oilTypeIndex\":33,\"customOilName\":\"新\"}");
+        assertEquals(RpcResultStatus.FAILED, result.getStatus());
+        assertEquals("旧", names.saved.get(33)[0]);
     }
 
     private RpcResult call(String argsJson) {
@@ -127,10 +171,20 @@ public class SetTankSettingsHandlerTest {
     }
 
     @Test
+    public void correctionsHaveNoRangeLimit() {
+        RpcResult result = call("{\"tank\":1,\"levelCorrectionMm\":1000,\"waterCorrectionMm\":-1000.5,\"tempCorrectionC\":-100.5}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(1000, repo.lastSaved.getOilCorrection(), 1e-9);
+        assertEquals(-1000.5, repo.lastSaved.getWaterCorrection(), 1e-9);
+        assertEquals(-100.5, repo.lastSaved.getTempCorrection(), 1e-9);
+    }
+
+    @Test
     public void rejectsOutOfRangeAndNonNumericValues() {
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighWaterMm\":2001}")); // 超过罐高
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighTempC\":101}"));
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"tempCorrectionC\":10.5}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tempCorrectionC\":\"1\"}")); // 字符串
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"levelCorrectionMm\":1e999}")); // 超出 double
         assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":40}"));
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":\"650\"}")); // 字符串
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":650.5}")); // 整数字段带小数
