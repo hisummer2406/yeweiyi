@@ -62,10 +62,12 @@ type Querier interface {
 	//     config_command_in_flight.
 	CreateControlCommand(ctx context.Context, arg CreateControlCommandParams) (ControlCommand, error)
 	CreateCustomer(ctx context.Context, name string) (Customer, error)
+	CreateDeviceMediaSlot(ctx context.Context, arg CreateDeviceMediaSlotParams) error
 	// 设备彻底删除（cloud#83，迁移 000032，契约 docs/device-purge-contract.md）。
 	// 设备行须已由调用方在同一事务里锁住（GetDeviceForUpdate）。同设备已有未完成任务时唯一索引冲突（23505），
 	// 调用方改读那个任务。
 	CreateDevicePurge(ctx context.Context, arg CreateDevicePurgeParams) (DevicePurge, error)
+	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreateStation(ctx context.Context, arg CreateStationParams) (Station, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	// A concurrent bind of the same openid or the same user trips a UNIQUE constraint (23505); the caller
@@ -82,6 +84,7 @@ type Querier interface {
 	// Refused by the foreign keys (ON DELETE RESTRICT) while any user, device, command or audit row still
 	// references the customer; the handler turns that into 409. `default` is protected as above.
 	DeleteCustomer(ctx context.Context, id int64) (int64, error)
+	DeleteDeviceMediaSlots(ctx context.Context, deviceName string) (int64, error)
 	// A station that still has devices fails with 23503 (devices_station_customer_fk); the handler turns
 	// that into 409.
 	DeleteStation(ctx context.Context, id int64) (int64, error)
@@ -130,6 +133,8 @@ type Querier interface {
 	GetDeviceSettings(ctx context.Context, deviceName string) (DeviceSetting, error)
 	// INTERNAL: the command currently holding control_commands_config_in_flight_key for a target.
 	GetInFlightConfigCommand(ctx context.Context, arg GetInFlightConfigCommandParams) (ControlCommand, error)
+	GetMedia(ctx context.Context, id int64) (Medium, error)
+	GetMediaForUpdate(ctx context.Context, id int64) (Medium, error)
 	GetOpenDevicePurge(ctx context.Context, deviceName string) (DevicePurge, error)
 	// The caller's own submission by requestId, with the same visibility rule (a user moved to another
 	// customer no longer sees what they filed under the old one).
@@ -214,6 +219,7 @@ type Querier interface {
 	// (operator, reason, arguments, results) to the new one.
 	ListControlCommandsVisibleToUser(ctx context.Context, arg ListControlCommandsVisibleToUserParams) ([]ControlCommand, error)
 	ListCustomers(ctx context.Context) ([]Customer, error)
+	ListDeviceMediaSlots(ctx context.Context, deviceName string) ([]DeviceMediaSlot, error)
 	ListDevicePurgesByDevice(ctx context.Context, deviceName string) ([]DevicePurge, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on
 	// which they hold at least one tank grant (cloud#63); the tanks themselves are listed separately.
@@ -229,6 +235,9 @@ type Querier interface {
 	ListDevicesWithOpenControlCommandsUnscoped(ctx context.Context) ([]ListDevicesWithOpenControlCommandsUnscopedRow, error)
 	// 用户在某设备上被授权的罐号（升序）。调用方用它过滤整机快照；管理员不走这条，他们看全部。
 	ListGrantedTanks(ctx context.Context, arg ListGrantedTanksParams) ([]int32, error)
+	ListMedia(ctx context.Context) ([]Medium, error)
+	// 可供选择的介质：启用的公共介质，加上指定客户的启用专属介质。customer 为 NULL（设备未分配）时只有公共介质。
+	ListMediaOptionsForCustomer(ctx context.Context, customerID pgtype.Int8) ([]Medium, error)
 	// Drives the requestOilcan poll loop (design doc §4.3) — only bother polling devices we believe
 	// are actually online.
 	ListOnlineDeviceNames(ctx context.Context) ([]string, error)
@@ -384,6 +393,7 @@ type Querier interface {
 	// 扫码不再创建任何授权，授权只来自 user_tank_grants（db/queries/tank_grants.sql）。user_devices 表保留为
 	// 只读历史，不再被任何授权判定引用。
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
+	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	UpdateStation(ctx context.Context, arg UpdateStationParams) (Station, error)
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
 	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.

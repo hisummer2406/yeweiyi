@@ -94,6 +94,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   最大者胜，永久保存（同约束 5）。`GET /api/shift-records`、`/api/stock-records` 每 (记录, 罐) 一行，规则同 `/api/oil-in-out`（#84），
   缺失值一律 `null` 不当 0，`syncStatus` 为 `UNSUPPORTED|SYNCING|SYNCED`，客户端只在 `SYNCED` 且无行时显示"暂无记录"。
   `oilTypeIndex` 是与界面语言无关的油品标识，`oilType` 只是显示名。**设备端与云端都未真机验证。**
+- 介质库（#27，契约见 [docs/media-library-contract.md](docs/media-library-contract.md)）：`media` 字典 + `device_media_slots` 位置映射，仅平台管理员。客户端只提交 `mediaId`，云端换算；直接提交 `oilTypeIndex` 被拒。
 - 设备端仓库是 `../android/`，小程序仓库是
   `../miniapp/`。跨仓库协议变更必须获得相关负责人确认。
 

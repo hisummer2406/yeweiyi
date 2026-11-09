@@ -458,6 +458,31 @@ declare namespace API {
     | 'expired';
 
   /** 控制命令（cloud internal/api/control.go commandResponse）。terminal 由云端计算，是否继续轮询只看它。 */
+  type Medium = {
+    id: number;
+    name: string;
+    nameEn: string | null;
+    scope: 'public' | 'customer';
+    customerId: number | null;
+    builtinIndex: number | null;
+    enabled: boolean;
+    updatedAt: string;
+  };
+  type MediumCreate = {
+    name: string;
+    nameEn?: string;
+    scope: 'public' | 'customer';
+    customerId?: number;
+  };
+  type MediumUpdate = { name?: string; nameEn?: string; enabled?: boolean };
+  type MediaOptions = {
+    public: Medium[];
+    customer: Medium[];
+    customMediaSync: boolean;
+    slotsUsed: number;
+    slotsTotal: number;
+  };
+
   type ControlCommand = {
     commandId: string;
     deviceName: string;

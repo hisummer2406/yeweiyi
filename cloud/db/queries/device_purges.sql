@@ -113,4 +113,5 @@ SELECT
   + (SELECT COUNT(*) FROM tank_settings x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM tank_calibration x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM device_settings x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
+  + (SELECT COUNT(*) FROM device_media_slots x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT
   + (SELECT COUNT(*) FROM devices x WHERE x.device_name = sqlc.arg('device_name')::TEXT)::BIGINT AS remnants;

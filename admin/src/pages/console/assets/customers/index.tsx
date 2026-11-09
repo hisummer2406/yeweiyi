@@ -95,6 +95,9 @@ const AdminCustomers: React.FC = () => {
             >
               {t('pages.ops.customers.action.users')}
             </a>
+            <a onClick={() => history.push(`/assets/media?customer=${row.id}`)}>
+              {t('pages.ops.customers.action.media')}
+            </a>
             <a onClick={() => setRenameTarget(row)}>
               {t('pages.ops.customers.action.rename')}
             </a>

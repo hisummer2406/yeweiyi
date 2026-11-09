@@ -343,6 +343,9 @@ export type SubmitErrorKind =
   | 'unconfirmed'
   | 'forbidden'
   | 'purging'
+  | 'mediaNotSelectable'
+  | 'mediaSyncUnsupported'
+  | 'mediaSlotsExhausted'
   | 'unavailable'
   | 'other';
 
@@ -368,6 +371,13 @@ export function classifySubmitError(err: {
       return 'unconfirmed';
     case 'device_purge_in_progress':
       return 'purging';
+    case 'media_not_selectable':
+    case 'media_id_required':
+      return 'mediaNotSelectable';
+    case 'media_sync_unsupported':
+      return 'mediaSyncUnsupported';
+    case 'media_slots_exhausted':
+      return 'mediaSlotsExhausted';
   }
   if (err.status === 0) return 'unconfirmed';
   if (err.status === 403) return 'forbidden';
@@ -386,8 +396,25 @@ export function pendingSettledBy(kind: SubmitErrorKind): boolean {
     kind === 'stationChanged' ||
     kind === 'inFlight' ||
     kind === 'requestIdReused' ||
-    kind === 'invalidArgs'
+    kind === 'invalidArgs' ||
+    kind === 'mediaNotSelectable' ||
+    kind === 'mediaSyncUnsupported' ||
+    kind === 'mediaSlotsExhausted'
   );
+}
+
+/**
+ * 介质按 mediaId 提交，设备回报的是云端换算出的 oilTypeIndex：回显要按命令实际下发的编号核对。
+ * 名称字段设备不回报，不参与比较。
+ */
+export function trackedArgs(
+  command: Pick<API.ControlCommand, 'args'>,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!('mediaId' in args)) return args;
+  const { mediaId: _mediaId, ...rest } = args;
+  const index = command.args?.oilTypeIndex;
+  return typeof index === 'number' ? { ...rest, oilTypeIndex: index } : rest;
 }
 
 /** 命令的 configTarget（tank:N / device）显示用 */
