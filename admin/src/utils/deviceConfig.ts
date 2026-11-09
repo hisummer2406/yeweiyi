@@ -24,7 +24,7 @@ type TankKey = Exclude<
   'tank' | 'reportedAt' | 'oilType'
 >;
 
-/** 罐设置字段（显示顺序）。密度：单位未与设备对齐，本期只读（用户 2026-11-08 决定）。 */
+/** 罐设置字段（显示顺序）。密度：单位未与设备对齐，本期只读（用户 2026-11-08 决定）。三项修正不限范围（#28，用户决定）。 */
 export const TANK_FIELDS: FieldDef<TankKey>[] = [
   {
     key: 'alarmHighHighLevelMm',
@@ -78,24 +78,24 @@ export const TANK_FIELDS: FieldDef<TankKey>[] = [
     key: 'levelCorrectionMm',
     unit: 'mm',
     kind: 'number',
-    min: -100,
-    max: 100,
+    min: -Infinity,
+    max: Infinity,
     editable: true,
   },
   {
     key: 'waterCorrectionMm',
     unit: 'mm',
     kind: 'number',
-    min: -100,
-    max: 100,
+    min: -Infinity,
+    max: Infinity,
     editable: true,
   },
   {
     key: 'tempCorrectionC',
     unit: '℃',
     kind: 'number',
-    min: -10,
-    max: 10,
+    min: -Infinity,
+    max: Infinity,
     editable: true,
   },
   { key: 'oilTypeIndex', kind: 'oil', min: 0, max: 39, editable: true },
@@ -171,6 +171,11 @@ export const DEVICE_FIELDS: FieldDef<DeviceKey>[] = [
     editable: true,
   },
 ];
+
+/** 可负的小数字段（三项修正）旁边放正负号切换：部分手机键盘打不出负号（#30）。 */
+export function hasSignToggle(f: FieldDef): boolean {
+  return f.kind === 'number' && f.min < 0;
+}
 
 /** 表单草稿：键 → 用户输入的数（undefined/null = 没填） */
 export type Draft = Record<string, number | null | undefined>;

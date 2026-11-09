@@ -122,7 +122,7 @@
   - 当前值只来自设备回报（`tank-settings` / `device-settings` + `reportedAt`），null 显示「—」、0 照常显示，**不乐观更新**。
   - **没有逐台开放**（2026-11-09 用户决定）：管理员打开参数页即可直接修改；云端只剩部署级总闸，关闭时提交得到
     `config_commands_disabled`。整机设置只有平台管理员能改。
-  - 只发改动字段；本地预检在 `utils/deviceConfig.ts`（范围同云端 `config_args.go`，四级液位顺序用当前值+改动合并，0 = 不启用），云端/设备才是裁决。
+  - 只发改动字段；本地预检在 `utils/deviceConfig.ts`（范围同云端 `config_args.go`，四级液位顺序用当前值+改动合并，0 = 不启用），云端/设备才是裁决。三项修正不限范围（#28，用户决定）。`InputNumber` 不传 `min/max` 和小数 `step`（否则失焦静默改值、1000 显示成 1000.0）；修正框带 ± 切换（#30）。
   - 提交（`ConfigSubmitModal`）：打开确认弹窗生成一次 `requestId`，这次确认的重试都复用；确认时重读设备列表，油站变了就不发并刷新；
     `expectedStationId` 发**表单打开时**的值。超时/`command_delivery_unconfirmed`：先 `?requestId=` 找回，找不到只给「用同一提交编号重试」，
     **绝不换新编号自动重发**。`config_command_in_flight` 跳到在途命令。
@@ -185,7 +185,7 @@
 - **油罐示意图（GitHub issue #28）**：`TankCard`（设备总览与详情实时数据共用）每个罐卡片左侧放一张通用卧罐图
   `public/images/tank-generic.png`，取自安卓端 `app/src/main/res/drawable-mdpi/max_oilcan.png`（裁掉空白、缩到 240 宽）。它**只是示意**：
   云端没有罐型字段（cloud#45），所以不声称是真实罐型，alt 写明「通用，非实际罐型」；图不随液位/状态变色（不画假液位），
-  无数据、报警、探针未连接都靠标题里的文字标签。窄屏下图自动换到读数上方（`Col flex` 换行）。
+  无数据、报警、探针未连接都靠标题里的文字标签。窄屏下图自动换到读数上方（`Col flex` 换行）。总览 `xl` 起每行 4 个罐（#29）。
   **右侧读数按设备显示器样式（#21，`components/TankReadout.tsx`，总览与详情共用）**：深蓝底白字标题条「罐号 + 介质」（报警/探针标签也在条里），
   下面固定五行 液位 → 容积 → 水高 → 温度 → 质量，标签/数值/单位三列对齐（真 `<table>`），一位小数，0 显示 0.0、缺失「--」；
   中文单位 毫米/升/℃/千克，英文 mm/L/℃/kg（`pages.console.tank.unit.*`）。详情页的水体积、空容、占比放在下方「更多读数」。罐型有了再按 `gunType` 换立罐图

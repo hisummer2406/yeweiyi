@@ -3,7 +3,7 @@ import { confirmAndSend } from '../../utils/configSubmit';
 import { describeError } from '../../utils/errors';
 import { formatLocalTime } from '../../utils/format';
 import { currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
-import { CORRECTION_SEND_FIELDS, buildArgs, mirrorToForm } from '../../utils/remoteConfig';
+import { CORRECTION_SEND_FIELDS, buildArgs, mirrorToForm, toggleSign } from '../../utils/remoteConfig';
 import { getTankSettings } from '../../utils/remoteConfigApi';
 import { get } from '../../utils/request';
 import { isReadOnlyRole } from '../../utils/roles';
@@ -190,6 +190,11 @@ Page({
   },
   onClosePicker() {
     this.setData({ pickerShow: false });
+  },
+  // 正负号切换（#30）：部分手机键盘打不出负号
+  onToggleSign(e: WechatMiniprogram.BaseEvent) {
+    const field = e.currentTarget.dataset.field as 'levelOffset' | 'waterOffset' | 'tempOffset';
+    this.setData({ [field]: toggleSign(String(this.data[field] ?? '')) });
   },
   onLevelInput(e: WechatMiniprogram.Input) {
     this.setData({ levelOffset: e.detail.value });

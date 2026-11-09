@@ -167,6 +167,60 @@ describe('SettingsTab', () => {
     expect(await screen.findByText('设备已接收，等待执行结果')).toBeTruthy();
   });
 
+  it('keeps a 1000 mm correction through blur, confirm and submit (#28)', async () => {
+    issueConfigCommand.mockResolvedValue({
+      command: command(),
+      replayed: false,
+    });
+    render(<SettingsTab device="D1" />);
+    const input = (await screen.findByLabelText(
+      '液位修正',
+    )) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '1000' } });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 });
+    fireEvent.blur(input);
+    expect(input.value).toBe('1000');
+    const dialog = await openConfirm();
+    expect(within(dialog).getByText('1000 mm')).toBeTruthy();
+    await confirm(dialog);
+    expect(issueConfigCommand.mock.calls[0][1].args).toEqual({
+      tank: 1,
+      levelCorrectionMm: 1000,
+    });
+  });
+
+  it('keeps an out-of-range value, explains it and blocks the submit (#28)', async () => {
+    render(<SettingsTab device="D1" />);
+    const input = (await screen.findByLabelText(
+      '高温报警',
+    )) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '120' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('120');
+    expect(screen.getByText('超出范围（-50～100）')).toBeTruthy();
+    expect(
+      (
+        screen.getAllByRole('button', {
+          name: '下发到设备',
+        })[0] as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it('flips a correction with the sign button, no keyboard minus needed (#30)', async () => {
+    render(<SettingsTab device="D1" />);
+    const input = (await screen.findByLabelText(
+      '水位修正',
+    )) as HTMLInputElement;
+    const sign = screen.getByRole('button', { name: '水位修正 切换正负号' });
+    expect((sign as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(input, { target: { value: '1.5' } });
+    fireEvent.click(sign);
+    expect(input.value).toBe('-1.5');
+    fireEvent.click(sign);
+    expect(input.value).toBe('1.5');
+  });
+
   it('sends nothing when the confirmation is cancelled', async () => {
     render(<SettingsTab device="D1" />);
     await editHighLevel('610');

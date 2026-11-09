@@ -330,6 +330,7 @@ export const zh: Record<string, string> = {
   "backfill.previewBody": "罐号 {tank}\n时间 {time}\n前高度 {level}mm\n升数 {volume}L",
   "backfill.notSelected": "未选择",
   "calibration.navTitle": "参数修正",
+  "calibration.toggleSign": "切换正负号",
   "calibration.levelOffset": "液位修正",
   "calibration.waterOffset": "水位修正",
   "calibration.tempOffset": "温度修正",

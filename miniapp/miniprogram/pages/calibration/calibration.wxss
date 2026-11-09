@@ -13,6 +13,21 @@
   margin-left: 8rpx;
 }
 
+/* 正负号切换（#30）：触控区不小于 64rpx */
+.cb-sign {
+  flex: none;
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  margin-right: 8rpx;
+  text-align: center;
+  font-size: 36rpx;
+  color: #131313;
+  border: 1rpx solid #d9d9d9;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+}
+
 /* 只读数值（设备当前值）：与输入框同宽同对齐，单位位置一致 */
 .cb-num {
   width: 170rpx;

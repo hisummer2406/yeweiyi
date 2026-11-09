@@ -296,9 +296,9 @@ const ConsoleDevices: React.FC = () => {
         />
       )}
       {g.state === 'ok' && g.telemetry && (
-        <Row gutter={[16, 16]}>
+        <Row gutter={[8, 8]}>
           {g.telemetry.tanks.map((t) => (
-            <Col key={t.index} xs={24} md={12} xl={8}>
+            <Col key={t.index} xs={24} sm={12} lg={8} xl={6}>
               <TankCard
                 tank={t}
                 onClick={() =>

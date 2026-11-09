@@ -59,6 +59,15 @@ describe('checkArgs', () => {
       checkArgs(DEVICE_FIELDS, null, { inStockTimeThresholdSec: 0 }),
     ).toEqual([{ field: 'inStockTimeThresholdSec', code: 'range' }]);
   });
+  it('puts no range limit on the corrections (#28)', () => {
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, {
+        levelCorrectionMm: 1000,
+        waterCorrectionMm: -1000.5,
+        tempCorrectionC: -100.5,
+      }),
+    ).toEqual([]);
+  });
   it('checks the level order on merged values, 0 = disabled', () => {
     expect(
       checkArgs(TANK_FIELDS, tank as never, { alarmHighLevelMm: 610 }),
