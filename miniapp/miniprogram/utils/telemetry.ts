@@ -15,12 +15,9 @@ export type TankView = Tank & { alarmStateLabel: string; tankNoLabel: string; ke
 
 export function tankShapeFields(state: TankShapeState | undefined, tank: number) {
   const info = tankShapeOf(state, tank);
-  const label = tr(`tankDisplay.${info.status === 'error' ? 'failed' : info.shape}`);
   return {
     shape: info.shape,
-    shapeLabel: info.status === 'stale' ? `${label} · ${tr('tankDisplay.stale')}` : label,
-    // 未确认罐型时保留原有通用罐图；展示回退不改变真实的 unknown 状态。
-    shapePictureLabel: info.shape === 'unknown' ? `${tr('tankDisplay.generic')} · ${label}` : label,
+    shapeLabel: tr(`tankDisplay.${info.shape}`),
     shapeTime: info.reportedAt ? tr('tankDisplay.reportedAt', { time: formatLocalTime(info.reportedAt, currentLocale()) }) : '',
     shapeImage: `/assets/illustrations/${info.shape === 'vertical' ? 'tank-vertical-home.png' : 'tank-horizontal-home.png'}`,
   };

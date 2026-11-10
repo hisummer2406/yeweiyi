@@ -19,8 +19,7 @@ export default function TankShapeLabel({ info }: { info: TankShapeInfo }) {
           : undefined
       }
     >
-      {text(info.status === 'error' ? 'failed' : info.shape)}
-      {info.status === 'stale' ? ` · ${text('stale')}` : ''}
+      {text(info.shape)}
     </span>
   );
 }

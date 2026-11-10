@@ -72,10 +72,10 @@ describe('SnapshotTab', () => {
     getTankSettings.mockRejectedValue({ status: 503 });
     render(<SnapshotTab device="D1" />);
     expect(await screen.findByText(/READINGS-AVAILABLE/)).toBeTruthy();
-    expect(await screen.findByText('罐型读取失败')).toBeTruthy();
     expect(
-      screen.getByAltText('1号罐示意图（罐型未知）').getAttribute('src'),
-    ).toBe('/images/tank-unknown.svg');
+      (await screen.findByAltText('1号罐示意图（卧罐）')).getAttribute('src'),
+    ).toBe('/images/tank-generic.png');
+    expect(screen.queryByText(/罐型未知|罐型读取失败/)).toBeNull();
   });
 
   it('drops a late response of the previous device after switching', async () => {

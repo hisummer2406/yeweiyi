@@ -8,7 +8,8 @@ export type TankShapeState = {
   rows: TankShapeRow[];
   status: 'loading' | 'ok' | 'error' | 'stale';
 };
-export type TankShape = 'horizontal' | 'vertical' | 'unknown';
+// 未上报或无法识别的罐型一律按卧罐处理（产品决定 2026-11-10），不展示「罐型未知」。
+export type TankShape = 'horizontal' | 'vertical';
 
 export const emptyTankShapes = (): TankShapeState => ({
   rows: [],
@@ -26,12 +27,7 @@ export function tankShapeFailure(
 
 export function tankShapeOf(state: TankShapeState | undefined, tank: number) {
   const row = state?.rows.find((r) => r.tank === tank);
-  const shape: TankShape =
-    row?.tankShape === 0
-      ? 'horizontal'
-      : row?.tankShape === 1
-        ? 'vertical'
-        : 'unknown';
+  const shape: TankShape = row?.tankShape === 1 ? 'vertical' : 'horizontal';
   return {
     shape,
     reportedAt: row?.reportedAt || '',

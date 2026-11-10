@@ -24,14 +24,14 @@ const WATER_COLOR = '#1677ff';
 // 填充窗口只覆盖两道竖箍之间 x=109..190、y=56..299，不含底座与顶部横边。
 
 /**
- * 罐型来自设备配置镜像；填充只来自这个罐自己的读数。未知罐型不推测几何形状。
+ * 罐型来自设备配置镜像，未上报按卧罐；填充只来自这个罐自己的读数。
  * 状态不只靠颜色：报警、探针未连接都在卡片上有文字标签，悬停有「油 x% 水 y%」。
  */
 const TankPicture: React.FC<{
   tank: API.Tank;
   width?: number;
   shape?: TankShape;
-}> = ({ tank, width = 96, shape = 'unknown' }) => {
+}> = ({ tank, width = 96, shape = 'horizontal' }) => {
   const intl = useIntl();
   const shapeLabel = intl.formatMessage({
     id: `pages.console.tank.shape.${shape}`,
@@ -50,7 +50,9 @@ const TankPicture: React.FC<{
         data-tank-shape={shape}
         style={{
           position: 'absolute',
-          inset: shape === 'vertical' ? '0 26.03%' : 0,
+          // 立罐细长，限在框高内只有卧罐一半面积、显得小：视口放大到框高的 113.6%（上下各超出 6.82%），
+          // 宽按素材可见范围 196×293 换算后水平居中；内部百分比相对视口，比例不变。与小程序首页一致。
+          inset: shape === 'vertical' ? '-6.82% 22.76%' : 0,
           overflow: 'hidden',
         }}
       >
@@ -58,9 +60,7 @@ const TankPicture: React.FC<{
           src={
             shape === 'vertical'
               ? '/images/tank-vertical.png'
-              : shape === 'horizontal'
-                ? '/images/tank-generic.png'
-                : '/images/tank-unknown.svg'
+              : '/images/tank-generic.png'
           }
           alt={intl.formatMessage(
             { id: 'pages.console.tank.shape.picture' },
@@ -79,7 +79,7 @@ const TankPicture: React.FC<{
               : { display: 'block', width: '100%', height: '100%' }
           }
         />
-        {shape !== 'unknown' && f.fillState !== 'none' && (
+        {f.fillState !== 'none' && (
           <div
             data-fill-state={f.fillState}
             title={`油 ${f.fillOilPct}%　水 ${f.fillWaterPct}%`}

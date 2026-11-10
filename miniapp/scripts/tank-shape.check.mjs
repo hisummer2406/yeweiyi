@@ -68,24 +68,23 @@ let count=0;
 async function test(name, fn) { pending=[]; storage.set('token',jwt(1)); await fn(); count++; console.log('ok -',name); }
 
 await test('strict type mapping and sparse tank identity', async () => {
- for(const [value, expected] of [[0,'horizontal'],[1,'vertical'],[null,'unknown'],[2,'unknown']]) {
+ for(const [value, expected] of [[0,'horizontal'],[1,'vertical'],[null,'horizontal'],[2,'horizontal']]) {
   const state={rows:rows(value),status:'ok'};
   assert.equal(tankShapeOf(state,3).shape,expected);
-  assert.equal(tankShapeOf(state,1).shape,'unknown');
+  assert.equal(tankShapeOf(state,1).shape,'horizontal');
  }
 });
-await test('unknown home shape keeps the original illustration without fabricating a known type', async () => {
+await test('a tank without a reported shape is shown as horizontal, never as unknown', async () => {
  const views=toTankViews(snapshot,'D');
- assert.equal(views[0].shape,'unknown');
+ assert.equal(views[0].shape,'horizontal');
  assert.equal(views[0].shapeImage,'/assets/illustrations/tank-horizontal-home.png');
- assert.match(views[0].shapePictureLabel,/通用示意图/);
- assert.match(views[0].shapePictureLabel,/罐型未知/);
+ assert.equal(views[0].shapeLabel,'卧罐');
 });
 await test('home readings render before config, then merge by real tank number', async () => {
  const p=home(); const loading=p.loadDevice('D',1);
  answer(take('/telemetry/latest'),snapshot); await tick();
  assert.equal(p.data.groups[0].tanks[0].oilLevelMm,100);
- assert.equal(p.data.groups[0].tanks[0].shape,'unknown');
+ assert.equal(p.data.groups[0].tanks[0].shape,'horizontal');
  answer(take('/tank-settings'),{tanks:rows(1)}); await loading;
  assert.equal(p.data.groups[0].tanks[0].shape,'vertical');
  assert.equal(p.data.groups[0].tanks.length,1);
@@ -102,15 +101,15 @@ await test('home keeps old shape only on transient failure, not 403', async () =
  const p=home(); p.data.groups[0].shapes={rows:rows(1),status:'ok'};
  p.data.groups[0].tanks=toTankViews(snapshot,'D',p.data.groups[0].shapes);
  let load=p.loadShapes('D',1); answer(take('/tank-settings'),{},503); await load;
- assert.match(p.data.groups[0].tanks[0].shapeLabel,/未更新/);
+ assert.equal(p.data.groups[0].tanks[0].shape,'vertical');
  load=p.loadShapes('D',1); answer(take('/tank-settings'),{},403); await load;
- assert.equal(p.data.groups[0].tanks[0].shape,'unknown');
+ assert.equal(p.data.groups[0].tanks[0].shape,'horizontal');
  assert.equal(p.data.groups[0].shapes.rows.length,0);
 });
 await test('detail receives readings independently, then shape and its own reportedAt', async () => {
  const p=detail(); const load=p.loadSnapshot();
  answer(take('/telemetry/latest'),snapshot); await load;
- assert.equal(p.data.tanks[0].shape,'unknown');
+ assert.equal(p.data.tanks[0].shapeTime,'');
  answer(take('/tank-settings'),{tanks:rows(0)}); await tick();
  assert.equal(p.data.tanks[0].shape,'horizontal');
  assert.match(p.data.tanks[0].shapeTime,/罐型上报时间/);

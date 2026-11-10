@@ -144,10 +144,14 @@ page {
   overflow: hidden;
 }
 
-/* 原始设备素材 500×320，非透明范围 x=70..266、y=24..317。用视口裁掉透明边，不重绘素材。 */
+/* 原始设备素材 500×320，非透明范围 x=70..266、y=24..317（196×293）。用视口裁掉透明边，不重绘素材。
+   立罐细长，限在 176rpx 框高里只有卧罐一半面积、显得小：视口放到 200rpx 高（宽 200×196/293≈134rpx），
+   上下各超出罐框 12rpx、水平居中；首页罐行最矮 274rpx，放得下。内部百分比相对视口，比例不变。 */
 .home-tank-crop-vertical {
-  left: 25.48%;
-  right: 25.48%;
+  top: -12rpx;
+  bottom: -12rpx;
+  left: 22.13%;
+  right: 22.13%;
 }
 
 .home-tank-crop-vertical .home-tank-img {
@@ -279,9 +283,7 @@ page {
 .hs-probe-status {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8rpx;
-  min-height: 24rpx;
+  height: 24rpx;
   font-size: var(--font-status);
   line-height: 24rpx;
 }
@@ -320,7 +322,7 @@ page {
 }
 
 .home-compact .hs-probe-status {
-  min-height: 22rpx;
+  height: 22rpx;
   line-height: 22rpx;
 }
 

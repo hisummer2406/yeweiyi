@@ -6,7 +6,7 @@ import { alarmColor, alarmLabel } from '@/utils/telemetry';
 import styles from './TankDisplay.module.less';
 import TankPicture from './TankPicture';
 import TankReadout from './TankReadout';
-import TankShapeLabel, { type TankShapeInfo } from './TankShapeLabel';
+import type { TankShapeInfo } from './TankShapeLabel';
 
 /** 总览罐卡：罐图与五行读数按卡片宽度成比例排布，状态文字独立展示。 */
 export const TankCard: React.FC<{
@@ -33,7 +33,6 @@ export const TankCard: React.FC<{
           tank={tank}
           extra={
             <>
-              <TankShapeLabel info={shapeInfo} />
               {tank.alarmState !== 'NORMAL' && (
                 <Tag color={alarmColor(tank.alarmState)}>
                   {alarmLabel(tank.alarmState)}

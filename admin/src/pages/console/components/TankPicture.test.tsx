@@ -101,7 +101,7 @@ describe('TankPicture liquid level', () => {
   });
 });
 
-it('uses a separate vertical image and fill window, and never guesses an unknown shape', () => {
+it('uses a separate vertical image and fill window, and draws a tank without a reported shape as horizontal', () => {
   const v = render(<TankPicture shape="vertical" tank={tank()} />);
   expect(v.getByRole('img').getAttribute('src')).toBe(
     '/images/tank-vertical.png',
@@ -112,7 +112,7 @@ it('uses a separate vertical image and fill window, and never guesses an unknown
   v.unmount();
   const u = render(<TankPicture tank={tank()} />);
   expect(u.getByRole('img').getAttribute('src')).toBe(
-    '/images/tank-unknown.svg',
+    '/images/tank-generic.png',
   );
-  expect(u.container.querySelector('[data-fill-state]')).toBeNull();
+  expect(u.container.querySelector('[data-fill-state]')).not.toBeNull();
 });

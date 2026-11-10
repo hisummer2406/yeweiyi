@@ -68,7 +68,7 @@
       >
         <view class="home-tank">
           <view class="home-tank-crop home-tank-crop-{{t.shape}}">
-          <image class="home-tank-img" src="{{t.shapeImage}}" mode="scaleToFill" aria-label="{{t.tankNoLabel}} {{t.shapePictureLabel}}" />
+          <image class="home-tank-img" src="{{t.shapeImage}}" mode="scaleToFill" aria-label="{{t.tankNoLabel}} {{t.shapeLabel}}" />
           <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化 -->
           <view wx:if="{{t.fillState !== 'none'}}" class="home-tank-body">
             <view class="fill fill-water" style="height:{{t.fillWaterPct}}%"></view>
@@ -87,7 +87,7 @@
           <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
           <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
-          <view class="hs-probe-status"><text>{{t.shapePictureLabel}}</text><text wx:if="{{!t.probeConnected}}" class="hs-probe-off">{{text.probeOff}}</text></view>
+          <view class="hs-probe-status"><text wx:if="{{!t.probeConnected}}" class="hs-probe-off">{{text.probeOff}}</text></view>
         </view>
       </view>
     </view>

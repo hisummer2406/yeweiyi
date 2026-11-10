@@ -1,12 +1,8 @@
 // zh texts. Keys are shared by zh/en/es; scripts/i18n.check.mjs fails when they drift.
 // Spanish is machine-translated by Claude and still to be reviewed by a person who knows the domain terms.
 export const zh: Record<string, string> = {
-  "tankDisplay.generic": "通用示意图",
   "tankDisplay.horizontal": "卧罐",
   "tankDisplay.vertical": "立罐",
-  "tankDisplay.unknown": "罐型未知",
-  "tankDisplay.failed": "罐型读取失败",
-  "tankDisplay.stale": "未更新",
   "tankDisplay.reportedAt": "罐型上报时间 {time}",
 
   // common, errors, enum labels, notes (utils/)

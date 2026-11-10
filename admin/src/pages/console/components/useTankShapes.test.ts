@@ -47,16 +47,16 @@ describe('罐型配置独立读取', () => {
     expect(getTankSettings.mock.calls.map((c) => c[0])).not.toContain('old5');
   });
 
-  it('按实际罐号匹配；0 是卧罐，未知值与缺失不猜测', () => {
+  it('按实际罐号匹配；缺失或无法识别按卧罐', () => {
     for (const [value, expected] of [
       [0, 'horizontal'],
       [1, 'vertical'],
-      [null, 'unknown'],
-      [2, 'unknown'],
+      [null, 'horizontal'],
+      [2, 'horizontal'],
     ] as const) {
       const state = { rows: rows(value), status: 'ok' as const };
       expect(tankShapeOf(state, 3).shape).toBe(expected);
-      expect(tankShapeOf(state, 1).shape).toBe('unknown');
+      expect(tankShapeOf(state, 1).shape).toBe('horizontal');
     }
   });
 

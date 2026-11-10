@@ -1,9 +1,6 @@
 export default {
   'pages.console.tank.shape.horizontal': '卧罐',
   'pages.console.tank.shape.vertical': '立罐',
-  'pages.console.tank.shape.unknown': '罐型未知',
-  'pages.console.tank.shape.failed': '罐型读取失败',
-  'pages.console.tank.shape.stale': '未更新',
   'pages.console.tank.shape.reportedAt': '罐型上报时间 {time}',
   'pages.console.tank.shape.picture': '{index}号罐示意图（{shape}）',
 
