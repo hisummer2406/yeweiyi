@@ -1,6 +1,14 @@
 // en texts. Keys are shared by zh/en/es; scripts/i18n.check.mjs fails when they drift.
 // Spanish is machine-translated by Claude and still to be reviewed by a person who knows the domain terms.
 export const en: Record<string, string> = {
+  "tankDisplay.generic": "Generic illustration",
+  "tankDisplay.horizontal": "Horizontal tank",
+  "tankDisplay.vertical": "Vertical tank",
+  "tankDisplay.unknown": "Tank shape unknown",
+  "tankDisplay.failed": "Tank shape unavailable",
+  "tankDisplay.stale": "Not updated",
+  "tankDisplay.reportedAt": "Shape reported {time}",
+
   // common, errors, enum labels, notes (utils/)
   "common.comingSoon": "This feature is coming soon.",
   "common.more": "More…",

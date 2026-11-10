@@ -19,8 +19,10 @@ import {
   telemetryEmptyMessageId,
 } from '@/services/ant-design-pro/telemetry';
 import { parseTankParam, pickTank } from '@/utils/tankPick';
+import { tankShapeOf } from '@/utils/tankShape';
 import { fmtTime } from '@/utils/telemetry';
 import { REFRESH_MS } from '../components/useRecordsQuery';
+import { useTankShapes } from '../components/useTankShapes';
 import TankDetail from './TankDetail';
 
 type State =
@@ -59,6 +61,7 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
   const [params, setParams] = useSearchParams();
   const requestedTank = parseTankParam(params.get('tank'));
   const seq = useRef(0);
+  const shapes = useTankShapes([device]);
 
   const load = useCallback(
     async (fresh: boolean) => {
@@ -90,9 +93,16 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
 
   useEffect(() => {
     void load(true);
-    const timer = setInterval(() => void load(false), REFRESH_MS);
+    const timer = setInterval(() => {
+      if (!document.hidden) void load(false);
+    }, REFRESH_MS);
+    const visible = () => {
+      if (!document.hidden) void load(false);
+    };
+    document.addEventListener('visibilitychange', visible);
     return () => {
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', visible);
       seq.current++; // 卸载或换设备后丢弃在途响应
     };
   }, [load]);
@@ -178,7 +188,10 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
             />
           )}
           {/* 罐号 + 介质在 TankDetail 的显示器样式标题条里（#21），这里不再重复一行标题 */}
-          <TankDetail tank={tank} />
+          <TankDetail
+            tank={tank}
+            shapeInfo={tankShapeOf(shapes.states[device], tank.index)}
+          />
         </Space>
       );
       break;
@@ -191,7 +204,10 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
         <Button
           icon={<ReloadOutlined />}
           loading={refreshing}
-          onClick={() => void load(false)}
+          onClick={() => {
+            void load(false);
+            shapes.refresh();
+          }}
         >
           {t('pages.console.records.refresh')}
         </Button>

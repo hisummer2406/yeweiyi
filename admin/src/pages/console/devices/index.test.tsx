@@ -12,6 +12,8 @@ import zhPages from '@/locales/zh-CN/pages';
 const push = vi.fn();
 const listDevices = vi.fn();
 const getLatestTelemetry = vi.fn();
+const getTankSettings = vi.fn().mockResolvedValue([]);
+vi.mock('@/services/ant-design-pro/deviceConfig', () => ({ getTankSettings }));
 const listStations = vi.fn();
 const listCustomers = vi.fn();
 let initialSearch = '';
@@ -80,6 +82,7 @@ const telemetry = (name: string): API.LatestTelemetry => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getTankSettings.mockReset().mockResolvedValue([]);
   initialSearch = '';
   canPlatformAdmin = false;
   listStations.mockResolvedValue([]);
@@ -88,6 +91,28 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ConsoleDevices (overview) after extracting TankCard', () => {
+  it('merges device configuration by tank number and renders both reported shapes', async () => {
+    listDevices.mockResolvedValue([device('D1')]);
+    const base = telemetry('D1');
+    getLatestTelemetry.mockResolvedValue({
+      ...base,
+      tanks: [{ ...base.tanks[0], index: 3 }, base.tanks[0]],
+    });
+    getTankSettings.mockResolvedValue([
+      { tank: 1, tankShape: 1, reportedAt: '2026-01-01T00:00:00Z' },
+      { tank: 3, tankShape: 0, reportedAt: '2026-01-01T00:00:00Z' },
+    ]);
+    render(<ConsoleDevices />);
+    expect(
+      (await screen.findByAltText('1号罐示意图（立罐）')).getAttribute('src'),
+    ).toBe('/images/tank-vertical.png');
+    expect(screen.getByAltText('3号罐示意图（卧罐）').getAttribute('src')).toBe(
+      '/images/tank-generic.png',
+    );
+    expect(getTankSettings).toHaveBeenCalledTimes(1);
+    expect(getTankSettings).toHaveBeenCalledWith('D1');
+  });
+
   it('still shows the alarm and probe tags on the card', async () => {
     listDevices.mockResolvedValue([device('D1')]);
     getLatestTelemetry.mockResolvedValue(telemetry('D1'));

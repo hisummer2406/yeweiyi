@@ -182,14 +182,11 @@
   同一请求（云端返回原任务并继续）；状态读取失败只提示、继续取，不当完成也不当失败。请求超时（status 0）结果未知：先按设备编号
   `GET /api/device-purges?deviceName=` 找回任务，找不到也**不自动重发**。打开弹窗时先找这台设备未完成的任务，页面刷新或上次中途关闭后能接着看。
   后台不编排多个删除请求、不碰数据库/ThingsBoard；完成后重新接入同一编号要先在 ThingsBoard 重新预登记（弹窗完成页有提示）。
-- **油罐示意图（GitHub issue #28）**：`TankCard`（设备总览与详情实时数据共用）每个罐卡片左侧放一张通用卧罐图
-  `public/images/tank-generic.png`，取自安卓端 `app/src/main/res/drawable-mdpi/max_oilcan.png`（裁掉空白、缩到 240 宽）。它**只是示意**：
-  云端没有罐型字段（cloud#45），所以不声称是真实罐型，alt 写明「通用，非实际罐型」；图不随液位/状态变色（不画假液位），
-  缺失读数用「--」，报警、探针未连接用读数下方的文字标签。总览罐图与读数按卡片宽度成比例并排，详情窄屏时图置于读数上方（`TankDisplay.module.less` 容器查询）。总览 `xl` 起每行 4 个罐（#29）。
+- **油罐罐型展示（Issue #40，2026-11-10）**：监控页通过现有 `tank-settings` 独立读取设备回报罐型，由 `useTankShapes` 每分钟复核当前可见设备，隐藏停止、恢复／手动刷新重读，账号或设备切换丢弃旧响应。总览与详情复用 `TankPicture`：卧罐用 `tank-generic.png`，立罐用从设备端复制的 `tank-vertical.png`（CSS 裁掉透明边），未知用中性占位。文字与 alt 明确罐型；配置读取失败不阻断遥测，临时失败标注未更新，401/403/404 清除罐型缓存。配置时间来自 `reportedAt`。
+  缺失读数用「--」，报警、探针未连接用读数下方文字；保持 `TankDisplay.module.less` 布局与总览 `xl` 起每行四罐（#29）。实现及验证边界见 `openspec/changes/sync-reported-tank-shape/`。
   **右侧读数按设备显示器样式（#21，`components/TankReadout.tsx`，总览与详情共用）**：深蓝底白字标题条「罐号 + 介质」，报警/探针标签置于读数下方，避免挤压标题；
   下面固定五行 液位 → 容积 → 水高 → 温度 → 质量，标签/数值/单位三列对齐（真 `<table>`），一位小数，0 显示 0.0、缺失「--」；
-  中文单位 毫米/升/℃/千克，英文 mm/L/℃/kg（`pages.console.tank.unit.*`）。详情页的水体积、空容、占比放在下方「更多读数」。罐型有了再按 `gunType` 换立罐图
-  （安卓 `min_oilcan.png`）。
+  中文单位 毫米/升/℃/千克，英文 mm/L/℃/kg（`pages.console.tank.unit.*`）。详情页的水体积、空容、占比放在下方「更多读数」。
   **液位填充（2026-11-02）**：`TankPicture` 在两道箍之间的窗口里按该罐真实的 `oilRatioPct`/`waterRatioPct` 画油和水（水在下、油在上，
   `utils/tankFill.ts`，规则同小程序）：探针未连接不画，占比异常夹到 0..100，报警红、故障灰；窗口位置是对着 `tank-generic.png` 逐像素量的，
   **换图要重新量**（`TankPicture.tsx` 里的 `WINDOW`）。

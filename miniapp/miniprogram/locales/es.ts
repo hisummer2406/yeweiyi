@@ -1,6 +1,14 @@
 // es texts. Keys are shared by zh/en/es; scripts/i18n.check.mjs fails when they drift.
 // Spanish is machine-translated by Claude and still to be reviewed by a person who knows the domain terms.
 export const es: Record<string, string> = {
+  "tankDisplay.generic": "Ilustración genérica",
+  "tankDisplay.horizontal": "Tanque horizontal",
+  "tankDisplay.vertical": "Tanque vertical",
+  "tankDisplay.unknown": "Tipo de tanque desconocido",
+  "tankDisplay.failed": "Tipo de tanque no disponible",
+  "tankDisplay.stale": "Sin actualizar",
+  "tankDisplay.reportedAt": "Tipo informado {time}",
+
   // common, errors, enum labels, notes (utils/)
   "common.comingSoon": "Esta función estará disponible próximamente.",
   "common.more": "Más…",

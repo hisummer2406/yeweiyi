@@ -1,4 +1,12 @@
 export default {
+  'pages.console.tank.shape.horizontal': 'Horizontal tank',
+  'pages.console.tank.shape.vertical': 'Vertical tank',
+  'pages.console.tank.shape.unknown': 'Tank shape unknown',
+  'pages.console.tank.shape.failed': 'Tank shape unavailable',
+  'pages.console.tank.shape.stale': 'Not updated',
+  'pages.console.tank.shape.reportedAt': 'Shape reported {time}',
+  'pages.console.tank.shape.picture': 'Tank {index} illustration ({shape})',
+
   'pages.layouts.userLayout.title': 'Level gauge cloud platform admin',
   'pages.login.accountLogin.errorMessage': 'Incorrect username or password',
   'pages.login.failure': 'Login failed, please try again!',

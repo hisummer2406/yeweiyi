@@ -4,14 +4,16 @@ import { onNetworkBack } from '../../utils/network';
 import { ApiError, get } from '../../utils/request';
 import { FOLLOW_NOTICES, followStationDevice, stationIdFromKey } from '../../utils/stationDevice';
 import { AlarmSocket, type SocketState } from '../../utils/ws';
-import { roleFromToken } from '../../utils/auth';
+import { roleFromToken, userKeyFromToken } from '../../utils/auth';
 import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
 import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
 import { formatLocalTime } from '../../utils/format';
 import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
-import { toTankViews, type TankView } from '../../utils/telemetry';
+import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
+import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
+import { getTankSettings } from '../../utils/remoteConfigApi';
 import { telemetryFailure } from '../../utils/failureState';
 import {
   ALARM_TYPE_KEYS,
@@ -127,6 +129,10 @@ Page({
   // old device can write into the new device's view.
   deviceGen: 0,
   snapshotSeq: 0,
+  shapeSeq: 0,
+  shapeState: emptyTankShapes(),
+  shapeAccount: '',
+  shapeTimer: null as ReturnType<typeof setInterval> | null,
   commandsSeq: 0,
   // The station this page was opened from (contract v1.2 §8.1): a number only when opened from a
   // station entry on the home page; the device then follows the station's current device
@@ -377,6 +383,8 @@ Page({
     if (this.unloaded) return;
     this.deviceGen++;
     this.snapshotSeq++;
+    this.shapeSeq++;
+    this.shapeState = emptyTankShapes();
     this.commandsSeq++;
     this.requestedTank = undefined;
     this.allTanks = [];
@@ -415,6 +423,8 @@ Page({
 
   onShow() {
     this.setData({ text: texts('detail') });
+    this.stopShapePoll();
+    this.shapeTimer = setInterval(() => { if (this.data.deviceActive) void this.loadShapes(); }, 60_000);
     // Back from another page (or the app was in the background): the back office may have replaced the
     // station's device meanwhile.
     this.refreshAssociation();
@@ -429,7 +439,14 @@ Page({
 
   onHide() {
     this.wasHidden = true;
+    this.shapeSeq++;
+    this.stopShapePoll();
     this.stopCommandsPoll();
+  },
+
+  stopShapePoll() {
+    if (this.shapeTimer) clearInterval(this.shapeTimer);
+    this.shapeTimer = null;
   },
 
   // Reads the tab on screen again (nothing happens for a tab not loaded yet or without a device).
@@ -446,6 +463,8 @@ Page({
   },
 
   onUnload() {
+    this.shapeSeq++;
+    this.stopShapePoll();
     this.stopNet?.();
     this.stopNet = null;
     setActiveScene(null);
@@ -529,12 +548,13 @@ Page({
     if (!this.data.device) return Promise.resolve();
     const device = this.data.device as string;
     const seq = ++this.snapshotSeq;
+    void this.loadShapes();
     this.setData({ loading: true });
     return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
         if (seq !== this.snapshotSeq) return;
         this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), snapshotLoaded: true, snapshotError: '', emptyNote: '' });
-        this.applyTanks(toTankViews(res, device), false);
+        this.applyTanks(toTankViews(res, device, this.shapeState), false);
         this.markSnapshotFresh();
       })
       .catch((err: ApiError) => {
@@ -551,6 +571,12 @@ Page({
           this.applyTanks([], true);
           this.markSnapshotFresh();
         } else {
+          if ([401, 403].includes(err.status)) {
+            this.shapeSeq++;
+            this.shapeState = emptyTankShapes();
+            this.applyTanks([], false);
+            this.setData({ snapshotLoaded: false, snapshotTs: '' });
+          }
           // Nothing was ever loaded: say that reading failed (not "no data"), with a retry. Something was: keep
           // it and mark it out of date.
           if (this.data.snapshotLoaded) {
@@ -573,6 +599,24 @@ Page({
       .finally(() => {
         if (seq === this.snapshotSeq) this.setData({ loading: false });
       });
+  },
+
+  loadShapes(): Promise<void> {
+    const device = this.data.device;
+    if (!device || this.wasHidden) return Promise.resolve();
+    const seq = ++this.shapeSeq;
+    const account = userKeyFromToken(getToken());
+    if (account !== this.shapeAccount) {
+      this.shapeAccount = account;
+      this.shapeState = emptyTankShapes();
+      if (this.allTanks.length) this.applyTanks(this.allTanks.map((t) => ({ ...t, ...tankShapeFields(this.shapeState, t.index) })), this.neverReported);
+    }
+    const apply = (state: TankShapeState) => {
+      if (seq !== this.shapeSeq || device !== this.data.device || account !== userKeyFromToken(getToken()) || this.unloaded) return;
+      this.shapeState = state;
+      if (this.allTanks.length) this.applyTanks(this.allTanks.map((t) => ({ ...t, ...tankShapeFields(state, t.index) })), this.neverReported);
+    };
+    return getTankSettings(device).then((rows) => apply({ rows, status: 'ok' })).catch((error: ApiError) => apply(tankShapeFailure(this.shapeState, error.status)));
   },
 
   markSnapshotFresh() {

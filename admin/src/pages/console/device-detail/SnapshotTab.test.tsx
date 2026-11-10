@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
 const getLatestTelemetry = vi.fn();
+const getTankSettings = vi.fn().mockResolvedValue([]);
+vi.mock('@/services/ant-design-pro/deviceConfig', () => ({ getTankSettings }));
 
 let query = '';
 const setParams = vi.fn();
@@ -56,6 +58,7 @@ const telemetryOf = (oilType: string): API.LatestTelemetry => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getTankSettings.mockReset().mockResolvedValue([]);
   query = '';
 });
 afterEach(() => {
@@ -64,6 +67,17 @@ afterEach(() => {
 });
 
 describe('SnapshotTab', () => {
+  it('shows readings even when the independent configuration read fails', async () => {
+    getLatestTelemetry.mockResolvedValue(telemetryOf('READINGS-AVAILABLE'));
+    getTankSettings.mockRejectedValue({ status: 503 });
+    render(<SnapshotTab device="D1" />);
+    expect(await screen.findByText(/READINGS-AVAILABLE/)).toBeTruthy();
+    expect(await screen.findByText('罐型读取失败')).toBeTruthy();
+    expect(
+      screen.getByAltText('1号罐示意图（罐型未知）').getAttribute('src'),
+    ).toBe('/images/tank-unknown.svg');
+  });
+
   it('drops a late response of the previous device after switching', async () => {
     let resolveD1!: (v: API.LatestTelemetry) => void;
     getLatestTelemetry.mockImplementation((d: string) =>

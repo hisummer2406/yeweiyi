@@ -113,7 +113,7 @@ describe('TankCard', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('puts one generic picture on each tank, labelled with its own number', () => {
+  it('labels an unknown shape explicitly instead of guessing horizontal', () => {
     render(
       <>
         <TankCard tank={tank({ index: 1 })} onClick={() => {}} />
@@ -122,9 +122,9 @@ describe('TankCard', () => {
     );
     const imgs = screen.getAllByRole('img');
     expect(imgs).toHaveLength(2);
-    expect(imgs[0].getAttribute('alt')).toBe('1号罐示意图（通用，非实际罐型）');
-    expect(imgs[1].getAttribute('alt')).toBe('3号罐示意图（通用，非实际罐型）');
-    expect(imgs[0].getAttribute('src')).toBe('/images/tank-generic.png');
+    expect(imgs[0].getAttribute('alt')).toBe('1号罐示意图（罐型未知）');
+    expect(imgs[1].getAttribute('alt')).toBe('3号罐示意图（罐型未知）');
+    expect(imgs[0].getAttribute('src')).toBe('/images/tank-unknown.svg');
   });
 
   it('keeps the picture neutral: no-data, alarm and probe state stay as text', () => {

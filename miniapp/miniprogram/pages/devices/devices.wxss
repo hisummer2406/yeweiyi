@@ -135,6 +135,37 @@ page {
   height: 100%;
 }
 
+.home-tank-crop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+/* 原始设备素材 500×320，非透明范围 x=70..266、y=24..317。用视口裁掉透明边，不重绘素材。 */
+.home-tank-crop-vertical {
+  left: 25.48%;
+  right: 25.48%;
+}
+
+.home-tank-crop-vertical .home-tank-img {
+  position: absolute;
+  width: 255.1%;
+  height: 109.22%;
+  left: -35.71%;
+  top: -8.19%;
+  max-width: none;
+}
+
+.home-tank-crop-vertical .home-tank-body {
+  left: 19.9%;
+  width: 41.33%;
+  top: 10.92%;
+  height: 82.94%;
+}
+
 /* 填充只在罐身中间两道箍之间的那一列（不铺满整个罐、不含顶部人孔和底座），按 tank-horizontal-home.png 实测：
    左箍外沿 x=45–53、右箍 x=107–115，所以这一列是 x=54–106（宽 52），上下沿与罐身一致（y=26–165）。
    罐图按比例缩小后用百分比表示同一块区域（54/240、52/240、26/176、139/176），面积和位置不变。 */
@@ -248,7 +279,9 @@ page {
 .hs-probe-status {
   display: flex;
   align-items: center;
-  height: 24rpx;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  min-height: 24rpx;
   font-size: var(--font-status);
   line-height: 24rpx;
 }
@@ -287,7 +320,7 @@ page {
 }
 
 .home-compact .hs-probe-status {
-  height: 22rpx;
+  min-height: 22rpx;
   line-height: 22rpx;
 }
 

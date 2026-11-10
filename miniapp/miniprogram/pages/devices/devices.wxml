@@ -55,7 +55,7 @@
         <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">{{text.retry}}</button>
       </view>
 
-      <!-- 罐形状来自设备配置（设备端 gunType），云端尚未透出，见 yeweiyi-cloud#45；在此之前一律卧罐图 -->
+      <!-- 罐型来自 tank-settings；只按该设备的实际罐号合并，不从容积或介质猜测。 -->
       <view
         wx:for="{{g.tanks}}"
         wx:for-item="t"
@@ -67,11 +67,13 @@
         bindtap="onTapTank"
       >
         <view class="home-tank">
-          <image class="home-tank-img" src="/assets/illustrations/tank-horizontal-home.png" mode="aspectFit" />
+          <view class="home-tank-crop home-tank-crop-{{t.shape}}">
+          <image class="home-tank-img" src="{{t.shapeImage}}" mode="scaleToFill" aria-label="{{t.tankNoLabel}} {{t.shapePictureLabel}}" />
           <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化 -->
-          <view class="home-tank-body">
+          <view wx:if="{{t.fillState !== 'none'}}" class="home-tank-body">
             <view class="fill fill-water" style="height:{{t.fillWaterPct}}%"></view>
             <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%"></view>
+          </view>
           </view>
         </view>
         <view class="tank-info">
@@ -85,7 +87,7 @@
           <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
           <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
-          <view class="hs-probe-status"><text wx:if="{{!t.probeConnected}}" class="hs-probe-off">{{text.probeOff}}</text></view>
+          <view class="hs-probe-status"><text>{{t.shapePictureLabel}}</text><text wx:if="{{!t.probeConnected}}" class="hs-probe-off">{{text.probeOff}}</text></view>
         </view>
       </view>
     </view>

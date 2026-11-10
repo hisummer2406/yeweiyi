@@ -349,8 +349,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     from `oilRatioPct`/`waterRatioPct`; red on ALARM, grey on FAULT, nothing without a probe). The
     fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
     首页按设计图比例排布（2026-11-10）：数值 36rpx、标签 30rpx、单位 28rpx；较短屏幕用 32/28/24rpx。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
-    Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
-    device, `yeweiyi-cloud#45`).
+    Tank type comes from `tank-settings`; confirmed types select horizontal/vertical images. Before confirmation, keep a generic illustration with an explicit label; do not replace the tank with a question mark.
   - **我的记录 `records`** (tabBar) — the home page's current station (name on top) and five entries
     (报警/出库/入库/交班/库存), each opening `record-list?type=`. **No device picker**: no valid station
     (old cloud, ungrouped, none) → go choose one on the home page; empty or multi-device station → says
@@ -415,6 +414,10 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
 - `backfill` posts `POST /api/devices/:device/stock-events` (administrators): date + time (phone offset → RFC 3339,
   not in the future), level, volume, reason, one `requestId` per confirmation (a retry reuses it; the cloud replays).
 - **Not verified in DevTools, in the app, or against a real cloud/device.**
+
+## 罐型同步展示（Issue #40，2026-11-10）
+
+首页与详情独立读取现有 `tank-settings`，按设备及实际罐号合并；首页区分已确认的卧罐／立罐；罐型尚未确认或读取失败时保留原有通用罐图和液位，文字明确为通用示意，不再用问号替换。详情显示罐型及其上报时间。立罐用设备端 `min_oilcan.png` 的完整副本，通过 CSS 视口去掉透明边，液位窗口另行适配。保留四罐首屏布局和字号。配置每分钟复核，隐藏停止，恢复／手动刷新重读；临时失败可保留旧值并标注，401/403/404 清除罐型缓存，迟到响应按账号、设备及页面代次丢弃。纯逻辑及真实页面加载方法的检查在 `scripts/tank-shape.check.mjs`，不等于微信／Donut／现场设备验收。规格和待验收项见 `openspec/changes/sync-reported-tank-shape/`。 2026-11-10 已在微信开发者工具真实模拟器核对测试站点首页卧罐展示；若热重载后新方法未加载，应清理编译缓存后重新编译，不能把浏览器预览当作目标端验证。
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
 

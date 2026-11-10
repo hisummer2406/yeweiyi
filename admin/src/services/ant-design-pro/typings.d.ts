@@ -376,7 +376,7 @@ declare namespace API {
 
   type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';
 
-  /** telemetry/latest 的一个罐；tankShape 缺失表示未知 */
+  /** telemetry/latest 的一个罐；罐型另读 tank-settings，不在遥测结构中。 */
   type Tank = {
     index: number;
     oilType: string;
@@ -391,7 +391,6 @@ declare namespace API {
     waterRatioPct: number;
     alarmState: TankAlarmState | string;
     probeConnected: boolean;
-    tankShape?: string;
   };
 
   /** GET /api/devices/:device/telemetry/latest 成功响应 */

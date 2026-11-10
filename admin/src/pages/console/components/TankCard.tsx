@@ -1,16 +1,19 @@
 import { ProCard } from '@ant-design/pro-components';
 import { Tag, theme } from 'antd';
 import type React from 'react';
+import { tankShapeOf } from '@/utils/tankShape';
 import { alarmColor, alarmLabel } from '@/utils/telemetry';
 import styles from './TankDisplay.module.less';
 import TankPicture from './TankPicture';
 import TankReadout from './TankReadout';
+import TankShapeLabel, { type TankShapeInfo } from './TankShapeLabel';
 
 /** 总览罐卡：罐图与五行读数按卡片宽度成比例排布，状态文字独立展示。 */
-export const TankCard: React.FC<{ tank: API.Tank; onClick: () => void }> = ({
-  tank,
-  onClick,
-}) => {
+export const TankCard: React.FC<{
+  tank: API.Tank;
+  onClick: () => void;
+  shapeInfo?: TankShapeInfo;
+}> = ({ tank, onClick, shapeInfo = tankShapeOf(undefined, tank.index) }) => {
   const { token } = theme.useToken();
   return (
     <ProCard
@@ -24,12 +27,13 @@ export const TankCard: React.FC<{ tank: API.Tank; onClick: () => void }> = ({
         style={{ background: token.colorFillAlter }}
       >
         <div className={styles.picture}>
-          <TankPicture tank={tank} width={240} />
+          <TankPicture tank={tank} width={240} shape={shapeInfo.shape} />
         </div>
         <TankReadout
           tank={tank}
           extra={
             <>
+              <TankShapeLabel info={shapeInfo} />
               {tank.alarmState !== 'NORMAL' && (
                 <Tag color={alarmColor(tank.alarmState)}>
                   {alarmLabel(tank.alarmState)}

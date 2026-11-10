@@ -6,7 +6,9 @@ import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndLocate } from '../../utils/scan';
 import { showComingSoon } from '../../utils/comingSoon';
-import { toTankViews, type TankView } from '../../utils/telemetry';
+import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
+import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
+import { getTankSettings } from '../../utils/remoteConfigApi';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -37,6 +39,7 @@ type DeviceGroup = {
   // Set when the last refresh failed but an earlier one succeeded: the tanks on screen are kept and the
   // card says they may be out of date, and since when (the phone's clock at the last success).
   staleText: string;
+  shapes: TankShapeState;
 };
 
 const emptyGroup = (deviceName: string): DeviceGroup => ({
@@ -48,6 +51,7 @@ const emptyGroup = (deviceName: string): DeviceGroup => ({
   error: '',
   note: '',
   staleText: '',
+  shapes: emptyTankShapes(),
 });
 
 const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale());
@@ -94,12 +98,16 @@ Page({
 
   // Stops listening for the network coming back.
   stopNet: null as (() => void) | null,
+  shapeTimer: null as ReturnType<typeof setInterval> | null,
+  activeAccount: '',
+  shapeRequests: {} as Record<string, number>,
+  pageHidden: false,
 
   onLoad() {
     // Network back (airplane mode off, wifi to mobile data ...): read again at once instead of waiting for
     // the user to pull down. onShow only fires when the page comes into view.
     this.stopNet = onNetworkBack(() => {
-      if (getToken()) this.loadHome();
+      if (!this.pageHidden && getToken()) this.loadHome();
     });
     try {
       const info = wx.getWindowInfo();
@@ -151,16 +159,38 @@ Page({
   },
 
   onShow() {
+    this.pageHidden = false;
     if (!getToken()) {
       wx.reLaunch({ url: '/pages/login/login' });
       return;
     }
     applyTabBar();
+    const account = this.currentUserKey();
+    if (account !== this.activeAccount) this.setData({ groups: [] });
+    this.activeAccount = account;
     this.setData({ text: texts('home'), homeLanguage: currentLocale() });
     this.loadHome();
+    this.stopShapePoll();
+    this.shapeTimer = setInterval(() => {
+      for (const g of this.data.groups) void this.loadShapes(g.deviceName, this.loadSeq);
+    }, 60_000);
+  },
+
+  onHide() {
+    this.pageHidden = true;
+    this.loadSeq++;
+    this.stopShapePoll();
+  },
+
+  stopShapePoll() {
+    if (this.shapeTimer) clearInterval(this.shapeTimer);
+    this.shapeTimer = null;
   },
 
   onUnload() {
+    this.pageHidden = true;
+    this.loadSeq++;
+    this.stopShapePoll();
     this.stopNet?.();
     this.stopNet = null;
   },
@@ -175,12 +205,13 @@ Page({
   // device of the SELECTED station, in parallel — there is no batch endpoint.
   loadHome(): Promise<unknown> {
     const seq = ++this.loadSeq;
+    const account = this.currentUserKey();
     return Promise.all([
       get<{ rows: Device[] }>('/api/devices'),
       get<{ rows: Station[] }>('/api/stations').catch(() => ({ rows: [] as Station[] })),
     ])
       .then(([devRes, stRes]) => {
-        if (seq !== this.loadSeq) return;
+        if (seq !== this.loadSeq || account !== this.currentUserKey()) return;
         this.allDevices = devRes.rows;
         this.allStations = stRes.rows;
         this.stationOptions = buildStationOptions(stRes.rows, devRes.rows, t('station.ungrouped'));
@@ -250,14 +281,15 @@ Page({
   },
 
   loadDevice(deviceName: string, seq: number): Promise<void> {
-    return get<LatestTelemetryResponse>(
+    const shapeLoad = this.loadShapes(deviceName, seq);
+    const telemetryLoad = get<LatestTelemetryResponse>(
       `/api/devices/${encodeURIComponent(deviceName)}/telemetry/latest`,
     )
       .then((res) =>
         this.patchGroup(deviceName, seq, {
           state: 'ok',
           ts: formatLocalTime(res.ts, currentLocale()),
-          tanks: toTankViews(res, deviceName),
+          tanks: toTankViews(res, deviceName, this.data.groups.find((g) => g.deviceName === deviceName)?.shapes),
           error: '',
           staleText: '',
           fetchedAt: nowText(),
@@ -274,7 +306,7 @@ Page({
           this.patchGroup(deviceName, seq, { state: 'never', ts: '', tanks: [], error: '', note, staleText: '' });
         } else {
           const shown = (this.data.groups as DeviceGroup[]).find((g) => g.deviceName === deviceName);
-          if (shown && shown.fetchedAt && shown.tanks.length > 0) {
+          if (![401, 403, 404].includes(err.status) && shown && shown.fetchedAt && shown.tanks.length > 0) {
             // Keep what was shown and say how old it is, rather than replacing readings with an error.
             this.patchGroup(deviceName, seq, { state: 'ok', staleText: t('home.stale', { time: shown.fetchedAt }) });
           } else {
@@ -282,10 +314,27 @@ Page({
           }
         }
       });
+    return Promise.all([telemetryLoad, shapeLoad]).then(() => undefined);
+  },
+
+  loadShapes(deviceName: string, seq: number): Promise<void> {
+    const account = this.currentUserKey();
+    const mine = (this.shapeRequests[deviceName] ?? 0) + 1;
+    this.shapeRequests[deviceName] = mine;
+    const apply = (shapes: TankShapeState) => {
+      if (seq !== this.loadSeq || mine !== this.shapeRequests[deviceName] || account !== this.currentUserKey()) return;
+      const group = this.data.groups.find((g) => g.deviceName === deviceName);
+      if (!group) return;
+      this.patchGroup(deviceName, seq, { shapes, tanks: group.tanks.map((t) => ({ ...t, ...tankShapeFields(shapes, t.index) })) });
+    };
+    return getTankSettings(deviceName).then((rows) => apply({ rows, status: 'ok' })).catch((error: ApiError) => {
+      const old = this.data.groups.find((g) => g.deviceName === deviceName)?.shapes ?? emptyTankShapes();
+      apply(tankShapeFailure(old, error.status));
+    });
   },
 
   patchGroup(deviceName: string, seq: number, patch: Partial<DeviceGroup>) {
-    if (seq !== this.loadSeq) return;
+    if (seq !== this.loadSeq || this.activeAccount !== this.currentUserKey()) return;
     const index = this.data.groups.findIndex((g: DeviceGroup) => g.deviceName === deviceName);
     if (index < 0) return;
     const update: Record<string, unknown> = {};

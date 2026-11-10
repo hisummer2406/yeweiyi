@@ -29,6 +29,7 @@ import {
   packPages,
   TELEMETRY_CONCURRENCY,
 } from '@/utils/overviewPaging';
+import { tankShapeOf } from '@/utils/tankShape';
 import { fmtTime } from '@/utils/telemetry';
 import TankCard from '../components/TankCard';
 import {
@@ -36,6 +37,7 @@ import {
   StationFilter,
   useStationFilter,
 } from '../components/useStationFilter';
+import { useTankShapes } from '../components/useTankShapes';
 
 /** 自动刷新间隔：遥测是快照而非实时推送，30 秒足够。 */
 const REFRESH_MS = 30_000;
@@ -180,6 +182,7 @@ const ConsoleDevices: React.FC = () => {
   const pageCount = pages.length;
   const current = Math.min(page, Math.max(pageCount, 1));
   const pageGroups: Group[] = pages[current - 1] ?? [];
+  const shapes = useTankShapes(pageGroups.map((g) => g.device.device_name));
 
   // 换筛选回到第一页；设备减少导致页码越界由 current 兜底
   useEffect(() => {
@@ -301,6 +304,10 @@ const ConsoleDevices: React.FC = () => {
             <Col key={t.index} xs={24} sm={12} lg={8} xl={6}>
               <TankCard
                 tank={t}
+                shapeInfo={tankShapeOf(
+                  shapes.states[g.device.device_name],
+                  t.index,
+                )}
                 onClick={() =>
                   openDetail(g.device.device_name, t.index, g.device.station_id)
                 }
@@ -357,7 +364,10 @@ const ConsoleDevices: React.FC = () => {
           key="refresh"
           icon={<ReloadOutlined />}
           loading={refreshing}
-          onClick={load}
+          onClick={() => {
+            void load();
+            shapes.refresh();
+          }}
         >
           刷新
         </Button>,
