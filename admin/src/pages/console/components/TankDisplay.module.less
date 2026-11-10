@@ -1,0 +1,172 @@
+.card,
+.detail {
+  container-type: inline-size;
+}
+
+.card {
+  height: 100%;
+}
+
+.card .display {
+  height: 100%;
+}
+
+.card .readout {
+  align-self: start;
+}
+
+.display {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.readout {
+  min-width: 0;
+}
+
+.header {
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  background: #033158;
+  color: #fff;
+  font-size: clamp(14px, 4.8cqi, 17px);
+  font-weight: 500;
+}
+
+.title {
+  min-width: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+
+.readings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: clamp(12px, 4.25cqi, 15px);
+  line-height: 1.85;
+
+  th,
+  td {
+    padding: 0;
+    white-space: nowrap;
+  }
+
+  th {
+    width: 1%;
+    text-align: left;
+    font-weight: 400;
+  }
+
+  td:nth-child(2) {
+    padding: 0 6px;
+    text-align: right;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  td:last-child {
+    width: 1%;
+    text-align: left;
+  }
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+
+  &:empty {
+    display: none;
+  }
+
+  :global(.ant-tag) {
+    margin-inline-end: 0;
+  }
+}
+
+.detail .display {
+  max-width: 800px;
+  padding: 24px;
+  gap: 32px;
+}
+
+.large {
+  .header {
+    margin-bottom: 12px;
+    padding: 6px 12px;
+    font-size: 20px;
+  }
+
+  .readings {
+    font-size: 20px;
+    line-height: 1.9;
+
+    td:nth-child(2) {
+      padding: 0 16px;
+    }
+  }
+}
+
+@container (max-width: 340px) {
+  .display {
+    grid-template-columns: minmax(0, 0.8fr) minmax(min-content, 1.2fr);
+    gap: 12px;
+    padding: 10px;
+  }
+}
+
+@container (max-width: 280px) {
+  .display {
+    grid-template-columns: minmax(0, 0.75fr) minmax(min-content, 1.25fr);
+    gap: 8px;
+    padding: 8px;
+  }
+}
+
+@container (max-width: 560px) {
+  .detail .display {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .large {
+    .header {
+      font-size: 17px;
+    }
+
+    .readings {
+      font-size: 16px;
+
+      td:nth-child(2) {
+        padding: 0 8px;
+      }
+    }
+  }
+}
+
+@container (max-width: 380px) {
+  .detail .display {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .detail .picture {
+    max-width: 200px;
+    width: 100%;
+    margin: 0 auto 8px;
+  }
+}
