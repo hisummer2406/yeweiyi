@@ -3,7 +3,7 @@
 }
 
 .rl-station {
-  font-size: 40rpx;
+  font-size: var(--font-title);
   font-weight: 600;
   color: #131313;
 }
@@ -54,7 +54,7 @@
   height: 84rpx;
   line-height: 84rpx;
   padding: 0 16rpx;
-  font-size: 36rpx;
+  font-size: var(--font-body);
   color: #131313;
   border-bottom: 1rpx solid #eef1f6;
   overflow: hidden;
@@ -79,7 +79,7 @@
 .rt-head {
   background: #f3f5f9;
   color: #5a6170;
-  font-size: 32rpx;
+  font-size: var(--font-label);
 }
 
 /* 报警中（未恢复）的行：文字标红；状态文字本身也写在报警信息里，不只靠颜色 */
@@ -139,7 +139,7 @@
 .rl-sheet-title {
   flex: 1;
   min-width: 0;
-  font-size: 40rpx;
+  font-size: var(--font-title);
   font-weight: 700;
   color: #131313;
 }
@@ -150,7 +150,7 @@
   margin-left: 16rpx;
   padding: 6rpx 24rpx;
   border-radius: 999rpx;
-  font-size: 30rpx;
+  font-size: var(--font-meta);
   font-weight: 600;
 }
 
@@ -178,13 +178,13 @@
 
 .rl-sheet-label {
   flex-shrink: 0;
-  font-size: 32rpx;
+  font-size: var(--font-body);
   color: #5a6170;
 }
 
 .rl-sheet-value {
   margin-left: 24rpx;
-  font-size: 34rpx;
+  font-size: var(--font-body);
   font-weight: 600;
   color: #131313;
   text-align: right;
@@ -200,7 +200,7 @@
 
 .rl-sheet-msg-text {
   margin-top: 12rpx;
-  font-size: 34rpx;
+  font-size: var(--font-body);
   line-height: 1.5;
   color: #131313;
   word-break: break-all;
@@ -215,7 +215,7 @@ button.rl-sheet-close {
   border-radius: 46rpx;
   background: #066daa;
   color: #ffffff;
-  font-size: 36rpx;
+  font-size: var(--font-body);
 }
 
 button.rl-sheet-close::after {

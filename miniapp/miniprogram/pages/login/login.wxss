@@ -12,7 +12,7 @@
   flex: 1;
   text-align: center;
   padding: 16rpx 0;
-  font-size: 36rpx;
+  font-size: var(--font-body);
   color: #606060;
   border-bottom: 4rpx solid transparent;
 }
@@ -26,6 +26,6 @@
 .lang-entry {
   margin-top: 32rpx;
   padding: 12rpx 24rpx;
-  font-size: 32rpx;
+  font-size: var(--font-label);
   color: #05507c;
 }
