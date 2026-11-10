@@ -55,6 +55,7 @@ const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale())
 Page({
   data: {
     text: texts('home'),
+    homeLanguage: currentLocale(),
     groups: [] as DeviceGroup[],
     // Distinguishes "still asking which devices I have" from "I have none", so the first-run empty
     // state does not flash while /api/devices is in flight.
@@ -75,6 +76,9 @@ Page({
     // The header is drawn under the status bar (navigationStyle: custom), so it needs the status
     // bar's height in rpx. Falls back to the design draft's 88rpx if the API is unavailable.
     statusBarRpx: 88,
+    // 每个罐占首页可用高度的四分之一；测量前沿用设计稿行高。
+    tankRowHeightRpx: 293,
+    compactHome: false,
   },
 
   // Bumped on every reload; a telemetry response from an older reload is dropped instead of
@@ -105,13 +109,54 @@ Page({
     }
   },
 
+  onReady() {
+    this.measureHomeLayout();
+  },
+
+  onResize() {
+    try {
+      const info = wx.getWindowInfo();
+      this.setData(
+        { statusBarRpx: Math.round((info.statusBarHeight * 750) / info.windowWidth) },
+        () => this.measureHomeLayout(),
+      );
+    } catch {
+      // 无窗口信息时保留当前排版。
+    }
+  },
+
+  // windowHeight 已是小程序可用窗口，不再重复扣除微信原生 tabBar / 底部安全区。
+  // 只量头部和第一组上报时间的高度，滚动后刷新也不会因坐标变化把罐行越算越高。
+  measureHomeLayout() {
+    wx.createSelectorQuery()
+      .select('.home-header').boundingClientRect()
+      .select('.group-head').boundingClientRect()
+      .exec((rects) => {
+        const [header, group] = rects as (WechatMiniprogram.BoundingClientRectResult | null)[];
+        if (!header) return;
+        try {
+          const info = wx.getWindowInfo();
+          const available = info.windowHeight - header.height - (group?.height || 0);
+          if (available <= 0 || info.windowWidth <= 0) return;
+          // 向下取两位小数，避免四行累计舍入误差把第四罐推入底部导航。
+          const tankRowHeightRpx = Math.floor((available * 750 * 100) / info.windowWidth / 4) / 100;
+          const compactHome = tankRowHeightRpx < 274;
+          if (tankRowHeightRpx !== this.data.tankRowHeightRpx || compactHome !== this.data.compactHome) {
+            this.setData({ tankRowHeightRpx, compactHome });
+          }
+        } catch {
+          // 旧运行环境无法测量时保留设计稿尺寸，全部罐仍可自然滚动查看。
+        }
+      });
+  },
+
   onShow() {
     if (!getToken()) {
       wx.reLaunch({ url: '/pages/login/login' });
       return;
     }
     applyTabBar();
-    this.setData({ text: texts('home') });
+    this.setData({ text: texts('home'), homeLanguage: currentLocale() });
     this.loadHome();
   },
 
@@ -181,7 +226,7 @@ Page({
       stationKey: current ? current.key : '',
       deviceTotal: this.allDevices.length,
       stationNotice: lostStation ? t('home.lostStation') : '',
-    });
+    }, () => this.measureHomeLayout());
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
   },
 
@@ -247,7 +292,7 @@ Page({
     for (const key of Object.keys(patch) as (keyof DeviceGroup)[]) {
       update[`groups[${index}].${key}`] = patch[key];
     }
-    this.setData(update);
+    this.setData(update, () => this.measureHomeLayout());
   },
 
   onRetryDevice(e: WechatMiniprogram.BaseEvent) {
