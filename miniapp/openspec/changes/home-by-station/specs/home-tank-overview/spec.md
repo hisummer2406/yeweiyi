@@ -118,3 +118,15 @@
 #### Scenario: Open detail from a card
 - **WHEN** 用户点击某设备下的罐卡片
 - **THEN** 进入该设备的设备详情页，选中被点的罐
+
+
+### Requirement: Compact four-tank home readings
+首页 SHALL 使用介于原始设计稿与适老化版本之间的字号：字段标签 26rpx、数值 30rpx、单位 24rpx。首页 MUST 收紧读数行距、罐卡上下间距和头部留白，常规手机首屏能够完整显示四罐，且保留上报时间和异常文字。此字号调整仅作用于首页。
+
+#### Scenario: Four tanks with a disconnected probe
+- **WHEN** 常规字号、375×667 或更大的常用竖屏下，单台设备有四罐、介质名称简短，第四罐故障且探针未连接
+- **THEN** 五项读数与第四罐异常提示完整显示在底部导航上方，数据和单位不被截断
+
+#### Scenario: Content needs more space
+- **WHEN** 介质名称、异常文案或读数超长，或系统字号放大
+- **THEN** 罐行可随内容增高并继续滚动查看，不通过截断数据或隐藏异常来维持四罐高度
