@@ -3,6 +3,6 @@
   height: 54rpx;
   line-height: 54rpx;
   margin: 0 0 21rpx 59rpx;
-  font-size: 40rpx;
+  font-size: var(--font-heading);
   color: #131313;
 }

@@ -31,6 +31,6 @@ page {
   margin-top: 7rpx;
   line-height: 44rpx;
   text-align: center;
-  font-size: 32rpx;
+  font-size: var(--font-body);
   color: #131313;
 }

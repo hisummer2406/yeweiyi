@@ -1,3 +1,5 @@
+@import "../../styles/typography.wxss";
+
 /* 数值取自设计稿「参数修正-罐号选择08」「罐表设置-长方体选择罐号19」PNG 的像素实测：
    面板 x35–714（宽 680）、圆角约 16；药丸 202×57、行距 77、列间距 14；选中 #0066A2，未选中 #F5F6F8；
    遮罩把 #EDF0F7 压成 #CACCD2（约 15% 黑）；标题栏浅灰蓝 #D3DAE1，标题约 34rpx。 */
@@ -26,7 +28,7 @@
   height: 62rpx;
   line-height: 62rpx;
   text-align: center;
-  font-size: 42rpx;
+  font-size: var(--font-title);
   color: #131313;
   background-color: #d3dae1;
 }
@@ -47,7 +49,7 @@
   line-height: 57rpx;
   margin: 0 14rpx 20rpx 0;
   text-align: center;
-  font-size: 32rpx;
+  font-size: var(--font-body);
   color: #131313;
   background-color: #f5f6f8;
   border-radius: 29rpx;

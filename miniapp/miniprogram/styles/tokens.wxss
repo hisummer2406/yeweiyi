@@ -1,3 +1,5 @@
+@import "./typography.wxss";
+
 /*
  * Design Tokens — 从设备端 PSD「中成系统.psd」解析提炼的视觉变量
  * 数据来源：psd-tools 解析 28 个画板、657 个文字图层的精确色值/字号
@@ -6,8 +8,7 @@
  * 使用方式：在 app.wxss 里 @import "/styles/tokens.wxss";
  * 所有页面 wxss 用 var(--xxx) 引用，不要硬编码色值/字号。
  *
- * 注意：设备端设计稿是 1280x800 横屏，字号/间距为横屏数值。
- * 小程序竖屏需重新布局，但颜色 token 直接复用，字号层级参考。
+ * 颜色/间距保留设备设计稿参考；小程序字号统一来自 typography.wxss。
  */
 
 page {
@@ -39,17 +40,10 @@ page {
   --color-warning: #FAAD14;
   --color-warning-light: #FFFBE6;
 
-  /* ===== 字号 ===== */
-  /* 设备端 1280px 横屏的字号，按出现频次归并 7 档。
-     小程序竖屏实际使用建议：display 20px、title 17px、body 15px、
-     label 14px、caption 12px，其余档位按需微调。 */
-  --font-display: 24px;   /* 大按钮「返回首页」 */
-  --font-title: 17px;     /* 罐号「1号/甲醇」 */
-  --font-subtitle: 16px;  /* 数据标签「液位/容积」 */
-  --font-body: 14px;      /* 标题、底部导航 */
-  --font-label: 13px;     /* 时间、数据值 */
-  --font-caption: 12px;   /* 单位「毫米/升」 */
-  --font-micro: 11px;     /* 设置项 */
+  /* 字号由 typography.wxss 统一定义；保留旧组件使用的三个别名。 */
+  --font-display: var(--font-title);
+  --font-subtitle: var(--font-heading);
+  --font-micro: var(--font-meta);
 
   /* ===== 间距 ===== */
   --space-xs: 4px;   /* 图标-文字 */

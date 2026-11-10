@@ -32,6 +32,14 @@ about the design draft are easy to get wrong:
 
 Stations (cloud main 1d9d0be, yeweiyi-cloud#53): `/api/stations` returns all of the customer's stations (including empty ones) to `customer_admin`, and only the stations holding the user's bound devices to `customer_user`. A missing `station_id` on a device row means an old cloud; `customerId` on a station is not used.
 
+## 小程序统一字号（2026-11-10）
+
+- 字号定义在 `miniprogram/styles/typography.wxss`：标题/主要读数 36rpx、分组标题 32rpx、正文/表单/按钮 30rpx、标签/单位 28rpx、说明 26rpx、时间/徽标 24rpx。页面与组件按语义引用变量，不再逐页使用适老化放大表。
+- `app.wxss` 引入统一字号；隔离的 `grid-picker`、`side-picker` 在自身 WXSS 中显式引入，由面板根节点提供变量。旧 `styles/tokens.wxss` 的字体别名也指向同一份定义。
+- 首页沿用已确认的四罐排布，品牌 34rpx、状态 22rpx、短屏读数 32rpx；字号数值和首屏高度不因此调整。
+- 长按钮文字允许换行并撑高，确认弹窗随内容增高。原生导航栏、tabBar 与系统弹窗的字号由微信控制。
+- 验证包括类型/项目检查，以及由实际 WXML/WXSS 生成的浏览器多尺寸、多语言预览；不代表微信真机验收。
+
 ## Android App (Donut) and languages (2026-10-19, openspec change `donut-android-app`, issue #12)
 
 The same code is built twice: as the WeChat mini-program and, through Donut (小程序多端框架), as an Android
