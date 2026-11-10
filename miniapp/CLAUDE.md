@@ -340,7 +340,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     The tank illustration carries a level fill (oil on top of water, `tankFill` in `utils/tankFill.ts`,
     from `oilRatioPct`/`waterRatioPct`; red on ALARM, grey on FAULT, nothing without a probe). The
     fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
-    首页字号单独按紧凑四罐排版（2026-11-10）：标签 26rpx、数值 30rpx、单位 24rpx，读数行距 34rpx、罐行最小 236rpx；不沿用全局适老化档位。长介质名和异常提示可撑开，不裁切。已用当前 WXML/WXSS 在浏览器核对多尺寸排版，未作微信真机验收。
+    首页按设计图比例排布（2026-11-10）：数值 36rpx、标签 30rpx、单位 28rpx；较短屏幕用 32/28/24rpx。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
     Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
     device, `yeweiyi-cloud#45`).
   - **我的记录 `records`** (tabBar) — the home page's current station (name on top) and five entries

@@ -120,12 +120,20 @@
 - **THEN** 进入该设备的设备详情页，选中被点的罐
 
 
-### Requirement: Compact four-tank home readings
-首页 SHALL 使用介于原始设计稿与适老化版本之间的字号：字段标签 26rpx、数值 30rpx、单位 24rpx。首页 MUST 收紧读数行距、罐卡上下间距和头部留白，常规手机首屏能够完整显示四罐，且保留上报时间和异常文字。此字号调整仅作用于首页。
+### Requirement: Four tanks fill the first screen in the design proportions
+首页 SHALL 参照用户提供的设计图协调罐图、标题和三列读数；常规字号下数值 36rpx、标签 30rpx、单位 28rpx，较短屏幕使用 32/28/24rpx。扣除头部及上报时间后，每罐 SHALL 占首屏可用高度的四分之一，第四罐底边与底部导航上沿对齐，不留大块空白。此调整仅作用于首页。
 
-#### Scenario: Four tanks with a disconnected probe
-- **WHEN** 常规字号、375×667 或更大的常用竖屏下，单台设备有四罐、介质名称简短，第四罐故障且探针未连接
-- **THEN** 五项读数与第四罐异常提示完整显示在底部导航上方，数据和单位不被截断
+#### Scenario: Four tanks fill the available height
+- **WHEN** 常规字号、单台设备、短介质名，第四罐故障且探针未连接
+- **THEN** 五项读数及异常文字完整显示，四罐恰好铺满首页数据区；首屏尺寸按当前窗口实测，不重复扣原生底部导航及安全区
+
+#### Scenario: Scroll to additional tanks
+- **WHEN** 当前设备有五个或更多可查看的罐
+- **THEN** 第五罐从首屏数据区下边缘之后开始，用户下滑可继续查看其余罐；不截取前四罐或限制列表总高度
+
+#### Scenario: Refresh while scrolled or resize the window
+- **WHEN** 滚动后刷新数据，或可用窗口尺寸改变
+- **THEN** 按头部和上报时间的高度重算罐行，不把滚动偏移计入高度；改变窗口后仍按四罐首屏排布
 
 #### Scenario: Content needs more space
 - **WHEN** 介质名称、异常文案或读数超长，或系统字号放大
