@@ -164,6 +164,7 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
           {tanks.length > 1 && (
             <Segmented
               aria-label={t('pages.console.detail.snapshot.switch')}
+              style={{ maxWidth: '100%', overflowX: 'auto' }}
               value={pick.tank}
               options={tanks.map((x) => ({
                 value: x.index,

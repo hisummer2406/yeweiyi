@@ -1,7 +1,8 @@
 import { useIntl } from '@umijs/max';
-import { Col, Descriptions, Row, Space, Tag, Typography } from 'antd';
+import { Descriptions, Tag, theme, Typography } from 'antd';
 import type React from 'react';
 import { alarmColor, alarmLabel, fmt } from '@/utils/telemetry';
+import styles from '../components/TankDisplay.module.less';
 import TankPicture from '../components/TankPicture';
 import TankReadout from '../components/TankReadout';
 
@@ -12,6 +13,7 @@ import TankReadout from '../components/TankReadout';
  */
 const TankDetail: React.FC<{ tank: API.Tank }> = ({ tank }) => {
   const intl = useIntl();
+  const { token } = theme.useToken();
   const t = (id: string) => intl.formatMessage({ id });
   const k = (name: string) => t(`pages.console.detail.snapshot.${name}`);
   const items = [
@@ -21,23 +23,31 @@ const TankDetail: React.FC<{ tank: API.Tank }> = ({ tank }) => {
     ['waterRatio', fmt(tank.waterRatioPct), '%'],
   ] as const;
   return (
-    <Row gutter={[24, 16]} align="middle" wrap>
-      <Col flex="0 0 200px">
-        <TankPicture tank={tank} width={200} />
-      </Col>
-      <Col flex="1 1 280px" style={{ minWidth: 0 }}>
-        <TankReadout tank={tank} size="large" />
-        <Space wrap style={{ marginTop: 12 }}>
-          <Tag color={alarmColor(tank.alarmState)}>
-            {k('field.alarm')}：{alarmLabel(tank.alarmState)}
-          </Tag>
-          <Tag color={tank.probeConnected ? 'success' : 'error'}>
-            {k('field.probe')}：
-            {k(tank.probeConnected ? 'probe.on' : 'probe.off')}
-          </Tag>
-        </Space>
-      </Col>
-      <Col span={24}>
+    <div className={styles.detail}>
+      <div
+        className={styles.display}
+        style={{ background: token.colorFillAlter }}
+      >
+        <div className={styles.picture}>
+          <TankPicture tank={tank} width={360} />
+        </div>
+        <TankReadout
+          tank={tank}
+          size="large"
+          extra={
+            <>
+              <Tag color={alarmColor(tank.alarmState)}>
+                {k('field.alarm')}：{alarmLabel(tank.alarmState)}
+              </Tag>
+              <Tag color={tank.probeConnected ? 'success' : 'error'}>
+                {k('field.probe')}：
+                {k(tank.probeConnected ? 'probe.on' : 'probe.off')}
+              </Tag>
+            </>
+          }
+        />
+      </div>
+      <div style={{ marginTop: 24 }}>
         <Typography.Text type="secondary">{k('more')}</Typography.Text>
         <Descriptions
           style={{ marginTop: 8 }}
@@ -50,8 +60,8 @@ const TankDetail: React.FC<{ tank: API.Tank }> = ({ tank }) => {
             children: value === '--' ? '--' : `${value} ${unit}`,
           }))}
         />
-      </Col>
-    </Row>
+      </div>
+    </div>
   );
 };
 
