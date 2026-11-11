@@ -381,7 +381,7 @@ public void dispatch(String mqttRequestId, String payload) {
 
 **不发的**：`deviceModel`/`hardwareVersion`（没人定义过取值；候选来源有 `Build.MODEL` = `rk3562_t`、厂商接口 `XzjhSystemManager.xzjhGetSerialNo()`/`xzjhGetDeviceKernelInfo()`）、`localControlMode`（设备上没有这个状态）。不编造值。
 
-**触发时机**：连接成功后立即发；设置变化后经 `ThingsBoardManager.requestClientAttributesPublish()` 防抖 2 秒重发——罐设置写库完成（`OilTankRepository.setOilCanSetChangedListener`，覆盖设置页、下拉框、复制、报警开关、RPC 全部入口；写库是异步的，所以等写完再读）、基础设置页保存、罐配置重新加载（`OilcanDataManager.refresh()`）。标定表保存不触发，要等下次重连或设置变化。发布异常只记日志，不影响后续的共享属性请求，也不会让 app 崩溃。
+**触发时机**：连接成功后立即发；设置变化后经 `ThingsBoardManager.requestClientAttributesPublish()` 防抖 2 秒重发——罐设置写库完成（`OilTankRepository.setOilCanSetChangedListener`，覆盖设置页保存、复制、报警开关、RPC 全部入口；写库是异步的，所以等写完再读）、基础设置页保存、罐配置重新加载（`OilcanDataManager.refresh()`）。标定表保存不触发，要等下次重连或设置变化。发布异常只记日志，不影响后续的共享属性请求，也不会让 app 崩溃。
 
 **现状**：✅ 已发，云端未接。跟共享样例逐 key 比对，已知差异：上面三个不发的字段、`probeType` 取值。
 

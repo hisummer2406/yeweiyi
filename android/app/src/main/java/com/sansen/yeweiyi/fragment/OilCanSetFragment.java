@@ -10,7 +10,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.view.View.OnFocusChangeListener;
-import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -153,27 +152,8 @@ public class OilCanSetFragment extends BaseFragment {
                 }
             }
         });
-        item_sp_guanType.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-
-            @Override
-            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                //选中触发
-                //Log.i("TAG", "选中触发" + i);
-//                new MyOnFocusChangeLis1tener(
-//                        "GunType", int.class);
-                oilCanSet.setGunType(i);
-                //Log.i("onActivityResult", "onActivityResult: 保存油品类型"+resultCode);
-                oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
-                oilTankRepository.updateOilCanSet(oilCanSet);
-                Const.isUpdate = true;
-
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> adapterView) {
-
-            }
-        });
+        // 储罐类型不在选中时落库，随"保存数据"一起保存：首次布局和 setSelection() 也会回调
+        // onItemSelected，在那里落库会让只是打开页面就置 Const.isUpdate，离开时触发 refresh()。
     }
 
     public void initTitle() {
@@ -244,9 +224,8 @@ public class OilCanSetFragment extends BaseFragment {
         int tanZhenId = oilCanSet.getPk_tanZhenId();
         double[] tanZhenLang = Singleton.getInstance().TanZhenLang;
         if (tanZhenId >= 0 && tanZhenId < tanZhenLang.length && tanZhenLang[tanZhenId] != 0) {
+            // 只显示探针读到的长度，点"保存数据"时才落库
             item_et_chuanGanQiLeng.setText(tanZhenLang[tanZhenId] + "");
-            saveData(item_et_chuanGanQiLeng.getText().toString(),"ChuanGanQiHight", double.class);
-
         }
        // TODO  设置传感器长度
         item_sp_guanType.setSelection(oilCanSet.getGunType());
@@ -402,7 +381,8 @@ public class OilCanSetFragment extends BaseFragment {
                 }
                 saveData(item_et_oilheight.getText().toString(),"Height", int.class);
                 saveData(item_et_maxvolum.getText().toString(),"MaxVolume", int.class);
-                saveData(item_et_chuanGanQiLeng.getText().toString(), "ChuanGanQiHight", double.class);
+                saveData(item_et_chuanGanQiLeng.getText().toString(), "ChuanGanQiHight", float.class);
+                saveData(String.valueOf(item_sp_guanType.getSelectedItemPosition()), "GunType", int.class);
                 saveData(item_et_oilheightalarm.getText().toString(),"HeightOilAlarm", int.class);
                 saveData(item_et_oilhheightalarm.getText().toString(), "HheightOilAlarm", int.class);
                 saveData(item_et_oillowalarm.getText().toString(), "LowOilAlarm", int.class);
@@ -510,6 +490,8 @@ public class OilCanSetFragment extends BaseFragment {
                 //Log.i("TAG", method.getName());
             } else if (clazz.equals(double.class)) {
                 method.invoke(oilCanSet, Double.parseDouble(cur));
+            } else if (clazz.equals(float.class)) {
+                method.invoke(oilCanSet, Float.parseFloat(cur));
             }
             oilCanSet.setGmt_modified(DateUtils.getYYYMMddHHmmss());
             oilTankRepository.updateOilCanSet(oilCanSet);
