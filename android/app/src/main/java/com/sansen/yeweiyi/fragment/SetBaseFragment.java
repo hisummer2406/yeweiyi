@@ -38,9 +38,9 @@ import java.util.Locale;
  */
 public class SetBaseFragment extends BaseFragment implements OnItemClickListener, TextWatcher, AdapterView.OnItemSelectedListener {
 
-    // 顺序必须跟 R.array.language（中文/英文/西班牙语/俄语/乌兹别克语）的 item 顺序一一对应，
+    // 顺序必须跟 R.array.language（中文/英文/西班牙语/俄语/乌兹别克语/法语）的 item 顺序一一对应，
     // Spinner 的下标直接映射这里的下标
-    private static final String[] LANGUAGE_CODES = {"zh", "en", "es", "ru", "uz"};
+    private static final String[] LANGUAGE_CODES = {"zh", "en", "es", "ru", "uz", "fr"};
 
     private Spinner sp_yuyan, sp_yewei, sp_rongji, sp_zhiliang;
     private EditText et_outTime, et_outHight, et_inTime, et_inHight;

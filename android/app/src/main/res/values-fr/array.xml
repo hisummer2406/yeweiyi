@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 法语数组：来源同 values-fr/strings.xml 的「数组文案对照」sheet。
+         只放可达的数组（同 values-es）；数组按整组替换，条数必须与 values/array.xml 一致。
+         language 是 translatable="false"，不在这里覆盖。 -->
+    <string-array name="set_array">
+        <item>Réglages des cuves</item>
+        <item>Réglages des jauges</item>
+        <item>Réglages du mot de passe</item>
+        <item>Réglages de base</item>
+        <item>Réglages des enregistrements</item>
+        <item>Réglages avancés</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>Horiz.</item>
+        <item>Vert.</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>mm</item>
+        <item>m</item>
+    </string-array>
+    <string-array name="rongji_unit">
+        <item>L</item>
+        <item>m³</item>
+        <item>gal</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>kg</item>
+        <item>t</item>
+    </string-array>
+    <string-array name="oilcanArray">
+        <item>Cuve 1</item>
+        <item>Cuve 2</item>
+        <item>Cuve 3</item>
+        <item>Cuve 4</item>
+        <item>Cuve 5</item>
+        <item>Cuve 6</item>
+        <item>Cuve 7</item>
+        <item>Cuve 8</item>
+        <item>Cuve 9</item>
+        <item>Cuve 10</item>
+        <item>Cuve 11</item>
+        <item>Cuve 12</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>Prod.</item>
+        <item>Niv. prod.</item>
+        <item>Vol.</item>
+        <item>Poids</item>
+        <item>Vol. vide</item>
+        <item>Niv. d\'eau</item>
+        <item>Vol. d\'eau</item>
+        <item>Temp.</item>
+    </string-array>
+    <string-array name="oiltypeArray">
+        <item>Non conf.</item>
+        <item>GO 0#</item>
+        <item>GO -10#</item>
+        <item>GO -20#</item>
+        <item>GO -35#</item>
+        <item>ES 92#</item>
+        <item>ES 95#</item>
+        <item>ES 98#</item>
+        <item>Méthanol</item>
+        <item>Toluène</item>
+        <item>Huile son riz</item>
+        <item>H₂SO₄</item>
+        <item>Xylène</item>
+        <item>Acét. n-butyle</item>
+        <item>Acét. sec-butyle</item>
+        <item>Acét. méthyle</item>
+        <item>DBE</item>
+        <item>Solv. pét.</item>
+        <item>Propyl. glycol</item>
+        <item>Éthanol</item>
+        <item>Huile soja</item>
+        <item>Huile palme</item>
+        <item>Huile pneus</item>
+        <item>Paraf.</item>
+        <item>DCM</item>
+        <item>HCl U2</item>
+        <item>Grav. U2</item>
+        <item>NaOH U2</item>
+        <item>H₂SO₄ U2</item>
+        <item>Purgeur</item>
+        <item>Purge E</item>
+        <item>Purge O</item>
+        <item>Vide</item>
+    </string-array>
+</resources>

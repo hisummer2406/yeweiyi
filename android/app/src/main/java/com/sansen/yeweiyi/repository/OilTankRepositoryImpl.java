@@ -91,7 +91,7 @@ public class OilTankRepositoryImpl implements OilTankRepository {
 
     private volatile Runnable oilCanSetChangedListener;
 
-    /** 所有罐设置保存入口（设置页、下拉框、复制、报警开关、RPC）都经过本类，挂在这里一处即可。 */
+    /** 所有罐设置保存入口（设置页保存、复制、报警开关、RPC）都经过本类，挂在这里一处即可。 */
     @Override
     public void setOilCanSetChangedListener(Runnable listener) {
         this.oilCanSetChangedListener = listener;

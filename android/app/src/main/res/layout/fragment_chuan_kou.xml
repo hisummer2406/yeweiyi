@@ -71,7 +71,7 @@
 
         <!-- 串口4设置 -->
         <TextView
-            android:layout_marginTop="@dimen/dp_80"
+            android:layout_marginTop="@dimen/dp_40"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/serial_port_4_settings"
@@ -105,6 +105,54 @@
                 android:textSize="20sp" />
         </RadioGroup>
 
+        <!-- 单罐开关量输出（IO2 联动，PumpIoManager）；开关图标同记录设置页 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp_40"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/pump_link_title"
+                android:textColor="#1a1a1a"
+                android:textSize="22sp" />
+
+            <CheckBox
+                android:id="@+id/cb_pump_link"
+                android:layout_width="@dimen/dp_55"
+                android:layout_height="@dimen/dp_25"
+                android:layout_marginStart="24dp"
+                android:button="@drawable/custom_track_selector"
+                android:checked="false" />
+        </LinearLayout>
+
+        <!-- 未选罐时显示"罐号"，选后显示 oilcanArray 对应项；点击弹出罐号选择 -->
+        <TextView
+            android:id="@+id/tv_pump_link_tank"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_input_border"
+            android:gravity="center"
+            android:minWidth="160dp"
+            android:paddingLeft="20dp"
+            android:paddingTop="8dp"
+            android:paddingRight="20dp"
+            android:paddingBottom="8dp"
+            android:text="@string/tank_no"
+            android:textColor="#222222"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/pump_link_desc"
+            android:textColor="#666666"
+            android:textSize="18sp" />
 
     </LinearLayout>
 
