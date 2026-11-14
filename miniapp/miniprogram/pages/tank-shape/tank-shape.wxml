@@ -1,4 +1,5 @@
-<!-- 设计稿「罐表设置15」：选罐体形状，点一张卡片进入对应的尺寸页（卧罐16 / 立罐17 / 长方体18）。 -->
+<!-- 设计稿「罐表设置15」：选罐体形状，点一张卡片进入对应的尺寸页（卧罐16 / 立罐17 / 长方体18）。
+     下方「设备当前罐表」（#41，设计稿没有）：首页当前油站设备各罐在用的罐表，来自云端标定镜像，只读。 -->
 <view class="ts-grid">
   <view
     wx:for="{{shapes}}"
@@ -10,4 +11,47 @@
     <image class="ts-card-img" src="/assets/illustrations/tankshape-card-{{item.key}}.png" mode="aspectFit" />
     <text class="ts-card-label">{{item.label}}</text>
   </view>
+</view>
+
+<view class="ts-device">
+  <view class="ts-device-title">{{text.deviceTitle}}</view>
+  <view class="ts-device-hint">{{text.deviceHint}}</view>
+
+  <view wx:if="{{devLoading}}" class="ts-notice">{{text.loading}}</view>
+  <view wx:elif="{{devNotice}}" class="ts-notice">
+    <text>{{devNotice}}</text>
+    <text class="ts-retry" bindtap="onRetry">{{text.retry}}</text>
+  </view>
+  <block wx:else>
+    <view class="ts-tanks">
+      <view
+        wx:for="{{tanks}}"
+        wx:key="n"
+        class="ts-tank {{item.n === tank ? 'ts-tank-on' : ''}}"
+        data-n="{{item.n}}"
+        bindtap="onTankTap"
+      >{{item.label}}</view>
+    </view>
+
+    <view wx:if="{{tableLoading}}" class="ts-notice">{{text.loading}}</view>
+    <view wx:elif="{{tableNotice}}" class="ts-notice">
+      <text>{{tableNotice}}</text>
+      <text class="ts-retry" bindtap="onRetry">{{text.retry}}</text>
+    </view>
+    <block wx:else>
+      <view class="ts-summary">{{summary}}</view>
+      <view class="ts-reported">{{reportedAt}}</view>
+      <view wx:if="{{sampled}}" class="ts-reported">{{edit.sampled}}</view>
+      <view class="ts-table-head">
+        <text class="ts-col">{{edit.colHeight}}</text>
+        <text class="ts-col">{{edit.colVolume}}</text>
+      </view>
+      <scroll-view scroll-y class="ts-table">
+        <view wx:for="{{rows}}" wx:key="heightMm" class="ts-table-row">
+          <text class="ts-col">{{item.heightMm}}</text>
+          <text class="ts-col">{{item.volumeL}}</text>
+        </view>
+      </scroll-view>
+    </block>
+  </block>
 </view>

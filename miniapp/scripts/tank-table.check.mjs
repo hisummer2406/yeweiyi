@@ -4,7 +4,7 @@
 // 原样复制后用 JDK 运行）生成，输入见各 key：形状_各尺寸(mm)。
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { doubleFoment, generateTankTable, parseDims, previewRows, tableArgs, tableEcho, tableValid } from '../miniprogram/utils/tankTable.ts';
+import { deviceTableView, doubleFoment, generateTankTable, parseDims, previewRows, tableArgs, tableEcho, tableValid } from '../miniprogram/utils/tankTable.ts';
 
 const golden = JSON.parse(readFileSync(new URL('./fixtures/tank-table-golden.json', import.meta.url), 'utf8'));
 
@@ -83,6 +83,18 @@ test('echo: only a later report counts; points and last point must match the rec
   assert.equal(tableEcho(cal('2026-11-14T10:00:03Z', [10, 20], [1.5, 3]), detail, done), 'mismatch');
   assert.equal(tableEcho(cal('2026-11-14T10:00:03Z', [10, 20, 30], [1.5, 3, 9]), detail, done), 'mismatch');
   assert.equal(tableEcho(cal('2026-11-14T10:00:03Z', [], []), detail, done), 'mismatch');
+});
+
+test('device table view (#41): finite pairs only, last point is the full tank, empty → null', () => {
+  assert.equal(deviceTableView(undefined), null);
+  assert.equal(deviceTableView({ heightMm: [], volumeL: [] }), null);
+  assert.equal(deviceTableView({ heightMm: [10, 20], volumeL: [null, 'x'] }), null);
+  const view = deviceTableView({ heightMm: [10, 20, 30, 40], volumeL: [1.5, null, 4.5] });
+  assert.deepEqual(view, { pointCount: 2, maxHeightMm: 30, maxVolumeL: 4.5, rows: [{ heightMm: 10, volumeL: 1.5 }, { heightMm: 30, volumeL: 4.5 }], sampled: false });
+  const big = deviceTableView({ heightMm: Array.from({ length: 450 }, (_, i) => i), volumeL: Array.from({ length: 450 }, (_, i) => i * 2) });
+  assert.equal(big.pointCount, 450);
+  assert.equal(big.sampled, true);
+  assert.equal(big.rows[big.rows.length - 1].volumeL, 898);
 });
 
 console.log(`tank-table: ${n} checks passed`);
