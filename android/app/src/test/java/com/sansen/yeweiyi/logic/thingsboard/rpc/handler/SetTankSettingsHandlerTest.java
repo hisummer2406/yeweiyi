@@ -40,7 +40,7 @@ public class SetTankSettingsHandlerTest {
         repo.byId.put(1, tank1);
         refreshCount = 0;
         names = new FakeNames();
-        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names);
+        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names, hex -> "not in palette: " + hex);
     }
 
     private static final class FakeNames implements CustomOilNameStore {
@@ -67,7 +67,9 @@ public class SetTankSettingsHandlerTest {
 
     @Test
     public void refusesAColorOutsideThePalette() {
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":1193046}"));
+        RpcResult result = call("{\"tank\":1,\"oilColor\":1193046}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("界面语言的提示文字（strings.xml），不是写死的中文", "not in palette: #123456", result.getMessage());
         assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":\"#FF0000\"}"));
     }
 

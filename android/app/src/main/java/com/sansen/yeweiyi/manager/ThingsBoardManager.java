@@ -5,7 +5,9 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.google.gson.Gson;
+import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.config.ApiConfig;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -199,7 +201,8 @@ public final class ThingsBoardManager {
         registry.register(SetTankSettingsHandler.METHOD,
                 new SetTankSettingsHandler(OilTankRepositoryImpl.getInstance(),
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
-                        new SharePrefCustomOilNameStore(MyApplication.getInstance())));
+                        new SharePrefCustomOilNameStore(MyApplication.getInstance()),
+                        hex -> SystemUtils.getRsStr(R.string.rpc_oil_color_not_in_palette, hex)));
         registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
         registry.register(SetTankTableHandler.METHOD,
                 new SetTankTableHandler(OilTankRepositoryImpl.getInstance(), new EllipseTable(),
