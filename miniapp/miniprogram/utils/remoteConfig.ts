@@ -12,13 +12,15 @@ export type SendField = {
   integer: boolean;
   min: number;
   max: number;
+  // min itself is not allowed (density > 0)
+  exclMin?: boolean;
 };
 
 const INT_MAX = 2147483647;
 
-// 储罐设置 → config.setTankSettings. Not here on purpose: density (unit not aligned with the device,
-// read-only this release), height (the cloud refuses it), waterLow (the device has no such alarm),
-// tempLow (the device never checks it), colour and the free-text medium (no device field).
+// 储罐设置 → config.setTankSettings. Not here on purpose: height (the cloud refuses it), waterLow (the device
+// has no such alarm), tempLow (the device never checks it). Medium (mediaId) and colour (oilColor) are chosen,
+// not typed: buildMediumArgs. Density is g/cm³ (= kg/L; 2026-11-14), 0 < v ≤ 2.
 export const TANK_SEND_FIELDS: readonly SendField[] = [
   { form: 'highHigh', cloud: 'alarmHighHighLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'high', cloud: 'alarmHighLevelMm', integer: true, min: 0, max: INT_MAX },
@@ -27,11 +29,11 @@ export const TANK_SEND_FIELDS: readonly SendField[] = [
   { form: 'waterHigh', cloud: 'alarmHighWaterMm', integer: true, min: 0, max: INT_MAX },
   { form: 'tempHigh', cloud: 'alarmHighTempC', integer: true, min: -50, max: 100 },
   { form: 'capacity', cloud: 'capacityL', integer: true, min: 0, max: 1_000_000 },
+  { form: 'density', cloud: 'density', integer: false, min: 0, max: 2, exclMin: true },
 ];
 
 // Draft fields shown next to the device's value but never sent.
 export const TANK_DISPLAY_ONLY: Readonly<Record<string, string>> = {
-  density: 'density',
   height: 'tankHeightMm',
   tempLow: 'alarmLowTempC',
 };
@@ -47,7 +49,7 @@ export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
 
 export type ParamKind = 'calibration' | 'tank';
 
-export type Unit = 'mm' | 'L' | '℃' | 'kg/m³';
+export type Unit = 'mm' | 'L' | '℃' | 'g/cm³';
 
 export type EditField = SendField & { unit: Unit; signed: boolean; labelKey: string };
 
@@ -62,10 +64,11 @@ const UNITS: Record<string, Unit> = {
   low: 'mm',
   waterHigh: 'mm',
   tempHigh: '℃',
+  density: 'g/cm³',
 };
 
 // 储罐设置 order as on the old form (capacity first, then the four levels high → low, water, temperature).
-const TANK_ORDER = ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh'];
+const TANK_ORDER = ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'density'];
 
 export function editFields(kind: ParamKind): EditField[] {
   if (kind === 'calibration') {
@@ -80,10 +83,9 @@ export function editFields(kind: ParamKind): EditField[] {
   }));
 }
 
-// Shown with the device's value, never editable or sent (density: unit not aligned; height: refused by the
-// cloud; low temperature: never checked by the device). Low water and colour have no device field at all.
+// Shown with the device's value, never editable or sent (height: refused by the cloud; low temperature: never
+// checked by the device). Low water has no device field at all.
 export const TANK_READONLY: readonly { form: string; cloud: string; unit: Unit }[] = [
-  { form: 'density', cloud: 'density', unit: 'kg/m³' },
   { form: 'height', cloud: 'tankHeightMm', unit: 'mm' },
   { form: 'tempLow', cloud: 'alarmLowTempC', unit: '℃' },
 ];
@@ -125,15 +127,17 @@ export function buildArgs(
       problems.push({ form: f.form, reason: 'number' });
       continue;
     }
+    // The device's own value, untouched: not ours to refuse (a density of 840 typed in kg/m³ must not block the
+    // rest of the form), and nothing to send.
+    if (mirror && mirror[f.cloud] === n) continue;
     if (f.integer && !Number.isInteger(n)) {
       problems.push({ form: f.form, reason: 'integer' });
       continue;
     }
-    if (n < f.min || n > f.max) {
+    if (n < f.min || n > f.max || (f.exclMin && n <= f.min)) {
       problems.push({ form: f.form, reason: 'range' });
       continue;
     }
-    if (mirror && mirror[f.cloud] === n) continue;
     args[f.cloud] = n;
   }
   if (LEVELS.some((k) => k in args)) {
@@ -151,6 +155,25 @@ export function buildArgs(
     }
   }
   return { args, problems };
+}
+
+// Medium and colour are picked, not typed (2026-11-14): send the medium chosen (the cloud turns mediaId into the
+// device's number) and the colour if it differs from the report. Nothing chosen = nothing sent.
+export function buildMediumArgs(
+  mediaId: number | undefined,
+  oilColor: number | undefined,
+  mirror: Record<string, unknown> | null | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (typeof mediaId === 'number') out.mediaId = mediaId;
+  if (typeof oilColor === 'number' && mirror?.oilColor !== oilColor) out.oilColor = oilColor;
+  return out;
+}
+
+// Fields the device left untouched in a succeeded command (cmdResult detail.ignored), e.g. an older firmware.
+export function ignoredFields(cmd: { resultDetail?: unknown }): string[] {
+  const d = cmd.resultDetail as { ignored?: unknown } | null | undefined;
+  return d && Array.isArray(d.ignored) ? d.ignored.filter((x): x is string => typeof x === 'string') : [];
 }
 
 // The mirror's value as form text ('' for not reported), for 导入设备值.

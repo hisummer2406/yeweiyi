@@ -16,6 +16,8 @@ import { mediumText } from '../../utils/recordColumns';
 import {
   TANK_READONLY,
   buildArgs,
+  buildMediumArgs,
+  ignoredFields,
   commandError,
   commandPhase,
   echoState,
@@ -27,11 +29,12 @@ import {
   type ParamKind,
   type Unit,
 } from '../../utils/remoteConfig';
-import { getCommand, getTankSettings } from '../../utils/remoteConfigApi';
+import { getCommand, getMediaOptions, getTankSettings } from '../../utils/remoteConfigApi';
+import { OIL_COLOR_PALETTE, isPaletteColor, toCss } from '../../utils/oilColor';
 import { ApiError } from '../../utils/request';
 import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
-import type { ControlCommand, TankSettings } from '../../types/api';
+import type { ControlCommand, MediaOption, TankSettings } from '../../types/api';
 
 // 参数修正 / 储罐设置 的编辑表单（Issue #43）。罐详情的两个参数页签和设置页里的两个旧入口都用它，规则只有一套：
 // - 对象由使用方给定（device + 实际罐号 + 设备行的 station_id）；组件自己不选设备、不选罐。
@@ -41,6 +44,8 @@ import type { ControlCommand, TankSettings } from '../../types/api';
 // - 「下发修改」只发改动且合法的字段（buildArgs），原因必填，确认框列前后值与单位；受理后在本组件内跟踪结果：
 //   terminal 之前是处理中，成功后按 echoState 核对新鲜回显；拒绝/失败显示设备原因（#42）；过期 = 结果无法确认。
 // - 员工（customer_user）只看上报值，没有草稿和下发。
+// - 储罐设置另有介质（选 mediaId，云端换算）与颜色（20 色色板）两项选择（2026-11-14），只有管理员可选；
+//   选项读不到时介质只读，固件不支持（media-options.oilColorSync 为假）时颜色只读。选择不进暂存草稿。
 
 const POLL_MS = 2000;
 const ECHO_MS = 5000;
@@ -70,6 +75,8 @@ function unitText(u: Unit): string {
   return u;
 }
 
+const PALETTE = OIL_COLOR_PALETTE.map((c) => ({ color: c, css: toCss(c) }));
+
 function shown(v: string): string {
   return v === '' ? t('param.unreported') : v;
 }
@@ -94,6 +101,16 @@ Component({
     rows: [] as Row[],
     roRows: [] as RoRow[],
     medium: '',
+    mediumEditable: false,
+    mediumNames: [] as string[],
+    mediumIdx: -1,
+    mediumNote: '',
+    colors: PALETTE,
+    colorEditable: false,
+    colorSel: -1,
+    colorNow: '',
+    colorNonStandard: false,
+    colorNote: '',
     isTank: false,
     readOnly: true,
     draftNote: '',
@@ -128,6 +145,7 @@ Component({
       self.tracked = undefined;
       self.trackSeq = 0;
       self.timer = 0;
+      self.mediaIds = [];
     },
     detached() {
       const self = this as unknown as EditorThis;
@@ -187,6 +205,15 @@ Component({
         rows: [],
         roRows: [],
         medium: '',
+        mediumEditable: false,
+        mediumNames: [],
+        mediumIdx: -1,
+        mediumNote: '',
+        colorEditable: false,
+        colorSel: -1,
+        colorNow: '',
+        colorNonStandard: false,
+        colorNote: '',
         draftNote: '',
         moved: false,
         changedCount: 0,
@@ -211,6 +238,7 @@ Component({
       const gen = ++self.gen;
       const device = this.data.device as string;
       const tank = this.data.tank as number;
+      if (this.data.kind === 'tank' && !this.data.readOnly) this.loadOptions(gen);
       getTankSettings(device)
         .then((rows) => {
           if (gen !== self.gen) return;
@@ -224,6 +252,60 @@ Component({
           else this.setData({ state: 'error' });
           this.updateSendable();
         });
+    },
+
+    // Administrators only: what the medium can be changed to, and whether the firmware takes a colour.
+    loadOptions(gen: number) {
+      const self = this as unknown as EditorThis;
+      getMediaOptions(this.data.device as string)
+        .then((o) => {
+          if (gen !== self.gen) return;
+          const list: MediaOption[] = [...(o.public || []), ...(o.customer || [])];
+          const keep = self.mediaIds[this.data.mediumIdx as number];
+          self.mediaIds = list.map((x) => x.id);
+          this.setData({
+            mediumEditable: true,
+            mediumNames: list.map((x) => x.name),
+            mediumIdx: keep === undefined ? -1 : self.mediaIds.indexOf(keep),
+            mediumNote: '',
+            colorEditable: !!o.oilColorSync,
+            colorSel: o.oilColorSync ? this.data.colorSel : -1,
+            colorNote: o.oilColorSync ? '' : t('param.colorUnsupported'),
+          });
+          this.render();
+        })
+        .catch(() => {
+          if (gen !== self.gen) return;
+          self.mediaIds = [];
+          this.setData({ mediumEditable: false, mediumIdx: -1, mediumNote: t('param.mediumUnavailable'), colorEditable: false, colorSel: -1, colorNote: '' });
+          this.render();
+        });
+    },
+
+    onMediumPick(e: WechatMiniprogram.PickerChange) {
+      if (this.data.readOnly || !this.data.mediumEditable) return;
+      this.setData({ mediumIdx: Number(e.detail.value) });
+      this.render();
+    },
+
+    // Tap a colour to choose it; tap it again to leave the colour as it is.
+    onColorPick(e: WechatMiniprogram.BaseEvent) {
+      if (this.data.readOnly || !this.data.colorEditable) return;
+      const c = Number(e.currentTarget.dataset.color);
+      this.setData({ colorSel: this.data.colorSel === c ? -1 : c });
+      this.render();
+    },
+
+    // The medium/colour choices as cloud args (only what differs from the report).
+    choiceArgs(): Record<string, number> {
+      const self = this as unknown as EditorThis;
+      const idx = this.data.mediumIdx as number;
+      const sel = this.data.colorSel as number;
+      return buildMediumArgs(
+        idx >= 0 ? self.mediaIds[idx] : undefined,
+        sel >= 0 ? sel : undefined,
+        self.mirror as unknown as Record<string, unknown> | undefined,
+      );
     },
 
     applyMirror(m: TankSettings | undefined) {
@@ -257,6 +339,8 @@ Component({
           })
           : [],
         medium: this.data.kind === 'tank' && m ? mediumText(m.oilTypeIndex, m.oilType, t) : '',
+        colorNow: m && typeof m.oilColor === 'number' ? toCss(m.oilColor) : '',
+        colorNonStandard: !!m && typeof m.oilColor === 'number' && !isPaletteColor(m.oilColor),
       });
       this.render();
     },
@@ -297,9 +381,13 @@ Component({
         if (moved) note = t('param.moved', { was: shown(self.form.base[f.form] ?? ''), now: shown(report), unit });
         else if (changed) note = t('param.change', { before: shown(report), after: value, unit });
         else if (value.trim() === '' && report !== '') note = t('param.keep', { before: report, unit });
-        return { key: f.form, label: t(f.labelKey), unit, signed: f.signed, value, changed, note, warn: moved };
+        // A density above 2 g/cm³ was most likely typed in kg/m³ (the device's old label): ask to check it.
+        const odd = f.form === 'density' && !changed && Number(report) > 2;
+        if (odd) note = t('param.densityCheck');
+        return { key: f.form, label: t(f.labelKey), unit, signed: f.signed, value, changed, note, warn: moved || odd };
       });
-      this.setData({ rows, moved: self.form.moved.length > 0, changedCount: Object.keys(self.form.edits).length });
+      const choices = Object.keys(this.choiceArgs()).length;
+      this.setData({ rows, moved: self.form.moved.length > 0, changedCount: Object.keys(self.form.edits).length + choices });
       this.updateSendable();
     },
 
@@ -322,7 +410,7 @@ Component({
       const fields = editFields(this.data.kind as ParamKind);
       self.form = mergeReport(fields, self.report, {}, {});
       this.persist();
-      this.setData({ draftNote: '' });
+      this.setData({ draftNote: '', mediumIdx: -1, colorSel: -1 });
       this.render();
     },
 
@@ -363,7 +451,10 @@ Component({
       const kind = this.data.kind as ParamKind;
       const fields = editFields(kind);
       const mirror = self.mirror as unknown as Record<string, unknown> | undefined;
-      const { args, problems } = buildArgs(fields, self.form.values, mirror);
+      const built = buildArgs(fields, self.form.values, mirror);
+      const { problems } = built;
+      const choices = kind === 'tank' ? this.choiceArgs() : {};
+      const args = { ...built.args, ...choices };
       if (problems.length) {
         const p = problems[0];
         const f = fields.find((x) => x.form === p.form);
@@ -384,6 +475,12 @@ Component({
         const before = self.report[f.form] ?? '';
         return { label: t(f.labelKey), before: before === '' ? t('param.unreported') : `${before} ${unit}`, after: `${args[f.cloud]} ${unit}` };
       });
+      if ('mediaId' in choices) {
+        lines.push({ label: t('param.medium'), before: (this.data.medium as string) || t('param.unreported'), after: (this.data.mediumNames as string[])[this.data.mediumIdx as number] });
+      }
+      if ('oilColor' in choices) {
+        lines.push({ label: t('param.color'), before: (this.data.colorNow as string) || t('param.unreported'), after: toCss(choices.oilColor) });
+      }
       const device = this.data.device as string;
       const tank = this.data.tank as number;
       const station = this.data.station as number;
@@ -394,7 +491,11 @@ Component({
           if (!cmd) return;
           // The result belongs to that device + tank, whatever is on screen by now.
           this.track({ device, tank, cmd, echoStarted: 0 });
-          if (key === self.loadedKey) this.setData({ reason: '' });
+          // The choices went out with this command; the device's next report shows them.
+          if (key === self.loadedKey) {
+            this.setData({ reason: '', mediumIdx: -1, colorSel: -1 });
+            this.render();
+          }
         })
         .finally(() => this.setData({ sending: false }));
     },
@@ -522,11 +623,14 @@ Component({
       } else if (phase === 'rejected' || phase === 'failed') tone = 'bad';
       else if (phase === 'expired') tone = 'warn';
       const err = commandError(cmd.status, cmd.errorCode, cmd.errorReason);
+      // Succeeded but some fields untouched (e.g. older firmware): say which, never a silent "done".
+      const ignored = phase === 'succeeded' ? ignoredFields(cmd) : [];
+      if (ignored.length && tone === 'ok') tone = 'warn';
       this.setData({
         result: {
           tone,
           message,
-          error: !err ? '' : 'key' in err ? t(err.key) : err.text,
+          error: err ? ('key' in err ? t(err.key) : err.text) : ignored.length ? t('param.ignored', { fields: ignored.join(', ') }) : '',
           commandId: cmd.commandId,
         },
       });
@@ -555,6 +659,7 @@ type EditorThis = WechatMiniprogram.Component.Instance<Record<string, unknown>, 
   tracked: Tracked | undefined;
   trackSeq: number;
   timer: number;
+  mediaIds: number[];
   sync(): void;
   load(): void;
   refresh(): void;

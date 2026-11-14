@@ -98,12 +98,21 @@ const DEV = 'ZCT000001';
 let mirrors;
 let command;
 let postReply = null;
+let mediaOptions = null;
 const ok = (o, data) => setTimeout(() => o.success({ statusCode: 200, data, header: {} }), 0);
 function cloud({ hold = false } = {}) {
   route = (o) => {
     if (o.url.endsWith('/tank-settings')) {
       if (hold) return false;
       ok(o, { deviceName: DEV, tanks: structuredClone(mirrors) });
+      return true;
+    }
+    if (o.url.endsWith('/media-options')) {
+      if (!mediaOptions) {
+        setTimeout(() => o.success({ statusCode: 403, data: { error: 'not authorized for this device' }, header: {} }), 0);
+        return true;
+      }
+      ok(o, structuredClone(mediaOptions));
       return true;
     }
     if (o.method === 'GET' && o.url.endsWith('/api/devices')) {
@@ -135,6 +144,14 @@ const reset = () => {
   ];
   command = { commandId: 'cmd-1', status: 'pending', terminal: false };
   postReply = null;
+  mediaOptions = {
+    public: [{ id: 5, name: '0#柴油', builtinIndex: 5 }],
+    customer: [{ id: 90, name: '盐酸', builtinIndex: null }],
+    customMediaSync: true,
+    oilColorSync: true,
+    slotsUsed: 0,
+    slotsTotal: 8,
+  };
   setToken(jwt(12));
   cloud();
 };
@@ -363,14 +380,109 @@ await test('employee: read only, typing stores nothing', async () => {
   assert.equal([...store.keys()].some((k) => k.startsWith('param-draft:')), false);
 });
 
-await test('tank kind: the seven sendable fields editable, density/height/low temp read only', async () => {
+await test('tank kind: eight sendable fields incl. density (g/cm³), height/low temp read only', async () => {
   reset();
   mirrors[1] = { ...mirrors[1], capacityL: 30000, alarmHighLevelMm: 1800, density: 0.84, tankHeightMm: 2500, alarmLowTempC: null };
   const ed = mount({ ...props, kind: 'tank' });
   await tick();
-  assert.deepEqual(ed.data.rows.map((r) => r.key), ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh']);
+  assert.deepEqual(ed.data.rows.map((r) => r.key), ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'density']);
   assert.equal(ed.data.rows[0].value, '30000');
-  assert.deepEqual(ed.data.roRows.map((r) => [r.key, r.value]), [['density', '0.84'], ['height', '2500'], ['tempLow', '未上报']]);
+  assert.equal(ed.data.rows[7].unit, 'g/cm³');
+  assert.deepEqual(ed.data.roRows.map((r) => [r.key, r.value]), [['height', '2500'], ['tempLow', '未上报']]);
+});
+
+await test('tank kind, admin: choose medium and colour; both are sent with the other changes', async () => {
+  reset();
+  mirrors[1] = { ...mirrors[1], oilTypeIndex: 3, oilType: '92#', oilColor: 0x0000ff, density: 0.84 };
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.equal(ed.data.mediumEditable, true);
+  assert.equal(ed.data.colorEditable, true);
+  assert.equal(ed.data.colorNow, '#0000FF');
+  assert.deepEqual(ed.data.mediumNames, ['0#柴油', '盐酸']);
+  ed.onMediumPick({ detail: { value: '1' } });
+  ed.onColorPick({ currentTarget: { dataset: { color: 0xff0000 } } });
+  assert.equal(ed.data.changedCount, 2);
+  ed.onReasonInput({ detail: { value: '换介质' } });
+  modalAnswers = [true];
+  ed.onSend();
+  await tick(30);
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].data.args, { tank: 3, mediaId: 90, oilColor: 0xff0000 });
+  assert.match(modals[0].content, /盐酸/);
+  ed.stopTrack();
+});
+
+await test('tank kind: colour read only without device support; a non-palette colour is marked', async () => {
+  reset();
+  mediaOptions.oilColorSync = false;
+  mirrors[1] = { ...mirrors[1], oilColor: 0x123456 };
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.equal(ed.data.mediumEditable, true);
+  assert.equal(ed.data.colorEditable, false);
+  assert.equal(ed.data.colorNote, '当前设备固件不支持远程修改颜色');
+  assert.equal(ed.data.colorNonStandard, true);
+});
+
+await test('tank kind: options unavailable keeps medium read only, other fields still editable', async () => {
+  reset();
+  mediaOptions = null;
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.equal(ed.data.mediumEditable, false);
+  assert.equal(ed.data.colorEditable, false);
+  assert.equal(ed.data.readOnly, false);
+});
+
+await test('tank kind, employee: medium, density and colour read only, options never asked', async () => {
+  reset();
+  setToken(jwt(20, 'customer_user'));
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.equal(ed.data.readOnly, true);
+  assert.equal(ed.data.mediumEditable, false);
+  assert.equal(ed.data.colorEditable, false);
+  assert.equal(held.some((o) => o.url.endsWith('/media-options')), false);
+});
+
+await test('a density that looks like kg/m³ is flagged for checking', async () => {
+  reset();
+  mirrors[1] = { ...mirrors[1], density: 840 };
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  const row = ed.data.rows.find((r) => r.key === 'density');
+  assert.equal(row.warn, true);
+  assert.match(row.note, /kg\/m³/);
+});
+
+await test('an odd density report (840) does not block sending another field', async () => {
+  reset();
+  mirrors[1] = { ...mirrors[1], density: 840, alarmHighLevelMm: 1800 };
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  ed.setInput('high', '1700');
+  ed.onReasonInput({ detail: { value: 'r' } });
+  modalAnswers = [true];
+  ed.onSend();
+  await tick(30);
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].data.args, { tank: 3, alarmHighLevelMm: 1700 });
+  ed.stopTrack();
+});
+
+await test('a succeeded command that the device partly ignored says so', async () => {
+  reset();
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  ed.setInput('capacity', '100');
+  ed.onReasonInput({ detail: { value: 'r' } });
+  modalAnswers = [true];
+  command = { commandId: 'cmd-1', status: 'succeeded', terminal: true, finishedAt: '2026-11-14T03:00:00Z', resultDetail: { ignored: ['oilColor'] } };
+  ed.onSend();
+  await tick(30);
+  assert.match(ed.data.result.error, /oilColor/);
+  ed.stopTrack();
 });
 
 console.log(`${n} param-editor flow checks passed`);

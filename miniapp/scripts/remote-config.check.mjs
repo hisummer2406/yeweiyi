@@ -4,6 +4,8 @@ import {
   CORRECTION_SEND_FIELDS,
   TANK_SEND_FIELDS,
   buildArgs,
+  buildMediumArgs,
+  ignoredFields,
   buildBackfill,
   classifySubmit,
   commandError,
@@ -42,13 +44,14 @@ const mirror = {
 };
 
 test('only filled fields that differ from the device are sent; empty is "leave as is"', () => {
-  const r = buildArgs(TANK_SEND_FIELDS, { high: '610', highHigh: '2300', low: '', density: '0.7' }, mirror);
+  const r = buildArgs(TANK_SEND_FIELDS, { high: '610', highHigh: '2300', low: '', density: '0.56' }, mirror);
   assert.deepEqual(r, { args: { alarmHighLevelMm: 610 }, problems: [] });
 });
 
-test('density, height, low water, low temperature are never sent', () => {
+test('height, low water, low temperature are never sent (density is, since 2026-11-14)', () => {
   const keys = TANK_SEND_FIELDS.map((f) => f.form);
-  for (const k of ['density', 'height', 'waterLow', 'tempLow']) assert.ok(!keys.includes(k), k);
+  for (const k of ['height', 'waterLow', 'tempLow']) assert.ok(!keys.includes(k), k);
+  assert.ok(keys.includes('density'));
 });
 
 test('number, integer, range problems', () => {
@@ -212,6 +215,27 @@ test('commandError: only refusals/failures explain; the ACK "已受理" never do
   assert.equal(commandError('expired', '', '已受理'), null);
   assert.equal(commandError('received', '', '已受理'), null);
   assert.equal(commandError('succeeded', '', '已受理'), null);
+});
+
+test('density is sendable in g/cm³, > 0 and ≤ 2; an untouched odd report is not sent', () => {
+  assert.deepEqual(buildArgs(TANK_SEND_FIELDS, { density: '0.84' }, { density: 0.56 }).args, { density: 0.84 });
+  for (const bad of ['0', '2.5', '-1']) {
+    assert.deepEqual(buildArgs(TANK_SEND_FIELDS, { density: bad }, {}).problems, [{ form: 'density', reason: 'range' }]);
+  }
+  assert.deepEqual(buildArgs(TANK_SEND_FIELDS, { density: '840', high: '1800' }, { density: 840 }), { args: { alarmHighLevelMm: 1800 }, problems: [] });
+});
+
+test('medium and colour: only what was chosen and differs from the report', () => {
+  assert.deepEqual(buildMediumArgs(5, undefined, { oilColor: null }), { mediaId: 5 });
+  assert.deepEqual(buildMediumArgs(undefined, 0xff0000, { oilColor: 0x0000ff }), { oilColor: 0xff0000 });
+  assert.deepEqual(buildMediumArgs(undefined, 0xff0000, { oilColor: 0xff0000 }), {});
+  assert.deepEqual(buildMediumArgs(undefined, undefined, undefined), {});
+});
+
+test('ignoredFields reads the device detail', () => {
+  assert.deepEqual(ignoredFields({ resultDetail: { tank: 1, updated: [], ignored: ['oilColor'] } }), ['oilColor']);
+  assert.deepEqual(ignoredFields({ resultDetail: null }), []);
+  assert.deepEqual(ignoredFields({}), []);
 });
 
 console.log(`${n} checks passed`);

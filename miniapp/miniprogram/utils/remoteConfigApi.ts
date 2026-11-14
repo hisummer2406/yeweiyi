@@ -2,12 +2,18 @@
 // docs/stock-manual-entry-contract.md. Failures reject with ApiError (status 0 = no answer).
 import { get, post } from './request';
 import type { SendArgs, SendMethod } from './remoteConfig';
-import type { ControlCommand, ListCommandsResponse, TankSettings, TankSettingsResponse } from '../types/api';
+import type { ControlCommand, ListCommandsResponse, MediaOptions, TankSettings, TankSettingsResponse } from '../types/api';
 
 const dev = (device: string) => `/api/devices/${encodeURIComponent(device)}`;
 
 export function getTankSettings(device: string): Promise<TankSettings[]> {
   return get<TankSettingsResponse>(`${dev(device)}/tank-settings`).then((r) => (r && Array.isArray(r.tanks) ? r.tanks : []));
+}
+
+// What an administrator may pick for this device's tanks (media + whether the firmware takes oilColor).
+// Employees are refused (403); the editor never asks for them.
+export function getMediaOptions(device: string): Promise<MediaOptions> {
+  return get<MediaOptions>(`${dev(device)}/media-options`);
 }
 
 export type ConfigSubmission = {
