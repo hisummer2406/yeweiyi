@@ -110,6 +110,10 @@ Component({
     'kind, device, tank, active': function () {
       (this as unknown as { sync(): void }).sync();
     },
+    // 设备所在油站可能在编辑器读完上报值之后才查到：只重算能否下发，不动草稿
+    station: function () {
+      (this as unknown as { updateSendable(): void }).updateSendable();
+    },
   },
 
   lifetimes: {
@@ -400,6 +404,11 @@ Component({
     track(tr: Tracked) {
       const self = this as unknown as EditorThis;
       self.stopTrack();
+      // 超时找回/同请求重试可能直接拿到已成功的命令：同样要等设备新上报
+      if (tr.cmd.terminal && tr.cmd.status === 'succeeded' && !tr.echo) {
+        tr.echo = 'waiting';
+        tr.echoStarted = Date.now();
+      }
       self.tracked = tr;
       this.showResult();
       this.tick(++self.trackSeq);
