@@ -1,0 +1,189 @@
+@import "../../styles/typography.wxss";
+
+/* 参数编辑表单（Issue #43）。沿用 app.wxss 的 .fc/.fr/.fl/.fi/.fu，按需覆盖宽度，长文案换行不裁切。 */
+.pe {
+  padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+}
+
+.pe-banner {
+  margin: 16rpx 20rpx 0;
+}
+
+.pe-draft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pe-draft-text {
+  flex: 1;
+  min-width: 0;
+  margin-right: 16rpx;
+}
+
+.pe-draft .btn-primary {
+  margin: 0;
+  flex: none;
+}
+
+.pe-card {
+  padding: 8rpx 0 12rpx;
+}
+
+.pe-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 20rpx 37rpx 8rpx 51rpx;
+}
+
+.pe-head-title {
+  font-size: var(--font-heading);
+  font-weight: 600;
+  color: #131313;
+  margin-right: 16rpx;
+}
+
+.pe-head-time {
+  font-size: var(--font-caption);
+}
+
+.pe-fr {
+  height: auto;
+  min-height: 81rpx;
+}
+
+.pe-fl {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 12rpx 12rpx 12rpx 0;
+  line-height: 1.3;
+}
+
+.pe-fr .fv {
+  flex: 0 0 0;
+}
+
+/* 数值输入：放得下「未上报」与 -100.00，右对齐，单位紧跟其后 */
+.pe-fi {
+  flex: none;
+  width: 170rpx;
+  text-align: right;
+  font-size: var(--font-body);
+}
+
+.pe-fu {
+  flex: none;
+  width: 72rpx;
+  margin-left: 8rpx;
+}
+
+.pe-ro {
+  flex: none;
+  max-width: 320rpx;
+  text-align: right;
+  font-size: var(--font-body);
+  color: #131313;
+}
+
+/* 正负号切换（#30）：触控区不小于 64rpx */
+.pe-sign {
+  flex: none;
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  margin-right: 8rpx;
+  text-align: center;
+  font-size: var(--font-heading);
+  color: #131313;
+  border: 1rpx solid #d9d9d9;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+}
+
+.pe-row-changed {
+  background-color: #eef5ff;
+}
+
+.pe-row-note {
+  padding: 0 37rpx 14rpx 51rpx;
+  font-size: var(--font-caption);
+  line-height: 1.5;
+  color: #0068e9;
+}
+
+.pe-row-note.text-warning {
+  color: #9c6b00;
+}
+
+.pe-sub {
+  padding: 20rpx 37rpx 4rpx 51rpx;
+  font-size: var(--font-caption);
+  color: #919191;
+}
+
+.pe-reason {
+  flex: 1;
+  min-width: 0;
+  height: 60rpx;
+  font-size: var(--font-body);
+  color: #131313;
+  text-align: right;
+}
+
+.pe-note {
+  padding: 12rpx 51rpx 0;
+  font-size: var(--font-caption);
+  line-height: 1.5;
+}
+
+.pe-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 32rpx;
+  padding: 0 36rpx;
+}
+
+button.pe-send {
+  width: 100%;
+}
+
+.pe-result {
+  margin: 16rpx 20rpx 0;
+  font-size: var(--font-body);
+  line-height: 1.5;
+}
+
+.pe-result-title {
+  font-size: var(--font-caption);
+  color: #919191;
+}
+
+.pe-result-info {
+  border-left: 8rpx solid #0068e9;
+}
+
+.pe-result-ok {
+  border-left: 8rpx solid #0f846c;
+}
+
+.pe-result-warn {
+  border-left: 8rpx solid #d99a00;
+}
+
+.pe-result-bad {
+  border-left: 8rpx solid #d4380d;
+}
+
+.pe-result-error {
+  margin-top: 8rpx;
+  color: #d4380d;
+}
+
+.pe-link {
+  margin-top: 12rpx;
+  color: #0068e9;
+  font-size: var(--font-label);
+}

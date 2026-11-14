@@ -1,42 +1,10 @@
-/* 参数修正（#6）：在设计稿「参数修正07」的表单件（app.wxss .fc/.fr/.fl/.fi/.fu）之上，补上接入设备回报后新增的几种行。
-   全局 .fi 是 69rpx（设计稿占位只有 "0"），.fu 是 flex:1——放「未设置」占位或纯文本数值时会挤坏布局，这里按页覆盖。 */
-
-/* 数值输入：放得下「未设置」与 -100.00，右对齐，单位紧跟其后 */
-.cb .fi {
-  width: 170rpx;
-  text-align: right;
-}
-
-.cb .fu {
-  flex: none;
-  width: 56rpx;
-  margin-left: 8rpx;
-}
-
-/* 正负号切换（#30）：触控区不小于 64rpx */
-.cb-sign {
-  flex: none;
-  width: 64rpx;
-  height: 64rpx;
-  line-height: 60rpx;
-  margin-right: 8rpx;
-  text-align: center;
-  font-size: var(--font-heading);
-  color: #131313;
-  border: 1rpx solid #d9d9d9;
-  border-radius: 8rpx;
-  box-sizing: border-box;
-}
-
-/* 只读数值（设备当前值）：与输入框同宽同对齐，单位位置一致 */
-.cb-num {
-  width: 170rpx;
-  text-align: right;
-  font-size: var(--font-body);
+/* 设置页参数入口（#43）：对象信息栏；表单样式在 components/param-editor。 */
+.pp-banner {
+  margin: 16rpx 20rpx 0;
 }
 
 /* 长文本值（油站 · 设备编号）：单行省略，不撑高行 */
-.cb-text {
+.pp-text {
   flex: 1;
   min-width: 0;
   text-align: right;
@@ -47,41 +15,6 @@
   text-overflow: ellipsis;
 }
 
-/* 分组标题行：标题不受 .fl 固定宽度限制，按钮靠右 */
-.cb-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 81rpx;
-  padding: 0 37rpx 0 51rpx;
-}
-
-.cb-head-title {
-  font-size: var(--font-heading);
-  font-weight: 600;
-  color: #131313;
-}
-
-.cb-head .btn-primary {
-  margin: 0;
-}
-
-/* 原因输入：占满剩余宽度 */
-.cb-reason {
-  flex: 1;
-  min-width: 0;
-  height: 60rpx;
-  font-size: var(--font-body);
-  color: #131313;
-  text-align: right;
-}
-
-.cb-note {
-  padding: 4rpx 51rpx 16rpx;
-  font-size: var(--font-caption);
-  line-height: 1.5;
-}
-
-.cb-banner {
-  margin: 16rpx 20rpx 0;
+.pp-note {
+  padding: 24rpx 51rpx;
 }

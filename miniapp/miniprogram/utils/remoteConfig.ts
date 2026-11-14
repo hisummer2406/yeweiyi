@@ -5,7 +5,7 @@
 // The cloud and the device decide; the checks here only say "no" earlier.
 
 export type SendField = {
-  // Key in the page form (tankDraft keys for 储罐设置, calibration keys for 参数修正)
+  // Key in the page form (储罐设置 / 参数修正 field keys, see editFields)
   form: string;
   // Field name on the wire / in the tank-settings mirror
   cloud: string;
@@ -41,6 +41,51 @@ export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
   { form: 'levelOffset', cloud: 'levelCorrectionMm', integer: false, min: -Infinity, max: Infinity },
   { form: 'waterOffset', cloud: 'waterCorrectionMm', integer: false, min: -Infinity, max: Infinity },
   { form: 'tempOffset', cloud: 'tempCorrectionC', integer: false, min: -Infinity, max: Infinity },
+];
+
+// ---- 编辑表单字段（Issue #43：罐详情参数页签与设置页共用） ----
+
+export type ParamKind = 'calibration' | 'tank';
+
+export type Unit = 'mm' | 'L' | '℃' | 'kg/m³';
+
+export type EditField = SendField & { unit: Unit; signed: boolean; labelKey: string };
+
+const UNITS: Record<string, Unit> = {
+  levelOffset: 'mm',
+  waterOffset: 'mm',
+  tempOffset: '℃',
+  capacity: 'L',
+  highHigh: 'mm',
+  high: 'mm',
+  lowLow: 'mm',
+  low: 'mm',
+  waterHigh: 'mm',
+  tempHigh: '℃',
+};
+
+// 储罐设置 order as on the old form (capacity first, then the four levels high → low, water, temperature).
+const TANK_ORDER = ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh'];
+
+export function editFields(kind: ParamKind): EditField[] {
+  if (kind === 'calibration') {
+    return CORRECTION_SEND_FIELDS.map((f) => ({ ...f, unit: UNITS[f.form], signed: true, labelKey: `calibration.${f.form}` }));
+  }
+  return TANK_ORDER.map((k) => TANK_SEND_FIELDS.find((f) => f.form === k) as SendField).map((f) => ({
+    ...f,
+    unit: UNITS[f.form],
+    // Temperatures can be below zero; the digit keyboard has no minus sign on every phone (#30).
+    signed: f.min < 0,
+    labelKey: `tankCfg.${f.form}`,
+  }));
+}
+
+// Shown with the device's value, never editable or sent (density: unit not aligned; height: refused by the
+// cloud; low temperature: never checked by the device). Low water and colour have no device field at all.
+export const TANK_READONLY: readonly { form: string; cloud: string; unit: Unit }[] = [
+  { form: 'density', cloud: 'density', unit: 'kg/m³' },
+  { form: 'height', cloud: 'tankHeightMm', unit: 'mm' },
+  { form: 'tempLow', cloud: 'alarmLowTempC', unit: '℃' },
 ];
 
 // The ± button beside a correction: some phone keyboards have no usable minus (#30). It only flips the sign of

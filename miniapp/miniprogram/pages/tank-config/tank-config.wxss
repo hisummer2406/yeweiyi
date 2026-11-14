@@ -1,43 +1,20 @@
-/* 数值取自设计稿「储罐设置10」PNG：行高 90，标签 x=53、值 x=316。
-   输入框比设计稿的占位 "0" 宽，放得下「未设置」和 6 位数，单位固定在右侧。 */
-.fr-b .fi {
-  width: 150rpx;
-  text-align: right;
+/* 设置页参数入口（#43）：对象信息栏；表单样式在 components/param-editor。 */
+.pp-banner {
+  margin: 16rpx 20rpx 0;
 }
 
-.tc-page {
-  padding-bottom: calc(320rpx + env(safe-area-inset-bottom));
-}
-
-.tc-banner {
-  margin: 16rpx 24rpx 0;
-}
-
-.tc-saved {
-  padding: 8rpx 53rpx 0;
-}
-
-.tc-color-dot {
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 8rpx;
-}
-
-/* 介质类型：手输文字，和数字行不同，输入框占满剩余宽度 */
-.fi-text {
+/* 长文本值（油站 · 设备编号）：单行省略，不撑高行 */
+.pp-text {
   flex: 1;
   min-width: 0;
-  height: 60rpx;
-  font-size: var(--font-body);
+  text-align: right;
+  font-size: var(--font-label);
   color: #131313;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.tc-actions {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 24rpx 0 calc(24rpx + env(safe-area-inset-bottom));
-  background: #edf0f7;
-  z-index: 10;
+.pp-note {
+  padding: 24rpx 51rpx;
 }

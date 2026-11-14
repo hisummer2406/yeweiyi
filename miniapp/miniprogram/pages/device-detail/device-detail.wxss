@@ -3,6 +3,11 @@
   padding: 16rpx 24rpx 0;
 }
 
+.tank-bar-target {
+  margin-bottom: 4rpx;
+  word-break: break-all;
+}
+
 .tank-bar-current {
   margin-bottom: 12rpx;
   font-size: var(--font-title);
