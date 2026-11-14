@@ -77,6 +77,10 @@ function mount(props) {
     Object.assign(inst.data, p);
     def.observers['kind, device, tank, active'].call(inst);
   };
+  inst.setStation = (station) => {
+    inst.data.station = station;
+    def.observers.station.call(inst);
+  };
   inst.props(props);
   return inst;
 }
@@ -93,6 +97,7 @@ const jwt = (uid, role = 'customer_admin') => `h.${Buffer.from(JSON.stringify({ 
 const DEV = 'ZCT000001';
 let mirrors;
 let command;
+let postReply = null;
 const ok = (o, data) => setTimeout(() => o.success({ statusCode: 200, data, header: {} }), 0);
 function cloud({ hold = false } = {}) {
   route = (o) => {
@@ -106,7 +111,8 @@ function cloud({ hold = false } = {}) {
       return true;
     }
     if (o.method === 'POST') {
-      setTimeout(() => o.success({ statusCode: 202, data: { commandId: 'cmd-1', status: 'pending', terminal: false, args: o.data.args }, header: {} }), 0);
+      const data = postReply ? structuredClone(postReply) : { commandId: 'cmd-1', status: 'pending', terminal: false, args: o.data.args };
+      setTimeout(() => o.success({ statusCode: 202, data, header: {} }), 0);
       return true;
     }
     if (o.method === 'GET' && /\/commands\/cmd-1$/.test(o.url)) {
@@ -128,6 +134,7 @@ const reset = () => {
     { tank: 3, reportedAt: '2026-11-14T02:00:00Z', levelCorrectionMm: 2, waterCorrectionMm: null, tempCorrectionC: -0.5 },
   ];
   command = { commandId: 'cmd-1', status: 'pending', terminal: false };
+  postReply = null;
   setToken(jwt(12));
   cloud();
 };
@@ -287,6 +294,34 @@ await test('station not known yet: no send', async () => {
   await tick();
   assert.equal(ed.data.canSend, false);
   assert.notEqual(ed.data.sendBlock, '');
+});
+
+await test('station found after an edit: send becomes available, the edit kept', async () => {
+  reset();
+  const ed = mount({ ...props, station: -2 });
+  await tick();
+  ed.setInput('levelOffset', '-1.5');
+  assert.equal(ed.data.canSend, false);
+  ed.setStation(7);
+  assert.equal(ed.data.canSend, true);
+  assert.equal(ed.data.sendBlock, '');
+  assert.equal(ed.data.changedCount, 1);
+});
+
+await test('an already-succeeded command (recovered/retried) still waits for a fresh report', async () => {
+  reset();
+  const ed = mount(props);
+  await tick();
+  ed.setInput('levelOffset', '-1.5');
+  ed.onReasonInput({ detail: { value: 'r' } });
+  modalAnswers = [true];
+  postReply = { commandId: 'cmd-1', status: 'succeeded', terminal: true, args: { tank: 3, levelCorrectionMm: -1.5 }, finishedAt: '2026-11-14T04:00:00Z' };
+  mirrors[1] = { ...mirrors[1], reportedAt: '2026-11-14T04:00:05Z', levelCorrectionMm: -1.5 };
+  ed.onSend();
+  await tick(30);
+  assert.equal(ed.data.result.tone, 'ok');
+  assert.equal(ed.data.changedCount, 0);
+  ed.stopTrack();
 });
 
 await test('employee: read only, typing stores nothing', async () => {
