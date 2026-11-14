@@ -141,6 +141,12 @@ export function generateTankTable(shape: TankShape, mm: Record<string, number>):
   return cuboid(mm.L / 1000, (mm.R / 2000) * 2, mm.H / 1000);
 }
 
+// 设备公式在个别尺寸下会算出 NaN（卧罐点数取整/浮点累加使最后一档高度略超直径，开方为负），
+// 例如 H=2605 或 H=200。这类表不能当作生成成功，更不能下发。
+export function tableValid(table: TankTable): boolean {
+  return table.heightMm.length > 0 && table.volumeL.every((v) => Number.isFinite(v));
+}
+
 // 预览用：点数多时按设备列表的做法抽样（≥ 200 点时每 step 个取一个），最后一行总是保留。
 export function previewRows(table: TankTable, limit = 200): { heightMm: number; volumeL: number }[] {
   const n = table.heightMm.length;

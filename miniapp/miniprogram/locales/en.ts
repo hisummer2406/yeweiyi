@@ -371,6 +371,7 @@ export const en: Record<string, string> = {
   "tankEdit.dimTooSmall": "{dim} must be at least 100 mm",
   "tankEdit.dimTooLarge": "{dim} must be at most 20000 mm",
   "tankEdit.summary": "{n} points, full at {height} mm / {volume} L",
+  "tankEdit.tableInvalid": "The device formula gives no valid table for these dimensions; adjust them slightly and retry",
   "tankEdit.generated": "Tank table generated on this phone only",
   "tankEdit.generateFirst": "Generate the tank table first",
   "tankEdit.sampled": "Many points: a sample is shown below",

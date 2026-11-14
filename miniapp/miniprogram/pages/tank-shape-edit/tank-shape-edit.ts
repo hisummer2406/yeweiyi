@@ -13,7 +13,7 @@ import { isReadOnlyRole } from '../../utils/roles';
 import { FOLLOW_NOTICES } from '../../utils/stationDevice';
 import { loadRecordsContext } from '../../utils/stationPref';
 import { getToken } from '../../utils/storage';
-import { DIM_KEYS, generateTankTable, parseDims, previewRows, tableArgs, type TankShape, type TankTable } from '../../utils/tankTable';
+import { DIM_KEYS, generateTankTable, parseDims, previewRows, tableArgs, tableValid, type TankShape, type TankTable } from '../../utils/tankTable';
 import type { DeviceTanksResponse } from '../../types/api';
 
 type Dim = { key: string; value: string };
@@ -84,6 +84,10 @@ Page({
     const table = generateTankTable(this.data.shape, parsed.mm);
     const n = table.heightMm.length;
     if (n === 0) return;
+    if (!tableValid(table)) {
+      wx.showToast({ title: t('tankEdit.tableInvalid'), icon: 'none', duration: 3000 });
+      return;
+    }
     this.table = table;
     this.mm = parsed.mm;
     const rows = previewRows(table);
