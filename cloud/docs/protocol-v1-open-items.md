@@ -424,3 +424,14 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 - 既有事件新增**可选、向后兼容**字段：`stockEvent.deliveredWeightKg`、`stockEvent.oilTypeIndex`、`alarm.oilType`、`alarm.oilTypeIndex`。
 - 共享 fixture 已由设备端起草、云端收录（2026-11-03，8 份，见 MANIFEST），两端已按其实现并测试。仍待：设备端分支合并、
   真机联调；Android 侧 fixture 已与云端共用一份并接入 CI（同 §C-1）。
+
+## G. 参数拒绝经 `cmdResult` 上报（#42）—— 云端已兼容，待设备端确认
+
+现场旧固件（`RpcDispatcher` 先回 `received` ACK，`SetTankSettingsHandler.invalid` 再把 `rejected`/`INVALID_PARAMS` 经
+`cmdResult` 上报）与契约"`rejected` 只在 ACK 阶段"不一致，云端曾拒收该结果，命令被扫成 `expired`。云端已按
+[协议 §6.6 兼容规则](protocol-v1.md#66-最终结果) 接受它并结束为 `rejected`。
+
+- 【待确认·设备端】是否把参数预检移到 ACK 之前（契约推荐），还是把"`received` → `cmdResult rejected`"写入协议成为正式路径。
+  兼容规则不论哪种都保留，以覆盖已安装的固件。
+- 【待确认·设备端】`rejected` 结果必须保证未发生部分写入（多字段请求整条拒绝）。
+- 共享 fixture 暂未新增；设备端确认形状后补 `cmd_result_rejected.json`。

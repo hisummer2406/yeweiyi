@@ -132,11 +132,16 @@ const CommandsTab: React.FC<{ device: string }> = ({ device }) => {
                   <Tag color={PHASE_COLOR[phase]}>
                     {t(`pages.console.commands.status.${phase}`)}
                   </Tag>
-                  {(c.errorReason || c.errorCode) && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {c.errorReason || c.errorCode}
-                    </Typography.Text>
-                  )}
+                  {/* 只有拒绝/失败才有说明；expired 等状态的 errorReason 是 ACK 的"已受理"（#42） */}
+                  {(phase === 'rejected' || phase === 'failed') &&
+                    (c.errorReason || c.errorCode) && (
+                      <Typography.Text
+                        type="secondary"
+                        style={{ fontSize: 12 }}
+                      >
+                        {c.errorReason || c.errorCode}
+                      </Typography.Text>
+                    )}
                 </Space>
               );
             },

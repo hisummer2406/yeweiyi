@@ -80,7 +80,8 @@ var Methods = map[string]MethodSpec{
 //	pending   backend  command row written, not yet handed to ThingsBoard
 //	sent      backend  ThingsBoard accepted the RPC call
 //	received  device   ACK on the RPC response topic
-//	rejected  device   ACK on the RPC response topic, terminal
+//	rejected  device   ACK on the RPC response topic, terminal; legacy firmware also reports it as a
+//	                   CmdResult after a received ACK, which the backend accepts (#42)
 //	executing device   optional CmdResult, for actions that take a while
 //	succeeded device   CmdResult, terminal
 //	failed    device   CmdResult, terminal

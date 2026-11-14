@@ -149,6 +149,9 @@ type Device struct {
 
 	thresholds deviceThresholds
 	localMode  bool
+	// legacyReject mimics field firmware before #42: parameter refusals are ACKed 'received' and then
+	// reported as cmdResult 'rejected' instead of a 'rejected' ACK.
+	legacyReject bool
 	// customPolicy is true when the caller supplied Config.OnCommand; the built-in config handlers
 	// only answer when it did not, so tests that script a policy keep full control.
 	customPolicy bool
@@ -330,6 +333,17 @@ func (d *Device) PublishAttributes() error {
 	}
 	d.cfg.Logf("→ attributes: %s", payload)
 	return d.publish(protocol.AttributesTopic, payload)
+}
+
+// PublishRawTelemetry publishes arbitrary telemetry values with envelope ts, for tests that need a
+// point the simulator would never produce (a malformed cmdResult, say).
+func (d *Device) PublishRawTelemetry(ts int64, values map[string]any) error {
+	payload, err := json.Marshal(map[string]any{"ts": ts, "values": values})
+	if err != nil {
+		return err
+	}
+	d.cfg.Logf("→ telemetry: %s", payload)
+	return d.publish(protocol.TelemetryTopic, payload)
 }
 
 // PublishRawAttributes reports arbitrary client attributes, for tests that need the device to

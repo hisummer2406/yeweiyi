@@ -136,6 +136,25 @@ export function commandPhase(status: string): Phase {
   return 'unknown';
 }
 
+// What the record shows after the status (#42). Only a device refusal or failure has an explanation: the
+// device's own reason as is (data, not translated), else the error code's key. A received ACK carries
+// "已受理" in errorReason; on an expired/in-flight command that is not an explanation of anything and
+// must not be shown ("结果无法确认：已受理" read as if the device had accepted the change).
+export const KNOWN_ERROR_CODES = [
+  'UNKNOWN_METHOD', 'INVALID_PARAMS', 'EXPIRED', 'INTERLOCK_BLOCKED', 'BUSY', 'NOT_SUPPORTED', 'HARDWARE_FAULT', 'LOCAL_MODE_LOCKED',
+];
+
+export type CommandError = { text: string } | { key: string } | null;
+
+export function commandError(status: string, errorCode?: string, errorReason?: string): CommandError {
+  if (status !== 'rejected' && status !== 'failed') return null;
+  const reason = (errorReason || '').trim();
+  if (reason) return { text: reason };
+  if (errorCode && KNOWN_ERROR_CODES.includes(errorCode)) return { key: `cmdLog.code.${errorCode}` };
+  if (errorCode) return { text: errorCode };
+  return null;
+}
+
 export type Echo = 'matched' | 'waiting' | 'mismatch';
 
 // After succeeded: only a report strictly later than the command's finishedAt can be the device's answer

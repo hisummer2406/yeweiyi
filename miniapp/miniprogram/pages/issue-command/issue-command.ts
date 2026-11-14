@@ -2,7 +2,7 @@ import { roleFromToken } from '../../utils/auth';
 import { describeError } from '../../utils/errors';
 import { formatLocalTime } from '../../utils/format';
 import { currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
-import { commandPhase, echoState, type Echo } from '../../utils/remoteConfig';
+import { commandError, commandPhase, echoState, type Echo } from '../../utils/remoteConfig';
 import { getCommand, getTankSettings, listCommands } from '../../utils/remoteConfigApi';
 import { ApiError } from '../../utils/request';
 import { isReadOnlyRole } from '../../utils/roles';
@@ -14,7 +14,8 @@ import type { ControlCommand } from '../../types/api';
 // 只读，不发命令。打开方式：储罐设置/参数修正下发后 ?device=&commandId=&tank=；或从设置页进入（首页当前油站的设备）。
 // - 是否继续轮询只看云端 terminal；received 不是完成。
 // - succeeded 后读回设备镜像：回报时间不早于下发且字段相等才算"已一致"。
-// - expired / 交付未确认：结果无法确认，设备可能已执行。
+// - rejected / failed：显示设备原因或错误码（#42：旧固件的拒绝经 cmdResult 到达，云端已结束为 rejected）。
+// - expired / 交付未确认：结果无法确认，设备可能已执行；不显示 ACK 的“已受理”。
 // - 页面隐藏（onHide/onUnload）停止所有轮询，回来（onShow）继续。员工看不到命令历史（云端也不给）。
 
 const POLL_MS = 2000;
@@ -42,6 +43,7 @@ function toRow(c: ControlCommand): Row {
     .map((k) => `${fieldLabel(k)}=${String((c.args as Record<string, unknown>)[k])}`)
     .join(t('common.listSep'));
   const phase = commandPhase(c.status);
+  const err = commandError(c.status, c.errorCode, c.errorReason);
   return {
     id: c.commandId,
     time: c.issuedAt ? formatLocalTime(c.issuedAt, currentLocale()) : '—',
@@ -50,7 +52,7 @@ function toRow(c: ControlCommand): Row {
     args: args || '—',
     status: t(`cmdLog.phase.${phase}`),
     phase,
-    error: c.errorReason || c.errorCode || '',
+    error: !err ? '' : 'key' in err ? t(err.key) : err.text,
     operator: c.operator,
   };
 }

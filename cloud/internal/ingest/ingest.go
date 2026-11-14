@@ -284,6 +284,10 @@ func (i *Ingester) handleCmdResult(ctx context.Context, deviceName string, raw a
 	}
 
 	cmd, applied, err := i.cfg.Control.ApplyResult(ctx, deviceName, res)
+	if errors.Is(err, control.ErrInvalidResult) {
+		i.cfg.Logf("ingest: %s: cmdResult %s ignored: %v", deviceName, res.CommandID, err)
+		return
+	}
 	if err != nil {
 		// A database failure, not "unknown command": the result is valid and unrecorded. It is not
 		// lost — commandReconcileLoop reads it back from ThingsBoard until the command's window closes.

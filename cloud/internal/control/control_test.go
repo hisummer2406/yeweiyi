@@ -608,8 +608,8 @@ func TestApplyResult_RejectsStatusesOnlyTheBackendMayWrite(t *testing.T) {
 			CommandID: "3f2504e0-4f89-41d3-9a0c-0305e82c3301",
 			Status:    status,
 		})
-		if err == nil {
-			t.Errorf("a device reporting status %q should be rejected", status)
+		if !errors.Is(err, control.ErrInvalidResult) {
+			t.Errorf("a device reporting status %q should be ErrInvalidResult, got %v", status, err)
 		}
 	}
 }
@@ -819,4 +819,97 @@ func findAudit(t *testing.T, f *fixture, action, commandID string) db.AuditLog {
 		t.Fatalf("want exactly 1 %s audit row for command %s, got %d", action, commandID, len(found))
 	}
 	return found[0]
+}
+
+// #42: field firmware ACKs 'received' and then reports a parameter refusal as cmdResult 'rejected'.
+// It closes the command as rejected, replaces the ACK's "已受理" with the device's reason, and audits
+// the result as denied.
+func TestApplyResult_RejectedAfterReceivedClosesTheCommand(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
+	ctx := context.Background()
+	f.sender.ack = protocol.Ack{Status: protocol.CmdStatusReceived, Reason: "已受理"}
+
+	cmd, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute))
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusReceived {
+		t.Fatalf("after ACK status = %q", cmd.Status)
+	}
+	commandID := f.sender.lastEnv.CommandID
+
+	updated, applied, err := f.svc.ApplyResult(ctx, f.device, protocol.CmdResult{
+		CommandID: commandID, Status: protocol.CmdStatusRejected,
+		ErrorCode: protocol.ErrInvalidParams, Reason: "液位修正超出范围 -100~100", TSMs: time.Now().UnixMilli(),
+	})
+	if err != nil || !applied {
+		t.Fatalf("ApplyResult applied=%v err=%v", applied, err)
+	}
+	if updated.Status != protocol.CmdStatusRejected || updated.ErrorCode.String != protocol.ErrInvalidParams ||
+		updated.ErrorReason.String != "液位修正超出范围 -100~100" || !updated.FinishedAt.Valid {
+		t.Errorf("got status=%q code=%q reason=%q finished=%v", updated.Status, updated.ErrorCode.String,
+			updated.ErrorReason.String, updated.FinishedAt.Valid)
+	}
+	if a := findAudit(t, f, "control.result", commandID); a.Outcome != "denied" {
+		t.Errorf("control.result outcome = %q, want denied", a.Outcome)
+	}
+
+	// Terminal: a later contradicting result does not rewrite it.
+	if _, applied, _ := f.svc.ApplyResult(ctx, f.device, protocol.CmdResult{CommandID: commandID, Status: protocol.CmdStatusSucceeded}); applied {
+		t.Error("a result after rejected must not apply")
+	}
+	if got := getCommand(t, f, commandID); got.Status != protocol.CmdStatusRejected {
+		t.Errorf("status rewritten to %q", got.Status)
+	}
+}
+
+// #42: the rejection can land before Issue's own ACK bookkeeping. The ACK must not overwrite it, and
+// the ACK audit must not report a failure.
+func TestIssue_RejectedResultBeforeAckIsKept(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{})
+	ctx := context.Background()
+	f.sender.onSend = func(env protocol.Envelope) {
+		if _, applied, err := f.svc.ApplyResult(ctx, f.device, protocol.CmdResult{
+			CommandID: env.CommandID, Status: protocol.CmdStatusRejected, ErrorCode: protocol.ErrInvalidParams, Reason: "越界",
+		}); err != nil || !applied {
+			t.Errorf("ApplyResult while pending: applied=%v err=%v", applied, err)
+		}
+	}
+
+	cmd, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute))
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusRejected || cmd.ErrorCode.String != protocol.ErrInvalidParams {
+		t.Errorf("Issue returned status=%q code=%q", cmd.Status, cmd.ErrorCode.String)
+	}
+	if a := findAudit(t, f, "control.ack", f.sender.lastEnv.CommandID); a.Outcome == "failed" {
+		t.Errorf("control.ack audited as failed: %s", a.Detail)
+	}
+}
+
+// #42: a rejection reported after the command already expired stays expired (no silent rewrite) but
+// leaves one diagnostic control.result_late audit row.
+func TestApplyResult_LateRejectedKeepsExpiredAndAudits(t *testing.T) {
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{CommandTTL: time.Millisecond})
+	ctx := context.Background()
+	if _, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute)); err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	commandID := f.sender.lastEnv.CommandID
+	time.Sleep(10 * time.Millisecond)
+	if _, err := f.svc.ExpireStale(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	res := protocol.CmdResult{CommandID: commandID, Status: protocol.CmdStatusRejected, ErrorCode: protocol.ErrInvalidParams, Reason: "越界"}
+	for i := 0; i < 2; i++ {
+		if _, applied, err := f.svc.ApplyResult(ctx, f.device, res); err != nil || applied {
+			t.Fatalf("late result: applied=%v err=%v", applied, err)
+		}
+	}
+	if got := getCommand(t, f, commandID); got.Status != protocol.CmdStatusExpired {
+		t.Errorf("status = %q, want expired", got.Status)
+	}
+	findAudit(t, f, "control.result_late", commandID) // exactly one, despite the redelivery
 }

@@ -6,6 +6,7 @@ import {
   buildArgs,
   buildBackfill,
   classifySubmit,
+  commandError,
   commandPhase,
   echoState,
   localRfc3339,
@@ -194,6 +195,19 @@ test('pending submission: kept while unknown; a retry is settled only by a verdi
   }
   for (const k of ['stationChanged', 'inFlight', 'invalidArgs', 'requestIdReused']) assert.equal(pendingAfter(k, true), 'clear', k);
   for (const k of ['deploymentDisabled', 'deviceDisabled', 'other']) assert.equal(pendingAfter(k, true), 'keep', k);
+});
+
+test('commandError: only refusals/failures explain; the ACK "已受理" never does (#42)', () => {
+  // legacy firmware: received ACK ("已受理") then cmdResult rejected — the cloud stores the device's reason
+  assert.deepEqual(commandError('rejected', 'INVALID_PARAMS', '液位修正超出范围'), { text: '液位修正超出范围' });
+  assert.deepEqual(commandError('rejected', 'INVALID_PARAMS', ''), { key: 'cmdLog.code.INVALID_PARAMS' });
+  assert.deepEqual(commandError('failed', 'HARDWARE_FAULT', undefined), { key: 'cmdLog.code.HARDWARE_FAULT' });
+  assert.deepEqual(commandError('failed', 'VENDOR_X', ''), { text: 'VENDOR_X' });
+  assert.equal(commandError('failed', '', ''), null);
+  // truly no result: still "结果无法确认", without the stale ACK reason
+  assert.equal(commandError('expired', '', '已受理'), null);
+  assert.equal(commandError('received', '', '已受理'), null);
+  assert.equal(commandError('succeeded', '', '已受理'), null);
 });
 
 console.log(`${n} checks passed`);
