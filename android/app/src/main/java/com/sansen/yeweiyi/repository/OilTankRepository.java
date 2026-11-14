@@ -44,6 +44,9 @@ public interface OilTankRepository {
 
     void updateOilCanTable(OilCanTable oilCanTable);
 
+    /** 同步写入罐表（远程下发 {@code config.setTankTable} 用）：写库成功才返回，失败抛出，调用方据此回成功或失败。 */
+    void updateOilCanTableSync(OilCanTable oilCanTable) throws DbException;
+
     /**
      * 等价于原 {@code DBDataManager.SaveOilCanTable(String)}：导出全部罐表数据到 Excel。
      */

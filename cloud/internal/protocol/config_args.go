@@ -125,6 +125,8 @@ func ValidateArgs(method string, args json.RawMessage) error {
 		return validateConfigArgs(args, true, tankSettingRules, tankSettingsClosed)
 	case MethodConfigDeviceSettings:
 		return validateConfigArgs(args, false, deviceSettingRules, nil)
+	case MethodConfigTankTable:
+		return validateTankTableArgs(args)
 	}
 	return nil
 }

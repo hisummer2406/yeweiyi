@@ -26,7 +26,7 @@ const (
 	MethodConfigAlarmThreshold = "config.setAlarmThresholds" // 修改报警阈值
 	MethodConfigTank           = "config.setTank"            // 修改油罐配置
 	MethodConfigProbe          = "config.setProbe"           // 修改探针配置
-	// config.setTankSettings / config.setDeviceSettings: see config_args.go.
+	// config.setTankSettings / config.setDeviceSettings: see config_args.go; config.setTankTable: tank_table_args.go.
 )
 
 // PermissionLevel is the authorization tier a method requires. The backend enforces this before a
@@ -73,6 +73,7 @@ var Methods = map[string]MethodSpec{
 
 	MethodConfigTankSettings:   {MethodConfigTankSettings, PermAdmin, false, "修改单个罐的设置（报警阈值、修正值、密度、油品、容积）"},
 	MethodConfigDeviceSettings: {MethodConfigDeviceSettings, PermPlatform, false, "修改整机设置（出入库判定的高度/时间阈值）"},
+	MethodConfigTankTable:      {MethodConfigTankTable, PermAdmin, false, "按罐型和尺寸重新生成单个罐的罐表（设备端计算）"},
 }
 
 // Command status values — the state machine issue #1 requires. Which side owns each transition:

@@ -3,7 +3,8 @@ import { describeError } from '../../utils/errors';
 import { formatLocalTime } from '../../utils/format';
 import { currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
 import { commandError, commandPhase, echoState, type Echo } from '../../utils/remoteConfig';
-import { getCommand, getTankSettings, listCommands } from '../../utils/remoteConfigApi';
+import { getCommand, getTankCalibration, getTankSettings, listCommands } from '../../utils/remoteConfigApi';
+import { tableEcho } from '../../utils/tankTable';
 import { ApiError } from '../../utils/request';
 import { isReadOnlyRole } from '../../utils/roles';
 import { loadRecordsContext } from '../../utils/stationPref';
@@ -27,6 +28,7 @@ type Row = { id: string; time: string; method: string; target: string; args: str
 function methodLabel(m: string): string {
   if (m === 'config.setTankSettings') return t('cmdLog.method.tank');
   if (m === 'config.setDeviceSettings') return t('cmdLog.method.device');
+  if (m === 'config.setTankTable') return t('cmdLog.method.tankTable');
   return m;
 }
 
@@ -159,6 +161,20 @@ Page({
       return;
     }
     if (this.cmd.status !== 'succeeded' || !this.tank) return;
+    // 罐表（#49）：核对标定镜像，而不是罐设置镜像。
+    if (this.cmd.method === 'config.setTankTable') {
+      getTankCalibration(device, this.tank)
+        .then((cal) => {
+          if (seq !== this.seq || !this.cmd) return;
+          this.echo = tableEcho(cal, this.cmd.resultDetail, this.cmd.finishedAt);
+          this.show();
+          if (this.echo === 'waiting' && Date.now() - this.echoStarted < ECHO_WAIT_MS) this.later(seq, ECHO_MS);
+        })
+        .catch(() => {
+          if (seq === this.seq && Date.now() - this.echoStarted < ECHO_WAIT_MS) this.later(seq, ECHO_MS);
+        });
+      return;
+    }
     getTankSettings(device)
       .then((tanks) => {
         if (seq !== this.seq || !this.cmd) return;

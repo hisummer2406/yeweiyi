@@ -672,7 +672,8 @@ func authorizeFields(actor Actor, method string, args json.RawMessage) error {
 }
 
 func isConfigWriteMethod(method string) bool {
-	return method == protocol.MethodConfigTankSettings || method == protocol.MethodConfigDeviceSettings
+	return method == protocol.MethodConfigTankSettings || method == protocol.MethodConfigDeviceSettings ||
+		method == protocol.MethodConfigTankTable
 }
 
 // isRetiredConfigMethod: the configuration writes that predate config.setTankSettings (see ErrMethodRetired).

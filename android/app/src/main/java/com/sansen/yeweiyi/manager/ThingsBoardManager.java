@@ -36,6 +36,9 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetDeviceSettingsHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankSettingsHandler;
+import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankTableHandler;
+import com.sansen.yeweiyi.factory.EllipseTable;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SharePrefCustomOilNameStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
@@ -198,6 +201,10 @@ public final class ThingsBoardManager {
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
                         new SharePrefCustomOilNameStore(MyApplication.getInstance())));
         registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
+        registry.register(SetTankTableHandler.METHOD,
+                new SetTankTableHandler(OilTankRepositoryImpl.getInstance(), new EllipseTable(),
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
+                        DateUtils::getYYYMMddHHmmss));
         HighRiskActionHandler highRiskActionHandler = new HighRiskActionHandler();
         registry.register(HighRiskActionHandler.METHOD_START_PUMP, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_STOP_PUMP, highRiskActionHandler);

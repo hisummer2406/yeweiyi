@@ -157,3 +157,36 @@ export function previewRows(table: TankTable, limit = 200): { heightMm: number; 
   }
   return rows;
 }
+
+// ---- 下发到控制器（#49，config.setTankTable）----
+
+// 页面的 H/L/R → 协议字段（与设备现场输入框含义一致，见文件头）。
+export function tableArgs(shape: TankShape, mm: Record<string, number>): Record<string, number | string> {
+  if (shape === 'horizontal') return { shape, diameterMm: mm.H, lengthMm: mm.L, headMm: mm.R };
+  if (shape === 'vertical') return { shape, heightMm: mm.H, diameterMm: mm.R };
+  return { shape, heightMm: mm.H, lengthMm: mm.L, widthMm: mm.R };
+}
+
+export type TableEcho = 'matched' | 'waiting' | 'mismatch';
+
+// 命令成功后核对设备回显（标定镜像）：只有晚于命令结束时间的上报才算设备对这条命令的回答，否则仍在等；
+// 点数与最后一点（满罐高度/容积）都与设备回执 detail 一致为 matched，不一致为 mismatch（期间现场又改过）。
+export function tableEcho(
+  cal: { reportedAt?: unknown; heightMm?: unknown; volumeL?: unknown } | null | undefined,
+  detail: unknown,
+  finishedAt: string | undefined,
+): TableEcho {
+  if (!cal || typeof cal.reportedAt !== 'string' || typeof finishedAt !== 'string') return 'waiting';
+  const reported = Date.parse(cal.reportedAt);
+  const finished = Date.parse(finishedAt);
+  if (!Number.isFinite(reported) || !Number.isFinite(finished) || reported <= finished) return 'waiting';
+  const d = (detail && typeof detail === 'object' ? detail : {}) as Record<string, unknown>;
+  const h = Array.isArray(cal.heightMm) ? cal.heightMm : [];
+  const v = Array.isArray(cal.volumeL) ? cal.volumeL : [];
+  const n = h.length;
+  if (n === 0) return 'mismatch';
+  // 回执与上报都只计有限值的点（设备 SetTankTableHandler / TankCalibrationAttributeBuilder）。
+  if (typeof d.pointCount !== 'number') return 'matched';
+  if (n !== d.pointCount || h[n - 1] !== d.maxHeightMm || v[n - 1] !== d.maxVolumeL) return 'mismatch';
+  return 'matched';
+}

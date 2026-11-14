@@ -4,7 +4,7 @@
 // 原样复制后用 JDK 运行）生成，输入见各 key：形状_各尺寸(mm)。
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { doubleFoment, generateTankTable, parseDims, previewRows, tableValid } from '../miniprogram/utils/tankTable.ts';
+import { doubleFoment, generateTankTable, parseDims, previewRows, tableArgs, tableEcho, tableValid } from '../miniprogram/utils/tankTable.ts';
 
 const golden = JSON.parse(readFileSync(new URL('./fixtures/tank-table-golden.json', import.meta.url), 'utf8'));
 
@@ -63,6 +63,26 @@ test('preview: every point under 200, sampled above, last point always kept', ()
   assert.ok(rows.length <= 201);
   assert.equal(rows[0].heightMm, 0);
   assert.equal(rows[rows.length - 1].heightMm, 449);
+});
+
+test('send args: H/L/R mapped to the protocol fields per shape (#49)', () => {
+  assert.deepEqual(tableArgs('horizontal', { H: 2600, L: 8000, R: 0 }), { shape: 'horizontal', diameterMm: 2600, lengthMm: 8000, headMm: 0 });
+  assert.deepEqual(tableArgs('vertical', { H: 2500, R: 2000 }), { shape: 'vertical', heightMm: 2500, diameterMm: 2000 });
+  assert.deepEqual(tableArgs('cuboid', { H: 1500, L: 3000, R: 2000 }), { shape: 'cuboid', heightMm: 1500, lengthMm: 3000, widthMm: 2000 });
+});
+
+test('echo: only a later report counts; points and last point must match the receipt', () => {
+  const detail = { pointCount: 3, maxHeightMm: 30, maxVolumeL: 4.5 };
+  const cal = (reportedAt, h = [10, 20, 30], v = [1.5, 3, 4.5]) => ({ reportedAt, heightMm: h, volumeL: v });
+  const done = '2026-11-14T10:00:00Z';
+  assert.equal(tableEcho(undefined, detail, done), 'waiting');
+  assert.equal(tableEcho(cal('2026-11-14T09:59:59Z'), detail, done), 'waiting');
+  assert.equal(tableEcho(cal('2026-11-14T10:00:00Z'), detail, done), 'waiting');
+  assert.equal(tableEcho(cal('2026-11-14T10:00:03Z'), detail, undefined), 'waiting');
+  assert.equal(tableEcho(cal('2026-11-14T10:00:03Z'), detail, done), 'matched');
+  assert.equal(tableEcho(cal('2026-11-14T10:00:03Z', [10, 20], [1.5, 3]), detail, done), 'mismatch');
+  assert.equal(tableEcho(cal('2026-11-14T10:00:03Z', [10, 20, 30], [1.5, 3, 9]), detail, done), 'mismatch');
+  assert.equal(tableEcho(cal('2026-11-14T10:00:03Z', [], []), detail, done), 'mismatch');
 });
 
 console.log(`tank-table: ${n} checks passed`);

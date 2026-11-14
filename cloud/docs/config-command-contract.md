@@ -1,7 +1,8 @@
 # 远程配置命令：提交保护契约（#3，config-command-delivery）
 
 本文是后台（#4）与小程序（#6）接入远程配置下发的云端契约。方法本身（`config.setTankSettings` /
-`config.setDeviceSettings` 的参数、校验、设备拒绝原因）见 [tank-settings-contract.md](tank-settings-contract.md) 第二阶段；
+`config.setDeviceSettings` 的参数、校验、设备拒绝原因）见 [tank-settings-contract.md](tank-settings-contract.md) 第二阶段，
+`config.setTankTable` 见本文 §8；
 本文只定义**提交保护**：幂等、找回、受理时复核、在途互斥、开关、迟到结果与整机设置镜像。
 设计与取舍见 `openspec/changes/config-command-delivery/design.md`。
 
@@ -128,3 +129,20 @@
 
 2026-11-09 起生产 `ALLOW_CONFIG_COMMANDS=true`，没有设备白名单。真机只验证过单字段 `config.setTankSettings`（2026-11-08），其余字段、
 整机设置、失败与离线路径仍待真机验收（#9）。物理命令（泵/阀/重启）仍关闭。
+
+## 8. 罐表远程生成：`config.setTankTable`（#49）
+
+**状态（2026-11-14）**：三端同 PR 实现；字段待设备端负责人确认（open-items §H）；**未真机验证**。
+
+只下发罐型和尺寸，设备按现场同一公式生成罐表并整表覆盖该罐。提交保护与 `config.setTankSettings` 相同（`requestId`、
+`expectedStationId` 必填），权限 `PermAdmin`（客户管理员、平台管理员），在途目标 `tank:<n>` 与罐设置共用。
+
+| `shape` | 必填字段（mm） | 范围 |
+|---|---|---|
+| `horizontal` 卧罐 | `diameterMm`、`lengthMm`、`headMm`（单侧封头，0 = 平封头） | 100～20000；`headMm` 0～20000 |
+| `vertical` 立罐 | `heightMm`、`diameterMm` | 100～20000 |
+| `cuboid` 长方体 | `heightMm`、`lengthMm`、`widthMm` | 100～20000 |
+
+`tank` 为 1～16 的整数。缺字段、非数字、越界、不属于该罐型的字段一律 `400`（`fields[]` 逐项说明），不派发。
+设备 `succeeded` 的 `detail` 为 `{tank, shape, pointCount, maxHeightMm, maxVolumeL}`；写入后设备重发标定属性，
+客户端以 `GET /api/devices/:device/tanks/:tank/calibration` 的 `reportedAt` 晚于命令受理时间、点数与最后一点和本地计算一致来确认回显。

@@ -404,6 +404,7 @@ Component({
     track(tr: Tracked) {
       const self = this as unknown as EditorThis;
       self.stopTrack();
+      if (this.handOff(tr)) return;
       // 超时找回/同请求重试可能直接拿到已成功的命令：同样要等设备新上报
       if (tr.cmd.terminal && tr.cmd.status === 'succeeded' && !tr.echo) {
         tr.echo = 'waiting';
@@ -446,6 +447,7 @@ Component({
           .then((cmd) => {
             if (seq !== self.trackSeq || self.tracked !== tr) return;
             tr.cmd = cmd;
+            if (this.handOff(tr)) return;
             if (cmd.terminal && cmd.status === 'succeeded') {
               tr.echo = 'waiting';
               tr.echoStarted = Date.now();
@@ -475,6 +477,22 @@ Component({
         .catch(() => {
           if (seq === self.trackSeq && Date.now() - tr.echoStarted < ECHO_WAIT_MS) this.later(seq, ECHO_MS);
         });
+    },
+
+    // 找回/占用中的可能是同一罐的其他命令（如罐表 config.setTankTable，#49）：它的参数对不上储罐设置镜像，
+    // 不在这里比对回显，交给操作记录跟踪。方法未知（只有 commandId）时先查到命令再判断。
+    handOff(tr: Tracked): boolean {
+      const self = this as unknown as EditorThis;
+      if (!tr.cmd.method || tr.cmd.method === 'config.setTankSettings') return false;
+      if (self.tracked === tr) {
+        self.stopTrack();
+        self.tracked = undefined;
+        this.setData({ result: null });
+      }
+      wx.navigateTo({
+        url: `/pages/issue-command/issue-command?device=${encodeURIComponent(tr.device)}&commandId=${encodeURIComponent(tr.cmd.commandId)}&tank=${tr.tank}`,
+      });
+      return true;
     },
 
     // Shown only on the tank it belongs to.

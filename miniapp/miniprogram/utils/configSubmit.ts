@@ -18,6 +18,8 @@ import {
   withPending,
   withoutPending,
   type PendingSubmit,
+  type SendArgs,
+  type SendMethod,
 } from './remoteConfig';
 import { getToken } from './storage';
 import { findByRequestId, issueConfig } from './remoteConfigApi';
@@ -106,7 +108,7 @@ async function sendSnapshot(p: PendingSubmit, retry: boolean, stay: boolean): Pr
       }
     }
     const cmd = await issueConfig(device, {
-      method: 'config.setTankSettings',
+      method: p.method || 'config.setTankSettings',
       args: { tank, ...args },
       reason,
       requestId,
@@ -193,9 +195,11 @@ export type SendOptions = {
   device: string;
   stationId: number | null;
   tank: number;
-  args: Record<string, number>;
+  args: SendArgs;
   reason: string;
   lines: ChangeLine[];
+  // Default config.setTankSettings; the tank table page sends config.setTankTable (#49).
+  method?: SendMethod;
   // Return the accepted command instead of opening 操作记录 (#43).
   stay?: boolean;
 };
@@ -227,6 +231,7 @@ async function runFlow(opts: SendOptions): Promise<ControlCommand | undefined> {
   // must not lose it either).
   const snapshot: PendingSubmit = {
     requestId: newRequestId('mp'),
+    ...(opts.method && opts.method !== 'config.setTankSettings' ? { method: opts.method } : {}),
     device,
     stationId,
     tank,

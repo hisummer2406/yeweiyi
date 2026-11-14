@@ -301,7 +301,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   shared by the home page and `device-detail`. Pure, no `wx`.
 - `utils/tankTable.ts` — 罐表设置「生成罐表」：照搬设备端 `factory/EllipseTable.java`（卧罐筒体+单侧封头、立罐圆柱、长方体，1 cm 一档，
   设备的取整与浮点细节一并照搬）。`scripts/fixtures/tank-table-golden.json` 由设备 Java 代码直接运行生成，check 逐点比对。
-  字母：卧罐 H 直径/L 筒长/R 封头高度（可 0）；立罐 H 罐高/R（设备按直径算）；长方体 H 高/L 长/R 宽。「保存到控制器」待下发协议。
+  字母：卧罐 H 直径/L 筒长/R 封头高度（可 0）；立罐 H 罐高/R（设备按直径算）；长方体 H 高/L 长/R 宽。
+  「保存到控制器」（#49）：只下发罐型 + 尺寸（`config.setTankTable`，`tableArgs` 映射为 diameterMm/lengthMm/headMm/heightMm/widthMm），
+  设备自行生成；对象 = 首页当前油站的设备 + 选择的可见罐，必填原因，走 `configSubmit` 同一提交保护（快照带 `method`），受理后进操作记录，
+  成功后按 `tableEcho` 核对标定镜像（`GET .../tanks/:tank/calibration`，晚于 finishedAt，点数与末点等于回执）。仅管理员。
 - `utils/displayScale.ts` / `utils/displayScaleStore.ts` — 管理员本机显示倍率（#44，openspec `local-display-scale`）：
   按 `display-scale:<账号>:<设备>#<罐>` 存在本机，只有 platform_admin / customer_admin 读写和应用（每次从 token 取）；
   油容积、质量、水体积、空容从 `TankView.raw`（未舍入原始值）乘倍率再舍入，液位/水高/温度/占比不乘，标「换算显示 ×倍率」。

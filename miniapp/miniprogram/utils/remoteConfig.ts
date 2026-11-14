@@ -341,12 +341,19 @@ export function buildBackfill(
 // too). Before anything new is sent to that target the kept one is looked up again and, if still not
 // found, only resent *as it was* with its own requestId — the cloud replays it if it had taken it.
 
+// Configuration methods the send flow may carry (#49 adds the tank table; absent = config.setTankSettings,
+// which is what every snapshot kept before #49 is).
+export const SEND_METHODS = ['config.setTankSettings', 'config.setTankTable'] as const;
+export type SendMethod = (typeof SEND_METHODS)[number];
+export type SendArgs = Record<string, number | string>;
+
 export type PendingSubmit = {
   requestId: string;
+  method?: SendMethod;
   device: string;
   stationId: number | null;
   tank: number;
-  args: Record<string, number>;
+  args: SendArgs;
   reason: string;
   lines: { label: string; before: string; after: string }[];
   savedAt: number;
@@ -360,8 +367,11 @@ export function pendingTargetKey(device: string, tank: number): string {
   return `${device}#${tank}`;
 }
 
-function isNumberRecord(v: unknown): v is Record<string, number> {
-  return !!v && typeof v === 'object' && Object.values(v as object).every((x) => typeof x === 'number' && Number.isFinite(x));
+// Settings carry numbers only; the tank table also carries its shape as text (#49).
+function isArgsRecord(v: unknown, method: string | undefined): v is SendArgs {
+  const textOk = method === 'config.setTankTable';
+  return !!v && typeof v === 'object' &&
+    Object.values(v as object).every((x) => (typeof x === 'number' && Number.isFinite(x)) || (textOk && typeof x === 'string'));
 }
 
 // Reads one kept submission out of a stored map, dropping anything malformed (an unreadable entry
@@ -373,7 +383,8 @@ export function readPending(store: unknown, device: string, tank: number): Pendi
   if (typeof p.requestId !== 'string' || !p.requestId) return undefined;
   if (p.device !== device || p.tank !== tank) return undefined;
   if (!(p.stationId === null || (typeof p.stationId === 'number' && Number.isFinite(p.stationId)))) return undefined;
-  if (!isNumberRecord(p.args) || typeof p.reason !== 'string' || !Array.isArray(p.lines)) return undefined;
+  if (p.method !== undefined && !(SEND_METHODS as readonly string[]).includes(p.method)) return undefined;
+  if (!isArgsRecord(p.args, p.method) || typeof p.reason !== 'string' || !Array.isArray(p.lines)) return undefined;
   return p as PendingSubmit;
 }
 
