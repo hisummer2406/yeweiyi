@@ -371,6 +371,7 @@ export const zh: Record<string, string> = {
   "tankEdit.dimTooSmall": "{dim} 不能小于 100 mm",
   "tankEdit.dimTooLarge": "{dim} 不能大于 20000 mm",
   "tankEdit.summary": "共 {n} 个点，满罐 {height} mm / {volume} L",
+  "tankEdit.tableInvalid": "这组尺寸按设备公式算不出有效罐表，请微调尺寸后重试",
   "tankEdit.generated": "罐表已生成，仅在本机",
   "tankEdit.generateFirst": "请先生成罐表",
   "tankEdit.sampled": "点数较多，下方为抽样显示",

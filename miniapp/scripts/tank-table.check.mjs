@@ -4,7 +4,7 @@
 // 原样复制后用 JDK 运行）生成，输入见各 key：形状_各尺寸(mm)。
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { doubleFoment, generateTankTable, parseDims, previewRows } from '../miniprogram/utils/tankTable.ts';
+import { doubleFoment, generateTankTable, parseDims, previewRows, tableValid } from '../miniprogram/utils/tankTable.ts';
 
 const golden = JSON.parse(readFileSync(new URL('./fixtures/tank-table-golden.json', import.meta.url), 'utf8'));
 
@@ -43,6 +43,16 @@ test('inputs: required, numeric, ≥ 100 mm; horizontal head R may be 0', () => 
   assert.deepEqual(parseDims('cuboid', { H: '20001', L: '1000', R: '1000' }), { ok: false, key: 'tankEdit.dimTooLarge', params: { dim: 'H' } });
   assert.equal(parseDims('horizontal', { H: '2600', L: '8000', R: '0' }).ok, true);
   assert.equal(parseDims('horizontal', { H: '-2600', L: '8000', R: '0' }).ok, false);
+});
+
+test('a table with NaN (device formula overshoots the diameter) is not valid', () => {
+  for (const mm of [{ H: 2605, L: 8000, R: 0 }, { H: 200, L: 1000, R: 0 }]) {
+    const table = generateTankTable('horizontal', mm);
+    assert.ok(table.volumeL.some((v) => !Number.isFinite(v)), JSON.stringify(mm));
+    assert.equal(tableValid(table), false);
+  }
+  assert.equal(tableValid(generateTankTable('horizontal', { H: 2600, L: 8000, R: 0 })), true);
+  assert.equal(tableValid(generateTankTable('vertical', { H: 2500, R: 2000 })), true);
 });
 
 test('preview: every point under 200, sampled above, last point always kept', () => {

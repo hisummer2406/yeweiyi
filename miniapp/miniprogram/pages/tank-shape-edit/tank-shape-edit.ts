@@ -4,7 +4,7 @@
 // 「保存到控制器」需要新的下发方法（设备、云端、小程序三端），下一步单独实现；在此之前只提示暂未开放。
 import { showComingSoon } from '../../utils/comingSoon';
 import { t, texts } from '../../utils/i18n';
-import { DIM_KEYS, generateTankTable, parseDims, previewRows, type TankShape, type TankTable } from '../../utils/tankTable';
+import { DIM_KEYS, generateTankTable, parseDims, previewRows, tableValid, type TankShape, type TankTable } from '../../utils/tankTable';
 
 type Dim = { key: string; value: string };
 
@@ -66,6 +66,10 @@ Page({
     const table = generateTankTable(this.data.shape, parsed.mm);
     const n = table.heightMm.length;
     if (n === 0) return;
+    if (!tableValid(table)) {
+      wx.showToast({ title: t('tankEdit.tableInvalid'), icon: 'none', duration: 3000 });
+      return;
+    }
     this.table = table;
     const rows = previewRows(table);
     this.setData({
