@@ -29,7 +29,8 @@ const (
 	AttrLevelCorrectionMm  = "levelCorrectionMm"    // number, mm
 	AttrWaterCorrectionMm  = "waterCorrectionMm"    // number, mm
 	AttrTempCorrectionC    = "tempCorrectionC"      // number, ℃
-	AttrDensity            = "density"              // number, **单位未对齐**（设置页标 kg/m³，实际存 0.56 这类值），原样透传
+	AttrDensity            = "density"              // number, g/cm³（= kg/L；设备设置页标的 kg/m³ 有误，存的是 0.56 这类值，重量 = 升 × 密度）
+	AttrOilColor           = "oilColor"             // int, 0xRRGGBB；设备存值为 0（未设置）时不上报，旧数据可不在色板内
 )
 
 // MaxDeviceTankSettings is the device's own tank ceiling (tank numbers and probe IDs 1–16). Attributes
@@ -55,6 +56,7 @@ type TankSettings struct {
 	TankShape      *int32
 	OilType        *string
 	OilTypeIndex   *int32
+	OilColor       *int32
 
 	AlarmHighHighLevelMm *int32
 	AlarmHighLevelMm     *int32
@@ -132,7 +134,7 @@ func isSettingsField(f string) bool {
 	case AttrTankHeightMm, AttrSensorLengthMm, AttrTankShape, AttrOilType, AttrOilTypeIndex,
 		AttrAlarmHighHighLevel, AttrAlarmHighLevel, AttrAlarmLowLevel, AttrAlarmLowLowLevel,
 		AttrAlarmHighWater, AttrAlarmHighTempC, AttrAlarmLowTempC,
-		AttrLevelCorrectionMm, AttrWaterCorrectionMm, AttrTempCorrectionC, AttrDensity, AttrCapacityL:
+		AttrLevelCorrectionMm, AttrWaterCorrectionMm, AttrTempCorrectionC, AttrDensity, AttrCapacityL, AttrOilColor:
 		return true
 	}
 	return false
@@ -174,6 +176,9 @@ func (t *TankSettings) set(field string, v any) bool {
 		return false
 	}
 	i := int32(f)
+	if field == AttrOilColor && (i < 0 || i > maxRGB) {
+		return false
+	}
 	switch field {
 	case AttrTankHeightMm:
 		t.TankHeightMm = &i
@@ -181,6 +186,8 @@ func (t *TankSettings) set(field string, v any) bool {
 		t.TankShape = &i
 	case AttrOilTypeIndex:
 		t.OilTypeIndex = &i
+	case AttrOilColor:
+		t.OilColor = &i
 	case AttrAlarmHighHighLevel:
 		t.AlarmHighHighLevelMm = &i
 	case AttrAlarmHighLevel:

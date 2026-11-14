@@ -652,11 +652,12 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 	return nil
 }
 
-// authorizeFields is the per-field tier on top of the per-method one: the medium of a tank is maintained
-// by platform administrators only (#27), while the rest of config.setTankSettings stays open to customer
-// administrators. A mixed submission is refused whole. Malformed args are left to ValidateArgs.
+// authorizeFields is the per-field tier on top of the per-method one. Since 2026-11-14 (user decision) the
+// medium is changed by administrators — platform and customer — like every other tank field; employees never
+// reach this point because roleAllows refuses them every command. Kept as the one place a field-level rule
+// would go: a mixed submission is refused whole. Malformed args are left to ValidateArgs.
 func authorizeFields(actor Actor, method string, args json.RawMessage) error {
-	if method != protocol.MethodConfigTankSettings || actor.Role == RolePlatformAdmin {
+	if method != protocol.MethodConfigTankSettings || actor.Role == RolePlatformAdmin || actor.Role == RoleCustomerAdmin {
 		return nil
 	}
 	var fields map[string]json.RawMessage

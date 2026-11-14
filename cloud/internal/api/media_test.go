@@ -24,8 +24,9 @@ type mediaRow struct {
 }
 
 type mediaOptions struct {
-	Public   []mediaRow `json:"public"`
-	Customer []mediaRow `json:"customer"`
+	Public       []mediaRow `json:"public"`
+	Customer     []mediaRow `json:"customer"`
+	OilColorSync bool       `json:"oilColorSync"`
 }
 
 func mediaName(label string) string {
@@ -65,7 +66,6 @@ func TestMedia_PlatformAdminOnly(t *testing.T) {
 			{"GET", "/api/media", nil},
 			{"POST", "/api/media", map[string]any{"name": "x", "scope": "public"}},
 			{"PUT", "/api/media/1", map[string]any{"enabled": false}},
-			{"GET", "/api/devices/" + tn.devA1 + "/media-options", nil},
 		} {
 			if rec := tn.send(t, r.method, r.path, token, r.body); rec.Code != http.StatusForbidden {
 				t.Errorf("%s %s %s: %d, want 403", who, r.method, r.path, rec.Code)
@@ -276,8 +276,8 @@ func TestMedia_SelectRefusals(t *testing.T) {
 	if direct.Code != 400 || mediaCode(t, direct) != "media_id_required" {
 		t.Errorf("direct index: %d %s", direct.Code, direct.Body.String())
 	}
-	if rec := selectMedium(t, tn, tn.adminA, tn.devA1, 1, own.ID); rec.Code != http.StatusForbidden {
-		t.Errorf("customer admin: %d %s", rec.Code, rec.Body.String())
+	if rec := selectMedium(t, tn, tn.userA, tn.devA1, 1, own.ID); rec.Code != http.StatusForbidden {
+		t.Errorf("employee: %d %s", rec.Code, rec.Body.String())
 	}
 	if tn.sender.calls != calls {
 		t.Errorf("refused selections reached the device %d time(s)", tn.sender.calls-calls)
@@ -372,5 +372,106 @@ func TestMedia_ReclaimsUnusedPosition(t *testing.T) {
 	}
 	if args = tn.lastArgs(t, tn.devA1); args["oilTypeIndex"] != float64(34) || args["customOilName"] != media[1].Name {
 		t.Errorf("reselect args = %v", args)
+	}
+}
+
+func (tn *tenancy) markColorSynced(t *testing.T, device string) {
+	t.Helper()
+	if _, err := tn.env.pool.Exec(context.Background(), `
+		INSERT INTO device_settings (device_name, oil_color_sync, reported_at) VALUES ($1, 1, now())
+		ON CONFLICT (device_name) DO UPDATE SET oil_color_sync = 1`, device); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		tn.env.pool.Exec(context.Background(), `DELETE FROM device_settings WHERE device_name = $1`, device)
+	})
+}
+
+// 2026-11-14：客户管理员可读本客户设备的选项（公共 + 本客户专属）；别的客户、不存在的设备同一 403；员工 403。
+func TestMedia_OptionsAccess(t *testing.T) {
+	tn := newTenancy(t)
+	ownA := tn.createMedia(t, map[string]any{"name": mediaName("甲"), "scope": "customer", "customerId": tn.custA})
+	ownB := tn.createMedia(t, map[string]any{"name": mediaName("乙"), "scope": "customer", "customerId": tn.custB})
+
+	rec := tn.send(t, "GET", "/api/devices/"+tn.devA1+"/media-options", tn.adminA, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("customer admin own device: %d %s", rec.Code, rec.Body.String())
+	}
+	opts := decodeAs[mediaOptions](t, rec)
+	if !names(opts.Customer)[ownA.Name] || names(opts.Customer)[ownB.Name] || len(opts.Public) == 0 || opts.OilColorSync {
+		t.Errorf("options = %+v", opts)
+	}
+
+	other := tn.send(t, "GET", "/api/devices/"+tn.devB1+"/media-options", tn.adminA, nil)
+	ghost := tn.send(t, "GET", "/api/devices/"+tn.devGhost+"/media-options", tn.adminA, nil)
+	if other.Code != http.StatusForbidden || ghost.Code != http.StatusForbidden || other.Body.String() != ghost.Body.String() {
+		t.Errorf("other customer %d %s / missing %d %s: want the same 403", other.Code, other.Body.String(), ghost.Code, ghost.Body.String())
+	}
+	if rec := tn.send(t, "GET", "/api/devices/"+tn.devA1+"/media-options", tn.userA, nil); rec.Code != http.StatusForbidden {
+		t.Errorf("employee: %d, want 403", rec.Code)
+	}
+
+	tn.markColorSynced(t, tn.devA1)
+	if opts := decodeAs[mediaOptions](t, tn.send(t, "GET", "/api/devices/"+tn.devA1+"/media-options", tn.platform, nil)); !opts.OilColorSync {
+		t.Error("oilColorSync should follow the device's report")
+	}
+}
+
+func TestMedia_CustomerAdminSelects(t *testing.T) {
+	tn := newTenancyWith(t, control.Config{AllowConfigCommands: true})
+	tn.markSynced(t, tn.devA1)
+	ownA := tn.createMedia(t, map[string]any{"name": mediaName("甲"), "scope": "customer", "customerId": tn.custA})
+	ownB := tn.createMedia(t, map[string]any{"name": mediaName("乙"), "scope": "customer", "customerId": tn.custB})
+
+	if rec := selectMedium(t, tn, tn.adminA, tn.devA1, 1, builtinID(t, tn, 5)); rec.Code != http.StatusAccepted {
+		t.Fatalf("public: %d %s", rec.Code, rec.Body.String())
+	}
+	if args := tn.lastArgs(t, tn.devA1); args["oilTypeIndex"] != float64(5) || args["mediaId"] != nil {
+		t.Errorf("public args = %v", args)
+	}
+	if rec := selectMedium(t, tn, tn.adminA, tn.devA1, 2, ownA.ID); rec.Code != http.StatusAccepted {
+		t.Fatalf("own: %d %s", rec.Code, rec.Body.String())
+	}
+	if args := tn.lastArgs(t, tn.devA1); args["oilTypeIndex"] != float64(32) || args["customOilName"] != ownA.Name {
+		t.Errorf("own args = %v", args)
+	}
+	calls := tn.sender.calls
+	if rec := selectMedium(t, tn, tn.adminA, tn.devA1, 3, ownB.ID); rec.Code != 400 || mediaCode(t, rec) != "media_not_selectable" {
+		t.Errorf("other customer's medium: %d %s", rec.Code, rec.Body.String())
+	}
+	direct := tn.send(t, "POST", "/api/devices/"+tn.devA1+"/commands", tn.adminA, map[string]any{
+		"method": protocol.MethodConfigTankSettings, "reason": "r", "requestId": fmt.Sprintf("d%d", time.Now().UnixNano()), "expectedStationId": nil,
+		"args": map[string]any{"tank": 4, "oilTypeIndex": 5},
+	})
+	if direct.Code != 400 || mediaCode(t, direct) != "media_id_required" {
+		t.Errorf("customer admin direct index: %d %s", direct.Code, direct.Body.String())
+	}
+	if tn.sender.calls != calls {
+		t.Errorf("refused selections reached the device %d time(s)", tn.sender.calls-calls)
+	}
+}
+
+// 旧固件会静默忽略 oilColor，所以没有能力位就整条拒绝、不派发。
+func TestMedia_OilColorNeedsCapability(t *testing.T) {
+	tn := newTenancyWith(t, control.Config{AllowConfigCommands: true})
+	send := func() *httptest.ResponseRecorder {
+		return tn.send(t, "POST", "/api/devices/"+tn.devA1+"/commands", tn.adminA, map[string]any{
+			"method": protocol.MethodConfigTankSettings, "reason": "换色", "requestId": fmt.Sprintf("c%d", time.Now().UnixNano()),
+			"expectedStationId": nil, "args": map[string]any{"tank": 1, "oilColor": 0xFF0000, "capacityL": 100},
+		})
+	}
+	calls := tn.sender.calls
+	if rec := send(); rec.Code != http.StatusConflict || mediaCode(t, rec) != "color_sync_unsupported" {
+		t.Errorf("old firmware: %d %s", rec.Code, rec.Body.String())
+	}
+	if tn.sender.calls != calls {
+		t.Fatal("a refused colour change reached the device")
+	}
+	tn.markColorSynced(t, tn.devA1)
+	if rec := send(); rec.Code != http.StatusAccepted {
+		t.Errorf("synced firmware: %d %s", rec.Code, rec.Body.String())
+	}
+	if args := tn.lastArgs(t, tn.devA1); args["oilColor"] != float64(0xFF0000) {
+		t.Errorf("args = %v", args)
 	}
 }

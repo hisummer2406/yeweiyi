@@ -2,14 +2,16 @@
 
 字典只保存名称和归属：新增、改名、停用都**不会**修改任何油罐或设备配置。选用并下发见下文“选用与下发”。
 
-全部接口仅平台管理员，按库内当前角色判定；其他角色 `403 not authorized`。
+字典维护接口（`GET/POST/PUT /api/media`）仅平台管理员，按库内当前角色判定；其他角色 `403 not authorized`。
+**选用**（`media-options` 与提交 `mediaId`）自 2026-11-14 起平台管理员与客户管理员都可以（用户决定：所有修改只限管理员，员工只读）；
+客户管理员只能对本客户设备操作，别的客户的设备与不存在的设备同一 `403`；员工一律 `403`。
 
 | 接口 | 说明 |
 |---|---|
 | `GET /api/media` | `{rows:[介质]}`，含停用项 |
 | `POST /api/media` | `{name, nameEn?, scope, customerId?}`；手动新增，`201` 返回介质 |
 | `PUT /api/media/:id` | `{name?, nameEn?, enabled?}`；缺省字段不变，归属不可改 |
-| `GET /api/devices/:device/media-options` | `{public:[], customer:[]}`；只含启用项，客户取设备当前归属 |
+| `GET /api/devices/:device/media-options` | `{public:[], customer:[], customMediaSync, oilColorSync, slotsUsed, slotsTotal}`；只含启用项，客户取设备当前归属；`oilColorSync` 为设备是否支持远程改颜色 |
 
 介质：`{id, name, nameEn|null, scope, customerId|null, builtinIndex|null, enabled, updatedAt}`。`nameEn` 为 null 时显示 `name` 原文。
 
@@ -27,7 +29,8 @@
 
 内置编号 1–24 初始化为公共介质。25–31（二厂四种、排水三种）归属待业务核实，暂不进入可选库，旧编号的显示兼容不变。
 
-`config.setTankSettings` 的 `oilTypeIndex` 仅平台管理员可提交；其他角色提交（含与别的字段混合）整条 `403`，不派发。
+`config.setTankSettings` 的介质只有管理员（平台、客户）可改；员工提交任何字段都整条 `403`，不派发。
+客户管理员选用尚无位置的专属介质时，与平台管理员一样按下文规则分配/回收位置（只回收不在用的位置）。
 
 ## 选用与下发
 

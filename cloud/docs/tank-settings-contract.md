@@ -66,10 +66,11 @@
 | `alarm*Mm` / `alarmHighTempC` | `0` = 不启用 |
 | `alarmLowTempC` | 设备上报，但设备端低温检测从未被调用，**改了不生效** |
 | `capacityL` | 油罐公称容积，L（#71 起镜像，因可远程修改） |
-| `density` | **原样透传，单位未与设备端对齐**（设置页标 kg/m³，实际存 0.56 这类值）；不要据此换算 |
+| `density` | g/cm³（= kg/L）。设备设置页标的 kg/m³ 有误：存的是 0.56 这类值，设备按 `升 × 密度 = 千克` 计算（2026-11-14 核实）。现场可能有按 kg/m³ 填的旧值（如 840），客户端照原样显示并提示核对 |
+| `oilColor` | 罐颜色，`0xRRGGBB` 整数；设备未设置（0）时不上报为 `null`；旧数据可不在色板内（2026-11-14） |
 | 任一字段 `null` | 设备未上报该键 |
 
-不提供：低水位报警、物料颜色（设备端没有，也不上报）。标定表见下一节，不在本接口。
+不提供：低水位报警（设备端没有）。标定表见下一节，不在本接口。
 
 ## 授权与错误
 
@@ -127,8 +128,9 @@
 | `alarmHighTempC` | int, ℃ | −50～100 | 0 = 不启用 |
 | `levelCorrectionMm` `waterCorrectionMm` | number, mm | 不限（有限数字，可负可小数） | 设备把它直接加到读数上；旧固件仍拒绝 ±100 以外的值（#28） |
 | `tempCorrectionC` | number, ℃ | 不限（有限数字，可负可小数） | 旧固件仍拒绝 ±10 以外的值（#28） |
-| `density` | number | > 0 且 ≤ 2 | **单位未对齐，原样写入**，云端不换算 |
-| `oilTypeIndex` | int | 0～39 | 1–31 内置，32–39 自定义；自定义油品为空时是否允许由设备决定（产品未定）。旧固件把 18–25 当自定义，向旧固件下发 18–31 的含义不同（#11） |
+| `density` | number, g/cm³ | > 0 且 ≤ 2 | 云端不换算 |
+| `oilColor` | int, 0xRRGGBB | 必须在色板内（`fixtures/protocol/v1/oil_color_palette.json`，20 色） | 设备整机属性 `oilColorSync` 不为 1 时云端 `409 color_sync_unsupported`，不派发（旧固件会静默忽略该字段） |
+| `oilTypeIndex` | int | 0～39 | **客户端不得直接提交**，经 `mediaId` 由云端换算（见 [media-library-contract.md](media-library-contract.md)）。1–31 内置，32–39 自定义；自定义油品为空时是否允许由设备决定（产品未定）。旧固件把 18–25 当自定义，向旧固件下发 18–31 的含义不同（#11） |
 | `capacityL` | int, L | 0～1,000,000 | 只影响空容/可添油量计算 |
 
 **认识但不开放远程修改的字段会被拒绝，不是忽略**：`alarmLowTempC`（设备低温检测从未被调用）、`tankHeightMm`、
