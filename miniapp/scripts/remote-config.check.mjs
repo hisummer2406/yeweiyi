@@ -238,4 +238,11 @@ test('ignoredFields reads the device detail', () => {
   assert.deepEqual(ignoredFields({}), []);
 });
 
+test('echo: the custom medium name the cloud adds is not part of the report, only its index is compared', () => {
+  const args = { tank: 1, oilTypeIndex: 32, customOilName: '盐酸', customOilNameEn: 'HCl' };
+  const fresh = { reportedAt: '2026-11-14T03:00:01Z', oilTypeIndex: 32, oilType: '盐酸' };
+  assert.equal(echoState(fresh, args, '2026-11-14T03:00:00Z'), 'matched');
+  assert.equal(echoState({ ...fresh, oilTypeIndex: 33 }, args, '2026-11-14T03:00:00Z'), 'mismatch');
+});
+
 console.log(`${n} checks passed`);

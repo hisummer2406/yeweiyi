@@ -346,7 +346,9 @@ export function echoState(
     return 'waiting';
   }
   for (const [k, v] of Object.entries(args)) {
-    if (k === 'tank') continue;
+    // 自定义介质名称由云端随编号附带下发，镜像里没有；只比对编号
+    if (k === 'tank' || k === 'customOilName' || k === 'customOilNameEn')
+      continue;
     if (mirror[k] !== v) return 'mismatch';
   }
   return 'matched';

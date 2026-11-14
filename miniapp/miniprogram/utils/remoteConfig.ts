@@ -240,7 +240,8 @@ export function echoState(
   const finished = Date.parse(finishedAt);
   if (!Number.isFinite(reported) || !Number.isFinite(finished) || reported <= finished) return 'waiting';
   for (const k of Object.keys(args)) {
-    if (k === 'tank') continue;
+    // The custom medium's names travel with its index (the cloud adds them) but are not mirrored; the index is.
+    if (k === 'tank' || k === 'customOilName' || k === 'customOilNameEn') continue;
     if (mirror?.[k] !== args[k]) return 'mismatch';
   }
   return 'matched';

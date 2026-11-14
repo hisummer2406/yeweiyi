@@ -155,6 +155,19 @@ describe('commandPhase', () => {
 });
 
 describe('echoState', () => {
+  it('ignores the custom medium names the cloud adds (not mirrored)', () => {
+    const args = {
+      tank: 1,
+      oilTypeIndex: 32,
+      customOilName: '盐酸',
+      customOilNameEn: 'HCl',
+    };
+    const mirror = { reportedAt: '2026-11-14T03:00:01Z', oilTypeIndex: 32 };
+    expect(echoState(mirror, args, '2026-11-14T03:00:00Z')).toBe('matched');
+    expect(
+      echoState({ ...mirror, oilTypeIndex: 33 }, args, '2026-11-14T03:00:00Z'),
+    ).toBe('mismatch');
+  });
   const issued = '2026-11-08T14:00:05Z';
   it('waits for a report newer than the command', () => {
     expect(
