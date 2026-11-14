@@ -177,6 +177,10 @@ test('pending submission: per account key, per device+tank, malformed dropped (#
   assert.equal(readPending(st, 'D', 2), undefined);
   assert.equal(readPending(st, 'E', 1), undefined);
   assert.equal(readPending(withoutPending(st, 'D', 1), 'D', 1), undefined);
+  // #49: a tank-table snapshot carries its method and a string shape; an unknown method is dropped.
+  const table = { ...p, method: 'config.setTankTable', args: { shape: 'vertical', heightMm: 2500, diameterMm: 2000 } };
+  assert.deepEqual(readPending(withPending({}, table), 'D', 1), table);
+  assert.equal(readPending(withPending({}, { ...table, method: 'pump.start' }), 'D', 1), undefined);
   assert.deepEqual(readPending(withPending(st, { ...p, tank: 2 }), 'D', 1), p);
   assert.deepEqual(readPending(withPending(undefined, { ...p, stationId: null }), 'D', 1).stationId, null);
   for (const bad of [{ ...p, requestId: '' }, { ...p, args: { a: 'x' } }, { ...p, stationId: '7' }, { ...p, lines: null }]) {

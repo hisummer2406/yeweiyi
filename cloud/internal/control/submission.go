@@ -115,7 +115,8 @@ func configTarget(method string, args json.RawMessage) (pgtype.Text, bool) {
 	switch method {
 	case protocol.MethodConfigDeviceSettings:
 		return pgtype.Text{String: "device", Valid: true}, true
-	case protocol.MethodConfigTankSettings:
+	// The tank table shares the tank's target with its settings: one in-flight config change per tank.
+	case protocol.MethodConfigTankSettings, protocol.MethodConfigTankTable:
 		var v struct {
 			Tank *float64 `json:"tank"`
 		}

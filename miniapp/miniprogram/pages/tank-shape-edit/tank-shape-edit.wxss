@@ -150,3 +150,28 @@ button.te-btn::after {
 .te-col {
   flex: 1;
 }
+
+.te-reason {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  margin-top: 20rpx;
+  padding: 0 24rpx;
+  background-color: #f5f6f8;
+  border-radius: 16rpx;
+}
+
+.te-reason-label {
+  flex-shrink: 0;
+  margin-right: 16rpx;
+  font-size: var(--font-label);
+  color: #4a4f57;
+}
+
+.te-reason-input {
+  flex: 1;
+  height: 64rpx;
+  font-size: var(--font-body);
+  color: #131313;
+}

@@ -115,6 +115,11 @@ public class OilTankRepositoryImpl implements OilTankRepository {
     }
 
     @Override
+    public void updateOilCanTableSync(OilCanTable oilCanTable) throws DbException {
+        db.update(oilCanTable);
+    }
+
+    @Override
     public void exportOilCanTable(String path) {
         ExportExcel<OilCanTable> exportExcel = new ExportExcel<OilCanTable>();
         String headers[] = new String[31];

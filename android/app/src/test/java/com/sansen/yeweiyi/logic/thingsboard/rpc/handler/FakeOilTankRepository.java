@@ -55,7 +55,18 @@ class FakeOilTankRepository implements OilTankRepository {
 
     @Override
     public void updateOilCanTable(OilCanTable oilCanTable) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("handler 应该调用同步版本 updateOilCanTableSync");
+    }
+
+    OilCanTable lastSavedTable;
+    boolean throwOnTableUpdate = false;
+
+    @Override
+    public void updateOilCanTableSync(OilCanTable oilCanTable) throws com.lidroid.xutils.exception.DbException {
+        if (throwOnTableUpdate) {
+            throw new com.lidroid.xutils.exception.DbException("模拟数据库写入失败");
+        }
+        lastSavedTable = oilCanTable;
     }
 
     @Override

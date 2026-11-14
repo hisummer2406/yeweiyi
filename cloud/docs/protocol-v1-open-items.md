@@ -435,3 +435,15 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
   兼容规则不论哪种都保留，以覆盖已安装的固件。
 - 【待确认·设备端】`rejected` 结果必须保证未发生部分写入（多字段请求整条拒绝）。
 - 共享 fixture 暂未新增；设备端确认形状后补 `cmd_result_rejected.json`。
+
+## H. 罐表远程生成 `config.setTankTable`（#49）—— 三端同 PR 实现，待设备端负责人确认、待真机验证
+
+只下发罐型 + 尺寸，设备用现场同一套公式（`EllipseTable`）生成并写入罐表，回显走已有标定属性
+`tank{N}.calibrationHeightMm/VolumeL`（cloud#14 镜像）。参数与范围见 Android `docs/远程配置下发-字段清单.md` §3a、
+[config-command-contract.md](config-command-contract.md) §8。
+
+- 【待确认·设备端】字段名（`shape` + `diameterMm/lengthMm/headMm/heightMm/widthMm`）、范围（100～20000 mm，封头 0～20000）。
+  立罐的 R 输入框在现场按**直径**参与计算，协议据此命名为 `diameterMm`。
+- 【待确认·设备端/产品】现场卧罐公式只计一侧封头、高度累加有浮点误差（如 2600 mm 直径末点 2599）；远程与现场一致，要改须两端同改。
+- 【选择·云端】与 `config.setTankSettings` 共用 `tank:<n>` 在途目标：同一罐同时至多一条配置命令。
+- 共享 fixture 暂未新增；字段确认后补 `rpc_request_set_tank_table.json`。设备模拟器（`internal/devicesim`）未实现此方法。
