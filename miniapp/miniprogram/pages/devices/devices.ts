@@ -9,6 +9,8 @@ import { showComingSoon } from '../../utils/comingSoon';
 import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
 import { getTankSettings } from '../../utils/remoteConfigApi';
+import { applyScale } from '../../utils/displayScale';
+import { scaleFactor } from '../../utils/displayScaleStore';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -52,6 +54,12 @@ const emptyGroup = (deviceName: string): DeviceGroup => ({
   note: '',
   staleText: '',
   shapes: emptyTankShapes(),
+});
+
+// Re-applied from the raw readings: a scale changed on the detail page shows at once, never multiplied twice.
+const rescaled = (g: DeviceGroup): DeviceGroup => ({
+  ...g,
+  tanks: g.tanks.map((t) => applyScale(t, scaleFactor(g.deviceName, t.index))),
 });
 
 const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale());
@@ -169,6 +177,8 @@ Page({
     if (account !== this.activeAccount) this.setData({ groups: [] });
     this.activeAccount = account;
     this.setData({ text: texts('home'), homeLanguage: currentLocale() });
+    // 详情页改了倍率后回来：先按本机设置重算已显示的罐，断网刷新失败也和详情一致
+    this.rescaleShown();
     this.loadHome();
     this.stopShapePoll();
     this.shapeTimer = setInterval(() => {
@@ -245,7 +255,9 @@ Page({
     const before = new Map((this.data.groups as DeviceGroup[]).map((g) => [g.deviceName, g]));
     const groups = visible.map((d: Device) => {
       const prev = before.get(d.device_name);
-      return prev && prev.state === 'ok' && prev.tanks.length > 0 ? { ...prev, staleText: '' } : emptyGroup(d.device_name);
+      return prev && prev.state === 'ok' && prev.tanks.length > 0
+        ? { ...rescaled(prev), staleText: '' }
+        : emptyGroup(d.device_name);
     });
     this.setData({
       groups,
@@ -259,6 +271,11 @@ Page({
       stationNotice: lostStation ? t('home.lostStation') : '',
     }, () => this.measureHomeLayout());
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
+  },
+
+  rescaleShown() {
+    const groups = this.data.groups as DeviceGroup[];
+    if (groups.some((g) => g.tanks.length > 0)) this.setData({ groups: groups.map(rescaled) });
   },
 
   onPickStation() {
@@ -289,7 +306,12 @@ Page({
         this.patchGroup(deviceName, seq, {
           state: 'ok',
           ts: formatLocalTime(res.ts, currentLocale()),
-          tanks: toTankViews(res, deviceName, this.data.groups.find((g) => g.deviceName === deviceName)?.shapes),
+          tanks: toTankViews(
+            res,
+            deviceName,
+            this.data.groups.find((g) => g.deviceName === deviceName)?.shapes,
+            (tank) => scaleFactor(deviceName, tank),
+          ),
           error: '',
           staleText: '',
           fetchedAt: nowText(),
