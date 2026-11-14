@@ -313,3 +313,64 @@ func TestMedia_TransferClearsDevicePositions(t *testing.T) {
 		t.Errorf("old customer's medium after transfer: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestMedia_ReclaimsUnusedPosition(t *testing.T) {
+	tn := newTenancyWith(t, control.Config{AllowConfigCommands: true})
+	tn.markSynced(t, tn.devA1)
+	ctx := context.Background()
+	t.Cleanup(func() { tn.env.pool.Exec(ctx, `DELETE FROM tank_settings WHERE device_name = $1`, tn.devA1) })
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := tn.env.pool.Exec(ctx, sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 罐 i+1 选用第 i 种手动介质，占满 32–39。
+	media := make([]mediaRow, 8)
+	for i := range media {
+		media[i] = tn.createMedia(t, map[string]any{"name": fmt.Sprintf("%s%d", mediaName("收"), i), "scope": "customer", "customerId": tn.custA})
+		if rec := selectMedium(t, tn, tn.platform, tn.devA1, i+1, media[i].ID); rec.Code != http.StatusAccepted {
+			t.Fatalf("slot %d: %d %s", i, rec.Code, rec.Body.String())
+		}
+	}
+	next := tn.createMedia(t, map[string]any{"name": mediaName("新"), "scope": "customer", "customerId": tn.custA})
+
+	// 命令都还在途：设备可能已在执行，一个都不能回收。
+	if rec := selectMedium(t, tn, tn.platform, tn.devA1, 9, next.ID); rec.Code != 409 || mediaCode(t, rec) != "media_slots_exhausted" {
+		t.Fatalf("in flight: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 全部执行成功。罐 1 的镜像早于命令（还没跟上），罐 2–8 的镜像已改成内置 1 号介质，只有罐 8 仍用 39。
+	exec(`UPDATE control_commands SET status = 'succeeded', finished_at = now() WHERE device_name = $1 AND status IN ('pending','sent','received','executing')`, tn.devA1)
+	exec(`INSERT INTO tank_settings (device_name, tank, oil_type_index, reported_at) VALUES ($1, 1, 5, now() - interval '1 hour')`, tn.devA1)
+	for tank := 2; tank <= 8; tank++ {
+		idx := 1
+		if tank == 8 {
+			idx = 39
+		}
+		exec(`INSERT INTO tank_settings (device_name, tank, oil_type_index, reported_at) VALUES ($1, $2, $3, now() + interval '1 second')`, tn.devA1, tank, idx)
+	}
+
+	var opts struct{ SlotsUsed int }
+	if rec := tn.send(t, "GET", "/api/devices/"+tn.devA1+"/media-options", tn.platform, nil); rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &opts) != nil || opts.SlotsUsed != 2 {
+		t.Errorf("slotsUsed = %d (%d %s), want 2 (32 awaiting mirror, 39 on tank 8)", opts.SlotsUsed, rec.Code, rec.Body.String())
+	}
+	if rec := selectMedium(t, tn, tn.platform, tn.devA1, 9, next.ID); rec.Code != http.StatusAccepted {
+		t.Fatalf("reclaim: %d %s", rec.Code, rec.Body.String())
+	}
+	args := tn.lastArgs(t, tn.devA1)
+	if args["oilTypeIndex"] != float64(33) || args["customOilName"] != next.Name {
+		t.Errorf("reclaimed args = %v, want position 33 (32 awaits mirror)", args)
+	}
+	var owner int64
+	if err := tn.env.pool.QueryRow(ctx, `SELECT media_id FROM device_media_slots WHERE device_name = $1 AND slot = 33`, tn.devA1).Scan(&owner); err != nil || owner != next.ID {
+		t.Errorf("position 33 owner = %d, err %v", owner, err)
+	}
+	// 被回收的介质再次选用时重新拿位置、重新下发名称。
+	if rec := selectMedium(t, tn, tn.platform, tn.devA1, 10, media[1].ID); rec.Code != http.StatusAccepted {
+		t.Fatalf("reselect: %d %s", rec.Code, rec.Body.String())
+	}
+	if args = tn.lastArgs(t, tn.devA1); args["oilTypeIndex"] != float64(34) || args["customOilName"] != media[1].Name {
+		t.Errorf("reselect args = %v", args)
+	}
+}

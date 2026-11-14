@@ -368,7 +368,7 @@ export const zh: Record<string, string> = {
   "tankCfg.navTitle": "储罐设置",
   "tankCfg.color": "物料颜色",
   "tankCfg.medium": "介质类型",
-  "tankCfg.mediumPlaceholder": "如：汽油、柴油、大豆油",
+  "tankCfg.mediumByPlatform": "设备当前介质，由平台统一配置，此处不可修改",
   "tankCfg.density": "介质密度",
   "tankCfg.height": "储罐高度",
   "tankCfg.capacity": "储罐容量",

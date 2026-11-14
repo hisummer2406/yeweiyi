@@ -84,6 +84,7 @@ type Querier interface {
 	// Refused by the foreign keys (ON DELETE RESTRICT) while any user, device, command or audit row still
 	// references the customer; the handler turns that into 409. `default` is protected as above.
 	DeleteCustomer(ctx context.Context, id int64) (int64, error)
+	DeleteDeviceMediaSlot(ctx context.Context, arg DeleteDeviceMediaSlotParams) error
 	DeleteDeviceMediaSlots(ctx context.Context, deviceName string) (int64, error)
 	// A station that still has devices fails with 23503 (devices_station_customer_fk); the handler turns
 	// that into 409.
@@ -219,6 +220,10 @@ type Querier interface {
 	// (operator, reason, arguments, results) to the new one.
 	ListControlCommandsVisibleToUser(ctx context.Context, arg ListControlCommandsVisibleToUserParams) ([]ControlCommand, error)
 	ListCustomers(ctx context.Context) ([]Customer, error)
+	// 设备各动态位置是否仍在用（#27）。在用 = 某罐镜像的 oil_type_index 就是该位置，或有指向该位置的 config.setTankSettings
+	// 命令尚未被镜像覆盖：未终态的一律算在用（设备可能已开始执行）；succeeded/expired 的在该罐镜像晚于命令签发前也算在用
+	// （镜像还没跟上，expired 可能已执行）。rejected/failed 设备未生效（全有或全无），不算。不在用的位置可回收给别的介质。
+	ListDeviceMediaSlotUsage(ctx context.Context, deviceName string) ([]ListDeviceMediaSlotUsageRow, error)
 	ListDeviceMediaSlots(ctx context.Context, deviceName string) ([]DeviceMediaSlot, error)
 	ListDevicePurgesByDevice(ctx context.Context, deviceName string) ([]DevicePurge, error)
 	// Same three-way rule as UserMayAccessDevice, expressed as a list. A customer user sees the devices on

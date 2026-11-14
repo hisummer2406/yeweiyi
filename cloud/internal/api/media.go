@@ -285,12 +285,18 @@ func deviceMediaOptionsHandler(deps Deps) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
-		slots, err := deps.Queries.ListDeviceMediaSlots(ctx, device.DeviceName)
+		slots, err := deps.Queries.ListDeviceMediaSlotUsage(ctx, device.DeviceName)
 		if err != nil {
 			internalError(c, err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"public": public, "customer": own, "customMediaSync": synced, "slotsUsed": len(slots), "slotsTotal": mediaSlotLast - mediaSlotFirst + 1})
+		used := 0
+		for _, s := range slots {
+			if s.InUse {
+				used++
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"public": public, "customer": own, "customMediaSync": synced, "slotsUsed": used, "slotsTotal": mediaSlotLast - mediaSlotFirst + 1})
 	}
 }
 
@@ -424,23 +430,35 @@ func resolveMediaArgs(c *gin.Context, deps Deps, actor control.Actor, device str
 	return out, true
 }
 
-// deviceMediaSlot returns the device position of a medium, taking a free one if it has none. A position
-// in use is never reassigned, so another tank's name cannot be overwritten.
+// deviceMediaSlot returns the device position of a medium, taking a free one if it has none. When all
+// eight are mapped, one no tank uses and no unsettled command points at is handed over; a position in use
+// is never reassigned, so another tank's name cannot be overwritten. The caller holds the device row lock.
 func deviceMediaSlot(ctx context.Context, q *db.Queries, device string, mediaID int64) (int16, error) {
-	slots, err := q.ListDeviceMediaSlots(ctx, device)
+	slots, err := q.ListDeviceMediaSlotUsage(ctx, device)
 	if err != nil {
 		return 0, err
 	}
-	used := map[int16]bool{}
+	mapped := map[int16]bool{}
 	for _, s := range slots {
 		if s.MediaID == mediaID {
 			return s.Slot, nil
 		}
-		used[s.Slot] = true
+		mapped[s.Slot] = true
+	}
+	take := func(slot int16) (int16, error) {
+		return slot, q.CreateDeviceMediaSlot(ctx, db.CreateDeviceMediaSlotParams{DeviceName: device, Slot: slot, MediaID: mediaID})
 	}
 	for slot := int16(mediaSlotFirst); slot <= mediaSlotLast; slot++ {
-		if !used[slot] {
-			return slot, q.CreateDeviceMediaSlot(ctx, db.CreateDeviceMediaSlotParams{DeviceName: device, Slot: slot, MediaID: mediaID})
+		if !mapped[slot] {
+			return take(slot)
+		}
+	}
+	for _, s := range slots {
+		if !s.InUse {
+			if err := q.DeleteDeviceMediaSlot(ctx, db.DeleteDeviceMediaSlotParams{DeviceName: device, Slot: s.Slot}); err != nil {
+				return 0, err
+			}
+			return take(s.Slot)
 		}
 	}
 	return 0, &mediaRefusal{http.StatusConflict, "media_slots_exhausted", "all 8 custom medium positions on this device are in use"}
