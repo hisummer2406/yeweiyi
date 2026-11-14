@@ -254,7 +254,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts`/`utils/displayScale.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts`/`utils/displayScale.ts`/`utils/tankTable.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -299,6 +299,9 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   trusting it if time has passed.
 - `utils/telemetry.ts` — telemetry snapshot → tank view-model and the "never reported" (404) test,
   shared by the home page and `device-detail`. Pure, no `wx`.
+- `utils/tankTable.ts` — 罐表设置「生成罐表」：照搬设备端 `factory/EllipseTable.java`（卧罐筒体+单侧封头、立罐圆柱、长方体，1 cm 一档，
+  设备的取整与浮点细节一并照搬）。`scripts/fixtures/tank-table-golden.json` 由设备 Java 代码直接运行生成，check 逐点比对。
+  字母：卧罐 H 直径/L 筒长/R 封头高度（可 0）；立罐 H 罐高/R（设备按直径算）；长方体 H 高/L 长/R 宽。「保存到控制器」待下发协议。
 - `utils/displayScale.ts` / `utils/displayScaleStore.ts` — 管理员本机显示倍率（#44，openspec `local-display-scale`）：
   按 `display-scale:<账号>:<设备>#<罐>` 存在本机，只有 platform_admin / customer_admin 读写和应用（每次从 token 取）；
   油容积、质量、水体积、空容从 `TankView.raw`（未舍入原始值）乘倍率再舍入，液位/水高/温度/占比不乘，标「换算显示 ×倍率」。
