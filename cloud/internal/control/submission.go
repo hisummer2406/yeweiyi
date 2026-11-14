@@ -266,7 +266,9 @@ func requiredLevel(p protocol.PermissionLevel) string { return string(p) }
 // (invariant 4), but "the device did run it after all" is no longer lost. A result whose status equals
 // the stored one is an ordinary redelivery and is not recorded; neither is a non-terminal 'executing'.
 func (s *Service) recordLateResult(ctx context.Context, deviceName string, commandID pgtype.UUID, res protocol.CmdResult) {
-	if res.Status != protocol.CmdStatusSucceeded && res.Status != protocol.CmdStatusFailed {
+	switch res.Status {
+	case protocol.CmdStatusSucceeded, protocol.CmdStatusFailed, protocol.CmdStatusRejected:
+	default:
 		return
 	}
 	cmd, err := s.q.GetControlCommand(ctx, commandID)

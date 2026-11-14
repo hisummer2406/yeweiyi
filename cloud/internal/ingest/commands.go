@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/protocol"
 	"yeweiyi-cloud/internal/tbclient"
 )
@@ -77,6 +78,11 @@ func (i *Ingester) ReconcileCommands(ctx context.Context) int {
 				return nil // one bad point must not hide the good ones after it
 			}
 			cmd, applied, err := i.cfg.Control.ApplyResult(ctx, deviceName, res)
+			if errors.Is(err, control.ErrInvalidResult) {
+				// Can never apply; skipping it keeps the later points (other commands) readable (#42).
+				i.cfg.Logf("ingest: command reconcile: %s: cmdResult at %d skipped: %v", deviceName, pt.TS, err)
+				return nil
+			}
 			if err != nil {
 				return err // the database is failing; stop and let the next pass try again
 			}
