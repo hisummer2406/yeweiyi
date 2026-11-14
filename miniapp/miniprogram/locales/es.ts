@@ -618,6 +618,7 @@ export const es: Record<string, string> = {
   "param.colorNonStandard": " (fuera de la paleta)",
   "param.colorUnsupported": "El firmware de este equipo no permite cambiar el color a distancia",
   "param.mediumUnavailable": "No se pudieron leer las opciones de medio; ahora no se puede cambiar el medio",
+  "param.mediumUpgrade": "El software del equipo está desactualizado; no se pueden elegir medios personalizados. Actualice el software del equipo",
   "param.densityCheck": "Fuera del rango habitual en g/cm³; puede haberse introducido en kg/m³. Revíselo",
   "param.ignored": "El equipo no aplicó: {fields}",
   "param.reason": "Motivo",

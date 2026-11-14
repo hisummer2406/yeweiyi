@@ -618,6 +618,7 @@ export const en: Record<string, string> = {
   "param.colorNonStandard": " (not in the palette)",
   "param.colorUnsupported": "This device firmware cannot change the colour remotely",
   "param.mediumUnavailable": "Could not read the medium options; the medium cannot be changed now",
+  "param.mediumUpgrade": "The device software is out of date; custom media cannot be chosen. Please upgrade the device software",
   "param.densityCheck": "Outside the usual g/cm³ range; it may have been entered in kg/m³. Please check",
   "param.ignored": "Not applied by the device: {fields}",
   "param.reason": "Reason",

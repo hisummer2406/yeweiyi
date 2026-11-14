@@ -274,7 +274,8 @@ Component({
             mediumEditable: true,
             mediumNames: list.map((x) => x.name),
             mediumIdx: keep === undefined ? -1 : self.mediaIds.indexOf(keep),
-            mediumNote: '',
+            // Old firmware: say why the list is short and what to do about it.
+            mediumNote: o.customMediaSync ? '' : t('param.mediumUpgrade'),
             colorEditable: !!o.oilColorSync,
             colorSel: o.oilColorSync ? this.data.colorSel : -1,
             colorNote: o.oilColorSync ? '' : t('param.colorUnsupported'),

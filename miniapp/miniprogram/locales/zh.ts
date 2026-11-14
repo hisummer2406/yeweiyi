@@ -618,6 +618,7 @@ export const zh: Record<string, string> = {
   "param.colorNonStandard": "（非色板颜色）",
   "param.colorUnsupported": "当前设备固件不支持远程修改颜色",
   "param.mediumUnavailable": "介质选项读取失败，暂不能修改介质",
+  "param.mediumUpgrade": "设备软件版本较旧，自定义介质暂不可选，请升级设备软件",
   "param.densityCheck": "数值超出 g/cm³ 常见范围，可能是按 kg/m³ 填写的，请核对",
   "param.ignored": "设备未处理：{fields}",
   "param.reason": "下发原因",

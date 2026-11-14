@@ -397,6 +397,7 @@ await test('tank kind, admin: choose medium and colour; both are sent with the o
   const ed = mount({ ...props, kind: 'tank' });
   await tick(20);
   assert.equal(ed.data.mediumEditable, true);
+  assert.equal(ed.data.mediumNote, '');
   assert.equal(ed.data.colorEditable, true);
   assert.equal(ed.data.colorNow, '#0000FF');
   assert.deepEqual(ed.data.mediumNames, ['0#柴油', '盐酸']);
@@ -432,6 +433,7 @@ await test('firmware without name sync: only built-in media below 18 can be chos
   const ed = mount({ ...props, kind: 'tank' });
   await tick(20);
   assert.deepEqual(ed.data.mediumNames, ['0#柴油']);
+  assert.equal(ed.data.mediumNote, '设备软件版本较旧，自定义介质暂不可选，请升级设备软件');
   ed.onMediumPick({ detail: { value: '0' } });
   assert.deepEqual(ed.choiceArgs(), { mediaId: 5 });
 });
