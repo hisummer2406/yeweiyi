@@ -75,6 +75,9 @@ function unitText(u: Unit): string {
   return u;
 }
 
+// Old firmware treats 18 and up as custom positions (#11): those numbers mean something else there.
+const FIRST_NEW_BUILTIN_INDEX = 18;
+
 const PALETTE = OIL_COLOR_PALETTE.map((c) => ({ color: c, css: toCss(c) }));
 
 function shown(v: string): string {
@@ -260,7 +263,11 @@ Component({
       getMediaOptions(this.data.device as string)
         .then((o) => {
           if (gen !== self.gen) return;
-          const list: MediaOption[] = [...(o.public || []), ...(o.customer || [])];
+          // Firmware without name sync takes only the old built-in numbers (< 18); the cloud refuses the rest with
+          // media_sync_unsupported, which would sink the whole submission. Same rule as the admin form.
+          const list: MediaOption[] = [...(o.public || []), ...(o.customer || [])].filter(
+            (x) => o.customMediaSync || (x.builtinIndex !== null && x.builtinIndex < FIRST_NEW_BUILTIN_INDEX),
+          );
           const keep = self.mediaIds[this.data.mediumIdx as number];
           self.mediaIds = list.map((x) => x.id);
           this.setData({

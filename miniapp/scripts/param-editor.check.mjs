@@ -425,6 +425,17 @@ await test('tank kind: colour read only without device support; a non-palette co
   assert.equal(ed.data.colorNonStandard, true);
 });
 
+await test('firmware without name sync: only built-in media below 18 can be chosen (the cloud refuses the rest)', async () => {
+  reset();
+  mediaOptions.customMediaSync = false;
+  mediaOptions.public.push({ id: 20, name: '新内置', builtinIndex: 20 });
+  const ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.deepEqual(ed.data.mediumNames, ['0#柴油']);
+  ed.onMediumPick({ detail: { value: '0' } });
+  assert.deepEqual(ed.choiceArgs(), { mediaId: 5 });
+});
+
 await test('tank kind: options unavailable keeps medium read only, other fields still editable', async () => {
   reset();
   mediaOptions = null;
