@@ -607,4 +607,5 @@
     <string name="log_clear">Clear Logs</string>
     <string name="log_cleared">Logs cleared</string>
     <string name="log_op_failed">Operation failed, see the log for details</string>
+    <string name="rpc_oil_color_not_in_palette">Colour %1$s is not in the palette on this device; choose one from the palette</string>
 </resources>

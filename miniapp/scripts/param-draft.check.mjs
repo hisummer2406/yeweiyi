@@ -30,11 +30,11 @@ test('calibration fields are the three corrections, signed, with units', () => {
   ]);
 });
 
-test('tank fields are exactly the sendable ones; density/height/low temp are read-only, no colour or low water', () => {
+test('tank fields are exactly the sendable ones (density since 2026-11-14); height/low temp read-only; colour is picked, no low water', () => {
   const tank = editFields('tank');
-  assert.deepEqual(tank.map((f) => f.form), ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh']);
+  assert.deepEqual(tank.map((f) => f.form), ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'density']);
   assert.deepEqual(tank.filter((f) => f.signed).map((f) => f.form), ['tempHigh']);
-  assert.deepEqual(TANK_READONLY.map((f) => f.form), ['density', 'height', 'tempLow']);
+  assert.deepEqual(TANK_READONLY.map((f) => f.form), ['height', 'tempLow']);
   assert.ok(!tank.some((f) => f.form === 'waterLow' || f.form === 'color'));
 });
 

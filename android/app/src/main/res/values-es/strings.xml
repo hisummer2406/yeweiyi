@@ -288,4 +288,5 @@
     <string name="log_clear">Borrar registros</string>
     <string name="log_cleared">Registros borrados</string>
     <string name="log_op_failed">Operación fallida, consulte el registro para más detalles</string>
+    <string name="rpc_oil_color_not_in_palette">El color %1$s no está en la paleta de este equipo; elija uno de la paleta</string>
 </resources>

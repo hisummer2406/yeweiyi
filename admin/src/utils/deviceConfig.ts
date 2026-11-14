@@ -4,15 +4,19 @@
  * 契约：cloud/docs/config-command-contract.md、cloud/docs/tank-settings-contract.md。
  */
 
-export type FieldKind = 'int' | 'number' | 'oil';
+import { isPaletteColor } from './oilColor';
+
+export type FieldKind = 'int' | 'number' | 'oil' | 'color';
 
 export type FieldDef<K extends string = string> = {
   key: K;
   /** 文案 id 后缀：pages.console.settings.field.<key> */
-  unit?: 'mm' | '℃' | 'L' | 's';
+  unit?: 'mm' | '℃' | 'L' | 's' | 'g/cm³';
   kind: FieldKind;
   min: number;
   max: number;
+  /** true = min 本身不允许（密度 > 0） */
+  exclMin?: boolean;
   /** false = 只读（云端拒绝远程修改，或单位未确认） */
   editable: boolean;
 };
@@ -24,7 +28,7 @@ type TankKey = Exclude<
   'tank' | 'reportedAt' | 'oilType'
 >;
 
-/** 罐设置字段（显示顺序）。密度：单位未与设备对齐，本期只读（用户 2026-11-08 决定）。三项修正不限范围（#28，用户决定）。 */
+/** 罐设置字段（显示顺序）。密度单位 g/cm³（2026-11-14 核实设备按 升×密度=千克 计算），可写 0<v≤2；颜色只能选色板。三项修正不限范围（#28，用户决定）。 */
 export const TANK_FIELDS: FieldDef<TankKey>[] = [
   {
     key: 'alarmHighHighLevelMm',
@@ -99,6 +103,7 @@ export const TANK_FIELDS: FieldDef<TankKey>[] = [
     editable: true,
   },
   { key: 'oilTypeIndex', kind: 'oil', min: 0, max: 39, editable: true },
+  { key: 'oilColor', kind: 'color', min: 0, max: 0xffffff, editable: true },
   {
     key: 'capacityL',
     unit: 'L',
@@ -124,7 +129,15 @@ export const TANK_FIELDS: FieldDef<TankKey>[] = [
     max: INT_MAX,
     editable: false,
   },
-  { key: 'density', kind: 'number', min: 0, max: 2, editable: false },
+  {
+    key: 'density',
+    unit: 'g/cm³',
+    kind: 'number',
+    min: 0,
+    max: 2,
+    exclMin: true,
+    editable: true,
+  },
   {
     key: 'alarmLowTempC',
     unit: '℃',
@@ -202,7 +215,7 @@ export function changedArgs(
 
 export type FieldProblem = {
   field: string;
-  code: 'range' | 'integer' | 'order';
+  code: 'range' | 'integer' | 'order' | 'color';
 };
 
 const LEVEL_ORDER = [
@@ -225,9 +238,11 @@ export function checkArgs(
   for (const f of fields) {
     const v = args[f.key];
     if (v === undefined) continue;
-    if ((f.kind === 'int' || f.kind === 'oil') && !Number.isInteger(v)) {
+    if (f.kind === 'color') {
+      if (!isPaletteColor(v)) problems.push({ field: f.key, code: 'color' });
+    } else if ((f.kind === 'int' || f.kind === 'oil') && !Number.isInteger(v)) {
       problems.push({ field: f.key, code: 'integer' });
-    } else if (v < f.min || v > f.max) {
+    } else if (v < f.min || v > f.max || (f.exclMin && v <= f.min)) {
       problems.push({ field: f.key, code: 'range' });
     }
   }
@@ -248,6 +263,11 @@ export function checkArgs(
     }
   }
   return problems;
+}
+
+/** 回报的密度大于 2：多半是按设备旧标注 kg/m³ 填的（如 840），只提示核对，不改值 */
+export function densityLooksOff(v: number | null | undefined): boolean {
+  return typeof v === 'number' && v > 2;
 }
 
 /** 液位阈值超过罐高：只提示（"≤ 罐高"由设备裁决） */
@@ -326,7 +346,9 @@ export function echoState(
     return 'waiting';
   }
   for (const [k, v] of Object.entries(args)) {
-    if (k === 'tank') continue;
+    // 自定义介质名称由云端随编号附带下发，镜像里没有；只比对编号
+    if (k === 'tank' || k === 'customOilName' || k === 'customOilNameEn')
+      continue;
     if (mirror[k] !== v) return 'mismatch';
   }
   return 'matched';
@@ -345,6 +367,7 @@ export type SubmitErrorKind =
   | 'purging'
   | 'mediaNotSelectable'
   | 'mediaSyncUnsupported'
+  | 'colorSyncUnsupported'
   | 'mediaSlotsExhausted'
   | 'unavailable'
   | 'other';
@@ -376,6 +399,8 @@ export function classifySubmitError(err: {
       return 'mediaNotSelectable';
     case 'media_sync_unsupported':
       return 'mediaSyncUnsupported';
+    case 'color_sync_unsupported':
+      return 'colorSyncUnsupported';
     case 'media_slots_exhausted':
       return 'mediaSlotsExhausted';
   }
@@ -399,6 +424,7 @@ export function pendingSettledBy(kind: SubmitErrorKind): boolean {
     kind === 'invalidArgs' ||
     kind === 'mediaNotSelectable' ||
     kind === 'mediaSyncUnsupported' ||
+    kind === 'colorSyncUnsupported' ||
     kind === 'mediaSlotsExhausted'
   );
 }
@@ -415,6 +441,20 @@ export function trackedArgs(
   const { mediaId: _mediaId, ...rest } = args;
   const index = command.args?.oilTypeIndex;
   return typeof index === 'number' ? { ...rest, oilTypeIndex: index } : rest;
+}
+
+/**
+ * 设备拒绝/失败的说明：设备不认识该方法（UNKNOWN_METHOD）说明设备软件版本比命令旧，给升级提示而不是设备原文；
+ * 其余照设备原因、再退回错误码。
+ */
+export function commandRefusal(
+  code: string | undefined,
+  reason: string | undefined,
+): { key: string } | { text: string } | null {
+  if (code === 'UNKNOWN_METHOD')
+    return { key: 'pages.console.settings.refusal.unknownMethod' };
+  const text = reason?.trim() || code;
+  return text ? { text } : null;
 }
 
 /** 命令的 configTarget（tank:N / device）显示用 */

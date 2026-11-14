@@ -346,10 +346,27 @@ export interface TankSettings {
   waterCorrectionMm: number | null;
   tempCorrectionC: number | null;
   density: number | null;
+  // 0xRRGGBB; null = not set on the device, or firmware that does not report it
+  oilColor?: number | null;
   capacityL: number | null;
 }
 
 export interface TankSettingsResponse {
   deviceName: string;
   tanks: TankSettings[];
+}
+
+// GET /api/devices/:device/media-options (administrators only; cloud docs/media-library-contract.md)
+export interface MediaOption {
+  id: number;
+  name: string;
+  builtinIndex: number | null;
+}
+export interface MediaOptions {
+  public: MediaOption[];
+  customer: MediaOption[];
+  customMediaSync: boolean;
+  oilColorSync: boolean;
+  slotsUsed: number;
+  slotsTotal: number;
 }

@@ -104,7 +104,7 @@ func TestParseTankSettings_SharedFixture(t *testing.T) {
 		t1.OilTypeIndex == nil || t1.AlarmHighHighLevelMm == nil || t1.AlarmHighLevelMm == nil ||
 		t1.AlarmLowLevelMm == nil || t1.AlarmLowLowLevelMm == nil || t1.AlarmHighWaterMm == nil ||
 		t1.AlarmHighTempC == nil || t1.AlarmLowTempC == nil || t1.LevelCorrectionMm == nil ||
-		t1.WaterCorrectionMm == nil || t1.TempCorrectionC == nil || t1.Density == nil || t1.CapacityL == nil {
+		t1.WaterCorrectionMm == nil || t1.TempCorrectionC == nil || t1.Density == nil || t1.CapacityL == nil || t1.OilColor == nil {
 		t.Errorf("every documented tank1 key should parse to a value: %+v", t1)
 	}
 	if *got[1].OilTypeIndex != 19 || *got[1].Density != 0.84 {

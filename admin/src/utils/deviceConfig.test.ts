@@ -5,9 +5,12 @@ import {
   checkArgs,
   classifySubmitError,
   commandPhase,
+  commandRefusal,
   DEVICE_FIELDS,
+  densityLooksOff,
   echoState,
   newRequestId,
+  pendingSettledBy,
   TANK_FIELDS,
   targetTank,
   trackedArgs,
@@ -31,7 +34,7 @@ describe('changedArgs', () => {
       changedArgs(TANK_FIELDS, tank as never, {
         alarmHighLevelMm: 610,
         alarmLowLevelMm: 300, // unchanged
-        density: 0.7, // read-only
+        tankHeightMm: 3000, // read-only
         alarmHighTempC: undefined,
       }),
     ).toEqual({ alarmHighLevelMm: 610 });
@@ -45,6 +48,48 @@ describe('changedArgs', () => {
   });
   it('treats an empty draft as no change', () => {
     expect(changedArgs(TANK_FIELDS, tank as never, {})).toEqual({});
+  });
+});
+
+describe('density and colour (2026-11-14)', () => {
+  it('sends density and oilColor when changed', () => {
+    expect(
+      changedArgs(TANK_FIELDS, tank as never, {
+        density: 0.84,
+        oilColor: 0xff0000,
+      }),
+    ).toEqual({ density: 0.84, oilColor: 0xff0000 });
+  });
+  it('leaves an untouched out-of-range density out of the submission', () => {
+    const odd = { ...tank, density: 840 } as never;
+    expect(changedArgs(TANK_FIELDS, odd, { alarmHighLevelMm: 610 })).toEqual({
+      alarmHighLevelMm: 610,
+    });
+    expect(checkArgs(TANK_FIELDS, odd, { alarmHighLevelMm: 610 })).toEqual([]);
+  });
+  it('checks density range and the palette', () => {
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { density: 0 }).map((p) => p.field),
+    ).toEqual(['density']);
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { density: 2.5 }).map(
+        (p) => p.field,
+      ),
+    ).toEqual(['density']);
+    expect(checkArgs(TANK_FIELDS, tank as never, { density: 2 })).toEqual([]);
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { oilColor: 0x123456 }).map(
+        (p) => p.code,
+      ),
+    ).toEqual(['color']);
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { oilColor: 0xff0000 }),
+    ).toEqual([]);
+  });
+  it('flags a density that looks like kg/m³', () => {
+    expect(densityLooksOff(840)).toBe(true);
+    expect(densityLooksOff(0.84)).toBe(false);
+    expect(densityLooksOff(null)).toBe(false);
   });
 });
 
@@ -112,6 +157,19 @@ describe('commandPhase', () => {
 });
 
 describe('echoState', () => {
+  it('ignores the custom medium names the cloud adds (not mirrored)', () => {
+    const args = {
+      tank: 1,
+      oilTypeIndex: 32,
+      customOilName: '盐酸',
+      customOilNameEn: 'HCl',
+    };
+    const mirror = { reportedAt: '2026-11-14T03:00:01Z', oilTypeIndex: 32 };
+    expect(echoState(mirror, args, '2026-11-14T03:00:00Z')).toBe('matched');
+    expect(
+      echoState({ ...mirror, oilTypeIndex: 33 }, args, '2026-11-14T03:00:00Z'),
+    ).toBe('mismatch');
+  });
   const issued = '2026-11-08T14:00:05Z';
   it('waits for a report newer than the command', () => {
     expect(
@@ -220,7 +278,23 @@ describe('media submit errors (#27)', () => {
     ['media_not_selectable', 'mediaNotSelectable'],
     ['media_sync_unsupported', 'mediaSyncUnsupported'],
     ['media_slots_exhausted', 'mediaSlotsExhausted'],
+    ['color_sync_unsupported', 'colorSyncUnsupported'],
   ])('%s', (code, kind) => {
     expect(classifySubmitError({ status: 409, code })).toBe(kind);
+  });
+});
+
+describe('outdated device software', () => {
+  it('a refused colour on old firmware settles the snapshot', () => {
+    expect(pendingSettledBy('colorSyncUnsupported')).toBe(true);
+  });
+  it('an unknown method asks to upgrade instead of the raw device text', () => {
+    expect(commandRefusal('UNKNOWN_METHOD', 'unknown method x')).toEqual({
+      key: 'pages.console.settings.refusal.unknownMethod',
+    });
+    expect(commandRefusal('INVALID_PARAMS', '超出范围')).toEqual({
+      text: '超出范围',
+    });
+    expect(commandRefusal(undefined, undefined)).toBeNull();
   });
 });

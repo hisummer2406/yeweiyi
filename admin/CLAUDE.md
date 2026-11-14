@@ -118,7 +118,7 @@
 - 未做：历史趋势图（没装图表库）、WebSocket 报警推送。
 - **远程配置（#4，云端契约 `cloud/docs/config-command-contract.md` 与 `tank-settings-contract.md`，依赖 cloud PR #13；OpenSpec
   `device-parameter-settings`）**：设备详情新增「参数设置」（`?tab=settings`）、「操作记录」（`?tab=commands`）；菜单「远程控制」
-  （`/console/issue-command`）是设备列表入口。本期只有配置类，动作类（消音/清警/重启/泵阀）不提供入口；**密度只读**。
+  （`/console/issue-command`）是设备列表入口。本期只有配置类，动作类（消音/清警/重启/泵阀）不提供入口。密度可写（g/cm³，0<v≤2；回报 >2 多半是按旧标注 kg/m³ 填的，只提示核对）；颜色（`oilColor`，20 色色板 `utils/oilColor.ts`，对照云端共享 fixture）只在 `media-options.oilColorSync` 为真时可改（2026-11-14）。
   - 当前值只来自设备回报（`tank-settings` / `device-settings` + `reportedAt`），null 显示「—」、0 照常显示，**不乐观更新**。
   - **没有逐台开放**（2026-11-09 用户决定）：管理员打开参数页即可直接修改；云端只剩部署级总闸，关闭时提交得到
     `config_commands_disabled`。整机设置只有平台管理员能改。
@@ -226,7 +226,7 @@
   向导页本身也只有一个动作：管理员已建时第 2 步按钮是「添加并开通」，油站和大屏建好、条件一齐就自动 `complete` 并回客户列表；「完成开通」按钮只在条件已齐但上次开通没成功时出现，不再有灰着的第二个按钮。
 - **开通向导合并「油站」与「设备」（2026-10-15）**：一油站一台大屏，所以向导只有两步——1 客户管理员、2 油站与大屏。第 2 步一次提交 = 新建油站 + 登记设备 + 分配油站（云端没有一次建三样的接口，前端串起来）：
   设备登记失败就 `DELETE` 刚建的空油站回滚，分配失败时设备已登记、提示去设备页重试。已有油站列在下面并标出各自的大屏。「完成开通」成功后回客户列表。
-- **介质库（#27，契约 `cloud/docs/media-library-contract.md`）**：`/assets/media` 仅平台管理员，手动维护公共/客户专属介质，保存不影响设备；客户列表有「专属介质」入口（`?customer=` 锁定）。参数设置里介质只有平台管理员能选，提交 `mediaId`，回显按命令实际的 `oilTypeIndex`（`trackedArgs`）。
+- **介质库（#27，契约 `cloud/docs/media-library-contract.md`）**：`/assets/media` 仅平台管理员，手动维护公共/客户专属介质，保存不影响设备；客户列表有「专属介质」入口（`?customer=` 锁定）。参数设置里介质由管理员（平台、客户，2026-11-14 起）选，提交 `mediaId`，回显按命令实际的 `oilTypeIndex`（`trackedArgs`）；`media-options` 两种管理员都请求。
 - 没做：扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的

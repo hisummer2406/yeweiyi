@@ -222,6 +222,8 @@ type DeviceSetting struct {
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 	// 设备上报的介质名称同步能力；1 = 支持随 config.setTankSettings 写入名称，NULL = 旧固件。
 	CustomMediaSync pgtype.Int4 `json:"custom_media_sync"`
+	// 设备上报的颜色同步能力；1 = 支持随 config.setTankSettings 写入 oilColor，NULL = 旧固件（会静默忽略该字段）。
+	OilColorSync pgtype.Int4 `json:"oil_color_sync"`
 }
 
 // 介质字典：公共介质可用于所有客户，客户专属介质只能用于所属客户的设备（#27）。被引用过的条目只停用、不物理删除。
@@ -478,6 +480,8 @@ type TankSetting struct {
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 	// 油罐公称容积，L（客户端属性 capacityL）。NULL = 设备未上报。
 	CapacityL pgtype.Float8 `json:"capacity_l"`
+	// 设备上报的罐颜色，0xRRGGBB 整数；设备未设置（0）时不上报，为 NULL。旧数据可不在色板内。
+	OilColor pgtype.Int4 `json:"oil_color"`
 }
 
 // 罐内数值型遥测的小时级汇总，由 internal/rollup 以 ThingsBoard 的聚合结果幂等写入，只含已结束的整点小时。无样本的小时没有行（离线不是 0）。业务库是长期来源，非必要不删除。原始 30 秒数据不入业务库。

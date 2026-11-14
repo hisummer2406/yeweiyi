@@ -40,7 +40,7 @@ public class SetTankSettingsHandlerTest {
         repo.byId.put(1, tank1);
         refreshCount = 0;
         names = new FakeNames();
-        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names);
+        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names, hex -> "not in palette: " + hex);
     }
 
     private static final class FakeNames implements CustomOilNameStore {
@@ -57,6 +57,27 @@ public class SetTankSettingsHandlerTest {
     }
 
     private FakeNames names;
+
+    @Test
+    public void writesAPaletteColorAsArgb() {
+        RpcResult result = call("{\"tank\":1,\"oilColor\":16711680}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(0xFFFF0000, repo.lastSaved.getOilColor());
+    }
+
+    @Test
+    public void refusesAColorOutsideThePalette() {
+        RpcResult result = call("{\"tank\":1,\"oilColor\":1193046}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("界面语言的提示文字（strings.xml），不是写死的中文", "not in palette: #123456", result.getMessage());
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":\"#FF0000\"}"));
+    }
+
+    @Test
+    public void colorAndAnInvalidFieldAreRefusedTogether() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":16711680,\"density\":3}"));
+        assertEquals(0, tank1.getOilColor());
+    }
 
     @Test
     public void writesTheNameAndTheIndexTogether() {

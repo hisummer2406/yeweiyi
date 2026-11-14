@@ -4,7 +4,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import { listCommands } from '@/services/ant-design-pro/deviceConfig';
-import { commandPhase, targetTank } from '@/utils/deviceConfig';
+import { commandPhase, commandRefusal, targetTank } from '@/utils/deviceConfig';
 
 const PAGE = 20;
 
@@ -134,14 +134,19 @@ const CommandsTab: React.FC<{ device: string }> = ({ device }) => {
                   </Tag>
                   {/* 只有拒绝/失败才有说明；expired 等状态的 errorReason 是 ACK 的"已受理"（#42） */}
                   {(phase === 'rejected' || phase === 'failed') &&
-                    (c.errorReason || c.errorCode) && (
-                      <Typography.Text
-                        type="secondary"
-                        style={{ fontSize: 12 }}
-                      >
-                        {c.errorReason || c.errorCode}
-                      </Typography.Text>
-                    )}
+                    (() => {
+                      const r = commandRefusal(c.errorCode, c.errorReason);
+                      return (
+                        r && (
+                          <Typography.Text
+                            type="secondary"
+                            style={{ fontSize: 12 }}
+                          >
+                            {'key' in r ? t(r.key) : r.text}
+                          </Typography.Text>
+                        )
+                      );
+                    })()}
                 </Space>
               );
             },

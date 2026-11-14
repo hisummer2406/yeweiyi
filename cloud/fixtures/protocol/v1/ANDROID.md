@@ -25,6 +25,7 @@ Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/f
 | `stock_event_in_delivered_weight.json` | stockEvent 新增 `oilTypeIndex`、`deliveredWeightKg` | `StockEventMapperTest` |
 | `alarm_active_oil_type.json` | alarm 新增 `oilType`、`oilTypeIndex` | `ProtocolV1ContractTest` |
 | `oil_type_index.json` | `oilTypeIndex` 对照表（字典，不是报文） | `OilTypeIndexFixtureTest`（与 `res/values*/array.xml` 比对） |
+| `oil_color_palette.json` | 罐颜色色板（0xRRGGBB，序号 1–20） | `OilColorsTest`（与 `OilColors.PALETTE_RGB` 比对） |
 
 
 ## 各 fixture 在 Android 侧的覆盖情况

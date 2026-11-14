@@ -151,7 +151,7 @@ describe('ShiftRecords', () => {
   it('UNSUPPORTED says so and does not claim there are no records', async () => {
     listShiftRecords.mockResolvedValue(list([], { syncStatus: 'UNSUPPORTED' }));
     render(<ShiftRecords device="D1" />);
-    await screen.findByText('设备暂不支持该类记录');
+    await screen.findByText('设备软件版本较旧，暂不支持该类记录，请升级设备软件');
     expect(screen.queryByText('该时间范围内没有交班记录')).toBeNull();
   });
 

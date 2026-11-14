@@ -1,6 +1,5 @@
 package com.sansen.yeweiyi.fragment;
 
-import android.graphics.Color;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -141,80 +140,9 @@ public class ColorFragment extends BaseFragment implements OnItemClickListener {
 		
 	}
 	
+	/** 色板见 {@link com.sansen.yeweiyi.logic.OilColors}（与云端共用，远程改色只接受这些颜色）。 */
 	public static int yanseId(int yanse){
-		
-		Color color =new Color();
-		int id=0;
-		switch (yanse) {
-			case 1:
-				id=color.rgb(255,0,0);
-			break;
-			
-			case 2:
-				id=color.rgb( 255,255,0);
-			break;
-			case 3:
-				id=color.rgb(0,0,255);
-			break;
-			case 4:
-				id=color.rgb(0,128,0);
-			break;
-			case 5:
-				id=color.rgb(128,0,128);
-			break;
-			case 6:
-				id=color.rgb(37,77,42);
-			break;
-			case 7:
-				id=color.rgb(111,18,0);
-			break;
-			case 8:
-				id=color.rgb(0,0,52);
-			break;
-			case 9:
-				id=color.rgb(244,178,214);
-			break;
-			case 10:
-				id=color.rgb(76,11,113);
-			break;
-			case 11:
-				id=color.rgb(0,69,108);
-			break;
-			case 12:
-				id=color.rgb(0,173,239);
-			break;
-			case 13:
-				id=color.rgb(52,47,147);
-			break;
-			case 14:
-				id=color.rgb(244,240,141);
-			break;
-			case 15:
-				id=color.rgb(241,100,93);
-			break;
-			
-			case 16:
-				id=color.rgb(255,0,205);
-			break;
-			case 17:
-				id=color.rgb(65,49,0);
-			break;
-			case 18:
-				id=color.rgb(19,147,0);
-			break;
-			
-			case 19:
-				id=color.rgb(193,205,35);
-			break;
-			
-			case 20:
-				id=color.rgb(255,153,0);
-			break;
-
-		default:
-			break;
-		}
-		return id;
+		return com.sansen.yeweiyi.logic.OilColors.argbOf(yanse);
 	}
 
 }

@@ -114,7 +114,7 @@ export default {
   'pages.console.records.notice.folded':
     '{count} corrected records were merged.',
   'pages.console.records.notice.firmware':
-    'The device firmware has not been upgraded; some records cannot be read.',
+    'The device software is out of date; some records cannot be read. Please upgrade the device software.',
   'pages.console.records.notice.firmware.detail':
     'Device {device}, sample: {sample}',
   'pages.console.records.empty.alarms': 'No alarms in this time range',
@@ -144,7 +144,7 @@ export default {
   'pages.console.records.title.shift': 'Shift records',
   'pages.console.records.title.inventory': 'Inventory records',
   'pages.console.records.notice.unsupported':
-    'This device does not support this kind of record yet',
+    'The device software is out of date and does not support this kind of record yet. Please upgrade the device software',
   'pages.console.records.notice.syncing':
     'Records are still syncing; the list may be incomplete',
   'pages.console.records.notice.syncUnknown':
@@ -728,9 +728,9 @@ export default {
     'Device settings (in/out-stock detection)',
   'pages.console.settings.reportedAt': 'Reported by the device at {time}',
   'pages.console.settings.notReported':
-    'The device has not reported tank settings yet.',
+    'The device has not reported tank settings yet. If this persists, make sure the device software is up to date.',
   'pages.console.settings.deviceNotReported':
-    'The device has not reported its device settings yet.',
+    'The device has not reported its device settings yet. If this persists, make sure the device software is up to date.',
   'pages.console.settings.devicePlatformOnly':
     'Only platform administrators can change device settings.',
   'pages.console.settings.tankN': 'Tank {tank}',
@@ -739,7 +739,7 @@ export default {
   'pages.console.settings.col.new': 'New value',
   'pages.console.settings.readOnly': '(read-only)',
   'pages.console.settings.readOnlyNote':
-    'Read-only parameters cannot be changed remotely: tank height, shape and sensor length are set on the device; the density unit is not yet confirmed with the device; the low-temperature alarm has no effect on the device.',
+    'Read-only parameters cannot be changed remotely: tank height, shape and sensor length are set on the device; the low-temperature alarm has no effect on the device.',
   'pages.console.settings.send': 'Send to device',
   'pages.console.settings.reset': 'Clear changes',
   'pages.console.settings.aboveTankHeight':
@@ -769,6 +769,13 @@ export default {
   'pages.console.settings.field.tankShape': 'Tank shape',
   'pages.console.settings.field.sensorLengthMm': 'Sensor length',
   'pages.console.settings.field.density': 'Density',
+  'pages.console.settings.field.oilColor': 'Colour',
+  'pages.console.settings.color.unsupported':
+    'The device software is out of date and cannot change the colour remotely. Please upgrade the device software.',
+  'pages.console.settings.color.nonStandard': '(not in the palette)',
+  'pages.console.settings.density.check':
+    'Outside the usual g/cm³ range; it may have been entered in kg/m³. Please check.',
+  'pages.console.settings.problem.color': 'Choose a colour from the palette',
   'pages.console.settings.field.inStockHeightThresholdMm':
     'In-stock height threshold',
   'pages.console.settings.field.inStockTimeThresholdSec':
@@ -793,14 +800,16 @@ export default {
     'The device writes the settings and reports them back. Saving settings on the device itself overrides remote changes.',
   'pages.console.settings.submit.reason': 'Reason (required)',
   'pages.ops.customers.action.media': 'Media',
-  'pages.console.media.note': 'This only saves the name. To apply it, select it for a tank in the device settings and send it.',
+  'pages.console.media.note':
+    'This only saves the name. To apply it, select it for a tank in the device settings and send it.',
   'pages.console.media.loadFailed': 'Failed to load media.',
   'pages.console.media.retry': 'Retry',
   'pages.console.media.add': 'Add medium',
   'pages.console.media.edit': 'Edit',
   'pages.console.media.enable': 'Enable',
   'pages.console.media.disable': 'Disable',
-  'pages.console.media.saved': 'Saved to the library; not sent to any device yet.',
+  'pages.console.media.saved':
+    'Saved to the library; not sent to any device yet.',
   'pages.console.media.filter.all': 'All',
   'pages.console.media.col.name': 'Name',
   'pages.console.media.col.nameEn': 'English name (optional)',
@@ -812,21 +821,33 @@ export default {
   'pages.console.media.scope.customer': 'Customer-only',
   'pages.console.media.status.on': 'Enabled',
   'pages.console.media.status.off': 'Disabled',
-  'pages.console.media.error.invalid_media_name': 'Invalid name (1–20 characters).',
-  'pages.console.media.error.invalid_media_scope': 'Scope and customer do not match.',
+  'pages.console.media.error.invalid_media_name':
+    'Invalid name (1–20 characters).',
+  'pages.console.media.error.invalid_media_scope':
+    'Scope and customer do not match.',
   'pages.console.media.error.unknown_customer': 'Customer not found; refresh.',
   'pages.console.media.error.media_not_found': 'Medium not found; refresh.',
-  'pages.console.media.error.media_name_exists': 'This name already exists in this scope.',
-  'pages.console.media.error.media_builtin_readonly': 'Built-in media cannot be renamed.',
+  'pages.console.media.error.media_name_exists':
+    'This name already exists in this scope.',
+  'pages.console.media.error.media_builtin_readonly':
+    'Built-in media cannot be renamed.',
   'pages.console.media.error.other': 'Operation failed; try again later.',
   'pages.console.settings.medium.public': 'Public',
   'pages.console.settings.medium.customer': 'This customer',
-  'pages.console.settings.medium.noSync': 'This firmware cannot sync medium names. Custom media and numbers from 18 are unavailable until it is upgraded.',
-  'pages.console.settings.medium.loadFailed': 'Failed to load media options; the medium cannot be changed now.',
-  'pages.console.settings.medium.slots': 'Custom positions on this device: {used}/{total} used',
-  'pages.console.settings.submit.error.mediaNotSelectable': 'This medium is disabled or not available to this device; refresh and choose again.',
-  'pages.console.settings.submit.error.mediaSyncUnsupported': 'The firmware does not support this medium; upgrade it first.',
-  'pages.console.settings.submit.error.mediaSlotsExhausted': 'All 8 custom positions on this device are in use; nothing was sent.',
+  'pages.console.settings.medium.noSync':
+    'The device software is out of date and cannot sync medium names: custom media and numbers from 18 are unavailable. Please upgrade the device software.',
+  'pages.console.settings.medium.loadFailed':
+    'Failed to load media options; the medium cannot be changed now.',
+  'pages.console.settings.medium.slots':
+    'Custom positions on this device: {used}/{total} used',
+  'pages.console.settings.submit.error.mediaNotSelectable':
+    'This medium is disabled or not available to this device; refresh and choose again.',
+  'pages.console.settings.submit.error.mediaSyncUnsupported':
+    'The device software is out of date and does not support this medium. Please upgrade the device software.',
+  'pages.console.settings.submit.error.colorSyncUnsupported':
+    'The device software is out of date and cannot change the colour remotely. Please upgrade the device software.',
+  'pages.console.settings.submit.error.mediaSlotsExhausted':
+    'All 8 custom positions on this device are in use; nothing was sent.',
   'pages.console.settings.submit.error.deploymentDisabled':
     'Remote configuration is not enabled on this system.',
   'pages.console.settings.submit.error.deviceDisabled':
@@ -866,13 +887,16 @@ export default {
   'pages.console.settings.echo.timedOut':
     'Applied, but no report from the device for a while; refresh later',
   'pages.console.settings.echo.refresh': 'Refresh report',
-  'pages.console.settings.result.ignored': 'Ignored by the device: {fields}',
+  'pages.console.settings.result.ignored':
+    'Ignored by the device: {fields}. The device software is out of date; please upgrade it.',
+  'pages.console.settings.refusal.unknownMethod':
+    'The device software is out of date and does not support this operation. Please upgrade the device software.',
   'pages.console.settings.commandId': 'Command {id}',
   'pages.console.settings.pollFailing': 'Failed to read status, retrying…',
   'pages.console.settings.dismiss': 'Close',
   'pages.console.settings.calibration.title': 'Calibration table (read-only)',
   'pages.console.settings.calibration.none':
-    'The device has not reported a calibration table.',
+    'The device has not reported a calibration table. If this persists, make sure the device software is up to date.',
   'pages.console.settings.calibration.failed':
     'Failed to load the calibration table',
   'pages.console.settings.calibration.meta':

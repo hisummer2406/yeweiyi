@@ -74,6 +74,7 @@ const tank1: API.TankSettings = {
   tempCorrectionC: 0,
   density: 0.56,
   capacityL: 30000,
+  oilColor: null,
 };
 
 const deviceRow = (over: Partial<API.DeviceRow> = {}): API.DeviceRow => ({
@@ -108,6 +109,7 @@ beforeEach(() => {
     public: [],
     customer: [],
     customMediaSync: false,
+    oilColorSync: false,
     slotsUsed: 0,
     slotsTotal: 8,
   });
@@ -230,11 +232,55 @@ describe('SettingsTab', () => {
     expect(input.value).toBe('1.5');
   });
 
-  it('never asks a customer admin for media options (#27)', async () => {
+  it('lets a customer admin choose the medium (2026-11-14)', async () => {
     role = 'customer_admin';
     render(<SettingsTab device="D1" />);
-    await screen.findByLabelText('液位修正');
-    expect(getDeviceMediaOptions).not.toHaveBeenCalled();
+    expect(await screen.findByLabelText('油品')).toBeTruthy();
+    expect(getDeviceMediaOptions).toHaveBeenCalledWith('D1');
+  });
+
+  it('sends a palette colour when the device supports it', async () => {
+    getDeviceMediaOptions.mockResolvedValue({
+      public: [],
+      customer: [],
+      customMediaSync: true,
+      oilColorSync: true,
+      slotsUsed: 0,
+      slotsTotal: 8,
+    });
+    issueConfigCommand.mockResolvedValue({
+      command: command({ args: { tank: 1, oilColor: 0xff0000 } }),
+      replayed: false,
+    });
+    render(<SettingsTab device="D1" />);
+    fireEvent.click(await screen.findByRole('radio', { name: '颜色 #FF0000' }));
+    await confirm(await openConfirm());
+    expect(issueConfigCommand.mock.calls[0][1].args).toEqual({
+      tank: 1,
+      oilColor: 0xff0000,
+    });
+  });
+
+  it('keeps the colour read-only on firmware without colour sync', async () => {
+    getTankSettings.mockResolvedValue([{ ...tank1, oilColor: 0x123456 }]);
+    render(<SettingsTab device="D1" />);
+    expect(
+      await screen.findByText(
+        zhPages['pages.console.settings.color.unsupported'],
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: '颜色 #FF0000' })).toBeNull();
+    expect(
+      screen.getByText(zhPages['pages.console.settings.color.nonStandard']),
+    ).toBeTruthy();
+  });
+
+  it('asks to check a density that looks like kg/m³', async () => {
+    getTankSettings.mockResolvedValue([{ ...tank1, density: 840 }]);
+    render(<SettingsTab device="D1" />);
+    expect(
+      await screen.findByText(zhPages['pages.console.settings.density.check']),
+    ).toBeTruthy();
   });
 
   it('sends nothing when the confirmation is cancelled', async () => {

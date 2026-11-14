@@ -447,3 +447,15 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 - 【待确认·设备端/产品】现场卧罐公式只计一侧封头、高度累加有浮点误差（如 2600 mm 直径末点 2599）；远程与现场一致，要改须两端同改。
 - 【选择·云端】与 `config.setTankSettings` 共用 `tank:<n>` 在途目标：同一罐同时至多一条配置命令。
 - 共享 fixture 暂未新增；字段确认后补 `rpc_request_set_tank_table.json`。设备模拟器（`internal/devicesim`）未实现此方法。
+
+## G. 罐颜色 `oilColor` 与能力位 `oilColorSync`（2026-11-14）—— 云端发起，**待 android 负责同事确认**
+
+用户要求介质设置（介质类型、密度、颜色）三端同步，颜色此前只存在设备本地。云端发起的新字段，两端已在同一分支实现
+（设计：`docs/superpowers/specs/2026-11-14-tank-medium-sync-design.md`）：
+
+- 上报 `tankN.oilColor`：`0xRRGGBB` 整数，设备存值为 0 时不上报；
+- 整机能力位 `oilColorSync = 1`：新固件上报；没有它云端拒绝下发 `oilColor`（旧固件会静默忽略未知字段）；
+- `config.setTankSettings` 新增 `oilColor`，只接受 `oil_color_palette.json` 里的 20 色，与其他字段同一命令原子生效；
+- `density` 单位定为 g/cm³（kg/L），设备设置页 kg/m³ 文案一并改正。
+
+待办：android 负责同事审核字段名与形状，并做真机验收（远程改颜色/密度/介质、重启保留、旧固件颜色只读）。

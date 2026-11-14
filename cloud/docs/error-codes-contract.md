@@ -91,3 +91,9 @@
 
 `username_taken` 沿用，现也适用于用户名账号。`password_not_allowed`、`no_password_for_role` 不再返回（员工可以有密码）。
 没有自助改密，也就没有 `wrong_password`/`password_unchanged`。
+
+## 罐颜色（2026-11-14）
+
+| code | HTTP | 场景 |
+| --- | --- | --- |
+| `color_sync_unsupported` | 409 | `config.setTankSettings` 带 `oilColor`，但设备未上报 `oilColorSync = 1`（旧固件会静默忽略该字段）。整条不派发 |

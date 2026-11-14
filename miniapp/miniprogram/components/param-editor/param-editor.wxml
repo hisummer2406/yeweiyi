@@ -60,12 +60,42 @@
       </view>
 
       <block wx:if="{{isTank}}">
-        <view class="pe-sub">{{text.readonlyTitle}}</view>
-        <view class="fr pe-fr">
-          <text class="fl pe-fl">{{text.medium}}</text>
-          <view class="fv"></view>
-          <text class="pe-ro">{{medium || text.unreported}}</text>
+        <!-- 介质：管理员从可选介质中选（云端换算编号）；员工或选项读不到时只读 -->
+        <view class="pe-row {{mediumIdx >= 0 ? 'pe-row-changed' : ''}}">
+          <view class="fr pe-fr">
+            <text class="fl pe-fl">{{text.medium}}</text>
+            <view class="fv"></view>
+            <picker wx:if="{{!readOnly && mediumEditable}}" range="{{mediumNames}}" value="{{mediumIdx < 0 ? 0 : mediumIdx}}" bindchange="onMediumPick">
+              <text class="pe-ro pe-pick">{{mediumIdx >= 0 ? mediumNames[mediumIdx] : (medium || text.unreported)}} ›</text>
+            </picker>
+            <text wx:else class="pe-ro">{{medium || text.unreported}}</text>
+          </view>
+          <view wx:if="{{mediumIdx >= 0}}" class="pe-row-note">{{medium || text.unreported}} → {{mediumNames[mediumIdx]}}</view>
+          <view wx:if="{{!readOnly && mediumNote}}" class="pe-row-note text-warning">{{mediumNote}}</view>
         </view>
+        <!-- 颜色：20 色色板，再点一次取消；固件不支持时只读 -->
+        <view class="pe-row {{colorSel >= 0 ? 'pe-row-changed' : ''}}">
+          <view class="fr pe-fr">
+            <text class="fl pe-fl">{{text.color}}</text>
+            <view class="fv"></view>
+            <view wx:if="{{colorNow}}" class="pe-swatch" style="background:{{colorNow}};"></view>
+            <text class="pe-ro">{{colorNow || text.unreported}}{{colorNonStandard ? text.colorNonStandard : ''}}</text>
+          </view>
+          <view wx:if="{{!readOnly && colorEditable}}" class="pe-palette">
+            <view
+              wx:for="{{colors}}"
+              wx:key="color"
+              class="pe-swatch pe-swatch-pick {{colorSel === item.color ? 'pe-swatch-on' : ''}}"
+              style="background:{{item.css}};"
+              data-color="{{item.color}}"
+              bindtap="onColorPick"
+              aria-role="radio"
+              aria-label="{{text.color}} {{item.css}}"
+            ></view>
+          </view>
+          <view wx:if="{{!readOnly && colorNote}}" class="pe-row-note">{{colorNote}}</view>
+        </view>
+        <view class="pe-sub">{{text.readonlyTitle}}</view>
         <view wx:for="{{roRows}}" wx:key="key" class="fr pe-fr">
           <text class="fl pe-fl">{{item.label}}</text>
           <view class="fv"></view>

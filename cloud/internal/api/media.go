@@ -252,9 +252,23 @@ func updateMediaHandler(deps Deps) gin.HandlerFunc {
 
 // deviceMediaOptionsHandler lists what may be selected for this device: the customer always comes from the
 // device's current owner, never from the request.
+// deviceMediaOptionsHandler serves what an administrator may pick for a device's tanks: platform admins for
+// any device, customer admins for their own (2026-11-14), employees never — they are read-only.
 func deviceMediaOptionsHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if _, ok := requireMediaAdmin(c, deps, "media.options"); !ok {
+		actor, ok := requireAdminActor(c, deps)
+		if !ok {
+			return
+		}
+		switch actor.Role {
+		case control.RolePlatformAdmin:
+		case control.RoleCustomerAdmin:
+			// Same refusal for another customer's device and a missing one (constraints 6 and 9).
+			if !requireDeviceOwnership(c, deps, c.Param("device")) {
+				return
+			}
+		default:
+			refuse(c, deps, actor, "media.options", "administrators only", nil)
 			return
 		}
 		ctx := c.Request.Context()
@@ -296,7 +310,13 @@ func deviceMediaOptionsHandler(deps Deps) gin.HandlerFunc {
 				used++
 			}
 		}
-		c.JSON(http.StatusOK, gin.H{"public": public, "customer": own, "customMediaSync": synced, "slotsUsed": used, "slotsTotal": mediaSlotLast - mediaSlotFirst + 1})
+		colors, err := deviceSyncsColor(ctx, deps.Queries, device.DeviceName)
+		if err != nil {
+			internalError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"public": public, "customer": own, "customMediaSync": synced, "oilColorSync": colors,
+			"slotsUsed": used, "slotsTotal": mediaSlotLast - mediaSlotFirst + 1})
 	}
 }
 
@@ -317,6 +337,54 @@ func deviceSyncsMedia(ctx context.Context, q *db.Queries, device string) (bool, 
 		return false, err
 	}
 	return s.CustomMediaSync.Valid && s.CustomMediaSync.Int32 == 1, nil
+}
+
+// adminOfDevice: the caller may change this device's settings — a platform admin, or a customer admin the
+// access rule lets see the device. Anything else is left for control to refuse.
+func adminOfDevice(c *gin.Context, deps Deps, actor control.Actor, device string) bool {
+	switch actor.Role {
+	case control.RolePlatformAdmin:
+		return true
+	case control.RoleCustomerAdmin:
+		allowed, err := deps.Queries.UserMayAccessDevice(c.Request.Context(), db.UserMayAccessDeviceParams{UserID: actor.UserID, DeviceName: device})
+		return err == nil && allowed
+	}
+	return false
+}
+
+// colorSendable refuses oilColor for firmware that has not reported oilColorSync. On false the response has
+// been written. Callers that are not administrators of the device pass through to control's refusal.
+func colorSendable(c *gin.Context, deps Deps, actor control.Actor, device string, args json.RawMessage) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(args, &fields) != nil {
+		return true
+	}
+	if _, has := fields[protocol.AttrOilColor]; !has || !adminOfDevice(c, deps, actor, device) {
+		return true
+	}
+	ok, err := deviceSyncsColor(c.Request.Context(), deps.Queries, device)
+	if err != nil {
+		internalError(c, err)
+		return false
+	}
+	if !ok {
+		apiError(c, http.StatusConflict, "color_sync_unsupported", "this device firmware cannot receive oilColor")
+		return false
+	}
+	return true
+}
+
+// deviceSyncsColor: firmware without it ignores oilColor silently (cmdResult.ignored), so the cloud refuses
+// to send it rather than report a success that changed nothing.
+func deviceSyncsColor(ctx context.Context, q *db.Queries, device string) (bool, error) {
+	s, err := q.GetDeviceSettings(ctx, device)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return s.OilColorSync.Valid && s.OilColorSync.Int32 == 1, nil
 }
 
 type mediaRefusal struct {
@@ -341,8 +409,10 @@ func resolveMediaArgs(c *gin.Context, deps Deps, actor control.Actor, device str
 	if !hasMedia && !direct && !name && !nameEn {
 		return raw, true
 	}
-	if actor.Role != control.RolePlatformAdmin {
-		// Leave the verdict to control so the device check, its order and the audit stay in one place.
+	if !adminOfDevice(c, deps, actor, device) {
+		// Employees, and administrators of another customer: leave the verdict to control so the device check,
+		// its order and the audit stay in one place — and so nothing here answers differently for a device the
+		// caller cannot see (constraint 6).
 		delete(fields, protocol.ArgMediaID)
 		fields[protocol.AttrOilTypeIndex] = json.RawMessage("0")
 		out, err := json.Marshal(fields)

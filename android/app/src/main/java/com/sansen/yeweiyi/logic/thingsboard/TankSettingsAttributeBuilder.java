@@ -50,8 +50,12 @@ public final class TankSettingsAttributeBuilder {
             putFinite(attributes, key(tank, "levelCorrectionMm"), set.getOilCorrection());
             putFinite(attributes, key(tank, "waterCorrectionMm"), set.getWaterCorrection());
             putFinite(attributes, key(tank, "tempCorrectionC"), set.getTempCorrection());
-            // 原样上报：设置页标的单位是 kg/m³，库里实际存的是 0.56 这类值，单位待云端对齐
+            // 单位 g/cm³（= kg/L）：库里存 0.56 这类值，重量 = 升 × 密度；设置页旧标注 kg/m³ 有误
             putFinite(attributes, key(tank, "density"), set.getDensity());
+            // 0xRRGGBB；0 = 从未选过颜色，不上报
+            if (set.getOilColor() != 0) {
+                attributes.put(key(tank, "oilColor"), set.getOilColor() & 0xFFFFFF);
+            }
         }
         return attributes;
     }

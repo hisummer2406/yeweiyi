@@ -407,8 +407,12 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
   keep draft / discard / cancel (`utils/paramSwitch.ts`); 罐详情 has no tank switch. `customer_user` sees the report read-only, no draft, no send.
   Old drafts (`calibration-draft`, `tankcfg-draft:*`) are no longer read.
 - Fields: corrections (no range limit, #28; ± toggle, #30, `toggleSign`); 储罐设置 edits `TANK_SEND_FIELDS` (4 level alarms,
-  high water, high temp, capacity); density, height, low temp and the medium are shown read-only; colour and low water
-  are gone (no device field; user decision 2026-11-14). No per-device opening since 2026-11-09; the cloud's deployment
+  high water, high temp, capacity, density in g/cm³ 0<v≤2 — a report >2 is flagged as probably kg/m³); height and low temp are
+  read-only; low water is gone (no device field). **Medium and colour (2026-11-14, user rule: every change is for administrators,
+  employees read-only)**: administrators pick the medium from `GET /media-options` (sent as `mediaId`, the cloud converts) and a
+  colour from the 20-colour palette (`utils/oilColor.ts`, checked against the cloud's shared fixture), `buildMediumArgs`; options
+  unreadable → medium read-only; `oilColorSync` false (old firmware) → colour read-only. Choices are not kept in the draft. A
+  succeeded command with `resultDetail.ignored` says which fields the device did not apply (`ignoredFields`). No per-device opening since 2026-11-09; the cloud's deployment
   switch answers `config_commands_disabled` when off.
 - Send flow: the reason is a form row (no `showModal` `editable`); the confirm dialog lists before → after; then
   `commandGuard` re-reads `GET /api/devices` (station's device changed → stop); one `requestId` per confirmation,

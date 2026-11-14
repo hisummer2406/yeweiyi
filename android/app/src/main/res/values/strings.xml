@@ -642,4 +642,5 @@
     <string name="vendor_logo_reset_done" tools:ignore="MissingTranslation">已恢复默认 logo</string>
     <string name="vendor_log_diag" tools:ignore="MissingTranslation">日志诊断</string>
     <string name="vendor_log_diag_summary" tools:ignore="MissingTranslation">查看、修改日志级别，清空日志</string>
+    <string name="rpc_oil_color_not_in_palette">颜色 %1$s 不在本机色板内，请从色板中选择</string>
 </resources>
