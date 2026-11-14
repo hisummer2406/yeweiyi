@@ -63,18 +63,6 @@ Page({
     this.setData({ pickerShow: false });
   },
 
-  // 真实的本机保存：只存这个形状的尺寸，不会下发给设备
-  onSaveLocal() {
-    const saved: Record<string, string> = {};
-    this.data.dims.forEach((d: Dim) => (saved[d.key] = d.value));
-    try {
-      wx.setStorageSync(storageKey(this.data.shape), saved);
-      wx.showToast({ title: t('form.savedLocal'), icon: 'none' });
-    } catch {
-      wx.showToast({ title: t('tankEdit.saveFailed'), icon: 'none' });
-    }
-  },
-
   onSaveDevice() {
     showComingSoon(); // 协议里没有下发罐表的方法
   },

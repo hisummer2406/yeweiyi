@@ -9,6 +9,8 @@ import { showComingSoon } from '../../utils/comingSoon';
 import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
 import { getTankSettings } from '../../utils/remoteConfigApi';
+import { applyScale } from '../../utils/displayScale';
+import { scaleFactor } from '../../utils/displayScaleStore';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -245,7 +247,10 @@ Page({
     const before = new Map((this.data.groups as DeviceGroup[]).map((g) => [g.deviceName, g]));
     const groups = visible.map((d: Device) => {
       const prev = before.get(d.device_name);
-      return prev && prev.state === 'ok' && prev.tanks.length > 0 ? { ...prev, staleText: '' } : emptyGroup(d.device_name);
+      // Re-applied from the raw readings: a scale changed on the detail page shows at once, never multiplied twice.
+      return prev && prev.state === 'ok' && prev.tanks.length > 0
+        ? { ...prev, staleText: '', tanks: prev.tanks.map((t) => applyScale(t, scaleFactor(d.device_name, t.index))) }
+        : emptyGroup(d.device_name);
     });
     this.setData({
       groups,
@@ -289,7 +294,12 @@ Page({
         this.patchGroup(deviceName, seq, {
           state: 'ok',
           ts: formatLocalTime(res.ts, currentLocale()),
-          tanks: toTankViews(res, deviceName, this.data.groups.find((g) => g.deviceName === deviceName)?.shapes),
+          tanks: toTankViews(
+            res,
+            deviceName,
+            this.data.groups.find((g) => g.deviceName === deviceName)?.shapes,
+            (tank) => scaleFactor(deviceName, tank),
+          ),
           error: '',
           staleText: '',
           fetchedAt: nowText(),

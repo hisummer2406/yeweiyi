@@ -1,6 +1,6 @@
 <!-- 设计稿「罐表设置-卧罐16 / 立罐17 / 长方体18 / 长方体选择罐号19」。
      协议里没有\"生成并下发罐表\"的方法：生成罐表只走到选罐号，随后说明暂不支持；
-     \"保存到手机\"是真实的本机保存；\"保存到控制器\"同样说明暂不支持。
+     \"保存到手机\"按钮已隐藏（#44）；\"保存到控制器\"同样说明暂不支持。
      示意图是从设计稿裁出的整条图（自带 H/L/R 标注），不是页面上叠的文字。 -->
 <view class="te-page">
   <image class="te-diagram" src="/assets/illustrations/tankshape-{{shape}}.png" mode="aspectFit" />
@@ -13,7 +13,6 @@
 
   <view class="te-buttons">
     <button class="te-btn te-btn-main" bindtap="onGenerate">{{text.generate}}</button>
-    <button class="te-btn te-btn-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
     <button class="te-btn te-btn-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
   </view>
 </view>

@@ -254,7 +254,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts`/`utils/displayScale.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -299,6 +299,10 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   trusting it if time has passed.
 - `utils/telemetry.ts` — telemetry snapshot → tank view-model and the "never reported" (404) test,
   shared by the home page and `device-detail`. Pure, no `wx`.
+- `utils/displayScale.ts` / `utils/displayScaleStore.ts` — 管理员本机显示倍率（#44，openspec `local-display-scale`）：
+  按 `display-scale:<账号>:<设备>#<罐>` 存在本机，只有 platform_admin / customer_admin 读写和应用（每次从 token 取）；
+  油容积、质量、水体积、空容从 `TankView.raw`（未舍入原始值）乘倍率再舍入，液位/水高/温度/占比不乘，标「换算显示 ×倍率」。
+  罐详情实时数据下方的「本机显示设置」折叠卡自动保存，无「保存到手机」按钮；不上云、不下发，报警/记录/报表用原始值。
 - `utils/scan.ts` — `wx.scanCode` → `POST /api/devices/resolve`, shared by the home page and
   `device-add`; hands the caller the actual device name. `utils/roles.ts` — `isReadOnlyRole`.
 - `utils/sceneEntry.ts` — device mini-program code entry (miniapp#7): path `pages/device-detail/device-detail`,
