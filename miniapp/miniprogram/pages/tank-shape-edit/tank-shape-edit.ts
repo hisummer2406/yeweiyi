@@ -1,35 +1,32 @@
-// 设计稿里字母标签只有 H / L / R，没有文字说明：
-// 卧罐 H（罐体直径）、L（中段长度）、R（封头半径）；立罐 H（高）、R（图上标在顶面整个宽度上，
-// 是半径还是直径设计稿没说清）；长方体 H（高）、L（长）、R（图上标在进深方向，应为宽，设计稿用 R）。
-// 这几处含义需要设计/工程确认，在此之前页面只显示字母，不替设计稿编含义。
+// 罐表设置：按形状和尺寸生成液位 → 容积换算表（utils/tankTable.ts，与设备端 EllipseTable 逐点一致）。
+// 字母含义与设备中文界面一致：卧罐 H 直径、L 筒体长度、R 单侧封头高度；立罐 H 罐高、R（设备按直径计算）；
+// 长方体 H 罐高、L 长、R 宽。
+// 「保存到控制器」需要新的下发方法（设备、云端、小程序三端），下一步单独实现；在此之前只提示暂未开放。
 import { showComingSoon } from '../../utils/comingSoon';
 import { t, texts } from '../../utils/i18n';
+import { DIM_KEYS, generateTankTable, parseDims, previewRows, type TankShape, type TankTable } from '../../utils/tankTable';
 
 type Dim = { key: string; value: string };
 
-const DIM_KEYS: Record<string, string[]> = {
-  horizontal: ['H', 'L', 'R'],
-  vertical: ['H', 'R'],
-  cuboid: ['H', 'L', 'R'],
-};
-
+// 尺寸草稿（不按账号区分，登出时由 utils/storage.ts clearLocalDrafts 清掉）。
 const storageKey = (shape: string) => `tankshape-draft-${shape}`;
 
 Page({
   data: {
     text: texts('tankEdit'),
     form: texts('form'),
-    shape: 'horizontal',
+    shape: 'horizontal' as TankShape,
     dims: [] as Dim[],
-    // 设计稿的罐号选择是 1–12 号
-    tankOptions: Array.from({ length: 12 }, (_, i) => t('form.numbered', { n: i + 1 })),
-    tankIndex: -1,
-    pickerShow: false,
-    pickerTop: 0,
+    // 生成结果：'' = 尚未生成或尺寸已改动（旧表作废）
+    summary: '',
+    rows: [] as { heightMm: number; volumeL: number }[],
+    sampled: false,
   },
 
+  table: null as TankTable | null,
+
   onLoad(query: Record<string, string>) {
-    const shape = DIM_KEYS[query.shape] ? query.shape : 'horizontal';
+    const shape = (query.shape in DIM_KEYS ? query.shape : 'horizontal') as TankShape;
     wx.setNavigationBarTitle({ title: t(`tankShape.${shape}`) });
     let saved: Record<string, string> = {};
     try {
@@ -46,25 +43,49 @@ Page({
   onDimInput(e: WechatMiniprogram.Input) {
     const key = e.currentTarget.dataset.key as string;
     const dims = this.data.dims.map((d: Dim) => (d.key === key ? { ...d, value: e.detail.value } : d));
-    this.setData({ dims });
+    // 尺寸变了，之前生成的表不再对应当前输入
+    this.table = null;
+    this.setData({ dims, summary: '', rows: [], sampled: false });
+    const saved: Record<string, string> = {};
+    dims.forEach((d: Dim) => (saved[d.key] = d.value));
+    try {
+      wx.setStorageSync(storageKey(this.data.shape), saved);
+    } catch {
+      // 草稿只是方便，写不进去不影响生成
+    }
   },
 
-  // 设计稿「长方体选择罐号19」：点"生成罐表"后弹出罐号选择（居中偏上，不贴任何一行）。
-  // 顶边在设计稿里是 y=595（面板自带 -4 的上移，所以这里写 599），页面区从 181 开始，按屏宽换算成 px。
   onGenerate() {
-    const info = wx.getWindowInfo();
-    this.setData({ pickerShow: true, pickerTop: ((599 - 181) * info.windowWidth) / 750 });
-  },
-  onPickTank(e: WechatMiniprogram.CustomEvent<{ index: number }>) {
-    this.setData({ tankIndex: e.detail.index, pickerShow: false });
-    showComingSoon(); // 协议里没有生成/下发罐表的方法
-  },
-  onClosePicker() {
-    this.setData({ pickerShow: false });
+    const values: Record<string, string> = {};
+    this.data.dims.forEach((d: Dim) => (values[d.key] = d.value));
+    const parsed = parseDims(this.data.shape, values);
+    if (!parsed.ok) {
+      wx.showToast({ title: t(parsed.key, parsed.params), icon: 'none', duration: 3000 });
+      return;
+    }
+    const table = generateTankTable(this.data.shape, parsed.mm);
+    const n = table.heightMm.length;
+    if (n === 0) return;
+    this.table = table;
+    const rows = previewRows(table);
+    this.setData({
+      summary: t('tankEdit.summary', {
+        n: String(n),
+        height: String(table.heightMm[n - 1]),
+        volume: String(table.volumeL[n - 1]),
+      }),
+      rows,
+      sampled: rows.length < n,
+    });
+    wx.showToast({ title: t('tankEdit.generated'), icon: 'none' });
   },
 
   onSaveDevice() {
-    showComingSoon(); // 协议里没有下发罐表的方法
+    if (!this.table) {
+      wx.showToast({ title: t('tankEdit.generateFirst'), icon: 'none' });
+      return;
+    }
+    showComingSoon(); // 下发罐表的协议方法尚未实现（第二步）
   },
 });
 
