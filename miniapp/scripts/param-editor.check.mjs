@@ -422,7 +422,7 @@ await test('tank kind: colour read only without device support; a non-palette co
   await tick(20);
   assert.equal(ed.data.mediumEditable, true);
   assert.equal(ed.data.colorEditable, false);
-  assert.equal(ed.data.colorNote, '当前设备固件不支持远程修改颜色');
+  assert.equal(ed.data.colorNote, '设备软件版本较旧，暂不支持远程修改颜色，请升级设备软件');
   assert.equal(ed.data.colorNonStandard, true);
 });
 
