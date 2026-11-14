@@ -536,6 +536,7 @@ public final class ThingsBoardManager {
             attributes.putAll(DeviceSettingsAttributeBuilder.build(
                     settings.InHight, settings.InTime, settings.OutHight, settings.OutTime));
             attributes.put(DeviceSettingsAttributeBuilder.KEY_CUSTOM_MEDIA_SYNC, 1);
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_OIL_COLOR_SYNC, 1);
             connection.publishAttributes(gson.toJson(attributes));
         } catch (RuntimeException e) {
             Log.e(TAG, "客户端属性发布失败", e);

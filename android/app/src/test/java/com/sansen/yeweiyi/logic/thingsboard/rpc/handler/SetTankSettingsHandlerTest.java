@@ -59,6 +59,25 @@ public class SetTankSettingsHandlerTest {
     private FakeNames names;
 
     @Test
+    public void writesAPaletteColorAsArgb() {
+        RpcResult result = call("{\"tank\":1,\"oilColor\":16711680}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(0xFFFF0000, repo.lastSaved.getOilColor());
+    }
+
+    @Test
+    public void refusesAColorOutsideThePalette() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":1193046}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":\"#FF0000\"}"));
+    }
+
+    @Test
+    public void colorAndAnInvalidFieldAreRefusedTogether() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":16711680,\"density\":3}"));
+        assertEquals(0, tank1.getOilColor());
+    }
+
+    @Test
     public void writesTheNameAndTheIndexTogether() {
         RpcResult result = call("{\"tank\":1,\"oilTypeIndex\":32,\"customOilName\":\"二厂盐酸\",\"customOilNameEn\":\"HCl\"}");
         assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());

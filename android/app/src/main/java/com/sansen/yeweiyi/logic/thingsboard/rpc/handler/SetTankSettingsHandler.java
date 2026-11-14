@@ -3,6 +3,7 @@ package com.sansen.yeweiyi.logic.thingsboard.rpc.handler;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.logic.OilColors;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcMethodHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcRequestEnvelope;
@@ -243,6 +244,13 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
             case "oilTypeIndex": {
                 int v = requireInt(field, value, 0, MAX_OIL_TYPE_INDEX);
                 return new Change(s -> s.setOilType(v));
+            }
+            case "oilColor": {
+                int v = requireInt(field, value, 0, 0xFFFFFF);
+                if (!OilColors.isPaletteRgb(v)) {
+                    throw new IllegalArgumentException("oilColor 不在色板内: " + v);
+                }
+                return new Change(s -> s.setOilColor(OilColors.toArgb(v)));
             }
             case "capacityL": {
                 int v = requireInt(field, value, 0, 1_000_000);
