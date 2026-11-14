@@ -1,0 +1,93 @@
+<!-- 参数修正 / 储罐设置 编辑表单（Issue #43），见 param-editor.ts。对象（设备、罐）由使用方的信息栏给出。 -->
+<view class="pe">
+  <view wx:if="{{state === 'loading'}}" class="muted pe-note">{{text.loading}}</view>
+
+  <view wx:if="{{state === 'error'}}" class="card banner-warning pe-banner">
+    <text class="text-warning">{{text.loadFailed}}</text>
+    <button class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
+  </view>
+
+  <block wx:if="{{state === 'ok' || state === 'none'}}">
+    <!-- 本次下发的结果：只显示在它所属的罐上 -->
+    <view wx:if="{{result}}" class="card pe-result pe-result-{{result.tone}}">
+      <view class="pe-result-title">{{text.resultTitle}}</view>
+      <view>{{result.message}}</view>
+      <view wx:if="{{result.error}}" class="pe-result-error">{{text.reasonFromDevice}}{{result.error}}</view>
+      <view class="pe-link" bindtap="onViewLog">{{text.viewLog}}</view>
+    </view>
+
+    <view wx:if="{{draftNote}}" class="card banner-warning pe-banner pe-draft">
+      <text class="text-warning pe-draft-text">{{draftNote}}</text>
+      <button class="btn-primary" size="mini" bindtap="onDiscard">{{text.discard}}</button>
+    </view>
+    <view wx:if="{{moved}}" class="card banner-warning pe-banner">
+      <text class="text-warning">{{text.movedBanner}}</text>
+    </view>
+
+    <view class="fc pe-card">
+      <view class="pe-head">
+        <text class="pe-head-title">{{text.reportedTitle}}</text>
+        <text class="muted pe-head-time">{{reportedText}}</text>
+      </view>
+      <view wx:if="{{refreshFailed}}" class="pe-note text-warning">{{text.refreshFailed}}</view>
+
+      <view wx:for="{{rows}}" wx:key="key" class="pe-row {{item.changed ? 'pe-row-changed' : ''}}">
+        <view class="fr pe-fr">
+          <text class="fl pe-fl">{{item.label}}</text>
+          <view class="fv"></view>
+          <view
+            wx:if="{{item.signed && !readOnly}}"
+            class="pe-sign"
+            data-key="{{item.key}}"
+            bindtap="onToggleSign"
+            aria-role="button"
+            aria-label="{{text.toggleSign}}"
+          >±</view>
+          <input
+            wx:if="{{!readOnly}}"
+            class="fi pe-fi"
+            type="{{item.signed ? 'text' : 'digit'}}"
+            placeholder="{{text.unreported}}"
+            placeholder-class="fv-ph"
+            value="{{item.value}}"
+            data-key="{{item.key}}"
+            bindinput="onInput"
+          />
+          <text wx:else class="pe-fi {{item.value ? '' : 'fv-ph'}}">{{item.value || text.unreported}}</text>
+          <text class="fu pe-fu">{{item.unit}}</text>
+        </view>
+        <view wx:if="{{item.note}}" class="pe-row-note {{item.warn ? 'text-warning' : ''}}">{{item.note}}</view>
+      </view>
+
+      <block wx:if="{{isTank}}">
+        <view class="pe-sub">{{text.readonlyTitle}}</view>
+        <view class="fr pe-fr">
+          <text class="fl pe-fl">{{text.medium}}</text>
+          <view class="fv"></view>
+          <text class="pe-ro">{{medium || text.unreported}}</text>
+        </view>
+        <view wx:for="{{roRows}}" wx:key="key" class="fr pe-fr">
+          <text class="fl pe-fl">{{item.label}}</text>
+          <view class="fv"></view>
+          <text class="pe-ro">{{item.value}}</text>
+          <text class="fu pe-fu">{{item.unit}}</text>
+        </view>
+      </block>
+    </view>
+
+    <block wx:if="{{!readOnly}}">
+      <view class="fc pe-card">
+        <view class="fr pe-fr">
+          <text class="fl pe-fl">{{text.reason}}</text>
+          <input class="pe-reason" type="text" maxlength="200" placeholder="{{text.reasonPlaceholder}}" placeholder-class="fv-ph" value="{{reason}}" bindinput="onReasonInput" />
+        </view>
+      </view>
+      <view class="muted pe-note">{{changedCount > 0 ? text.autoSaved : text.noChange}}</view>
+      <view wx:if="{{sendBlock}}" class="muted pe-note text-warning">{{sendBlock}}</view>
+      <view class="pe-actions">
+        <button class="pill pill-deep pe-send" bindtap="onSend" disabled="{{sending || !canSend || changedCount === 0}}" loading="{{sending}}">{{text.send}}</button>
+      </view>
+    </block>
+    <view wx:else class="muted pe-note">{{text.readOnly}}</view>
+  </block>
+</view>

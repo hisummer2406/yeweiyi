@@ -1,6 +1,8 @@
 {
   "navigationBarTitleText": "",
+  "enablePullDownRefresh": true,
   "usingComponents": {
-    "grid-picker": "/components/grid-picker/grid-picker"
+    "grid-picker": "/components/grid-picker/grid-picker",
+    "param-editor": "/components/param-editor/param-editor"
   }
 }

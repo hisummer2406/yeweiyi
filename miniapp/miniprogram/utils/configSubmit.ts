@@ -81,7 +81,9 @@ function linesText(lines: ChangeLine[]): string {
 // Sends one snapshot with its own requestId; on an unconfirmed answer looks it up and offers only a retry
 // of the *same* snapshot. The snapshot is kept on the phone (per account) until the cloud has answered
 // for that requestId, so 「稍后查看」 or leaving the page cannot lose it (issue #18 F2).
-async function sendSnapshot(p: PendingSubmit, retry: boolean): Promise<void> {
+// `stay`: the caller shows the progress itself (罐详情参数页签, #43) — the accepted command is returned instead of
+// opening 操作记录. Everything else (lookup, same-id retry, kept snapshot) is the same either way.
+async function sendSnapshot(p: PendingSubmit, retry: boolean, stay: boolean): Promise<ControlCommand | undefined> {
   const { device, stationId, tank, args, reason, requestId } = p;
   wx.showLoading({ title: t('cfgSend.sending'), mask: true });
   try {
@@ -100,7 +102,7 @@ async function sendSnapshot(p: PendingSubmit, retry: boolean): Promise<void> {
         wx.hideLoading();
         if (pendingAfter('notSent') === 'clear') dropPending(device, tank);
         await modal(t('cfgSend.failTitle'), t(guard.messageKey), t('cfgSend.know'), t('cfgSend.cancel'));
-        return;
+        return undefined;
       }
     }
     const cmd = await issueConfig(device, {
@@ -112,54 +114,60 @@ async function sendSnapshot(p: PendingSubmit, retry: boolean): Promise<void> {
     });
     wx.hideLoading();
     dropPending(device, tank);
-    openCommand(device, cmd, tank);
+    return accepted(device, cmd, tank, stay);
   } catch (err) {
     wx.hideLoading();
     const status = err instanceof ApiError ? err.status : 0;
     const kind = classifySubmit(status, err instanceof ApiError ? err.body : undefined);
     if (pendingAfter(kind, retry) === 'clear') dropPending(device, tank);
     if (kind === 'unconfirmed') {
-      if (await lookUp(p)) return;
+      const found = await lookUp(p, stay);
+      if (found) return found;
       const again = await modal(t('cfgSend.unconfirmedTitle'), t('cfgSend.unconfirmedBody'), t('cfgSend.retrySame'), t('cfgSend.later'));
-      if (again) return sendSnapshot(p, true); // same requestId, same snapshot
-      return;
+      if (again) return sendSnapshot(p, true, stay); // same requestId, same snapshot
+      return undefined;
     }
     if (kind === 'inFlight') {
       const holder = err instanceof ApiError ? (err.body as { commandId?: string } | undefined)?.commandId : undefined;
       await modal(t('cfgSend.failTitle'), t('cfgSend.err.inFlight'), t('cfgSend.know'), t('cfgSend.cancel'));
-      if (holder) openCommand(device, { commandId: holder } as ControlCommand, tank);
-      return;
+      if (holder) return accepted(device, { commandId: holder } as ControlCommand, tank, stay);
+      return undefined;
     }
     const text = kind === 'other' ? describeError(err) : t(`cfgSend.err.${kind}`);
     await modal(t('cfgSend.failTitle'), text, t('cfgSend.know'), t('cfgSend.cancel'));
+    return undefined;
   }
 }
 
-// Looks a kept submission up by its requestId. Found → settled, its progress opens. Returns whether found.
-async function lookUp(p: PendingSubmit): Promise<boolean> {
+function accepted(device: string, cmd: ControlCommand, tank: number, stay: boolean): ControlCommand {
+  if (!stay) openCommand(device, cmd, tank);
+  return cmd;
+}
+
+// Looks a kept submission up by its requestId. Found → settled, its progress opens (or is returned).
+async function lookUp(p: PendingSubmit, stay: boolean): Promise<ControlCommand | undefined> {
   try {
     const found = await findByRequestId(p.device, p.requestId);
     if (found) {
       dropPending(p.device, p.tank);
-      openCommand(p.device, found, p.tank);
-      return true;
+      return accepted(p.device, found, p.tank, stay);
     }
   } catch {
     // still unconfirmed
   }
-  return false;
+  return undefined;
 }
 
 // A kept submission for this tank comes first: looked up again, else offered as a retry of exactly what
 // was confirmed then (never the new form under the old id, never a new id). The new form is not sent in
 // this round; once the old one is settled the user confirms the current values again.
-async function settlePending(p: PendingSubmit): Promise<void> {
+async function settlePending(p: PendingSubmit, stay: boolean): Promise<ControlCommand | undefined> {
   wx.showLoading({ title: t('cfgSend.checking'), mask: true });
-  const found = await lookUp(p);
+  const found = await lookUp(p, stay);
   wx.hideLoading();
   if (found) {
-    wx.showToast({ title: t('cfgSend.pendingFound'), icon: 'none' });
-    return;
+    wx.showToast({ title: t(stay ? 'cfgSend.pendingFoundHere' : 'cfgSend.pendingFound'), icon: 'none' });
+    return found;
   }
   const retry = await modal(
     t('cfgSend.pendingTitle'),
@@ -167,7 +175,8 @@ async function settlePending(p: PendingSubmit): Promise<void> {
     t('cfgSend.retrySame'),
     t('cfgSend.later'),
   );
-  if (retry) await sendSnapshot(p, true);
+  if (retry) return sendSnapshot(p, true, stay);
+  return undefined;
 }
 
 // One flow at a time (issue #18 F4): a second tap on 「下发到设备」 while the confirm dialog, the send, the
@@ -180,43 +189,39 @@ export function sendInProgress(): boolean {
   return busy;
 }
 
-// Asks for confirmation, sends, and opens the command page on success. Returns after the flow ends.
-export async function confirmAndSend(opts: {
+export type SendOptions = {
   device: string;
   stationId: number | null;
   tank: number;
   args: Record<string, number>;
   reason: string;
   lines: ChangeLine[];
-}): Promise<void> {
-  if (busy) return;
+  // Return the accepted command instead of opening 操作记录 (#43).
+  stay?: boolean;
+};
+
+// Asks for confirmation and sends. On acceptance opens the command page, or with `stay` returns the command
+// (which may belong to an earlier kept submission of the same tank). Returns after the flow ends.
+export async function confirmAndSend(opts: SendOptions): Promise<ControlCommand | undefined> {
+  if (busy) return undefined;
   busy = true;
   try {
-    await runFlow(opts);
+    return await runFlow(opts);
   } finally {
     busy = false;
   }
 }
 
-async function runFlow(opts: {
-  device: string;
-  stationId: number | null;
-  tank: number;
-  args: Record<string, number>;
-  reason: string;
-  lines: ChangeLine[];
-}): Promise<void> {
+async function runFlow(opts: SendOptions): Promise<ControlCommand | undefined> {
   const { device, stationId, tank, args, reason, lines } = opts;
+  const stay = !!opts.stay;
   const kept = readPending(pendingStore().value, device, tank);
-  if (kept) {
-    await settlePending(kept);
-    return;
-  }
+  if (kept) return settlePending(kept, stay);
   const ok = await modal(
     t('cfgSend.confirmTitle'),
-    `${t('cfgSend.target', { device, tank })}\n${linesText(lines)}\n${t('cfgSend.note')}`,
+    `${t('cfgSend.target', { device, tank })}\n${linesText(lines)}\n${t('cfgSend.reasonLine', { reason })}\n${t('cfgSend.note')}`,
   );
-  if (!ok) return;
+  if (!ok) return undefined;
 
   // One confirmation = one requestId, kept on the phone before it goes out (an app kill mid-request
   // must not lose it either).
@@ -231,5 +236,5 @@ async function runFlow(opts: {
     savedAt: Date.now(),
   };
   keepPending(snapshot);
-  await sendSnapshot(snapshot, false);
+  return sendSnapshot(snapshot, false, stay);
 }

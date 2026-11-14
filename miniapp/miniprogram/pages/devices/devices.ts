@@ -358,7 +358,9 @@ Page({
     // The station the card was shown under travels with the device, so the detail page can follow the
     // station if its device is replaced while the page is open (see device-detail refreshAssociation).
     const station = stationParam(stationIdFromKey(this.data.stationKey));
-    const stationQuery = station ? `&station=${station}` : '';
+    // Display only: the detail page's info bar shows 油站 · 设备 · 罐号 (#43).
+    const name = station && this.data.stationName ? `&stationName=${encodeURIComponent(this.data.stationName as string)}` : '';
+    const stationQuery = station ? `&station=${station}${name}` : '';
     wx.navigateTo({
       url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}${tankQuery}${stationQuery}`,
     });

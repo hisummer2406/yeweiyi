@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "",
-  "enablePullDownRefresh": true
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "param-editor": "/components/param-editor/param-editor"
+  }
 }

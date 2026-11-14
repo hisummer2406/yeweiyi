@@ -15,6 +15,7 @@ import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemet
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
 import { getTankSettings } from '../../utils/remoteConfigApi';
 import { telemetryFailure } from '../../utils/failureState';
+import type { ParamEditorRef } from '../../utils/paramSwitch';
 import {
   ALARM_TYPE_KEYS,
   COMMAND_STATUS_KEYS,
@@ -33,10 +34,15 @@ import type {
 // the live-alarm banner follow the tank selected here. Records — alarms as well as stock in/out — are not
 // on this page: they have one entry only, under 我的记录 (pages/record-list), bound to the home page's
 // station. An old `tab=alarms` link simply opens 实时数据.
-type TabKey = 'snapshot' | 'commands';
+// 参数修正 / 储罐设置（#43）：同一设备、同一罐的编辑页签（components/param-editor）。页内没有罐切换：首页点哪个罐就是哪个罐。
+type TabKey = 'snapshot' | 'calibration' | 'settings' | 'commands';
+
+const EDITOR_TABS: TabKey[] = ['calibration', 'settings'];
 
 const TABS: { key: TabKey; labelKey: string }[] = [
   { key: 'snapshot', labelKey: 'detail.tabSnapshot' },
+  { key: 'calibration', labelKey: 'detail.tabCalibration' },
+  { key: 'settings', labelKey: 'detail.tabSettings' },
   // 控制命令 tab 入口已于 2026-10-17 关闭（页面、轮询和 issue-command 都保留，没有别的入口能进）。
   // 想起来再开时把下面这项加回 TABS：
   // { key: 'commands', labelKey: 'detail.tabCommands' },
@@ -112,7 +118,7 @@ Page({
     // All readings of the current tank, see tankFields.
     tankFields: [] as TankField[],
     snapshotLoaded: false,
-    // Visible tanks of this device, for the switcher; currentTank is a protocol tank number or NO_TANK.
+    // Visible tanks of this device; currentTank (the tapped one, else the lowest) is a protocol tank number or NO_TANK.
     tankOptions: [] as { tank: number; label: string }[],
     currentTank: NO_TANK,
     currentTankLabel: '',
@@ -121,6 +127,10 @@ Page({
 
     commands: [] as CommandView[],
     commandsLoaded: false,
+    // The device row's station_id for the editors' submission check: -1 = on no station, -2 = not known yet.
+    deviceStation: -2,
+    // Info bar (#43): the station name the home page showed (display only; '' for a scan entry).
+    stationName: '',
   },
 
   socket: null as AlarmSocket | null,
@@ -175,7 +185,8 @@ Page({
     const tab: TabKey = tabs.some((x) => x.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
     this.requestedTank = parseTankParam(query.tank);
     this.stationId = stationIdFromKey(query.station);
-    this.setData({ device, tabs: tabsView(tabs), activeTab: tab });
+    const stationName = typeof this.stationId === 'number' && query.stationName ? decodeURIComponent(query.stationName) : '';
+    this.setData({ device, tabs: tabsView(tabs), activeTab: tab, stationName });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     // Opened from a device mini-program code: the scene is the device's printed code, not yet a device
     // name. Locate it first; nothing is queried until the cloud has answered.
@@ -365,6 +376,8 @@ Page({
           if (this.data.device || this.data.notice !== notice) this.switchDevice('', notice);
         } else {
           this.grantedTanks = grantsOf(devices, device);
+          const deviceStation = stationOf(devices, device);
+          if (deviceStation !== this.data.deviceStation) this.setData({ deviceStation });
         }
       })
       // A failed re-read changes nothing: the current device stays as it was.
@@ -390,6 +403,7 @@ Page({
     this.allTanks = [];
     this.neverReported = false;
     this.grantedTanks = devices ? grantsOf(devices, device) : null;
+    const deviceStation = devices ? stationOf(devices, device) : -2;
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
@@ -414,6 +428,7 @@ Page({
       tankless: '',
       commands: [],
       commandsLoaded: false,
+      deviceStation,
     });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     if (!device) return;
@@ -453,7 +468,8 @@ Page({
   refreshActiveTab(): void {
     if (!this.data.deviceActive || !this.data.device) return;
     const tab = this.data.activeTab as TabKey;
-    if (tab === 'snapshot' && this.data.snapshotLoaded) this.loadSnapshot();
+    // The editors re-read the device's settings themselves (on show); the snapshot decides the tanks.
+    if ((tab === 'snapshot' || EDITOR_TABS.includes(tab)) && this.data.snapshotLoaded) this.loadSnapshot();
     else if (tab === 'commands' && this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -487,7 +503,8 @@ Page({
   },
 
   loadTabIfNeeded(tab: TabKey) {
-    if (tab === 'snapshot' && !this.data.snapshotLoaded) this.loadSnapshot();
+    // The editor tabs need the visible tanks, which come with the snapshot.
+    if ((tab === 'snapshot' || EDITOR_TABS.includes(tab)) && !this.data.snapshotLoaded) this.loadSnapshot();
     if (tab === 'commands' && !this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -497,8 +514,15 @@ Page({
       return;
     }
     this.refreshAssociation();
+    const editor = (tab: TabKey) => () => {
+      const ed = this.editorOf(tab) as unknown as { refresh?: () => void } | null;
+      ed?.refresh?.();
+      return this.loadSnapshot();
+    };
     const reload: Record<TabKey, () => Promise<unknown>> = {
       snapshot: () => this.loadSnapshot(),
+      calibration: editor('calibration'),
+      settings: editor('settings'),
       commands: () => this.loadCommands(),
     };
     reload[this.data.activeTab as TabKey]().finally(() => wx.stopPullDownRefresh());
@@ -535,13 +559,10 @@ Page({
     });
   },
 
-  onPickTank(e: WechatMiniprogram.BaseEvent) {
-    const tank = Number(e.currentTarget.dataset.tank);
-    if (tank === this.data.currentTank) return;
-    this.setData({ currentTank: tank, liveAlarm: '', infoNotice: '' });
-    // Re-render from the last snapshot; the next refresh reads it again.
-    this.applyTanks(this.allTanks, this.neverReported);
+  editorOf(tab: TabKey): ParamEditorRef | null {
+    return this.selectComponent(`#ed-${tab}`) as unknown as ParamEditorRef | null;
   },
+
 
   // GET /api/devices/:device/telemetry/latest — the cloud answers the granted tanks only.
   loadSnapshot() {
@@ -678,6 +699,13 @@ Page({
     });
   },
 });
+
+// The device row's station_id (-1 = on no station; -2 = the device is not in the list).
+function stationOf(devices: Device[], device: string): number {
+  const row = devices.find((d) => d.device_name === device);
+  if (!row) return -2;
+  return typeof row.station_id === 'number' ? row.station_id : -1;
+}
 
 // customer_user rows carry the tanks granted on that device; null for administrators or when not known.
 function grantsOf(devices: Device[], device: string): number[] | null {
