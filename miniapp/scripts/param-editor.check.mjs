@@ -324,6 +324,34 @@ await test('an already-succeeded command (recovered/retried) still waits for a f
   ed.stopTrack();
 });
 
+await test('a recovered tank-table command goes to 操作记录, never compared with the settings mirror', async () => {
+  reset();
+  const ed = mount(props);
+  await tick();
+  ed.setInput('levelOffset', '-1.5');
+  ed.onReasonInput({ detail: { value: 'r' } });
+  modalAnswers = [true];
+  postReply = { commandId: 'cmd-9', method: 'config.setTankTable', status: 'succeeded', terminal: true, args: { tank: 3, shape: 0 }, finishedAt: '2026-11-14T04:00:00Z' };
+  ed.onSend();
+  await tick(30);
+  assert.equal(ed.data.result, null);
+  assert.equal(navigations.length, 1);
+  assert.match(navigations[0], /issue-command\?device=ZCT000001&commandId=cmd-9&tank=3/);
+  assert.equal(ed.data.changedCount, 1);
+});
+
+await test('an in-flight holder known only by id: handed off once its method is read', async () => {
+  reset();
+  const ed = mount(props);
+  await tick();
+  command = { commandId: 'cmd-1', method: 'config.setTankTable', status: 'pending', terminal: false };
+  ed.track({ device: DEV, tank: 3, cmd: { commandId: 'cmd-1' }, echoStarted: 0 });
+  await tick(30);
+  assert.equal(ed.data.result, null);
+  assert.equal(navigations.length, 1);
+  assert.match(navigations[0], /commandId=cmd-1&tank=3/);
+});
+
 await test('employee: read only, typing stores nothing', async () => {
   reset();
   setToken(jwt(20, 'customer_user'));
