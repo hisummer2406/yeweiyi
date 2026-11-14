@@ -21,11 +21,12 @@ import { isReadOnlyRole } from '../../utils/roles';
 import { TANK_DISPLAY_ONLY, TANK_SEND_FIELDS, buildArgs, mirrorToForm } from '../../utils/remoteConfig';
 import { getTankSettings } from '../../utils/remoteConfigApi';
 import { confirmAndSend } from '../../utils/configSubmit';
+import { mediumText } from '../../utils/recordColumns';
 
 // 储罐设置（miniapp#18，#6）：按设计稿排的表单。「本机草稿」只保存在本手机；「设备当前回报」来自云端镜像
 // （GET /api/devices/:device/tank-settings），两者分开显示，草稿只能由「导入设备值」明确导入。管理员可直接
 // 「下发到设备」：只发与设备回报不同、且云端开放的字段（utils/remoteConfig.ts TANK_SEND_FIELDS）；
-// 密度、罐高、低水位、低温、物料颜色、介质文本不下发。没有逐台开放步骤（2026-11-09）。员工没有下发入口。
+// 密度、罐高、低水位、低温、物料颜色不下发。介质只读，显示设备回报（#27：介质仅平台管理员在后台选用下发）。没有逐台开放步骤（2026-11-09）。员工没有下发入口。
 //
 // The object being edited is shown on top — the home page's current station, its one device, and one of
 // the tanks this user can see on it (not a fixed 1–12 list). 保存 writes a draft keyed by account + device
@@ -93,7 +94,7 @@ Page({
     ],
     colorIndex: -1,
     // 手动输入的自由文本（汽油、柴油、大豆油…）：只在本机草稿里
-    medium: '',
+    medium: DASH,
     fields: [] as FieldView[],
     // "上次保存 …" or "尚未保存草稿"
     savedText: '',
@@ -194,7 +195,7 @@ Page({
       .catch(() => {
         if (seq !== this.seq) return;
         this.mirrors = [];
-        this.setData({ mirrorState: 'error', mirrorRows: [], mirrorTime: '' });
+        this.setData({ mirrorState: 'error', mirrorRows: [], mirrorTime: '', medium: DASH });
         this.updateSendable();
       });
   },
@@ -209,6 +210,7 @@ Page({
     this.setData({
       mirrorState: m ? 'ok' : 'none',
       mirrorRows: mirrorRows(m),
+      medium: m ? mediumText(m.oilTypeIndex, m.oilType, t) : DASH,
       mirrorTime: m ? t('tankCfg.deviceReportedAt', { time: formatLocalTime(m.reportedAt, currentLocale()) }) : '',
     });
     this.updateSendable();
@@ -292,7 +294,6 @@ Page({
     this.setData({
       tankIndex: index === undefined ? (this.data.tankIndex as number) : index,
       colorIndex: draft.color,
-      medium: draft.medium,
       fields: fieldViews(draft),
       savedText: draft.savedAt
         ? t('tankCfg.savedAt', { time: formatLocalTime(new Date(draft.savedAt).toISOString(), currentLocale()) })
@@ -304,7 +305,7 @@ Page({
   current(): TankDraft {
     const values: Record<string, string> = {};
     for (const f of this.data.fields as FieldView[]) values[f.key] = f.value;
-    return { color: this.data.colorIndex as number, medium: this.data.medium as string, values, savedAt: this.saved.savedAt };
+    return { color: this.data.colorIndex as number, medium: this.saved.medium, values, savedAt: this.saved.savedAt };
   },
 
   // 点选择行：量出该行 bottom，把对应的面板贴在它下面
@@ -343,10 +344,6 @@ Page({
 
   onClosePicker() {
     this.setData({ gridShow: false, sideShow: false });
-  },
-
-  onMediumInput(e: WechatMiniprogram.Input) {
-    this.setData({ medium: e.detail.value });
   },
 
   onFieldInput(e: WechatMiniprogram.Input) {

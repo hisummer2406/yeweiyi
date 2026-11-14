@@ -24,7 +24,7 @@ type TankKey = Exclude<
   'tank' | 'reportedAt' | 'oilType'
 >;
 
-/** 罐设置字段（显示顺序）。密度：单位未与设备对齐，本期只读（用户 2026-11-08 决定）。 */
+/** 罐设置字段（显示顺序）。密度：单位未与设备对齐，本期只读（用户 2026-11-08 决定）。三项修正不限范围（#28，用户决定）。 */
 export const TANK_FIELDS: FieldDef<TankKey>[] = [
   {
     key: 'alarmHighHighLevelMm',
@@ -78,24 +78,24 @@ export const TANK_FIELDS: FieldDef<TankKey>[] = [
     key: 'levelCorrectionMm',
     unit: 'mm',
     kind: 'number',
-    min: -100,
-    max: 100,
+    min: -Infinity,
+    max: Infinity,
     editable: true,
   },
   {
     key: 'waterCorrectionMm',
     unit: 'mm',
     kind: 'number',
-    min: -100,
-    max: 100,
+    min: -Infinity,
+    max: Infinity,
     editable: true,
   },
   {
     key: 'tempCorrectionC',
     unit: '℃',
     kind: 'number',
-    min: -10,
-    max: 10,
+    min: -Infinity,
+    max: Infinity,
     editable: true,
   },
   { key: 'oilTypeIndex', kind: 'oil', min: 0, max: 39, editable: true },
@@ -171,6 +171,11 @@ export const DEVICE_FIELDS: FieldDef<DeviceKey>[] = [
     editable: true,
   },
 ];
+
+/** 可负的小数字段（三项修正）旁边放正负号切换：部分手机键盘打不出负号（#30）。 */
+export function hasSignToggle(f: FieldDef): boolean {
+  return f.kind === 'number' && f.min < 0;
+}
 
 /** 表单草稿：键 → 用户输入的数（undefined/null = 没填） */
 export type Draft = Record<string, number | null | undefined>;
@@ -338,6 +343,9 @@ export type SubmitErrorKind =
   | 'unconfirmed'
   | 'forbidden'
   | 'purging'
+  | 'mediaNotSelectable'
+  | 'mediaSyncUnsupported'
+  | 'mediaSlotsExhausted'
   | 'unavailable'
   | 'other';
 
@@ -363,6 +371,13 @@ export function classifySubmitError(err: {
       return 'unconfirmed';
     case 'device_purge_in_progress':
       return 'purging';
+    case 'media_not_selectable':
+    case 'media_id_required':
+      return 'mediaNotSelectable';
+    case 'media_sync_unsupported':
+      return 'mediaSyncUnsupported';
+    case 'media_slots_exhausted':
+      return 'mediaSlotsExhausted';
   }
   if (err.status === 0) return 'unconfirmed';
   if (err.status === 403) return 'forbidden';
@@ -381,8 +396,25 @@ export function pendingSettledBy(kind: SubmitErrorKind): boolean {
     kind === 'stationChanged' ||
     kind === 'inFlight' ||
     kind === 'requestIdReused' ||
-    kind === 'invalidArgs'
+    kind === 'invalidArgs' ||
+    kind === 'mediaNotSelectable' ||
+    kind === 'mediaSyncUnsupported' ||
+    kind === 'mediaSlotsExhausted'
   );
+}
+
+/**
+ * 介质按 mediaId 提交，设备回报的是云端换算出的 oilTypeIndex：回显要按命令实际下发的编号核对。
+ * 名称字段设备不回报，不参与比较。
+ */
+export function trackedArgs(
+  command: Pick<API.ControlCommand, 'args'>,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!('mediaId' in args)) return args;
+  const { mediaId: _mediaId, ...rest } = args;
+  const index = command.args?.oilTypeIndex;
+  return typeof index === 'number' ? { ...rest, oilTypeIndex: index } : rest;
 }
 
 /** 命令的 configTarget（tank:N / device）显示用 */

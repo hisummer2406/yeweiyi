@@ -1075,6 +1075,10 @@ func assignDeviceHandler(deps Deps) gin.HandlerFunc {
 			if err := q.SetDeviceCustomer(ctx, db.SetDeviceCustomerParams{DeviceName: device, CustomerID: int8(req.CustomerID)}); err != nil {
 				return err
 			}
+			// The positions name the previous customer's media; the new customer starts with none.
+			if _, err := q.DeleteDeviceMediaSlots(ctx, device); err != nil {
+				return err
+			}
 			grantsCleared, err := q.DeleteTankGrantsForDevice(ctx, device)
 			if err != nil {
 				return err

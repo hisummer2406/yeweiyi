@@ -18,6 +18,7 @@ import {
   readPending,
   withPending,
   withoutPending,
+  toggleSign,
 } from '../miniprogram/utils/remoteConfig.ts';
 
 let n = 0;
@@ -54,6 +55,21 @@ test('number, integer, range problems', () => {
   assert.deepEqual(buildArgs(TANK_SEND_FIELDS, { high: '610.5' }, mirror).problems, [{ form: 'high', reason: 'integer' }]);
   assert.deepEqual(buildArgs(TANK_SEND_FIELDS, { tempHigh: '120' }, mirror).problems, [{ form: 'tempHigh', reason: 'range' }]);
   assert.deepEqual(buildArgs(CORRECTION_SEND_FIELDS, { levelOffset: '-1.5' }, mirror).args, { levelCorrectionMm: -1.5 });
+  // #28: corrections have no range limit, but must stay real numbers
+  assert.deepEqual(buildArgs(CORRECTION_SEND_FIELDS, { levelOffset: '1000', waterOffset: '-1000.5', tempOffset: '-100.5' }, mirror),
+    { args: { levelCorrectionMm: 1000, waterCorrectionMm: -1000.5, tempCorrectionC: -100.5 }, problems: [] });
+  assert.deepEqual(buildArgs(CORRECTION_SEND_FIELDS, { levelOffset: '9'.repeat(400) }, mirror).problems, [{ form: 'levelOffset', reason: 'number' }]);
+  for (const bad of ['-', '--1', '1.', '.5', '-.']) {
+    assert.deepEqual(buildArgs(CORRECTION_SEND_FIELDS, { tempOffset: bad }, mirror).problems, [{ form: 'tempOffset', reason: 'number' }], bad);
+  }
+});
+
+test('toggleSign flips the text and never steps (#30)', () => {
+  assert.equal(toggleSign('1.5'), '-1.5');
+  assert.equal(toggleSign('-1.5'), '1.5');
+  assert.equal(toggleSign(''), '-');
+  assert.equal(toggleSign('-'), '');
+  assert.equal(toggleSign(' 0 '), '-0');
 });
 
 test('level order on report + changes, 0 = off', () => {

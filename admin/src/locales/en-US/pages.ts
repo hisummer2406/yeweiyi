@@ -1,4 +1,9 @@
 export default {
+  'pages.console.tank.shape.horizontal': 'Horizontal tank',
+  'pages.console.tank.shape.vertical': 'Vertical tank',
+  'pages.console.tank.shape.reportedAt': 'Shape reported {time}',
+  'pages.console.tank.shape.picture': 'Tank {index} illustration ({shape})',
+
   'pages.layouts.userLayout.title': 'Level gauge cloud platform admin',
   'pages.login.accountLogin.errorMessage': 'Incorrect username or password',
   'pages.login.failure': 'Login failed, please try again!',
@@ -283,7 +288,7 @@ export default {
     'Enter a valid 11-digit mainland China mobile number',
   'pages.ops.users.form.password.optional': 'Initial password (optional)',
   'pages.ops.users.form.staff.hint':
-    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (WeChat sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
+    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (phone sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',
@@ -300,7 +305,7 @@ export default {
   'pages.ops.users.edit.passwordHint':
     'Leave blank to keep the current password.',
   'pages.ops.users.changePhone.hint':
-    'The account must sign in with the new number afterwards. Its WeChat binding is removed and must be re-authorized; existing sessions are not affected (disable the account to sign it out).',
+    'The account must sign in with the new number afterwards. Its phone authorization is removed and must be granted again; existing sessions are not affected (disable the account to sign it out).',
   'pages.ops.users.form.submit.move': 'Move',
   'pages.ops.users.move.warning':
     'Moving the account also clears its device bindings; they must be bound again.',
@@ -531,9 +536,9 @@ export default {
   'pages.console.miniCode.error.notFound':
     'Device not found; please refresh the list.',
   'pages.console.miniCode.error.unavailable':
-    'WeChat is not enabled on the cloud; cannot generate the code.',
+    'The mini program service is not enabled on the cloud; cannot generate the code.',
   'pages.console.miniCode.error.upstream':
-    'WeChat service failed; please retry later.',
+    'The mini program code service failed; please retry later.',
   'pages.console.miniCode.error.unknown':
     'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.console.stations.devices.action.replace': 'Replace',
@@ -739,6 +744,7 @@ export default {
   'pages.console.settings.reset': 'Clear changes',
   'pages.console.settings.aboveTankHeight':
     '{fields} exceed the tank height; the device may refuse.',
+  'pages.console.settings.toggleSign': 'Toggle sign',
   'pages.console.settings.problem.range': 'Out of range ({min}–{max})',
   'pages.console.settings.problem.integer': 'Must be an integer',
   'pages.console.settings.problem.order':
@@ -786,6 +792,41 @@ export default {
   'pages.console.settings.submit.note':
     'The device writes the settings and reports them back. Saving settings on the device itself overrides remote changes.',
   'pages.console.settings.submit.reason': 'Reason (required)',
+  'pages.ops.customers.action.media': 'Media',
+  'pages.console.media.note': 'This only saves the name. To apply it, select it for a tank in the device settings and send it.',
+  'pages.console.media.loadFailed': 'Failed to load media.',
+  'pages.console.media.retry': 'Retry',
+  'pages.console.media.add': 'Add medium',
+  'pages.console.media.edit': 'Edit',
+  'pages.console.media.enable': 'Enable',
+  'pages.console.media.disable': 'Disable',
+  'pages.console.media.saved': 'Saved to the library; not sent to any device yet.',
+  'pages.console.media.filter.all': 'All',
+  'pages.console.media.col.name': 'Name',
+  'pages.console.media.col.nameEn': 'English name (optional)',
+  'pages.console.media.col.owner': 'Owner',
+  'pages.console.media.col.scope': 'Scope',
+  'pages.console.media.col.status': 'Status',
+  'pages.console.media.col.actions': 'Actions',
+  'pages.console.media.scope.public': 'Public',
+  'pages.console.media.scope.customer': 'Customer-only',
+  'pages.console.media.status.on': 'Enabled',
+  'pages.console.media.status.off': 'Disabled',
+  'pages.console.media.error.invalid_media_name': 'Invalid name (1–20 characters).',
+  'pages.console.media.error.invalid_media_scope': 'Scope and customer do not match.',
+  'pages.console.media.error.unknown_customer': 'Customer not found; refresh.',
+  'pages.console.media.error.media_not_found': 'Medium not found; refresh.',
+  'pages.console.media.error.media_name_exists': 'This name already exists in this scope.',
+  'pages.console.media.error.media_builtin_readonly': 'Built-in media cannot be renamed.',
+  'pages.console.media.error.other': 'Operation failed; try again later.',
+  'pages.console.settings.medium.public': 'Public',
+  'pages.console.settings.medium.customer': 'This customer',
+  'pages.console.settings.medium.noSync': 'This firmware cannot sync medium names. Custom media and numbers from 18 are unavailable until it is upgraded.',
+  'pages.console.settings.medium.loadFailed': 'Failed to load media options; the medium cannot be changed now.',
+  'pages.console.settings.medium.slots': 'Custom positions on this device: {used}/{total} used',
+  'pages.console.settings.submit.error.mediaNotSelectable': 'This medium is disabled or not available to this device; refresh and choose again.',
+  'pages.console.settings.submit.error.mediaSyncUnsupported': 'The firmware does not support this medium; upgrade it first.',
+  'pages.console.settings.submit.error.mediaSlotsExhausted': 'All 8 custom positions on this device are in use; nothing was sent.',
   'pages.console.settings.submit.error.deploymentDisabled':
     'Remote configuration is not enabled on this system.',
   'pages.console.settings.submit.error.deviceDisabled':

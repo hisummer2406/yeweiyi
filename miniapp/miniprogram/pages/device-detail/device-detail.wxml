@@ -67,6 +67,7 @@
         <view class="dt-probe {{item.probeConnected ? '' : 'dt-probe-off'}}">
           {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}
         </view>
+        <view class="dt-probe">{{item.shapeLabel}}<text wx:if="{{item.shapeTime}}"> · {{item.shapeTime}}</text></view>
         <view class="dt-grid">
           <view wx:for="{{tankFields}}" wx:for-item="f" wx:key="label" class="dt-cell">
             <view class="dt-label">{{f.label}}</view>

@@ -376,7 +376,7 @@ declare namespace API {
 
   type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';
 
-  /** telemetry/latest 的一个罐；tankShape 缺失表示未知 */
+  /** telemetry/latest 的一个罐；罐型另读 tank-settings，不在遥测结构中。 */
   type Tank = {
     index: number;
     oilType: string;
@@ -391,7 +391,6 @@ declare namespace API {
     waterRatioPct: number;
     alarmState: TankAlarmState | string;
     probeConnected: boolean;
-    tankShape?: string;
   };
 
   /** GET /api/devices/:device/telemetry/latest 成功响应 */
@@ -458,6 +457,31 @@ declare namespace API {
     | 'expired';
 
   /** 控制命令（cloud internal/api/control.go commandResponse）。terminal 由云端计算，是否继续轮询只看它。 */
+  type Medium = {
+    id: number;
+    name: string;
+    nameEn: string | null;
+    scope: 'public' | 'customer';
+    customerId: number | null;
+    builtinIndex: number | null;
+    enabled: boolean;
+    updatedAt: string;
+  };
+  type MediumCreate = {
+    name: string;
+    nameEn?: string;
+    scope: 'public' | 'customer';
+    customerId?: number;
+  };
+  type MediumUpdate = { name?: string; nameEn?: string; enabled?: boolean };
+  type MediaOptions = {
+    public: Medium[];
+    customer: Medium[];
+    customMediaSync: boolean;
+    slotsUsed: number;
+    slotsTotal: number;
+  };
+
   type ControlCommand = {
     commandId: string;
     deviceName: string;

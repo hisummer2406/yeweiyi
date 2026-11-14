@@ -10,6 +10,7 @@ import {
   newRequestId,
   TANK_FIELDS,
   targetTank,
+  trackedArgs,
 } from './deviceConfig';
 
 const tank = {
@@ -58,6 +59,15 @@ describe('checkArgs', () => {
     expect(
       checkArgs(DEVICE_FIELDS, null, { inStockTimeThresholdSec: 0 }),
     ).toEqual([{ field: 'inStockTimeThresholdSec', code: 'range' }]);
+  });
+  it('puts no range limit on the corrections (#28)', () => {
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, {
+        levelCorrectionMm: 1000,
+        waterCorrectionMm: -1000.5,
+        tempCorrectionC: -100.5,
+      }),
+    ).toEqual([]);
   });
   it('checks the level order on merged values, 0 = disabled', () => {
     expect(
@@ -188,4 +198,29 @@ describe('classifySubmitError', () => {
 it('targetTank', () => {
   expect(targetTank('tank:3')).toBe(3);
   expect(targetTank('device')).toBeUndefined();
+});
+
+describe('trackedArgs (#27)', () => {
+  it('checks the echo against the index the cloud actually sent', () => {
+    expect(
+      trackedArgs(
+        { args: { tank: 1, oilTypeIndex: 32, customOilName: '盐酸' } },
+        { tank: 1, mediaId: 77, capacityL: 5 },
+      ),
+    ).toEqual({ tank: 1, capacityL: 5, oilTypeIndex: 32 });
+  });
+  it('leaves other submissions alone', () => {
+    const args = { tank: 1, capacityL: 5 };
+    expect(trackedArgs({}, args)).toBe(args);
+  });
+});
+
+describe('media submit errors (#27)', () => {
+  it.each([
+    ['media_not_selectable', 'mediaNotSelectable'],
+    ['media_sync_unsupported', 'mediaSyncUnsupported'],
+    ['media_slots_exhausted', 'mediaSlotsExhausted'],
+  ])('%s', (code, kind) => {
+    expect(classifySubmitError({ status: 409, code })).toBe(kind);
+  });
 });

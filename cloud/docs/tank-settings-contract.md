@@ -125,8 +125,8 @@
 | `alarmHighHighLevelMm` `alarmHighLevelMm` `alarmLowLevelMm` `alarmLowLowLevelMm` | int, mm | ≥ 0（设备另限 ≤ 罐高） | 0 = 不启用；非 0 的必须 低低 < 低 < 高 < 高高 |
 | `alarmHighWaterMm` | int, mm | ≥ 0（设备另限 ≤ 罐高） | 0 = 不启用 |
 | `alarmHighTempC` | int, ℃ | −50～100 | 0 = 不启用 |
-| `levelCorrectionMm` `waterCorrectionMm` | number, mm | −100～100 | |
-| `tempCorrectionC` | number, ℃ | −10～10 | |
+| `levelCorrectionMm` `waterCorrectionMm` | number, mm | 不限（有限数字，可负可小数） | 设备把它直接加到读数上；旧固件仍拒绝 ±100 以外的值（#28） |
+| `tempCorrectionC` | number, ℃ | 不限（有限数字，可负可小数） | 旧固件仍拒绝 ±10 以外的值（#28） |
 | `density` | number | > 0 且 ≤ 2 | **单位未对齐，原样写入**，云端不换算 |
 | `oilTypeIndex` | int | 0～39 | 1–31 内置，32–39 自定义；自定义油品为空时是否允许由设备决定（产品未定）。旧固件把 18–25 当自定义，向旧固件下发 18–31 的含义不同（#11） |
 | `capacityL` | int, L | 0～1,000,000 | 只影响空容/可添油量计算 |

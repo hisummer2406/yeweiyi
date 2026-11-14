@@ -32,6 +32,14 @@ about the design draft are easy to get wrong:
 
 Stations (cloud main 1d9d0be, yeweiyi-cloud#53): `/api/stations` returns all of the customer's stations (including empty ones) to `customer_admin`, and only the stations holding the user's bound devices to `customer_user`. A missing `station_id` on a device row means an old cloud; `customerId` on a station is not used.
 
+## 小程序统一字号（2026-11-10）
+
+- 字号定义在 `miniprogram/styles/typography.wxss`：标题/主要读数 36rpx、分组标题 32rpx、正文/表单/按钮 30rpx、标签/单位 28rpx、说明 26rpx、时间/徽标 24rpx。页面与组件按语义引用变量，不再逐页使用适老化放大表。
+- `app.wxss` 引入统一字号；隔离的 `grid-picker`、`side-picker` 在自身 WXSS 中显式引入，由面板根节点提供变量。旧 `styles/tokens.wxss` 的字体别名也指向同一份定义。
+- 首页沿用已确认的四罐排布，品牌 34rpx、状态 22rpx、短屏读数 32rpx；字号数值和首屏高度不因此调整。
+- 长按钮文字允许换行并撑高，确认弹窗随内容增高。原生导航栏、tabBar 与系统弹窗的字号由微信控制。
+- 验证包括类型/项目检查，以及由实际 WXML/WXSS 生成的浏览器多尺寸、多语言预览；不代表微信真机验收。
+
 ## Android App (Donut) and languages (2026-10-19, openspec change `donut-android-app`, issue #12)
 
 The same code is built twice: as the WeChat mini-program and, through Donut (小程序多端框架), as an Android
@@ -340,8 +348,8 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     The tank illustration carries a level fill (oil on top of water, `tankFill` in `utils/tankFill.ts`,
     from `oilRatioPct`/`waterRatioPct`; red on ALARM, grey on FAULT, nothing without a probe). The
     fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
-    Tank illustration is always horizontal until the cloud exposes tank shape (`gunType` on the
-    device, `yeweiyi-cloud#45`).
+    首页按设计图比例排布（2026-11-10）：数值 36rpx、标签 30rpx、单位 28rpx；较短屏幕用 32/28/24rpx。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
+    Tank type comes from `tank-settings`; confirmed types select horizontal/vertical images. Before confirmation, keep a generic illustration with an explicit label; do not replace the tank with a question mark.
   - **我的记录 `records`** (tabBar) — the home page's current station (name on top) and five entries
     (报警/出库/入库/交班/库存), each opening `record-list?type=`. **No device picker**: no valid station
     (old cloud, ungrouped, none) → go choose one on the home page; empty or multi-device station → says
@@ -383,7 +391,7 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
   `config_commands_disabled` when off): only filled fields that differ from the
   report and are open (`TANK_SEND_FIELDS`: 4 level alarms, high water, high temp, capacity) are sent; density, height,
   low water, low temp, colour and the free-text medium never are.
-- `calibration` uses the same station → device → visible tank; shows the device's corrections; 「保存到控制器」 sends
+- `calibration` uses the same station → device → visible tank; shows the device's corrections (no range limit, #28; each input has a ± toggle, #30, `toggleSign`); 「保存到控制器」 sends
   the three corrections the same way. 「保存到手机」 keeps one local draft (`calibration-draft`, tied to device + tank,
   cleared at logout).
 - Send flow: the reason is a form row (no `showModal` `editable`); the confirm dialog lists before → after; then
@@ -406,6 +414,10 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
 - `backfill` posts `POST /api/devices/:device/stock-events` (administrators): date + time (phone offset → RFC 3339,
   not in the future), level, volume, reason, one `requestId` per confirmation (a retry reuses it; the cloud replays).
 - **Not verified in DevTools, in the app, or against a real cloud/device.**
+
+## 罐型同步展示（Issue #40，2026-11-10）
+
+首页与详情独立读取现有 `tank-settings`，按设备及实际罐号合并；只有 tankShape=1 显示立罐，未上报、未知值或读取失败一律按卧罐，不出现「罐型未知」（用户 2026-11-10 决定）；首页罐卡不显示罐型文字，只换罐图。详情显示罐型及其上报时间。立罐用设备端 `min_oilcan.png` 的完整副本，通过 CSS 视口去掉透明边，液位窗口另行适配。保留四罐首屏布局和字号。配置每分钟复核，隐藏停止，恢复／手动刷新重读；临时失败沿用旧值，401/403/404 清除罐型缓存，迟到响应按账号、设备及页面代次丢弃。纯逻辑及真实页面加载方法的检查在 `scripts/tank-shape.check.mjs`，不等于微信／Donut／现场设备验收。规格和待验收项见 `openspec/changes/sync-reported-tank-shape/`。 2026-11-10 已在微信开发者工具真实模拟器核对测试站点首页卧罐展示；若热重载后新方法未加载，应清理编译缓存后重新编译，不能把浏览器预览当作目标端验证。
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
 

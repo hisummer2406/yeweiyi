@@ -29,15 +29,22 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
     static final int MAX_TANK = 16;
     static final int MAX_OIL_TYPE_INDEX = 39; // = oiltypeArray 条数 - 2（去掉"未设置""空白"）+ 8 个自定义位，改数组要同步
     /** 认识但不开放远程修改的字段：拒绝而不是忽略，云端发了是期望生效的，静默忽略会误以为改成功了。 */
+    static final String FIELD_NAME = "customOilName";
+    static final String FIELD_NAME_EN = "customOilNameEn";
+    static final int CUSTOM_OIL_FROM = 32;
+
     static final Set<String> CLOSED_FIELDS = new HashSet<>(Arrays.asList(
             "alarmLowTempC", "tankHeightMm", "probeAddress", "tankShape", "sensorLengthMm"));
 
     private final OilTankRepository oilTankRepository;
     private final Runnable onSettingsUpdated;
+    private final CustomOilNameStore customOilNames;
 
-    public SetTankSettingsHandler(OilTankRepository oilTankRepository, Runnable onSettingsUpdated) {
+    public SetTankSettingsHandler(OilTankRepository oilTankRepository, Runnable onSettingsUpdated,
+                                  CustomOilNameStore customOilNames) {
         this.oilTankRepository = oilTankRepository;
         this.onSettingsUpdated = onSettingsUpdated;
+        this.customOilNames = customOilNames;
     }
 
     @Override
@@ -59,7 +66,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
         try {
             for (Map.Entry<String, JsonElement> entry : args.entrySet()) {
                 String field = entry.getKey();
-                if ("tank".equals(field)) {
+                if ("tank".equals(field) || FIELD_NAME.equals(field) || FIELD_NAME_EN.equals(field)) {
                     continue;
                 }
                 Change change = validate(set, field, entry.getValue());
@@ -87,13 +94,29 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
         if (orderError != null) {
             return invalid(orderError);
         }
+        String[] name;
+        try {
+            name = customOilName(args);
+        } catch (IllegalArgumentException e) {
+            return invalid(e.getMessage());
+        }
         for (Change change : changes) {
             change.applyTo(set);
         }
 
+        // 名称和编号要么都生效要么都不生效（#27）：先写名称，罐设置写失败就恢复原名称
+        int slot = name == null ? -1 : intValue(args.get("oilTypeIndex"));
+        String[] previousName = null;
         try {
+            if (name != null) {
+                previousName = customOilNames.save(slot, name[0], name[1]);
+                updated.add(FIELD_NAME);
+            }
             oilTankRepository.updateOilCanSetSync(set);
         } catch (Exception e) {
+            if (previousName != null) {
+                customOilNames.save(slot, previousName[0], previousName[1]);
+            }
             return RpcResult.failed(RpcErrorCode.INTERNAL_ERROR, "写入罐设置失败: " + e.getMessage());
         }
         onSettingsUpdated.run();
@@ -105,6 +128,32 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
             data.put("ignored", ignored);
         }
         return RpcResult.succeeded("罐设置已更新", data);
+    }
+
+    /** 返回 {中文名, 英文名}；没带名称返回 null。名称只能和 32–39 的自定义编号一起下发。 */
+    private static String[] customOilName(JsonObject args) {
+        JsonElement zh = args.get(FIELD_NAME);
+        JsonElement en = args.get(FIELD_NAME_EN);
+        if (zh == null && en == null) {
+            return null;
+        }
+        Integer index = intValue(args.get("oilTypeIndex"));
+        if (zh == null || index == null || index < CUSTOM_OIL_FROM || index > MAX_OIL_TYPE_INDEX) {
+            throw new IllegalArgumentException("介质名称只能和 32–39 的 oilTypeIndex 一起下发");
+        }
+        String name = requireName(FIELD_NAME, zh, 20);
+        return new String[]{name, en == null ? name : requireName(FIELD_NAME_EN, en, 40)};
+    }
+
+    private static String requireName(String field, JsonElement value, int limit) {
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) {
+            throw new IllegalArgumentException(field + " 必须是文本");
+        }
+        String text = value.getAsString().trim();
+        if (text.isEmpty() || text.codePointCount(0, text.length()) > limit) {
+            throw new IllegalArgumentException(field + " 长度必须是 1～" + limit);
+        }
+        return text;
     }
 
     private interface Applier {
@@ -173,15 +222,15 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
                 return new Change(s -> s.setHighTempAlarm(v));
             }
             case "levelCorrectionMm": {
-                double v = requireNumber(field, value, -100, 100);
+                double v = requireFinite(field, value);
                 return new Change(s -> s.setOilCorrection(v));
             }
             case "waterCorrectionMm": {
-                double v = requireNumber(field, value, -100, 100);
+                double v = requireFinite(field, value);
                 return new Change(s -> s.setWaterCorrection(v));
             }
             case "tempCorrectionC": {
-                double v = requireNumber(field, value, -10, 10);
+                double v = requireFinite(field, value);
                 return new Change(s -> s.setTempCorrection(v));
             }
             case "density": {
@@ -234,6 +283,11 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
             throw new IllegalArgumentException(field + " 超出范围 " + min + "～" + max + ": " + v);
         }
         return v;
+    }
+
+    /** 修正值不设上下限（#28，与本地设置页一致）；超出 double 的值变成无穷大，仍要拒绝。 */
+    private static double requireFinite(String field, JsonElement value) {
+        return requireNumber(field, value, -Double.MAX_VALUE, Double.MAX_VALUE);
     }
 
     private static double requireNumber(String field, JsonElement value, double min, double max) {

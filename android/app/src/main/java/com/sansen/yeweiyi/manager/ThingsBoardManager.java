@@ -36,6 +36,7 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetDeviceSettingsHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankSettingsHandler;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SharePrefCustomOilNameStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
@@ -194,7 +195,8 @@ public final class ThingsBoardManager {
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
         registry.register(SetTankSettingsHandler.METHOD,
                 new SetTankSettingsHandler(OilTankRepositoryImpl.getInstance(),
-                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
+                        new SharePrefCustomOilNameStore(MyApplication.getInstance())));
         registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
         HighRiskActionHandler highRiskActionHandler = new HighRiskActionHandler();
         registry.register(HighRiskActionHandler.METHOD_START_PUMP, highRiskActionHandler);
@@ -526,6 +528,7 @@ public final class ThingsBoardManager {
             Singleton settings = Singleton.getInstance();
             attributes.putAll(DeviceSettingsAttributeBuilder.build(
                     settings.InHight, settings.InTime, settings.OutHight, settings.OutTime));
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_CUSTOM_MEDIA_SYNC, 1);
             connection.publishAttributes(gson.toJson(attributes));
         } catch (RuntimeException e) {
             Log.e(TAG, "客户端属性发布失败", e);

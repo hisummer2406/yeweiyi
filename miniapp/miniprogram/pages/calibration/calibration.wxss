@@ -13,11 +13,26 @@
   margin-left: 8rpx;
 }
 
+/* 正负号切换（#30）：触控区不小于 64rpx */
+.cb-sign {
+  flex: none;
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  margin-right: 8rpx;
+  text-align: center;
+  font-size: var(--font-heading);
+  color: #131313;
+  border: 1rpx solid #d9d9d9;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+}
+
 /* 只读数值（设备当前值）：与输入框同宽同对齐，单位位置一致 */
 .cb-num {
   width: 170rpx;
   text-align: right;
-  font-size: 36rpx;
+  font-size: var(--font-body);
 }
 
 /* 长文本值（油站 · 设备编号）：单行省略，不撑高行 */
@@ -25,7 +40,7 @@
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-size: 32rpx;
+  font-size: var(--font-label);
   color: #131313;
   overflow: hidden;
   white-space: nowrap;
@@ -42,7 +57,7 @@
 }
 
 .cb-head-title {
-  font-size: 32rpx;
+  font-size: var(--font-heading);
   font-weight: 600;
   color: #131313;
 }
@@ -56,14 +71,14 @@
   flex: 1;
   min-width: 0;
   height: 60rpx;
-  font-size: 32rpx;
+  font-size: var(--font-body);
   color: #131313;
   text-align: right;
 }
 
 .cb-note {
   padding: 4rpx 51rpx 16rpx;
-  font-size: 24rpx;
+  font-size: var(--font-caption);
   line-height: 1.5;
 }
 

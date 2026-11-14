@@ -161,7 +161,7 @@ func TestConfigTankSettings_CloudRejectsBadArgsBeforeAnythingIsSent(t *testing.T
 	for name, args := range map[string]string{
 		"closed field":   `{"tank":1,"tankShape":1}`,
 		"unknown field":  `{"tank":1,"densty":0.5}`,
-		"out of range":   `{"tank":1,"tempCorrectionC":11}`,
+		"out of range":   `{"tank":1,"alarmHighTempC":101}`,
 		"density zero":   `{"tank":1,"density":0}`,
 		"fractional int": `{"tank":1,"alarmHighLevelMm":650.5}`,
 		"string number":  `{"tank":1,"alarmHighLevelMm":"650"}`,

@@ -31,6 +31,14 @@ test('zh, en and es have the same keys, the same placeholders and no empty text'
   assert.deepEqual(compareTables(tables), []);
 });
 
+test('no platform brand name in any text shown to users', () => {
+  for (const [lang, table] of Object.entries(tables)) {
+    for (const [key, value] of Object.entries(table)) {
+      assert.ok(!/微信|wechat|weixin/i.test(value), `${lang} ${key}: ${value}`);
+    }
+  }
+});
+
 test('compareTables names a missing, an extra and a mismatched-placeholder key', () => {
   const broken = {
     zh,

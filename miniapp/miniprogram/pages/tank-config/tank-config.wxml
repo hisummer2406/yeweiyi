@@ -63,8 +63,9 @@
       </view>
       <view class="fr fr-b">
         <text class="fl">{{text.medium}}</text>
-        <input class="fi-text" type="text" maxlength="20" placeholder="{{text.mediumPlaceholder}}" placeholder-class="fv-ph" value="{{medium}}" bindinput="onMediumInput" />
+        <text class="fv">{{medium}}</text>
       </view>
+      <view class="muted tc-saved">{{text.mediumByPlatform}}</view>
       <!-- 左标签 / 中输入 / 右固定单位。占位写「未设置」，与已填写的 0 区分 -->
       <view class="fr fr-b" wx:for="{{fields}}" wx:key="key">
         <text class="fl">{{item.label}}</text>

@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Configuration commands (cloud#71, phase 2 of the tank settings mirror). Field names are the same as
@@ -39,6 +40,7 @@ const (
 	ArgNothingToChange   = "no_editable_fields"    // only `tank` (or nothing) was sent
 	ArgLevelOrder        = "level_order_violation" // 低低 < 低 < 高 < 高高 broken
 	capacityLMax         = 1_000_000
+	customOilFrom        = 32
 	maxOilTypeIndex      = 39 // 0 未设置，1–31 内置，32–39 自定义（#11）
 	deviceThresholdMaxMm = 10000
 	deviceThresholdMaxS  = 86400
@@ -70,6 +72,19 @@ type numRule struct {
 	exclMin  bool // min itself is not allowed (density > 0)
 }
 
+// anyFiniteNumber is for the sensor corrections: the device simply adds them to the reading and its local
+// settings page has no limit either, so the remote path does not invent one (#28).
+// Medium fields (#27). ArgMediaID is the client's choice and never reaches a device: the API turns it into
+// oilTypeIndex plus, for a medium without a fixed number, its names.
+const (
+	ArgMediaID          = "mediaId"
+	AttrCustomOilName   = "customOilName"
+	AttrCustomOilNameEn = "customOilNameEn"
+	AttrCustomMediaSync = "customMediaSync"
+)
+
+var anyFiniteNumber = numRule{-math.MaxFloat64, math.MaxFloat64, false, false}
+
 var tankSettingRules = map[string]numRule{
 	AttrAlarmHighHighLevel: {0, math.MaxInt32, true, false},
 	AttrAlarmHighLevel:     {0, math.MaxInt32, true, false},
@@ -77,9 +92,9 @@ var tankSettingRules = map[string]numRule{
 	AttrAlarmLowLowLevel:   {0, math.MaxInt32, true, false},
 	AttrAlarmHighWater:     {0, math.MaxInt32, true, false},
 	AttrAlarmHighTempC:     {-50, 100, true, false},
-	AttrLevelCorrectionMm:  {-100, 100, false, false},
-	AttrWaterCorrectionMm:  {-100, 100, false, false},
-	AttrTempCorrectionC:    {-10, 10, false, false},
+	AttrLevelCorrectionMm:  anyFiniteNumber,
+	AttrWaterCorrectionMm:  anyFiniteNumber,
+	AttrTempCorrectionC:    anyFiniteNumber,
 	AttrDensity:            {0, 2, false, true},
 	AttrOilTypeIndex:       {0, maxOilTypeIndex, true, false},
 	AttrCapacityL:          {0, capacityLMax, true, false},
@@ -140,6 +155,12 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 		if needTank && k == "tank" {
 			continue
 		}
+		if needTank && (k == AttrCustomOilName || k == AttrCustomOilNameEn) {
+			if msg := checkCustomOilName(args[k], k); msg != "" {
+				errs = append(errs, FieldError{k, ArgInvalidValue, k + " " + msg})
+			}
+			continue
+		}
 		if why, isClosed := closed[k]; isClosed {
 			errs = append(errs, FieldError{k, ArgFieldNotEditable, "不开放远程修改: " + why})
 			continue
@@ -159,6 +180,13 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 			levels[k] = int(args[k].(float64))
 		}
 	}
+	if _, named := args[AttrCustomOilName]; named {
+		if n, ok := args[AttrOilTypeIndex].(float64); !ok || n < customOilFrom || n > maxOilTypeIndex {
+			errs = append(errs, FieldError{AttrCustomOilName, ArgInvalidValue, "名称只能和 32–39 的 oilTypeIndex 一起下发"})
+		}
+	} else if _, onlyEn := args[AttrCustomOilNameEn]; onlyEn {
+		errs = append(errs, FieldError{AttrCustomOilNameEn, ArgInvalidValue, "英文名称不能单独下发"})
+	}
 	if len(errs) == 0 && editable == 0 {
 		errs = append(errs, FieldError{"args", ArgNothingToChange, "没有可修改的字段"})
 	}
@@ -171,6 +199,20 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 		return &ArgsError{Fields: errs}
 	}
 	return nil
+}
+
+// checkCustomOilName: the medium name travels with the index in one command so the device applies both or
+// neither (#27).
+func checkCustomOilName(v any, field string) string {
+	s, ok := v.(string)
+	limit := 20
+	if field == AttrCustomOilNameEn {
+		limit = 40
+	}
+	if !ok || strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > limit {
+		return fmt.Sprintf("必须是 1～%d 个字符的文本", limit)
+	}
+	return ""
 }
 
 func checkNumber(v any, r numRule) string {

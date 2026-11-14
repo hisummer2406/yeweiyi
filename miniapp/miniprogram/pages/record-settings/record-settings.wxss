@@ -9,7 +9,7 @@
   line-height: 47rpx;
   text-align: center;
   border-radius: 24rpx;
-  font-size: 30rpx;
+  font-size: var(--font-meta);
   color: #ffffff;
   background-color: #e4614f;
 }
@@ -22,7 +22,7 @@
 .rs-interval {
   width: 50rpx;
   height: 60rpx;
-  font-size: 36rpx;
+  font-size: var(--font-body);
   color: #131313;
 }
 
@@ -46,7 +46,8 @@
   top: 343rpx;
   box-sizing: border-box;
   width: 618rpx;
-  height: 263rpx;
+  min-height: 263rpx;
+  padding-bottom: 28rpx;
   background-color: #ffffff;
   border-radius: 12rpx;
 }
@@ -66,22 +67,23 @@
   margin-right: 18rpx;
   text-align: center;
   border-radius: 50%;
-  font-size: 30rpx;
+  font-size: var(--font-body);
   font-weight: 700;
   color: #ffffff;
   background-color: #ff8a00;
 }
 
 .rs-dialog-title {
-  font-size: 40rpx;
+  font-size: var(--font-title);
   color: #131313;
 }
 
 .rs-dialog-msg {
+  padding: 0 24rpx;
   margin-top: 25rpx;
   line-height: 46rpx;
   text-align: center;
-  font-size: 34rpx;
+  font-size: var(--font-body);
   color: #131313;
 }
 
@@ -97,7 +99,7 @@
   line-height: 60rpx;
   text-align: center;
   border-radius: 30rpx;
-  font-size: 28rpx;
+  font-size: var(--font-body);
 }
 
 .rs-dialog-cancel {

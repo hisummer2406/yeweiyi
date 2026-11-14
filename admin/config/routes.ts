@@ -82,6 +82,14 @@ export default [
         path: '/assets/staff',
         component: './console/assets/staff',
       },
+      {
+        // 公共/客户专属介质（#27），仅平台管理员
+        name: 'media',
+        icon: 'experiment',
+        access: 'canPlatformAdmin',
+        path: '/assets/media',
+        component: './console/assets/media',
+      },
     ],
   },
   {

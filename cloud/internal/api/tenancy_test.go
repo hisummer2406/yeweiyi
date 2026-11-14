@@ -46,7 +46,12 @@ type tenancy struct {
 
 func newTenancy(t *testing.T) *tenancy {
 	t.Helper()
-	env, sender := newControlEnv(t, control.Config{})
+	return newTenancyWith(t, control.Config{})
+}
+
+func newTenancyWith(t *testing.T, cfg control.Config) *tenancy {
+	t.Helper()
+	env, sender := newControlEnv(t, cfg)
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
 
 	tn := &tenancy{
@@ -323,6 +328,10 @@ var exemptRoutes = map[string]string{
 	"GET /api/device-purges":                "no device in the path; platform admin only, see TestDevicePurge_*",
 	"GET /api/device-purges/:id":            "no device; platform admin only, see TestDevicePurge_*",
 
+	"GET /api/media":     "no device; role-gated to platform admin, see TestMedia_*",
+	"POST /api/media":    "no device; role-gated to platform admin, see TestMedia_*",
+	"PUT /api/media/:id": "no device; role-gated to platform admin, see TestMedia_*",
+
 	"POST /api/customers":         "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"GET /api/customers":          "no device; role-gated to platform admin, see TestAdmin_Customers",
 	"PUT /api/customers/:id":      "no device; role-gated to platform admin, see TestAdmin_Customers",
@@ -381,6 +390,7 @@ func deviceScopedRoutes(t *testing.T, tn *tenancy) map[string]routeCase {
 		"GET /api/devices/:device/tank-settings":           {build: path("/tank-settings")},
 		"GET /api/devices/:device/tanks/:tank/calibration": {build: path("/tanks/1/calibration")},
 		// Platform admins only (cloud#83); every customer-side caller is refused by role.
+		"GET /api/devices/:device/media-options": {adminOnly: true, build: path("/media-options")},
 		"POST /api/devices/:device/purge": {
 			adminOnly: true,
 			build: func(device, _ string) (string, []byte) {

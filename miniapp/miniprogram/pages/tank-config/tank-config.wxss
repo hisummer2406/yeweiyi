@@ -28,7 +28,7 @@
   flex: 1;
   min-width: 0;
   height: 60rpx;
-  font-size: 36rpx;
+  font-size: var(--font-body);
   color: #131313;
 }
 

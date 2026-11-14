@@ -158,6 +158,16 @@ type Device struct {
 	StationID pgtype.Int8 `json:"station_id"`
 }
 
+// 设备动态介质位置映射（#27）。设备换客户时清空；彻底删除设备时随设备行删除。
+type DeviceMediaSlot struct {
+	DeviceName string `json:"device_name"`
+	// 设备上的 oilTypeIndex（32–39）。
+	Slot int16 `json:"slot"`
+	// 占用该位置的介质。
+	MediaID   int64              `json:"media_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 // 设备配对密钥（哈希），与 ThingsBoard 设备凭据完全隔离，仅用于验证 /api/devices/bind 请求
 type DevicePairingSecret struct {
 	DeviceName string `json:"device_name"`
@@ -210,6 +220,30 @@ type DeviceSetting struct {
 	// 这些属性在 ThingsBoard 的最近更新时间（取四个键中最新者）。
 	ReportedAt pgtype.Timestamptz `json:"reported_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+	// 设备上报的介质名称同步能力；1 = 支持随 config.setTankSettings 写入名称，NULL = 旧固件。
+	CustomMediaSync pgtype.Int4 `json:"custom_media_sync"`
+}
+
+// 介质字典：公共介质可用于所有客户，客户专属介质只能用于所属客户的设备（#27）。被引用过的条目只停用、不物理删除。
+type Medium struct {
+	// 稳定 ID，独立于显示名称和设备数组下标。
+	ID int64 `json:"id"`
+	// 显示名称（中文或客户原文），最长 20 字符。
+	Name string `json:"name"`
+	// 英文显示名；没有翻译时为 NULL，界面显示 name 原文。
+	NameEn pgtype.Text `json:"name_en"`
+	// public = 公共介质；customer = 客户专属介质。
+	Scope string `json:"scope"`
+	// 专属介质的所属客户；公共介质为 NULL。有专属介质的客户不能删除。
+	CustomerID pgtype.Int8 `json:"customer_id"`
+	// 对应设备固定编号（oilTypeIndex 1–31）；手动新增的条目为 NULL。内置条目不可改名，否则与设备显示不一致。
+	BuiltinIndex pgtype.Int2 `json:"builtin_index"`
+	// 停用后不可新选，既有配置和历史仍可解释。
+	Enabled bool `json:"enabled"`
+	// 最后修改的平台管理员。
+	UpdatedBy pgtype.Int8        `json:"updated_by"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
 
 // 设备的出入库与报警已从 ThingsBoard 全量回补完成的标记。没有标记的设备，定时回读会做全量回补而不是只读回看窗口。

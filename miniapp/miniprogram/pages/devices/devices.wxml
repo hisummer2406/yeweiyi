@@ -13,7 +13,7 @@
   <button class="btn-primary" size="mini" bindtap="loadHome" style="margin-top:24rpx;">{{text.retry}}</button>
 </view>
 
-<view wx:else>
+<view wx:else class="home-screen {{compactHome ? 'home-compact' : ''}} {{homeLanguage !== 'zh' ? 'home-wide-labels' : ''}}">
   <!-- 对应设计稿「首页-卧罐01」顶部：品牌栏 + 油站行。云端有油站数据时左侧是当前油站名加下拉标记，
        点击进入油站选择页；没有油站数据（旧版云端、油站接口失败、没有设备属于任何油站）时不出下拉，
        左侧写"我的设备"。不要用客户名或本地写死的油站名冒充油站。 -->
@@ -55,22 +55,25 @@
         <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">{{text.retry}}</button>
       </view>
 
-      <!-- 罐形状来自设备配置（设备端 gunType），云端尚未透出，见 yeweiyi-cloud#45；在此之前一律卧罐图 -->
+      <!-- 罐型来自 tank-settings；只按该设备的实际罐号合并，不从容积或介质猜测。 -->
       <view
         wx:for="{{g.tanks}}"
         wx:for-item="t"
         wx:key="key"
         class="tank-row"
+        style="min-height:{{tankRowHeightRpx}}rpx;"
         data-device="{{g.deviceName}}"
         data-tank="{{t.index}}"
         bindtap="onTapTank"
       >
         <view class="home-tank">
-          <image class="home-tank-img" src="/assets/illustrations/tank-horizontal-home.png" mode="aspectFit" />
+          <view class="home-tank-crop home-tank-crop-{{t.shape}}">
+          <image class="home-tank-img" src="{{t.shapeImage}}" mode="scaleToFill" aria-label="{{t.tankNoLabel}} {{t.shapeLabel}}" />
           <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化 -->
-          <view class="home-tank-body">
+          <view wx:if="{{t.fillState !== 'none'}}" class="home-tank-body">
             <view class="fill fill-water" style="height:{{t.fillWaterPct}}%"></view>
             <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%"></view>
+          </view>
           </view>
         </view>
         <view class="tank-info">
@@ -84,7 +87,7 @@
           <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
           <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
-          <view class="hs-probe-off" wx:if="{{!t.probeConnected}}">{{text.probeOff}}</view>
+          <view class="hs-probe-status"><text wx:if="{{!t.probeConnected}}" class="hs-probe-off">{{text.probeOff}}</text></view>
         </view>
       </view>
     </view>
