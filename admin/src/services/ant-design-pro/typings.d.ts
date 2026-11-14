@@ -424,6 +424,8 @@ declare namespace API {
     tempCorrectionC: number | null;
     density: number | null;
     capacityL: number | null;
+    /** 0xRRGGBB；null = 设备未设置或旧固件不上报 */
+    oilColor: number | null;
   };
 
   /** 整机设置镜像（cloud docs/config-command-contract.md §4）；0 = 设备未配置，null = 未上报 */
@@ -478,6 +480,8 @@ declare namespace API {
     public: Medium[];
     customer: Medium[];
     customMediaSync: boolean;
+    /** 设备支持远程改颜色（新固件上报 oilColorSync=1） */
+    oilColorSync: boolean;
     slotsUsed: number;
     slotsTotal: number;
   };

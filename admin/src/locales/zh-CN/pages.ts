@@ -749,7 +749,7 @@ export default {
   'pages.console.settings.col.new': '新值',
   'pages.console.settings.readOnly': '（只读）',
   'pages.console.settings.readOnlyNote':
-    '只读参数不能远程修改：罐高、罐型、传感器长度需在设备上设置；密度单位尚未与设备确认；低温报警在设备上不生效。',
+    '只读参数不能远程修改：罐高、罐型、传感器长度需在设备上设置；低温报警在设备上不生效。',
   'pages.console.settings.send': '下发到设备',
   'pages.console.settings.reset': '清空修改',
   'pages.console.settings.aboveTankHeight':
@@ -779,6 +779,13 @@ export default {
   'pages.console.settings.field.tankShape': '罐型',
   'pages.console.settings.field.sensorLengthMm': '传感器长度',
   'pages.console.settings.field.density': '密度',
+  'pages.console.settings.field.oilColor': '颜色',
+  'pages.console.settings.color.unsupported':
+    '当前设备固件不支持远程修改颜色，请在设备上设置或先升级固件。',
+  'pages.console.settings.color.nonStandard': '（非色板颜色）',
+  'pages.console.settings.density.check':
+    '数值超出 g/cm³ 常见范围，可能是按 kg/m³ 填写的，请核对。',
+  'pages.console.settings.problem.color': '请从色板中选择',
   'pages.console.settings.field.inStockHeightThresholdMm': '入库判定高度',
   'pages.console.settings.field.inStockTimeThresholdSec': '入库判定时间',
   'pages.console.settings.field.outStockHeightThresholdMm': '出库判定高度',
@@ -798,7 +805,8 @@ export default {
     '设备收到后会写入配置并重新上报；现场在设备上保存设置会覆盖远程修改。',
   'pages.console.settings.submit.reason': '修改原因（必填）',
   'pages.ops.customers.action.media': '专属介质',
-  'pages.console.media.note': '这里只保存介质名称。要让设备生效，请到设备的参数设置里为油罐选择并下发。',
+  'pages.console.media.note':
+    '这里只保存介质名称。要让设备生效，请到设备的参数设置里为油罐选择并下发。',
   'pages.console.media.loadFailed': '介质列表加载失败。',
   'pages.console.media.retry': '重试',
   'pages.console.media.add': '新增介质',
@@ -817,7 +825,8 @@ export default {
   'pages.console.media.scope.customer': '客户专属',
   'pages.console.media.status.on': '启用',
   'pages.console.media.status.off': '已停用',
-  'pages.console.media.error.invalid_media_name': '名称不符合要求（1–20 个字符）。',
+  'pages.console.media.error.invalid_media_name':
+    '名称不符合要求（1–20 个字符）。',
   'pages.console.media.error.invalid_media_scope': '使用范围和客户不匹配。',
   'pages.console.media.error.unknown_customer': '客户不存在，请刷新。',
   'pages.console.media.error.media_not_found': '介质不存在，请刷新。',
@@ -826,12 +835,18 @@ export default {
   'pages.console.media.error.other': '操作失败，请稍后重试。',
   'pages.console.settings.medium.public': '公共介质',
   'pages.console.settings.medium.customer': '本客户专属',
-  'pages.console.settings.medium.noSync': '当前设备固件不支持同步介质名称，手动新增的介质和编号 18 以上的介质暂不可选，请先升级固件。',
-  'pages.console.settings.medium.loadFailed': '介质选项加载失败，暂时不能修改介质。',
-  'pages.console.settings.medium.slots': '本设备动态介质位置：已用 {used}/{total}',
-  'pages.console.settings.submit.error.mediaNotSelectable': '这个介质已停用或不属于该设备的客户，请刷新后重选。',
-  'pages.console.settings.submit.error.mediaSyncUnsupported': '设备固件不支持这个介质，请先升级固件。',
-  'pages.console.settings.submit.error.mediaSlotsExhausted': '该设备的 8 个动态介质位置已用完，未下发。',
+  'pages.console.settings.medium.noSync':
+    '当前设备固件不支持同步介质名称，手动新增的介质和编号 18 以上的介质暂不可选，请先升级固件。',
+  'pages.console.settings.medium.loadFailed':
+    '介质选项加载失败，暂时不能修改介质。',
+  'pages.console.settings.medium.slots':
+    '本设备动态介质位置：已用 {used}/{total}',
+  'pages.console.settings.submit.error.mediaNotSelectable':
+    '这个介质已停用或不属于该设备的客户，请刷新后重选。',
+  'pages.console.settings.submit.error.mediaSyncUnsupported':
+    '设备固件不支持这个介质，请先升级固件。',
+  'pages.console.settings.submit.error.mediaSlotsExhausted':
+    '该设备的 8 个动态介质位置已用完，未下发。',
   'pages.console.settings.submit.error.deploymentDisabled':
     '系统暂未开放远程配置。',
   'pages.console.settings.submit.error.deviceDisabled':

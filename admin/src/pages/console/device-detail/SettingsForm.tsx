@@ -15,9 +15,11 @@ import {
   changedArgs,
   checkArgs,
   type Draft,
+  densityLooksOff,
   type FieldDef,
   hasSignToggle,
 } from '@/utils/deviceConfig';
+import { isPaletteColor, OIL_COLOR_PALETTE, toCss } from '@/utils/oilColor';
 import { BUILTIN_OIL_MAX, mediumText } from '@/utils/oilType';
 import { DASH } from '@/utils/records';
 
@@ -35,7 +37,7 @@ type Props = {
   /** 只读字段的说明（文案 id），如密度单位未确认 */
   readOnlyNote?: string;
   onSubmit: (args: Record<string, number>, draft: Draft) => void;
-  /** 平台管理员才传：该设备可选的介质（#27）。不传时介质只显示、不能改。 */
+  /** 管理员（平台、客户）的可选介质与设备能力（#27、2026-11-14）。不传时介质、颜色只显示、不能改。 */
   media?: API.MediaOptions;
   /** 改变即清空草稿（换罐、读回新配置） */
   resetKey: string;
@@ -48,6 +50,7 @@ export function useFormatValue() {
     intl.formatMessage({ id }, v);
   return (f: FieldDef, v: unknown, raw?: unknown): string => {
     if (v === null || v === undefined) return DASH;
+    if (f.kind === 'color' && typeof v === 'number') return toCss(v);
     if (f.kind === 'oil') {
       if (v === 0) return t('pages.console.settings.oil.unset');
       if (typeof v === 'number' && v > BUILTIN_OIL_MAX) {
@@ -67,6 +70,73 @@ export function useFormatValue() {
     return f.unit ? `${v} ${f.unit}` : String(v);
   };
 }
+
+const Swatch: React.FC<{ color: number; size?: number }> = ({
+  color,
+  size = 14,
+}) => (
+  <span
+    style={{
+      display: 'inline-block',
+      width: size,
+      height: size,
+      borderRadius: 3,
+      background: toCss(color),
+      border: '1px solid rgba(0,0,0,0.25)',
+      verticalAlign: 'middle',
+    }}
+  />
+);
+
+/** 色板单选：20 个色块，再点一次已选的取消（= 不改） */
+const ColorChoice: React.FC<{
+  label: string;
+  value?: number;
+  onChange: (v: number | undefined) => void;
+}> = ({ label, value, onChange }) => (
+  <fieldset
+    aria-label={label}
+    style={{
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 4,
+      maxWidth: 260,
+      border: 0,
+      margin: 0,
+      padding: 0,
+    }}
+  >
+    {OIL_COLOR_PALETTE.map((c) => {
+      const selected = value === c;
+      return (
+        <label
+          key={c}
+          style={{
+            width: 22,
+            height: 22,
+            cursor: 'pointer',
+            borderRadius: 4,
+            background: toCss(c),
+            border: selected
+              ? '2px solid #1677ff'
+              : '1px solid rgba(0,0,0,0.25)',
+            boxShadow: selected ? '0 0 0 2px #fff inset' : undefined,
+          }}
+        >
+          <input
+            type="radio"
+            name={label}
+            aria-label={`${label} ${toCss(c)}`}
+            checked={selected}
+            onChange={() => {}}
+            onClick={() => onChange(selected ? undefined : c)}
+            style={{ opacity: 0, width: 0, height: 0, margin: 0 }}
+          />
+        </label>
+      );
+    })}
+  </fieldset>
+);
 
 /**
  * 当前回报 + 新值输入的对照表。只把改动过的可编辑字段交给 onSubmit；本地预检（范围、整数、四级液位顺序）不过就不让提交。
@@ -152,12 +222,41 @@ const SettingsForm: React.FC<Props> = ({
           },
           {
             title: t('pages.console.settings.col.current'),
-            render: (_, f) =>
-              fmt(
+            render: (_, f) => {
+              const v = current?.[f.key];
+              const text = fmt(
                 f,
-                current?.[f.key],
+                v,
                 f.kind === 'oil' ? current?.oilType : undefined,
-              ),
+              );
+              if (f.kind === 'color' && typeof v === 'number') {
+                return (
+                  <Space size={4} wrap>
+                    <Swatch color={v} />
+                    {text}
+                    {!isPaletteColor(v) && (
+                      <Typography.Text
+                        type="secondary"
+                        style={{ fontSize: 12 }}
+                      >
+                        {t('pages.console.settings.color.nonStandard')}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                );
+              }
+              if (f.key === 'density' && densityLooksOff(v as number)) {
+                return (
+                  <Space direction="vertical" size={0}>
+                    {text}
+                    <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                      {t('pages.console.settings.density.check')}
+                    </Typography.Text>
+                  </Space>
+                );
+              }
+              return text;
+            },
           },
           ...(canEdit
             ? [
@@ -166,11 +265,29 @@ const SettingsForm: React.FC<Props> = ({
                   render: (_: unknown, f: FieldDef) => {
                     if (!f.editable || (f.kind === 'oil' && !media))
                       return null;
+                    if (f.kind === 'color' && !media?.oilColorSync) {
+                      return media ? (
+                        <Typography.Text
+                          type="secondary"
+                          style={{ fontSize: 12 }}
+                        >
+                          {t('pages.console.settings.color.unsupported')}
+                        </Typography.Text>
+                      ) : null;
+                    }
                     const p = problemOf(f.key);
                     const status = p ? ('error' as const) : undefined;
                     const label = t(`pages.console.settings.field.${f.key}`);
                     const input =
-                      f.kind === 'oil' ? (
+                      f.kind === 'color' ? (
+                        <ColorChoice
+                          label={label}
+                          value={draft[f.key] ?? undefined}
+                          onChange={(v) =>
+                            setDraft((d) => ({ ...d, [f.key]: v }))
+                          }
+                        />
+                      ) : f.kind === 'oil' ? (
                         <Select
                           aria-label={label}
                           style={{ width: 200 }}

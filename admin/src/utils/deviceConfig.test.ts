@@ -6,6 +6,7 @@ import {
   classifySubmitError,
   commandPhase,
   DEVICE_FIELDS,
+  densityLooksOff,
   echoState,
   newRequestId,
   TANK_FIELDS,
@@ -31,7 +32,7 @@ describe('changedArgs', () => {
       changedArgs(TANK_FIELDS, tank as never, {
         alarmHighLevelMm: 610,
         alarmLowLevelMm: 300, // unchanged
-        density: 0.7, // read-only
+        tankHeightMm: 3000, // read-only
         alarmHighTempC: undefined,
       }),
     ).toEqual({ alarmHighLevelMm: 610 });
@@ -45,6 +46,48 @@ describe('changedArgs', () => {
   });
   it('treats an empty draft as no change', () => {
     expect(changedArgs(TANK_FIELDS, tank as never, {})).toEqual({});
+  });
+});
+
+describe('density and colour (2026-11-14)', () => {
+  it('sends density and oilColor when changed', () => {
+    expect(
+      changedArgs(TANK_FIELDS, tank as never, {
+        density: 0.84,
+        oilColor: 0xff0000,
+      }),
+    ).toEqual({ density: 0.84, oilColor: 0xff0000 });
+  });
+  it('leaves an untouched out-of-range density out of the submission', () => {
+    const odd = { ...tank, density: 840 } as never;
+    expect(changedArgs(TANK_FIELDS, odd, { alarmHighLevelMm: 610 })).toEqual({
+      alarmHighLevelMm: 610,
+    });
+    expect(checkArgs(TANK_FIELDS, odd, { alarmHighLevelMm: 610 })).toEqual([]);
+  });
+  it('checks density range and the palette', () => {
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { density: 0 }).map((p) => p.field),
+    ).toEqual(['density']);
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { density: 2.5 }).map(
+        (p) => p.field,
+      ),
+    ).toEqual(['density']);
+    expect(checkArgs(TANK_FIELDS, tank as never, { density: 2 })).toEqual([]);
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { oilColor: 0x123456 }).map(
+        (p) => p.code,
+      ),
+    ).toEqual(['color']);
+    expect(
+      checkArgs(TANK_FIELDS, tank as never, { oilColor: 0xff0000 }),
+    ).toEqual([]);
+  });
+  it('flags a density that looks like kg/m³', () => {
+    expect(densityLooksOff(840)).toBe(true);
+    expect(densityLooksOff(0.84)).toBe(false);
+    expect(densityLooksOff(null)).toBe(false);
   });
 });
 
