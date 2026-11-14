@@ -444,7 +444,13 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
 
-`tank-shape` (+ `tank-shape-edit`), `record-settings`, `report-settings` are laid out from the design draft (checked against the exported artboard PNGs by
+**罐表设置 is no longer static**: `tank-shape-edit` generates and sends tables (#49, see `utils/tankTable.ts`), and
+`tank-shape` (#41) shows 设备当前罐表 below the shape cards — the home station's device, its visible tanks (`/tanks`,
+granted only for employees), one tank's calibration mirror (`GET .../tanks/:tank/calibration`, `deviceTableView`:
+finite pairs only, sampled like the preview, `reportedAt`); 404 `calibration_not_reported` or no valid point →
+「设备尚未上报该罐罐表」. Read-only for every role. Not verified in DevTools.
+
+`record-settings`, `report-settings` (and originally `tank-shape`) are laid out from the design draft (checked against the exported artboard PNGs by
 measuring pixels, see `openspec/changes/home-by-station/tasks.md` 3.8–3.10) and say "暂未开放 /
 云端没有对应接口" when saved. Shared pieces: form/button/switch styles in `app.wxss`,
 `components/grid-picker` (3-column tank-number sheet) and `components/side-picker` (type dropdown,

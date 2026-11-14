@@ -190,3 +190,30 @@ export function tableEcho(
   if (n !== d.pointCount || h[n - 1] !== d.maxHeightMm || v[n - 1] !== d.maxVolumeL) return 'mismatch';
   return 'matched';
 }
+
+// ---- 查看设备当前罐表（#41）：云端标定镜像 GET .../tanks/:tank/calibration ----
+
+export type DeviceTableView = {
+  pointCount: number;
+  maxHeightMm: number;
+  maxVolumeL: number;
+  rows: { heightMm: number; volumeL: number }[];
+  sampled: boolean;
+};
+
+// 镜像 → 页面展示：只取两列都是有限数的点（长度不一致时按短的算），没有有效点返回 null（按未上报处理）。
+export function deviceTableView(cal: { heightMm?: unknown; volumeL?: unknown } | null | undefined): DeviceTableView | null {
+  const h = cal && Array.isArray(cal.heightMm) ? cal.heightMm : [];
+  const v = cal && Array.isArray(cal.volumeL) ? cal.volumeL : [];
+  const table: TankTable = { heightMm: [], volumeL: [] };
+  for (let i = 0; i < Math.min(h.length, v.length); i++) {
+    if (typeof h[i] === 'number' && typeof v[i] === 'number' && Number.isFinite(h[i]) && Number.isFinite(v[i])) {
+      table.heightMm.push(h[i]);
+      table.volumeL.push(v[i]);
+    }
+  }
+  const n = table.heightMm.length;
+  if (n === 0) return null;
+  const rows = previewRows(table);
+  return { pointCount: n, maxHeightMm: table.heightMm[n - 1], maxVolumeL: table.volumeL[n - 1], rows, sampled: rows.length < n };
+}

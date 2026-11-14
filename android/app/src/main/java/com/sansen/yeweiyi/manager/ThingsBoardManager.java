@@ -524,7 +524,7 @@ public final class ThingsBoardManager {
     /**
      * 客户端属性合成一条发出：协议 §5.1 设备配置 + 标定表 + 罐设置页各项 + 出入库阈值。
      * 静态配置，不走补投队列，断线时没发出去下次连上会重发。触发：连接成功后；设置变化后经
-     * {@link #requestClientAttributesPublish()} 防抖重发。标定表保存不触发，要等下次重连或设置变化。
+     * {@link #requestClientAttributesPublish()} 防抖重发（罐设置和罐表写库都会触发，见 OilTankRepositoryImpl）。
      */
     private void publishClientAttributes() {
         // 连接成功后紧跟着要请求共享属性；这里抛异常会让那一步被跳过，所以就地吞掉并记日志

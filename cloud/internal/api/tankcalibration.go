@@ -16,8 +16,9 @@ import (
 // GET /api/devices/:device/tanks/:tank/calibration (cloud#14) returns the tank's height→volume
 // calibration curve as the device last reported it. Like tank-settings it is a read-only mirror served
 // from the business database (the device is the source of truth; the cloud never writes it), so it
-// answers while the device is offline and `reportedAt` says how old it is. The device republishes it
-// only when it reconnects, so a table changed on site shows up here after its next reconnect.
+// answers while the device is offline and `reportedAt` says how old it is. The device republishes it on
+// every reconnect and, since #41, shortly after any table write (on-site generation, USB import, remote
+// config.setTankTable); firmware older than that only refreshes it on reconnect.
 //
 // Visibility: the device-level check first, then the tank-level one (tank_not_authorized for an
 // employee without a grant on this tank), then the tank number is validated.
