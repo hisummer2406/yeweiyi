@@ -368,7 +368,7 @@ export const es: Record<string, string> = {
   "tankCfg.navTitle": "Configuración de tanques",
   "tankCfg.color": "Color del producto",
   "tankCfg.medium": "Tipo de medio",
-  "tankCfg.mediumPlaceholder": "p. ej., gasolina, diésel, aceite de soja",
+  "tankCfg.mediumByPlatform": "Medio actual del equipo. Lo configura la plataforma; no se puede cambiar aquí.",
   "tankCfg.density": "Densidad del medio",
   "tankCfg.height": "Altura del tanque",
   "tankCfg.capacity": "Capacidad del tanque",

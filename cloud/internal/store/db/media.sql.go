@@ -63,6 +63,20 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 	return i, err
 }
 
+const deleteDeviceMediaSlot = `-- name: DeleteDeviceMediaSlot :exec
+DELETE FROM device_media_slots WHERE device_name = $1 AND slot = $2
+`
+
+type DeleteDeviceMediaSlotParams struct {
+	DeviceName string `json:"device_name"`
+	Slot       int16  `json:"slot"`
+}
+
+func (q *Queries) DeleteDeviceMediaSlot(ctx context.Context, arg DeleteDeviceMediaSlotParams) error {
+	_, err := q.db.Exec(ctx, deleteDeviceMediaSlot, arg.DeviceName, arg.Slot)
+	return err
+}
+
 const deleteDeviceMediaSlots = `-- name: DeleteDeviceMediaSlots :execrows
 DELETE FROM device_media_slots WHERE device_name = $1
 `
@@ -117,6 +131,53 @@ func (q *Queries) GetMediaForUpdate(ctx context.Context, id int64) (Medium, erro
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listDeviceMediaSlotUsage = `-- name: ListDeviceMediaSlotUsage :many
+SELECT s.slot, s.media_id,
+    (EXISTS (
+        SELECT 1 FROM tank_settings ts WHERE ts.device_name = s.device_name AND ts.oil_type_index = s.slot
+    ) OR EXISTS (
+        SELECT 1 FROM control_commands cc
+        LEFT JOIN tank_settings ts ON ts.device_name = cc.device_name AND cc.config_target = 'tank:' || ts.tank
+        WHERE cc.device_name = s.device_name
+          AND cc.method = 'config.setTankSettings'
+          AND cc.args -> 'oilTypeIndex' = to_jsonb(s.slot::int)
+          AND (cc.status IN ('pending', 'sent', 'received', 'executing')
+               OR (cc.status IN ('succeeded', 'expired') AND (ts.reported_at IS NULL OR ts.reported_at <= cc.issued_at)))
+    ))::boolean AS in_use
+FROM device_media_slots s
+WHERE s.device_name = $1
+ORDER BY s.slot
+`
+
+type ListDeviceMediaSlotUsageRow struct {
+	Slot    int16 `json:"slot"`
+	MediaID int64 `json:"media_id"`
+	InUse   bool  `json:"in_use"`
+}
+
+// 设备各动态位置是否仍在用（#27）。在用 = 某罐镜像的 oil_type_index 就是该位置，或有指向该位置的 config.setTankSettings
+// 命令尚未被镜像覆盖：未终态的一律算在用（设备可能已开始执行）；succeeded/expired 的在该罐镜像晚于命令签发前也算在用
+// （镜像还没跟上，expired 可能已执行）。rejected/failed 设备未生效（全有或全无），不算。不在用的位置可回收给别的介质。
+func (q *Queries) ListDeviceMediaSlotUsage(ctx context.Context, deviceName string) ([]ListDeviceMediaSlotUsageRow, error) {
+	rows, err := q.db.Query(ctx, listDeviceMediaSlotUsage, deviceName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDeviceMediaSlotUsageRow
+	for rows.Next() {
+		var i ListDeviceMediaSlotUsageRow
+		if err := rows.Scan(&i.Slot, &i.MediaID, &i.InUse); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listDeviceMediaSlots = `-- name: ListDeviceMediaSlots :many

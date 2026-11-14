@@ -37,7 +37,8 @@
 
 - 介质须启用，且是公共介质或属于设备**当前**客户；否则 `400 media_not_selectable`。
 - 内置介质下发 `oilTypeIndex`（1–24）。
-- 手动新增的介质占用该设备 32–39 的一个位置，同一介质在同一设备上位置不变，下发 `oilTypeIndex` + `customOilName` + `customOilNameEn`（无翻译时为原名）。8 个位置用尽 `409 media_slots_exhausted`，不覆盖在用位置。
+- 手动新增的介质占用该设备 32–39 的一个位置，同一介质在同一设备上位置不变，下发 `oilTypeIndex` + `customOilName` + `customOilNameEn`（无翻译时为原名）。8 个位置都已映射时，回收一个不在用的位置给新介质（被回收的介质下次选用时重新分配位置、重新下发名称）；都在用才 `409 media_slots_exhausted`，不覆盖在用位置。
+  “在用”：某罐镜像的 `oilTypeIndex` 是该位置；或有指向该位置的 `config.setTankSettings` 命令未终态，或已 `succeeded`/`expired` 但该罐镜像还早于命令签发。`rejected`/`failed` 不算。`media-options` 的 `slotsUsed` 只计在用位置。
 - 直接提交 `oilTypeIndex`、`customOilName`、`customOilNameEn` 一律 `400 media_id_required`。
 
 设备在同一命令内写入名称和编号：任一失败都不生效，名称持久化，重启后保留。
