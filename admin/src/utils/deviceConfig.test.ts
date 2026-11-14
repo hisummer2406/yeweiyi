@@ -5,10 +5,12 @@ import {
   checkArgs,
   classifySubmitError,
   commandPhase,
+  commandRefusal,
   DEVICE_FIELDS,
   densityLooksOff,
   echoState,
   newRequestId,
+  pendingSettledBy,
   TANK_FIELDS,
   targetTank,
   trackedArgs,
@@ -276,7 +278,23 @@ describe('media submit errors (#27)', () => {
     ['media_not_selectable', 'mediaNotSelectable'],
     ['media_sync_unsupported', 'mediaSyncUnsupported'],
     ['media_slots_exhausted', 'mediaSlotsExhausted'],
+    ['color_sync_unsupported', 'colorSyncUnsupported'],
   ])('%s', (code, kind) => {
     expect(classifySubmitError({ status: 409, code })).toBe(kind);
+  });
+});
+
+describe('outdated device software', () => {
+  it('a refused colour on old firmware settles the snapshot', () => {
+    expect(pendingSettledBy('colorSyncUnsupported')).toBe(true);
+  });
+  it('an unknown method asks to upgrade instead of the raw device text', () => {
+    expect(commandRefusal('UNKNOWN_METHOD', 'unknown method x')).toEqual({
+      key: 'pages.console.settings.refusal.unknownMethod',
+    });
+    expect(commandRefusal('INVALID_PARAMS', '超出范围')).toEqual({
+      text: '超出范围',
+    });
+    expect(commandRefusal(undefined, undefined)).toBeNull();
   });
 });

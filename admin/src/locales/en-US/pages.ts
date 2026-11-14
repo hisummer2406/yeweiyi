@@ -114,7 +114,7 @@ export default {
   'pages.console.records.notice.folded':
     '{count} corrected records were merged.',
   'pages.console.records.notice.firmware':
-    'The device firmware has not been upgraded; some records cannot be read.',
+    'The device software is out of date; some records cannot be read. Please upgrade the device software.',
   'pages.console.records.notice.firmware.detail':
     'Device {device}, sample: {sample}',
   'pages.console.records.empty.alarms': 'No alarms in this time range',
@@ -144,7 +144,7 @@ export default {
   'pages.console.records.title.shift': 'Shift records',
   'pages.console.records.title.inventory': 'Inventory records',
   'pages.console.records.notice.unsupported':
-    'This device does not support this kind of record yet',
+    'The device software is out of date and does not support this kind of record yet. Please upgrade the device software',
   'pages.console.records.notice.syncing':
     'Records are still syncing; the list may be incomplete',
   'pages.console.records.notice.syncUnknown':
@@ -728,9 +728,9 @@ export default {
     'Device settings (in/out-stock detection)',
   'pages.console.settings.reportedAt': 'Reported by the device at {time}',
   'pages.console.settings.notReported':
-    'The device has not reported tank settings yet.',
+    'The device has not reported tank settings yet. If this persists, make sure the device software is up to date.',
   'pages.console.settings.deviceNotReported':
-    'The device has not reported its device settings yet.',
+    'The device has not reported its device settings yet. If this persists, make sure the device software is up to date.',
   'pages.console.settings.devicePlatformOnly':
     'Only platform administrators can change device settings.',
   'pages.console.settings.tankN': 'Tank {tank}',
@@ -771,7 +771,7 @@ export default {
   'pages.console.settings.field.density': 'Density',
   'pages.console.settings.field.oilColor': 'Colour',
   'pages.console.settings.color.unsupported':
-    'This device firmware cannot change the colour remotely. Set it on the device or upgrade the firmware.',
+    'The device software is out of date and cannot change the colour remotely. Please upgrade the device software.',
   'pages.console.settings.color.nonStandard': '(not in the palette)',
   'pages.console.settings.density.check':
     'Outside the usual g/cm³ range; it may have been entered in kg/m³. Please check.',
@@ -835,7 +835,7 @@ export default {
   'pages.console.settings.medium.public': 'Public',
   'pages.console.settings.medium.customer': 'This customer',
   'pages.console.settings.medium.noSync':
-    'This firmware cannot sync medium names. Custom media and numbers from 18 are unavailable until it is upgraded.',
+    'The device software is out of date and cannot sync medium names: custom media and numbers from 18 are unavailable. Please upgrade the device software.',
   'pages.console.settings.medium.loadFailed':
     'Failed to load media options; the medium cannot be changed now.',
   'pages.console.settings.medium.slots':
@@ -843,7 +843,9 @@ export default {
   'pages.console.settings.submit.error.mediaNotSelectable':
     'This medium is disabled or not available to this device; refresh and choose again.',
   'pages.console.settings.submit.error.mediaSyncUnsupported':
-    'The firmware does not support this medium; upgrade it first.',
+    'The device software is out of date and does not support this medium. Please upgrade the device software.',
+  'pages.console.settings.submit.error.colorSyncUnsupported':
+    'The device software is out of date and cannot change the colour remotely. Please upgrade the device software.',
   'pages.console.settings.submit.error.mediaSlotsExhausted':
     'All 8 custom positions on this device are in use; nothing was sent.',
   'pages.console.settings.submit.error.deploymentDisabled':
@@ -885,13 +887,16 @@ export default {
   'pages.console.settings.echo.timedOut':
     'Applied, but no report from the device for a while; refresh later',
   'pages.console.settings.echo.refresh': 'Refresh report',
-  'pages.console.settings.result.ignored': 'Ignored by the device: {fields}',
+  'pages.console.settings.result.ignored':
+    'Ignored by the device: {fields}. The device software is out of date; please upgrade it.',
+  'pages.console.settings.refusal.unknownMethod':
+    'The device software is out of date and does not support this operation. Please upgrade the device software.',
   'pages.console.settings.commandId': 'Command {id}',
   'pages.console.settings.pollFailing': 'Failed to read status, retrying…',
   'pages.console.settings.dismiss': 'Close',
   'pages.console.settings.calibration.title': 'Calibration table (read-only)',
   'pages.console.settings.calibration.none':
-    'The device has not reported a calibration table.',
+    'The device has not reported a calibration table. If this persists, make sure the device software is up to date.',
   'pages.console.settings.calibration.failed':
     'Failed to load the calibration table',
   'pages.console.settings.calibration.meta':

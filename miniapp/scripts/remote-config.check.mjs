@@ -245,4 +245,13 @@ test('echo: the custom medium name the cloud adds is not part of the report, onl
   assert.equal(echoState({ ...fresh, oilTypeIndex: 33 }, args, '2026-11-14T03:00:00Z'), 'mismatch');
 });
 
+test('outdated device software: refusals say so and ask to upgrade', () => {
+  assert.equal(classifySubmit(409, { code: 'media_sync_unsupported' }), 'firmwareOutdated');
+  assert.equal(classifySubmit(409, { code: 'color_sync_unsupported' }), 'firmwareOutdated');
+  assert.equal(pendingAfter('firmwareOutdated', true), 'clear');
+  // the device's own wording for an unknown method is replaced by the upgrade hint
+  assert.deepEqual(commandError('rejected', 'UNKNOWN_METHOD', 'unknown method config.setTankTable'), { key: 'cmdLog.code.UNKNOWN_METHOD' });
+  assert.deepEqual(commandError('rejected', 'INVALID_PARAMS', '超出范围'), { text: '超出范围' });
+});
+
 console.log(`${n} checks passed`);

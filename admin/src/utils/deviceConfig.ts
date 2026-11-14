@@ -367,6 +367,7 @@ export type SubmitErrorKind =
   | 'purging'
   | 'mediaNotSelectable'
   | 'mediaSyncUnsupported'
+  | 'colorSyncUnsupported'
   | 'mediaSlotsExhausted'
   | 'unavailable'
   | 'other';
@@ -398,6 +399,8 @@ export function classifySubmitError(err: {
       return 'mediaNotSelectable';
     case 'media_sync_unsupported':
       return 'mediaSyncUnsupported';
+    case 'color_sync_unsupported':
+      return 'colorSyncUnsupported';
     case 'media_slots_exhausted':
       return 'mediaSlotsExhausted';
   }
@@ -421,6 +424,7 @@ export function pendingSettledBy(kind: SubmitErrorKind): boolean {
     kind === 'invalidArgs' ||
     kind === 'mediaNotSelectable' ||
     kind === 'mediaSyncUnsupported' ||
+    kind === 'colorSyncUnsupported' ||
     kind === 'mediaSlotsExhausted'
   );
 }
@@ -437,6 +441,20 @@ export function trackedArgs(
   const { mediaId: _mediaId, ...rest } = args;
   const index = command.args?.oilTypeIndex;
   return typeof index === 'number' ? { ...rest, oilTypeIndex: index } : rest;
+}
+
+/**
+ * 设备拒绝/失败的说明：设备不认识该方法（UNKNOWN_METHOD）说明设备软件版本比命令旧，给升级提示而不是设备原文；
+ * 其余照设备原因、再退回错误码。
+ */
+export function commandRefusal(
+  code: string | undefined,
+  reason: string | undefined,
+): { key: string } | { text: string } | null {
+  if (code === 'UNKNOWN_METHOD')
+    return { key: 'pages.console.settings.refusal.unknownMethod' };
+  const text = reason?.trim() || code;
+  return text ? { text } : null;
 }
 
 /** 命令的 configTarget（tank:N / device）显示用 */

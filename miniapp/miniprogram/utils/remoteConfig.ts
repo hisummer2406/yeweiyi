@@ -216,6 +216,8 @@ export type CommandError = { text: string } | { key: string } | null;
 
 export function commandError(status: string, errorCode?: string, errorReason?: string): CommandError {
   if (status !== 'rejected' && status !== 'failed') return null;
+  // The device does not know the method: its software is older than the command. Say so and ask to upgrade.
+  if (errorCode === 'UNKNOWN_METHOD') return { key: 'cmdLog.code.UNKNOWN_METHOD' };
   const reason = (errorReason || '').trim();
   if (reason) return { text: reason };
   if (errorCode && KNOWN_ERROR_CODES.includes(errorCode)) return { key: `cmdLog.code.${errorCode}` };
@@ -255,6 +257,8 @@ export type SubmitError =
   | 'requestIdReused'
   | 'invalidArgs'
   | 'unconfirmed'
+  // the device software is too old for what was chosen (medium name / colour): ask to upgrade it
+  | 'firmwareOutdated'
   | 'other';
 
 function codeOf(body: unknown): string | undefined {
@@ -278,6 +282,9 @@ export function classifySubmit(status: number, body: unknown): SubmitError {
       return 'invalidArgs';
     case 'command_delivery_unconfirmed':
       return 'unconfirmed';
+    case 'media_sync_unsupported':
+    case 'color_sync_unsupported':
+      return 'firmwareOutdated';
   }
   return status === 0 ? 'unconfirmed' : 'other';
 }
@@ -433,7 +440,8 @@ export function pendingAfter(kind: SubmitError | 'ok' | 'notSent', retry = false
   if (kind === 'ok' || kind === 'notSent') return 'clear';
   if (kind === 'unconfirmed') return 'keep';
   if (!retry) return 'clear';
-  return kind === 'stationChanged' || kind === 'inFlight' || kind === 'requestIdReused' || kind === 'invalidArgs'
+  return kind === 'stationChanged' || kind === 'inFlight' || kind === 'requestIdReused' || kind === 'invalidArgs' ||
+    kind === 'firmwareOutdated'
     ? 'clear'
     : 'keep';
 }

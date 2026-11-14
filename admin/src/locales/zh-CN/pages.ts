@@ -105,7 +105,7 @@ export default {
     '有 {count} 条记录的来源异常，未显示。',
   'pages.console.records.notice.folded': '有 {count} 条更正记录已合并。',
   'pages.console.records.notice.firmware':
-    '设备固件尚未升级，部分记录无法读取。',
+    '设备软件版本较旧，部分记录无法读取，请升级设备软件。',
   'pages.console.records.notice.firmware.detail':
     '设备 {device}，样例：{sample}',
   'pages.console.records.empty.alarms': '该时间范围内没有报警',
@@ -134,7 +134,8 @@ export default {
   'pages.console.detail.tab.stock': '出入库记录',
   'pages.console.records.title.shift': '交班记录',
   'pages.console.records.title.inventory': '库存记录',
-  'pages.console.records.notice.unsupported': '设备暂不支持该类记录',
+  'pages.console.records.notice.unsupported':
+    '设备软件版本较旧，暂不支持该类记录，请升级设备软件',
   'pages.console.records.notice.syncing': '记录同步中，列表可能不完整',
   'pages.console.records.notice.syncUnknown':
     '无法确认记录是否已同步完整，列表可能不完整',
@@ -740,8 +741,10 @@ export default {
   'pages.console.settings.tankTitle': '油罐参数',
   'pages.console.settings.deviceTitle': '整机设置（出入库判定）',
   'pages.console.settings.reportedAt': '设备上报于 {time}',
-  'pages.console.settings.notReported': '设备尚未上报油罐配置。',
-  'pages.console.settings.deviceNotReported': '设备尚未上报整机设置。',
+  'pages.console.settings.notReported':
+    '设备尚未上报油罐配置。如长时间未上报，请确认设备软件已升级。',
+  'pages.console.settings.deviceNotReported':
+    '设备尚未上报整机设置。如长时间未上报，请确认设备软件已升级。',
   'pages.console.settings.devicePlatformOnly': '整机设置只能由平台管理员修改。',
   'pages.console.settings.tankN': '{tank} 号罐',
   'pages.console.settings.col.field': '参数',
@@ -781,7 +784,7 @@ export default {
   'pages.console.settings.field.density': '密度',
   'pages.console.settings.field.oilColor': '颜色',
   'pages.console.settings.color.unsupported':
-    '当前设备固件不支持远程修改颜色，请在设备上设置或先升级固件。',
+    '设备软件版本较旧，暂不支持远程修改颜色，请升级设备软件。',
   'pages.console.settings.color.nonStandard': '（非色板颜色）',
   'pages.console.settings.density.check':
     '数值超出 g/cm³ 常见范围，可能是按 kg/m³ 填写的，请核对。',
@@ -836,7 +839,7 @@ export default {
   'pages.console.settings.medium.public': '公共介质',
   'pages.console.settings.medium.customer': '本客户专属',
   'pages.console.settings.medium.noSync':
-    '当前设备固件不支持同步介质名称，手动新增的介质和编号 18 以上的介质暂不可选，请先升级固件。',
+    '设备软件版本较旧，不支持同步介质名称：手动新增的介质和编号 18 以上的介质暂不可选，请升级设备软件。',
   'pages.console.settings.medium.loadFailed':
     '介质选项加载失败，暂时不能修改介质。',
   'pages.console.settings.medium.slots':
@@ -844,7 +847,9 @@ export default {
   'pages.console.settings.submit.error.mediaNotSelectable':
     '这个介质已停用或不属于该设备的客户，请刷新后重选。',
   'pages.console.settings.submit.error.mediaSyncUnsupported':
-    '设备固件不支持这个介质，请先升级固件。',
+    '设备软件版本较旧，不支持这个介质，请升级设备软件。',
+  'pages.console.settings.submit.error.colorSyncUnsupported':
+    '设备软件版本较旧，暂不支持远程修改颜色，请升级设备软件。',
   'pages.console.settings.submit.error.mediaSlotsExhausted':
     '该设备的 8 个动态介质位置已用完，未下发。',
   'pages.console.settings.submit.error.deploymentDisabled':
@@ -881,12 +886,16 @@ export default {
   'pages.console.settings.echo.timedOut':
     '执行成功，但长时间未收到设备回报，可稍后手动刷新',
   'pages.console.settings.echo.refresh': '刷新回报',
-  'pages.console.settings.result.ignored': '设备忽略了：{fields}',
+  'pages.console.settings.result.ignored':
+    '设备忽略了：{fields}。设备软件版本较旧，请升级设备软件。',
+  'pages.console.settings.refusal.unknownMethod':
+    '设备软件版本较旧，不支持该操作，请升级设备软件。',
   'pages.console.settings.commandId': '命令编号 {id}',
   'pages.console.settings.pollFailing': '状态读取失败，正在重试…',
   'pages.console.settings.dismiss': '关闭',
   'pages.console.settings.calibration.title': '标定表（只读）',
-  'pages.console.settings.calibration.none': '设备尚未上报标定表。',
+  'pages.console.settings.calibration.none':
+    '设备尚未上报标定表。如长时间未上报，请确认设备软件已升级。',
   'pages.console.settings.calibration.failed': '读取标定表失败',
   'pages.console.settings.calibration.meta':
     '共 {n} 点，设备上报于 {time}（设备仅在重新连接时上报）',
