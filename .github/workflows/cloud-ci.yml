@@ -22,14 +22,18 @@ concurrency:
 
 jobs:
   go:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: cloud/go.mod
-          # 单仓库里 go.sum 不在根目录，不指定的话 setup-go 找不到依赖文件，缓存整体失效。
-          cache-dependency-path: cloud/go.sum
+          # 自托管 Runner：模块与构建缓存在本机持久目录（Runner .env 的 GOMODCACHE/GOCACHE），
+          # 不再上传 GitHub 缓存（大缓存经代理上传曾卡住收尾步骤，见 KeywordIQ 的同类问题）。
+          cache: false
+      - name: 本地缓存路径与命中
+        run: ../.github/scripts/ci-cache-check.sh go before
       - name: gofmt
         run: |
           out=$(gofmt -l .)
@@ -40,7 +44,8 @@ jobs:
         run: go test ./internal/protocol/
 
   sqlc-and-migrations:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -48,19 +53,22 @@ jobs:
           POSTGRES_USER: yeweiyi
           POSTGRES_PASSWORD: yeweiyi
           POSTGRES_DB: yeweiyi
-        ports: ["5432:5432"]
+        # 宿主端口由 Docker 随机分配：同一台虚拟机上 KeywordIQ 的 CI 也用宿主 5432。
+        # 服务容器与网络由 Runner 按 job 创建和删除。
+        ports: ["5432"]
         options: >-
           --health-cmd "pg_isready -U yeweiyi"
           --health-interval 5s --health-timeout 5s --health-retries 10
-    env:
-      DB_URL: postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: cloud/go.mod
-          # 单仓库里 go.sum 不在根目录，不指定的话 setup-go 找不到依赖文件，缓存整体失效。
-          cache-dependency-path: cloud/go.sum
+          # 自托管 Runner：模块与构建缓存在本机持久目录（Runner .env 的 GOMODCACHE/GOCACHE），
+          # 不再上传 GitHub 缓存（大缓存经代理上传曾卡住收尾步骤，见 KeywordIQ 的同类问题）。
+          cache: false
+      - name: 本地缓存路径与命中
+        run: ../.github/scripts/ci-cache-check.sh go before
       # 版本固定：@latest 会让某天 sqlc 一升级，没人改过任何代码 CI 就变红（或悄悄生成不同的输出）。
       # sqlc 与本地生成输出的版本一致；migrate 与 deploy/images.txt、docker-compose.prod.yml 里的镜像一致。
       # 要升级就改这里（版本号和 sha256 一起改），并在同一个提交里重新生成 internal/store/db。
@@ -68,19 +76,21 @@ jobs:
       - name: 安装 sqlc 与 migrate（固定版本）
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o /tmp/sqlc.tgz https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz
-          echo "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354  /tmp/sqlc.tgz" | sha256sum -c -
-          tar -xzf /tmp/sqlc.tgz -C "$HOME/.local/bin" sqlc
-          curl -fsSL -o /tmp/migrate.tgz https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz
-          echo "2a08137b4720aa457bc760540723e313783f1fab27473463bdcc5fc2e9252959  /tmp/migrate.tgz" | sha256sum -c -
-          tar -xzf /tmp/migrate.tgz -C "$HOME/.local/bin" migrate
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          # 压缩包缓存在本机并每次校验 sha256；二进制只放 RUNNER_TEMP，不写入 Runner 用户的 HOME。
+          ../.github/scripts/ci-fetch-tool.sh \
+            https://github.com/sqlc-dev/sqlc/releases/download/v1.31.1/sqlc_1.31.1_linux_amd64.tar.gz \
+            497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354 sqlc "$RUNNER_TEMP/bin"
+          ../.github/scripts/ci-fetch-tool.sh \
+            https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz \
+            2a08137b4720aa457bc760540723e313783f1fab27473463bdcc5fc2e9252959 migrate "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
       - name: sqlc 输出必须与提交一致
         run: |
           sqlc generate
           git diff --exit-code -- internal/store/db
       - name: 迁移 up / down / up 往返
+        env:
+          DB_URL: postgres://yeweiyi:yeweiyi@localhost:${{ job.services.postgres.ports['5432'] }}/yeweiyi?sslmode=disable
         run: |
           migrate -database "$DB_URL" -path db/migrations up
           migrate -database "$DB_URL" -path db/migrations down -all
@@ -89,7 +99,8 @@ jobs:
   # 部署文件：生产 Compose 曾经根本解析不了，端口隔离也曾被叠加文件悄悄撤销。
   # 这里不启动任何容器，只检查配置本身。
   deploy-files:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - run: docker compose version
@@ -108,7 +119,8 @@ jobs:
   # 而 Skip 在 CI 里等于“没测”却显示绿色，所以这里把任何 SKIP 都当成失败。
   integration-reuse:
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 5
     outputs:
       reuse: ${{ steps.check.outputs.reuse }}
     steps:
@@ -125,33 +137,65 @@ jobs:
   integration:
     needs: integration-reuse
     if: ${{ always() && (github.event_name == 'pull_request' || needs.integration-reuse.outputs.reuse != 'true') }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    # 含最多 20 分钟的资源等待（见下）；测试本身与托管 Runner 时一样约 10–15 分钟。
+    timeout-minutes: 50
     env:
-      DATABASE_URL: postgres://yeweiyi:yeweiyi@localhost:5432/yeweiyi?sslmode=disable
+      # 每次运行唯一的 Compose 项目：容器、网络、卷都带这个前缀，收尾时只删它们。
+      CI_PROJECT: ywy-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: cloud/go.mod
-          # 单仓库里 go.sum 不在根目录，不指定的话 setup-go 找不到依赖文件，缓存整体失效。
-          cache-dependency-path: cloud/go.sum
-      - name: 安装 migrate（固定版本，与 sqlc-and-migrations 作业一致）
+      # 这台虚拟机（3 vCPU / 5 GiB）与 KeywordIQ 的 Runner 共用。ThingsBoard 自身要 2–3 GiB，
+      # 与对方的重任务并发容易 OOM，所以等对方当前 job 结束、可用内存足够再启动。
+      # 等不到就失败，不降级、不跳过。
+      - name: 资源门禁（与同机其他 Runner 错开）
+        run: |
+          # 本 Runner 装在 $HOME/actions-runner；其他路径下的 Runner.Worker 即同机其他项目正在跑的 job。
+          for i in $(seq 1 120); do
+            others="$(pgrep -a -f 'bin/Runner.Worker' | grep -v -F "$HOME/actions-runner/" || true)"
+            avail_mb="$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
+            if [[ -z "$others" && "$avail_mb" -ge 3000 ]]; then
+              echo "可以启动：其他 Runner 空闲，可用内存 ${avail_mb} MiB"; exit 0
+            fi
+            (( i % 6 == 1 )) && echo "等待：其他 Runner 作业=${others:+忙} 可用内存=${avail_mb} MiB"
+            sleep 10
+          done
+          echo "::error::20 分钟内同机其他 Runner 未空闲或内存不足 3000 MiB" >&2
+          exit 1
+      - name: 准备测试容器参数与工具
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o /tmp/migrate.tgz https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz
-          echo "2a08137b4720aa457bc760540723e313783f1fab27473463bdcc5fc2e9252959  /tmp/migrate.tgz" | sha256sum -c -
-          tar -xzf /tmp/migrate.tgz -C "$HOME/.local/bin" migrate
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: 启动 PostgreSQL / Redis / ThingsBoard
-        run: docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml up -d postgres redis thingsboard
+          # 测试在与 go.mod 同版本的 golang 镜像里跑（setup-go 装在宿主上的 Go 进不了下面的网络命名空间）。
+          go_version="$(awk '$1=="go"{print $2; exit}' go.mod)"
+          [[ "$go_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]
+          {
+            echo "CI_GO_IMAGE=golang:$go_version"
+            echo "CI_UID=$(id -u)"
+            echo "CI_GID=$(id -g)"
+            echo "CI_BIN_DIR=$RUNNER_TEMP/bin"
+          } >> "$GITHUB_ENV"
+          # 版本与 sqlc-and-migrations 作业一致。
+          ../.github/scripts/ci-fetch-tool.sh \
+            https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz \
+            2a08137b4720aa457bc760540723e313783f1fab27473463bdcc5fc2e9252959 migrate "$RUNNER_TEMP/bin"
+          echo "本地缓存（宿主路径，挂载进测试容器）："
+          du -sh "$YEWEIYI_CI_CACHE/gomod" "$YEWEIYI_CI_CACHE/gobuild"
+      - name: 启动 PostgreSQL / Redis / ThingsBoard（本次运行独立的网络命名空间）
+        run: |
+          set -euo pipefail
+          C=(docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml)
+          "${C[@]}" config -q
+          "${C[@]}" up -d --quiet-pull netns postgres redis thingsboard
+          # 宿主上不应出现本项目发布的任何端口。
+          published="$(docker ps --filter "label=com.docker.compose.project=$CI_PROJECT" --format '{{.Names}} {{.Ports}}' | grep -E -- '->' || true)"
+          [[ -z "$published" ]] || { echo "::error::意外发布了宿主端口：$published" >&2; exit 1; }
       - name: 等待就绪（ThingsBoard 首次启动要装 schema，2–4 分钟）
         run: |
+          C=(docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml)
           for i in $(seq 1 90); do
             # 不能只探 /login 页面，也不能只看 curl 退出码：ThingsBoard 初始化到一半时，登录接口会
             # 302 重定向到 /login（curl -f 只把 >=400 当失败，302 会被当成成功）。要求 200 且返回 token。
-            body="$(curl -s -m 5 -X POST http://localhost:8081/api/auth/login \
+            body="$("${C[@]}" exec -T netns curl -s -m 5 -X POST http://localhost:8081/api/auth/login \
                  -H 'Content-Type: application/json' \
                  -d '{"username":"tenant@thingsboard.org","password":"tenant"}' || true)"
             if printf '%s' "$body" | grep -q '"token"'; then
@@ -160,16 +204,19 @@ jobs:
             sleep 5
           done
           echo "ThingsBoard 未在 450 秒内就绪" >&2
-          docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml logs --tail 80 thingsboard
+          "${C[@]}" logs --tail 80 thingsboard
           exit 1
       - name: 业务库迁移与 ThingsBoard 设备配置
         run: |
-          migrate -database "$DATABASE_URL" -path db/migrations up
-          go run ./cmd/tbconfig apply
+          docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml \
+            exec -T netns bash -euc 'go version; go env GOMODCACHE GOCACHE
+              migrate -database "$DATABASE_URL" -path db/migrations up
+              go run ./cmd/tbconfig apply'
       - name: 全量测试（串行）
         run: |
           set -o pipefail
-          go test ./... -p 1 -v 2>&1 | tee test.log
+          docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml \
+            exec -T netns go test ./... -p 1 -v 2>&1 | tee test.log
       - name: 不允许有 Skip
         run: |
           if grep -E '^\s*--- SKIP' test.log; then
@@ -178,4 +225,16 @@ jobs:
           fi
       - name: 失败时输出 ThingsBoard 日志
         if: failure()
-        run: docker compose -f docker-compose.yml -f docker-compose.thingsboard.yml logs --tail 120 thingsboard
+        run: docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml logs --tail 120 thingsboard
+      # 只删本次 Compose 项目创建的容器、网络、卷（镜像保留作本地缓存）；不做任何全局 prune。
+      - name: 清理本次测试资源
+        if: always()
+        run: |
+          docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml \
+            down -v --remove-orphans --timeout 20 || true
+          left="$(docker ps -aq --filter "label=com.docker.compose.project=$CI_PROJECT"; \
+                  docker volume ls -q --filter "label=com.docker.compose.project=$CI_PROJECT"; \
+                  docker network ls -q --filter "label=com.docker.compose.project=$CI_PROJECT")"
+          if [[ -n "$left" ]]; then echo "::error::本次项目资源未清理干净：$left" >&2; exit 1; fi
+          echo "已清理 Compose 项目 $CI_PROJECT（容器/网络/卷均为 0）"
+          du -sh "$YEWEIYI_CI_CACHE/gomod" "$YEWEIYI_CI_CACHE/gobuild"

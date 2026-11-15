@@ -13,13 +13,39 @@ permissions:
 
 jobs:
   image:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v7
+      # 自托管 Runner 的 HOME 跨 job 持久：登录凭证若写进 ~/.docker 会残留到之后的 job。
+      # 改用本 job 的 RUNNER_TEMP 下的临时目录，收尾步骤 always 删除。
+      - name: 临时 Docker 配置目录与本地构建缓存路径
+        id: prep
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$RUNNER_TEMP/docker-config"
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/docker-config" >> "$GITHUB_ENV"
+          cache="${YEWEIYI_CI_CACHE:?}/buildx/cloud-image"
+          mkdir -p "$cache"
+          echo "cache=$cache" >> "$GITHUB_OUTPUT"
+          echo "构建缓存目录：$cache（$(du -sh "$cache" | cut -f1)）"
+          # BuildKit 的 RUN 步骤不继承守护进程的代理配置；go mod download 需要经本机代理访问 proxy.golang.org。
+          # 代理参数是 BuildKit 预定义参数，不进入镜像历史与层内容。
+          {
+            echo 'build_args<<EOF'
+            [[ -n "${HTTPS_PROXY:-}" ]] && echo "HTTPS_PROXY=$HTTPS_PROXY"
+            [[ -n "${HTTP_PROXY:-}" ]] && echo "HTTP_PROXY=$HTTP_PROXY"
+            [[ -n "${NO_PROXY:-}" ]] && echo "NO_PROXY=$NO_PROXY"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      # docker 驱动直接使用本机守护进程（containerd 镜像存储，支持 local 缓存导出与证明），
+      # 不另起 BuildKit 容器。
       - uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
       - name: 登录 GHCR（仅推送时）
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
@@ -27,6 +53,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          logout: true
       - id: meta
         uses: docker/metadata-action@v6
         with:
@@ -36,11 +63,36 @@ jobs:
             type=sha
             type=match,pattern=cloud-(v.*),group=1
             type=raw,value=latest,enable={{is_default_branch}}
-      - uses: docker/build-push-action@v7
+      - id: build
+        uses: docker/build-push-action@v7
         with:
           context: cloud
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: ${{ steps.prep.outputs.build_args }}
+          # 本机持久目录作构建缓存，不再上传 GitHub 缓存（type=gha）。
+          # 写到新目录再替换旧目录：local 缓存原地写入会无限增长。
+          cache-from: type=local,src=${{ steps.prep.outputs.cache }}
+          cache-to: type=local,dest=${{ steps.prep.outputs.cache }}-new,mode=max
+      - name: 替换本地构建缓存并记录镜像 digest
+        env:
+          CACHE: ${{ steps.prep.outputs.cache }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          rm -rf "$CACHE" && mv "$CACHE-new" "$CACHE"
+          echo "构建缓存：$(du -sh "$CACHE" | cut -f1)"
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "::error::未得到镜像 digest：$DIGEST" >&2; exit 1; }
+          echo "镜像 digest：$DIGEST" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: 清理凭证与本次镜像标签
+        if: always()
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          CACHE: ${{ steps.prep.outputs.cache }}
+        run: |
+          # 只删本次构建打的标签（已推送的镜像以 GHCR 为准），共享层与其他镜像不受影响。
+          for t in $TAGS; do docker image rm "$t" >/dev/null 2>&1 || true; done
+          rm -rf "${CACHE:?}-new"
+          rm -rf "$RUNNER_TEMP/docker-config"
+          [[ ! -e "$RUNNER_TEMP/docker-config" ]] && echo "临时 Docker 凭证目录已删除"
