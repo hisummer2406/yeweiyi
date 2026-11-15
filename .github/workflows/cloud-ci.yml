@@ -54,9 +54,11 @@ jobs:
           POSTGRES_PASSWORD: yeweiyi
           POSTGRES_DB: yeweiyi
         # 宿主端口由 Docker 随机分配：同一台虚拟机上 KeywordIQ 的 CI 也用宿主 5432。
-        # 服务容器与网络由 Runner 按 job 创建和删除。
+        # 服务容器与网络由 Runner 按 job 创建和删除；但 Runner 删容器不带 -v，postgres 镜像声明的
+        # VOLUME 会残留成匿名卷，所以数据目录挂 tmpfs，不产生任何卷。
         ports: ["5432"]
         options: >-
+          --tmpfs /var/lib/postgresql/data
           --health-cmd "pg_isready -U yeweiyi"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:

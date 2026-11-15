@@ -47,7 +47,8 @@ Docker 镜像（postgres、redis、tb-postgres、golang）留在守护进程里�
   golang 容器共享一个网络命名空间，**宿主不发布任何端口**（KeywordIQ 的 CI 占宿主 5432；
   部分测试写死 `localhost:8081`）。业务库在命名空间内改用 55432（tb-postgres 自带的库占 5432）。
   收尾 `docker compose -p … down -v --remove-orphans`，并核对该项目的容器/网络/卷为 0。不做全局 prune。
-- **sqlc 作业**的 PostgreSQL 服务容器用随机宿主端口（`ports: ["5432"]`），由 Runner 按 job 创建和删除。
+- **sqlc 作业**的 PostgreSQL 服务容器用随机宿主端口（`ports: ["5432"]`），由 Runner 按 job 创建和删除；
+  数据目录挂 tmpfs——Runner 删服务容器不带 `-v`，否则镜像声明的 `VOLUME` 会每次残留一个匿名卷。
 - **资源**：集成测试启动前等待同机其他 Runner 的 job 结束且可用内存 ≥ 3000 MiB（最多 20 分钟，等不到失败）；
   ThingsBoard 容器 `mem_limit: 3g`。单个 Runner 同一时间只跑一个 job。
 
