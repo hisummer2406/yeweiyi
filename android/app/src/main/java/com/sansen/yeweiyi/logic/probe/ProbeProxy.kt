@@ -183,8 +183,8 @@ class ProbeProxy(
     }
 
     companion object {
-        // 缓存寿命按完整源应答接收时刻计算，现场需按最大罐数的轮询周期核实。
-        const val LEVEL_TTL_MS = 10_000L
+        // 30 秒覆盖多探针失联拖慢轮询的情况；故障、停采集等仍提前失效，现场需核实余量。
+        const val LEVEL_TTL_MS = 30_000L
         const val TEMPERATURE_TTL_MS = 60_000L
         const val LENGTH_TTL_MS = 600_000L
         // 这是源请求匹配/残帧上限，不是对客户端延迟应答的等待时间。

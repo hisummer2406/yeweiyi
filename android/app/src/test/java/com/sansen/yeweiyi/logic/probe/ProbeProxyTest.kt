@@ -178,7 +178,7 @@ class ProbeProxyTest {
 
     @Test fun badCrcDoesNotReplaceExistingSampleOrRenewItsAge() {
         cache(proxy, levelQuery, level)
-        time += 9_000
+        time += 29_000
         val bad = level.copyOf().also { it[6] = (it[6].toInt() xor 1).toByte() }
         cache(proxy, levelQuery, bad)
         assertArrayEquals(level, proxy.reply(levelQuery))
@@ -195,11 +195,72 @@ class ProbeProxyTest {
 
     @Test fun cachedReadsNeverExtendSamplingLifetime() {
         cache(proxy, levelQuery, level)
-        repeat(9) { time += 1_000; assertArrayEquals(level, proxy.reply(levelQuery)) }
+        repeat(29) { time += 1_000; assertArrayEquals(level, proxy.reply(levelQuery)) }
         time += 1_000
         assertNull(proxy.reply(levelQuery))
         cache(proxy, levelQuery, level)
         assertArrayEquals(level, proxy.reply(levelQuery))
+    }
+
+    @Test fun slowPollingRoundPreservesHealthyProbeAndFreshSampleRenewsLifetime() {
+        val modbusQuery = modbusFrame(hex("010300020002"))
+        val modbusResponse = modbusFrame(hex("010304000003E8"))
+        for ((protocol, pair) in listOf(0 to (levelQuery to level), 1 to (modbusQuery to modbusResponse))) {
+            time = 1_000L
+            val (query, response) = pair
+            val mode = if (protocol == 0) Serial4Mode.PROXY_ZHONGCHENG else Serial4Mode.PROXY_MODBUS
+            val session = ProbeProxySession(mode, protocol, { time })
+            session.configureAddresses(IntArray(12) { it + 1 })
+            session.setSourceAvailable(true)
+            session.sourceBytes(session.sourceRequest(protocol, query), response)
+
+            // 其余 11 根探针各重试 5 次，每次收包前后各等 100ms，共占 11 秒。
+            for (address in 2..12) {
+                val failedQuery = if (protocol == 0) {
+                    zcFrame(hex("FEFE${address.toString(16).padStart(2, '0')}03440000"))
+                } else modbusFrame(byteArrayOf(address.toByte(), 3, 0, 2, 0, 2))
+                repeat(5) {
+                    val token = session.sourceRequest(protocol, failedQuery)
+                    time += 100
+                    session.sourceBytes(token, null)
+                    time += 100
+                    assertArrayEquals(response, session.reply(query))
+                }
+                session.probeLost(address)
+            }
+            time += 1_000
+            assertArrayEquals(response, session.reply(query))
+            session.sourceBytes(session.sourceRequest(protocol, query), response)
+            time += 18_000
+            assertArrayEquals(response, session.reply(query))
+            time += 11_999
+            assertArrayEquals(response, session.reply(query))
+            time++
+            assertNull(session.reply(query))
+        }
+    }
+
+    @Test fun probeFaultInvalidatesBothProtocolsBeforeThirtySecondExpiry() {
+        val modbusQuery = modbusFrame(hex("010300020002"))
+        val modbusResponse = modbusFrame(hex("010304000003E8"))
+        for ((protocol, pair) in listOf(0 to (levelQuery to level), 1 to (modbusQuery to modbusResponse))) {
+            time = 1_000L
+            val (query, response) = pair
+            val mode = if (protocol == 0) Serial4Mode.PROXY_ZHONGCHENG else Serial4Mode.PROXY_MODBUS
+            val session = ProbeProxySession(mode, protocol, { time })
+            session.configureAddresses(intArrayOf(1))
+            session.setSourceAvailable(true)
+            session.sourceBytes(session.sourceRequest(protocol, query), response)
+            time += 12_000
+            assertArrayEquals(response, session.reply(query))
+            val token = session.sourceRequest(protocol, query)
+            session.probeLost(1)
+            assertNull(session.reply(query))
+            session.sourceBytes(token, response)
+            assertNull(session.reply(query))
+            session.sourceBytes(session.sourceRequest(protocol, query), response)
+            assertArrayEquals(response, session.reply(query))
+        }
     }
 
     @Test fun temperatureAndLengthHaveIndependentExpiry() {
