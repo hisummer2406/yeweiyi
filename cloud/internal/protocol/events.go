@@ -79,7 +79,7 @@ func (a AlarmEvent) MarshalTelemetry() ([]byte, error) {
 // once this arrives.
 type CmdResult struct {
 	CommandID string          `json:"commandId"`
-	Status    string          `json:"status"` // CmdStatusExecuting/Succeeded/Failed
+	Status    string          `json:"status"` // CmdStatusExecuting/Succeeded/Failed; Rejected from legacy firmware (#42)
 	ErrorCode string          `json:"errorCode,omitempty"`
 	Reason    string          `json:"reason,omitempty"`
 	Detail    json.RawMessage `json:"detail,omitempty"` // method-specific, e.g. the resulting config

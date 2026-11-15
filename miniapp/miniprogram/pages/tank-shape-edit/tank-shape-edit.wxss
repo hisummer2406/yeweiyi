@@ -1,5 +1,5 @@
 /* 数值取自设计稿「罐表设置-卧罐16」PNG：示意图占 190–760；输入框 628×100、#F5F6F8、行距 140、首个顶在 819；
-   字母标签 36rpx、x=105，值 x=258，单位 x=302；三个按钮 198×65、间距 27，顶在 1273（立罐页也在同一位置）。
+   字母标签 36rpx、x=105，值 x=258，单位 x=302。设计稿是三个按钮 198×65；「保存到手机」隐藏后（#44）两个按钮等宽铺满输入框宽度、主次分明。
    差异：输入框比设计稿的占位 0 宽（够 5 位数），单位因此比设计稿靠右约 36。 */
 page {
   background-color: #ffffff;
@@ -57,40 +57,121 @@ page {
 }
 
 .te-buttons {
-  position: absolute;
-  left: 52rpx;
-  top: 1092rpx;
   display: flex;
+  margin: 40rpx 60rpx 48rpx 62rpx; /* 与输入框左右对齐，跟在最后一个输入框下方，不再绝对定位 */
 }
 
 button.te-btn {
-  width: 198rpx;
-  min-height: 65rpx;
+  flex: 1;
+  width: auto;
+  min-height: 88rpx;
   height: auto;
   line-height: 1.3;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  margin: 0 27rpx 0 0;
-  padding: 8rpx;
-  border-radius: 33rpx;
+  margin: 0;
+  padding: 12rpx 16rpx;
+  border-radius: 44rpx;
   font-size: var(--font-body);
-  color: #ffffff;
+}
+
+button.te-btn + button.te-btn {
+  margin-left: 24rpx;
 }
 
 button.te-btn::after {
   border: none;
 }
 
+/* 主按钮实心，次按钮描边，区分主次 */
 .te-btn-main {
   background-color: #0066a2;
-}
-
-.te-btn-lite {
-  background-color: #3b7aef;
+  color: #ffffff;
 }
 
 .te-btn-deep {
-  background-color: #0068e9;
+  background-color: #ffffff;
+  color: #0066a2;
+  border: 2rpx solid #0066a2;
+}
+
+/* 生成结果 */
+.te-result {
+  margin: 0 60rpx 48rpx 62rpx;
+}
+
+.te-summary {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: #131313;
+  word-break: break-all;
+}
+
+.te-sampled {
+  margin-top: 8rpx;
+  font-size: var(--font-caption);
+  color: #6b7280;
+}
+
+.te-table-head,
+.te-table-row {
+  display: flex;
+  padding: 14rpx 24rpx;
+}
+
+.te-table-head {
+  margin-top: 20rpx;
+  background-color: #f5f6f8;
+  border-radius: 16rpx 16rpx 0 0;
+  font-size: var(--font-label);
+  color: #4a4f57;
+}
+
+.te-table {
+  max-height: 640rpx;
+  border: 1rpx solid #f0f1f3;
+  border-top: none;
+  border-radius: 0 0 16rpx 16rpx;
+}
+
+.te-table-row {
+  font-size: var(--font-body);
+  color: #131313;
+  font-variant-numeric: tabular-nums;
+  border-top: 1rpx solid #f0f1f3;
+}
+
+.te-table-row:first-child {
+  border-top: none;
+}
+
+.te-col {
+  flex: 1;
+}
+
+.te-reason {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  margin-top: 20rpx;
+  padding: 0 24rpx;
+  background-color: #f5f6f8;
+  border-radius: 16rpx;
+}
+
+.te-reason-label {
+  flex-shrink: 0;
+  margin-right: 16rpx;
+  font-size: var(--font-label);
+  color: #4a4f57;
+}
+
+.te-reason-input {
+  flex: 1;
+  height: 64rpx;
+  font-size: var(--font-body);
+  color: #131313;
 }

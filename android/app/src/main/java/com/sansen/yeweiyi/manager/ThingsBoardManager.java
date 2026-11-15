@@ -5,7 +5,9 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.google.gson.Gson;
+import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.config.ApiConfig;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -36,6 +38,9 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetDeviceSettingsHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankSettingsHandler;
+import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankTableHandler;
+import com.sansen.yeweiyi.factory.EllipseTable;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SharePrefCustomOilNameStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
@@ -196,8 +201,13 @@ public final class ThingsBoardManager {
         registry.register(SetTankSettingsHandler.METHOD,
                 new SetTankSettingsHandler(OilTankRepositoryImpl.getInstance(),
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
-                        new SharePrefCustomOilNameStore(MyApplication.getInstance())));
+                        new SharePrefCustomOilNameStore(MyApplication.getInstance()),
+                        hex -> SystemUtils.getRsStr(R.string.rpc_oil_color_not_in_palette, hex)));
         registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
+        registry.register(SetTankTableHandler.METHOD,
+                new SetTankTableHandler(OilTankRepositoryImpl.getInstance(), new EllipseTable(),
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
+                        DateUtils::getYYYMMddHHmmss));
         HighRiskActionHandler highRiskActionHandler = new HighRiskActionHandler();
         registry.register(HighRiskActionHandler.METHOD_START_PUMP, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_STOP_PUMP, highRiskActionHandler);
@@ -514,7 +524,7 @@ public final class ThingsBoardManager {
     /**
      * 客户端属性合成一条发出：协议 §5.1 设备配置 + 标定表 + 罐设置页各项 + 出入库阈值。
      * 静态配置，不走补投队列，断线时没发出去下次连上会重发。触发：连接成功后；设置变化后经
-     * {@link #requestClientAttributesPublish()} 防抖重发。标定表保存不触发，要等下次重连或设置变化。
+     * {@link #requestClientAttributesPublish()} 防抖重发（罐设置和罐表写库都会触发，见 OilTankRepositoryImpl）。
      */
     private void publishClientAttributes() {
         // 连接成功后紧跟着要请求共享属性；这里抛异常会让那一步被跳过，所以就地吞掉并记日志
@@ -529,6 +539,7 @@ public final class ThingsBoardManager {
             attributes.putAll(DeviceSettingsAttributeBuilder.build(
                     settings.InHight, settings.InTime, settings.OutHight, settings.OutTime));
             attributes.put(DeviceSettingsAttributeBuilder.KEY_CUSTOM_MEDIA_SYNC, 1);
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_OIL_COLOR_SYNC, 1);
             connection.publishAttributes(gson.toJson(attributes));
         } catch (RuntimeException e) {
             Log.e(TAG, "客户端属性发布失败", e);

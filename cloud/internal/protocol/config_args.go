@@ -81,6 +81,7 @@ const (
 	AttrCustomOilName   = "customOilName"
 	AttrCustomOilNameEn = "customOilNameEn"
 	AttrCustomMediaSync = "customMediaSync"
+	AttrOilColorSync    = "oilColorSync"
 )
 
 var anyFiniteNumber = numRule{-math.MaxFloat64, math.MaxFloat64, false, false}
@@ -125,6 +126,8 @@ func ValidateArgs(method string, args json.RawMessage) error {
 		return validateConfigArgs(args, true, tankSettingRules, tankSettingsClosed)
 	case MethodConfigDeviceSettings:
 		return validateConfigArgs(args, false, deviceSettingRules, nil)
+	case MethodConfigTankTable:
+		return validateTankTableArgs(args)
 	}
 	return nil
 }
@@ -159,6 +162,14 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 			if msg := checkCustomOilName(args[k], k); msg != "" {
 				errs = append(errs, FieldError{k, ArgInvalidValue, k + " " + msg})
 			}
+			continue
+		}
+		if needTank && k == AttrOilColor {
+			if f, ok := args[k].(float64); !ok || f != math.Trunc(f) || f < 0 || f > maxRGB || !IsPaletteColor(int32(f)) {
+				errs = append(errs, FieldError{k, ArgInvalidValue, "oilColor 必须是色板中的颜色（0xRRGGBB 整数）"})
+				continue
+			}
+			editable++
 			continue
 		}
 		if why, isClosed := closed[k]; isClosed {

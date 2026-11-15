@@ -165,6 +165,12 @@ button.btn-secondary::after {
   color: #606060;
 }
 
+/* 本机显示倍率（#44）：读数是换算值 */
+.badge-scale {
+  background-color: #fff3e0;
+  color: #9a5b00;
+}
+
 .badge-pending {
   background-color: #e4f1fb;
   color: #0066a2;

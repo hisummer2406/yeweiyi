@@ -18,6 +18,9 @@ public final class DeviceSettingsAttributeBuilder {
     /** 本固件支持随 config.setTankSettings 写入介质名称（#27）；旧固件不上报，云端据此不向其下发新含义编号。 */
     public static final String KEY_CUSTOM_MEDIA_SYNC = "customMediaSync";
 
+    /** 本固件支持随 config.setTankSettings 写入 oilColor；旧固件会忽略该字段，云端据此不向其下发颜色。 */
+    public static final String KEY_OIL_COLOR_SYNC = "oilColorSync";
+
     private DeviceSettingsAttributeBuilder() {
     }
 

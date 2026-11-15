@@ -80,6 +80,14 @@ func (d *Device) SetLocalControlMode(on bool) {
 	d.mu.Unlock()
 }
 
+// SetLegacyRejectAfterAck switches parameter refusals (INVALID_PARAMS) to what field firmware does
+// (#42): ACK 'received' first, then cmdResult 'rejected' with the code and reason.
+func (d *Device) SetLegacyRejectAfterAck(on bool) {
+	d.mu.Lock()
+	d.legacyReject = on
+	d.mu.Unlock()
+}
+
 // TankSettings returns a copy of what the device currently holds for a tank (1-based).
 func (d *Device) TankSettings(tank int) (tankConfig, bool) {
 	d.mu.Lock()
@@ -165,6 +173,16 @@ func (d *Device) configPolicy(method string, env protocol.Envelope) (protocol.Ac
 		detail, reason, err = d.applyDeviceSettings(env.Args)
 	}
 	if err != nil {
+		d.mu.Lock()
+		legacy := d.legacyReject
+		d.mu.Unlock()
+		if legacy {
+			ack.Status = protocol.CmdStatusReceived
+			return ack, &protocol.CmdResult{
+				CommandID: env.CommandID, Status: protocol.CmdStatusRejected,
+				ErrorCode: protocol.ErrInvalidParams, Reason: err.Error(),
+			}, 50 * time.Millisecond
+		}
 		return reject(protocol.ErrInvalidParams, err.Error())
 	}
 

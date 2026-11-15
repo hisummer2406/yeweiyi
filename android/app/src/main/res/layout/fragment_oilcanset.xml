@@ -437,7 +437,7 @@
                         android:gravity="center_vertical"
                         android:layout_width="@dimen/dp_100"
                         android:layout_height="match_parent"
-                        android:text="kg/m³"
+                        android:text="g/cm³"
                         android:textSize="@dimen/fontSize" />
                     <TextView
                         android:textStyle="bold"

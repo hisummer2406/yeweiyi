@@ -12,7 +12,7 @@ import (
 )
 
 const listTankSettings = `-- name: ListTankSettings :many
-SELECT device_name, tank, tank_height_mm, sensor_length_mm, tank_shape, oil_type, oil_type_index, alarm_high_high_level_mm, alarm_high_level_mm, alarm_low_level_mm, alarm_low_low_level_mm, alarm_high_water_mm, alarm_high_temp_c, alarm_low_temp_c, level_correction_mm, water_correction_mm, temp_correction_c, density, reported_at, updated_at, capacity_l FROM tank_settings WHERE device_name = $1 ORDER BY tank
+SELECT device_name, tank, tank_height_mm, sensor_length_mm, tank_shape, oil_type, oil_type_index, alarm_high_high_level_mm, alarm_high_level_mm, alarm_low_level_mm, alarm_low_low_level_mm, alarm_high_water_mm, alarm_high_temp_c, alarm_low_temp_c, level_correction_mm, water_correction_mm, temp_correction_c, density, reported_at, updated_at, capacity_l, oil_color FROM tank_settings WHERE device_name = $1 ORDER BY tank
 `
 
 // 一台设备的全部罐镜像（罐号升序）。员工只能看被授权的罐，由调用方按 ListGrantedTanks 过滤。
@@ -47,6 +47,7 @@ func (q *Queries) ListTankSettings(ctx context.Context, deviceName string) ([]Ta
 			&i.ReportedAt,
 			&i.UpdatedAt,
 			&i.CapacityL,
+			&i.OilColor,
 		); err != nil {
 			return nil, err
 		}
@@ -64,14 +65,14 @@ INSERT INTO tank_settings (
     device_name, tank, tank_height_mm, sensor_length_mm, tank_shape, oil_type, oil_type_index,
     alarm_high_high_level_mm, alarm_high_level_mm, alarm_low_level_mm, alarm_low_low_level_mm,
     alarm_high_water_mm, alarm_high_temp_c, alarm_low_temp_c,
-    level_correction_mm, water_correction_mm, temp_correction_c, density, capacity_l, reported_at
+    level_correction_mm, water_correction_mm, temp_correction_c, density, capacity_l, oil_color, reported_at
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
     $8, $9, $10,
     $11, $12, $13,
     $14, $15, $16,
-    $17, $18, $19, $20
+    $17, $18, $19, $20, $21
 )
 ON CONFLICT (device_name, tank) DO UPDATE SET
     tank_height_mm = EXCLUDED.tank_height_mm,
@@ -91,6 +92,7 @@ ON CONFLICT (device_name, tank) DO UPDATE SET
     temp_correction_c = EXCLUDED.temp_correction_c,
     density = EXCLUDED.density,
     capacity_l = EXCLUDED.capacity_l,
+    oil_color = EXCLUDED.oil_color,
     reported_at = EXCLUDED.reported_at,
     updated_at = now()
 WHERE tank_settings.reported_at IS DISTINCT FROM EXCLUDED.reported_at
@@ -116,6 +118,7 @@ type UpsertTankSettingsParams struct {
 	TempCorrectionC      pgtype.Float8      `json:"temp_correction_c"`
 	Density              pgtype.Float8      `json:"density"`
 	CapacityL            pgtype.Float8      `json:"capacity_l"`
+	OilColor             pgtype.Int4        `json:"oil_color"`
 	ReportedAt           pgtype.Timestamptz `json:"reported_at"`
 }
 
@@ -142,6 +145,7 @@ func (q *Queries) UpsertTankSettings(ctx context.Context, arg UpsertTankSettings
 		arg.TempCorrectionC,
 		arg.Density,
 		arg.CapacityL,
+		arg.OilColor,
 		arg.ReportedAt,
 	)
 	return err

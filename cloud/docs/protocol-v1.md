@@ -358,7 +358,16 @@ ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttrib
   } } }
 ```
 
-`rejected` 是 ACK 阶段的终态，**不再发 `cmdResult`**。
+`rejected` 是 ACK 阶段的终态，**不再发 `cmdResult`**。设备应在 ACK 前完成参数预检，非法参数直接回
+`rejected` ACK。
+
+**兼容规则（#42，云端单方面落地，待设备端负责人确认）**：现场旧固件先回 `received` ACK、再校验参数，
+把拒绝作为 `cmdResult` `status: "rejected"`（带 `errorCode`/`reason`，如 `INVALID_PARAMS`）上报。云端接受这种
+结果：命令从 `pending`/`sent`/`received`/`executing` 进入终态 `rejected`，错误码与原因取自该结果（覆盖 ACK 的
+"已受理"），审计 `control.result` 为 `denied`。设备不得以此表示"已部分执行"——`rejected` 一律视为未写入任何字段。
+命令已终态后才到的 `rejected` 结果按迟到结果处理（只写 `control.result_late`，状态不变）。
+`cmdResult` 里的其他非法状态（`expired`、`received` 等）或不可解析的 `commandId` 被丢弃并记日志，不阻断同一设备其他
+结果的回读。
 
 ### 6.7 错误码
 

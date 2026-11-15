@@ -254,7 +254,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/tankDraft.ts` and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts`/`utils/displayScale.ts`/`utils/tankTable.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -299,6 +299,16 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   trusting it if time has passed.
 - `utils/telemetry.ts` — telemetry snapshot → tank view-model and the "never reported" (404) test,
   shared by the home page and `device-detail`. Pure, no `wx`.
+- `utils/tankTable.ts` — 罐表设置「生成罐表」：照搬设备端 `factory/EllipseTable.java`（卧罐筒体+单侧封头、立罐圆柱、长方体，1 cm 一档，
+  设备的取整与浮点细节一并照搬）。`scripts/fixtures/tank-table-golden.json` 由设备 Java 代码直接运行生成，check 逐点比对。
+  字母：卧罐 H 直径/L 筒长/R 封头高度（可 0）；立罐 H 罐高/R（设备按直径算）；长方体 H 高/L 长/R 宽。
+  「保存到控制器」（#49）：只下发罐型 + 尺寸（`config.setTankTable`，`tableArgs` 映射为 diameterMm/lengthMm/headMm/heightMm/widthMm），
+  设备自行生成；对象 = 首页当前油站的设备 + 选择的可见罐，必填原因，走 `configSubmit` 同一提交保护（快照带 `method`），受理后进操作记录，
+  成功后按 `tableEcho` 核对标定镜像（`GET .../tanks/:tank/calibration`，晚于 finishedAt，点数与末点等于回执）。仅管理员。
+- `utils/displayScale.ts` / `utils/displayScaleStore.ts` — 管理员本机显示倍率（#44，openspec `local-display-scale`）：
+  按 `display-scale:<账号>:<设备>#<罐>` 存在本机，只有 platform_admin / customer_admin 读写和应用（每次从 token 取）；
+  油容积、质量、水体积、空容从 `TankView.raw`（未舍入原始值）乘倍率再舍入，液位/水高/温度/占比不乘，标「换算显示 ×倍率」。
+  罐详情实时数据下方的「本机显示设置」折叠卡自动保存，无「保存到手机」按钮；不上云、不下发，报警/记录/报表用原始值。
 - `utils/scan.ts` — `wx.scanCode` → `POST /api/devices/resolve`, shared by the home page and
   `device-add`; hands the caller the actual device name. `utils/roles.ts` — `isReadOnlyRole`.
 - `utils/sceneEntry.ts` — device mini-program code entry (miniapp#7): path `pages/device-detail/device-detail`,
@@ -362,9 +372,9 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     then pins that station.
   - **设置 `more`** (tabBar) — entries to the pages below, plus `profile` (account, role, logout).
   - `login`, `station-select` (station list with search, tap to pick and return), `device-add` (扫码查看设备), `device-detail` (**one tank at a time**: opened with `tank=` from
-    the home tank row, else the lowest visible tank; a switcher over the visible tanks; shows every reading of the
-    selected tank as a grid, no tank picture (only the 实时数据 tab is left — 控制命令 entry closed — so the
-    tab bar is hidden), plus the live-alarm banner from `AlarmSocket` for that tank only. **No alarm or stock
+    the home tank row, else the lowest visible tank; no in-page tank switcher (user 2026-11-14: the tapped tank is the one shown); shows every reading of the
+    selected tank as a grid, no tank picture; tabs 实时数据 / 参数修正 / 储罐设置 (#43: the two editor tabs act on the
+    tank shown in the info bar 油站 · 设备 · 罐, see "Remote configuration"; 控制命令 entry closed), plus the live-alarm banner from `AlarmSocket` for that tank only. **No alarm or stock
     record tab**: records have one entry only, 我的记录 (2026-10-26); polls the command list every 3s while any command is non-terminal;
     **no 出入库 tab** — an old `tab=oilInOut` link moves to `record-list` when its station is verified,
     otherwise stays and says where the records went), `issue-command` (操作记录, see "Remote configuration" below).
@@ -385,19 +395,32 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
 **density read-only**; no action commands. Pure rules in `utils/remoteConfig.ts` (Node-checked,
 `scripts/remote-config.check.mjs`), requests in `utils/remoteConfigApi.ts`, the send flow in `utils/configSubmit.ts`.
 
-- `tank-config` shows **设备当前回报** (`GET /api/devices/:device/tank-settings` + `reportedAt`, read-only) next to the
-  phone draft; 「导入设备值」 is the only way device values enter the form. Administrators (not `customer_user`) get
-  「下发到设备」 directly (no per-device opening since 2026-11-09; only the cloud's deployment switch, which answers
-  `config_commands_disabled` when off): only filled fields that differ from the
-  report and are open (`TANK_SEND_FIELDS`: 4 level alarms, high water, high temp, capacity) are sent; density, height,
-  low water, low temp, colour and the free-text medium never are.
-- `calibration` uses the same station → device → visible tank; shows the device's corrections (no range limit, #28; each input has a ± toggle, #30, `toggleSign`); 「保存到控制器」 sends
-  the three corrections the same way. 「保存到手机」 keeps one local draft (`calibration-draft`, tied to device + tank,
-  cleared at logout).
+- **One editor, `components/param-editor` (Issue #43, openspec `tank-detail-param-tabs`)**, used by the 参数修正 / 储罐设置
+  tabs of `device-detail` and by the old 设置 entries `calibration` / `tank-config` (now thin pages, `utils/paramPage.ts`:
+  home station → device → `?tank=` or the only tank; several tanks and none given → asks, never guesses). The editor is
+  given device + tank + the device row's `station_id` (-2 = not known yet → cannot send) and:
+  fills the form with the device's last report (`tank-settings` mirror, its `reportedAt` shown, missing = 未上报, never 0);
+  an edit is a value different from the report (`utils/paramDraft.ts`), marked 原值 → 新值; edits auto-save as a draft keyed
+  `param-draft:<kind>:<account>:<device>#<tank>` with the report they were made against, restored with a notice and
+  「放弃修改」; a new report never overwrites input (untouched fields follow it, a moved edit is flagged for review, an
+  edit the device now reports disappears). 「下发修改」 sends only changed, valid fields (`buildArgs`); the tank switch of the 设置 entries asks
+  keep draft / discard / cancel (`utils/paramSwitch.ts`); 罐详情 has no tank switch. `customer_user` sees the report read-only, no draft, no send.
+  Old drafts (`calibration-draft`, `tankcfg-draft:*`) are no longer read.
+- Fields: corrections (no range limit, #28; ± toggle, #30, `toggleSign`); 储罐设置 edits `TANK_SEND_FIELDS` (4 level alarms,
+  high water, high temp, capacity, density in g/cm³ 0<v≤2 — a report >2 is flagged as probably kg/m³); height and low temp are
+  read-only; low water is gone (no device field). **Medium and colour (2026-11-14, user rule: every change is for administrators,
+  employees read-only)**: administrators pick the medium from `GET /media-options` (sent as `mediaId`, the cloud converts) and a
+  colour from the 20-colour palette (`utils/oilColor.ts`, checked against the cloud's shared fixture), `buildMediumArgs`; options
+  unreadable → medium read-only; `oilColorSync` false (old firmware) → colour read-only. Choices are not kept in the draft. A
+  succeeded command with `resultDetail.ignored` says which fields the device did not apply (`ignoredFields`). No per-device opening since 2026-11-09; the cloud's deployment
+  switch answers `config_commands_disabled` when off.
 - Send flow: the reason is a form row (no `showModal` `editable`); the confirm dialog lists before → after; then
   `commandGuard` re-reads `GET /api/devices` (station's device changed → stop); one `requestId` per confirmation,
   `expectedStationId` always sent (null allowed). Timeout/`command_delivery_unconfirmed`: look up `?requestId=`; not
-  found → only 「用同一编号重试」, never a new id. Success opens `issue-command?device=&commandId=&tank=`.
+  found → only 「用同一编号重试」, never a new id. Accepted: with `stay` (the editor) the command is returned and its
+  progress shown in place — polled by `terminal`, succeeded → fresh echo (`echoState`), rejected/failed → the device's
+  reason (#42), expired → 结果无法确认; bound to its device + tank, stopped on hide/detach; 「查看操作记录」 stays. Without
+  `stay` it opens `issue-command?device=&commandId=&tank=`.
   **The confirmed snapshot is kept on the phone** (`cfg-pending:<userKey>`, per device + tank, written before the
   request goes out; issue #18 F2) until the cloud answers anything but "unconfirmed". The next send to that tank
   first looks it up again, else offers only a retry of the *kept* content with its id (no client station guard
@@ -407,7 +430,7 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
 - Sliding renewal is adopted only when the request's token is still the stored one (`renewedTokenToAdopt`,
   `loginFlow.ts`; #18 F5): a late answer after logout or an account switch never overwrites the new session.
 - `scripts/config-flow.check.mjs` runs the real `request.ts` / `configSubmit.ts` against an in-memory `wx`
-  stand-in (F5/F2 flows). It is not DevTools or device acceptance.
+  stand-in (F5/F2 flows); `scripts/param-editor.check.mjs` does the same for the editor. Neither is DevTools or device acceptance.
 - `issue-command` is now **操作记录** (the raw-JSON command form is gone): tracks one command by `terminal`, then reads
   the mirror back (`reportedAt` strictly later than the command's `finishedAt` and equal fields = 已一致; no valid `finishedAt` = still waiting, #18 F3), lists the device's last 20 commands; polling
   stops in `onHide`/`onUnload`. Entry: 设置 → 操作记录 (administrators only).
@@ -421,8 +444,13 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
 
 ## Static design-draft pages (not wired to the cloud — on purpose)
 
-`tank-shape` (+ `tank-shape-edit`), `record-settings`, `report-settings` (and the draft half of `tank-config` /
-`calibration`) are laid out from the design draft (checked against the exported artboard PNGs by
+**罐表设置 is no longer static**: `tank-shape-edit` generates and sends tables (#49, see `utils/tankTable.ts`), and
+`tank-shape` (#41) shows 设备当前罐表 below the shape cards — the home station's device, its visible tanks (`/tanks`,
+granted only for employees), one tank's calibration mirror (`GET .../tanks/:tank/calibration`, `deviceTableView`:
+finite pairs only, sampled like the preview, `reportedAt`); 404 `calibration_not_reported` or no valid point →
+「设备尚未上报该罐罐表」. Read-only for every role. Not verified in DevTools.
+
+`record-settings`, `report-settings` (and originally `tank-shape`) are laid out from the design draft (checked against the exported artboard PNGs by
 measuring pixels, see `openspec/changes/home-by-station/tasks.md` 3.8–3.10) and say "暂未开放 /
 云端没有对应接口" when saved. Shared pieces: form/button/switch styles in `app.wxss`,
 `components/grid-picker` (3-column tank-number sheet) and `components/side-picker` (type dropdown,
@@ -435,8 +463,6 @@ measuring pixels, see `openspec/changes/home-by-station/tasks.md` 3.8–3.10) an
   (and no device field to carry them).
 - Who may configure: cloud#44's latest decision — no station-administrator role; platform and customer
   administrators may send tank settings, employees are read-only.
-- The `tank-config` phone draft (miniapp#18) stays: keyed by account + device + tank (`utils/tankDraft.ts`),
-  "not set" is not 0, 恢复默认 only empties the form, not cleared at logout (the key carries the account).
 
 ## Spec workflow
 

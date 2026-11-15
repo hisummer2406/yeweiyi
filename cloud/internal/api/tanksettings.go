@@ -46,10 +46,12 @@ type tankSettingsView struct {
 	LevelCorrectionMm *float64 `json:"levelCorrectionMm"`
 	WaterCorrectionMm *float64 `json:"waterCorrectionMm"`
 	TempCorrectionC   *float64 `json:"tempCorrectionC"`
-	// Density is passed through as the device stores it; its unit is not yet aligned with the device.
+	// Density is in g/cm³ (= kg/L; the device's settings page wrongly labels it kg/m³).
 	Density *float64 `json:"density"`
 	// CapacityL is the tank's nominal volume in litres; it only affects the device's empty-volume math.
 	CapacityL *float64 `json:"capacityL"`
+	// OilColor is the tank colour as 0xRRGGBB; null when the device has none set or does not report it.
+	OilColor *int32 `json:"oilColor"`
 }
 
 func i32p(v pgtype.Int4) *int32 {
@@ -84,6 +86,7 @@ func newTankSettingsView(r db.TankSetting) tankSettingsView {
 		AlarmLowTempC:     i32p(r.AlarmLowTempC),
 		LevelCorrectionMm: f64p(r.LevelCorrectionMm), WaterCorrectionMm: f64p(r.WaterCorrectionMm),
 		TempCorrectionC: f64p(r.TempCorrectionC), Density: f64p(r.Density), CapacityL: f64p(r.CapacityL),
+		OilColor: i32p(r.OilColor),
 	}
 }
 

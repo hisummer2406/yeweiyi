@@ -124,11 +124,10 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device, reload]);
 
-  // 介质选项仅平台管理员可读；客户侧只显示当前介质（#27）
+  // 介质选项与颜色能力：两种管理员都可读（2026-11-14；员工没有网页后台）
   const [media, setMedia] = useState<API.MediaOptions>();
   const [mediaFailed, setMediaFailed] = useState(false);
   useEffect(() => {
-    if (!isPlatform) return;
     let alive = true;
     getDeviceMediaOptions(device)
       .then((m) => {
@@ -142,7 +141,7 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
     return () => {
       alive = false;
     };
-  }, [device, reload, isPlatform]);
+  }, [device, reload]);
 
   const target = tracked?.command.configTarget;
   const readMirror = useCallback(async () => {
@@ -269,7 +268,7 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
                 }))}
               />
             )}
-            {isPlatform && mediaFailed && (
+            {mediaFailed && (
               <Alert
                 style={{ marginBottom: 12 }}
                 type="warning"

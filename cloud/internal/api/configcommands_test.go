@@ -182,3 +182,46 @@ func TestConfigCommands_DeviceSettingsMirror(t *testing.T) {
 		t.Errorf("employee: %d %s, want 403", rec.Code, rec.Body.String())
 	}
 }
+
+// config.setTankTable (#49): a config write like setTankSettings — submission protection, 400 on bad args,
+// and it shares the tank's in-flight slot with setTankSettings.
+func TestConfigCommands_TankTable(t *testing.T) {
+	env, sender := newControlEnv(t, control.Config{AllowConfigCommands: true})
+	device := "ctl-api-tank-table"
+	env.ownDevice(device)
+	env.setRole(control.RoleCustomerAdmin)
+	url := "/api/devices/" + device + "/commands"
+
+	bad := configBody(t, protocol.MethodConfigTankTable, map[string]any{"tank": 1, "shape": "vertical", "heightMm": 2500})
+	if rec := env.authed("POST", url, bad); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "diameterMm") {
+		t.Errorf("missing dimension: %d %s", rec.Code, rec.Body.String())
+	}
+	noReq := jsonBody(t, map[string]any{"method": protocol.MethodConfigTankTable, "reason": "r", "expectedStationId": nil,
+		"args": map[string]any{"tank": 1, "shape": "vertical", "heightMm": 2500, "diameterMm": 2000}})
+	if rec := env.authed("POST", url, noReq); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "request_id_required") {
+		t.Errorf("no requestId: %d %s", rec.Code, rec.Body.String())
+	}
+
+	ok := configBody(t, protocol.MethodConfigTankTable, map[string]any{"tank": 2, "shape": "horizontal", "diameterMm": 2600, "lengthMm": 8000, "headMm": 600})
+	rec := env.authed("POST", url, ok)
+	if rec.Code != http.StatusAccepted || !strings.Contains(rec.Body.String(), `"configTarget":"tank:2"`) {
+		t.Fatalf("submit: %d %s", rec.Code, rec.Body.String())
+	}
+	if sender.calls != 1 {
+		t.Errorf("sender calls = %d", sender.calls)
+	}
+	settings := configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 2, "alarmHighLevelMm": 610})
+	if rec := env.authed("POST", url, settings); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "config_command_in_flight") {
+		t.Errorf("settings on the same tank while the table is in flight: %d %s", rec.Code, rec.Body.String())
+	}
+	other := configBody(t, protocol.MethodConfigTankSettings, map[string]any{"tank": 3, "alarmHighLevelMm": 610})
+	if rec := env.authed("POST", url, other); rec.Code != http.StatusAccepted {
+		t.Errorf("another tank: %d %s", rec.Code, rec.Body.String())
+	}
+
+	env.setRole(control.RoleCustomerUser)
+	staff := configBody(t, protocol.MethodConfigTankTable, map[string]any{"tank": 4, "shape": "vertical", "heightMm": 2500, "diameterMm": 2000})
+	if rec := env.authed("POST", url, staff); rec.Code != http.StatusForbidden {
+		t.Errorf("employee: %d %s, want 403", rec.Code, rec.Body.String())
+	}
+}

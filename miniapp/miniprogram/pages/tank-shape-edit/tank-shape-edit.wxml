@@ -1,6 +1,6 @@
 <!-- 设计稿「罐表设置-卧罐16 / 立罐17 / 长方体18 / 长方体选择罐号19」。
-     协议里没有\"生成并下发罐表\"的方法：生成罐表只走到选罐号，随后说明暂不支持；
-     \"保存到手机\"是真实的本机保存；\"保存到控制器\"同样说明暂不支持。
+     「生成罐表」在本机按设备同样的公式算出液位→容积表并在下方预览；
+     「保存到手机」已隐藏（#44）；「保存到控制器」选罐号后只下发罐型和尺寸，设备自行生成（#49）。
      示意图是从设计稿裁出的整条图（自带 H/L/R 标注），不是页面上叠的文字。 -->
 <view class="te-page">
   <image class="te-diagram" src="/assets/illustrations/tankshape-{{shape}}.png" mode="aspectFit" />
@@ -13,9 +13,29 @@
 
   <view class="te-buttons">
     <button class="te-btn te-btn-main" bindtap="onGenerate">{{text.generate}}</button>
-    <button class="te-btn te-btn-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
     <button class="te-btn te-btn-deep" bindtap="onSaveDevice">{{form.saveDevice}}</button>
+  </view>
+
+  <!-- 生成结果：液位(mm) → 容积(L)；点数多时抽样显示，最后一行（满罐）总是在 -->
+  <view wx:if="{{summary}}" class="te-result">
+    <view class="te-summary">{{summary}}</view>
+    <!-- 下发原因（保存到控制器时必填，进入确认框和操作记录） -->
+    <view class="te-reason">
+      <text class="te-reason-label">{{text.reasonLabel}}</text>
+      <input class="te-reason-input" value="{{reason}}" placeholder="{{text.reasonPlaceholder}}" placeholder-class="te-ph" maxlength="100" bindinput="onReasonInput" />
+    </view>
+    <view wx:if="{{sampled}}" class="te-sampled">{{text.sampled}}</view>
+    <view class="te-table-head">
+      <text class="te-col">{{text.colHeight}}</text>
+      <text class="te-col">{{text.colVolume}}</text>
+    </view>
+    <scroll-view scroll-y class="te-table">
+      <view wx:for="{{rows}}" wx:key="heightMm" class="te-table-row">
+        <text class="te-col">{{item.heightMm}}</text>
+        <text class="te-col">{{item.volumeL}}</text>
+      </view>
+    </scroll-view>
   </view>
 </view>
 
-<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="{{text.tankPickerTitle}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />
+<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="{{text.tankPickerTitle}}" options="{{tankOptions}}" value="{{-1}}" bind:pick="onPickTank" bind:close="onClosePicker" />

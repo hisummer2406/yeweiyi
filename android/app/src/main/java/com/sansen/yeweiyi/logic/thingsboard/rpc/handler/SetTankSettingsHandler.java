@@ -3,6 +3,7 @@ package com.sansen.yeweiyi.logic.thingsboard.rpc.handler;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.sansen.yeweiyi.db.OilCanSet;
+import com.sansen.yeweiyi.logic.OilColors;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcMethodHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcRequestEnvelope;
@@ -39,12 +40,14 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
     private final OilTankRepository oilTankRepository;
     private final Runnable onSettingsUpdated;
     private final CustomOilNameStore customOilNames;
+    private final OilColorRejectText colorText;
 
     public SetTankSettingsHandler(OilTankRepository oilTankRepository, Runnable onSettingsUpdated,
-                                  CustomOilNameStore customOilNames) {
+                                  CustomOilNameStore customOilNames, OilColorRejectText colorText) {
         this.oilTankRepository = oilTankRepository;
         this.onSettingsUpdated = onSettingsUpdated;
         this.customOilNames = customOilNames;
+        this.colorText = colorText;
     }
 
     @Override
@@ -69,7 +72,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
                 if ("tank".equals(field) || FIELD_NAME.equals(field) || FIELD_NAME_EN.equals(field)) {
                     continue;
                 }
-                Change change = validate(set, field, entry.getValue());
+                Change change = validate(set, field, entry.getValue(), colorText);
                 if (change == null) {
                     ignored.add(field);
                 } else {
@@ -194,7 +197,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
      * 校验一个字段，返回待写入的修改；不认识的字段返回 null（忽略）；非法值或不开放字段抛
      * IllegalArgumentException，调用方整条拒绝。
      */
-    private static Change validate(OilCanSet set, String field, JsonElement value) {
+    private static Change validate(OilCanSet set, String field, JsonElement value, OilColorRejectText colorText) {
         int tankHeight = set.getHeight();
         switch (field) {
             case "alarmLowLowLevelMm": {
@@ -243,6 +246,13 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
             case "oilTypeIndex": {
                 int v = requireInt(field, value, 0, MAX_OIL_TYPE_INDEX);
                 return new Change(s -> s.setOilType(v));
+            }
+            case "oilColor": {
+                int v = requireInt(field, value, 0, 0xFFFFFF);
+                if (!OilColors.isPaletteRgb(v)) {
+                    throw new IllegalArgumentException(colorText.notInPalette(String.format("#%06X", v)));
+                }
+                return new Change(s -> s.setOilColor(OilColors.toArgb(v)));
             }
             case "capacityL": {
                 int v = requireInt(field, value, 0, 1_000_000);

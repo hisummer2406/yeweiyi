@@ -7,14 +7,7 @@ import {
   within,
 } from '@testing-library/react';
 import { message } from 'antd';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
 const listUsers = vi.fn();

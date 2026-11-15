@@ -1,7 +1,8 @@
 # 远程配置命令：提交保护契约（#3，config-command-delivery）
 
 本文是后台（#4）与小程序（#6）接入远程配置下发的云端契约。方法本身（`config.setTankSettings` /
-`config.setDeviceSettings` 的参数、校验、设备拒绝原因）见 [tank-settings-contract.md](tank-settings-contract.md) 第二阶段；
+`config.setDeviceSettings` 的参数、校验、设备拒绝原因）见 [tank-settings-contract.md](tank-settings-contract.md) 第二阶段，
+`config.setTankTable` 见本文 §8；
 本文只定义**提交保护**：幂等、找回、受理时复核、在途互斥、开关、迟到结果与整机设置镜像。
 设计与取舍见 `openspec/changes/config-command-delivery/design.md`。
 
@@ -106,7 +107,7 @@
 
 ## 5. 迟到的命令结果
 
-命令已终态（多为 `expired`）后才到的 `cmdResult`（`succeeded`/`failed`，且与已存状态不同）写一条审计
+命令已终态（多为 `expired`）后才到的 `cmdResult`（`succeeded`/`failed`/`rejected`，且与已存状态不同）写一条审计
 `control.result_late`（`outcome=failed`，detail 含设备报告的状态、错误码、原因、`detail` 与命令当前状态），**命令状态不变**，
 每条命令至多一条。后台"操作记录"可经 `GET /api/audit?device=` 看到。设备上报别的设备的命令只记日志。
 限制：`ingest` 的回读只覆盖未过期命令，过期后才到的结果只能经实时订阅捕获。
@@ -117,7 +118,9 @@
 2. 确认弹窗生成 `requestId`，带上表单打开时的 `expectedStationId`。
 3. 网络超时：用**同一 `requestId`** 重发或用 `?requestId=` 查找回；**不得换新 id 自动重发**。
 4. 轮询 `GET .../commands/:commandId`，以 `terminal` 停止；`received` 不是完成。
-5. `succeeded` 后再比对镜像：`reportedAt` 晚于命令 `finishedAt` 且字段等于提交值才显示"已生效"；否则"等待设备回报"或"回报值不一致"。
+5. `rejected`/`failed` 显示错误码对应的明确结论与 `errorReason`（设备拒绝不是"结果无法确认"）；只有 `expired` 才是
+   "结果无法确认"，且不得拼接 ACK 阶段的"已受理"。旧固件的拒绝经 `cmdResult` 到达（见协议 §6.6 兼容规则）。
+6. `succeeded` 后再比对镜像：`reportedAt` 晚于命令 `finishedAt` 且字段等于提交值才显示"已生效"；否则"等待设备回报"或"回报值不一致"。
 6. `expired`、`command_delivery_unconfirmed`：显示"结果无法确认，请核对设备当前值"，不表示设备没执行。
 7. `device_station_changed`：重新载入油站与设备，丢弃旧表单。`config_command_in_flight`：跳到在途命令。
 8. 现场设置页保存会覆盖远程值（已接受的限制），"已生效"只表示读到了一致的回报。
@@ -126,3 +129,20 @@
 
 2026-11-09 起生产 `ALLOW_CONFIG_COMMANDS=true`，没有设备白名单。真机只验证过单字段 `config.setTankSettings`（2026-11-08），其余字段、
 整机设置、失败与离线路径仍待真机验收（#9）。物理命令（泵/阀/重启）仍关闭。
+
+## 8. 罐表远程生成：`config.setTankTable`（#49）
+
+**状态（2026-11-14）**：三端同 PR 实现；字段待设备端负责人确认（open-items §H）；**未真机验证**。
+
+只下发罐型和尺寸，设备按现场同一公式生成罐表并整表覆盖该罐。提交保护与 `config.setTankSettings` 相同（`requestId`、
+`expectedStationId` 必填），权限 `PermAdmin`（客户管理员、平台管理员），在途目标 `tank:<n>` 与罐设置共用。
+
+| `shape` | 必填字段（mm） | 范围 |
+|---|---|---|
+| `horizontal` 卧罐 | `diameterMm`、`lengthMm`、`headMm`（单侧封头，0 = 平封头） | 100～20000；`headMm` 0～20000 |
+| `vertical` 立罐 | `heightMm`、`diameterMm` | 100～20000 |
+| `cuboid` 长方体 | `heightMm`、`lengthMm`、`widthMm` | 100～20000 |
+
+`tank` 为 1～16 的整数。缺字段、非数字、越界、不属于该罐型的字段一律 `400`（`fields[]` 逐项说明），不派发。
+设备 `succeeded` 的 `detail` 为 `{tank, shape, pointCount, maxHeightMm, maxVolumeL}`；写入后设备重发标定属性，
+客户端以 `GET /api/devices/:device/tanks/:tank/calibration` 的 `reportedAt` 晚于命令受理时间、点数与最后一点和本地计算一致来确认回显。
