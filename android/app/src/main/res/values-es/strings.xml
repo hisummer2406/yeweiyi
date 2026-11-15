@@ -294,5 +294,6 @@
 
     <string name="serial_proxy_zhongcheng">Doble pantalla Zhongcheng</string>
     <string name="serial_proxy_modbus">Doble pantalla Modbus</string>
+    <string name="serial_proxy_restart">Reinicie la aplicación tras cambiar el modo de doble pantalla para aplicar el cambio.</string>
     <string name="data_save_error">Error al guardar</string>
 </resources>

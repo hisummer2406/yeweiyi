@@ -93,6 +93,7 @@ public class SoundLightManager {
 
     int modeType = 0;
 
+    /** 串口 4 双显时跳过防溢阀输出；本机声光报警及 IO 联动由各自路径处理。 */
     public void FYF(int oilCanId, boolean isHHeightAlarm) {
         if (!ProbeProxyManager.allowsControl()) return;
         if (fyfMap.get(oilCanId) == null) {
@@ -119,6 +120,7 @@ public class SoundLightManager {
 
     }
 
+    /** 低低液位同样受串口 4 模式约束，不能向双显线路发送阀控报文。 */
     public void FYFL(int oilCanId, boolean isLLowAlarm) {
         if (!ProbeProxyManager.allowsControl()) return;
         if (ProbeProxyManager.getMode() == com.sansen.yeweiyi.logic.probe.Serial4Mode.OVERFLOW) {

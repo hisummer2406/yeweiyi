@@ -231,5 +231,6 @@
     <string name="pump_link_desc">Juda past sathda ulanadi, juda yuqori sathda uziladi</string>
     <string name="serial_proxy_zhongcheng">Zhongcheng ikki ekran</string>
     <string name="serial_proxy_modbus">Modbus ikki ekran</string>
+    <string name="serial_proxy_restart">Ikki ekran rejimini oʻzgartirgandan soʻng, sozlama kuchga kirishi uchun ilovani qayta ishga tushiring.</string>
     <string name="data_save_error">Saqlash amalga oshmadi</string>
 </resources>

@@ -146,8 +146,10 @@ public class SerialPortManager {
         @Override
         public void run() {
             while (!isStop) {
+                // 复用串口 4 唯一接收线程；双显应答不受继电器开关控制，也不进入控制板解析。
                 if (ProbeProxyManager.isProxyMode()) {
                     try {
+                        // 客户端采集只等待 100ms；沿用控制路径的 250ms 间隔可能错过本次读取。
                         Thread.sleep(10);
                         if (isPause) continue;
                         if (!mainSerialPort.isOpen) {
@@ -158,6 +160,7 @@ public class SerialPortManager {
                         byte[] request = mainSerialPort.receiveData();
                         if (request != null && request.length > 0) {
                             byte[] reply = ProbeProxyManager.serial4Request(request);
+                            // 缓存命中即回原串口，避开控制消息队列每秒一次的发送节奏。
                             if (reply != null && mainSerialPort.isOpen) mainSerialPort.sendData(reply);
                         }
                     } catch (InterruptedException e) {
@@ -247,12 +250,14 @@ public class SerialPortManager {
 
     ProbeReciveDataListener reciveDataListener;
 
+    /** 控制输出入口；双显响应由接收线程直接发送，不能经此入口混入控制帧。 */
     public void sendByteProbe(byte[] datas) {
         if (!ProbeProxyManager.allowsControl()) return;
         mainSerialPort.sendData(datas);
 //        Log.i("发送的数据", DataUtils.bytesToHexString(datas, datas.length));
     }
 
+    /** 与另一控制输出入口保持相同的串口 4 模式限制。 */
     public void sendMsgMain(byte[] data) {
         if (!ProbeProxyManager.allowsControl()) return;
         //        LogUtils.i(TAG, "发送" + DataUtils.bytesToHexString(bytes, bytes.length));

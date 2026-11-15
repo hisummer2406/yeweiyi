@@ -66,6 +66,7 @@ public class AsyManager implements IHardIntf {
                 relayMap.put(i, new Relay(i, false));
             }
         }
+        // 本实例使用串口 4，队列和定时查询均受其启动模式约束。
         manager = new ObservableManager(true);
         manager.setUpdateListener(new ObservableManager.UpdateListener() {
             int count = 0;
@@ -227,6 +228,7 @@ public class AsyManager implements IHardIntf {
 
     @Override
     public void openOne(int relayNo, int isAutoClose, ObservableManager.ReciveListener reciveListener) {
+        // 双显独占串口 4；仅控制模式允许组帧，不能将新增的非零模式都当作 Modbus 控制。
         if (!ProbeProxyManager.allowsControl()) return;
         byte chain = (byte) getChainNumber().shortValue();
         byte[] frame;

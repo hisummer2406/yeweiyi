@@ -108,8 +108,10 @@ public class ChuanKouFragment extends BaseFragment  {
         tvTitle.setText(R.string.serial_port_settings);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
+    // 两行 RadioGroup 共用一个模式；程序回显和跨行清选时禁止触发重复保存。
     private boolean restoringSerialSettings;
 
+    /** 回显已持久化的选择，重启前可能与串口实际运行模式不同。 */
     private void showSerialSettings() {
         restoringSerialSettings = true;
         int type = SharePrefUtil.getInt(main, Constans.ChuanKou2, 0);
@@ -128,6 +130,7 @@ public class ChuanKouFragment extends BaseFragment  {
         restoringSerialSettings = false;
     }
 
+    /** 按待生效的串口 2/4 配置校验协议配对；仅保存，运行模式在完整重启后切换。 */
     private void saveSerialSetting(String key, int value) {
         int type = SharePrefUtil.getInt(main, Constans.ChuanKou2, 0);
         int mode = SharePrefUtil.getInt(main, Constans.ChuanKou4, 0);

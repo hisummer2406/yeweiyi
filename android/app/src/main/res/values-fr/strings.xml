@@ -227,5 +227,6 @@
     <string name="pump_link_desc">Fermeture au niveau très bas, ouverture au niveau très haut</string>
     <string name="serial_proxy_zhongcheng">Double affichage Zhongcheng</string>
     <string name="serial_proxy_modbus">Double affichage Modbus</string>
+    <string name="serial_proxy_restart">Après avoir changé le mode double affichage, redémarrez l’application pour appliquer le réglage.</string>
     <string name="data_save_error">Échec de l’enregistrement</string>
 </resources>

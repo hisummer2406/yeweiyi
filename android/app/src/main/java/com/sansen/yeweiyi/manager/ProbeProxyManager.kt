@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.manager
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.SystemClock
 import com.sansen.yeweiyi.applog.ProbeProxyLog
 import com.sansen.yeweiyi.logic.probe.ProbeProxySession
@@ -10,17 +11,21 @@ import com.sansen.yeweiyi.utils.SharePrefUtil
 
 /** 启动时固定串口模式，把 Android 配置与日志接到可单测的代理会话。 */
 object ProbeProxyManager {
+    // 两个端口共用启动快照，避免运行中只有控制路由或采集协议的一侧发生切换。
     private var mode = Serial4Mode.OVERFLOW
     private var protocol = 0
+    // init 重复调用不重读配置，保证本进程始终使用同一份模式和缓存会话。
     private var initialized = false
+    // 会话负责来源可用性、采集范围和在途请求代次；原始报文缓存封装在其内部。
     private var session: ProbeProxySession? = null
-    private var context: Context? = null
+    // 仅保留配置存储，动态读取演示开关，无需在单例中持有 Context。
+    private var preferences: SharedPreferences? = null
 
     /** 在 HAL 和探针线程启动前调用一次；端口协议固定为启动配置，设置修改需重启。 */
     @JvmStatic @Synchronized fun init(ctx: Context) {
         if (initialized) return
         initialized = true
-        context = ctx.applicationContext
+        preferences = SharePrefUtil.preferences(ctx.applicationContext)
         mode = SharePrefUtil.getInt(ctx, Constans.ChuanKou4, 0)
         protocol = SharePrefUtil.getInt(ctx, Constans.ChuanKou2, 0)
         session = ProbeProxySession(mode, protocol, { SystemClock.elapsedRealtime() }, ProbeProxyLog::notice)
@@ -74,7 +79,7 @@ object ProbeProxyManager {
 
     /** 演示开关运行中可改，不能像串口协议一样只在启动时读取。 */
     private fun isDemo(): Boolean {
-        val ctx = context ?: return true
-        return SharePrefUtil.getInt(ctx, Constans.isTestStatus, 0) != 0
+        val prefs = preferences ?: return true
+        return prefs.getInt(Constans.isTestStatus, 0) != 0
     }
 }

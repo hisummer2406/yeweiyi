@@ -5,7 +5,7 @@ import com.sansen.yeweiyi.logic.applog.LogLevel
 import com.sansen.yeweiyi.logic.applog.LogModule
 import com.sansen.yeweiyi.utils.DataUtils
 
-/** 代理失败按原因限频，逐帧内容仅在 DEBUG 输出。 */
+/** 异常记 W、启动模式记 I；逐帧内容仅在 PROBE 日志级别为 D 时输出，与构建类型无关。 */
 object ProbeProxyLog {
     private val last = HashMap<String, Long>()
 
@@ -23,7 +23,7 @@ object ProbeProxyLog {
         AppLog.i(LogModule.PROBE, "探针代理模式", "serial4", mode, "serial2", protocol)
     }
 
-    /** 先判断 DEBUG 再格式化原始帧，正常轮询无需生成十六进制字符串。 */
+    /** 先判断是否开启 D 级详细日志，再格式化原始帧，避免默认 W 级轮询产生额外开销。 */
     @JvmStatic fun frame(direction: String, bytes: ByteArray) = logSafely("ProbeProxyLog") {
         if (AppLog.isLoggable(LogModule.PROBE, LogLevel.DEBUG)) {
             AppLog.d(LogModule.PROBE, "探针代理报文", "direction", direction,

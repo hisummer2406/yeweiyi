@@ -21,7 +21,7 @@ public class Singleton {
     public boolean IsKuCun;//库存记录导出
     public long StockTime = 0;
     public double[] TanZhenLang = new double[256];// 下标 = 探针地址字节（1-255）
-    public int ChuanKou2;//串口2设置
+    public int ChuanKou2;//串口2启动协议：0 中成、1 Modbus、2 4–20mA
     public int ChuanKou4;//串口4启动模式：0/1 控制，2/3 探针代理
     public boolean ChuanKou5;//串口5设置
 
@@ -79,6 +79,7 @@ public class Singleton {
             Singleton.getInstance().IsRuKu = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsRuKu, 0) == 0 ? false : true;
         if (name.equals(Constans.IsKuCun) || "".equals(name))
             Singleton.getInstance().IsKuCun = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsKuCun, 0) == 0 ? false : true;
+        // 运行协议统一取启动快照，避免设置页保存后仅部分模块切换协议。
         if (name.equals(Constans.ChuanKou2) || "".equals(name)) {
             Singleton.getInstance().ChuanKou2 = com.sansen.yeweiyi.manager.ProbeProxyManager.getSourceProtocol();
         }

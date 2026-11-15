@@ -648,4 +648,5 @@
 
     <string name="serial_proxy_zhongcheng">中成探针双显</string>
     <string name="serial_proxy_modbus">Modbus双显</string>
+    <string name="serial_proxy_restart">切换双显模式后，请重启应用使设置生效。</string>
 </resources>

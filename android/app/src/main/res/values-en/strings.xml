@@ -613,4 +613,5 @@
 
     <string name="serial_proxy_zhongcheng">Zhongcheng dual display</string>
     <string name="serial_proxy_modbus">Modbus dual display</string>
+    <string name="serial_proxy_restart">Restart the app after switching dual-display modes for the change to take effect.</string>
 </resources>

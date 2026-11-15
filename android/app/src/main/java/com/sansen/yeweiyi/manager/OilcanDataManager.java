@@ -108,6 +108,7 @@ public class OilcanDataManager {
         setProbeData(newTestOilCanData, "test");
         mOilCanData = newOilCanData;
         testOilCanData = newTestOilCanData;
+        // 配置重载先使代理旧缓存及在途请求失效，原有云端配置回调仍独立执行。
         configureProxyAddresses(newOilCanData);
         Runnable listener = configChangedListener;
         if (listener != null) {
@@ -122,6 +123,7 @@ public class OilcanDataManager {
         this.configChangedListener = listener;
     }
 
+    /** 代理范围取本机真实采集配置的探针地址，而非油罐编号；不使用演示数据。 */
     private void configureProxyAddresses(SparseArray<OilCan> data) {
         int[] addresses = new int[data.size()];
         for (int i = 0; i < data.size(); i++) {

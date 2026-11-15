@@ -86,6 +86,7 @@ public class SerialPortManager implements IParseDataListener {
     private OilcanDataManager mOilCanDataManager;
     private ModbusTcpServer modbusTcpServer;
 
+    // true 表示允许轮询、false 表示暂停；volatile 保证采集线程能看到其他线程的切换。
     private volatile boolean isStopProbe = true;
     private SerialPortHelper Censtar;
 
@@ -174,11 +175,13 @@ public class SerialPortManager implements IParseDataListener {
         modbusTcpServer.start();
     }
 
+    /** 暂停时同步失效代理缓存与在途请求，避免已发出的采样重新开放双显应答。 */
     public void stopProbeThread() {
         isStopProbe = false;
         ProbeProxyManager.setPollingEnabled(false);
     }
 
+    /** 恢复轮询许可；代理缓存仍需收到新的真实采样才能提供数据。 */
     public void startProbeThread() {
         ProbeProxyManager.setPollingEnabled(true);
         isStopProbe = true;
@@ -223,6 +226,7 @@ public class SerialPortManager implements IParseDataListener {
                             System.currentTimeMillis() > DateUtils.getStringToDate(SharePrefUtil.getString(MyApplication.getInstance(),
                                     SharePrefUtil.TIME_REMAINING, DateUtils.getYYYMMdd()), "yyyy-MM-dd")) {
 
+                        // 授权到期停止采集时，双显也不能继续提供之前的采样。
                         ProbeProxyManager.setSourceAvailable(false);
                     } else {
                         if (isStopProbe) {
@@ -343,6 +347,7 @@ public class SerialPortManager implements IParseDataListener {
                                         }
                                         ProbeProxyManager.setSourceAvailable(isStopProbe && serialPort.isOpen);
                                         byte[] requestBytes = DataUtils.HexString2Bytes(oilCanData);
+                                        // 发送前记录配置代次；等待应答期间若暂停或重载配置，该应答不得回填缓存。
                                         long proxyToken = ProbeProxyManager.sourceRequest(probeType, requestBytes);
                                         serialPort.sendData(requestBytes);
                                 Log.i(TAG, "发送到串口数据" + oilCanData);
@@ -357,6 +362,8 @@ public class SerialPortManager implements IParseDataListener {
 
                                         data = null;
                                         byte[] bytes = serialPort.receiveData();
+                                        // 共用现有串口 2 读结果，在本机协议解析与液位修正前缓存原始报文。
+                                        // 缓存自行校验帧，不依赖厂商解析返回值，也不另启读取线程。
                                         ProbeProxyManager.sourceBytes(proxyToken, bytes);
 
                                         if (bytes != null) {
@@ -475,6 +482,7 @@ public class SerialPortManager implements IParseDataListener {
 
                 }
             } finally {
+                // 采集线程异常退出也需撤销来源可用状态，不能让远端继续读旧缓存。
                 ProbeProxyManager.setSourceAvailable(false);
             }
         }
@@ -494,6 +502,7 @@ public class SerialPortManager implements IParseDataListener {
 //        Log.i(TAG, "crcError: " + mOilCan.getErrorTimes());
 
         if ((mOilCan.getProbeType() == 0 || mOilCan.getProbeType() == 1) && mOilCan.getErrorTimes() >= 5) {
+            // 达到本机故障阈值即失效该探针缓存；其他探针和原有报警处理继续运行。
             ProbeProxyManager.probeLost(mOilCan.getProbeAddressByte());
         }
         switch (mOilCan.getProbeType()) {

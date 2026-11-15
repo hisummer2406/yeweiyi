@@ -234,5 +234,6 @@
     <string name="pump_link_desc">Замыкается при аварийно низком уровне, размыкается при аварийно высоком</string>
     <string name="serial_proxy_zhongcheng">Два экрана Zhongcheng</string>
     <string name="serial_proxy_modbus">Два экрана Modbus</string>
+    <string name="serial_proxy_restart">После переключения режима двух экранов перезапустите приложение, чтобы применить настройку.</string>
     <string name="data_save_error">Не удалось сохранить</string>
 </resources>
