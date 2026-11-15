@@ -1,26 +1,14 @@
 package com.sansen.yeweiyi.logic.inout;
 
 /**
- * 出/入库事件判定阈值。
- *
- * <p>前四个字段是用户在"基础设置"页面配置的业务阈值（对应
- * {@code Singleton.InHight}/{@code InTime}/{@code OutHight}/{@code OutTime}）。
- * 后三个是判定逻辑内部使用的去抖/兜底参数，不对用户暴露：
- * <ul>
- *   <li>{@code noiseTolerance}：两次读数差的绝对值不超过此值视为"未变化"，
- *       用于过滤传感器噪声，避免要求读数完全相等。</li>
- *   <li>{@code settleWindowMillis}：读数进入"未变化"状态后，需要再持续这么久
- *       才确认"真的稳定了"（去抖确认窗口），量级应远小于业务时间阈值。</li>
- *   <li>{@code maxTrackingMillis}：一段跟踪从开始变化起最长可以持续多久；
- *       超过仍未同时满足双阈值就放弃，避免状态无限期悬挂。</li>
- * </ul>
- * 三者的具体取值是占位默认值，真实取值需要结合现场传感器噪声特征和轮询频率
- * 在真机验证阶段确认（见 openspec/changes/rewrite-stock-inout-detection/tasks.md 第6组）。
+ * 出/入库事件判定阈值：业务高度/时长来自基础设置，内部参数不对用户暴露。
+ * 入库、出库共用 1 毫米容差和 60 秒稳定窗口，减少短暂停顿造成的分段结算。
+ * 稳定等待与业务时长分别判断；默认参数的现场效果仍需真机验证。
  */
 public class InOutThresholds {
 
     public static final double DEFAULT_NOISE_TOLERANCE = 1.0;
-    public static final long DEFAULT_SETTLE_WINDOW_MILLIS = 3_000L;
+    public static final long DEFAULT_SETTLE_WINDOW_MILLIS = 60_000L;
     public static final long DEFAULT_MAX_TRACKING_MILLIS = 2L * 60 * 60 * 1000; // 2小时
 
     /** 入库判定的高度阈值：净高度变化需达到此值才可能判定为入库。 */
