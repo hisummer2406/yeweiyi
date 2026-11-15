@@ -645,4 +645,7 @@
     <!-- 串口设置页：单罐开关量输出（IO2 联动，PumpIoManager）；罐号框复用 tank_no、oilcanArray -->
     <string name="pump_link_title">单罐开关量输出</string>
     <string name="pump_link_desc">低低液位闭合，高高液位断开</string>
+
+    <string name="serial_proxy_zhongcheng">中成探针双显</string>
+    <string name="serial_proxy_modbus">Modbus双显</string>
 </resources>

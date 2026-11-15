@@ -22,7 +22,7 @@ public class Singleton {
     public long StockTime = 0;
     public double[] TanZhenLang = new double[256];// 下标 = 探针地址字节（1-255）
     public int ChuanKou2;//串口2设置
-    public boolean ChuanKou4;//串口4设置
+    public int ChuanKou4;//串口4启动模式：0/1 控制，2/3 探针代理
     public boolean ChuanKou5;//串口5设置
 
     public boolean IsCreateAlarm;//生成报警记录
@@ -80,11 +80,11 @@ public class Singleton {
         if (name.equals(Constans.IsKuCun) || "".equals(name))
             Singleton.getInstance().IsKuCun = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.IsKuCun, 0) == 0 ? false : true;
         if (name.equals(Constans.ChuanKou2) || "".equals(name)) {
-            Singleton.getInstance().ChuanKou2 = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou2, 0);
+            Singleton.getInstance().ChuanKou2 = com.sansen.yeweiyi.manager.ProbeProxyManager.getSourceProtocol();
         }
 
         if (name.equals(Constans.ChuanKou4) || "".equals(name))
-            Singleton.getInstance().ChuanKou4 = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou4, 0) == 0 ? false : true;
+            Singleton.getInstance().ChuanKou4 = com.sansen.yeweiyi.manager.ProbeProxyManager.getMode();
         if (name.equals(Constans.ChuanKou5) || "".equals(name))
             Singleton.getInstance().ChuanKou5 = SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou5, 0) == 0 ? false : true;
         if (name.equals(Constans.IsCreateAlarm) || "".equals(name))

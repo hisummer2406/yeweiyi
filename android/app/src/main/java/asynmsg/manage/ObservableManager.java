@@ -3,6 +3,7 @@ package asynmsg.manage;
 import android.util.Log;
 
 import com.sansen.yeweiyi.applog.RelayLog;
+import com.sansen.yeweiyi.manager.ProbeProxyManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.DataUtils;
 
@@ -36,8 +37,14 @@ public class ObservableManager {
     private int errorCount;
     private IErrorCodeListener errorListener;
     private UpdateListener updateListener;
+    private final boolean ownsSerial4;
 
     public ObservableManager() {
+        this(false);
+    }
+
+    public ObservableManager(boolean ownsSerial4) {
+        this.ownsSerial4 = ownsSerial4;
         Log.i(TAG, "启动了");
         mDisposable = getDisposable();
         mCompositeDisposable.add(mDisposable);
@@ -54,6 +61,7 @@ public class ObservableManager {
                 .subscribe(new Consumer<Long>() {
                     @Override
                     public void accept(Long aLong) throws Exception {
+                        if (ownsSerial4 && !ProbeProxyManager.allowsControl()) return;
 //                        Log.i(TAG, "accept: "+aLong);
                         if (SharePreManager.getRelaySwitch()) {
                             for (int key : listeners.keySet()) {
@@ -92,6 +100,7 @@ public class ObservableManager {
     }
 
     private void sendMsg(byte[] bytes) {
+        if (ownsSerial4 && !ProbeProxyManager.allowsControl()) return;
         if (mainSerialPort == null) {
             throw new RuntimeException();
         }
@@ -141,6 +150,7 @@ public class ObservableManager {
     }
 
     public void sendData(byte[] address, byte[] content, int waitTime, ObservableManager.ReciveListener listener) {
+        if (ownsSerial4 && !ProbeProxyManager.allowsControl()) return;
         addListener(address, listener, waitTime);
         addMsgPool(address, content);
     }

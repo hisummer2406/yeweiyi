@@ -4,6 +4,8 @@ import android.databinding.ObservableField;
 import android.util.Log;
 
 import com.sansen.yeweiyi.applog.RelayLog;
+import com.sansen.yeweiyi.manager.ProbeProxyManager;
+import com.sansen.yeweiyi.logic.probe.Serial4Mode;
 import com.sansen.yeweiyi.bean.Relay;
 import com.sansen.yeweiyi.logic.relay.Serial4Frame;
 import com.sansen.yeweiyi.intf.IHardIntf;
@@ -64,7 +66,7 @@ public class AsyManager implements IHardIntf {
                 relayMap.put(i, new Relay(i, false));
             }
         }
-        manager = new ObservableManager();
+        manager = new ObservableManager(true);
         manager.setUpdateListener(new ObservableManager.UpdateListener() {
             int count = 0;
 
@@ -225,9 +227,10 @@ public class AsyManager implements IHardIntf {
 
     @Override
     public void openOne(int relayNo, int isAutoClose, ObservableManager.ReciveListener reciveListener) {
+        if (!ProbeProxyManager.allowsControl()) return;
         byte chain = (byte) getChainNumber().shortValue();
         byte[] frame;
-        if (Singleton.getInstance().ChuanKou4){
+        if (ProbeProxyManager.getMode() == Serial4Mode.RELAY_MODBUS){
             frame = Serial4Frame.modbusWrite(relayNo, isAutoClose);
             RelayLog.onCommand(relayNo, "Modbus", isAutoClose, frame);
         }

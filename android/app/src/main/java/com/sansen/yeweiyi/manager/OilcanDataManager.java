@@ -64,6 +64,7 @@ public class OilcanDataManager {
         getData();
         getTestData();
         setProbeData(mOilCanData, "nomar");
+        configureProxyAddresses(mOilCanData);
         setProbeData(testOilCanData, "test");
 //		Log.i("在什么线程下执行啊+++",Thread.currentThread().getName());
 //
@@ -107,6 +108,7 @@ public class OilcanDataManager {
         setProbeData(newTestOilCanData, "test");
         mOilCanData = newOilCanData;
         testOilCanData = newTestOilCanData;
+        configureProxyAddresses(newOilCanData);
         Runnable listener = configChangedListener;
         if (listener != null) {
             listener.run();
@@ -118,6 +120,14 @@ public class OilcanDataManager {
 
     public void setConfigChangedListener(Runnable listener) {
         this.configChangedListener = listener;
+    }
+
+    private void configureProxyAddresses(SparseArray<OilCan> data) {
+        int[] addresses = new int[data.size()];
+        for (int i = 0; i < data.size(); i++) {
+            addresses[i] = data.valueAt(i).getProbeAddressByte();
+        }
+        ProbeProxyManager.configureAddresses(addresses);
     }
 
     /**

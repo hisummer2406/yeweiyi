@@ -37,11 +37,9 @@ import java.util.concurrent.locks.ReentrantLock;
 import serialport.help.SerialPortHelper;
 
 /**
- * 协议编排层：串口/PC/探头三路轮询、厂商协议分发（factory/）、报警联动、经 {@link DataRefreshCallback}
- * 把解析结果回调给 UI 层。不是 HAL——底层字节收发在 {@code serialport.manager.SerialPortManager}
- * （263 行，零 UI 依赖，几乎无调用方）。两者同名易混淆：UI/业务层应始终经本类，禁止直接调用
- * {@code serialport.manager.SerialPortManager}。见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries §8、
- * `CLAUDE.md` "Known landmines"。
+ * 协议编排层：探头轮询、厂商分发、报警联动，经 {@link DataRefreshCallback} 刷新 UI。
+ * 原始应答交给 ProbeProxyManager；底层收发在 serialport.manager.SerialPortManager。
+ * UI/业务层统一经编排层访问硬件，避免绕过协议和端口所有权判断。
  */
 public class SerialPortManager implements IParseDataListener {
 
@@ -88,7 +86,7 @@ public class SerialPortManager implements IParseDataListener {
     private OilcanDataManager mOilCanDataManager;
     private ModbusTcpServer modbusTcpServer;
 
-    private boolean isStopProbe = true;
+    private volatile boolean isStopProbe = true;
     private SerialPortHelper Censtar;
 
     /**
@@ -178,9 +176,11 @@ public class SerialPortManager implements IParseDataListener {
 
     public void stopProbeThread() {
         isStopProbe = false;
+        ProbeProxyManager.setPollingEnabled(false);
     }
 
     public void startProbeThread() {
+        ProbeProxyManager.setPollingEnabled(true);
         isStopProbe = true;
     }
 
@@ -209,7 +209,7 @@ public class SerialPortManager implements IParseDataListener {
         }
 
         public void run() {
-
+            try {
                 String data = null;
                 // 如果串口一直打开，那么线程就一直执行
                 SparseArray<OilCan> mOilCanData;
@@ -223,6 +223,7 @@ public class SerialPortManager implements IParseDataListener {
                             System.currentTimeMillis() > DateUtils.getStringToDate(SharePrefUtil.getString(MyApplication.getInstance(),
                                     SharePrefUtil.TIME_REMAINING, DateUtils.getYYYMMdd()), "yyyy-MM-dd")) {
 
+                        ProbeProxyManager.setSourceAvailable(false);
                     } else {
                         if (isStopProbe) {
                             mOilCanData = mOilCanDataManager.getData();// 保证每一次获取的数据为最新
@@ -340,7 +341,10 @@ public class SerialPortManager implements IParseDataListener {
                                                 //  oilCanData = RouXingCompany.getInstance().sendProbeInfo("04", mOilCan.getProbeAdr(),mContext);
                                                 break;
                                         }
-                                        serialPort.sendData(DataUtils.HexString2Bytes(oilCanData));
+                                        ProbeProxyManager.setSourceAvailable(isStopProbe && serialPort.isOpen);
+                                        byte[] requestBytes = DataUtils.HexString2Bytes(oilCanData);
+                                        long proxyToken = ProbeProxyManager.sourceRequest(probeType, requestBytes);
+                                        serialPort.sendData(requestBytes);
                                 Log.i(TAG, "发送到串口数据" + oilCanData);
                                         try {
                                             Thread.sleep(100);
@@ -353,6 +357,7 @@ public class SerialPortManager implements IParseDataListener {
 
                                         data = null;
                                         byte[] bytes = serialPort.receiveData();
+                                        ProbeProxyManager.sourceBytes(proxyToken, bytes);
 
                                         if (bytes != null) {
                                             data = DataUtils.bytesToHexString(bytes, bytes.length);
@@ -460,6 +465,7 @@ public class SerialPortManager implements IParseDataListener {
                                 }
                             }
                         } else {
+                            ProbeProxyManager.setSourceAvailable(false);
                             byte[] bytes = serialPort.receiveData();
                             if (bytes != null && bytes.length > 0) {
                                 reciveDataListener.reciveData(bytes);
@@ -468,7 +474,10 @@ public class SerialPortManager implements IParseDataListener {
                     }
 
                 }
+            } finally {
+                ProbeProxyManager.setSourceAvailable(false);
             }
+        }
     }
 
     ProbeReciveDataListener reciveDataListener;
@@ -484,6 +493,9 @@ public class SerialPortManager implements IParseDataListener {
     private void crcError(OilCan mOilCan) {
 //        Log.i(TAG, "crcError: " + mOilCan.getErrorTimes());
 
+        if ((mOilCan.getProbeType() == 0 || mOilCan.getProbeType() == 1) && mOilCan.getErrorTimes() >= 5) {
+            ProbeProxyManager.probeLost(mOilCan.getProbeAddressByte());
+        }
         switch (mOilCan.getProbeType()) {
             case 0:
                 if (mOilCan.getErrorTimes() >= 5) {

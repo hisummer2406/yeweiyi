@@ -101,6 +101,9 @@ public class MyApplication extends Application {
 		CrashApphandler.getInstance().init(this.getApplicationContext());
 		LogCatHelper.getInstance(this.getApplicationContext(),null).start();
 		CRCheck.getInstance().init_all_tab();
+		com.sansen.yeweiyi.manager.ProbeProxyManager.init(this);
+		com.sansen.yeweiyi.utils.Singleton.getInstance().getSetData(com.sansen.yeweiyi.utils.Constans.ChuanKou2);
+		com.sansen.yeweiyi.utils.Singleton.getInstance().getSetData(com.sansen.yeweiyi.utils.Constans.ChuanKou4);
 		//RMC
 		serialport.manager.SerialPortManager.getInstance();
 

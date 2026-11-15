@@ -225,4 +225,7 @@
     <string name="createtable_sheet_name_invalid">Onglet « %1$s » invalide (n° cuve 1–%2$d attendu) — non importé</string>
     <string name="pump_link_title">Sortie tout-ou-rien par cuve</string>
     <string name="pump_link_desc">Fermeture au niveau très bas, ouverture au niveau très haut</string>
+    <string name="serial_proxy_zhongcheng">Double affichage Zhongcheng</string>
+    <string name="serial_proxy_modbus">Double affichage Modbus</string>
+    <string name="data_save_error">Échec de l’enregistrement</string>
 </resources>

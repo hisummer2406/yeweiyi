@@ -21,6 +21,8 @@ import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
 import com.sansen.yeweiyi.manager.PumpIoManager;
+import com.sansen.yeweiyi.logic.probe.Serial4Mode;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.utils.Constans;
 import com.sansen.yeweiyi.utils.SharePrefUtil;
 
@@ -30,7 +32,7 @@ import com.sansen.yeweiyi.utils.SharePrefUtil;
  */
 public class ChuanKouFragment extends BaseFragment  {
 
-    private RadioGroup rg_serial2, rg_serial4;
+    private RadioGroup rg_serial2, rg_serial4, rg_serial4_proxy;
     private CheckBox cb_pump_link;
     private LinearLayout ly_upper_page;
     private TextView tv_pump_link_tank;
@@ -77,51 +79,26 @@ public class ChuanKouFragment extends BaseFragment  {
     public void findView() {
         rg_serial2 = rootView.findViewById(R.id.rg_serial2);
         rg_serial4 = rootView.findViewById(R.id.rg_serial4);
+        rg_serial4_proxy = rootView.findViewById(R.id.rg_serial4_proxy);
         ly_upper_page=rootView.findViewById(R.id.ly_upper_page);
         ly_upper_page.setOnClickListener(this);
+        showSerialSettings();
         rg_serial2.setOnCheckedChangeListener((group, checkedId) -> {
-            switch (checkedId) {
-                case R.id.rb_serial2_zhongcheng:
-                    SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou2,  0);
-                    // 选项 A
-                    break;
-                case R.id.rb_serial2_modbus:
-                    SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou2,  1 );
-                    // 选项 B
-                    break;
-                case R.id.rb_serial2_mA:
-                    SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou2,  2 );
-                    break;
-
-            }
+            if (restoringSerialSettings) return;
+            int type = checkedId == R.id.rb_serial2_zhongcheng ? 0
+                    : checkedId == R.id.rb_serial2_modbus ? 1 : 2;
+            saveSerialSetting(Constans.ChuanKou2, type);
         });
-        rg_serial4.setOnCheckedChangeListener((group, checkedId) -> {
-            switch (checkedId) {
-                case R.id.rb_serial4_oil:
-                    SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou4,  0);
-                    // 选项 A
-                    break;
-                case R.id.rb_serial4_modbus:
-                    SharePrefUtil.saveInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou4,  1);
-                    // 选项 B
-                    break;
-            }
-        });
-
-        switch (SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou2,0)){
-            case 0 :
-                rg_serial2.check(R.id.rb_serial2_zhongcheng);
-                break;
-
-            case 1:
-                rg_serial2.check(R.id.rb_serial2_modbus);
-                break;
-
-            case 2:
-                rg_serial2.check( R.id.rb_serial2_mA);
-                break;
-        }
-        rg_serial4.check(SharePrefUtil.getInt(MyApplication.getInstance().getApplicationContext(), Constans.ChuanKou4, 0) == 0 ? R.id.rb_serial4_oil : R.id.rb_serial4_modbus);
+        RadioGroup.OnCheckedChangeListener serial4Listener = (group, checkedId) -> {
+            if (restoringSerialSettings || checkedId == -1) return;
+            int mode = checkedId == R.id.rb_serial4_oil ? Serial4Mode.OVERFLOW
+                    : checkedId == R.id.rb_serial4_modbus ? Serial4Mode.RELAY_MODBUS
+                    : checkedId == R.id.rb_serial4_proxy_zhongcheng ? Serial4Mode.PROXY_ZHONGCHENG
+                    : Serial4Mode.PROXY_MODBUS;
+            saveSerialSetting(Constans.ChuanKou4, mode);
+        };
+        rg_serial4.setOnCheckedChangeListener(serial4Listener);
+        rg_serial4_proxy.setOnCheckedChangeListener(serial4Listener);
         initPumpLink();
 
         View headerView = rootView.findViewById(R.id.title_bar);
@@ -131,6 +108,42 @@ public class ChuanKouFragment extends BaseFragment  {
         tvTitle.setText(R.string.serial_port_settings);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
+    private boolean restoringSerialSettings;
+
+    private void showSerialSettings() {
+        restoringSerialSettings = true;
+        int type = SharePrefUtil.getInt(main, Constans.ChuanKou2, 0);
+        int mode = SharePrefUtil.getInt(main, Constans.ChuanKou4, 0);
+        rg_serial2.check(type == 0 ? R.id.rb_serial2_zhongcheng
+                : type == 1 ? R.id.rb_serial2_modbus : R.id.rb_serial2_mA);
+        rg_serial4.clearCheck();
+        rg_serial4_proxy.clearCheck();
+        switch (mode) {
+            case Serial4Mode.OVERFLOW: rg_serial4.check(R.id.rb_serial4_oil); break;
+            case Serial4Mode.RELAY_MODBUS: rg_serial4.check(R.id.rb_serial4_modbus); break;
+            case Serial4Mode.PROXY_ZHONGCHENG: rg_serial4_proxy.check(R.id.rb_serial4_proxy_zhongcheng); break;
+            case Serial4Mode.PROXY_MODBUS: rg_serial4_proxy.check(R.id.rb_serial4_proxy_modbus); break;
+            default: rg_serial4.clearCheck();
+        }
+        restoringSerialSettings = false;
+    }
+
+    private void saveSerialSetting(String key, int value) {
+        int type = SharePrefUtil.getInt(main, Constans.ChuanKou2, 0);
+        int mode = SharePrefUtil.getInt(main, Constans.ChuanKou4, 0);
+        if (Constans.ChuanKou2.equals(key)) type = value;
+        else mode = value;
+        if (!Serial4Mode.matches(mode, type)) {
+            showSerialSettings();
+            return;
+        }
+        if (SharePrefUtil.getInt(main, key, 0) != value) {
+            boolean saved = SharePrefUtil.saveIntsChecked(main, java.util.Collections.singletonMap(key, value));
+            SystemUtils.showRsToast(saved ? R.string.data_save_success : R.string.data_save_error);
+        }
+        showSerialSettings();
+    }
+
     Observable.OnPropertyChangedCallback callback = new Observable.OnPropertyChangedCallback() {
         @Override
         public void onPropertyChanged(Observable sender, int propertyId) {

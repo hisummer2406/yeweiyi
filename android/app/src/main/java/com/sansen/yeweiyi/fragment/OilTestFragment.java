@@ -183,6 +183,7 @@ public class OilTestFragment extends BaseFragment {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
                 SharePrefUtil.saveInt(MyApplication.getInstance(), Constans.isTestStatus,b ? 1:0);
+                com.sansen.yeweiyi.manager.ProbeProxyManager.setSourceAvailable(false);
                 Singleton.getInstance().getSetData(Constans.isTestStatus);
             }
         });

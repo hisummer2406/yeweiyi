@@ -10,7 +10,7 @@
         android:id="@+id/title_bar"
         layout="@layout/layout_title_bar2" />
 
-    <LinearLayout
+    <ScrollView
         android:layout_marginLeft="@dimen/dp_104"
         android:layout_marginRight="@dimen/dp_104"
         android:layout_marginTop="@dimen/dp_50"
@@ -18,6 +18,11 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:background="#e6eeff"
         android:orientation="vertical"
         android:padding="@dimen/dp_54">
@@ -105,6 +110,31 @@
                 android:textSize="20sp" />
         </RadioGroup>
 
+        <RadioGroup
+            android:id="@+id/rg_serial4_proxy"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rb_serial4_proxy_zhongcheng"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/serial_proxy_zhongcheng"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+
+            <RadioButton
+                android:id="@+id/rb_serial4_proxy_modbus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="80dp"
+                android:text="@string/serial_proxy_modbus"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+        </RadioGroup>
+
         <!-- 单罐开关量输出（IO2 联动，PumpIoManager）；开关图标同记录设置页 -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -155,6 +185,7 @@
             android:textSize="18sp" />
 
     </LinearLayout>
+    </ScrollView>
 
     <LinearLayout
         android:layout_marginBottom="@dimen/dp_60"
