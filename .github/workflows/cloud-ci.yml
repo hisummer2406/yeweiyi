@@ -152,7 +152,8 @@ jobs:
         run: |
           # 本 Runner 装在 $HOME/actions-runner；其他路径下的 Runner.Worker 即同机其他项目正在跑的 job。
           for i in $(seq 1 120); do
-            others="$(pgrep -a -f 'bin/Runner.Worker' | grep -v -F "$HOME/actions-runner/" || true)"
+            # 按进程名精确匹配（-x），不能用 -f：任何命令行里带这串字符的进程（如监控脚本）都会被误判。
+            others="$(for p in $(pgrep -x Runner.Worker); do ps -o args= -p "$p"; done | grep -v -F "$HOME/actions-runner/" || true)"
             avail_mb="$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
             if [[ -z "$others" && "$avail_mb" -ge 3000 ]]; then
               echo "可以启动：其他 Runner 空闲，可用内存 ${avail_mb} MiB"; exit 0
