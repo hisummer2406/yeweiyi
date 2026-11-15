@@ -212,15 +212,21 @@ jobs:
             exec -T netns bash -euc 'go version; go env GOMODCACHE GOCACHE
               migrate -database "$DATABASE_URL" -path db/migrations up
               go run ./cmd/tbconfig apply'
+      # -count=1：GOCACHE 在本机持久，若不禁用测试结果缓存，依赖 ThingsBoard/PostgreSQL 的测试会直接
+      # 复用上一次运行的结果（显示 "ok (cached)"），并没有针对本次启动的基础设施执行。
       - name: 全量测试（串行）
         run: |
           set -o pipefail
           docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml \
-            exec -T netns go test ./... -p 1 -v 2>&1 | tee test.log
-      - name: 不允许有 Skip
+            exec -T netns go test ./... -p 1 -count=1 -v 2>&1 | tee test.log
+      - name: 不允许有 Skip，也不允许复用缓存的测试结果
         run: |
           if grep -E '^\s*--- SKIP' test.log; then
             echo "存在被跳过的测试：基础设施没有真正跑起来，或有测试被悄悄禁用。" >&2
+            exit 1
+          fi
+          if grep -E '^ok\s.*\(cached\)' test.log; then
+            echo "存在复用缓存的测试结果：本次没有真正执行。" >&2
             exit 1
           fi
       - name: 失败时输出 ThingsBoard 日志

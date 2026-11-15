@@ -65,6 +65,9 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
       - id: build
         uses: docker/build-push-action@v7
+        env:
+          # 不把 .dockerbuild 构建记录作为 artifact 上传（收尾不经代理上传任何东西）；摘要照常写入。
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
         with:
           context: cloud
           push: ${{ github.event_name != 'pull_request' }}

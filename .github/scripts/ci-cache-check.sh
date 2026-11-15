@@ -24,8 +24,9 @@ case "$kind" in
     check GOMODCACHE "$(go env GOMODCACHE)"
     check GOCACHE "$(go env GOCACHE)"
     if [[ "$phase" == before ]]; then
-      # GOPROXY=off：不允许联网，只有模块已在本地缓存时才会成功。
-      if GOPROXY=off GOFLAGS=-mod=mod go mod download >/dev/null 2>&1; then
+      # GOPROXY=off：不允许联网，只有构建与测试需要的模块都已在本地缓存时才会成功。
+      # （不用 `go mod download`：它要求整个模块图，含构建根本用不到的模块，永远不会命中。）
+      if GOPROXY=off GOFLAGS=-mod=mod go list -deps -test ./... >/dev/null 2>&1; then
         echo "依赖缓存：命中（离线可解析全部模块）"
       else
         echo "依赖缓存：未命中（首次运行或依赖有变化，本次会联网下载）"

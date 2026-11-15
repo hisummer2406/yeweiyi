@@ -27,6 +27,9 @@ Runner `.env`（`/home/yeweiyi-ci/actions-runner/.env`）固定以下变量，�
 | Docker 构建缓存（`type=local`） | `ci-cache/buildx/cloud-image`（每次写新目录再替换，避免无限增长） |
 | sqlc / migrate 预编译包 | `ci-cache/tools`（每次重新校验 sha256） |
 
+集成测试用 `go test -count=1`，并且日志里出现 `ok … (cached)` 就判失败：GOCACHE 持久后，不禁用测试结果缓存会
+让依赖 ThingsBoard/PostgreSQL 的测试直接复用上一次运行的结果。
+
 `setup-go` 设 `cache: false`，`setup-node` 不设 `cache`，Cloud Image 不再用 `type=gha`。
 Admin 的 `admin-dist` artifact 是 check-build → deploy 之间交付同一构建产物的通道，保留。
 
