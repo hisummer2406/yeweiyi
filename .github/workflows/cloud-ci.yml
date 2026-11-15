@@ -136,7 +136,9 @@ jobs:
 
   integration:
     needs: integration-reuse
-    if: ${{ always() && (github.event_name == 'pull_request' || needs.integration-reuse.outputs.reuse != 'true') }}
+    # !cancelled() 而不是 always()：integration-reuse 在 PR 上被跳过时仍要跑，但整个运行被取消（PR 有新提交）
+    # 时不应再启动——always() 会让被取消的旧运行照样跑满集成测试，在单个自托管 Runner 上堵住后续队列。
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.integration-reuse.outputs.reuse != 'true') }}
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     # 含最多 20 分钟的资源等待（见下）；测试本身与托管 Runner 时一样约 10–15 分钟。
     timeout-minutes: 50
