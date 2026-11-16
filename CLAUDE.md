@@ -18,6 +18,9 @@
 - CI 在根目录 `.github/workflows/`，按目录触发：`cloud-*` 只看 `cloud/`，`admin-ci` 只看 `admin/`。
   云端发布（Cloud Deploy）须选一个改过 `cloud/` 且 Cloud CI/Image 通过的 main 提交。
   main 上的合并提交若与 PR 头代码完全相同且该 PR 的 Cloud CI 已通过，则复用结果、不重跑集成测试。只改 `cloud/` 文档不触发 Cloud CI。
+  Cloud CI/Image/Deploy 与 Admin CI/CD 跑在本机 Lima 虚拟机上的自托管 Runner（标签 `yeweiyi-ci`，与 KeywordIQ 的 Runner
+  同机但独立），缓存放本机持久目录、不上传 GitHub；目录、隔离与运维见 [.github/ci/README.md](.github/ci/README.md)。
+  Android CI 仍用托管 Runner。
 - 合并前的 issue/PR 编号（如 `#85`、`zhongchengyeweiyi#39`）指原仓库（已归档，只读可查）。合并时仍开着的已迁来，
   新编号：cloud#79→#2、cloud#93→#3、admin#38→#4、miniapp#12→#5、miniapp#26→#6、
   zhongchengyeweiyi#33→#7、#50→#8、#54→#9，PR zhongchengyeweiyi#48→#1。新 issue 用标签
