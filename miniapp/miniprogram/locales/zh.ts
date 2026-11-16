@@ -207,7 +207,7 @@ export const zh: Record<string, string> = {
   "oil.7": "98#",
   "oil.8": "甲醇",
   "oil.9": "甲苯",
-  "oil.10": "米糠油",
+  "oil.10": "煤油",
   "oil.11": "硫酸",
   "oil.12": "二甲苯",
   "oil.13": "正丁酯",

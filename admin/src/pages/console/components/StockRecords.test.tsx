@@ -106,7 +106,7 @@ describe('StockRecords', () => {
     expect(kg).toBeGreaterThan(0);
     expect(a[kg]).toBe('5600.12');
     expect((await cellsOf('B'))[kg]).toBe('—');
-    expect(await screen.findByText('米糠油')).toBeTruthy();
+    expect(await screen.findByText('煤油')).toBeTruthy();
   });
 
   it('requests the given device for the last 24 hours', async () => {

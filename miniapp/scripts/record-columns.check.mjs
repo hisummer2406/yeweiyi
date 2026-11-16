@@ -73,7 +73,7 @@ test('medium: builtin index in the app language, else the device text, else a da
   assert.equal(mediumText(5, 'whatever', zt), '92#');
   // The device's English list is misaligned (index 2 reads "Sulfuric Acid"): the index decides.
   assert.equal(mediumText(2, 'Sulfuric Acid', (k) => en[k]), '-10# Diesel');
-  assert.equal(mediumText(10, 'Kerosene', zt), '米糠油');
+  assert.equal(mediumText(10, 'Kerosene', zt), '煤油');
   assert.equal(mediumText(20, '自定义油', zt), '自定义油');
   assert.equal(mediumText(0, '', zt), DASH);
   assert.equal(mediumText(null, null, zt), DASH);

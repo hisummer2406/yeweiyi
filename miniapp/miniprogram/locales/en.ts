@@ -207,7 +207,7 @@ export const en: Record<string, string> = {
   "oil.7": "98# Gasoline",
   "oil.8": "Methanol",
   "oil.9": "Toluene",
-  "oil.10": "Rice Bran Oil",
+  "oil.10": "Kerosene",
   "oil.11": "Sulfuric Acid",
   "oil.12": "Xylene",
   "oil.13": "n-Butyl Ester",

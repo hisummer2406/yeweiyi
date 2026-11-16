@@ -180,7 +180,7 @@ export default {
   'pages.console.oil.7': '98# Gasoline',
   'pages.console.oil.8': 'Methanol',
   'pages.console.oil.9': 'Toluene',
-  'pages.console.oil.10': 'Rice Bran Oil',
+  'pages.console.oil.10': 'Kerosene',
   'pages.console.oil.11': 'Sulfuric Acid',
   'pages.console.oil.12': 'Xylene',
   'pages.console.oil.13': 'n-Butyl Ester',

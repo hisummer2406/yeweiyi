@@ -210,7 +210,7 @@ describe('InventoryRecords', () => {
       ]),
     );
     render(<InventoryRecords device="D1" />);
-    await screen.findByText('米糠油');
+    await screen.findByText('煤油');
     expect(cells(screen.getAllByRole('row')[2])[1]).toBe('—');
   });
 });

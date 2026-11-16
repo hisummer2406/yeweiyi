@@ -207,7 +207,7 @@ export const es: Record<string, string> = {
   "oil.7": "Gasolina 98#",
   "oil.8": "Metanol",
   "oil.9": "Tolueno",
-  "oil.10": "Aceite de salvado de arroz",
+  "oil.10": "Queroseno",
   "oil.11": "Ácido sulfúrico",
   "oil.12": "Xileno",
   "oil.13": "Éster n-butílico",

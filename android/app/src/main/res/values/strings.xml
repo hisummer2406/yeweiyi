@@ -595,9 +595,11 @@
     <string name="oilcan_short_label_format">%1$d号 </string>
 
     <!-- ThingsBoardSetFragment 云平台设置页：页面只在中文界面开放，en/es 待设计稿文案 -->
+    <string name="tb_connection_settings" tools:ignore="MissingTranslation">云平台连接设置</string>
+    <string name="tb_address" tools:ignore="MissingTranslation">地址</string>
     <string name="tb_device_id_hint" tools:ignore="MissingTranslation">设备贴纸上的编号</string>
     <string name="tb_access_token_hint" tools:ignore="MissingTranslation">留空则自动从云平台领取</string>
-    <string name="tb_broker_host_empty" tools:ignore="MissingTranslation">Broker地址不能为空</string>
+    <string name="tb_broker_host_empty" tools:ignore="MissingTranslation">地址不能为空</string>
     <string name="tb_port_not_number" tools:ignore="MissingTranslation">端口必须是数字</string>
     <string name="tb_port_out_of_range" tools:ignore="MissingTranslation">端口必须在 1-65535 之间</string>
     <string name="tb_device_id_empty" tools:ignore="MissingTranslation">设备编号不能为空</string>
