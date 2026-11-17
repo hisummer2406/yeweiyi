@@ -19,8 +19,8 @@ import { detailUrlForScene, sceneFromQuery } from '../../utils/sceneEntry';
 //               administrator provisioned for that number
 type Stage = 'restoring' | 'ready' | 'needPhone';
 
-// Which way in the page offers: in the mini-program WeChat is the default and the password form is a
-// second tab; in the app there is no WeChat (utils/platform.ts) and the password form is all there is.
+// Which way in the page offers: the password form is the default everywhere. The mini-program has the
+// phone sign-in as a second tab; the app has no WeChat (utils/platform.ts), so the password form is all there is.
 // The password form is the same single input as the web back office (POST /api/login): the account
 // (phone number or username) plus the password.
 type Mode = 'wechat' | 'password';
@@ -37,7 +37,7 @@ Page({
   data: {
     text: {} as Record<string, string>,
     wechatLogin: WECHAT_LOGIN,
-    mode: (WECHAT_LOGIN ? 'wechat' : 'password') as Mode,
+    mode: 'password' as Mode,
     stage: 'ready' as Stage,
     busy: false,
     errorMsg: '',
@@ -177,6 +177,11 @@ Page({
     const status = err instanceof ApiError ? err.status : 0;
     const code = err instanceof ApiError ? codeOfBody(err.body) : undefined;
     const failure = describeLoginFailure(status, code);
+    // The silent attempt behind the password form was never asked for: its failure is not news.
+    if (from === 'restore' && this.data.mode === 'password') {
+      this.setData({ stage: failure.offerPhone ? 'needPhone' : 'ready' });
+      return;
+    }
     if (failure.offerPhone) {
       // Not bound yet: show the phone button. Not an error to display.
       this.showError('');
