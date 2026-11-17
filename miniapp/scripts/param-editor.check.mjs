@@ -170,6 +170,33 @@ await test('opens on the given tank with the device report filled in; missing st
   assert.equal(ed.data.canSend, true);
 });
 
+await test('digit keyboard (#56): the input shows the magnitude, ± keeps the sign while typing, deleting and clearing', async () => {
+  reset();
+  const ed = mount(props);
+  await tick();
+  const row = (k) => ed.data.rows.find((r) => r.key === k);
+  // reported -0.5: the input holds 0.5, the sign is shown beside it
+  assert.equal(row('tempOffset').neg, true);
+  assert.equal(row('tempOffset').mag, '0.5');
+  const type = (key, value) => ed.onInput({ currentTarget: { dataset: { key, signed: true } }, detail: { value } });
+  const sign = (key) => ed.onToggleSign({ currentTarget: { dataset: { key } } });
+  sign('waterOffset');
+  assert.equal(row('waterOffset').neg, true);
+  assert.equal(row('waterOffset').mag, '');
+  for (const v of ['1', '1.', '1.5']) type('waterOffset', v);
+  assert.equal(row('waterOffset').value, '-1.5');
+  type('waterOffset', '');
+  assert.equal(row('waterOffset').value, '-', 'cleared: the bare sign stays, never 0');
+  type('waterOffset', '100');
+  sign('waterOffset');
+  assert.equal(row('waterOffset').value, '100');
+  assert.equal(row('waterOffset').neg, false);
+  type('levelOffset', '500');
+  assert.equal(row('levelOffset').value, '500');
+  type('levelOffset', '0');
+  assert.equal(row('levelOffset').value, '0');
+});
+
 await test('not active: nothing is read', async () => {
   reset();
   const ed = mount({ ...props, active: false });

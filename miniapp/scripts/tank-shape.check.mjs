@@ -126,20 +126,21 @@ await test('home account switch cannot adopt an earlier account response', async
  answer(take('/tank-settings'),{tanks:rows(1)}); await load;
  assert.equal(p.data.groups[0].shapes.rows.length,0);
 });
-await test('returning home offline: cached cards take the scale just saved on the detail page', async () => {
- const { saveScale } = await import('../miniprogram/utils/displayScaleStore.ts');
+await test('returning home offline: cached cards take the virtual table just enabled in tank-table settings (#56)', async () => {
+ const { saveVirtual, removeVirtual } = await import('../miniprogram/utils/virtualTableStore.ts');
+ const { buildVirtualTable } = await import('../miniprogram/utils/virtualTable.ts');
  const p=home();
  p.data.groups=[{ deviceName:'D', state:'ok', tanks:toTankViews(snapshot,'D'), shapes:emptyTankShapes(), fetchedAt:'x' }];
- assert.equal(p.data.groups[0].tanks[0].oilVolumeL, toTankViews(snapshot,'D')[0].oilVolumeL);
  const before=p.data.groups[0].tanks[0].oilVolumeL;
- assert.equal(saveScale('D',3,{ enabled:true, factor:2 }), true);
- p.rescaleShown();
- p.rescaleShown();
+ const vt=buildVirtualTable('horizontal',{ H:2600, L:5000, R:500 }, new Date());
+ assert.equal(saveVirtual('D',3,vt), true);
+ p.revirtualizeShown();
+ p.revirtualizeShown();
  assert.notEqual(p.data.groups[0].tanks[0].oilVolumeL, before);
- assert.equal(p.data.groups[0].tanks[0].scaleTag, '×2');
- assert.equal(saveScale('D',3,{ enabled:false, factor:1 }), true);
- p.rescaleShown();
+ assert.equal(p.data.groups[0].tanks[0].virtualState, 'virtual');
+ assert.equal(removeVirtual('D',3), true);
+ p.revirtualizeShown();
  assert.equal(p.data.groups[0].tanks[0].oilVolumeL, before);
- assert.equal(p.data.groups[0].tanks[0].scaleTag, '');
+ assert.equal(p.data.groups[0].tanks[0].virtualState, '');
 });
 console.log(count+' tank-shape flow checks passed');

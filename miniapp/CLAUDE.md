@@ -254,7 +254,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
 1. `npm install` — pulls in `typescript` and `miniprogram-api-typings` (type declarations only).
 2. `npm run typecheck` — `tsc --noEmit` over `miniprogram/**/*.ts`. Run this after any `.ts` change.
    There is no test runner; the only other automated check is `npm run check` below.
-   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts`/`utils/displayScale.ts`/`utils/tankTable.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
+   `npm run check` — Node checks for `utils/stations.ts`, `utils/recordsRange.ts`, `utils/loginFlow.ts`, `utils/stationDevice.ts`, `utils/pairing.ts`/`utils/roles.ts`/`utils/tankFill.ts`/`utils/tankPick.ts`/`utils/recordColumns.ts`/`utils/paramDraft.ts`/`utils/virtualTable.ts`/`utils/tankTable.ts` (+ `scripts/param-editor.check.mjs`, the real `components/param-editor` against a `wx` stand-in) and the language tables / rules (`scripts/i18n.check.mjs`) (needs Node 22.6+).
 3. Open the repo root in WeChat DevTools (`project.config.json` sets `miniprogramRoot: miniprogram/`
    already). `appid` in `project.config.json` is `wx2f6409ecf18a918b` (set in commit `415250e`; it used
    to be the tourist placeholder `"touristappid"`). This repo cannot tell whether that is the AppID of
@@ -305,10 +305,11 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
   「保存到控制器」（#49）：只下发罐型 + 尺寸（`config.setTankTable`，`tableArgs` 映射为 diameterMm/lengthMm/headMm/heightMm/widthMm），
   设备自行生成；对象 = 首页当前油站的设备 + 选择的可见罐，必填原因，走 `configSubmit` 同一提交保护（快照带 `method`），受理后进操作记录，
   成功后按 `tableEcho` 核对标定镜像（`GET .../tanks/:tank/calibration`，晚于 finishedAt，点数与末点等于回执）。仅管理员。
-- `utils/displayScale.ts` / `utils/displayScaleStore.ts` — 管理员本机显示倍率（#44，openspec `local-display-scale`）：
-  按 `display-scale:<账号>:<设备>#<罐>` 存在本机，只有 platform_admin / customer_admin 读写和应用（每次从 token 取）；
-  油容积、质量、水体积、空容从 `TankView.raw`（未舍入原始值）乘倍率再舍入，液位/水高/温度/占比不乘，标「换算显示 ×倍率」。
-  罐详情实时数据下方的「本机显示设置」折叠卡自动保存，无「保存到手机」按钮；不上云、不下发，报警/记录/报表用原始值。
+- `utils/virtualTable.ts` / `utils/virtualTableStore.ts` — 虚拟罐表（#56，openspec `virtual-tank-table`；**#44 显示倍率已下线**）：
+  罐表设置生成后管理员「启用为虚拟罐表」，按 `virtual-table:<账号>:<设备>#<罐>` 存完整表在本机，只有 platform_admin / customer_admin 读写和应用。
+  首页/详情用设备液位在完整表上查容积（表点取值、两点线性、0–首点按 (0,0) 线性；缺失/负数/高于末点不外推，四项回退设备原值并标出）；
+  质量 = V虚 × (原质量 ÷ 原容积)，空容 = 末点 − V虚，水体积 = V虚(水高)；液位/水高/温度/占比/罐图不变（设备 oilVolumeL 是含水总体积）。
+  罐表设置页「本机虚拟罐表」区块可查看/停用。旧 `display-scale:` 记录在首页清掉并提示一次。不上云、不下发，报警/记录/报表用设备值。
 - `utils/scan.ts` — `wx.scanCode` → `POST /api/devices/resolve`, shared by the home page and
   `device-add`; hands the caller the actual device name. `utils/roles.ts` — `isReadOnlyRole`.
 - `utils/sceneEntry.ts` — device mini-program code entry (miniapp#7): path `pages/device-detail/device-detail`,
@@ -358,7 +359,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     The tank illustration carries a level fill (oil on top of water, `tankFill` in `utils/tankFill.ts`,
     from `oilRatioPct`/`waterRatioPct`; red on ALARM, grey on FAULT, nothing without a probe). The
     fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
-    首页按设计图比例排布（2026-11-10）：数值 36rpx、标签 30rpx、单位 28rpx；较短屏幕用 32/28/24rpx。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
+    首页按设计图比例排布（2026-11-10）：读数与左侧标签同字号同字重（#56，常规 30rpx、短屏 28rpx，单行不换行），单位 28rpx（短屏 24rpx）。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
     Tank type comes from `tank-settings`; confirmed types select horizontal/vertical images. Before confirmation, keep a generic illustration with an explicit label; do not replace the tank with a question mark.
   - **我的记录 `records`** (tabBar) — the home page's current station (name on top) and five entries
     (报警/出库/入库/交班/库存), each opening `record-list?type=`. **No device picker**: no valid station
@@ -406,7 +407,7 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
   edit the device now reports disappears). 「下发修改」 sends only changed, valid fields (`buildArgs`); the tank switch of the 设置 entries asks
   keep draft / discard / cancel (`utils/paramSwitch.ts`); 罐详情 has no tank switch. `customer_user` sees the report read-only, no draft, no send.
   Old drafts (`calibration-draft`, `tankcfg-draft:*`) are no longer read.
-- Fields: corrections (no range limit, #28; ± toggle, #30, `toggleSign`); 储罐设置 edits `TANK_SEND_FIELDS` (4 level alarms,
+- Fields: corrections (no range limit, #28; ± toggle, #30, `toggleSign`; every number input is `type=digit` and a signed field keeps its minus outside the input, shown beside it, `splitSigned`/`joinSigned`, #56); 储罐设置 edits `TANK_SEND_FIELDS` (4 level alarms,
   high water, high temp, capacity, density in g/cm³ 0<v≤2 — a report >2 is flagged as probably kg/m³); height and low temp are
   read-only; low water is gone (no device field). **Medium and colour (2026-11-14, user rule: every change is for administrators,
   employees read-only)**: administrators pick the medium from `GET /media-options` (sent as `mediaId`, the cloud converts) and a

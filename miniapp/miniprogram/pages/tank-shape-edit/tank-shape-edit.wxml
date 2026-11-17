@@ -1,6 +1,7 @@
 <!-- 设计稿「罐表设置-卧罐16 / 立罐17 / 长方体18 / 长方体选择罐号19」。
      「生成罐表」在本机按设备同样的公式算出液位→容积表并在下方预览；
-     「保存到手机」已隐藏（#44）；「保存到控制器」选罐号后只下发罐型和尺寸，设备自行生成（#49）。
+     「启用为虚拟罐表」（#56）：选罐号后只存本机本账号，首页按此表显示容积，不下发；
+     「保存到控制器」选罐号后只下发罐型和尺寸，设备自行生成（#49）。
      示意图是从设计稿裁出的整条图（自带 H/L/R 标注），不是页面上叠的文字。 -->
 <view class="te-page">
   <image class="te-diagram" src="/assets/illustrations/tankshape-{{shape}}.png" mode="aspectFit" />
@@ -19,6 +20,8 @@
   <!-- 生成结果：液位(mm) → 容积(L)；点数多时抽样显示，最后一行（满罐）总是在 -->
   <view wx:if="{{summary}}" class="te-result">
     <view class="te-summary">{{summary}}</view>
+    <!-- 虚拟罐表（#56）：管理员把这张完整表绑定到一个罐，只在本机显示用 -->
+    <button wx:if="{{canVirtual}}" class="te-btn te-btn-deep te-btn-virtual" bindtap="onEnableVirtual">{{text.enableVirtual}}</button>
     <!-- 下发原因（保存到控制器时必填，进入确认框和操作记录） -->
     <view class="te-reason">
       <text class="te-reason-label">{{text.reasonLabel}}</text>
@@ -38,4 +41,4 @@
   </view>
 </view>
 
-<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="{{text.tankPickerTitle}}" options="{{tankOptions}}" value="{{-1}}" bind:pick="onPickTank" bind:close="onClosePicker" />
+<grid-picker show="{{pickerShow}}" top="{{pickerTop}}" title="{{pickerTitle}}" options="{{tankOptions}}" value="{{-1}}" bind:pick="onPickTank" bind:close="onClosePicker" />

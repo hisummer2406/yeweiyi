@@ -1,5 +1,6 @@
 <!-- 设计稿「罐表设置15」：选罐体形状，点一张卡片进入对应的尺寸页（卧罐16 / 立罐17 / 长方体18）。
-     下方「设备当前罐表」（#41，设计稿没有）：首页当前油站设备各罐在用的罐表，来自云端标定镜像，只读。 -->
+     下方「设备当前罐表」（#41，设计稿没有）：首页当前油站设备各罐在用的罐表，来自云端标定镜像，只读。
+     再下方「本机虚拟罐表」（#56，仅管理员）：同一罐在本机启用的显示用罐表，可停用。 -->
 <view class="ts-grid">
   <view
     wx:for="{{shapes}}"
@@ -53,5 +54,18 @@
         </view>
       </scroll-view>
     </block>
+
+    <view wx:if="{{canVirtual}}" class="ts-virtual">
+      <view class="ts-device-title">{{text.virtualTitle}}</view>
+      <view class="ts-device-hint">{{text.virtualHint}}</view>
+      <view wx:if="{{!vSummary}}" class="ts-notice">{{text.virtualNone}}</view>
+      <block wx:else>
+        <view class="ts-summary">{{vSummary}}</view>
+        <view class="ts-reported">{{vDims}}</view>
+        <view class="ts-reported">{{vEnabledAt}}</view>
+        <view class="ts-reported">{{text.virtualReplaceHint}}</view>
+        <text class="ts-retry ts-virtual-off" bindtap="onDisableVirtual">{{text.virtualDisable}}</text>
+      </block>
+    </view>
   </block>
 </view>

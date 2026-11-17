@@ -43,14 +43,17 @@
             aria-role="button"
             aria-label="{{text.toggleSign}}"
           >±</view>
+          <!-- 全部数值字段用支持小数点的数字键盘（#56）；负号不进输入框，由 ± 控制并显示在这里 -->
+          <text wx:if="{{item.signed && !readOnly && item.neg}}" class="pe-neg">−</text>
           <input
             wx:if="{{!readOnly}}"
-            class="fi pe-fi"
-            type="{{item.signed ? 'text' : 'digit'}}"
+            class="fi pe-fi {{item.signed ? 'pe-fi-signed' : ''}}"
+            type="digit"
             placeholder="{{text.unreported}}"
             placeholder-class="fv-ph"
-            value="{{item.value}}"
+            value="{{item.mag}}"
             data-key="{{item.key}}"
+            data-signed="{{item.signed}}"
             bindinput="onInput"
           />
           <text wx:else class="pe-fi {{item.value ? '' : 'fv-ph'}}">{{item.value || text.unreported}}</text>

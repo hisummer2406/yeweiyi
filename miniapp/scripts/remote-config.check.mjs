@@ -22,6 +22,8 @@ import {
   withPending,
   withoutPending,
   toggleSign,
+  splitSigned,
+  joinSigned,
 } from '../miniprogram/utils/remoteConfig.ts';
 
 let n = 0;
@@ -66,6 +68,40 @@ test('number, integer, range problems', () => {
   for (const bad of ['-', '--1', '1.', '.5', '-.']) {
     assert.deepEqual(buildArgs(CORRECTION_SEND_FIELDS, { tempOffset: bad }, mirror).problems, [{ form: 'tempOffset', reason: 'number' }], bad);
   }
+});
+
+test('digit keyboard: the sign lives outside the input and survives typing (#56)', () => {
+  assert.deepEqual(splitSigned('-1.5'), { neg: true, mag: '1.5' });
+  assert.deepEqual(splitSigned('500'), { neg: false, mag: '500' });
+  assert.deepEqual(splitSigned('-'), { neg: true, mag: '' });
+  assert.deepEqual(splitSigned(''), { neg: false, mag: '' });
+  // ± first, then type: 500 → -500; keep typing, delete, clear
+  let v = toggleSign('');
+  assert.equal(v, '-');
+  for (const typed of ['5', '50', '500', '50', '5', '']) v = joinSigned(v, typed);
+  assert.equal(v, '-', 'clearing keeps the bare sign, never 0');
+  v = joinSigned(v, '1.');
+  assert.equal(v, '-1.', 'unfinished decimal stays as typed');
+  v = joinSigned(v, '1.5');
+  assert.equal(v, '-1.5');
+  v = toggleSign(v);
+  assert.equal(v, '1.5');
+  assert.equal(joinSigned(v, '1.50'), '1.50');
+  assert.equal(joinSigned('0', '0'), '0');
+  assert.equal(joinSigned('-0', '0'), '-0');
+  // a keyboard that can type '-' wins over the stored sign
+  assert.equal(joinSigned('', '-3'), '-3');
+  assert.equal(joinSigned('-1', '-3'), '-3');
+  // round trip: what the input shows + the sign = the form text
+  for (const text of ['-12.25', '100', '0', '-0.5', '-']) {
+    const { neg, mag } = splitSigned(text);
+    assert.equal(joinSigned(text, mag), text);
+    assert.equal((neg ? '-' : '') + mag, text);
+  }
+  // incomplete values are still refused at send time
+  const f = CORRECTION_SEND_FIELDS[0];
+  assert.ok(buildArgs([f], { [f.form]: '-' }, {}).problems.length === 1);
+  assert.ok(buildArgs([f], { [f.form]: '-1.' }, {}).problems.length === 1);
 });
 
 test('toggleSign flips the text and never steps (#30)', () => {

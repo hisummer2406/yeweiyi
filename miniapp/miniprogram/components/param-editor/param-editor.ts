@@ -23,6 +23,8 @@ import {
   echoState,
   editFields,
   mirrorToForm,
+  joinSigned,
+  splitSigned,
   toggleSign,
   type EditField,
   type Echo,
@@ -60,6 +62,9 @@ type Row = {
   unit: string;
   signed: boolean;
   value: string;
+  // 带符号字段：输入框只显示数值部分 mag，负号 neg 显示在输入框前（#56 数字键盘）
+  neg: boolean;
+  mag: string;
   changed: boolean;
   // 「原值 → 新值」/「设备值已变化」/「留空 = 不修改」之一，'' = 不显示
   note: string;
@@ -392,7 +397,8 @@ Component({
         // A density above 2 g/cm³ was most likely typed in kg/m³ (the device's old label): ask to check it.
         const odd = f.form === 'density' && !changed && Number(report) > 2;
         if (odd) note = t('param.densityCheck');
-        return { key: f.form, label: t(f.labelKey), unit, signed: f.signed, value, changed, note, warn: moved || odd };
+        const { neg, mag } = splitSigned(value);
+        return { key: f.form, label: t(f.labelKey), unit, signed: f.signed, value, neg: f.signed && neg, mag: f.signed ? mag : value, changed, note, warn: moved || odd };
       });
       const choices = Object.keys(this.choiceArgs()).length;
       this.setData({ rows, moved: self.form.moved.length > 0, changedCount: Object.keys(self.form.edits).length + choices });
@@ -426,8 +432,12 @@ Component({
       this.discardDraft();
     },
 
+    // 带符号的字段输入框里只有数值部分（#56），接回 ± 设定的符号再存。
     onInput(e: WechatMiniprogram.Input) {
-      this.setInput(e.currentTarget.dataset.key as string, e.detail.value);
+      const self = this as unknown as EditorThis;
+      const key = e.currentTarget.dataset.key as string;
+      const signed = e.currentTarget.dataset.signed === true || e.currentTarget.dataset.signed === 'true';
+      this.setInput(key, signed ? joinSigned(self.form.values[key] ?? '', e.detail.value) : e.detail.value);
     },
 
     // ± (#30): some phone keyboards have no usable minus

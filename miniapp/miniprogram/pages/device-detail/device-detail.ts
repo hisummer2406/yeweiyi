@@ -10,8 +10,8 @@ import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
 import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
 import { formatLocalTime, round2 } from '../../utils/format';
-import { applyScale, DEFAULT_SCALE, parseFactor, type ScaleConfig } from '../../utils/displayScale';
-import { loadScale, saveScale, scaleAllowed, scaleFactor } from '../../utils/displayScaleStore';
+import { applyVirtual } from '../../utils/virtualTable';
+import { loadVirtual } from '../../utils/virtualTableStore';
 import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
 import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
@@ -69,17 +69,17 @@ const NO_TANK = -1;
 // rows: the detail page shows all of them, the home card only five. Missing or non-numeric values are a
 // dash, never 0. The tank number and oil type are in the header; snapshotSeq is a transport counter and
 // is not shown.
-// `raw`: the original reading next to a scaled one (#44), '' when the value is not scaled.
+// `raw`: the device's reading next to one read from the virtual tank table (#56), '' otherwise.
 type TankField = { label: string; value: string; unit: string; strong?: boolean; raw?: string };
 
 function num(v: unknown): string {
   return typeof v === 'number' && Number.isFinite(v) ? String(v) : '—';
 }
 
-// The original value of a scaled reading, rounded for display only.
+// The device's value of a reading shown from the virtual table, rounded for display only.
 function rawText(v: TankView, field: keyof TankView['raw']): string {
   const raw = v.raw[field];
-  return v.scaleTag ? num(typeof raw === 'number' ? round2(raw) : undefined) : '';
+  return v.virtualState === 'virtual' ? num(typeof raw === 'number' ? round2(raw) : undefined) : '';
 }
 
 function tankFields(v: TankView): TankField[] {
@@ -141,14 +141,8 @@ Page({
     // Info bar (#43): the station name the home page showed (display only; '' for a scan entry).
     stationName: '',
 
-    // 本机显示设置（#44）：管理员才有；只存本机本账号，按设备 + 罐隔离。
-    canScale: false,
-    scaleOpen: false,
-    scaleEnabled: false,
-    // 输入框里的文字；确认（失焦/完成）且合法才保存并生效，编辑中不影响已生效的倍率。
-    scaleInput: '1',
-    scaleError: '',
-    scalePreview: [] as { label: string; raw: string; scaled: string; unit: string }[],
+    // 虚拟罐表（#56）：当前罐按本机虚拟表显示时的说明（'' = 设备原值）
+    virtualNote: '',
   },
 
   socket: null as AlarmSocket | null,
@@ -188,8 +182,6 @@ Page({
   // Every tank of the last snapshot (the card shows the selected one only).
   allTanks: [] as TankView[],
   neverReported: false,
-  // Which account + device + tank the 本机显示设置 card currently shows; '' = not synced yet.
-  scaleUiKey: '',
 
   onLoad(query: Record<string, string>) {
     // Network back: the live-alarm connection retries at once and the tab on screen is read again.
@@ -422,7 +414,6 @@ Page({
     this.requestedTank = undefined;
     this.allTanks = [];
     this.neverReported = false;
-    this.scaleUiKey = '';
     this.grantedTanks = devices ? grantsOf(devices, device) : null;
     const deviceStation = devices ? stationOf(devices, device) : -2;
     this.stopCommandsPoll();
@@ -450,9 +441,7 @@ Page({
       commands: [],
       commandsLoaded: false,
       deviceStation,
-      canScale: false,
-      scaleError: '',
-      scalePreview: [],
+      virtualNote: '',
     });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     if (!device) return;
@@ -462,7 +451,6 @@ Page({
 
   onShow() {
     this.setData({ text: texts('detail') });
-    this.scaleUiKey = '';
     if (this.allTanks.length) this.applyTanks(this.allTanks, this.neverReported);
     this.stopShapePoll();
     this.shapeTimer = setInterval(() => { if (this.data.deviceActive) void this.loadShapes(); }, 60_000);
@@ -572,8 +560,8 @@ Page({
     const pick = pickTank(visible, requested);
     const tank = pick.kind === 'tank' ? pick.tank : NO_TANK;
     const found = all.find((v) => v.index === tank);
-    // Always from the raw readings, with the scale stored right now for this account/device/tank (#44).
-    const view = found ? applyScale(found, scaleFactor(this.data.device as string, tank)) : undefined;
+    // Always from the raw readings, with the virtual table stored right now for this account/device/tank (#56).
+    const view = found ? applyVirtual(found, loadVirtual(this.data.device as string, tank)) : undefined;
     let tankless = '';
     if (pick.kind === 'none') tankless = neverReported || all.length === 0 ? tr('detail.noTankInfo') : tr('detail.noVisibleTank');
     this.setData({
@@ -583,99 +571,9 @@ Page({
       tanks: view ? [view] : [],
       tankFields: view ? tankFields(view) : [],
       tankless,
+      virtualNote: !view || !view.virtualState ? '' : view.virtualState === 'virtual' ? tr('detail.virtualNote') : tr(view.virtualReason === 'range' ? 'detail.virtualFallbackRange' : 'detail.virtualFallbackMissing'),
       ...(pick.hidden !== undefined ? { infoNotice: tr('detail.tankHidden', { n: pick.hidden }) } : {}),
     });
-    this.syncScaleUi(view);
-  },
-
-  // ---- 本机显示设置（#44）----
-
-  // The card follows the tank shown. Its input is only reset when the account, device or tank changes (or
-  // after a save), so a periodic refresh does not wipe what the user is typing; the preview always follows.
-  syncScaleUi(view: TankView | undefined) {
-    const device = this.data.device as string;
-    const tank = this.data.currentTank as number;
-    const allowed = !!view && scaleAllowed(device, tank);
-    const token = getToken();
-    const key = allowed ? `${userKeyFromToken(token)}|${roleFromToken(token)}|${device}#${tank}` : '';
-    if (key !== this.scaleUiKey) {
-      this.scaleUiKey = key;
-      const cfg = allowed ? loadScale(device, tank) : DEFAULT_SCALE;
-      this.setData({ canScale: allowed, scaleEnabled: cfg.enabled, scaleInput: String(cfg.factor), scaleError: '' });
-    }
-    this.updateScalePreview();
-  },
-
-  // Original → scaled for the volume and mass of the tank shown, with the factor typed (if valid) or stored.
-  updateScalePreview() {
-    const tank = this.data.currentTank as number;
-    const view = this.allTanks.find((v) => v.index === tank);
-    if (!this.data.canScale || !view) {
-      if ((this.data.scalePreview as unknown[]).length) this.setData({ scalePreview: [] });
-      return;
-    }
-    const factor = parseFactor(this.data.scaleInput as string) ?? loadScale(this.data.device as string, tank).factor;
-    const scaled = applyScale(view, factor);
-    const row = (label: string, field: 'oilVolumeL' | 'oilWeightKg', unit: string) => ({
-      label,
-      raw: num(typeof view.raw[field] === 'number' ? round2(view.raw[field] as number) : undefined),
-      scaled: num(scaled[field]),
-      unit,
-    });
-    this.setData({
-      scalePreview: [row(tr('detail.volume'), 'oilVolumeL', tr('detail.unitL')), row(tr('detail.mass'), 'oilWeightKg', tr('detail.unitKg'))],
-    });
-  },
-
-  onToggleScaleCard() {
-    this.setData({ scaleOpen: !this.data.scaleOpen });
-  },
-
-  // Saves and applies, or says it could not save and puts the card back to what is stored.
-  commitScale(cfg: ScaleConfig, toastKey: string) {
-    const device = this.data.device as string;
-    const tank = this.data.currentTank as number;
-    // Checked again at the moment of change: hiding the card is not the permission check.
-    if (!scaleAllowed(device, tank)) {
-      this.scaleUiKey = '';
-      this.applyTanks(this.allTanks, this.neverReported);
-      return;
-    }
-    const ok = saveScale(device, tank, cfg);
-    wx.showToast({ title: tr(ok ? toastKey : 'detail.scaleSaveFailed'), icon: 'none' });
-    this.scaleUiKey = '';
-    this.applyTanks(this.allTanks, this.neverReported);
-  },
-
-  onScaleSwitch(e: WechatMiniprogram.SwitchChange) {
-    const stored = loadScale(this.data.device as string, this.data.currentTank as number);
-    this.commitScale({ enabled: !!e.detail.value, factor: stored.factor }, 'detail.scaleSaved');
-  },
-
-  onScaleInput(e: WechatMiniprogram.Input) {
-    this.setData({ scaleInput: e.detail.value, scaleError: '' });
-    this.updateScalePreview();
-  },
-
-  // Blur or the keyboard's done key: an invalid value is refused with a message and nothing stored changes.
-  onScaleCommit() {
-    const factor = parseFactor(this.data.scaleInput as string);
-    if (factor === null) {
-      this.setData({ scaleError: tr('detail.scaleInvalid') });
-      this.updateScalePreview();
-      return;
-    }
-    const stored = loadScale(this.data.device as string, this.data.currentTank as number);
-    if (factor === stored.factor) {
-      this.setData({ scaleInput: String(factor), scaleError: '' });
-      return;
-    }
-    this.commitScale({ enabled: stored.enabled, factor }, 'detail.scaleSaved');
-  },
-
-  // Back to ×1 and off. Only this phone's display setting; device data and other parameters are untouched.
-  onScaleReset() {
-    this.commitScale({ ...DEFAULT_SCALE }, 'detail.scaleResetDone');
   },
 
   editorOf(tab: TabKey): ParamEditorRef | null {

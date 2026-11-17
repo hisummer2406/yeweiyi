@@ -244,11 +244,10 @@ page {
 
 .hs-row {
   display: flex;
-  max-width: 290rpx;
   align-items: center;
   min-height: 40rpx;
   line-height: 40rpx;
-  font-size: var(--font-number);
+  font-size: var(--font-body);
   color: #131313;
 }
 
@@ -261,21 +260,22 @@ page {
   color: #2f3540;
 }
 
-/* 数值略大于标签，保留等宽数字，按设计图靠近标签左对齐；超长数值仍可换行，不截断。 */
+/* #56：数值与左侧标签同字号、同字重；完整读数（负号、小数）单行显示，不截断、不换行。
+   行宽用满罐图右侧整列（不再限 290rpx），等宽数字下约 11 位仍不与单位重叠。 */
 .hs-value {
   flex: 1;
   min-width: 0;
-  font-size: var(--font-number);
-  font-weight: 600;
+  font-size: var(--font-body);
+  font-weight: normal;
   font-variant-numeric: tabular-nums;
   text-align: left;
-  word-break: break-all;
+  white-space: nowrap;
 }
 
 .hs-unit {
-  width: 56rpx;
+  min-width: 40rpx;
   flex-shrink: 0;
-  margin-left: 12rpx;
+  margin-left: 8rpx;
   font-size: var(--font-label);
   color: #3d434c;
 }
@@ -301,11 +301,11 @@ page {
 .home-compact .hs-row {
   min-height: 33rpx;
   line-height: 33rpx;
-  font-size: var(--font-number-compact);
+  font-size: var(--font-label);
 }
 
 .home-compact .hs-value {
-  font-size: var(--font-number-compact);
+  font-size: var(--font-label);
 }
 
 .home-compact .hs-label {
@@ -324,10 +324,6 @@ page {
 .home-compact .hs-probe-status {
   height: 22rpx;
   line-height: 22rpx;
-}
-
-.home-wide-labels .hs-row {
-  max-width: none;
 }
 
 .home-wide-labels .hs-label {
