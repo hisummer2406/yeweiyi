@@ -22,6 +22,7 @@ export function tankShapeFields(state: TankShapeState | undefined, tank: number)
   const info = tankShapeOf(state, tank);
   return {
     shape: info.shape,
+    oilColor: info.oilColor,
     shapeLabel: tr(`tankDisplay.${info.shape}`),
     shapeTime: info.reportedAt ? tr('tankDisplay.reportedAt', { time: formatLocalTime(info.reportedAt, currentLocale()) }) : '',
     shapeImage: `/assets/illustrations/${info.shape === 'vertical' ? 'tank-vertical-home.png' : 'tank-horizontal-home.png'}`,

@@ -72,7 +72,7 @@
           <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化 -->
           <view wx:if="{{t.fillState !== 'none'}}" class="home-tank-body">
             <view class="fill fill-water" style="height:{{t.fillWaterPct}}%"></view>
-            <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%"></view>
+            <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%;{{t.fillState === 'normal' && t.oilColor ? 'background-color:' + t.oilColor : ''}}"></view>
           </view>
           </view>
         </view>

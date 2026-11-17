@@ -74,6 +74,14 @@ await test('strict type mapping and sparse tank identity', async () => {
   assert.equal(tankShapeOf(state,1).shape,'horizontal');
  }
 });
+await test('tank picture oil colour follows the reported tank colour', async () => {
+ const at=(oilColor)=>tankShapeOf({rows:[{tank:3,tankShape:0,oilColor,reportedAt:''}],status:'ok'},3).oilColor;
+ assert.equal(at(0x0000ff),'#0000FF');
+ assert.equal(at(0x123456),'#123456'); // 旧数据可不在色板内
+ for (const v of [0,null,undefined,-1,0x1000000,1.5]) assert.equal(at(v),'');
+ assert.equal(tankShapeOf(emptyTankShapes(),3).oilColor,'');
+ assert.equal(toTankViews(snapshot,'D',{rows:[{tank:3,tankShape:0,oilColor:0xff0000,reportedAt:''}],status:'ok'})[0].oilColor,'#FF0000');
+});
 await test('a tank without a reported shape is shown as horizontal, never as unknown', async () => {
  const views=toTankViews(snapshot,'D');
  assert.equal(views[0].shape,'horizontal');

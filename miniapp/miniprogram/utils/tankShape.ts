@@ -1,5 +1,7 @@
-/** 罐型只来自 tank-settings；配置行不能决定哪些罐应显示。 */
-export type TankShapeRow = { tank: number; tankShape: number | null; reportedAt: string };
+import { toCss } from './oilColor';
+
+/** 罐型、罐颜色只来自 tank-settings；配置行不能决定哪些罐应显示。 */
+export type TankShapeRow = { tank: number; tankShape: number | null; oilColor?: number | null; reportedAt: string };
 export type TankShapeState = {
   rows: TankShapeRow[];
   status: 'loading' | 'ok' | 'error' | 'stale';
@@ -18,5 +20,8 @@ export function tankShapeFailure(previous: TankShapeState, status: number): Tank
 export function tankShapeOf(state: TankShapeState | undefined, tank: number) {
   const row = state?.rows.find((r) => r.tank === tank);
   const shape: TankShape = row?.tankShape === 1 ? 'vertical' : 'horizontal';
-  return { shape, reportedAt: row?.reportedAt || '', status: state?.status ?? 'loading' };
+  // 罐图油色按设备回报的罐颜色（0xRRGGBB）；未上报/0/非法 → ''，沿用默认油色。旧数据可不在色板内，照样显示。
+  const c = row?.oilColor;
+  const oilColor = typeof c === 'number' && Number.isInteger(c) && c > 0 && c <= 0xffffff ? toCss(c) : '';
+  return { shape, oilColor, reportedAt: row?.reportedAt || '', status: state?.status ?? 'loading' };
 }

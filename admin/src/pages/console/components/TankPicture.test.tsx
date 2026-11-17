@@ -93,6 +93,27 @@ describe('TankPicture liquid level', () => {
     expect(heights(container)).toEqual({ oil: '70%', water: '30%' });
   });
 
+  it('paints oil in the reported tank colour, but keeps alarm red', () => {
+    const oil = (c: HTMLElement) =>
+      (c.querySelector('[data-fill="oil"]') as HTMLElement).style.background;
+    const a = render(
+      <TankPicture shape="horizontal" tank={tank()} oilColor="#0000FF" />,
+    );
+    expect(oil(a.container)).toBe('#0000FF');
+    cleanup();
+    const b = render(
+      <TankPicture
+        shape="horizontal"
+        tank={tank({ alarmState: 'ALARM' })}
+        oilColor="#0000FF"
+      />,
+    );
+    expect(oil(b.container)).toBe('#ff4d4f');
+    cleanup();
+    const c = render(<TankPicture shape="horizontal" tank={tank()} />);
+    expect(oil(c.container)).toBe('#faad14');
+  });
+
   it('puts the tank number in the picture label', () => {
     const { getByRole } = render(
       <TankPicture shape="horizontal" tank={tank({ index: 5 })} />,
