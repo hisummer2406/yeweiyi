@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.logic.thingsboard;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import com.google.gson.JsonObject;
 
@@ -10,6 +11,7 @@ import org.w3c.dom.NodeList;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -54,5 +56,37 @@ public class OilTypeIndexFixtureTest {
             assertEquals("zh[" + i + "]", zh.get(i), entry.get("zh").getAsString());
             assertEquals("en[" + i + "]", en.get(i), entry.get("en").getAsString());
         }
+    }
+
+    @Test
+    public void compactPickerKeepsBlankAtFirstCustomIndex() throws Exception {
+        File file = new File("src/main/res/values/array.xml");
+        NodeList arrays = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+                .getElementsByTagName("integer-array");
+        List<Integer> selected = new ArrayList<>();
+        for (int i = 0; i < arrays.getLength(); i++) {
+            Element array = (Element) arrays.item(i);
+            if (!"oiltype_selection_indices".equals(array.getAttribute("name"))) continue;
+            NodeList items = array.getElementsByTagName("item");
+            for (int j = 0; j < items.getLength(); j++) {
+                selected.add(Integer.parseInt(items.item(j).getTextContent().trim()));
+            }
+        }
+        assertEquals(Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 32), selected);
+        JsonObject custom = FixtureLoader.loadProtocolV1("oil_type_index.json").getAsJsonObject("custom");
+        assertEquals(32, custom.get("from").getAsInt());
+        assertEquals(39, custom.get("to").getAsInt());
+        for (String locale : Arrays.asList("values", "values-zh", "values-en", "values-es",
+                "values-ru", "values-uz", "values-fr")) {
+            List<String> names = oilTypeArray(locale);
+            assertEquals(locale, 33, names.size());
+            for (int index : selected) {
+                assertTrue(locale + "[" + index + "]", index < names.size());
+                assertTrue(locale + "[" + index + "]", !names.get(index).isEmpty());
+            }
+        }
+        assertEquals("煤油", oilTypeArray("values").get(10));
+        assertEquals("硫酸", oilTypeArray("values").get(11));
+        assertEquals("空白", oilTypeArray("values").get(32));
     }
 }

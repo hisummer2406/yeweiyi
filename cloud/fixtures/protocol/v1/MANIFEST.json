@@ -167,7 +167,7 @@
     },
     {
       "file": "oil_type_index.json",
-      "sha256": "4c0a18f0eba1003d9d07029ee56662fc450e655d6cf2dbfb1eb7dc5c35fd2b76",
+      "sha256": "fb4ac667a0c05b2f0f3193b336309e3ee50ad47e565e53d6eb5e435d6c692e3b",
       "direction": "uplink",
       "pins": "oilTypeIndex 对照表（字典，非报文）：0 未设置，1–31 内置，32–39 自定义（#11 扩容）；英文名照抄设备（#52 修正、#11 缩写）"
     },

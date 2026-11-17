@@ -50,7 +50,7 @@
         <item>98#</item>
         <item>甲醇</item>
         <item>甲苯</item>
-        <item>米糠油</item>
+        <item>煤油</item>
         <item>硫酸</item>
         <item>二甲苯</item>
         <item>正丁酯</item>
@@ -74,6 +74,22 @@
         <item>西排水</item>
         <item>空白</item>
     </string-array>
+
+    <!-- 仅控制本地可选项，完整介质表和自定义位置不能随选择框精简而缩短。 -->
+    <integer-array name="oiltype_selection_indices">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+        <item>32</item>
+    </integer-array>
 
     <string-array name="oilcanArray">
         <item>1号罐</item>

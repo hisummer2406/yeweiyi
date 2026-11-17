@@ -169,7 +169,7 @@ export default {
   'pages.console.oil.7': '98#',
   'pages.console.oil.8': '甲醇',
   'pages.console.oil.9': '甲苯',
-  'pages.console.oil.10': '米糠油',
+  'pages.console.oil.10': '煤油',
   'pages.console.oil.11': '硫酸',
   'pages.console.oil.12': '二甲苯',
   'pages.console.oil.13': '正丁酯',

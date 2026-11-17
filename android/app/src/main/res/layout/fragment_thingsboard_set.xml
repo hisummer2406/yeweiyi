@@ -36,7 +36,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textSize="@dimen/sp_28"
-                android:text="配置 ThingsBoard 云平台连接地址与设备凭据"
+                android:text="@string/tb_connection_settings"
                 android:textStyle="bold"
                 android:textColor="@color/black"/>
 
@@ -50,7 +50,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_28"
                     android:textColor="@color/black"
-                    android:text="Broker地址"/>
+                    android:text="@string/tb_address"/>
                 <EditText
                     android:id="@+id/et_broker_host"
                     android:layout_marginLeft="@dimen/dp_20"

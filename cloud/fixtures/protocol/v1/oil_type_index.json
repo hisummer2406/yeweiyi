@@ -1,5 +1,5 @@
 {
-  "_comment": "oilTypeIndex 对照表（不是报文，是字典）。下标来自设备 DataUtils.getOilType()：0 = 未设置；1–31 = 内置油品，取 res/values*/array.xml 的 oiltypeArray 除最后一项『空白』外的全部（新增介质插在『空白』之前、只追加不重排）；32–39 = 用户自定义的 8 个油品，名称存在设备本地（中文/英文各一份），没有固定名称，读方显示 oilType。与云端 tank-settings 契约的 oilTypeIndex（0–39）是同一套下标。18–31 是测试包 E–L（2026-10-20 至 11-08）新增的内置介质，旧固件（测试包 D 及以前）上报的 18–25 是自定义油品，名称恒为空（#11）：读方遇到 18–25 且 oilType 为空时按『未设置/自定义』显示，不套内置名称。英文名照抄设备（为适配屏宽用了 PG、DCM 等缩写），客户端显示文案可另用全称。oilType 是设备当前界面语言的显示名，读方应以 oilTypeIndex 识别油品。2026-11-04 前的设备英文表 2 号误为 Sulfuric Acid、10 号误为 Kerosene（issue #52），旧设备和历史记录里仍可能出现这两个名字。",
+  "_comment": "oilTypeIndex 对照表（不是报文，是字典）。下标来自设备 DataUtils.getOilType()：0 = 未设置；1–31 = 内置油品，取 res/values*/array.xml 的 oiltypeArray 除最后一项『空白』外的全部（新增介质插在『空白』之前、只追加不重排）；32–39 = 用户自定义的 8 个油品，名称存在设备本地（中文/英文各一份），没有固定名称，读方显示 oilType。与云端 tank-settings 契约的 oilTypeIndex（0–39）是同一套下标。18–31 是测试包 E–L（2026-10-20 至 11-08）新增的内置介质，旧固件（测试包 D 及以前）上报的 18–25 是自定义油品，名称恒为空（#11）：读方遇到 18–25 且 oilType 为空时按『未设置/自定义』显示，不套内置名称。编号 10 按用户决定直接沿用原米糠油编号，现为煤油；旧设备和历史原文仍可能写米糠油 / Rice Bran Oil。32–39 自定义位置不变。英文名照抄设备（为适配屏宽用了 PG、DCM 等缩写），客户端显示文案可另用全称。oilType 是设备当前界面语言的显示名，读方应以 oilTypeIndex 识别油品。2026-11-04 前的设备英文表 2 号误为 Sulfuric Acid、10 号误为 Kerosene（issue #52），旧设备和历史记录里仍可能出现这两个名字。",
   "unset": 0,
   "builtin": {
     "1": {"zh": "0#", "en": "0# Diesel"},
@@ -11,7 +11,7 @@
     "7": {"zh": "98#", "en": "98# Gasoline"},
     "8": {"zh": "甲醇", "en": "Methanol"},
     "9": {"zh": "甲苯", "en": "Toluene"},
-    "10": {"zh": "米糠油", "en": "Rice Bran Oil"},
+    "10": {"zh": "煤油", "en": "Kerosene"},
     "11": {"zh": "硫酸", "en": "Sulfuric Acid"},
     "12": {"zh": "二甲苯", "en": "Xylene"},
     "13": {"zh": "正丁酯", "en": "n-Butyl"},

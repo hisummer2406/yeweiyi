@@ -12,7 +12,7 @@ describe('mediumText (cloud#85 §5, same as miniapp recordColumns)', () => {
     expect(mediumText(5, 'whatever', zt)).toBe('92#');
     // 设备英文表错位（2 号写成 Sulfuric Acid）：按下标
     expect(mediumText(2, 'Sulfuric Acid', et)).toBe('-10# Diesel');
-    expect(mediumText(10, 'Kerosene', zt)).toBe('米糠油');
+    expect(mediumText(10, 'Kerosene', zt)).toBe('煤油');
   });
 
   it('builtin index 18–31 (#11) in the UI language; the device English abbreviation is not shown', () => {

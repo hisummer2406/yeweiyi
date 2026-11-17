@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/protocol"
@@ -56,6 +59,88 @@ func names(rows []mediaRow) map[string]bool {
 	return out
 }
 
+func TestMedia_KeroseneMigrationPreservesCustomMedia(t *testing.T) {
+	up, err := os.ReadFile("../../db/migrations/000042_builtin_kerosene.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	down, err := os.ReadFile("../../db/migrations/000042_builtin_kerosene.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, seed, downSeed, upName, downName string
+	}{
+		{name: "no conflict", upName: "煤油", downName: "米糠油"},
+		{
+			name:     "disabled public names conflict",
+			seed:     `INSERT INTO media (id, name, scope, enabled) VALUES (101, '煤油', 'public', false);`,
+			downSeed: `INSERT INTO media (id, name, scope, enabled) VALUES (201, '米糠油', 'public', false);`,
+			upName:   "煤油（内置）", downName: "米糠油（内置）",
+		},
+		{
+			name:     "suffix also occupied",
+			seed:     `INSERT INTO media (id, name, scope) VALUES (101, '煤油', 'public'), (102, '煤油（内置）', 'public');`,
+			downSeed: `INSERT INTO media (id, name, scope) VALUES (201, '米糠油', 'public'), (202, '米糠油（内置）', 'public');`,
+			upName:   "煤油（内置2）", downName: "米糠油（内置2）",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			conn, err := pgx.Connect(ctx, testDatabaseURL())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn.Close(context.Background())
+			exec := func(sql string) {
+				t.Helper()
+				if _, err := conn.Exec(ctx, sql); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// 临时表复制真实约束，迁移只作用于当前连接，不修改共享测试数据。
+			exec(`CREATE TEMP TABLE media (LIKE public.media INCLUDING ALL);
+CREATE TEMP TABLE device_media_slots (LIKE public.device_media_slots INCLUDING ALL);
+INSERT INTO media (id, builtin_index, name, name_en, scope) VALUES (10, 10, '米糠油', 'Rice Bran Oil', 'public');
+INSERT INTO media (id, name, scope) VALUES (103, '保留介质', 'public'), (104, '保留介质2', 'public');
+INSERT INTO device_media_slots (device_name, slot, media_id) VALUES ('migration-test', 32, 103), ('migration-test', 39, 104);`)
+			exec(tc.seed)
+			customSnapshot := func() string {
+				t.Helper()
+				var snapshot string
+				if err := conn.QueryRow(ctx, `SELECT jsonb_build_object(
+'media', (SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM media m WHERE builtin_index IS NULL),
+'slots', (SELECT jsonb_agg(to_jsonb(s) ORDER BY slot) FROM device_media_slots s))::text`).Scan(&snapshot); err != nil {
+					t.Fatal(err)
+				}
+				return snapshot
+			}
+			for _, step := range []struct{ sql, name, english string }{
+				{string(up), tc.upName, "Kerosene"},
+				{string(down), tc.downName, "Rice Bran Oil"},
+			} {
+				if step.english == "Rice Bran Oil" {
+					exec(tc.downSeed)
+				}
+				before := customSnapshot()
+				exec(step.sql)
+				var id int64
+				var name, english string
+				if err := conn.QueryRow(ctx, `SELECT id, name, name_en FROM media WHERE builtin_index = 10`).Scan(&id, &name, &english); err != nil {
+					t.Fatal(err)
+				}
+				if id != 10 || name != step.name || english != step.english {
+					t.Fatalf("builtin = %d %q %q, want 10 %q %q", id, name, english, step.name, step.english)
+				}
+				if customSnapshot() != before {
+					t.Fatal("migration changed custom media or slot mappings")
+				}
+			}
+		})
+	}
+}
+
 func TestMedia_PlatformAdminOnly(t *testing.T) {
 	tn := newTenancy(t)
 	for who, token := range map[string]string{"customer admin": tn.adminA, "customer user": tn.userA} {
@@ -82,6 +167,9 @@ func TestMedia_ManualEntryAndCustomerIsolation(t *testing.T) {
 	a := decodeAs[mediaOptions](t, tn.send(t, "GET", "/api/devices/"+tn.devA1+"/media-options", tn.platform, nil))
 	if !names(a.Public)[pub.Name] || !names(a.Public)["92#"] || !names(a.Customer)[own.Name] {
 		t.Fatalf("customer A device options = %+v", a)
+	}
+	if !names(a.Public)["煤油"] || names(a.Public)["米糠油"] {
+		t.Fatalf("builtin 10 must be kerosene after migration: %+v", a.Public)
 	}
 	if names(a.Public)["二厂盐酸"] {
 		t.Error("二厂 media must stay unclassified until their owner is confirmed")
@@ -226,11 +314,11 @@ func TestMedia_SelectResolvesOnTheServer(t *testing.T) {
 	tn.markSynced(t, tn.devA1)
 	own := tn.createMedia(t, map[string]any{"name": mediaName("酸"), "nameEn": "HCl", "scope": "customer", "customerId": tn.custA})
 
-	if rec := selectMedium(t, tn, tn.platform, tn.devA1, 1, builtinID(t, tn, 5)); rec.Code != http.StatusAccepted {
+	if rec := selectMedium(t, tn, tn.platform, tn.devA1, 1, builtinID(t, tn, 10)); rec.Code != http.StatusAccepted {
 		t.Fatalf("builtin: %d %s", rec.Code, rec.Body.String())
 	}
 	args := tn.lastArgs(t, tn.devA1)
-	if args["oilTypeIndex"] != float64(5) || args["customOilName"] != nil || args["mediaId"] != nil {
+	if args["oilTypeIndex"] != float64(10) || args["customOilName"] != nil || args["mediaId"] != nil {
 		t.Errorf("builtin args = %v", args)
 	}
 

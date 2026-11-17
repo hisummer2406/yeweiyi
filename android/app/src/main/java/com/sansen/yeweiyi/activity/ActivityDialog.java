@@ -13,13 +13,16 @@ import android.widget.GridView;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
+import com.sansen.yeweiyi.applog.AppLog;
 import com.sansen.yeweiyi.languageUtil.LanguageUtil;
+import com.sansen.yeweiyi.logic.applog.LogModule;
+
+import java.util.Arrays;
 
 public class ActivityDialog extends Activity implements OnItemClickListener {
 
-	private GridView activity_dialog_gridview;
-	String[]  valueData = null;
-	private int value;
+	private String[] optionNames = new String[0];
+	private int[] oilTypeIndices;
 
 	@Override
 	protected void attachBaseContext(Context newBase) {
@@ -28,83 +31,103 @@ public class ActivityDialog extends Activity implements OnItemClickListener {
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
-		// TODO Auto-generated method stub
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_dialog);
-		value = getIntent().getIntExtra("value", 0);
-		 if (value == 0) {
+
+		int selectionType = getIntent().getIntExtra("value", 0);
+		if (selectionType == 0) {
 			setTitle(R.string.oilCanSelect);
-			valueData=getResources().getStringArray(R.array.oilcanArray);
-		}else if(value == 1){
+			optionNames = getResources().getStringArray(R.array.oilcanArray);
+		} else if (selectionType == 1) {
 			setTitle(R.string.oil_type);
-			valueData= getResources().getStringArray(R.array.oiltypeArray);//DataUtils.getOilType();
-		// [不可达-2026-09-21] value==5/6/7 这三个分支：全仓库穷举了所有
-		// new Intent(..., ActivityDialog.class) 的调用点，传的 value 只有 0、1，或者压根没
-		// putExtra("value",...)（走默认值 0）。没有任何调用方传 5/6/7（西语翻译覆盖率核查时发现）。
-		// oilcanset_info/oilcantable_info 这两个字符串虽然已经有西语翻译（历史遗留，不算错，
-		// 只是翻了不会显示的分支），sensor_settings 还没翻——三个都不用优先翻。
-		}else if (value==5) {
-			setTitle(R.string.oilcanset_info);
-			// [已屏蔽-2026-09-24] oilcanSetArray 不可达（value==5 无调用方传入，见上方注释）。
-			// valueData = getResources().getStringArray(R.array.oilcanSetArray);
-		}else if (value==6) {
-			setTitle(R.string.oilcantable_info);
-			// [已屏蔽-2026-09-24] oilcanTableArray 不可达（value==6 无调用方传入，见上方注释）。
-			// valueData = getResources().getStringArray(R.array.oilcanTableArray);
+			optionNames = buildOilTypeOptions();
+		} else {
+			finish();
+			return;
 		}
-		else if (value == 7) {
-			// [已屏蔽-2026-09-23] sensor_settings 已删除（value==7 无调用方传入，不可达，见上方注释）。
-			// setTitle(R.string.sensor_settings);
-			// [已屏蔽-2026-09-24] tanZhenTableArray 不可达（value==7 无调用方传入，同上）。
-			// valueData=getResources().getStringArray(R.array.tanZhenTableArray);
+
+		if (optionNames.length == 0) {
+			finish();
+			return;
 		}
-		
-		overridePendingTransition(0,0);
-		initView();
+
+		GridView gridView = (GridView) findViewById(R.id.activity_dialog_gridview);
+		gridView.setAdapter(new MyAdapter());
+		gridView.setOnItemClickListener(this);
+		overridePendingTransition(0, 0);
 	}
 
-	private void initView() {
-		activity_dialog_gridview = (GridView)findViewById(R.id.activity_dialog_gridview);
-		activity_dialog_gridview.setAdapter(new MyAdapter());
-		activity_dialog_gridview.setOnItemClickListener(this);
+	private String[] buildOilTypeOptions() {
+		String[] allNames = getResources().getStringArray(R.array.oiltypeArray);
+		int[] indices = getResources().getIntArray(R.array.oiltype_selection_indices);
+		String[] names = new String[indices.length];
+		int[] originalIndices = new int[indices.length];
+		int count = 0;
+
+		for (int index : indices) {
+			if (index < 0 || index >= allNames.length || allNames[index] == null) {
+				AppLog.w(LogModule.SYSTEM, "跳过无效介质编号", "index", index);
+				continue;
+			}
+			names[count] = allNames[index];
+			originalIndices[count] = index;
+			count++;
+		}
+		// 显示列表可以精简，但回传编号必须保留；“空白”仍为 32。
+		oilTypeIndices = Arrays.copyOf(originalIndices, count);
+		return Arrays.copyOf(names, count);
 	}
+
 	class MyAdapter extends BaseAdapter {
 
 		@Override
 		public int getCount() {
-			return valueData.length;
+			return optionNames.length;
 		}
 
 		@Override
-		public Object getItem(int position) {
-			return null;
+		public String getItem(int position) {
+			if (position < 0 || position >= optionNames.length) {
+				return null;
+			}
+			return optionNames[position];
 		}
 
 		@Override
 		public long getItemId(int position) {
-			// TODO Auto-generated method stub
-			return 0;
+			return position;
 		}
 
 		@Override
 		public View getView(int position, View convertView, ViewGroup parent) {
-			View v = LayoutInflater.from(ActivityDialog.this).inflate(R.layout.iteam_activity_dialog_gridview, null);
-			TextView tv=(TextView) v.findViewById(R.id.item_activity_dialog_tv);
-			tv.setText(valueData[position]);
-			return v;
+			if (convertView == null) {
+				convertView = LayoutInflater.from(ActivityDialog.this)
+						.inflate(R.layout.iteam_activity_dialog_gridview, parent, false);
+			}
+			TextView textView = (TextView) convertView.findViewById(R.id.item_activity_dialog_tv);
+			textView.setText(getItem(position));
+			return convertView;
 		}
 	}
+
 	@Override
-	public void onItemClick(AdapterView<?> parent, View view, int position,
-							long id) {
-		//由于点击框的外面默认返回为0，因此在这里不能返回0应该在此基础上+上某些数字
-		setResult(position+100);
+	public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+		if (position < 0 || position >= optionNames.length) {
+			AppLog.w(LogModule.SYSTEM, "忽略无效选择位置", "position", position);
+			return;
+		}
+		int sourceIndex = position;
+		if (oilTypeIndices != null) {
+			sourceIndex = oilTypeIndices[position];
+		}
+		// 0 表示取消，选择结果沿用调用方约定的“原编号 + 100”。
+		setResult(sourceIndex + 100);
 		finish();
 	}
+
 	@Override
 	protected void onPause() {
-		// TODO Auto-generated method stub
 		super.onPause();
-		overridePendingTransition(0,0);
+		overridePendingTransition(0, 0);
 	}
 }
