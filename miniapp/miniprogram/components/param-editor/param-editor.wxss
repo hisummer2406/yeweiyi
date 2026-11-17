@@ -74,6 +74,11 @@
   font-size: var(--font-body);
 }
 
+/* 带符号字段左对齐，让 ± 设定的「−」紧挨数字（#56） */
+.pe-fi-signed {
+  text-align: left;
+}
+
 .pe-fu {
   flex: none;
   width: 72rpx;
@@ -89,6 +94,13 @@
 }
 
 /* 正负号切换（#30）：触控区不小于 64rpx */
+.pe-neg {
+  flex: none;
+  margin-right: 4rpx;
+  font-size: var(--font-body);
+  color: #131313;
+}
+
 .pe-sign {
   flex: none;
   width: 64rpx;

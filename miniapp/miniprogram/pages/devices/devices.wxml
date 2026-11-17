@@ -81,8 +81,9 @@
             <text class="tank-tag">{{t.tankNoLabel}} {{t.oilType || '--'}}</text>
             <text class="badge badge-failed" wx:if="{{t.alarmState === 'ALARM'}}">{{t.alarmStateLabel}}</text>
             <text class="badge badge-offline" wx:elif="{{t.alarmState === 'FAULT'}}">{{t.alarmStateLabel}}</text>
-            <!-- 本机显示倍率（#44）：容积、质量是换算值，标出来，不冒充原始计量 -->
-            <text class="badge badge-scale" wx:if="{{t.scaleTag}}">{{text.scaled}} {{t.scaleTag}}</text>
+            <!-- 虚拟罐表（#56）：容积、质量按本机虚拟罐表算出，标出来，不冒充设备计量；算不了时标「设备原值」 -->
+            <text class="badge badge-scale" wx:if="{{t.virtualState === 'virtual'}}">{{text.virtual}}</text>
+            <text class="badge badge-offline" wx:elif="{{t.virtualState === 'fallback'}}">{{text.virtualFallback}}</text>
           </view>
           <view class="hs-row"><text class="hs-label">{{text.level}}</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.volume}}</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">{{text.unitL}}</text></view>

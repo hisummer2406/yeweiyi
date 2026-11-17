@@ -61,38 +61,17 @@
           {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}
         </view>
         <view class="dt-probe">{{item.shapeLabel}}<text wx:if="{{item.shapeTime}}"> · {{item.shapeTime}}</text></view>
-        <!-- 本机显示倍率（#44）：容积、质量、水体积、空容是换算值，标出倍率并在下方给出原始值 -->
-        <view wx:if="{{item.scaleTag}}" class="dt-scale-tag"><text class="badge badge-scale">{{text.scaled}} {{item.scaleTag}}</text></view>
+        <!-- 虚拟罐表（#56）：容积、质量、水体积、空容按本机虚拟表算出，标出来并在下方给出设备原值；算不了时说明原因 -->
+        <view wx:if="{{virtualNote}}" class="dt-scale-tag">
+          <text class="badge {{item.virtualState === 'virtual' ? 'badge-scale' : 'badge-offline'}}">{{item.virtualState === 'virtual' ? text.virtual : text.virtualFallbackTag}}</text>
+          <view class="muted dt-virtual-note">{{virtualNote}}</view>
+        </view>
         <view class="dt-grid">
           <view wx:for="{{tankFields}}" wx:for-item="f" wx:key="label" class="dt-cell">
             <view class="dt-label">{{f.label}}</view>
             <view class="dt-value {{f.strong ? 'dt-value-strong' : ''}}">{{f.value}}<text class="dt-unit">{{f.unit}}</text></view>
-            <view wx:if="{{f.raw}}" class="dt-raw">{{text.scaleRaw}} {{f.raw}} {{f.unit}}</view>
+            <view wx:if="{{f.raw}}" class="dt-raw">{{text.virtualRaw}} {{f.raw}} {{f.unit}}</view>
           </view>
-        </view>
-      </view>
-
-      <!-- 本机显示设置（#44）：仅管理员；只存本机本账号，自动保存，没有「保存到手机」按钮 -->
-      <view wx:if="{{canScale && tanks.length}}" class="card sc-card">
-        <view class="sc-head" bindtap="onToggleScaleCard">
-          <text class="sc-title">{{text.scaleTitle}}</text>
-          <text class="sc-toggle">{{scaleOpen ? text.scaleHide : text.scaleShow}}</text>
-        </view>
-        <view wx:if="{{scaleOpen}}" class="sc-body">
-          <view class="muted sc-note">{{text.scaleNote}}</view>
-          <view class="sc-row">
-            <text class="sc-label">{{text.scaleEnable}}</text>
-            <switch checked="{{scaleEnabled}}" color="#0066a2" bindchange="onScaleSwitch" />
-          </view>
-          <view class="sc-row">
-            <text class="sc-label">{{text.scaleFactor}}</text>
-            <input class="sc-input" type="digit" value="{{scaleInput}}" placeholder="1" bindinput="onScaleInput" bindblur="onScaleCommit" bindconfirm="onScaleCommit" />
-          </view>
-          <view wx:if="{{scaleError}}" class="text-danger sc-error">{{scaleError}}</view>
-          <view wx:for="{{scalePreview}}" wx:key="label" class="sc-preview">
-            {{item.label}}：{{text.scaleRaw}} {{item.raw}} {{item.unit}} → {{text.scaled}} {{item.scaled}} {{item.unit}}
-          </view>
-          <button class="btn-secondary sc-reset" size="mini" bindtap="onScaleReset">{{text.scaleReset}}</button>
         </view>
       </view>
     </view>

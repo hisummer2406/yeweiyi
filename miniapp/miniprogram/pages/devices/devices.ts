@@ -9,8 +9,8 @@ import { showComingSoon } from '../../utils/comingSoon';
 import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
 import { getTankSettings } from '../../utils/remoteConfigApi';
-import { applyScale } from '../../utils/displayScale';
-import { scaleFactor } from '../../utils/displayScaleStore';
+import { applyVirtual } from '../../utils/virtualTable';
+import { dropLegacyScale, loadVirtual } from '../../utils/virtualTableStore';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -56,10 +56,11 @@ const emptyGroup = (deviceName: string): DeviceGroup => ({
   shapes: emptyTankShapes(),
 });
 
-// Re-applied from the raw readings: a scale changed on the detail page shows at once, never multiplied twice.
-const rescaled = (g: DeviceGroup): DeviceGroup => ({
+// Re-applied from the raw readings with the virtual table stored right now (#56): a table enabled or stopped
+// in 罐表设置 shows at once, and a reading is never converted twice.
+const revirtualized = (g: DeviceGroup): DeviceGroup => ({
   ...g,
-  tanks: g.tanks.map((t) => applyScale(t, scaleFactor(g.deviceName, t.index))),
+  tanks: g.tanks.map((t) => applyVirtual(t, loadVirtual(g.deviceName, t.index))),
 });
 
 const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale());
@@ -177,8 +178,12 @@ Page({
     if (account !== this.activeAccount) this.setData({ groups: [] });
     this.activeAccount = account;
     this.setData({ text: texts('home'), homeLanguage: currentLocale() });
-    // 详情页改了倍率后回来：先按本机设置重算已显示的罐，断网刷新失败也和详情一致
-    this.rescaleShown();
+    // 从罐表设置启用/停用虚拟罐表后回来：先按本机当前的表重算已显示的罐，断网刷新失败也和详情一致
+    this.revirtualizeShown();
+    // 旧显示倍率（#44）已下线：本账号还留着倍率配置的，清掉并提示一次去罐表设置启用虚拟罐表（#56）
+    if (dropLegacyScale()) {
+      wx.showModal({ title: t('home.scaleRetiredTitle'), content: t('home.scaleRetired'), showCancel: false });
+    }
     this.loadHome();
     this.stopShapePoll();
     this.shapeTimer = setInterval(() => {
@@ -256,7 +261,7 @@ Page({
     const groups = visible.map((d: Device) => {
       const prev = before.get(d.device_name);
       return prev && prev.state === 'ok' && prev.tanks.length > 0
-        ? { ...rescaled(prev), staleText: '' }
+        ? { ...revirtualized(prev), staleText: '' }
         : emptyGroup(d.device_name);
     });
     this.setData({
@@ -273,9 +278,9 @@ Page({
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
   },
 
-  rescaleShown() {
+  revirtualizeShown() {
     const groups = this.data.groups as DeviceGroup[];
-    if (groups.some((g) => g.tanks.length > 0)) this.setData({ groups: groups.map(rescaled) });
+    if (groups.some((g) => g.tanks.length > 0)) this.setData({ groups: groups.map(revirtualized) });
   },
 
   onPickStation() {
@@ -310,7 +315,7 @@ Page({
             res,
             deviceName,
             this.data.groups.find((g) => g.deviceName === deviceName)?.shapes,
-            (tank) => scaleFactor(deviceName, tank),
+            (tank) => loadVirtual(deviceName, tank),
           ),
           error: '',
           staleText: '',

@@ -130,3 +130,16 @@ page {
 .ts-col {
   flex: 1;
 }
+
+/* 本机虚拟罐表（#56） */
+.ts-virtual {
+  margin-top: 40rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #e5e8ee;
+}
+
+.ts-virtual-off {
+  display: inline-block;
+  margin-top: 16rpx;
+  margin-left: 0;
+}

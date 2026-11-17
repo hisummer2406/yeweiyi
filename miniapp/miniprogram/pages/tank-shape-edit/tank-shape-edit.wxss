@@ -97,6 +97,12 @@ button.te-btn::after {
   border: 2rpx solid #0066a2;
 }
 
+button.te-btn-virtual {
+  flex: none;
+  width: 100%;
+  margin: 16rpx 0 8rpx;
+}
+
 /* 生成结果 */
 .te-result {
   margin: 0 60rpx 48rpx 62rpx;

@@ -97,6 +97,23 @@ export function toggleSign(text: string): string {
   return t.startsWith('-') ? t.slice(1) : `-${t}`;
 }
 
+// 数字键盘（#56）：带符号的字段用支持小数点的数字键盘（type=digit），很多手机的数字键盘没有负号，
+// 程序写进去的「-」在部分系统上也会被数字键盘过滤。所以符号不放进输入框：输入框只显示数值部分，
+// 符号由 ± 按钮控制、显示在输入框前。splitSigned 拆开表单文字，joinSigned 把键盘输入接回原来的符号。
+export function splitSigned(text: string): { neg: boolean; mag: string } {
+  const s = String(text ?? '');
+  const t = s.trimStart();
+  return t.startsWith('-') ? { neg: true, mag: t.slice(1) } : { neg: false, mag: s };
+}
+
+// 键盘上若真能打出「-」（个别输入法），以打出的为准；否则沿用原来的符号。清空数值时保留单独的「-」，
+// 不补成 0，buildArgs 照样拒绝。
+export function joinSigned(prev: string, typed: string): string {
+  const t = String(typed ?? '');
+  if (t.trimStart().startsWith('-')) return t.trimStart();
+  return splitSigned(prev).neg ? `-${t}` : t;
+}
+
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
 export type SendProblem = { form: string; reason: 'number' | 'integer' | 'range' | 'order' };
