@@ -260,23 +260,25 @@ page {
   color: #2f3540;
 }
 
-/* #56：数值与左侧标签同字号、同字重；完整读数（负号、小数）单行显示，不截断、不换行。
-   行宽用满罐图右侧整列（不再限 290rpx），等宽数字下约 11 位仍不与单位重叠。 */
+/* #59：标签—数值—单位三列。单位列定宽右对齐（容纳最宽的「毫米」），各罐同一边界；
+   数值占满中间并右对齐，适度加粗、与标签同字号；min-width 保持内容宽，完整读数单行显示，
+   不被压缩到与单位重叠。 */
 .hs-value {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--font-body);
-  font-weight: normal;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  text-align: left;
+  text-align: right;
   white-space: nowrap;
 }
 
 .hs-unit {
-  min-width: 40rpx;
+  width: 56rpx;
   flex-shrink: 0;
   margin-left: 8rpx;
   font-size: var(--font-label);
+  text-align: right;
+  white-space: nowrap;
   color: #3d434c;
 }
 
@@ -313,6 +315,7 @@ page {
 }
 
 .home-compact .hs-unit {
+  width: 48rpx;
   font-size: var(--font-meta);
 }
 
