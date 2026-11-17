@@ -359,7 +359,7 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     The tank illustration carries a level fill (oil on top of water, `tankFill` in `utils/tankFill.ts`,
     from `oilRatioPct`/`waterRatioPct`; red on ALARM, grey on FAULT, nothing without a probe). The
     fill rectangle was measured against `tank-horizontal-home.png`, not verified in DevTools.
-    首页按设计图比例排布（2026-11-10）：读数与左侧标签同字号（#56，常规 30rpx、短屏 28rpx，单行不换行）；#59 起标签—数值—单位三列：单位列定宽 56rpx（短屏 48rpx）右对齐，数值右对齐并加粗 600，单位 28rpx（短屏 24rpx）。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
+    首页按设计图比例排布（2026-11-10）：读数与左侧标签同字号（#56，常规 30rpx、短屏 28rpx，单行不换行）；#59 起标签—数值—单位三列：单位列定宽 56rpx（短屏 48rpx）、单位文字左对齐，数值右对齐紧靠单位并加粗 600，单位 28rpx（短屏 24rpx）。`measureHomeLayout` 实测头部和第一组上报时间，从 `wx.getWindowInfo().windowHeight` 扣除后四等分作为每罐最小高度；原生 tabBar / 安全区不重复扣。数据到达和窗口变化时重算，滚动不影响结果。保留所有罐，第五罐起自然下滑查看；长介质名和异常文字可撑开、不裁切。浏览器已验证实际 WXML/WXSS 和高度计算方法，未作微信真机验收。
     Tank type comes from `tank-settings`; confirmed types select horizontal/vertical images. Before confirmation, keep a generic illustration with an explicit label; do not replace the tank with a question mark.
   - **我的记录 `records`** (tabBar) — the home page's current station (name on top) and five entries
     (报警/出库/入库/交班/库存), each opening `record-list?type=`. **No device picker**: no valid station

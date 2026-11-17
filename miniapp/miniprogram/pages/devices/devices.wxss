@@ -260,7 +260,8 @@ page {
   color: #2f3540;
 }
 
-/* #59：标签—数值—单位三列。单位列定宽右对齐（容纳最宽的「毫米」），各罐同一边界；
+/* #59：标签—数值—单位三列。单位列定宽（容纳最宽的「毫米」）、文字左对齐，各罐同一起点，
+   数值紧靠单位；
    数值占满中间并右对齐，适度加粗、与标签同字号；min-width 保持内容宽，完整读数单行显示，
    不被压缩到与单位重叠。 */
 .hs-value {
@@ -275,9 +276,9 @@ page {
 .hs-unit {
   width: 56rpx;
   flex-shrink: 0;
-  margin-left: 8rpx;
+  margin-left: 4rpx;
   font-size: var(--font-label);
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
   color: #3d434c;
 }
