@@ -1,6 +1,7 @@
 package com.sansen.yeweiyi.manager;
 
 import android.content.Context;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -23,6 +24,7 @@ import com.sansen.yeweiyi.logic.thingsboard.ProvisionMessages;
 import com.sansen.yeweiyi.logic.thingsboard.ProvisionResult;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
 import com.sansen.yeweiyi.logic.thingsboard.SharedAttributesParser;
+import com.sansen.yeweiyi.logic.thingsboard.SnapshotTrigger;
 import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TankSettingsAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
@@ -82,6 +84,8 @@ public final class ThingsBoardManager {
 
     private static final String TAG = "ThingsBoardManager";
     private static final long TELEMETRY_PERIOD_MILLIS = 30_000L;
+    /** 每秒检查一次是否该发快照（保底周期或液位变化），见 {@link SnapshotTrigger}。 */
+    private static final long SNAPSHOT_CHECK_MILLIS = 1_000L;
     private static final long COMMAND_RETENTION_MILLIS = 24L * 60 * 60 * 1000; // 24 小时
     private static final int MAX_PENDING_ALARMS = 200;
     /** 交班/库存上报通道容量：16 罐每小时一条库存，离线约 40 天才会开始丢最旧的。 */
@@ -111,6 +115,7 @@ public final class ThingsBoardManager {
     private String boundDeviceId;
     private final ThingsBoardMqttConnection connection;
     private final TelemetryScheduler telemetryScheduler;
+    private final SnapshotTrigger snapshotTrigger = new SnapshotTrigger(TELEMETRY_PERIOD_MILLIS);
     private final PendingAlarmStore pendingAlarmStore;
     private final RecordOutbox recordOutbox;
     private final ProcessedCommandStore commandStore;
@@ -220,8 +225,8 @@ public final class ThingsBoardManager {
         this.rpcDispatcher = new RpcDispatcher(registry, commandStore, this::publishRpcAck, this::publishRpcResult,
                 System::currentTimeMillis, CloudCmdLog.INSTANCE);
 
-        this.telemetryScheduler = new TelemetryScheduler(this::buildAndPublishSnapshot, TELEMETRY_PERIOD_MILLIS,
-                error -> Log.e(TAG, "30 秒快照发布失败", error));
+        this.telemetryScheduler = new TelemetryScheduler(this::buildAndPublishSnapshot, SNAPSHOT_CHECK_MILLIS,
+                error -> Log.e(TAG, "遥测快照发布失败", error));
     }
 
     public synchronized void start() {
@@ -610,12 +615,12 @@ public final class ThingsBoardManager {
         if (newPeriodMillis == null) {
             return;
         }
-        long oldPeriodMillis = telemetryScheduler.getPeriodMillis();
+        long oldPeriodMillis = snapshotTrigger.getPeriodMillis();
         if (oldPeriodMillis != newPeriodMillis) {
             // 每次重连都会拉一次，值没变不记
             CloudCmdLog.onSharedAttributeApplied("reportIntervalSec", oldPeriodMillis + "ms", newPeriodMillis + "ms", source);
         }
-        telemetryScheduler.updatePeriod(newPeriodMillis);
+        snapshotTrigger.setPeriodMillis(newPeriodMillis);
     }
 
     /**
@@ -637,19 +642,39 @@ public final class ThingsBoardManager {
         }
     }
 
-    // ---- 30 秒快照 ----
+    // ---- 遥测快照 ----
 
     private void buildAndPublishSnapshot() {
         if (!connection.isConnected()) {
-            // 明确策略：断线期间的普通快照直接丢弃，不补投——见 PendingAlarmStore 类注释,
-            // 网络恢复后下一个 30 秒周期会带着最新状态重新上报。
+            // 断线期间的普通快照直接丢弃、不补投（见 PendingAlarmStore 类注释），重连后下一次检查即上报最新状态。
             return;
         }
-        List<NetOilCan> tanks = OilcanDataManager.getInstance(MyApplication.getInstance()).getNetOilcans();
+        OilcanDataManager dataManager = OilcanDataManager.getInstance(MyApplication.getInstance());
+        Map<Integer, SnapshotTrigger.TankLevel> levels = currentLevels(dataManager.getData());
+        long monotonicNow = SystemClock.elapsedRealtime();
+        if (!snapshotTrigger.shouldPublish(monotonicNow, levels)) {
+            return;
+        }
+        List<NetOilCan> tanks = dataManager.getNetOilcans();
         long now = System.currentTimeMillis();
         Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, now, snapshotSeq.incrementAndGet());
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, now);
-        connection.publishTelemetry(gson.toJson(payload));
+        if (connection.publishTelemetry(gson.toJson(payload))) {
+            snapshotTrigger.onPublished(monotonicNow, levels);
+        }
+    }
+
+    /** 每秒调用，只读液位，不走 {@code getNetOilcans()}（它每次都反序列化 SharedPreferences）。 */
+    private static Map<Integer, SnapshotTrigger.TankLevel> currentLevels(SparseArray<OilCan> data) {
+        Map<Integer, SnapshotTrigger.TankLevel> levels = new java.util.HashMap<>();
+        for (int i = 0; i < data.size(); i++) {
+            OilCan oilCan = data.valueAt(i);
+            if (oilCan != null) {
+                levels.put(oilCan.getOilCanPos(),
+                        new SnapshotTrigger.TankLevel(oilCan.getOilLevel(), oilCan.getWaterLevel()));
+            }
+        }
+        return levels;
     }
 
     // ---- RPC ----
