@@ -71,7 +71,9 @@ first-login password change) is `yeweiyi-cloud#77` — until it lands, staff can
   data and shows "may be out of date, last updated …" (home cards, device-detail tabs); a first-load failure
   is an error with a retry, never an empty list; `AlarmSocket` reports `down`, `reconnectNow()` is called when
   the page comes back to the foreground or the network returns (`utils/network.ts`), and the page says live
-  alarms are unavailable while it is down. Local drafts of the static settings pages are cleared at logout.
+  alarms are unavailable while it is down. While visible, the home page and the device-detail 实时数据 tab
+  re-read `telemetry/latest` silently every 5 s (`LIVE_REFRESH_MS`, openspec `auto-refresh-live-readings`);
+  a read still in flight is not repeated. Local drafts of the static settings pages are cleared at logout.
 - Not verified on a device: nothing of this has run in DevTools, in the app, or without WeChat installed.
 
 ## What this project is

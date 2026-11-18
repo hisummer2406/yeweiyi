@@ -44,7 +44,7 @@ public final class SharedAttributesParser {
      * @param pushJson {@code v1/devices/me/attributes} 推送消息的原始 payload。
      * @return 新的快照周期（毫秒）；键缺失、不是数字、或数值非正，都返回 {@code null}——调用方
      * 保持当前周期不变，不能让一条畸形/被篡改的消息把周期改成 0 或负数（0 会让
-     * {@link TelemetryScheduler#updatePeriod} 直接抛异常，负数没有意义）。
+     * {@link SnapshotTrigger#setPeriodMillis} 直接抛异常，负数没有意义）。
      */
     public static Long parsePushedReportIntervalMillis(String pushJson) {
         return reportIntervalMillisFrom(parseObject(pushJson));
