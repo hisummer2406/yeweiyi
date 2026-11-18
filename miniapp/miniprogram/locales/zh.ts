@@ -446,7 +446,8 @@ export const zh: Record<string, string> = {
   "tankCfg.tempHigh": "高温报警",
   "tankCfg.tempLow": "低温报警",
   // network resilience notices
-  "home.stale": "数据可能已过期，最后更新：{time}",
+  "home.staleBadge": "数据可能已过期",
+  "home.stale": "数据刷新失败。最后一次成功读取：{time}",
   "home.virtual": "虚拟罐显示",
   "home.virtualFallback": "设备原值",
   "home.scaleRetiredTitle": "显示倍率已下线",
