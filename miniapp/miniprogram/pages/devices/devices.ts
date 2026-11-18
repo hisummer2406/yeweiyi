@@ -394,6 +394,14 @@ Page({
     this.loadDevice(deviceName, this.loadSeq);
   },
 
+  onShowStale(e: WechatMiniprogram.BaseEvent) {
+    wx.showModal({
+      title: t('home.staleBadge'),
+      content: e.currentTarget.dataset.message,
+      showCancel: false,
+    });
+  },
+
   onTapTank(e: WechatMiniprogram.BaseEvent) {
     const device = e.currentTarget.dataset.device as string;
     // The protocol tank number (not the row's position): the detail page opens on this tank.

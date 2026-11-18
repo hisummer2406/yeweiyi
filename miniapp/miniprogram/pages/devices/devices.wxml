@@ -39,20 +39,17 @@
     <view wx:if="{{groups.length === 0}}" class="empty">{{text.noDevicesInStation}}</view>
     <view wx:for="{{groups}}" wx:for-item="g" wx:key="deviceName" class="device-group">
       <!-- 只有一台设备时不显示设备名，但上报时间始终显示：这是快照，不是实时推送 -->
-      <view class="group-head" wx:if="{{showSingleDeviceHeader || g.ts}}">
+      <view class="group-head {{g.staleText ? 'group-head-stale' : ''}}" wx:if="{{showSingleDeviceHeader || g.ts || g.staleText}}">
         <text class="group-name" wx:if="{{showSingleDeviceHeader}}">{{g.deviceName}}</text>
         <text class="group-ts tabular-nums" wx:if="{{g.ts}}">{{text.reportedAt}} {{g.ts}}</text>
-      </view>
-
-      <view wx:if="{{g.staleText}}" class="card banner-warning" style="margin:0 20rpx 12rpx;">
-        <text class="text-warning">{{g.staleText}}</text>
+        <button wx:if="{{g.staleText}}" class="home-status home-status-warning group-stale" bindtap="onShowStale" data-message="{{g.staleText}}">{{text.staleBadge}}</button>
       </view>
 
       <view wx:if="{{g.state === 'loading'}}" class="group-note">{{text.loading}}</view>
-      <view wx:elif="{{g.state === 'never'}}" class="group-note">{{g.note || text.neverReported}}</view>
-      <view wx:elif="{{g.state === 'error'}}" class="group-note">
+      <view wx:elif="{{g.state === 'never'}}" class="group-note group-note-status">{{g.note || text.neverReported}}</view>
+      <view wx:elif="{{g.state === 'error'}}" class="group-note group-note-status">
         <view class="text-danger">{{g.error}}</view>
-        <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice" style="margin-top:16rpx;">{{text.retry}}</button>
+        <button class="btn-primary" size="mini" data-device="{{g.deviceName}}" bindtap="onRetryDevice">{{text.retry}}</button>
       </view>
 
       <!-- 罐型来自 tank-settings；只按该设备的实际罐号合并，不从容积或介质猜测。 -->
@@ -75,22 +72,23 @@
             <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%;{{t.fillState === 'normal' && t.oilColor ? 'background-color:' + t.oilColor : ''}}"></view>
           </view>
           </view>
+          <view wx:if="{{t.alarmState === 'ALARM' || t.alarmState === 'FAULT' || !t.probeConnected}}" class="home-tank-alerts">
+            <text wx:if="{{t.alarmState === 'ALARM' || t.alarmState === 'FAULT'}}" class="home-status home-status-danger">{{t.alarmStateLabel}}</text>
+            <text wx:if="{{!t.probeConnected}}" class="home-status home-status-danger">{{text.probeOff}}</text>
+          </view>
+          <!-- 虚拟罐表：容积、质量按本机罐表计算，算不了时标「设备原值」。 -->
+          <text wx:if="{{t.virtualState === 'virtual'}}" class="home-status home-tank-source">{{text.virtual}}</text>
+          <text wx:elif="{{t.virtualState === 'fallback'}}" class="home-status home-status-warning home-tank-source">{{text.virtualFallback}}</text>
         </view>
         <view class="tank-info">
           <view class="tank-tag-row">
             <text class="tank-tag">{{t.tankNoLabel}} {{t.oilType || '--'}}</text>
-            <text class="badge badge-failed" wx:if="{{t.alarmState === 'ALARM'}}">{{t.alarmStateLabel}}</text>
-            <text class="badge badge-offline" wx:elif="{{t.alarmState === 'FAULT'}}">{{t.alarmStateLabel}}</text>
-            <!-- 虚拟罐表（#56）：容积、质量按本机虚拟罐表算出，标出来，不冒充设备计量；算不了时标「设备原值」 -->
-            <text class="badge badge-scale" wx:if="{{t.virtualState === 'virtual'}}">{{text.virtual}}</text>
-            <text class="badge badge-offline" wx:elif="{{t.virtualState === 'fallback'}}">{{text.virtualFallback}}</text>
           </view>
           <view class="hs-row"><text class="hs-label">{{text.level}}</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.volume}}</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">{{text.unitL}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
           <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
           <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
-          <view class="hs-probe-status"><text wx:if="{{!t.probeConnected}}" class="hs-probe-off">{{text.probeOff}}</text></view>
         </view>
       </view>
     </view>

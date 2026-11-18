@@ -446,7 +446,8 @@ export const es: Record<string, string> = {
   "tankCfg.tempHigh": "Alarma de temperatura alta",
   "tankCfg.tempLow": "Alarma de temperatura baja",
   // network resilience notices
-  "home.stale": "Los datos pueden estar desactualizados. Última actualización: {time}",
+  "home.staleBadge": "Datos quizá antiguos",
+  "home.stale": "No se pudieron actualizar los datos. Última lectura correcta: {time}",
   "home.virtual": "Tabla virtual",
   "home.virtualFallback": "Valor del equipo",
   "home.scaleRetiredTitle": "Factor de visualización retirado",
