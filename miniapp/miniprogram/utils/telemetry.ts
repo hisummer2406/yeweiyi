@@ -16,6 +16,9 @@ import type { LatestTelemetryResponse, Tank } from '../types/api';
 // `raw` keeps the unrounded device readings and `virtualState` says whether volume/mass/ullage/water volume are
 // read from this phone's virtual tank table (#56, utils/virtualTable.ts); the fill is drawn from the device's
 // ratios, which a table does not change.
+// 首页和详情实时数据 tab 可见时静默重读 telemetry/latest 的间隔；设备液位变化时最快每 5 秒上报一次。
+export const LIVE_REFRESH_MS = 5_000;
+
 export type TankView = Tank & { alarmStateLabel: string; tankNoLabel: string; key: string } & TankFill & ReturnType<typeof tankShapeFields> & Virtualized;
 
 export function tankShapeFields(state: TankShapeState | undefined, tank: number) {

@@ -13,7 +13,7 @@ import { formatLocalTime, round2 } from '../../utils/format';
 import { applyVirtual } from '../../utils/virtualTable';
 import { loadVirtual } from '../../utils/virtualTableStore';
 import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
-import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
+import { LIVE_REFRESH_MS, toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
 import { getTankSettings } from '../../utils/remoteConfigApi';
 import { telemetryFailure } from '../../utils/failureState';
@@ -155,6 +155,8 @@ Page({
   shapeState: emptyTankShapes(),
   shapeAccount: '',
   shapeTimer: null as ReturnType<typeof setInterval> | null,
+  liveTimer: null as ReturnType<typeof setInterval> | null,
+  snapshotInFlight: 0,
   commandsSeq: 0,
   // The station this page was opened from (contract v1.2 §8.1): a number only when opened from a
   // station entry on the home page; the device then follows the station's current device
@@ -454,6 +456,12 @@ Page({
     if (this.allTanks.length) this.applyTanks(this.allTanks, this.neverReported);
     this.stopShapePoll();
     this.shapeTimer = setInterval(() => { if (this.data.deviceActive) void this.loadShapes(); }, 60_000);
+    // Only the 实时数据 tab, once something was loaded; the editor tabs are not refreshed under the user.
+    this.liveTimer = setInterval(() => {
+      if (this.data.deviceActive && this.data.activeTab === 'snapshot' && this.data.snapshotLoaded && !this.snapshotInFlight) {
+        void this.loadSnapshot(true);
+      }
+    }, LIVE_REFRESH_MS);
     // Back from another page (or the app was in the background): the back office may have replaced the
     // station's device meanwhile.
     this.refreshAssociation();
@@ -476,6 +484,8 @@ Page({
   stopShapePoll() {
     if (this.shapeTimer) clearInterval(this.shapeTimer);
     this.shapeTimer = null;
+    if (this.liveTimer) clearInterval(this.liveTimer);
+    this.liveTimer = null;
   },
 
   // Reads the tab on screen again (nothing happens for a tab not loaded yet or without a device).
@@ -582,12 +592,16 @@ Page({
 
 
   // GET /api/devices/:device/telemetry/latest — the cloud answers the granted tanks only.
-  loadSnapshot() {
+  // `silent` is the 5 s live refresh: no loading state, no shapes reload, no toast on failure.
+  loadSnapshot(silent = false) {
     if (!this.data.device) return Promise.resolve();
     const device = this.data.device as string;
     const seq = ++this.snapshotSeq;
-    void this.loadShapes();
-    this.setData({ loading: true });
+    this.snapshotInFlight++;
+    if (!silent) {
+      void this.loadShapes();
+      this.setData({ loading: true });
+    }
     return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
         if (seq !== this.snapshotSeq) return;
@@ -624,18 +638,21 @@ Page({
           }
           // 403 here is "not authorized for this device": no assignment for this device. Say what to do
           // instead of the cloud's English text; nothing in the app can grant it.
-          wx.showToast({
-            title: err.status === 403 ? tr('detail.noAccess') : describeError(err),
-            icon: 'none',
-            duration: 3000,
-          });
+          if (!silent || err.status === 403) {
+            wx.showToast({
+              title: err.status === 403 ? tr('detail.noAccess') : describeError(err),
+              icon: 'none',
+              duration: 3000,
+            });
+          }
           // "not authorized for this device" is an object-level refusal, not a dead session (request.ts
           // keeps the session): the device may have left this user's scope, so re-resolve the station.
           if (err.status === 403) this.refreshAssociation();
         }
       })
       .finally(() => {
-        if (seq === this.snapshotSeq) this.setData({ loading: false });
+        this.snapshotInFlight--;
+        if (seq === this.snapshotSeq && !silent) this.setData({ loading: false });
       });
   },
 
