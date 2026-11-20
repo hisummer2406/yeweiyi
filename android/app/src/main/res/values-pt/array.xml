@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 来自腾讯文档「数组文案对照」葡萄牙语列（2026-11-20）。
+         数组整组替换，条数与 values/array.xml 一致；language 统一使用默认资源中的语言自称。 -->
+    <string-array name="set_array">
+        <item>Conf. Tanque</item>
+        <item>Conf. Tab. Tanque</item>
+        <item>Conf. Senha</item>
+        <item>Conf. Básica</item>
+        <item>Conf. Registros</item>
+        <item>Conf. Avançada</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>Tanque Horiz.</item>
+        <item>Tanque Vert.</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>mm</item>
+        <item>m</item>
+    </string-array>
+    <string-array name="rongji_unit">
+        <item>L</item>
+        <item>m³</item>
+        <item>Gal</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>kg</item>
+        <item>t</item>
+    </string-array>
+    <string-array name="oilcanArray">
+        <item>Tanque 1</item>
+        <item>Tanque 2</item>
+        <item>Tanque 3</item>
+        <item>Tanque 4</item>
+        <item>Tanque 5</item>
+        <item>Tanque 6</item>
+        <item>Tanque 7</item>
+        <item>Tanque 8</item>
+        <item>Tanque 9</item>
+        <item>Tanque 10</item>
+        <item>Tanque 11</item>
+        <item>Tanque 12</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>Prod.</item>
+        <item>Nív. Óleo</item>
+        <item>Vol.</item>
+        <item>Peso</item>
+        <item>Vol. Vazio</item>
+        <item>Nív. Água</item>
+        <item>Vol. Água</item>
+        <item>Temp.</item>
+    </string-array>
+    <string-array name="oiltypeArray">
+        <item>Não config.</item>
+        <item>Diesel 0#</item>
+        <item>Diesel -10#</item>
+        <item>Diesel -20#</item>
+        <item>Diesel -35#</item>
+        <item>Gas 92#</item>
+        <item>Gas 95#</item>
+        <item>Gas 98#</item>
+        <item>Metan</item>
+        <item>Tol</item>
+        <item>Óleo Farelo Arroz</item>
+        <item>Ácido Sulfúrico</item>
+        <item>Xileno</item>
+        <item>Ac. But. n</item>
+        <item>Ac. But. sec</item>
+        <item>Éster Met</item>
+        <item>Éster Dimet</item>
+        <item>Óleo Solv</item>
+        <item>Prop. Glic</item>
+        <item>Etanol</item>
+        <item>Óleo Soja</item>
+        <item>Óleo Palma</item>
+        <item>Óleo Pneu</item>
+        <item>Parafina</item>
+        <item>Diclor. Met</item>
+        <item>Ác. Clor. F2</item>
+        <item>Ataq. Ác. F2</item>
+        <item>NaOH Liq. F2</item>
+        <item>Ác. Sulf. F2</item>
+        <item>Drenador</item>
+        <item>Dren Leste</item>
+        <item>Dren Oeste</item>
+        <item>Vazio</item>
+    </string-array>
+</resources>
