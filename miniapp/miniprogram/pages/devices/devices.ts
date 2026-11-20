@@ -6,7 +6,7 @@ import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndLocate } from '../../utils/scan';
 import { showComingSoon } from '../../utils/comingSoon';
-import { toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
+import { LIVE_REFRESH_MS, toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
 import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
 import { getTankSettings } from '../../utils/remoteConfigApi';
 import { applyVirtual } from '../../utils/virtualTable';
@@ -108,6 +108,9 @@ Page({
   // Stops listening for the network coming back.
   stopNet: null as (() => void) | null,
   shapeTimer: null as ReturnType<typeof setInterval> | null,
+  liveTimer: null as ReturnType<typeof setInterval> | null,
+  // Devices whose telemetry/latest read has not come back yet; the live refresh skips them.
+  telemetryInFlight: {} as Record<string, number>,
   activeAccount: '',
   shapeRequests: {} as Record<string, number>,
   pageHidden: false,
@@ -189,6 +192,11 @@ Page({
     this.shapeTimer = setInterval(() => {
       for (const g of this.data.groups) void this.loadShapes(g.deviceName, this.loadSeq);
     }, 60_000);
+    this.liveTimer = setInterval(() => {
+      for (const g of this.data.groups) {
+        if (!this.telemetryInFlight[g.deviceName]) void this.loadTelemetry(g.deviceName, this.loadSeq);
+      }
+    }, LIVE_REFRESH_MS);
   },
 
   onHide() {
@@ -200,6 +208,8 @@ Page({
   stopShapePoll() {
     if (this.shapeTimer) clearInterval(this.shapeTimer);
     this.shapeTimer = null;
+    if (this.liveTimer) clearInterval(this.liveTimer);
+    this.liveTimer = null;
   },
 
   onUnload() {
@@ -303,8 +313,13 @@ Page({
   },
 
   loadDevice(deviceName: string, seq: number): Promise<void> {
-    const shapeLoad = this.loadShapes(deviceName, seq);
-    const telemetryLoad = get<LatestTelemetryResponse>(
+    return Promise.all([this.loadTelemetry(deviceName, seq), this.loadShapes(deviceName, seq)]).then(() => undefined);
+  },
+
+  // Also the 5 s live refresh: it shows no loading state, and a failure keeps the readings marked out of date.
+  loadTelemetry(deviceName: string, seq: number): Promise<void> {
+    this.telemetryInFlight[deviceName] = (this.telemetryInFlight[deviceName] || 0) + 1;
+    return get<LatestTelemetryResponse>(
       `/api/devices/${encodeURIComponent(deviceName)}/telemetry/latest`,
     )
       .then((res) =>
@@ -340,8 +355,10 @@ Page({
             this.patchGroup(deviceName, seq, { state: 'error', ts: '', tanks: [], error: describeError(err), staleText: '' });
           }
         }
+      })
+      .finally(() => {
+        this.telemetryInFlight[deviceName] -= 1;
       });
-    return Promise.all([telemetryLoad, shapeLoad]).then(() => undefined);
   },
 
   loadShapes(deviceName: string, seq: number): Promise<void> {
@@ -375,6 +392,14 @@ Page({
     const deviceName = e.currentTarget.dataset.device as string;
     this.patchGroup(deviceName, this.loadSeq, { state: 'loading', error: '' });
     this.loadDevice(deviceName, this.loadSeq);
+  },
+
+  onShowStale(e: WechatMiniprogram.BaseEvent) {
+    wx.showModal({
+      title: t('home.staleBadge'),
+      content: e.currentTarget.dataset.message,
+      showCancel: false,
+    });
   },
 
   onTapTank(e: WechatMiniprogram.BaseEvent) {

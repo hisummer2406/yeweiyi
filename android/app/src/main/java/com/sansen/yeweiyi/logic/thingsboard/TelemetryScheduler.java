@@ -8,12 +8,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 单一调度器，固定周期触发一次完整快照上报，并且用 {@link AtomicBoolean} 做单飞保护——
- * 上一次快照还没跑完（比如探头轮询/MQTT publish 卡住），下一次 tick 直接跳过，不重入、
- * 不排队攒任务。
- * <p>
- * 只用 {@code java.util.concurrent}，无 Android 依赖，可在 JVM 单测里注入很短的周期
- * 验证"不重入""可重复 start/stop"。真机跑 30 秒周期由调用方传参决定，这里不写死。
+ * 固定间隔执行快照任务，单飞保护：上一次没跑完就跳过本次，不重入、不排队。
+ * 真机按 1 秒间隔检查，发不发由任务内的 {@link SnapshotTrigger} 决定（30 秒保底 + 液位变化）。
  */
 public final class TelemetryScheduler {
 
@@ -24,8 +20,7 @@ public final class TelemetryScheduler {
 
     private final ScheduledExecutorService executor;
     private final SnapshotTask task;
-    /** 不再是 {@code final}——{@link #updatePeriod} 支持运行期改周期（共享属性 {@code reportIntervalSec}，issue #39/#40 P1-4），只在 {@code synchronized} 方法里读写，不需要额外加锁。 */
-    private long periodMillis;
+    private final long periodMillis;
     private final AtomicBoolean inFlight = new AtomicBoolean(false);
     private final FailureListener failureListener;
 
@@ -82,32 +77,6 @@ public final class TelemetryScheduler {
             future.cancel(false);
             future = null;
         }
-    }
-
-    /**
-     * 运行期调整周期——云端共享属性 {@code reportIntervalSec} 下发时调用（见
-     * {@code SharedAttributesParser}），协议要求"设备必须不重启即可生效"（protocol-v1.md §5.2）。
-     * <p>
-     * 没在跑（还没 {@link #start()} 或已经 {@link #stop()}）时只更新 {@link #periodMillis}
-     * 字段，下次 {@code start()} 才生效；正在跑时取消当前调度、用新周期立刻重新排——新周期从
-     * "现在"开始算（{@code initialDelay} 也用 {@code newPeriodMillis}），不去推算距上一次 tick
-     * 已经过去多久，跟 {@link #start()} 首次调度的语义一致，也更简单。
-     */
-    public synchronized void updatePeriod(long newPeriodMillis) {
-        if (newPeriodMillis <= 0) {
-            throw new IllegalArgumentException("periodMillis 必须为正数: " + newPeriodMillis);
-        }
-        this.periodMillis = newPeriodMillis;
-        if (future != null && !future.isDone()) {
-            future.cancel(false);
-            future = executor.scheduleWithFixedDelay(this::tick, newPeriodMillis, newPeriodMillis,
-                    TimeUnit.MILLISECONDS);
-        }
-    }
-
-    /** 当前周期（毫秒），供测试和日志用。 */
-    public synchronized long getPeriodMillis() {
-        return periodMillis;
     }
 
     /** 立即触发一次（用于测试，或者上线后第一条快照不等一个完整周期）。 */

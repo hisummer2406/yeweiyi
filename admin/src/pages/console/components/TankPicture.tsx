@@ -31,7 +31,9 @@ const TankPicture: React.FC<{
   tank: API.Tank;
   width?: number;
   shape?: TankShape;
-}> = ({ tank, width = 96, shape = 'horizontal' }) => {
+  /** 设备回报的罐颜色（#RRGGBB）；正常状态按它画油，报警/故障仍用红/灰，空串用默认油色。 */
+  oilColor?: string;
+}> = ({ tank, width = 96, shape = 'horizontal', oilColor = '' }) => {
   const intl = useIntl();
   const shapeLabel = intl.formatMessage({
     id: `pages.console.tank.shape.${shape}`,
@@ -109,7 +111,10 @@ const TankPicture: React.FC<{
               data-fill="oil"
               style={{
                 height: `${f.fillOilPct}%`,
-                background: OIL_COLOR[f.fillState],
+                background:
+                  f.fillState === 'normal' && oilColor
+                    ? oilColor
+                    : OIL_COLOR[f.fillState],
               }}
             />
           </div>

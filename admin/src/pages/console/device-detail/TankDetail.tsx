@@ -36,7 +36,12 @@ const TankDetail: React.FC<{ tank: API.Tank; shapeInfo?: TankShapeInfo }> = ({
         style={{ background: token.colorFillAlter }}
       >
         <div className={styles.picture}>
-          <TankPicture tank={tank} width={360} shape={shapeInfo.shape} />
+          <TankPicture
+            tank={tank}
+            width={360}
+            shape={shapeInfo.shape}
+            oilColor={shapeInfo.oilColor}
+          />
         </div>
         <TankReadout
           tank={tank}

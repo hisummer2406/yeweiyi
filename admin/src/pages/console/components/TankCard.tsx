@@ -27,7 +27,12 @@ export const TankCard: React.FC<{
         style={{ background: token.colorFillAlter }}
       >
         <div className={styles.picture}>
-          <TankPicture tank={tank} width={240} shape={shapeInfo.shape} />
+          <TankPicture
+            tank={tank}
+            width={240}
+            shape={shapeInfo.shape}
+            oilColor={shapeInfo.oilColor}
+          />
         </div>
         <TankReadout
           tank={tank}

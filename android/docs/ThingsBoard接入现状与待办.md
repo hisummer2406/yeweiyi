@@ -54,14 +54,15 @@ Android 设备 --MQTT/TLS-->  ThingsBoard CE  --REST + WebSocket-->  Go 后端  
 
 ## 3. Android 业务逻辑详解（重点）
 
-### 3.1 遥测上报——30 秒快照
+### 3.1 遥测上报——30 秒保底 + 液位变化即报
 
-**业务场景**：设备每 30 秒把当前所有罐子的实时读数发一次，是云端"实时数据"页面的唯一数据源。
+**业务场景**：设备把当前所有罐子的实时读数发成一条完整快照，是云端"实时数据"页面的唯一数据源。触发条件（`SnapshotTrigger`，每秒检查一次）：距上次成功发出满 30 秒；或任一罐油位/水位与上次发出的值相差 ≥1 mm 且距上次 ≥5 秒。
 
 **完整链路**：
 ```
-TelemetryScheduler（独立线程，scheduleWithFixedDelay 30s）
+TelemetryScheduler（独立线程，scheduleWithFixedDelay 1s）
   → ThingsBoardManager.buildAndPublishSnapshot()
+      → SnapshotTrigger.shouldPublish(...)                     // 不该发就返回；发布成功才 onPublished 更新基准
       → OilcanDataManager.getInstance(...).getNetOilcans()   // 业务数据从这里取，本身跟 ThingsBoard 无关
       → TelemetrySnapshotBuilder.buildValues(tanks, now, snapshotSeq++)
       → connection.publishTelemetry(json)                     // 断线直接丢弃，不补投
@@ -70,7 +71,7 @@ TelemetryScheduler（独立线程，scheduleWithFixedDelay 30s）
 **每罐字段**（`TelemetrySnapshotBuilder.putTankFields`）：`oilType`/`oilLevelMm`/`waterLevelMm`/`tempC`/`oilVolumeL`/`waterVolumeL`/`oilWeightKg`/`nullVolumeL`/`oilRatioPct`/`alarmState`/`probeConnected`，外加设备级 `tankCount`（取最大罐号，不是罐数）、`snapshotSeq`（单调递增，丢帧检测用）。
 
 **业务规则**：
-- 断线期间**直接丢弃当次快照**，不进补投队列——因为快照是"当前状态"，补发一条 30 秒前的旧值没有意义，等下一个周期自然会发最新的。
+- 断线期间**直接丢弃当次快照**，不进补投队列——因为快照是"当前状态"，补发一条 30 秒前的旧值没有意义，重连后下一次检查就会发最新的。
 - 周期可以被云端下发的 `reportIntervalSec` 共享属性运行期覆盖（见 3.6），不需要重启设备。
 - **`alarmState`**（NORMAL/ALARM/FAULT）：跟报警事件同一个来源（`CloudAlarmReporter` 记录的当前报警集合，见 3.2）。探头断线报警在 → `FAULT`，其它报警在 → `ALARM`，否则 `NORMAL`。
 - **`oilRatioPct`**：沿用本机含义——液位 ÷ 罐高 × 100（本机 `OilCan.oilRatio` 只用来画罐体图，界面不显示百分比数字），上报时保留一位小数、向下截断、超过 100 按 100，罐高未配置时不发。
@@ -396,7 +397,7 @@ public void dispatch(String mqttRequestId, String payload) {
 每次连接成功 → ThingsBoardManager.requestSharedAttributes()   // 主动问一次"现在的值是多少"
     （只订阅推送 topic 收不到"连接前就已经设置好"的值，必须主动请求）
 共享属性变化推送 或 请求的应答 → SharedAttributesParser 解析出 reportIntervalSec
-    → TelemetryScheduler.updatePeriod(newPeriodMillis)   // 不需要重启设备就生效
+    → SnapshotTrigger.setPeriodMillis(newPeriodMillis)   // 下一次每秒检查即生效，不需要重启
 ```
 
 **业务规则**：非法值（缺失/非数字/非正数）一律忽略，保持当前周期不变——避免一条畸形消息把周期改成 0 或负数。

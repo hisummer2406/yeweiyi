@@ -55,7 +55,7 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
 
 - **Topic**：`v1/devices/me/telemetry`（ThingsBoard 原生，不可配置）
 - **QoS**：1
-- **周期**：默认 30 秒，可由共享属性 `reportIntervalSec` 覆盖
+- **周期**：默认 30 秒，可由共享属性 `reportIntervalSec` 覆盖。另外，任一罐 `oilLevelMm`/`waterLevelMm` 与上一条快照相差 ≥1 mm 时，设备会提前发一条完整快照（两条之间至少 5 秒），发出后周期重新计时。云端不能假设快照严格等间隔
 - **方向**：设备 → 云。**后台不再逐台轮询**（旧设计的 `requestOilcan` 轮询已废弃）
 
 报文使用 ThingsBoard 的显式时间戳形式：
