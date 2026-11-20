@@ -174,6 +174,7 @@ dependencies {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
     testImplementation 'junit:junit:4.12'
+    testImplementation 'org.mockito:mockito-inline:4.11.0'
     implementation project(':xutilslibrary')
     implementation 'com.android.support:recyclerview-v7:27.1.1'
     implementation 'com.android.support:appcompat-v7:27.1.1'

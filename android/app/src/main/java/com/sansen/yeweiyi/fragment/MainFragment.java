@@ -179,13 +179,13 @@ public class MainFragment extends BaseFragment implements OilCanAdapter.OnItemCl
 
 
     @Override
-    public void onClick(int position) {
+    public void onClick(int tankNo) {
         if (main.oilCanFragment != null) {
 
-            main.oilCanFragment.UpdatePostion(position + 1);
+            main.oilCanFragment.UpdatePostion(tankNo);
         } else {
 
-            main.oilCanFragment = new OilCanFragment(position + 1);
+            main.oilCanFragment = new OilCanFragment(tankNo);
         }
 
         main.switchContent(main.mContent, main.oilCanFragment);

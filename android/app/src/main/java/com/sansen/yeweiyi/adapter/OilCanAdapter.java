@@ -1,6 +1,5 @@
 package com.sansen.yeweiyi.adapter;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.support.v7.widget.RecyclerView;
 import android.util.SparseArray;
@@ -36,16 +35,17 @@ public class OilCanAdapter extends  RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	@Override
-	public void onBindViewHolder(RecyclerView.ViewHolder holder, @SuppressLint("RecyclerView") final int position) {
+	public void onBindViewHolder(RecyclerView.ViewHolder holder, final int position) {
 		OilCanAdapter.ViewHolder viewHolder = (OilCanAdapter.ViewHolder) holder;
+		final int tankNo = maps.keyAt(position);
 
-			viewHolder.min_oil.setOilCan(maps.get(maps.keyAt(position)));
+			viewHolder.min_oil.setOilCan(maps.get(tankNo));
 			viewHolder.min_oil.invalidate();
 			if (mOnItemClickListener != null) {
 				viewHolder.min_oil.setOnClickListener(new View.OnClickListener() {
 					@Override
 					public void onClick(View v) {
-						mOnItemClickListener.onClick(position);
+						mOnItemClickListener.onClick(tankNo);
 					}
 				});
 			}
@@ -78,7 +78,7 @@ public class OilCanAdapter extends  RecyclerView.Adapter<RecyclerView.ViewHolder
 	}
 
 	public interface OnItemClickListener {
-		void onClick(int position);
+		void onClick(int tankNo);
 
 		void onLongClick(int position);
 	}
