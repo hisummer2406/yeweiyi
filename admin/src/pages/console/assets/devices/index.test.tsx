@@ -90,7 +90,7 @@ describe('AdminDevices mini-program code', () => {
   it('platform admin downloads the code of that row', async () => {
     listDevices.mockResolvedValue([dev('000123', 1)]);
     render(<AdminDevices />);
-    fireEvent.click(within(await rowOf('000123')).getByText('下载小程序码'));
+    fireEvent.click(within(await rowOf('000123')).getByText('下载二维码'));
     expect(downloadMiniCode).toHaveBeenCalledWith(
       '000123',
       expect.any(Function),
@@ -101,9 +101,7 @@ describe('AdminDevices mini-program code', () => {
     canPlatformAdmin = false;
     listDevices.mockResolvedValue([dev('000123')]);
     render(<AdminDevices />);
-    expect(
-      within(await rowOf('000123')).queryByText('下载小程序码'),
-    ).toBeNull();
+    expect(within(await rowOf('000123')).queryByText('下载二维码')).toBeNull();
   });
 });
 

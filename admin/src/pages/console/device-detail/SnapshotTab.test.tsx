@@ -31,7 +31,7 @@ vi.mock('@/services/ant-design-pro/telemetry', async (importOriginal) => ({
 }));
 
 const { default: SnapshotTab } = await import('./SnapshotTab');
-const { REFRESH_MS } = await import('../components/useRecordsQuery');
+const { LIVE_TELEMETRY_MS: REFRESH_MS } = await import('@/utils/telemetry');
 
 const telemetryOf = (oilType: string): API.LatestTelemetry => ({
   deviceName: 'x',
@@ -95,7 +95,7 @@ describe('SnapshotTab', () => {
     expect(screen.getByText(/OIL-OF-D2/)).toBeTruthy();
   });
 
-  it('refreshes every 30 seconds without falling back to the skeleton', async () => {
+  it('refreshes every 5 seconds without falling back to the skeleton', async () => {
     vi.useFakeTimers();
     getLatestTelemetry.mockResolvedValue(telemetryOf('OIL'));
     render(<SnapshotTab device="D1" />);
@@ -120,6 +120,35 @@ describe('SnapshotTab', () => {
     });
     expect(screen.getByText(/GOOD-OIL/)).toBeTruthy();
     expect(screen.queryByText('实时数据加载失败')).toBeNull();
+  });
+
+  it('skips a tick while the previous request is still pending, then updates', async () => {
+    vi.useFakeTimers();
+    let resolveSlow!: (v: API.LatestTelemetry) => void;
+    getLatestTelemetry
+      .mockResolvedValueOnce(telemetryOf('FIRST-OIL'))
+      .mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            resolveSlow = r;
+          }),
+      )
+      .mockResolvedValue(telemetryOf('LATER-OIL'));
+    render(<SnapshotTab device="D1" />);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS * 3);
+    });
+    // 慢请求未回：后两轮都跳过，不堆积
+    expect(getLatestTelemetry).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/FIRST-OIL/)).toBeTruthy();
+    await act(async () => resolveSlow(telemetryOf('SLOW-OIL')));
+    expect(screen.getByText(/SLOW-OIL/)).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    });
+    expect(getLatestTelemetry).toHaveBeenCalledTimes(3);
+    expect(screen.getByText(/LATER-OIL/)).toBeTruthy();
   });
 
   it('stops polling after unmount', async () => {

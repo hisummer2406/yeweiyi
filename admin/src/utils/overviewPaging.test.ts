@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapLimit, packPages } from './overviewPaging';
+import { createLimiter, mapLimit, packPages } from './overviewPaging';
 
 describe('packPages', () => {
   const one = () => 1;
@@ -57,5 +57,33 @@ describe('mapLimit', () => {
 
   it('resolves immediately for an empty list', async () => {
     await expect(mapLimit([], 5, async () => 1)).resolves.toEqual([]);
+  });
+});
+
+describe('createLimiter', () => {
+  it('caps concurrency across overlapping batches and passes results through', async () => {
+    const run = createLimiter(2);
+    let running = 0;
+    let peak = 0;
+    const job = (v: number) => async () => {
+      running++;
+      peak = Math.max(peak, running);
+      await new Promise((r) => setTimeout(r, 5));
+      running--;
+      return v;
+    };
+    const a = Promise.all([1, 2, 3].map((v) => run(job(v))));
+    const b = Promise.all([4, 5].map((v) => run(job(v))));
+    await expect(a).resolves.toEqual([1, 2, 3]);
+    await expect(b).resolves.toEqual([4, 5]);
+    expect(peak).toBe(2);
+  });
+
+  it('frees the slot when a job throws', async () => {
+    const run = createLimiter(1);
+    await expect(run(() => Promise.reject(new Error('x')))).rejects.toThrow(
+      'x',
+    );
+    await expect(run(async () => 'ok')).resolves.toBe('ok');
   });
 });

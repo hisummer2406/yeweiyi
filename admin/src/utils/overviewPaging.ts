@@ -48,3 +48,30 @@ export async function mapLimit<T, R>(
   );
   return results;
 }
+
+/**
+ * 共享的并发闸门：多轮轮询重叠时（上一轮还没跑完下一轮又到了）合计也不超过 limit。
+ * 返回的 run(fn) 排队执行 fn，结果/异常原样交回。
+ */
+export function createLimiter(limit: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+  // 有人排队时名额直接转交，不先归还，避免新来的请求插队造成超额
+  const release = () => {
+    const next = queue.shift();
+    if (next) next();
+    else active--;
+  };
+  return async function run<R>(fn: () => Promise<R>): Promise<R> {
+    if (active >= limit) {
+      await new Promise<void>((resolve) => queue.push(resolve));
+    } else {
+      active++;
+    }
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  };
+}
