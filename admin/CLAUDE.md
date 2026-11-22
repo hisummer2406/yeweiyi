@@ -100,6 +100,8 @@
 - **设备总览分页与请求控制**（`pages/console/devices`，纯函数 `src/utils/overviewPaging.ts`）：设备列表一次取全，前端每页 12 台，
   **只对当前页取遥测**（翻到才取，已取过的沿用缓存），遥测请求并发上限 5；按油站分段时分页单位是油站（不拆开，超过一页的分段切开并重复标题）；
   标签页不可见时不轮询，回到前台立即刷新。云端没有批量遥测接口，有了再把「逐台请求」换成一次请求。
+  **读数 5 秒一刷（#62，`LIVE_TELEMETRY_MS`）**：总览只刷当前页遥测、不重拉列表（列表仍 30 秒），并发闸门 `createLimiter` 跨轮共享；
+  详情「实时数据」同为 5 秒。同一台设备上次请求未回就跳过本轮（不堆积，也不让慢请求被后来者作废），失败静默保留上次读数和上报时间。
 - **交班记录、库存记录（cloud#85，契约 `docs/shift-stock-records-contract.md` §4/§5；小程序 miniapp PR #24 同规则）**：
   `/records/shift`、`/records/inventory`，设备详情也有同名页签（`?tab=shift|inventory`）。接口 `GET /api/shift-records`、
   `GET /api/stock-records`，参数同出入库（device 必填、tank 可选，显式 `sort=false`，`limit`/`offset` 云端分页），响应 `{rows, truncated, partial,

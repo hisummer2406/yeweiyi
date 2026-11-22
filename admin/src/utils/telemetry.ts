@@ -27,3 +27,9 @@ export const fmtTime = (iso: string | null | undefined): string => {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
+
+/**
+ * 实时读数（总览、详情「实时数据」）的取数间隔（#62）：设备液位变化 ≥1 mm 会提前上报（两次至少隔 5 秒），
+ * 稳定时每 30 秒一份快照；后台每 5 秒读一次最新遥测，同小程序。
+ */
+export const LIVE_TELEMETRY_MS = 5_000;

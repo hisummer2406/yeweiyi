@@ -265,20 +265,20 @@ describe('StationsTab', () => {
       canPlatformAdmin = true;
       listDevices.mockResolvedValue([dev('000123', 3)]);
       const { unmount } = render(<StationsTab />);
-      fireEvent.click(within(await rowOf('一号站')).getByText('下载小程序码'));
+      fireEvent.click(within(await rowOf('一号站')).getByText('下载二维码'));
       expect(downloadMiniCode).toHaveBeenCalledWith(
         '000123',
         expect.any(Function),
       );
       expect(
-        within(await rowOf('二号站')).queryByText('下载小程序码'),
+        within(await rowOf('二号站')).queryByText('下载二维码'),
       ).toBeNull();
       unmount();
       cleanup();
       canPlatformAdmin = false;
       render(<StationsTab />);
       expect(
-        within(await rowOf('一号站')).queryByText('下载小程序码'),
+        within(await rowOf('一号站')).queryByText('下载二维码'),
       ).toBeNull();
     });
 

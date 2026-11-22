@@ -371,6 +371,56 @@ describe('ConsoleDevices (overview) paging and request control', () => {
       await waitFor(() => expect(listDevices).toHaveBeenCalledTimes(2));
     });
 
+    it('refreshes readings of the current page every 5 seconds without relisting', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(30));
+      render(<ConsoleDevices />);
+      await screen.findByText('D012');
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(12));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(24));
+      expect(listDevices).toHaveBeenCalledTimes(1);
+      const asked = getLatestTelemetry.mock.calls.map((c) => c[0]);
+      expect(asked).not.toContain('D013');
+    });
+
+    it('does not pile up requests for a device whose last request is pending', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(1));
+      let resolveSlow!: (v: API.LatestTelemetry) => void;
+      getLatestTelemetry
+        .mockResolvedValueOnce(telemetry('D001'))
+        .mockImplementationOnce(
+          () =>
+            new Promise((r) => {
+              resolveSlow = r;
+            }),
+        );
+      render(<ConsoleDevices />);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(2));
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(getLatestTelemetry).toHaveBeenCalledTimes(2);
+      resolveSlow(telemetry('D001'));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(3));
+    });
+
+    it('keeps the last reading and report time when a refresh fails', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(1));
+      getLatestTelemetry
+        .mockResolvedValueOnce(telemetry('D001'))
+        .mockRejectedValue({ message: 'Network Error' });
+      render(<ConsoleDevices />);
+      expect(await screen.findByText(/上报时间/)).toBeTruthy();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(2));
+      expect(screen.getByText(/上报时间/)).toBeTruthy();
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
     it('keeps polling while the tab is visible', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       listDevices.mockResolvedValue(many(2));
