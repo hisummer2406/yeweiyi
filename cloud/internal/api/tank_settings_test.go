@@ -189,3 +189,32 @@ func TestTankSettings_OilColorRoundTrip(t *testing.T) {
 		t.Errorf("oil_color_sync = %+v, %v", ds.OilColorSync, err)
 	}
 }
+
+// ThingsBoard stores attributes key by key, so one read can mix new and old keys under the new timestamp. The
+// next, complete read carries the same timestamp and must still land, or the mirror stays half-new (2026-11-24).
+func TestTankSettings_CompleteReadWithSameTimestampStillLands(t *testing.T) {
+	g := newGrantEnv(t)
+	ctx := context.Background()
+	q := db.New(g.env.pool)
+	reported := time.Now().Add(-time.Minute).UnixMilli()
+	high, oldDensity, newDensity := int32(2700), 0.56, 0.7
+	for _, d := range []*float64{&oldDensity, &newDensity} {
+		if err := ingest.SaveTankSettings(ctx, q, g.device, protocol.TankSettings{
+			Tank: 1, AlarmHighLevelMm: &high, Density: d, ReportedAtMs: reported}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := q.ListTankSettings(ctx, g.device)
+	if err != nil || len(rows) != 1 || rows[0].Density.Float64 != 0.7 {
+		t.Fatalf("mirror = %+v, %v; want density 0.7", rows, err)
+	}
+	oldSync, newSync := int32(0), int32(1)
+	for _, v := range []*int32{&oldSync, &newSync} {
+		if err := ingest.SaveDeviceSettings(ctx, q, g.device, protocol.DeviceSettings{TankHeightLowTempSync: v, ReportedAtMs: reported}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ds, err := q.GetDeviceSettings(ctx, g.device); err != nil || ds.TankHeightLowTempSync.Int32 != 1 {
+		t.Errorf("device settings = %+v, %v; want tank_height_low_temp_sync 1", ds.TankHeightLowTempSync, err)
+	}
+}

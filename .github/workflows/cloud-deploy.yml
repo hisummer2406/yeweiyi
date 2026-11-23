@@ -9,6 +9,11 @@ on:
         description: "已通过 main Cloud CI/Cloud Image 的完整 40 位提交 SHA"
         required: true
         type: string
+      image_source:
+        description: "registry = 从 GHCR 拉取已推送的镜像（默认）；runner = ghcr.io 推送不通时在 Runner 上按该提交构建、经 SSH 载入"
+        type: choice
+        options: [registry, runner]
+        default: registry
 
 permissions:
   contents: read
@@ -33,6 +38,7 @@ jobs:
     timeout-minutes: 15
     env:
       RELEASE_SHA: ${{ inputs.release_sha }}
+      IMAGE_SOURCE: ${{ inputs.image_source }}
       GH_TOKEN: ${{ github.token }}
       TARGET_HOST: ${{ secrets.CLOUD_DEPLOY_HOST }}
       TARGET_USER: ${{ secrets.CLOUD_DEPLOY_USER }}
@@ -64,7 +70,9 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
           # 单仓库按目录触发：只改别的目录的提交不会跑 Cloud CI/Image，选 SHA 时要选改过 cloud/ 的提交。
-          for wf in "Cloud CI" "Cloud Image"; do
+          # runner 模式镜像在本作业里按同一提交构建，不要求 Cloud Image（推送）成功；Cloud CI 照常必须成功。
+          wfs=("Cloud CI"); [[ "$IMAGE_SOURCE" == runner ]] || wfs+=("Cloud Image")
+          for wf in "${wfs[@]}"; do
             runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&event=push&per_page=100")"
             printf '%s' "$runs" | jq -e --arg wf "$wf" '
               [.workflow_runs[] | select(.name == $wf and .head_branch == "main")]
@@ -74,18 +82,35 @@ jobs:
       - name: 部署配置检查
         run: bash deploy/check-compose.sh
       - uses: docker/login-action@v4
+        if: inputs.image_source != 'runner'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
           logout: true
       - name: 将已构建镜像固定到 digest
+        if: inputs.image_source != 'runner'
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
           docker pull "$image"
           digest_image="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           [[ "$digest_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || exit 1
           echo "DEPLOY_IMAGE=$digest_image" >> "$GITHUB_ENV"
+          echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
+      # ghcr.io 出境推送反复超时时用（2026-11-23）：按已检出的同一提交在 Runner 上构建（复用 Cloud Image 的本机缓存，
+      # 只读），镜像不进任何仓库；身份以本机 .Id 为准，下一步照常核对远端载入后的标识。
+      - name: 在 Runner 上构建镜像（image_source=runner）
+        if: inputs.image_source == 'runner'
+        run: |
+          set -euo pipefail
+          image="yeweiyi-local/cloud:sha-$RELEASE_SHA"
+          args=()
+          for v in HTTPS_PROXY HTTP_PROXY NO_PROXY; do [[ -n "${!v:-}" ]] && args+=(--build-arg "$v=${!v}"); done
+          # 不带证明：导出包只含一个镜像，身份核对才有唯一的 digest。
+          docker buildx build --load --provenance=false --sbom=false "${args[@]}" \
+            --cache-from "type=local,src=${YEWEIYI_CI_CACHE:?}/buildx/cloud-image" -t "$image" .
+          echo "DEPLOY_IMAGE=$image" >> "$GITHUB_ENV"
+          echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
       - name: 配置 SSH
         env:
           KEY: ${{ secrets.CLOUD_DEPLOY_SSH_KEY }}
@@ -101,7 +126,7 @@ jobs:
           set -o pipefail
           read -ra SSH_OPTS_ARR <<< "$SSH_OPTS"
           SSH=(ssh "${SSH_OPTS_ARR[@]}" -p "${TARGET_PORT:-22}")
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
+          image="$SAVE_IMAGE"
           archive="$RUNNER_TEMP/cloud-image.tar"
           docker save "$image" -o "$archive"
           remote_store="$("${SSH[@]}" "$TARGET_USER@$TARGET_HOST" \
@@ -133,8 +158,11 @@ jobs:
           AUTH_DIR="$DEPLOY_DIR/.docker-ci"
           trap '"${SSH[@]}" "$TARGET" "sudo -n rm -rf -- '\''$AUTH_DIR'\''" || true' EXIT
           "${SSH[@]}" "$TARGET" "mkdir -p '$AUTH_DIR' && chmod 700 '$AUTH_DIR'"
-          printf '%s' "$REGISTRY_TOKEN" | "${SSH[@]}" "$TARGET" \
-            "sudo -n docker --config '$AUTH_DIR' login ghcr.io -u '$REGISTRY_USER' --password-stdin"
+          # runner 模式远端不 pull（镜像已载入），不需要仓库凭据。
+          if [[ "$IMAGE_SOURCE" != runner ]]; then
+            printf '%s' "$REGISTRY_TOKEN" | "${SSH[@]}" "$TARGET" \
+              "sudo -n docker --config '$AUTH_DIR' login ghcr.io -u '$REGISTRY_USER' --password-stdin"
+          fi
           "${SSH[@]}" "$TARGET" \
             "DOCKER_CONFIG='$AUTH_DIR' bash '$DEPLOY_DIR/deploy/remote-deploy.sh' '$DEPLOY_DIR' '$DEPLOY_IMAGE'"
       - name: 清理 Runner 凭据与本次镜像
@@ -142,5 +170,5 @@ jobs:
         working-directory: .
         run: |
           rm -rf "$RUNNER_TEMP/ssh" "$RUNNER_TEMP/docker-config" "$RUNNER_TEMP/cloud-image.tar"
-          [[ -n "${DEPLOY_IMAGE:-}" ]] && docker image rm "$DEPLOY_IMAGE" "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}" >/dev/null 2>&1 || true
+          [[ -n "${DEPLOY_IMAGE:-}" ]] && docker image rm "$DEPLOY_IMAGE" "${SAVE_IMAGE:-}" >/dev/null 2>&1 || true
           [[ ! -e "$RUNNER_TEMP/ssh" && ! -e "$RUNNER_TEMP/docker-config" ]] && echo "SSH 私钥与镜像仓库凭证已删除"

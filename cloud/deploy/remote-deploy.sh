@@ -6,7 +6,15 @@ DIR="${1:?用法：$0 <部署目录> <固定镜像>}"
 IMAGE="${2:?用法：$0 <部署目录> <固定镜像>}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/healthz}"
 HEALTH_TRIES="${HEALTH_TRIES:-30}"
-[[ "$IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || { echo '镜像必须使用 GHCR sha256 digest' >&2; exit 1; }
+# GHCR digest：照常 pull。yeweiyi-local/cloud:sha-<完整提交>：CI 已在 Runner 上构建并经 SSH 载入、核对过镜像标识
+# （ghcr.io 推送不通时的发布路径，见 cloud-deploy.yml image_source=runner），这里不 pull，只要求它已在本机。
+if [[ "$IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]]; then
+  PULL=1
+elif [[ "$IMAGE" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}$ ]]; then
+  PULL=0
+else
+  echo '镜像必须是 GHCR sha256 digest 或 yeweiyi-local/cloud:sha-<提交>' >&2; exit 1
+fi
 cd "$DIR"
 [[ -f .env.prod ]] || { echo '.env.prod 不存在' >&2; exit 1; }
 # 同一主机上手动运行也互斥，避免两个进程同时改环境文件。
@@ -37,8 +45,8 @@ wait_healthy() {
   return 1
 }
 PREV="$(grep '^API_IMAGE=' .env.prod | tail -n1 | cut -d= -f2- || true)"
-# 拉取失败时旧环境与 API 完全不动。
-docker_cmd pull "$IMAGE"
+# 拉取失败（或本机镜像不在）时旧环境与 API 完全不动。
+if [[ "$PULL" == 1 ]]; then docker_cmd pull "$IMAGE"; else docker_cmd image inspect "$IMAGE" >/dev/null; fi
 set_image "$IMAGE"
 # 本脚本只更新 API；基础设施必须由首次安装流程先准备好。
 # 显式运行新版本迁移，不复用上次退出成功的 migrate 容器。
