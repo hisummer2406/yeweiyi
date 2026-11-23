@@ -94,6 +94,7 @@ public class AlarmCoordinator {
             OilCan oilCan = main.myApplication.getmOilcanDataManager().getData(i);
             if (main.myApplication.getmOilcanDataManager().getData(i) != null && main.myApplication.getmOilcanDataManager().getData(i).getAlarmState() != 0) {
                 Singleton.getInstance().isTemperAlarm[i] = false;
+                Singleton.getInstance().isLowTemperAlarm[i] = false;
                 Singleton.getInstance().SoundLightAlarm[i] = false;
                 Singleton.getInstance().isWaterAlarm[i] = false;
                 Singleton.getInstance().isLowAlarms[i] = false;

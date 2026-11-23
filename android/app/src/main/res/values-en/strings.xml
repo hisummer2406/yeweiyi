@@ -16,6 +16,7 @@
     <string name="oilllow_alarm">Tank %1$d low low oil level alarm</string>
     <string name="waterheight_alarm">Tank %1$d high water level alarm</string>
     <string name="tempheight_alarm">Tank %1$d high temperature alarm</string>
+    <string name="templow_alarm">Tank %1$d low temperature alarm</string>
     <string name="oil_rise">litre</string>
     <string name="fyf_connect_error">Overflow valve mainboard connection error</string>
     <string name="open_external_lighting">Open external lighting</string>

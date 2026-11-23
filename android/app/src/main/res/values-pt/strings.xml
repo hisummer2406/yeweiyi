@@ -43,6 +43,7 @@
     <string name="oilllow_alarm">Alarme Nível LL Tanq %1$d</string>
     <string name="oillow_alarm">Alarme Nível L Tanq %1$d</string>
     <string name="tempheight_alarm">Alarme Temp Alta Tanq %1$d</string>
+    <string name="templow_alarm">Alarme Temp Baixa Tanq %1$d</string>
     <string name="waterheight_alarm">Alarme Água Alta Tanq %1$d</string>
     <string name="commitwork_record">Reg Troca Turno</string>
     <string name="oil_level">Tipo Meio</string>

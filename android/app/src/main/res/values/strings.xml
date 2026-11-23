@@ -16,6 +16,7 @@
     <string name="oilllow_alarm">%1$d 号储罐 低低液位报警</string>
     <string name="waterheight_alarm">%1$d 号储罐 高水位报警</string>
     <string name="tempheight_alarm">%1$d 号储罐高温度报警</string>
+    <string name="templow_alarm">%1$d 号储罐低温度报警</string>
     <string name="oil_rise">升</string>
     <string name="fyf_connect_error">驱动板连接中断</string>
     <string name="open_external_lighting">打开外接声光</string>

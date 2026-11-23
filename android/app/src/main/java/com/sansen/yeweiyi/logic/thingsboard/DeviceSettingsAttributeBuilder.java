@@ -21,6 +21,9 @@ public final class DeviceSettingsAttributeBuilder {
     /** 本固件支持随 config.setTankSettings 写入 oilColor；旧固件会忽略该字段，云端据此不向其下发颜色。 */
     public static final String KEY_OIL_COLOR_SYNC = "oilColorSync";
 
+    /** 本固件支持远程写入 tankHeightMm、alarmLowTempC 且低温报警已接通（#65）；旧固件拒绝这两个字段。 */
+    public static final String KEY_TANK_HEIGHT_LOW_TEMP_SYNC = "tankHeightLowTempSync";
+
     private DeviceSettingsAttributeBuilder() {
     }
 

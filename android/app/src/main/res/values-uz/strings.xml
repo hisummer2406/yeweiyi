@@ -12,6 +12,7 @@
     <string name="oilllow_alarm">%1$d-raqamli rezervuar: Daraja juda past!</string>
     <string name="waterheight_alarm">%1$d-raqamli rezervuar: Yuqori suv darajasi!</string>
     <string name="tempheight_alarm">%1$d-raqamli rezervuar: Yuqori harorat!</string>
+    <string name="templow_alarm">%1$d-raqamli rezervuar: Past harorat!</string>
     <string name="fyf_connect_error">Driver ulanishi uzildi</string>
     <string name="login_password_hint">Parol</string>
     <string name="login_tv_password">Parolni kiriting</string>

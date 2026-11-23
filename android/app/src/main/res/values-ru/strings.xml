@@ -12,6 +12,7 @@
     <string name="oilllow_alarm">Рез. №%1$d: тревога пред. низ. уровня</string>
     <string name="waterheight_alarm">Рез. №%1$d: тревога выс. ур. воды</string>
     <string name="tempheight_alarm">Рез. №%1$d: тревога выс. темп.</string>
+    <string name="templow_alarm">Рез. №%1$d: тревога низк. темп.</string>
     <string name="fyf_connect_error">Обрыв связи с драйвером</string>
     <string name="login_password_hint">Пароль</string>
     <string name="login_tv_password">Введите пароль</string>

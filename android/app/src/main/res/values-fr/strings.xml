@@ -43,6 +43,7 @@
     <string name="oilllow_alarm">Réservoir n°%1$d : Niv. LL</string>
     <string name="oillow_alarm">Réservoir n°%1$d : Niv. L</string>
     <string name="tempheight_alarm">Réservoir n°%1$d : Temp. H</string>
+    <string name="templow_alarm">Réservoir n°%1$d : Temp. B</string>
     <string name="waterheight_alarm">Réservoir n°%1$d : Niv. eau H</string>
     <string name="commitwork_record">Reg. relève</string>
     <string name="oil_level">Type prod.</string>
