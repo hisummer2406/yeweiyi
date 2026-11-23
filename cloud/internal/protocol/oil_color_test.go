@@ -67,3 +67,10 @@ func TestParseDeviceSettings_OilColorSync(t *testing.T) {
 		t.Errorf("s = %+v ok = %v skipped = %v", s, ok, skipped)
 	}
 }
+
+func TestParseDeviceSettings_TankHeightLowTempSync(t *testing.T) {
+	s, ok, skipped := protocol.ParseDeviceSettings(attrsFromJSON(t, `{"tankHeightLowTempSync": 1}`, 7))
+	if !ok || len(skipped) != 0 || s.TankHeightLowTempSync == nil || *s.TankHeightLowTempSync != 1 {
+		t.Fatalf("parsed = %+v ok=%v skipped=%v", s, ok, skipped)
+	}
+}

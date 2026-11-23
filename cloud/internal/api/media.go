@@ -315,8 +315,14 @@ func deviceMediaOptionsHandler(deps Deps) gin.HandlerFunc {
 			internalError(c, err)
 			return
 		}
+		heightTemp, err := deviceSyncsHeightLowTemp(ctx, deps.Queries, device.DeviceName)
+		if err != nil {
+			internalError(c, err)
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"public": public, "customer": own, "customMediaSync": synced, "oilColorSync": colors,
-			"slotsUsed": used, "slotsTotal": mediaSlotLast - mediaSlotFirst + 1})
+			"tankHeightLowTempSync": heightTemp,
+			"slotsUsed":             used, "slotsTotal": mediaSlotLast - mediaSlotFirst + 1})
 	}
 }
 
@@ -372,6 +378,42 @@ func colorSendable(c *gin.Context, deps Deps, actor control.Actor, device string
 		return false
 	}
 	return true
+}
+
+// heightLowTempSendable refuses tankHeightMm / alarmLowTempC for firmware that has not reported
+// tankHeightLowTempSync (#65): old firmware refuses them, and its low-temperature alarm is never checked.
+// On false the response has been written.
+func heightLowTempSendable(c *gin.Context, deps Deps, actor control.Actor, device string, args json.RawMessage) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(args, &fields) != nil {
+		return true
+	}
+	_, height := fields[protocol.AttrTankHeightMm]
+	_, lowTemp := fields[protocol.AttrAlarmLowTempC]
+	if (!height && !lowTemp) || !adminOfDevice(c, deps, actor, device) {
+		return true
+	}
+	ok, err := deviceSyncsHeightLowTemp(c.Request.Context(), deps.Queries, device)
+	if err != nil {
+		internalError(c, err)
+		return false
+	}
+	if !ok {
+		apiError(c, http.StatusConflict, "height_low_temp_unsupported", "this device firmware cannot receive tankHeightMm or alarmLowTempC")
+		return false
+	}
+	return true
+}
+
+func deviceSyncsHeightLowTemp(ctx context.Context, q *db.Queries, device string) (bool, error) {
+	s, err := q.GetDeviceSettings(ctx, device)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return s.TankHeightLowTempSync.Valid && s.TankHeightLowTempSync.Int32 == 1, nil
 }
 
 // deviceSyncsColor: firmware without it ignores oilColor silently (cmdResult.ignored), so the cloud refuses

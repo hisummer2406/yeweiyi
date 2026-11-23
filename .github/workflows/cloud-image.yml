@@ -11,6 +11,11 @@ on:
 permissions:
   contents: read
 
+# PR 上新提交取消旧运行，别让过时的构建占着唯一的自托管 Runner；main 与 tag 上不取消（部署要用）。
+concurrency:
+  group: cloud-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   image:
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]

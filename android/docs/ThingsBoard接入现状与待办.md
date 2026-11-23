@@ -335,7 +335,7 @@ public void dispatch(String mqttRequestId, String payload) {
 | 方法 | 业务动作 | 当前真实行为 |
 |---|---|---|
 | `config.setAlarmThresholds` | 改某个罐子的高高/高/低/低低四档报警阈值 | ✅ 真实执行：校验合法性（非负、四档必须严格递减）→ 同步写库 → 刷新 `OilcanDataManager` 缓存，让 `AlarmDetection` 立刻用上新阈值 |
-| `config.setTankSettings` | 改某个罐的报警阈值（不含低温）、修正值、密度、油品序号、容量，字段名同客户端属性 | ✅ 2026-10-08 新增：白名单 + 范围校验（全部通过才写，否则整条拒绝）→ 同步写库 → 刷新缓存 → 客户端属性自动回显。清单见 `docs/远程配置下发-字段清单.md`。**云端未对齐、未经真机验证** |
+| `config.setTankSettings` | 改某个罐的罐高、报警阈值（含低温，#65）、修正值、密度、油品序号、容量，字段名同客户端属性 | ✅ 2026-10-08 新增：白名单 + 范围校验（全部通过才写，否则整条拒绝）→ 同步写库 → 刷新缓存 → 客户端属性自动回显。清单见 `docs/远程配置下发-字段清单.md`。**云端未对齐、未经真机验证** |
 | `config.setDeviceSettings` | 改出入库高度/时间阈值 | ✅ 2026-10-08 新增：校验 → 写 SharedPreferences → 刷新 `Singleton` → 回显。**云端未对齐、未经真机验证** |
 | `pump.start`/`pump.stop` | 启/停指定油泵 | 恒拒绝（`FEATURE_DISABLED`），无真实业务逻辑 |
 | `valve.open`/`valve.close` | 开/关指定阀门 | 同上 |

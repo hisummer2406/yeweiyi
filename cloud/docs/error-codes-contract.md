@@ -97,3 +97,11 @@
 | code | HTTP | 场景 |
 | --- | --- | --- |
 | `color_sync_unsupported` | 409 | `config.setTankSettings` 带 `oilColor`，但设备未上报 `oilColorSync = 1`（旧固件会静默忽略该字段）。整条不派发 |
+
+## 罐高与低温报警（#65，2026-11-23）
+
+| code | HTTP | 场景 |
+| --- | --- | --- |
+| `height_low_temp_unsupported` | 409 | `config.setTankSettings` 带 `tankHeightMm` 或 `alarmLowTempC`，但设备未上报 `tankHeightLowTempSync = 1`（旧固件拒绝这两个字段、不检测低温）。整条不派发 |
+
+参数错误另有 `fields[].code = temp_order_violation`（同一命令里低温 ≥ 高温，两者都非 0），见罐设置契约。

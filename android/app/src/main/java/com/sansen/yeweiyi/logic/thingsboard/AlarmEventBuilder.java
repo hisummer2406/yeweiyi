@@ -35,6 +35,7 @@ public final class AlarmEventBuilder {
     private static final String TYPE_LOW_LOW_LEVEL = "LOW_LOW_LEVEL";
     private static final String TYPE_HIGH_WATER_LEVEL = "HIGH_WATER_LEVEL";
     private static final String TYPE_HIGH_TEMPERATURE = "HIGH_TEMPERATURE";
+    private static final String TYPE_LOW_TEMPERATURE = "LOW_TEMPERATURE";
     private static final String TYPE_PROBE_DISCONNECTED = "PROBE_DISCONNECTED";
     // TYPE_LEAK_SUSPECTED / TYPE_OVERFILL_RISK 也在云端封闭集合里，但目前没有任何
     // OilMessage 类型可以映到它们——设备侧还没有对应的业务信号源，故意不在下面的表里出现。
@@ -53,8 +54,8 @@ public final class AlarmEventBuilder {
     }
 
     /**
-     * {@code OilMessage} 类型码 → 云端封闭类型 + 严重度。只覆盖这 7 个——其余类型
-     * （出入库、低温、网络/继电器故障、探头勘探等）在云端协议里没有对应的家，见
+     * {@code OilMessage} 类型码 → 云端封闭类型 + 严重度。只覆盖这 8 个——其余类型
+     * （出入库、网络/继电器故障、探头勘探等）在云端协议里没有对应的家，见
      * {@link #build}。
      * <p>
      * <b>严重度是这次改动自己的判断，不是跨仓库确认过的结果</b>——issue #39 核对时
@@ -72,6 +73,7 @@ public final class AlarmEventBuilder {
         mapping.put(OilMessage.LOW_OIL_ALARM, new Mapping(TYPE_LOW_LEVEL, SEVERITY_MAJOR));
         mapping.put(OilMessage.HEIGHT_WATER, new Mapping(TYPE_HIGH_WATER_LEVEL, SEVERITY_MAJOR));
         mapping.put(OilMessage.HEIGHT_TEMPER, new Mapping(TYPE_HIGH_TEMPERATURE, SEVERITY_MAJOR));
+        mapping.put(OilMessage.LOW_TEMPER, new Mapping(TYPE_LOW_TEMPERATURE, SEVERITY_MAJOR));
         mapping.put(OilMessage.PRO_ERR_CONN, new Mapping(TYPE_PROBE_DISCONNECTED, SEVERITY_MAJOR));
         return mapping;
     }
@@ -80,7 +82,7 @@ public final class AlarmEventBuilder {
     }
 
     /**
-     * {@code OilMessage} 类型码能否上报到云端。出入库、低温、网络/继电器故障、探头勘探等
+     * {@code OilMessage} 类型码能否上报到云端。出入库、网络/继电器故障、探头勘探等
      * 在云端封闭类型集合里没有对应的家，返回 false，调用方据此跳过，不能猜一个近似类型。
      */
     public static boolean isReportable(int oilMessageType) {

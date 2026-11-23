@@ -253,6 +253,7 @@
     <string name="oilllow_alarm">Tanque %1$d: alarma de nivel bajo bajo</string>
     <string name="waterheight_alarm">Tanque %1$d: alarma de agua alta</string>
     <string name="tempheight_alarm">Tanque %1$d: alarma de temperatura alta</string>
+    <string name="templow_alarm">Tanque %1$d: alarma de temperatura baja</string>
     <!-- ⚠️ 这条本身也有个范围未决问题，见 temp/Android_strings/多语言文案对照表_2026-09-23.xlsx
          的说明页：目前唯一读它的地方是内嵌 HTTP 服务，传给局域网 PC 客户端，app 自己界面不显示。 -->
     <string name="oilcan_pos_prefix_format">Nº%1$d%2$s</string>
@@ -297,4 +298,6 @@
     <string name="serial_proxy_restart">Reinicie la aplicación tras cambiar el modo de doble pantalla para aplicar el cambio.</string>
     <string name="data_save_error">Error al guardar</string>
     <string name="rpc_oil_color_not_in_palette">El color %1$s no está en la paleta de este equipo; elija uno de la paleta</string>
+    <string name="rpc_threshold_over_height">Los umbrales de alarma no pueden superar la altura del tanque (%1$d mm): %2$s</string>
+    <string name="rpc_low_temp_not_below_high">La alarma de temperatura baja (%1$d ℃) debe ser menor que la de temperatura alta (%2$d ℃)</string>
 </resources>

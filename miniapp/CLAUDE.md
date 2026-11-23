@@ -410,8 +410,9 @@ single-command lookup; the per-device gate was removed 2026-11-09) and `docs/sto
   keep draft / discard / cancel (`utils/paramSwitch.ts`); 罐详情 has no tank switch. `customer_user` sees the report read-only, no draft, no send.
   Old drafts (`calibration-draft`, `tankcfg-draft:*`) are no longer read.
 - Fields: corrections (no range limit, #28; ± toggle, #30, `toggleSign`; every number input is `type=digit` and a signed field keeps its minus outside the input, shown beside it, `splitSigned`/`joinSigned`, #56); 储罐设置 edits `TANK_SEND_FIELDS` (4 level alarms,
-  high water, high temp, capacity, density in g/cm³ 0<v≤2 — a report >2 is flagged as probably kg/m³); height and low temp are
-  read-only; low water is gone (no device field). **Medium and colour (2026-11-14, user rule: every change is for administrators,
+  high water, high temp, capacity, density in g/cm³ 0<v≤2 — a report >2 is flagged as probably kg/m³); height (1–100000 mm) and
+  low temp (−50–100 ℃, 0 = off) are editable only when `media-options.tankHeightLowTempSync` is true (#65; else read-only with an
+  upgrade note, `sendableTankFields`), checked before sending against thresholds / high temp (`overHeight`, `tempOrder`); low water is gone (no device field). **Medium and colour (2026-11-14, user rule: every change is for administrators,
   employees read-only)**: administrators pick the medium from `GET /media-options` (sent as `mediaId`, the cloud converts) and a
   colour from the 20-colour palette (`utils/oilColor.ts`, checked against the cloud's shared fixture), `buildMediumArgs`; options
   unreadable → medium read-only; `oilColorSync` false (old firmware) → colour read-only. Choices are not kept in the draft. A

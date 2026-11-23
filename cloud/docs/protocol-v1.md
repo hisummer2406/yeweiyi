@@ -157,7 +157,7 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
   仅靠 `(tank, type)` 配对是不够的——断网补传时两次重叠的同类报警会配错。
 - `tank`：1 起的罐号；`0` 表示设备级报警。
 - `type`：`HIGH_HIGH_LEVEL`、`HIGH_LEVEL`、`LOW_LEVEL`、`LOW_LOW_LEVEL`、`HIGH_WATER_LEVEL`、
-  `HIGH_TEMPERATURE`、`PROBE_DISCONNECTED`、`LEAK_SUSPECTED`、`OVERFILL_RISK`
+  `HIGH_TEMPERATURE`、`LOW_TEMPERATURE`（#65）、`PROBE_DISCONNECTED`、`LEAK_SUSPECTED`、`OVERFILL_RISK`
 - `severity`：`CRITICAL` / `MAJOR` / `MINOR` / `WARNING` / `INDETERMINATE`
   （**照抄 ThingsBoard 自己的枚举拼写**，这样规则链可以直接透传，不需要翻译表）
 - `status`：`ACTIVE` / `CLEARED`。**确认（acknowledge）是云端代操作员做的动作，设备永远不上报它。**

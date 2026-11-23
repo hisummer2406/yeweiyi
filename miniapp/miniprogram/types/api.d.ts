@@ -367,6 +367,8 @@ export interface MediaOptions {
   customer: MediaOption[];
   customMediaSync: boolean;
   oilColorSync: boolean;
+  // #65: firmware accepts tankHeightMm / alarmLowTempC (absent on an older cloud = false)
+  tankHeightLowTempSync?: boolean;
   slotsUsed: number;
   slotsTotal: number;
 }

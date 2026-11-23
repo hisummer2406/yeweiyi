@@ -96,6 +96,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `oilTypeIndex` 是与界面语言无关的油品标识，`oilType` 只是显示名。**设备端与云端都未真机验证。**
 - 介质库（#27，契约见 [docs/media-library-contract.md](docs/media-library-contract.md)）：`media` 字典 + `device_media_slots` 位置映射；字典维护仅平台管理员，**选用**（`media-options`、提交 `mediaId`）平台与客户管理员都可（2026-11-14，所有修改只限管理员、员工只读）。客户端只提交 `mediaId`，云端换算；直接提交 `oilTypeIndex` 被拒。
 - 罐颜色与密度（2026-11-14）：`tankN.oilColor`（0xRRGGBB，20 色色板见 `fixtures/protocol/v1/oil_color_palette.json`）可经 `config.setTankSettings` 写入，设备未上报 `oilColorSync=1` 时 `409 color_sync_unsupported`；`density` 单位定为 g/cm³（kg/L），可写 0<v≤2。
+- 罐高与低温报警（#65，2026-11-23）：`tankHeightMm`、`alarmLowTempC` 可经 `config.setTankSettings` 写入，设备未上报 `tankHeightLowTempSync=1` 时 `409 height_low_temp_unsupported`；新报警类型 `LOW_TEMPERATURE`。**未真机验证。**
 - 设备端仓库是 `../android/`，小程序仓库是
   `../miniapp/`。跨仓库协议变更必须获得相关负责人确认。
 

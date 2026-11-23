@@ -224,6 +224,8 @@ type DeviceSetting struct {
 	CustomMediaSync pgtype.Int4 `json:"custom_media_sync"`
 	// 设备上报的颜色同步能力；1 = 支持随 config.setTankSettings 写入 oilColor，NULL = 旧固件（会静默忽略该字段）。
 	OilColorSync pgtype.Int4 `json:"oil_color_sync"`
+	// 设备上报的罐高/低温远程修改能力；1 = 支持随 config.setTankSettings 写入 tankHeightMm、alarmLowTempC 且低温报警已接通，NULL = 旧固件（拒绝这两个字段）。
+	TankHeightLowTempSync pgtype.Int4 `json:"tank_height_low_temp_sync"`
 }
 
 // 介质字典：公共介质可用于所有客户，客户专属介质只能用于所属客户的设备（#27）。被引用过的条目只停用、不物理删除。

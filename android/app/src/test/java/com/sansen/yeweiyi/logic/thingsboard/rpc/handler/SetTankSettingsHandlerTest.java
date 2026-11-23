@@ -11,6 +11,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -40,7 +41,23 @@ public class SetTankSettingsHandlerTest {
         repo.byId.put(1, tank1);
         refreshCount = 0;
         names = new FakeNames();
-        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names, hex -> "not in palette: " + hex);
+        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names, hex -> "not in palette: " + hex,
+                new TankSettingsRejectText() {
+                    @Override
+                    public String overHeight(int heightMm, List<String> conflicts) {
+                        return "over " + heightMm + ": " + conflicts;
+                    }
+
+                    @Override
+                    public String thresholdName(int slot) {
+                        return "slot" + slot;
+                    }
+
+                    @Override
+                    public String lowTempNotBelowHigh(int lowC, int highC) {
+                        return "low " + lowC + " >= high " + highC;
+                    }
+                });
     }
 
     private static final class FakeNames implements CustomOilNameStore {
@@ -156,9 +173,67 @@ public class SetTankSettingsHandlerTest {
 
     @Test
     public void rejectsClosedFieldsEvenAlongsideValidOnes() {
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmLowTempC\":-5}"));
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":3000}"));
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":650,\"probeAddress\":2}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankShape\":1}"));
+    }
+
+    @Test
+    public void changesTankHeightAlone() {
+        RpcResult result = call("{\"tank\":1,\"tankHeightMm\":2600}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(2600, repo.lastSaved.getHeight());
+        assertEquals(1, repo.lastSaved.getEnable());
+    }
+
+    @Test
+    public void lowerTankHeightIsRejectedWhenAStoredThresholdWouldExceedIt() {
+        // #65 验收：高高 1500 时把罐高降到 1400 被拒，原值保留，错误里列出冲突阈值
+        RpcResult result = call("{\"tank\":1,\"tankHeightMm\":1400}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("界面语言的提示文字（strings.xml）", "over 1400: [slot3(1500)]", result.getMessage());
+        assertEquals(2000, tank1.getHeight());
+        tank1.setHeightWaterAlarm(1450);
+        assertEquals("over 1400: [slot3(1500), slot4(1450)]", call("{\"tank\":1,\"tankHeightMm\":1400}").getMessage());
+    }
+
+    @Test
+    public void lowerTankHeightPassesWhenTheConflictingThresholdIsFixedInTheSameCommand() {
+        RpcResult result = call("{\"tank\":1,\"tankHeightMm\":1400,\"alarmHighHighLevelMm\":1300}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(1400, repo.lastSaved.getHeight());
+        assertEquals(1300, repo.lastSaved.getHheightOilAlarm());
+    }
+
+    @Test
+    public void thresholdIsCheckedAgainstTheNewTankHeight() {
+        assertEquals(RpcResultStatus.SUCCEEDED,
+                call("{\"tank\":1,\"tankHeightMm\":3000,\"alarmHighHighLevelMm\":2800}").getStatus());
+    }
+
+    @Test
+    public void rejectsZeroNegativeAndFractionalTankHeight() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":0}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":-1}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":2600.5}"));
+    }
+
+    @Test
+    public void changesLowTempIncludingNegativeAndZero() {
+        assertEquals(RpcResultStatus.SUCCEEDED, call("{\"tank\":1,\"alarmLowTempC\":-40}").getStatus());
+        assertEquals(-40, repo.lastSaved.getLowTempAlarm());
+        assertEquals(RpcResultStatus.SUCCEEDED, call("{\"tank\":1,\"alarmLowTempC\":0}").getStatus());
+        assertEquals(0, repo.lastSaved.getLowTempAlarm());
+    }
+
+    @Test
+    public void lowTempMustBeBelowHighTempWhenBothEnabled() {
+        tank1.setHighTempAlarm(40);
+        RpcResult result = call("{\"tank\":1,\"alarmLowTempC\":40}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("low 40 >= high 40", result.getMessage());
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmLowTempC\":-51}"));
+        assertEquals(RpcResultStatus.SUCCEEDED,
+                call("{\"tank\":1,\"alarmLowTempC\":50,\"alarmHighTempC\":0}").getStatus());
     }
 
     @Test

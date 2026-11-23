@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -560,6 +561,51 @@ func TestMedia_OilColorNeedsCapability(t *testing.T) {
 		t.Errorf("synced firmware: %d %s", rec.Code, rec.Body.String())
 	}
 	if args := tn.lastArgs(t, tn.devA1); args["oilColor"] != float64(0xFF0000) {
+		t.Errorf("args = %v", args)
+	}
+}
+
+func (tn *tenancy) markHeightLowTempSynced(t *testing.T, device string) {
+	t.Helper()
+	if _, err := tn.env.pool.Exec(context.Background(), `
+		INSERT INTO device_settings (device_name, tank_height_low_temp_sync, reported_at) VALUES ($1, 1, now())
+		ON CONFLICT (device_name) DO UPDATE SET tank_height_low_temp_sync = 1`, device); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		tn.env.pool.Exec(context.Background(), `DELETE FROM device_settings WHERE device_name = $1`, device)
+	})
+}
+
+// #65: tankHeightMm / alarmLowTempC go only to firmware that reported tankHeightLowTempSync = 1.
+func TestTankSettings_HeightAndLowTempNeedCapability(t *testing.T) {
+	tn := newTenancyWith(t, control.Config{AllowConfigCommands: true})
+	send := func(args map[string]any) *httptest.ResponseRecorder {
+		return tn.send(t, "POST", "/api/devices/"+tn.devA1+"/commands", tn.adminA, map[string]any{
+			"method": protocol.MethodConfigTankSettings, "reason": "改罐高", "requestId": fmt.Sprintf("h%d", time.Now().UnixNano()),
+			"expectedStationId": nil, "args": args,
+		})
+	}
+	calls := tn.sender.calls
+	for _, args := range []map[string]any{{"tank": 1, "tankHeightMm": 2600}, {"tank": 1, "alarmLowTempC": -40}} {
+		if rec := send(args); rec.Code != http.StatusConflict || mediaCode(t, rec) != "height_low_temp_unsupported" {
+			t.Errorf("old firmware %v: %d %s", args, rec.Code, rec.Body.String())
+		}
+	}
+	if tn.sender.calls != calls {
+		t.Fatal("a refused change reached the device")
+	}
+	if rec := tn.get(tn.adminA, "/api/devices/"+tn.devA1+"/media-options"); !strings.Contains(rec.Body.String(), `"tankHeightLowTempSync":false`) {
+		t.Errorf("media-options before = %s", rec.Body.String())
+	}
+	tn.markHeightLowTempSynced(t, tn.devA1)
+	if rec := tn.get(tn.adminA, "/api/devices/"+tn.devA1+"/media-options"); !strings.Contains(rec.Body.String(), `"tankHeightLowTempSync":true`) {
+		t.Errorf("media-options after = %s", rec.Body.String())
+	}
+	if rec := send(map[string]any{"tank": 1, "tankHeightMm": 2600, "alarmLowTempC": -40}); rec.Code != http.StatusAccepted {
+		t.Fatalf("synced firmware: %d %s", rec.Code, rec.Body.String())
+	}
+	if args := tn.lastArgs(t, tn.devA1); args["tankHeightMm"] != float64(2600) || args["alarmLowTempC"] != float64(-40) {
 		t.Errorf("args = %v", args)
 	}
 }
