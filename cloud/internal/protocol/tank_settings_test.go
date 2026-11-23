@@ -149,7 +149,11 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		`{"tank":2,"alarmHighTempC":-50,"levelCorrectionMm":-100,"tempCorrectionC":10,"oilTypeIndex":39,"capacityL":0}`,
 		`{"tank":1,"levelCorrectionMm":1000,"waterCorrectionMm":-1000.5,"tempCorrectionC":-100.5}`, // #28: 修正值不设上下限
 		`{"tank":1,"oilTypeIndex":32,"customOilName":"二厂盐酸","customOilNameEn":"HCl"}`,
-		`{"tank":1,"alarmHighLevelMm":650.0}`, // integral value written with a fraction is still an integer
+		`{"tank":1,"alarmHighLevelMm":650.0}`,                        // integral value written with a fraction is still an integer
+		`{"tank":1,"tankHeightMm":2600,"alarmHighHighLevelMm":2400}`, // #65
+		`{"tank":1,"alarmLowTempC":-40}`,                             // #65
+		`{"tank":1,"alarmLowTempC":30,"alarmHighTempC":0}`,           // 高温不启用时不比较
+		`{"tank":1,"alarmLowTempC":0,"alarmHighTempC":-10}`,          // 0 = 低温不启用
 	} {
 		if err := protocol.ValidateArgs(m, json.RawMessage(ok)); err != nil {
 			t.Errorf("%s: %v", ok, err)
@@ -164,8 +168,12 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		{`{"tank":1}`, "args", protocol.ArgNothingToChange},
 		{`[]`, "args", protocol.ArgInvalidJSON},
 		{`null`, "args", protocol.ArgInvalidJSON},
-		{`{"tank":1,"alarmLowTempC":-5}`, "alarmLowTempC", protocol.ArgFieldNotEditable},
-		{`{"tank":1,"tankHeightMm":3000}`, "tankHeightMm", protocol.ArgFieldNotEditable},
+		{`{"tank":1,"tankHeightMm":0}`, "tankHeightMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"tankHeightMm":-1}`, "tankHeightMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"tankHeightMm":2600.5}`, "tankHeightMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"alarmLowTempC":-51}`, "alarmLowTempC", protocol.ArgInvalidValue},
+		{`{"tank":1,"alarmLowTempC":-5.5}`, "alarmLowTempC", protocol.ArgInvalidValue},
+		{`{"tank":1,"alarmLowTempC":40,"alarmHighTempC":40}`, "alarmTemps", protocol.ArgTempOrder},
 		{`{"tank":1,"probeAddress":"02"}`, "probeAddress", protocol.ArgFieldNotEditable},
 		{`{"tank":1,"tankShape":1}`, "tankShape", protocol.ArgFieldNotEditable},
 		{`{"tank":1,"sensorLengthMm":10}`, "sensorLengthMm", protocol.ArgFieldNotEditable},

@@ -459,3 +459,11 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 - `density` 单位定为 g/cm³（kg/L），设备设置页 kg/m³ 文案一并改正。
 
 待办：android 负责同事审核字段名与形状，并做真机验收（远程改颜色/密度/介质、重启保留、旧固件颜色只读）。
+
+## H. 远程修改罐高、低温报警与能力位 `tankHeightLowTempSync`（#65，2026-11-23）—— 两端同分支实现，**待 android 负责同事确认**
+
+- `config.setTankSettings` 开放 `tankHeightMm`（1～100000 mm，不可为 0）与 `alarmLowTempC`（−50～100 ℃，0 = 不启用）；
+  设备按合并后的值校验 阈值 ≤ 罐高、低温 < 高温。产品决定（2026-11-23）：0 表示停用、存量阈值升级后直接生效、范围同高温。
+- 整机能力位 `tankHeightLowTempSync = 1`：新固件上报，没有它云端 `409 height_low_temp_unsupported`、不派发。
+- 新报警类型 `LOW_TEMPERATURE`（MAJOR）：设备低温需持续 5 秒确认，恢复到阈值及以上时 CLEARED。
+- 待办：android 负责同事审核；真机验收"下发 → 写入 → 回显 → 重启仍生效"及低温触发/去重/恢复/再触发。

@@ -4,10 +4,10 @@
 -- 整行以设备最新上报为准；reported_at 没变就不写。
 INSERT INTO device_settings (
     device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec,
-    out_stock_height_threshold_mm, out_stock_time_threshold_sec, custom_media_sync, oil_color_sync, reported_at
+    out_stock_height_threshold_mm, out_stock_time_threshold_sec, custom_media_sync, oil_color_sync, tank_height_low_temp_sync, reported_at
 ) VALUES (
     sqlc.arg('device_name'), sqlc.narg('in_stock_height_threshold_mm'), sqlc.narg('in_stock_time_threshold_sec'),
-    sqlc.narg('out_stock_height_threshold_mm'), sqlc.narg('out_stock_time_threshold_sec'), sqlc.narg('custom_media_sync'), sqlc.narg('oil_color_sync'), sqlc.arg('reported_at')
+    sqlc.narg('out_stock_height_threshold_mm'), sqlc.narg('out_stock_time_threshold_sec'), sqlc.narg('custom_media_sync'), sqlc.narg('oil_color_sync'), sqlc.narg('tank_height_low_temp_sync'), sqlc.arg('reported_at')
 )
 ON CONFLICT (device_name) DO UPDATE SET
     in_stock_height_threshold_mm = EXCLUDED.in_stock_height_threshold_mm,
@@ -16,6 +16,7 @@ ON CONFLICT (device_name) DO UPDATE SET
     out_stock_time_threshold_sec = EXCLUDED.out_stock_time_threshold_sec,
     custom_media_sync = EXCLUDED.custom_media_sync,
     oil_color_sync = EXCLUDED.oil_color_sync,
+    tank_height_low_temp_sync = EXCLUDED.tank_height_low_temp_sync,
     reported_at = EXCLUDED.reported_at,
     updated_at = now()
 WHERE device_settings.reported_at IS DISTINCT FROM EXCLUDED.reported_at;

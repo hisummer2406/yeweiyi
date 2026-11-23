@@ -11,7 +11,7 @@
 | `GET /api/media` | `{rows:[介质]}`，含停用项 |
 | `POST /api/media` | `{name, nameEn?, scope, customerId?}`；手动新增，`201` 返回介质 |
 | `PUT /api/media/:id` | `{name?, nameEn?, enabled?}`；缺省字段不变，归属不可改 |
-| `GET /api/devices/:device/media-options` | `{public:[], customer:[], customMediaSync, oilColorSync, slotsUsed, slotsTotal}`；只含启用项，客户取设备当前归属；`oilColorSync` 为设备是否支持远程改颜色 |
+| `GET /api/devices/:device/media-options` | `{public:[], customer:[], customMediaSync, oilColorSync, tankHeightLowTempSync, slotsUsed, slotsTotal}`；只含启用项，客户取设备当前归属；`oilColorSync` 为设备是否支持远程改颜色，`tankHeightLowTempSync` 为是否支持远程改罐高与低温报警（#65） |
 
 介质：`{id, name, nameEn|null, scope, customerId|null, builtinIndex|null, enabled, updatedAt}`。`nameEn` 为 null 时显示 `name` 原文。
 

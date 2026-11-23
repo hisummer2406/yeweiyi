@@ -161,6 +161,9 @@ func issueCommandHandler(deps Deps) gin.HandlerFunc {
 			if !colorSendable(c, deps, actor, c.Param("device"), req.Args) {
 				return
 			}
+			if !heightLowTempSendable(c, deps, actor, c.Param("device"), req.Args) {
+				return
+			}
 		}
 
 		cmd, replayed, err := deps.Control.IssueDetailed(c.Request.Context(), control.IssueRequest{
