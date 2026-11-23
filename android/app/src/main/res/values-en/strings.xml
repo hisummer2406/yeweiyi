@@ -616,4 +616,6 @@
     <string name="serial_proxy_modbus">Modbus dual display</string>
     <string name="serial_proxy_restart">Restart the app after switching dual-display modes for the change to take effect.</string>
     <string name="rpc_oil_color_not_in_palette">Colour %1$s is not in the palette on this device; choose one from the palette</string>
+    <string name="rpc_threshold_over_height">Alarm thresholds cannot exceed the tank height (%1$d mm): %2$s</string>
+    <string name="rpc_low_temp_not_below_high">Low temperature alarm (%1$d ℃) must be below the high temperature alarm (%2$d ℃)</string>
 </resources>

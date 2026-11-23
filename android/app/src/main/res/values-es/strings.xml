@@ -298,4 +298,6 @@
     <string name="serial_proxy_restart">Reinicie la aplicación tras cambiar el modo de doble pantalla para aplicar el cambio.</string>
     <string name="data_save_error">Error al guardar</string>
     <string name="rpc_oil_color_not_in_palette">El color %1$s no está en la paleta de este equipo; elija uno de la paleta</string>
+    <string name="rpc_threshold_over_height">Los umbrales de alarma no pueden superar la altura del tanque (%1$d mm): %2$s</string>
+    <string name="rpc_low_temp_not_below_high">La alarma de temperatura baja (%1$d ℃) debe ser menor que la de temperatura alta (%2$d ℃)</string>
 </resources>

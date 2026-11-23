@@ -236,4 +236,6 @@
     <string name="oil_connect_error">Falha de conexão do tanque nº %1$d</string>
     <!-- [AI待review] AI 补译，待人工确认。 -->
     <string name="rpc_oil_color_not_in_palette">A cor %1$s não está na paleta deste dispositivo; selecione uma cor da paleta.</string>
+    <string name="rpc_threshold_over_height">Os limites de alarme não podem exceder a altura do tanque (%1$d mm): %2$s</string>
+    <string name="rpc_low_temp_not_below_high">O alarme de temperatura baixa (%1$d ℃) deve ser inferior ao de temperatura alta (%2$d ℃)</string>
 </resources>

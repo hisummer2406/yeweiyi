@@ -43,13 +43,16 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
     private final Runnable onSettingsUpdated;
     private final CustomOilNameStore customOilNames;
     private final OilColorRejectText colorText;
+    private final TankSettingsRejectText rejectText;
 
     public SetTankSettingsHandler(OilTankRepository oilTankRepository, Runnable onSettingsUpdated,
-                                  CustomOilNameStore customOilNames, OilColorRejectText colorText) {
+                                  CustomOilNameStore customOilNames, OilColorRejectText colorText,
+                                  TankSettingsRejectText rejectText) {
         this.oilTankRepository = oilTankRepository;
         this.onSettingsUpdated = onSettingsUpdated;
         this.customOilNames = customOilNames;
         this.colorText = colorText;
+        this.rejectText = rejectText;
     }
 
     @Override
@@ -88,7 +91,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
         if (updated.isEmpty()) {
             return invalid("没有可修改的字段" + (ignored.isEmpty() ? "" : "，已忽略: " + ignored));
         }
-        String mergedError = mergedError(set, changes);
+        String mergedError = mergedError(set, changes, rejectText);
         if (mergedError != null) {
             return invalid(mergedError);
         }
@@ -167,7 +170,6 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
     private static final int SLOT_HEIGHT = 5;
     private static final int SLOT_HIGH_TEMP = 6;
     private static final int SLOT_LOW_TEMP = 7;
-    private static final String[] THRESHOLD_NAMES = {"低低液位", "低液位", "高液位", "高高液位", "高水位"};
 
     /** 一个已校验通过、尚未写入的字段修改；参与合并校验的字段另记下标和值。 */
     private static final class Change {
@@ -194,7 +196,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
      * 按"库里现值 + 本次修改"合并后校验跨字段关系，只查本次动到的那一类（库里可能本就不合规，
      * 不能挡住无关修改）：阈值 ≤ 罐高（改罐高时查全部非 0 阈值）、液位顺序、低温 < 高温。
      */
-    static String mergedError(OilCanSet set, List<Change> changes) {
+    static String mergedError(OilCanSet set, List<Change> changes, TankSettingsRejectText text) {
         int[] merged = {set.getLlowOilAlarm(), set.getLowOilAlarm(), set.getHeightOilAlarm(),
                 set.getHheightOilAlarm(), set.getHeightWaterAlarm(), set.getHeight(),
                 set.getHighTempAlarm(), set.getLowTempAlarm()};
@@ -206,15 +208,14 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
             }
         }
         int height = merged[SLOT_HEIGHT];
-        StringBuilder overHeight = new StringBuilder(); // String.join 要 API 26，本机 minSdk 21
+        List<String> overHeight = new ArrayList<>();
         for (int i = SLOT_LLOW; i <= SLOT_WATER; i++) {
             if ((touched[SLOT_HEIGHT] || touched[i]) && merged[i] > height) {
-                overHeight.append(overHeight.length() == 0 ? "" : "、")
-                        .append(THRESHOLD_NAMES[i]).append('(').append(merged[i]).append(')');
+                overHeight.add(text.thresholdName(i) + "(" + merged[i] + ")");
             }
         }
-        if (overHeight.length() > 0) {
-            return "报警阈值不能超过罐高(" + height + "): " + overHeight;
+        if (!overHeight.isEmpty()) {
+            return text.overHeight(height, overHeight);
         }
         if (touched[SLOT_LLOW] || touched[SLOT_LOW] || touched[SLOT_HIGH] || touched[SLOT_HHIGH]) {
             String orderError = levelOrderError(new int[]{merged[SLOT_LLOW], merged[SLOT_LOW],
@@ -226,7 +227,7 @@ public final class SetTankSettingsHandler implements RpcMethodHandler {
         int high = merged[SLOT_HIGH_TEMP];
         int low = merged[SLOT_LOW_TEMP];
         if ((touched[SLOT_HIGH_TEMP] || touched[SLOT_LOW_TEMP]) && high != 0 && low != 0 && low >= high) {
-            return "低温报警(" + low + ") 须低于高温报警(" + high + ")";
+            return text.lowTempNotBelowHigh(low, high);
         }
         return null;
     }

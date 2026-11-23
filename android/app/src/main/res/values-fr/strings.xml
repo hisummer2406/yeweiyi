@@ -230,4 +230,6 @@
     <string name="serial_proxy_modbus">Double affichage Modbus</string>
     <string name="serial_proxy_restart">Après avoir changé le mode double affichage, redémarrez l’application pour appliquer le réglage.</string>
     <string name="data_save_error">Échec de l’enregistrement</string>
+    <string name="rpc_threshold_over_height">Les seuils d’alarme ne peuvent pas dépasser la hauteur de la cuve (%1$d mm) : %2$s</string>
+    <string name="rpc_low_temp_not_below_high">L’alarme de température basse (%1$d ℃) doit être inférieure à l’alarme de température haute (%2$d ℃)</string>
 </resources>
