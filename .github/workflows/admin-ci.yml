@@ -18,7 +18,8 @@ defaults:
 # 不取消正在切换线上版本的发布；旧提交在部署前检查是否仍为 main 最新版本。
 concurrency:
   group: admin-${{ github.ref }}
-  cancel-in-progress: false
+  # 只在 PR 上取消旧运行（不占唯一的自托管 Runner）；main 上不取消，保证每次合并都发布。
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check-build:
