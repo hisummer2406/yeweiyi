@@ -453,6 +453,35 @@ await test('tank kind: colour read only without device support; a non-palette co
   assert.equal(ed.data.colorNonStandard, true);
 });
 
+await test('#65: height and low temp editable only with tankHeightLowTempSync; -40 ℃ goes out with its sign', async () => {
+  reset();
+  mirrors[1] = { ...mirrors[1], tankHeightMm: 2600, alarmHighHighLevelMm: 2400, alarmHighTempC: 40, alarmLowTempC: 0 };
+  let ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.ok(!ed.data.rows.some((r) => r.key === 'height' || r.key === 'tempLow'));
+  assert.deepEqual(ed.data.roRows.map((r) => [r.key, r.value]), [['height', '2600'], ['tempLow', '0']]);
+  assert.match(ed.data.heightTempNote, /储罐高度和低温报警/);
+
+  reset();
+  mediaOptions.tankHeightLowTempSync = true;
+  mirrors[1] = { ...mirrors[1], tankHeightMm: 2600, alarmHighHighLevelMm: 2400, alarmHighTempC: 40, alarmLowTempC: 0 };
+  ed = mount({ ...props, kind: 'tank' });
+  await tick(20);
+  assert.deepEqual(ed.data.roRows, []);
+  const type = (key, value, signed) => ed.onInput({ currentTarget: { dataset: { key, signed } }, detail: { value } });
+  ed.onToggleSign({ currentTarget: { dataset: { key: 'tempLow' } } });
+  type('tempLow', '40', true);
+  assert.equal(ed.data.rows.find((r) => r.key === 'tempLow').value, '-40');
+  ed.onReasonInput({ detail: { value: '冬季防冻' } });
+  modalAnswers = [true];
+  ed.onSend();
+  await tick(30);
+  assert.equal(posts.length, 1);
+  assert.deepEqual(posts[0].data.args, { tank: 3, alarmLowTempC: -40 });
+  assert.match(modals[0].content, /-40 ℃/);
+  ed.stopTrack();
+});
+
 await test('firmware without name sync: only built-in media below 18 can be chosen (the cloud refuses the rest)', async () => {
   reset();
   mediaOptions.customMediaSync = false;

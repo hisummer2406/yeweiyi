@@ -14,7 +14,6 @@ import {
 } from '../../utils/paramDraft';
 import { mediumText } from '../../utils/recordColumns';
 import {
-  TANK_READONLY,
   buildArgs,
   buildMediumArgs,
   ignoredFields,
@@ -23,6 +22,7 @@ import {
   echoState,
   editFields,
   mirrorToForm,
+  sendableTankFields,
   joinSigned,
   splitSigned,
   toggleSign,
@@ -48,6 +48,7 @@ import type { ControlCommand, MediaOption, TankSettings } from '../../types/api'
 // - 员工（customer_user）只看上报值，没有草稿和下发。
 // - 储罐设置另有介质（选 mediaId，云端换算）与颜色（20 色色板）两项选择（2026-11-14），只有管理员可选；
 //   选项读不到时介质只读，固件不支持（media-options.oilColorSync 为假）时颜色只读。选择不进暂存草稿。
+// - 罐高、低温报警（#65）只在 media-options.tankHeightLowTempSync 为真时可改，否则列在只读区并提示升级。
 
 const POLL_MS = 2000;
 const ECHO_MS = 5000;
@@ -119,6 +120,8 @@ Component({
     colorNow: '',
     colorNonStandard: false,
     colorNote: '',
+    heightTempEditable: false,
+    heightTempNote: '',
     isTank: false,
     readOnly: true,
     draftNote: '',
@@ -222,6 +225,8 @@ Component({
         colorNow: '',
         colorNonStandard: false,
         colorNote: '',
+        heightTempEditable: false,
+        heightTempNote: '',
         draftNote: '',
         moved: false,
         changedCount: 0,
@@ -284,13 +289,15 @@ Component({
             colorEditable: !!o.oilColorSync,
             colorSel: o.oilColorSync ? this.data.colorSel : -1,
             colorNote: o.oilColorSync ? '' : t('param.colorUnsupported'),
+            heightTempEditable: !!o.tankHeightLowTempSync,
+            heightTempNote: o.tankHeightLowTempSync ? '' : t('param.heightTempUnsupported'),
           });
           this.render();
         })
         .catch(() => {
           if (gen !== self.gen) return;
           self.mediaIds = [];
-          this.setData({ mediumEditable: false, mediumIdx: -1, mediumNote: t('param.mediumUnavailable'), colorEditable: false, colorSel: -1, colorNote: '' });
+          this.setData({ mediumEditable: false, mediumIdx: -1, mediumNote: t('param.mediumUnavailable'), colorEditable: false, colorSel: -1, colorNote: '', heightTempEditable: false, heightTempNote: '' });
           this.render();
         });
     },
@@ -339,18 +346,11 @@ Component({
         if (!hasEdits(self.form)) draftNote = '';
       }
       this.persist();
-      const ro = m as unknown as Record<string, unknown> | undefined;
       this.setData({
         state: m ? 'ok' : 'none',
         refreshFailed: false,
         reportedText: m ? t('param.reportedAt', { time: formatLocalTime(m.reportedAt, currentLocale()) }) : t('param.notReported'),
         draftNote,
-        roRows: this.data.kind === 'tank'
-          ? TANK_READONLY.map((f) => {
-            const v = ro ? ro[f.cloud] : undefined;
-            return { key: f.form, label: t(`tankCfg.${f.form}`), value: typeof v === 'number' ? String(v) : t('param.unreported'), unit: unitText(f.unit) };
-          })
-          : [],
         medium: this.data.kind === 'tank' && m ? mediumText(m.oilTypeIndex, m.oilType, t) : '',
         colorNow: m && typeof m.oilColor === 'number' ? toCss(m.oilColor) : '',
         colorNonStandard: !!m && typeof m.oilColor === 'number' && !isPaletteColor(m.oilColor),
@@ -381,9 +381,22 @@ Component({
       }
     },
 
+    // The fields this editor may change now: on the tank form, height / low temp need the firmware capability (#65).
+    // Staff see every field as reported, read-only.
+    editable(): EditField[] {
+      const fields = editFields(this.data.kind as ParamKind);
+      if (this.data.kind !== 'tank' || this.data.readOnly) return fields;
+      return sendableTankFields(fields, this.data.heightTempEditable as boolean);
+    },
+
     render() {
       const self = this as unknown as EditorThis;
-      const fields = editFields(this.data.kind as ParamKind);
+      const fields = this.editable();
+      const locked = editFields(this.data.kind as ParamKind).filter((f) => !fields.some((x) => x.form === f.form));
+      const roRows: RoRow[] = locked.map((f) => {
+        const v = self.report[f.form] ?? '';
+        return { key: f.form, label: t(f.labelKey), value: v === '' ? t('param.unreported') : v, unit: unitText(f.unit) };
+      });
       const rows: Row[] = fields.map((f: EditField) => {
         const value = self.form.values[f.form] ?? '';
         const report = self.report[f.form] ?? '';
@@ -401,7 +414,8 @@ Component({
         return { key: f.form, label: t(f.labelKey), unit, signed: f.signed, value, neg: f.signed && neg, mag: f.signed ? mag : value, changed, note, warn: moved || odd };
       });
       const choices = Object.keys(this.choiceArgs()).length;
-      this.setData({ rows, moved: self.form.moved.length > 0, changedCount: Object.keys(self.form.edits).length + choices });
+      const edited = fields.filter((f) => f.form in self.form.edits).length;
+      this.setData({ rows, roRows, moved: self.form.moved.length > 0, changedCount: edited + choices });
       this.updateSendable();
     },
 
@@ -467,7 +481,7 @@ Component({
       const self = this as unknown as EditorThis;
       if (this.data.sending || !this.data.canSend) return;
       const kind = this.data.kind as ParamKind;
-      const fields = editFields(kind);
+      const fields = this.editable();
       const mirror = self.mirror as unknown as Record<string, unknown> | undefined;
       const built = buildArgs(fields, self.form.values, mirror);
       const { problems } = built;

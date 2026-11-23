@@ -18,25 +18,29 @@ export type SendField = {
 
 const INT_MAX = 2147483647;
 
-// 储罐设置 → config.setTankSettings. Not here on purpose: height (the cloud refuses it), waterLow (the device
-// has no such alarm), tempLow (the device never checks it). Medium (mediaId) and colour (oilColor) are chosen,
-// not typed: buildMediumArgs. Density is g/cm³ (= kg/L; 2026-11-14), 0 < v ≤ 2.
+// 储罐设置 → config.setTankSettings. Not here: waterLow (the device has no such alarm). Medium (mediaId) and colour
+// (oilColor) are chosen, not typed: buildMediumArgs. Density is g/cm³ (= kg/L; 2026-11-14), 0 < v ≤ 2.
+// height / tempLow (#65) are editable only on firmware reporting tankHeightLowTempSync (HEIGHT_LOW_TEMP_FORMS).
 export const TANK_SEND_FIELDS: readonly SendField[] = [
+  { form: 'height', cloud: 'tankHeightMm', integer: true, min: 1, max: 100_000 },
   { form: 'highHigh', cloud: 'alarmHighHighLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'high', cloud: 'alarmHighLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'low', cloud: 'alarmLowLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'lowLow', cloud: 'alarmLowLowLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'waterHigh', cloud: 'alarmHighWaterMm', integer: true, min: 0, max: INT_MAX },
   { form: 'tempHigh', cloud: 'alarmHighTempC', integer: true, min: -50, max: 100 },
+  { form: 'tempLow', cloud: 'alarmLowTempC', integer: true, min: -50, max: 100 },
   { form: 'capacity', cloud: 'capacityL', integer: true, min: 0, max: 1_000_000 },
   { form: 'density', cloud: 'density', integer: false, min: 0, max: 2, exclMin: true },
 ];
 
-// Draft fields shown next to the device's value but never sent.
-export const TANK_DISPLAY_ONLY: Readonly<Record<string, string>> = {
-  height: 'tankHeightMm',
-  tempLow: 'alarmLowTempC',
-};
+// Older firmware refuses these (cloud 409 height_low_temp_unsupported): shown read-only, never sent there.
+export const HEIGHT_LOW_TEMP_FORMS: readonly string[] = ['height', 'tempLow'];
+
+// The tank fields an administrator may send to this device.
+export function sendableTankFields<T extends SendField>(fields: readonly T[], heightLowTemp: boolean): T[] {
+  return heightLowTemp ? [...fields] : fields.filter((f) => !HEIGHT_LOW_TEMP_FORMS.includes(f.form));
+}
 
 // 参数修正 → config.setTankSettings. No range limit on purpose (#28): the device just adds them to the reading.
 export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
@@ -64,11 +68,13 @@ const UNITS: Record<string, Unit> = {
   low: 'mm',
   waterHigh: 'mm',
   tempHigh: '℃',
+  tempLow: '℃',
+  height: 'mm',
   density: 'g/cm³',
 };
 
 // 储罐设置 order as on the old form (capacity first, then the four levels high → low, water, temperature).
-const TANK_ORDER = ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'density'];
+const TANK_ORDER = ['capacity', 'height', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'tempLow', 'density'];
 
 export function editFields(kind: ParamKind): EditField[] {
   if (kind === 'calibration') {
@@ -82,13 +88,6 @@ export function editFields(kind: ParamKind): EditField[] {
     labelKey: `tankCfg.${f.form}`,
   }));
 }
-
-// Shown with the device's value, never editable or sent (height: refused by the cloud; low temperature: never
-// checked by the device). Low water has no device field at all.
-export const TANK_READONLY: readonly { form: string; cloud: string; unit: Unit }[] = [
-  { form: 'height', cloud: 'tankHeightMm', unit: 'mm' },
-  { form: 'tempLow', cloud: 'alarmLowTempC', unit: '℃' },
-];
 
 // The ± button beside a correction: some phone keyboards have no usable minus (#30). It only flips the sign of
 // the text — never a step — and '' → '-' lets the user tap first and type after; buildArgs still refuses a bare '-'.
@@ -116,7 +115,7 @@ export function joinSigned(prev: string, typed: string): string {
 
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
-export type SendProblem = { form: string; reason: 'number' | 'integer' | 'range' | 'order' };
+export type SendProblem = { form: string; reason: 'number' | 'integer' | 'range' | 'order' | 'overHeight' | 'tempOrder' };
 
 export type BuiltArgs = { args: Record<string, number>; problems: SendProblem[] };
 
@@ -169,6 +168,31 @@ export function buildArgs(
         problems.push({ form: f ? f.form : k, reason: 'order' });
         break;
       }
+    }
+  }
+  // The device checks these too, against what it holds; asking here saves a round trip. Same scope as the device:
+  // a new height checks every non-zero threshold, a new threshold only itself (#65).
+  const num = (k: string): number | undefined => {
+    const v = k in args ? args[k] : mirror?.[k];
+    return typeof v === 'number' ? v : undefined;
+  };
+  const height = num('tankHeightMm');
+  if (height !== undefined) {
+    for (const k of [...LEVELS].reverse().concat('alarmHighWaterMm')) {
+      const v = num(k);
+      if (('tankHeightMm' in args || k in args) && v !== undefined && v > height) {
+        const f = fields.find((x) => x.cloud === k) ?? fields.find((x) => x.cloud === 'tankHeightMm');
+        problems.push({ form: f ? f.form : k, reason: 'overHeight' });
+        break;
+      }
+    }
+  }
+  if ('alarmHighTempC' in args || 'alarmLowTempC' in args) {
+    const hi = num('alarmHighTempC');
+    const lo = num('alarmLowTempC');
+    if (hi && lo && lo >= hi) {
+      const f = fields.find((x) => x.cloud === ('alarmLowTempC' in args ? 'alarmLowTempC' : 'alarmHighTempC'));
+      problems.push({ form: f ? f.form : 'tempLow', reason: 'tempOrder' });
     }
   }
   return { args, problems };
@@ -301,6 +325,7 @@ export function classifySubmit(status: number, body: unknown): SubmitError {
       return 'unconfirmed';
     case 'media_sync_unsupported':
     case 'color_sync_unsupported':
+    case 'height_low_temp_unsupported':
       return 'firmwareOutdated';
   }
   return status === 0 ? 'unconfirmed' : 'other';

@@ -10,7 +10,7 @@ import {
   sameValue,
   toDraft,
 } from '../miniprogram/utils/paramDraft.ts';
-import { TANK_READONLY, buildArgs, editFields } from '../miniprogram/utils/remoteConfig.ts';
+import { buildArgs, editFields, sendableTankFields } from '../miniprogram/utils/remoteConfig.ts';
 
 let n = 0;
 const test = (name, fn) => {
@@ -30,12 +30,32 @@ test('calibration fields are the three corrections, signed, with units', () => {
   ]);
 });
 
-test('tank fields are exactly the sendable ones (density since 2026-11-14); height/low temp read-only; colour is picked, no low water', () => {
+test('tank fields (density since 2026-11-14, height/low temp since #65); colour is picked, no low water', () => {
   const tank = editFields('tank');
-  assert.deepEqual(tank.map((f) => f.form), ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'density']);
-  assert.deepEqual(tank.filter((f) => f.signed).map((f) => f.form), ['tempHigh']);
-  assert.deepEqual(TANK_READONLY.map((f) => f.form), ['height', 'tempLow']);
+  assert.deepEqual(tank.map((f) => f.form), ['capacity', 'height', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'tempLow', 'density']);
+  assert.deepEqual(tank.filter((f) => f.signed).map((f) => f.form), ['tempHigh', 'tempLow']);
+  assert.deepEqual(sendableTankFields(tank, false).map((f) => f.form), ['capacity', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'density']);
+  assert.equal(sendableTankFields(tank, true).length, tank.length);
   assert.ok(!tank.some((f) => f.form === 'waterLow' || f.form === 'color'));
+});
+
+test('#65: height against thresholds, low temp against high temp', () => {
+  const tank = editFields('tank');
+  const mirror = { tankHeightMm: 2600, alarmHighHighLevelMm: 2400, alarmHighLevelMm: 2200, alarmLowLevelMm: 300, alarmLowLowLevelMm: 0,
+    alarmHighWaterMm: 50, alarmHighTempC: 40, alarmLowTempC: 0, capacityL: 30000, density: 0.8 };
+  const v = (o) => Object.fromEntries(Object.entries({ ...mirror, ...o }).map(([k, x]) => [tank.find((f) => f.cloud === k).form, String(x)]));
+  let b = buildArgs(tank, v({ tankHeightMm: 2300 }), mirror);
+  assert.deepEqual(b.problems, [{ form: 'highHigh', reason: 'overHeight' }]);
+  b = buildArgs(tank, v({ tankHeightMm: 2300, alarmHighHighLevelMm: 2250 }), mirror);
+  assert.deepEqual(b.problems, []);
+  assert.deepEqual(b.args, { tankHeightMm: 2300, alarmHighHighLevelMm: 2250 });
+  for (const bad of ['0', '-1', '2600.5']) {
+    assert.equal(buildArgs(tank, { ...v({}), height: bad }, mirror).problems.length, 1, bad);
+  }
+  b = buildArgs(tank, v({ alarmLowTempC: -40 }), mirror);
+  assert.deepEqual(b.args, { alarmLowTempC: -40 });
+  assert.deepEqual(buildArgs(tank, v({ alarmLowTempC: 40 }), mirror).problems, [{ form: 'tempLow', reason: 'tempOrder' }]);
+  assert.deepEqual(buildArgs(tank, v({ alarmLowTempC: 45, alarmHighTempC: 0 }), mirror).problems, []);
 });
 
 test('a new session is the report: no edits, missing stays empty (never 0)', () => {
