@@ -17,7 +17,24 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # 只在 PR 上判定复用（与上次成功构建的 cloud/、.github/ 相同就不再构建）；main 与 tag 每次都构建并推送，部署要用。
+  reuse:
+    if: github.event_name == 'pull_request'
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 5
+    outputs:
+      reuse: ${{ steps.check.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/ci-reuse.sh "Cloud Image" >> "$GITHUB_OUTPUT"
+
   image:
+    needs: reuse
+    # !cancelled()：reuse 在 push 上被跳过时仍要构建。
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.reuse.outputs.reuse != 'true') }}
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 30
     permissions:
@@ -68,7 +85,10 @@ jobs:
             type=sha
             type=match,pattern=cloud-(v.*),group=1
             type=raw,value=latest,enable={{is_default_branch}}
+      # 推送到 ghcr.io 出境上传时常超时（2026-11-23 两次 timeout awaiting response headers）。失败时下一步原样重试一次：
+      # 层都在本机缓存里，重试几乎只剩上传。PR 不推送，不重试。
       - id: build
+        continue-on-error: ${{ github.event_name != 'pull_request' }}
         uses: docker/build-push-action@v7
         env:
           # 不把 .dockerbuild 构建记录作为 artifact 上传（收尾不经代理上传任何东西）；摘要照常写入。
@@ -83,10 +103,28 @@ jobs:
           # 写到新目录再替换旧目录：local 缓存原地写入会无限增长。
           cache-from: type=local,src=${{ steps.prep.outputs.cache }}
           cache-to: type=local,dest=${{ steps.prep.outputs.cache }}-new,mode=max
+      - name: 重试前清掉上次写了一半的缓存目录
+        if: steps.build.outcome == 'failure'
+        env:
+          CACHE: ${{ steps.prep.outputs.cache }}
+        run: rm -rf "${CACHE:?}-new"
+      - id: retry
+        if: steps.build.outcome == 'failure'
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+        with:
+          context: cloud
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ steps.prep.outputs.build_args }}
+          cache-from: type=local,src=${{ steps.prep.outputs.cache }}
+          cache-to: type=local,dest=${{ steps.prep.outputs.cache }}-new,mode=max
       - name: 替换本地构建缓存并记录镜像 digest
         env:
           CACHE: ${{ steps.prep.outputs.cache }}
-          DIGEST: ${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.retry.outputs.digest || steps.build.outputs.digest }}
         run: |
           set -euo pipefail
           rm -rf "$CACHE" && mv "$CACHE-new" "$CACHE"

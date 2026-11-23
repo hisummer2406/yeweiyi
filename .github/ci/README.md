@@ -50,6 +50,9 @@ Docker 镜像（postgres、redis、tb-postgres、golang）留在守护进程里�
 - Cloud CI 不再用 `services:` 服务容器（2026-11-23 起）：它在本 Runner 上多次卡在 Initialize containers 直到超时。
   sqlc 输出检查并入 `go` 作业（不需要数据库），迁移 up/down/up 往返并入集成测试，复用其 PostgreSQL。
 - PR 上 Cloud CI、Cloud Image、Admin CI/CD 都在新提交到来时取消旧运行；`main` 上不取消。
+- **复用**（`.github/scripts/ci-reuse.sh`）：Cloud CI 第一个作业判定本次 `cloud/`、`.github/` 是否与某次成功运行相同
+  （PR：同分支上次成功时的 PR 头与 base 都相同；main：合并提交与 PR 头同一棵树），相同则其余作业跳过。
+  Cloud Image 只在 PR 上复用，main 每次都构建推送。推送超时会原样重试一次（层在本机缓存，只剩上传）。
 - **资源**：集成测试启动前等待同机其他 Runner 的 job 结束且可用内存 ≥ 3000 MiB（最多 20 分钟，等不到失败）；
   ThingsBoard 容器 `mem_limit: 3g`。单个 Runner 同一时间只跑一个 job。
 

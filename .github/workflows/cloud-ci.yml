@@ -21,7 +21,25 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # 第一个作业：本次 cloud/、.github/ 与某次已成功的 Cloud CI 完全相同就复用，后面的作业全部跳过（跳过 = 成功，
+  # Cloud Deploy 门禁照常认）。单个自托管 Runner 上一次全量要 15–30 分钟，只改别的目录的推送不必再跑。
+  reuse:
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 5
+    outputs:
+      reuse: ${{ steps.check.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ../.github/scripts/ci-reuse.sh "Cloud CI" >> "$GITHUB_OUTPUT"
+
   go:
+    needs: reuse
+    if: needs.reuse.outputs.reuse != 'true'
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 15
     steps:
@@ -57,6 +75,8 @@ jobs:
   # 部署文件：生产 Compose 曾经根本解析不了，端口隔离也曾被叠加文件悄悄撤销。
   # 这里不启动任何容器，只检查配置本身。
   deploy-files:
+    needs: reuse
+    if: needs.reuse.outputs.reuse != 'true'
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 10
     steps:
@@ -75,28 +95,9 @@ jobs:
 
   # 集成测试：真实 PostgreSQL / Redis / ThingsBoard CE。这些测试在基础设施缺失时会自行 Skip，
   # 而 Skip 在 CI 里等于“没测”却显示绿色，所以这里把任何 SKIP 都当成失败。
-  integration-reuse:
-    if: github.event_name == 'push'
-    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
-    timeout-minutes: 5
-    outputs:
-      reuse: ${{ steps.check.outputs.reuse }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 2
-      # 只有 main 上的代码与 PR 通过时的代码完全相同（合并提交与 PR 头同一棵树）才复用；
-      # 分支落后于 main、查询失败等任何其他情况都照常跑全量。
-      - id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: ../.github/scripts/cloud-ci-reuse.sh HEAD >> "$GITHUB_OUTPUT"
-
   integration:
-    needs: integration-reuse
-    # !cancelled() 而不是 always()：integration-reuse 在 PR 上被跳过时仍要跑，但整个运行被取消（PR 有新提交）
-    # 时不应再启动——always() 会让被取消的旧运行照样跑满集成测试，在单个自托管 Runner 上堵住后续队列。
-    if: ${{ !cancelled() && (github.event_name == 'pull_request' || needs.integration-reuse.outputs.reuse != 'true') }}
+    needs: reuse
+    if: needs.reuse.outputs.reuse != 'true'
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     # 含最多 20 分钟的资源等待（见下）；测试本身与托管 Runner 时一样约 10–15 分钟。
     timeout-minutes: 50
