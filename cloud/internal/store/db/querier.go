@@ -411,7 +411,7 @@ type Querier interface {
 	// changed (or never held), and the handler answers 409.
 	UpsertDevicePairingSecretForCustomer(ctx context.Context, arg UpsertDevicePairingSecretForCustomerParams) (string, error)
 	// 设备上报的整机设置镜像（迁移 000038，config-command-delivery）。只由 internal/ingest 写入，API 只读。
-	// 整行以设备最新上报为准；reported_at 没变就不写。
+	// 整行以设备最新上报为准；内容与 reported_at 都没变才不写（理由同 UpsertTankSettings）。
 	UpsertDeviceSettings(ctx context.Context, arg UpsertDeviceSettingsParams) error
 	// 交班与库存记录（迁移 000037，cloud#85，契约 docs/shift-stock-records-contract.md）。写入全部幂等：
 	// 表头按信封 ts 最大者胜（相同则保留先写入的），罐行随后由 Sync*RecordTanks 与表头载荷对齐。
@@ -431,7 +431,8 @@ type Querier interface {
 	// reported_at 没变就不写（设备每次重连都会重发，lastUpdateTs 随之前进）。
 	UpsertTankCalibration(ctx context.Context, arg UpsertTankCalibrationParams) error
 	// 设备上报的油罐配置镜像（迁移 000033，cloud#70）。只由 internal/ingest 写入，API 只读。
-	// 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
+	// 整行以设备最新上报为准；内容与 reported_at 都没变才不写。不能只比 reported_at：ThingsBoard 逐键存属性，一次读取可能
+	// 新旧键混杂且时间已是新的，只比时间会让下一次完整读取被跳过、镜像停在半新状态（2026-11-24）。
 	UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error
 	// 小时级汇总（迁移 000018，issue #30）。
 	// 幂等；只在样本数不少于已存值时覆盖（迟到的补投会增加样本，TTL 会减少样本，后者不能顶掉完整值）。
