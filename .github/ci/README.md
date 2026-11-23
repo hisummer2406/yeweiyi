@@ -64,6 +64,13 @@ Docker 镜像（postgres、redis、tb-postgres、golang）留在守护进程里�
 （本机 `.Id` = 固定 digest → 导出包 `index.json` 只指向它 → 同包 config 的 digest 与内容一致 →
 远端经典存储期望 config digest、containerd 存储期望固定 digest），不一致仍报「远端预载镜像标识不一致」。
 
+## ghcr.io 推送不通时发布（`image_source=runner`）
+
+Cloud Deploy 手动触发时选 `image_source=runner`：在 Runner 上按 `release_sha` 构建镜像（只读复用本机构建缓存），
+`docker save` → SSH → 远端 `docker load`，不经 ghcr.io；不要求该提交的 Cloud Image 成功，Cloud CI 仍必须成功。
+镜像名 `yeweiyi-local/cloud:sha-<完整提交>`，身份以本机 `.Id` 推导并核对远端载入结果；`remote-deploy.sh` 对这种
+引用不 pull，只要求镜像已在远端。所选提交必须已包含这套 `remote-deploy.sh`（2026-11-24 起）。
+
 ## 运维
 
 ```bash
