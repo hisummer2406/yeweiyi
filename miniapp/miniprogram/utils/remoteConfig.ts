@@ -187,7 +187,8 @@ export function buildArgs(
       }
     }
   }
-  if ('alarmHighTempC' in args || 'alarmLowTempC' in args) {
+  // Only where low temp is editable: older firmware never checks it, and its read-only value must not block high temp.
+  if (fields.some((f) => f.cloud === 'alarmLowTempC') && ('alarmHighTempC' in args || 'alarmLowTempC' in args)) {
     const hi = num('alarmHighTempC');
     const lo = num('alarmLowTempC');
     if (hi && lo && lo >= hi) {

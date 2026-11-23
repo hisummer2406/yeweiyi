@@ -56,6 +56,12 @@ test('#65: height against thresholds, low temp against high temp', () => {
   assert.deepEqual(b.args, { alarmLowTempC: -40 });
   assert.deepEqual(buildArgs(tank, v({ alarmLowTempC: 40 }), mirror).problems, [{ form: 'tempLow', reason: 'tempOrder' }]);
   assert.deepEqual(buildArgs(tank, v({ alarmLowTempC: 45, alarmHighTempC: 0 }), mirror).problems, []);
+  // older firmware: low temp is read-only and unchecked there, so its stored value never blocks a high-temp change
+  const old = sendableTankFields(tank, false);
+  const oldMirror = { ...mirror, alarmHighTempC: 50, alarmLowTempC: 40 };
+  b = buildArgs(old, { ...v({}), tempHigh: '30' }, oldMirror);
+  assert.deepEqual(b.problems, []);
+  assert.deepEqual(b.args, { alarmHighTempC: 30 });
 });
 
 test('a new session is the report: no edits, missing stays empty (never 0)', () => {
