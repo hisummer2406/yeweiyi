@@ -309,13 +309,14 @@ func (d *Device) publish(topic string, payload []byte) error {
 func (d *Device) PublishAttributes() error {
 	d.mu.Lock()
 	attrs := map[string]any{
-		protocol.AttrProtocolVersion:    protocol.Version,
-		protocol.AttrDeviceModel:        "SANSEN-YWY-SIM",
-		protocol.AttrHardwareVersion:    "sim-1.0",
-		protocol.AttrTankCount:          d.cfg.Tanks,
-		protocol.AttrLocalControlMode:   d.localMode,
-		protocol.ClientCurrentFwTitle:   "yeweiyi-android",
-		protocol.ClientCurrentFwVersion: "1.4.2",
+		protocol.AttrProtocolVersion:       protocol.Version,
+		protocol.AttrDeviceModel:           "SANSEN-YWY-SIM",
+		protocol.AttrHardwareVersion:       "sim-1.0",
+		protocol.AttrTankCount:             d.cfg.Tanks,
+		protocol.AttrLocalControlMode:      d.localMode,
+		protocol.ClientCurrentFwTitle:      "yeweiyi-android",
+		protocol.ClientCurrentFwVersion:    "1.4.2",
+		protocol.AttrTankHeightLowTempSync: 1,
 	}
 	for k, v := range d.thresholds.attributes() {
 		attrs[k] = v

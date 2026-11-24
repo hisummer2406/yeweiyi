@@ -152,7 +152,7 @@ public class OilMessage {
     // alarmRepository.saveAlarm(...)，是可达的，要优先翻。RELAY_DISCONNECT 同理，AsyManager2 的
     // errorListener 直接调 AlarmRepositoryImpl.saveAlarmRecord(oilMessage.toString(),"","")，
     // 也可达（受 SharePreManager.getRelaySwitch() 开关控制，运行时可开可关，不是恒假分支）。
-    // 真正确认不可达的只有：LOW_TEMPER（producer 侧的 tempLowDection() 从未被调用，见下方注释）、
+    // 真正确认不可达的只有：
     // IN_OIL/OUT_OIL/IN_OILing/OUT_OILing（全仓库没人 setType() 过这 4 个，见下方注释）、
     // OIl_EXPLORATION（producer 侧 GasExplorationAdapter 死，见下方注释）；NET_ERR_CONN 原来唯一的
     // setType() 调用点在旧 Alink 版 BackService.java 里，ThingsBoard 迁移时随旧代码一起删了，现在
@@ -173,11 +173,9 @@ public class OilMessage {
                 return SystemUtils.getRsStr(R.string.waterheight_alarm, oilid);
             case HEIGHT_TEMPER:
                 return SystemUtils.getRsStr(R.string.tempheight_alarm, oilid);
-            // [不可达-2026-09-21] LOW_TEMPER：唯一 setType 调用点是 AlarmDetection.tempLowDection()，
-            // 而这个方法全仓库没有任何地方调用（西语翻译覆盖率核查时发现）。templow_alarm 不用优先翻。
+            // [可达-2026-11-23] AlarmDetection.beginDection 接通了低温检测（#65），存库并上报云端。
             case LOW_TEMPER:
-                // [已屏蔽-2026-09-23] templow_alarm 已删除（不可达，见上方注释）。
-                return null; // return SystemUtils.getRsStr(R.string.templow_alarm, oilid);
+                return SystemUtils.getRsStr(R.string.templow_alarm, oilid);
             // [不可达-2026-09-21] IN_OIL/OUT_OIL/IN_OILing/OUT_OILing 这 4 个 type 全仓库没有任何地方
             // setType() 过（西语翻译覆盖率核查时发现）。inoil/outoil/inoiling/outoiling 不用优先翻。
             // [已屏蔽-2026-09-23] inoil/outoil/inoiling/outoiling 已删除（不可达，见上方注释）。

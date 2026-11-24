@@ -8,6 +8,7 @@ import unittest
 
 NEW = 'ghcr.io/example/cloud@sha256:' + 'a' * 64
 OLD = 'ghcr.io/example/cloud@sha256:' + 'b' * 64
+LOCAL = 'yeweiyi-local/cloud:sha-' + 'c' * 40  # Runner 构建、经 SSH 预载（image_source=runner）
 SCRIPT = Path(__file__).with_name('remote-deploy.sh').resolve()
 MOCK = r"""#!/usr/bin/env bash
 set -eu
@@ -22,8 +23,8 @@ fi
 [[ "$1" == docker ]] && shift
 [[ "$1" == --config ]] && shift 2
 case "$1" in
-  pull) [[ "$SCENARIO" != pull_fail ]];;
-  image) printf '%s\n' "${@:3:1}";;
+  pull) [[ "$SCENARIO" != pull_fail && "$SCENARIO" != local_* ]];;
+  image) [[ "$SCENARIO" != local_missing ]] && printf '%s\n' "${@:3:1}";;
   inspect)
     if [[ "${*: -1}" == *State.Running* ]]; then echo true; else cat "$TEST_STATE"; fi;;
   compose)
@@ -43,7 +44,7 @@ esac
 """
 
 class DeployTests(unittest.TestCase):
-    def run_case(self, scenario):
+    def run_case(self, scenario, new=NEW):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             bins = root / 'bin'
@@ -58,11 +59,11 @@ class DeployTests(unittest.TestCase):
             state.write_text(OLD + '\n')
             env = dict(os.environ, PATH=str(bins) + ':' + os.environ['PATH'], SCENARIO=scenario,
                        TEST_STATE=str(state), HEALTH_TRIES='2')
-            result = subprocess.run(['bash', str(SCRIPT), str(root), NEW], env=env,
+            result = subprocess.run(['bash', str(SCRIPT), str(root), new], env=env,
                                     text=True, capture_output=True, timeout=15)
-            expected = 0 if scenario == 'success' else 1
-            self.assertEqual(result.returncode, expected, result.stderr + result.stdout)
-            target = NEW if scenario == 'success' else OLD
+            ok = scenario in ('success', 'local_success')
+            self.assertEqual(result.returncode, 0 if ok else 1, result.stderr + result.stdout)
+            target = new if ok else OLD
             self.assertIn('API_IMAGE=' + target + '\n', config.read_text())
             self.assertIn('JWT_SECRET=keep-existing-value\n', config.read_text())
             self.assertEqual(state.read_text().strip(), target)
@@ -73,5 +74,9 @@ class DeployTests(unittest.TestCase):
     def test_start_failure_restores_old_release(self): self.run_case('up_fail')
     def test_health_failure_restores_old_release(self): self.run_case('health_fail')
     def test_failed_rollback_returns_failure(self): self.run_case('rollback_fail')
+    # 预载镜像不 pull（mock 里 pull 会失败）；不在本机时旧环境不动。
+    def test_preloaded_local_image(self): self.run_case('local_success', LOCAL)
+    def test_missing_local_image_keeps_old_release(self): self.run_case('local_missing', LOCAL)
+    def test_rejects_other_image_refs(self): self.run_case('bad_ref', 'yeweiyi-local/cloud:latest')
 
 if __name__ == '__main__': unittest.main()

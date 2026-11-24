@@ -98,13 +98,17 @@
           </view>
           <view wx:if="{{!readOnly && colorNote}}" class="pe-row-note">{{colorNote}}</view>
         </view>
-        <view class="pe-sub">{{text.readonlyTitle}}</view>
-        <view wx:for="{{roRows}}" wx:key="key" class="fr pe-fr">
-          <text class="fl pe-fl">{{item.label}}</text>
-          <view class="fv"></view>
-          <text class="pe-ro">{{item.value}}</text>
-          <text class="fu pe-fu">{{item.unit}}</text>
-        </view>
+        <!-- 罐高、低温报警：固件不支持远程修改（#65）时只读 -->
+        <block wx:if="{{roRows.length}}">
+          <view class="pe-sub">{{text.readonlyTitle}}</view>
+          <view wx:for="{{roRows}}" wx:key="key" class="fr pe-fr">
+            <text class="fl pe-fl">{{item.label}}</text>
+            <view class="fv"></view>
+            <text class="pe-ro">{{item.value}}</text>
+            <text class="fu pe-fu">{{item.unit}}</text>
+          </view>
+          <view wx:if="{{heightTempNote}}" class="pe-row-note">{{heightTempNote}}</view>
+        </block>
       </block>
     </view>
 

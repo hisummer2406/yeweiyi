@@ -39,10 +39,12 @@ const (
 	ArgInvalidValue      = "invalid_value"         // wrong type or out of range
 	ArgNothingToChange   = "no_editable_fields"    // only `tank` (or nothing) was sent
 	ArgLevelOrder        = "level_order_violation" // 低低 < 低 < 高 < 高高 broken
+	ArgTempOrder         = "temp_order_violation"  // 低温 >= 高温（两者都非 0）
 	capacityLMax         = 1_000_000
 	customOilFrom        = 32
 	maxOilTypeIndex      = 39 // 0 未设置，1–31 内置，32–39 自定义（#11）
 	deviceThresholdMaxMm = 10000
+	tankHeightMaxMm      = 100_000 // 只防误输入；罐高 0 在设备上表示停用罐，远程不开放
 	deviceThresholdMaxS  = 86400
 )
 
@@ -82,6 +84,8 @@ const (
 	AttrCustomOilNameEn = "customOilNameEn"
 	AttrCustomMediaSync = "customMediaSync"
 	AttrOilColorSync    = "oilColorSync"
+	// AttrTankHeightLowTempSync: firmware without it refuses tankHeightMm and alarmLowTempC (#65).
+	AttrTankHeightLowTempSync = "tankHeightLowTempSync"
 )
 
 var anyFiniteNumber = numRule{-math.MaxFloat64, math.MaxFloat64, false, false}
@@ -93,6 +97,8 @@ var tankSettingRules = map[string]numRule{
 	AttrAlarmLowLowLevel:   {0, math.MaxInt32, true, false},
 	AttrAlarmHighWater:     {0, math.MaxInt32, true, false},
 	AttrAlarmHighTempC:     {-50, 100, true, false},
+	AttrAlarmLowTempC:      {-50, 100, true, false}, // 0 = 不启用，同高温（#65）
+	AttrTankHeightMm:       {1, tankHeightMaxMm, true, false},
 	AttrLevelCorrectionMm:  anyFiniteNumber,
 	AttrWaterCorrectionMm:  anyFiniteNumber,
 	AttrTempCorrectionC:    anyFiniteNumber,
@@ -104,8 +110,6 @@ var tankSettingRules = map[string]numRule{
 // tankSettingsClosed are fields the device knows but refuses to change remotely; sending one is an
 // error, not a no-op, because a caller who sent it expects it to take effect.
 var tankSettingsClosed = map[string]string{
-	AttrAlarmLowTempC:  "低温检测在设备端从未被调用，改了不生效",
-	AttrTankHeightMm:   "罐高决定罐的启用/停用，不开放远程修改",
 	AttrProbeAddress:   "改错会与探针断开通讯，不开放远程修改",
 	AttrTankShape:      "影响罐体图示与计算口径，安装阶段一次性设置",
 	AttrSensorLengthMm: "设备本地设置页尚不能保存该值，暂不开放",
@@ -154,6 +158,7 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 
 	editable := 0
 	levels := map[string]int{}
+	temps := map[string]int{}
 	for _, k := range keys {
 		if needTank && k == "tank" {
 			continue
@@ -189,6 +194,8 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 		switch k {
 		case AttrAlarmLowLowLevel, AttrAlarmLowLevel, AttrAlarmHighLevel, AttrAlarmHighHighLevel:
 			levels[k] = int(args[k].(float64))
+		case AttrAlarmHighTempC, AttrAlarmLowTempC:
+			temps[k] = int(args[k].(float64))
 		}
 	}
 	if _, named := args[AttrCustomOilName]; named {
@@ -204,6 +211,12 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 	if len(errs) == 0 {
 		if msg := levelOrderError(levels); msg != "" {
 			errs = append(errs, FieldError{"alarmLevels", ArgLevelOrder, msg})
+		}
+		// Only when both are in this command; against the stored value the device checks (it merges).
+		hi, hasHi := temps[AttrAlarmHighTempC]
+		lo, hasLo := temps[AttrAlarmLowTempC]
+		if hasHi && hasLo && hi != 0 && lo != 0 && lo >= hi {
+			errs = append(errs, FieldError{"alarmTemps", ArgTempOrder, fmt.Sprintf("低温报警(%d) 须低于高温报警(%d)", lo, hi)})
 		}
 	}
 	if len(errs) > 0 {

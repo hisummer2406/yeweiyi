@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用法：deploy-image-identity.sh <ghcr.io/...@sha256:...> <docker save 产生的 tar> <远端 driver-type>
+# 用法：deploy-image-identity.sh <ghcr.io/...@sha256:... | yeweiyi-local/cloud:sha-<提交>> <docker save 产生的 tar> <远端 driver-type>
 # 输出：远端 `docker load` 该 tar 之后，`docker image inspect --format '{{.Id}}'` 应当得到的值。
 #
 # 背景：`.Id` 的含义取决于 Docker 镜像存储——
@@ -20,10 +20,16 @@ ref="$1" archive="$2" remote_store="$3"
 CONTAINERD=io.containerd.snapshotter.v1
 store_of() { docker info --format '{{range .DriverStatus}}{{if eq (index . 0) "driver-type"}}{{index . 1}}{{end}}{{end}}'; }
 
-pinned="sha256:${ref##*@sha256:}"
-[[ "$ref" == *@sha256:* && "$pinned" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "不是固定 digest 的镜像引用：$ref" >&2; exit 1; }
-
 local_id="$(docker image inspect "$ref" --format '{{.Id}}')"
+if [[ "$ref" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}$ ]]; then
+  # Runner 本机构建（image_source=runner）：没有仓库 digest。containerd 存储时本机 .Id 就是 index digest，作为固定值；
+  # 经典存储时只有 config digest，远端若是 containerd 存储就无从推导，下面会失败。
+  pinned=""
+  [[ "$(store_of)" == "$CONTAINERD" ]] && pinned="$local_id"
+else
+  pinned="sha256:${ref##*@sha256:}"
+  [[ "$ref" == *@sha256:* && "$pinned" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "不是固定 digest 的镜像引用：$ref" >&2; exit 1; }
+fi
 if [[ "$(store_of)" == "$CONTAINERD" ]]; then
   [[ "$local_id" == "$pinned" ]] || { echo "本机镜像 .Id ($local_id) 与固定 digest ($pinned) 不一致" >&2; exit 1; }
   index_digest="$(tar -xOf "$archive" index.json | jq -er '[.manifests[].digest] | unique | if length == 1 then .[0] else error("index.json 含多个镜像") end')"
@@ -39,7 +45,7 @@ fi
 [[ "$config" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo "config digest 无效：$config" >&2; exit 1; }
 
 case "$remote_store" in
-  "$CONTAINERD") echo "$pinned" ;;
+  "$CONTAINERD") [[ -n "$pinned" ]] || { echo "本机经典存储构建的镜像无法推导 containerd 远端的标识" >&2; exit 1; }; echo "$pinned" ;;
   "") echo "$config" ;;
   *) echo "无法识别的远端镜像存储：$remote_store" >&2; exit 1 ;;
 esac

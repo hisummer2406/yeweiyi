@@ -62,25 +62,6 @@ declare namespace API {
     station_id?: number | null;
   };
 
-  /**
-   * 设备彻底删除任务（yeweiyi-cloud docs/device-purge-contract.md §2.3）。status 只有 running / failed / completed，
-   * completed 才算删完；step 是下一个要做（failed 时为失败）的步骤。counts 只有数字，随步骤逐项出现。
-   */
-  type DevicePurge = {
-    id: number;
-    deviceName: string;
-    status: 'running' | 'failed' | 'completed';
-    step: 'thingsboard' | 'business' | 'verify' | 'done';
-    error?: string;
-    counts: Record<string, number>;
-    requestedBy: { id: number | null; username: string };
-    reason: string;
-    customerId: number | null;
-    stationId: number | null;
-    startedAt: string;
-    finishedAt: string | null;
-  };
-
   /** PUT /api/devices/:device/customer 响应：changed=false 表示本来就属于该客户 */
   type AssignDeviceResult = {
     deviceName: string;

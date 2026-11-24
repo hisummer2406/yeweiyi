@@ -34,6 +34,8 @@ public class AlarmDetection {
     AlarmRecord record;
     Map<Integer, AlarmState> alarmStates;
     private final HighTempConfirmer highTempConfirmer = new HighTempConfirmer();
+    /** 低温同样要连续低于阈值满 5 秒才报（同一套确认逻辑，#65）。 */
+    private final HighTempConfirmer lowTempConfirmer = new HighTempConfirmer();
 
     private AlarmDetection(AlarmManager alarmManager) {
         this.alarmManager = alarmManager;
@@ -131,6 +133,25 @@ public class AlarmDetection {
                     SoundLightManager.getInstance().closeAlarm(oilCan.getOilCanPos());
                     oilCan.setAlarmState(0);
               }
+            }
+            // 只认真实温度读数（temperReadAt > 0）：LD 系列探针不读温度，显示的是补偿值
+            boolean underTemp = oilCan.getLowTempAlarm() != 0 && oilCan.getTemperReadAt() > 0
+                    && oilCan.getTemper() < oilCan.getLowTempAlarm();
+            HighTempConfirmer.Result lowCheck = lowTempConfirmer.update(pos, underTemp, oilCan.getTemperReadAt());
+            if (underTemp) {
+                if (lowCheck.getState() == HighTempConfirmer.State.CONFIRMED
+                        && Singleton.getInstance().isLowTemperAlarm[pos]) {
+                    Singleton.getInstance().isLowTemperAlarm[pos] = false;
+                    tempLowDection(oilCan);
+                }
+            } else {
+                cloud.onRecovered(pos, OilMessage.LOW_TEMPER, oilCan.getTemper());
+                if (!Singleton.getInstance().isLowTemperAlarm[pos]) {
+                    Singleton.getInstance().isLowTemperAlarm[pos] = true;
+                    SoundLightLog.onClose(pos, "低温");
+                    SoundLightManager.getInstance().closeAlarm(pos);
+                    oilCan.setAlarmState(0);
+                }
             }
         }
     }
@@ -421,45 +442,18 @@ public class AlarmDetection {
         SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), false);
     }
 
-    /**
-     * 检测低温度报警 如果当前温度低于设定的低温度报警则为ture
-     *
-     * @return true or false
-     */
-    // [不可达-2026-09-21] 全仓库没有任何地方调用这个方法——beginDection() 里只走了
-    // oilHeightDection/oilLowDection/waterHeightDection/tempHeightDection 四个，唯独漏了这个
-    // （西语翻译覆盖率核查时发现）。low_temp_alarm 不会被这条路径触发；OilMessage.getState() 里
-    // LOW_TEMPER 分支对应的 templow_alarm 字符串同理不可达。如果"低温报警"本该是真需求，
-    // 修法是在 beginDection() 里也调一下 tempLowDection(oilCan)。
-    private boolean tempLowDection(OilCan oilCan) {
-
-        AlarmState alarmState;
-
-        if (oilCan.getTemper() < oilCan.getLowTempAlarm()) {
-            oilMessage = new OilMessage();
-            oilMessage.setOilCanId(oilCan.getOilCanPos());
-            oilMessage.setType(OilMessage.LOW_TEMPER);
-            alarmManager.addAlarmState(oilMessage);
-            oilCan.setAlarmState(5);
-            oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.low_temp_alarm);
-
-            if (alarmStates.containsKey(oilCan.getOilCanPos())) {
-                alarmState = alarmStates.get(oilCan.getOilCanPos());
-                if (alarmState.getLowTempError() == 0) {
-                    oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
-                    alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
-                    alarmState.setLowTempError(1);
-                }
-            }
-            return false;
-        }
-
-        if (alarmStates.containsKey(oilCan.getOilCanPos())) {
-            alarmState = alarmStates.get(oilCan.getOilCanPos());
-            alarmState.setLowTempError(0);
-        }
-        return true;
+    /** 进入低温报警：只在 beginDection 里低温确认且标志位允许时调用一次，与 tempHeightDection 对称。 */
+    private void tempLowDection(OilCan oilCan) {
+        oilMessage = new OilMessage();
+        oilMessage.setOilCanId(oilCan.getOilCanPos());
+        oilMessage.setType(OilMessage.LOW_TEMPER);
+        oilMessage.setValue(oilCan.getTemper());
+        alarmManager.addAlarmState(oilMessage);
+        oilCan.setAlarmState(5);
+        oilCan.setStateInfo(oilCan.getOilCanPos(), R.string.low_temp_alarm);
+        oilMessage.setJieZhi(DataUtils.getOilType()[oilCan.getOilType()]);
+        alarmRepository.saveAlarm(oilCan.getOilCanPos(), oilMessage);
+        SoundLightLog.onOpen(oilCan.getOilCanPos(), "低温");
+        SoundLightManager.getInstance().openLowOilAlarm(oilCan.getOilCanPos(), false);
     }
-
-
 }

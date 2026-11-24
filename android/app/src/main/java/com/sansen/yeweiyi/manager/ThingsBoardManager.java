@@ -2,6 +2,7 @@ package com.sansen.yeweiyi.manager;
 
 import android.content.Context;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
 
@@ -42,6 +43,7 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetDeviceSettingsHandler
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankSettingsHandler;
 import com.sansen.yeweiyi.utils.DateUtils;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankTableHandler;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.TankSettingsRejectText;
 import com.sansen.yeweiyi.factory.EllipseTable;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SharePrefCustomOilNameStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
@@ -207,7 +209,28 @@ public final class ThingsBoardManager {
                 new SetTankSettingsHandler(OilTankRepositoryImpl.getInstance(),
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
                         new SharePrefCustomOilNameStore(MyApplication.getInstance()),
-                        hex -> SystemUtils.getRsStr(R.string.rpc_oil_color_not_in_palette, hex)));
+                        hex -> SystemUtils.getRsStr(R.string.rpc_oil_color_not_in_palette, hex),
+                        new TankSettingsRejectText() {
+                            private final int[] names = {R.string.llow_oil_alarm_value, R.string.low_oil_alarm_value,
+                                    R.string.height_oil_alarm_value, R.string.hheight_oil_alarm_value,
+                                    R.string.height_water_alarm_value};
+
+                            @Override
+                            public String overHeight(int heightMm, List<String> conflicts) {
+                                return SystemUtils.getRsStr(R.string.rpc_threshold_over_height, heightMm,
+                                        TextUtils.join(", ", conflicts));
+                            }
+
+                            @Override
+                            public String thresholdName(int slot) {
+                                return SystemUtils.getRsStr(names[slot]);
+                            }
+
+                            @Override
+                            public String lowTempNotBelowHigh(int lowC, int highC) {
+                                return SystemUtils.getRsStr(R.string.rpc_low_temp_not_below_high, lowC, highC);
+                            }
+                        }));
         registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
         registry.register(SetTankTableHandler.METHOD,
                 new SetTankTableHandler(OilTankRepositoryImpl.getInstance(), new EllipseTable(),
@@ -545,6 +568,7 @@ public final class ThingsBoardManager {
                     settings.InHight, settings.InTime, settings.OutHight, settings.OutTime));
             attributes.put(DeviceSettingsAttributeBuilder.KEY_CUSTOM_MEDIA_SYNC, 1);
             attributes.put(DeviceSettingsAttributeBuilder.KEY_OIL_COLOR_SYNC, 1);
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_TANK_HEIGHT_LOW_TEMP_SYNC, 1);
             connection.publishAttributes(gson.toJson(attributes));
         } catch (RuntimeException e) {
             Log.e(TAG, "客户端属性发布失败", e);

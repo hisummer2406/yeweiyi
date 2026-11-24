@@ -78,6 +78,10 @@ func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T
 		t.Fatalf("initial mirror = %+v", before)
 	}
 
+	// Subscribe first: the simulator answers within ~50 ms, and a cmdResult published before the subscription
+	// exists is only picked up by the periodic reconcile, which this test does not run (CI flake 2026-11-23).
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
 	cmd, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings,
 		`{"tank":1,"alarmHighLevelMm":2700,"density":0.7,"capacityL":40000}`)
 	if err != nil {
@@ -87,8 +91,6 @@ func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T
 		t.Fatalf("after ACK status = %q, want received (an ACK is not success)", cmd.Status)
 	}
 
-	s.ing.StartDevice(ctx, s.device)
-	waitForSubscription(t, s, ctx)
 	final := awaitStatus(t, s, uuidText(cmd.CommandID.Bytes), 25*time.Second, protocol.CmdStatusSucceeded)
 	var detail struct {
 		Tank    int      `json:"tank"`

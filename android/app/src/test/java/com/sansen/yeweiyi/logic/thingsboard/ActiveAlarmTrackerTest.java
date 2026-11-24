@@ -121,7 +121,6 @@ public class ActiveAlarmTrackerTest {
         MemoryPersistence persistence = new MemoryPersistence();
         ActiveAlarmTracker tracker = new ActiveAlarmTracker(persistence);
 
-        assertNull(tracker.raise(1, OilMessage.LOW_TEMPER, -5.0, "t", 1000L));
         assertNull(tracker.raise(1, OilMessage.IN_OIL, 0, "t", 1000L));
         assertEquals(ActiveAlarmTracker.STATE_NORMAL, tracker.alarmState(1));
         assertEquals(0, persistence.saves);

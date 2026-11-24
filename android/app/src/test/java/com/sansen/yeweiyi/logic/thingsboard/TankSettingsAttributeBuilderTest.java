@@ -85,6 +85,7 @@ public class TankSettingsAttributeBuilderTest {
     @Test
     public void deviceSettingsDeclareColorSync() {
         assertEquals("oilColorSync", DeviceSettingsAttributeBuilder.KEY_OIL_COLOR_SYNC);
+        assertEquals("tankHeightLowTempSync", DeviceSettingsAttributeBuilder.KEY_TANK_HEIGHT_LOW_TEMP_SYNC);
     }
 
     @Test

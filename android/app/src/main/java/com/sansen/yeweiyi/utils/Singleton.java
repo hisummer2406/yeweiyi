@@ -113,6 +113,7 @@ public class Singleton {
     public boolean[] SoundLightAlarm = new boolean[17];
     public boolean[] isWaterAlarm = new boolean[17];
     public boolean[] isTemperAlarm = new boolean[17];
+    public boolean[] isLowTemperAlarm = new boolean[17];
     public boolean[] isHHightAlarm = new boolean[17];
     public boolean[] isLowAlarms = new boolean[17];
     public boolean[] isLLLowAlarm = new boolean[17];

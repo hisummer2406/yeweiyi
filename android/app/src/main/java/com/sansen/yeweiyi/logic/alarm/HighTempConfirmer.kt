@@ -1,7 +1,7 @@
 package com.sansen.yeweiyi.logic.alarm
 
 /**
- * 高温要连续超阈值 [confirmMs] 才确认，期间任何一次不超就重新计时。按温度读数的时刻计时：
+ * 温度要连续越过阈值 [confirmMs] 才确认（高温、低温各用一个实例），期间任何一次不越过就重新计时。按读数时刻计时：
  * 报警检测随液位帧反复运行，同一个温度值被检测多次不能让计时前进。线程安全。
  */
 class HighTempConfirmer(private val confirmMs: Long = CONFIRM_MS) {

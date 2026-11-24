@@ -82,6 +82,7 @@ func SaveDeviceSettings(ctx context.Context, q *db.Queries, deviceName string, s
 		InStockHeightThresholdMm:  int4(s.InStockHeightThresholdMm),
 		CustomMediaSync:           int4(s.CustomMediaSync),
 		OilColorSync:              int4(s.OilColorSync),
+		TankHeightLowTempSync:     int4(s.TankHeightLowTempSync),
 		InStockTimeThresholdSec:   int4(s.InStockTimeThresholdSec),
 		OutStockHeightThresholdMm: int4(s.OutStockHeightThresholdMm),
 		OutStockTimeThresholdSec:  int4(s.OutStockTimeThresholdSec),

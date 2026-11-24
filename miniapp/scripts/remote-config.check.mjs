@@ -50,10 +50,10 @@ test('only filled fields that differ from the device are sent; empty is "leave a
   assert.deepEqual(r, { args: { alarmHighLevelMm: 610 }, problems: [] });
 });
 
-test('height, low water, low temperature are never sent (density is, since 2026-11-14)', () => {
+test('low water is never sent; density (2026-11-14), height and low temperature (#65) are', () => {
   const keys = TANK_SEND_FIELDS.map((f) => f.form);
-  for (const k of ['height', 'waterLow', 'tempLow']) assert.ok(!keys.includes(k), k);
-  assert.ok(keys.includes('density'));
+  assert.ok(!keys.includes('waterLow'));
+  for (const k of ['density', 'height', 'tempLow']) assert.ok(keys.includes(k), k);
 });
 
 test('number, integer, range problems', () => {
@@ -284,6 +284,7 @@ test('echo: the custom medium name the cloud adds is not part of the report, onl
 test('outdated device software: refusals say so and ask to upgrade', () => {
   assert.equal(classifySubmit(409, { code: 'media_sync_unsupported' }), 'firmwareOutdated');
   assert.equal(classifySubmit(409, { code: 'color_sync_unsupported' }), 'firmwareOutdated');
+  assert.equal(classifySubmit(409, { code: 'height_low_temp_unsupported' }), 'firmwareOutdated');
   assert.equal(pendingAfter('firmwareOutdated', true), 'clear');
   // the device's own wording for an unknown method is replaced by the upgrade hint
   assert.deepEqual(commandError('rejected', 'UNKNOWN_METHOD', 'unknown method config.setTankTable'), { key: 'cmdLog.code.UNKNOWN_METHOD' });

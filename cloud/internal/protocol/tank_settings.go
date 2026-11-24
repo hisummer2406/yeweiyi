@@ -25,7 +25,7 @@ const (
 	AttrAlarmLowLowLevel   = "alarmLowLowLevelMm"   // int, mm, 0 = 不启用
 	AttrAlarmHighWater     = "alarmHighWaterMm"     // int, mm, 0 = 不启用；设备端没有低水位报警
 	AttrAlarmHighTempC     = "alarmHighTempC"       // int, ℃, 0 = 不启用
-	AttrAlarmLowTempC      = "alarmLowTempC"        // int, ℃；设备端低温检测从未被调用，改了不生效
+	AttrAlarmLowTempC      = "alarmLowTempC"        // int, ℃；0 = 不启用；旧固件（无 tankHeightLowTempSync）不检测低温
 	AttrLevelCorrectionMm  = "levelCorrectionMm"    // number, mm
 	AttrWaterCorrectionMm  = "waterCorrectionMm"    // number, mm
 	AttrTempCorrectionC    = "tempCorrectionC"      // number, ℃

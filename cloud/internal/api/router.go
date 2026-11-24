@@ -5,7 +5,6 @@
 package api
 
 import (
-	"context"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -67,15 +66,6 @@ type Deps struct {
 	// short code (`000001` for device `ZCT000001`). Empty means short-code binding matches the
 	// scanned text exactly and nothing else. See bindDeviceHandler.
 	DeviceCodePrefixes []string
-
-	// Purger runs device purge tasks (internal/purge, cloud#83). Nil when ThingsBoard is not configured;
-	// the purge route then answers 503 and creates no task.
-	Purger DevicePurger
-}
-
-// DevicePurger starts (or resumes) a device purge task in the background.
-type DevicePurger interface {
-	Start(ctx context.Context, id int64)
 }
 
 func NewRouter(deps Deps) *gin.Engine {

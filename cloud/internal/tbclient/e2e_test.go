@@ -35,7 +35,7 @@ const (
 	defaultTBMQTT    = "tcp://localhost:1884"
 	defaultTBUser    = "tenant@thingsboard.org"
 	defaultTBPass    = "tenant"
-	settleTimeout    = 20 * time.Second
+	settleTimeout    = 45 * time.Second // 自托管 Runner（3 vCPU）上 ThingsBoard 写入偶尔超过 20 秒（2026-11-23）
 	settlePollPeriod = 250 * time.Millisecond
 )
 

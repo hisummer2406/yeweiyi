@@ -12,6 +12,7 @@
     <string name="oilllow_alarm">%1$d-raqamli rezervuar: Daraja juda past!</string>
     <string name="waterheight_alarm">%1$d-raqamli rezervuar: Yuqori suv darajasi!</string>
     <string name="tempheight_alarm">%1$d-raqamli rezervuar: Yuqori harorat!</string>
+    <string name="templow_alarm">%1$d-raqamli rezervuar: Past harorat!</string>
     <string name="fyf_connect_error">Driver ulanishi uzildi</string>
     <string name="login_password_hint">Parol</string>
     <string name="login_tv_password">Parolni kiriting</string>
@@ -233,4 +234,6 @@
     <string name="serial_proxy_modbus">Modbus ikki ekran</string>
     <string name="serial_proxy_restart">Ikki ekran rejimini oʻzgartirgandan soʻng, sozlama kuchga kirishi uchun ilovani qayta ishga tushiring.</string>
     <string name="data_save_error">Saqlash amalga oshmadi</string>
+    <string name="rpc_threshold_over_height">Signal chegaralari rezervuar balandligidan (%1$d mm) oshmasligi kerak: %2$s</string>
+    <string name="rpc_low_temp_not_below_high">Past harorat signali (%1$d ℃) yuqori harorat signalidan (%2$d ℃) past boʻlishi kerak</string>
 </resources>

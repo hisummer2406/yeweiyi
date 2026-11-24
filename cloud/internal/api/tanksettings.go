@@ -39,8 +39,7 @@ type tankSettingsView struct {
 	AlarmLowLowLevelMm   *int32 `json:"alarmLowLowLevelMm"`
 	AlarmHighWaterMm     *int32 `json:"alarmHighWaterMm"`
 	AlarmHighTempC       *int32 `json:"alarmHighTempC"`
-	// AlarmLowTempC is reported by the device but its low-temperature detection is never called, so
-	// the value has no effect on the device.
+	// AlarmLowTempC: 0 = not enabled. Firmware without tankHeightLowTempSync stores it but never checks it.
 	AlarmLowTempC *int32 `json:"alarmLowTempC"`
 
 	LevelCorrectionMm *float64 `json:"levelCorrectionMm"`
