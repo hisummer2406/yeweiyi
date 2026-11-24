@@ -177,13 +177,10 @@
   （`{deviceName, expectedCurrentDeviceName}`，后者必填，传页面看到的旧设备码；空油站传显式 `null`）。云端事务化，没有半成品，
   所以前端**没有**两步编排。新设备必须已按完整出厂编码**独立登记**（未登记 → 404），弹窗候选只列同客户、未分配油站的已登记设备；
   不提供改旧编码模拟换机的入口。弹窗显示旧/新编码和「新设备重新采集，不接续旧设备历史」，授权不自动复制。`changed:false` 是幂等重试。
-- **彻底删除设备（GitHub issue #29，云端 yeweiyi-cloud#83，契约 `docs/device-purge-contract.md` v1.0）**：设备页行内「删除设备」，只对平台管理员显示
-  （`canPlatformAdmin`，权限边界在云端）。`PurgeDeviceModal`：显示完整编号、所属客户、油站和「将彻底删除该设备及全部历史数据，无法在系统内撤销」，
-  要写删除原因并**逐字输入完整设备编号**才能点「彻底删除」；取消/关闭不发请求。`POST /api/devices/:device/purge` 的 200/202 只表示任务存在，
-  弹窗每 2 秒 `GET /api/device-purges/:id` 展示云端真实状态，**只有 `completed` 才提示已删除**；`failed` 显示失败步骤与云端原因，「重试」就是再发一次
-  同一请求（云端返回原任务并继续）；状态读取失败只提示、继续取，不当完成也不当失败。请求超时（status 0）结果未知：先按设备编号
-  `GET /api/device-purges?deviceName=` 找回任务，找不到也**不自动重发**。打开弹窗时先找这台设备未完成的任务，页面刷新或上次中途关闭后能接着看。
-  后台不编排多个删除请求、不碰数据库/ThingsBoard；完成后重新接入同一编号要先在 ThingsBoard 重新预登记（弹窗完成页有提示）。
+- **解除油站关联（#69，取代原「删除设备」）**：设备页行内「解除油站关联」（`station_id` 是数字的行，两种管理员都有），Popconfirm 确认后
+  `PUT /api/devices/:device/station {stationId: null}`，设备显示「未分组」、可再分配；设备档案、历史、ThingsBoard 实体与接入凭据都保留，终端照常上报。
+  原「删除设备」`PurgeDeviceModal` 及 purge 请求函数已删除：云端对 `POST /api/devices/:device/purge` 恒 `410 device_purge_disabled`（平台管理员也是），
+  永久清除由运维单独处理。`device_purge_in_progress` 的提示仍保留（运维执行中的任务仍会挡写入）。
 - **油罐罐型展示（Issue #40，2026-11-10）**：监控页通过现有 `tank-settings` 独立读取设备回报罐型，由 `useTankShapes` 每分钟复核当前可见设备，隐藏停止、恢复／手动刷新重读，账号或设备切换丢弃旧响应。总览与详情复用 `TankPicture`：卧罐用 `tank-generic.png`，立罐用从设备端复制的 `tank-vertical.png`（CSS 裁掉透明边）；未上报、未知值或读取失败一律按卧罐，不出现「罐型未知」。总览罐卡不显示罐型文字，详情显示罐型与上报时间；配置读取失败不阻断遥测，401/403/404 清除罐型缓存。配置时间来自 `reportedAt`。
   缺失读数用「--」，报警、探针未连接用读数下方文字；保持 `TankDisplay.module.less` 布局与总览 `xl` 起每行四罐（#29）。实现及验证边界见 `openspec/changes/sync-reported-tank-shape/`。
   **右侧读数按设备显示器样式（#21，`components/TankReadout.tsx`，总览与详情共用）**：深蓝底白字标题条「罐号 + 介质」，报警/探针标签置于读数下方，避免挤压标题；

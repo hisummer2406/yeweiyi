@@ -349,53 +349,6 @@ export default {
   'pages.ops.devices.transfer.success': 'Device {device} moved to {customer}',
   'pages.ops.devices.transfer.unchanged':
     'The device already belongs to {customer}; nothing changed',
-  'pages.ops.devices.purge.title': 'Delete device permanently',
-  'pages.ops.devices.purge.warning':
-    'This permanently deletes the device and all of its history. It cannot be undone in this system.',
-  'pages.ops.devices.purge.warningDetail':
-    'Includes telemetry, hourly summaries, alarms, stock records, commands and staff grants. The station is kept and shown as not installed. Copies on the device itself and in server backups are not covered.',
-  'pages.ops.devices.purge.reason': 'Reason (required)',
-  'pages.ops.devices.purge.typeName':
-    'Type the full device code {device} to confirm:',
-  'pages.ops.devices.purge.confirmLabel': 'Confirm device code',
-  'pages.ops.devices.purge.submit': 'Delete permanently',
-  'pages.ops.devices.purge.retry': 'Retry',
-  'pages.ops.devices.purge.close': 'Close',
-  'pages.ops.devices.purge.running':
-    'The cloud is deleting. You can close this window; the deletion continues.',
-  'pages.ops.devices.purge.pollFailing':
-    'Cannot get the latest status right now. Retrying.',
-  'pages.ops.devices.purge.completed':
-    'Device {device} has been permanently deleted',
-  'pages.ops.devices.purge.completedHint':
-    'To connect this code again, pre-register it in ThingsBoard first, then register it here. It is a new device with no history or grants.',
-  'pages.ops.devices.purge.failed':
-    'Deletion did not finish: stopped at "{step}"',
-  'pages.ops.devices.purge.failedHint':
-    'Finished steps are not repeated. Click Retry to continue from the failed step.',
-  'pages.ops.devices.purge.step.thingsboard': 'ThingsBoard',
-  'pages.ops.devices.purge.step.business': 'Business data',
-  'pages.ops.devices.purge.step.verify': 'Verify',
-  'pages.ops.devices.purge.step.done': 'Done',
-  'pages.ops.devices.purge.action': 'Delete device',
-  'pages.ops.devices.purge.count.stockEvents': 'Stock records',
-  'pages.ops.devices.purge.count.alarmEvents': 'Alarms',
-  'pages.ops.devices.purge.count.recordRejects': 'Rejected raw records',
-  'pages.ops.devices.purge.count.telemetryHourly': 'Hourly summaries',
-  'pages.ops.devices.purge.count.controlCommands': 'Commands',
-  'pages.ops.devices.purge.count.tankGrants': 'Tank grants',
-  'pages.ops.devices.purge.error.confirmMismatch':
-    'The confirmation does not match the device code.',
-  'pages.ops.devices.purge.error.reasonRequired':
-    'Enter a reason (at most 500 characters).',
-  'pages.ops.devices.purge.error.notFound':
-    'The device does not exist or is already deleted. Refresh the list.',
-  'pages.ops.devices.purge.error.unavailable':
-    'ThingsBoard is not configured in the cloud, so the device cannot be deleted. No task was created.',
-  'pages.ops.devices.purge.error.network':
-    'Network failure or timeout, the result is unknown: the cloud may have accepted it. Close and reopen this window to check; submit again only if there is no task.',
-  'pages.ops.devices.purge.error.unknown':
-    'Deletion failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.error.notFound': 'Device not found, refresh the list.',
   'pages.ops.customers.col.actions': 'Actions',
   'pages.ops.customers.action.users': 'Accounts',
@@ -541,6 +494,11 @@ export default {
     'The mini program code service failed; please retry later.',
   'pages.console.miniCode.error.unknown':
     'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
+  'pages.ops.devices.unassign.action': 'Unassign station',
+  'pages.ops.devices.unassign.title': 'Unassign device {device} from its station?',
+  'pages.ops.devices.unassign.description':
+    'The device becomes "Ungrouped" and can be assigned again. Its records, history and access credentials are kept and the terminal keeps reporting.',
+  'pages.ops.devices.unassign.ok': 'Unassign',
   'pages.console.stations.devices.action.replace': 'Replace',
   'pages.console.stations.replace.title': 'Replace device: {station}',
   'pages.console.stations.replace.station': 'Station',
