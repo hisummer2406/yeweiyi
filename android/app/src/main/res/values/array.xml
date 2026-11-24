@@ -192,16 +192,16 @@
         <item>卧罐</item>
         <item>立罐</item>
     </string-array>
-    <!-- 语言选择下拉框（SetBaseFragment.LANGUAGE_CODES 与之一一对应）：每种语言固定显示本语言自称，
+    <!-- 语言选择下拉框（SetBaseFragment.LANGUAGE_CODES 与之一一对应）：固定显示本语言自称及外语的中文简称，
          不随界面语言变，所以只在这里定义、不进任何 values-xx 覆盖。 -->
     <string-array name="language" translatable="false">
         <item>中文</item>
-        <item>English</item>
-        <item>Español</item>
-        <item>Русский</item>
-        <item>O‘zbekcha</item>
-        <item>Français</item>
-        <item>Português</item>
+        <item>English(英语)</item>
+        <item>Español(西语)</item>
+        <item>Русский(俄语)</item>
+        <item>O‘zbekcha(乌兹语)</item>
+        <item>Français(法语)</item>
+        <item>Português(葡语)</item>
     </string-array>
     <string-array name="yewei_unit">
         <item>毫米</item>
