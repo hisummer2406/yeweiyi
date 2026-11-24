@@ -178,8 +178,6 @@
     <string name="chukuliangl">Salida (L)</string>
     <string name="chukuliangkg">Salida (kg)</string>
     <string name="commitwork_end_time">Hora fin</string>
-    <string name="oilcan_length">L</string>
-    <string name="oilcan_height">H</string>
 
     <!-- 以下 21 条是用户直接对照设计稿人工整理给出的（2026-09-23），不是自动提取/匹配。
          oilCanSelect 一条例外：用户明确要求"直接 AI 翻译"，没有设计稿来源，是 Claude 按上下文拟的。
@@ -188,8 +186,6 @@
     <string name="height_temp_alarm_value">Alarma Temp. Alta</string>
     <string name="low_temp_alarm_value">Alarma Temp. Baja</string>
     <string name="select_color">Color</string>
-    <string name="oilcan_diameter">H</string>
-    <string name="head_a">R</string>
     <string name="lable_commitwork">Iniciar turno</string>
     <string name="oilcan_short_label_format">Tanque %1$d</string>
     <string name="water_level">Agua</string>
@@ -300,4 +296,31 @@
     <string name="rpc_oil_color_not_in_palette">El color %1$s no está en la paleta de este equipo; elija uno de la paleta</string>
     <string name="rpc_threshold_over_height">Los umbrales de alarma no pueden superar la altura del tanque (%1$d mm): %2$s</string>
     <string name="rpc_low_temp_not_below_high">La alarma de temperatura baja (%1$d ℃) debe ser menor que la de temperatura alta (%2$d ℃)</string>
+    <!-- 云平台文案：2026-11-24 AI 翻译，待 review。 -->
+    <string name="tb_settings">Nube</string>
+    <string name="tb_connection_settings">Conexión nube</string>
+    <string name="tb_address">Servidor</string>
+    <string name="tb_port">Puerto</string>
+    <string name="tb_device_id">ID equipo</string>
+    <string name="tb_access_token">Token</string>
+    <string name="tb_address_hint">Ej. 192.168.1.10</string>
+    <string name="tb_port_hint">Ej. 1883</string>
+    <string name="tb_device_id_hint">ID de la etiqueta</string>
+    <string name="tb_access_token_hint">Vacío: obtener de la nube</string>
+    <string name="tb_broker_host_empty">Ingrese servidor</string>
+    <string name="tb_port_not_number">Puerto: solo números</string>
+    <string name="tb_port_out_of_range">Puerto: 1–65535</string>
+    <string name="tb_device_id_empty">Ingrese ID del equipo</string>
+    <string name="tb_saved">Guardado. Reconectando…</string>
+    <string name="tb_saved_provisioning">Guardado. Obteniendo token…</string>
+    <string name="tb_confirm_device_id_title">Confirmar ID</string>
+    <string name="tb_confirm_device_id_message">Verifique el ID de la etiqueta:\n\n%1$s\n\nUn ID erróneo usa la identidad de otro equipo.</string>
+    <string name="tb_status_connected">Nube: conectada</string>
+    <string name="tb_status_disconnected">Nube: desconectada</string>
+    <string name="tb_provision_in_progress">Obteniendo token…</string>
+    <string name="tb_provision_success">Token recibido</string>
+    <string name="tb_provision_rejected">Token denegado: ID no registrado o ya activado. Contacte al admin.%1$s</string>
+    <string name="tb_provision_network_error">Token: error de red. Se reintentará.</string>
+    <string name="tb_provision_not_configured">Sin clave de registro. Ingrese token manualmente.</string>
+    <string name="tb_provision_token_unreadable">Token ilegible (otro equipo o copia). Sin obtención automática. Verifique el ID y guarde de nuevo.</string>
 </resources>

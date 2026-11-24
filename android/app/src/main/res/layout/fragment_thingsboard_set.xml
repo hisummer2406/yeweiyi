@@ -27,7 +27,8 @@
             android:layout_marginTop="@dimen/dp_40"
             android:id="@+id/left"
             android:layout_width="match_parent"
-            android:layout_height="@dimen/dp_500"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/dp_500"
             android:background="@color/white"
             android:padding="@dimen/dp_51"
             android:orientation="vertical">
@@ -59,7 +60,7 @@
                     android:layout_height="@dimen/dp_52"
                     android:background="@drawable/shap_login_setpwd"
                     android:textSize="@dimen/sp_22"
-                    android:hint="如 192.168.1.10"/>
+                    android:hint="@string/tb_address_hint"/>
             </LinearLayout>
 
             <LinearLayout
@@ -72,7 +73,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_28"
                     android:textColor="@color/black"
-                    android:text="端口"/>
+                    android:text="@string/tb_port"/>
                 <EditText
                     android:id="@+id/et_broker_port"
                     android:layout_marginLeft="@dimen/dp_20"
@@ -82,7 +83,7 @@
                     android:layout_height="@dimen/dp_52"
                     android:background="@drawable/shap_login_setpwd"
                     android:textSize="@dimen/sp_22"
-                    android:hint="如 1883"/>
+                    android:hint="@string/tb_port_hint"/>
             </LinearLayout>
 
             <LinearLayout
@@ -95,7 +96,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_28"
                     android:textColor="@color/black"
-                    android:text="设备ID"/>
+                    android:text="@string/tb_device_id"/>
                 <EditText
                     android:id="@+id/et_device_id"
                     android:layout_marginLeft="@dimen/dp_20"
@@ -116,7 +117,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="@dimen/sp_28"
                     android:textColor="@color/black"
-                    android:text="访问令牌"/>
+                    android:text="@string/tb_access_token"/>
                 <EditText
                     android:id="@+id/et_access_token"
                     android:layout_marginLeft="@dimen/dp_20"
@@ -149,7 +150,10 @@
             android:id="@+id/ly_saveData"
             android:layout_marginBottom="@dimen/dp_20"
             android:layout_marginTop="@dimen/dp_20"
-            android:layout_width="@dimen/dp_150"
+            android:layout_width="wrap_content"
+            android:minWidth="@dimen/dp_150"
+            android:paddingLeft="@dimen/dp_6"
+            android:paddingRight="@dimen/dp_6"
             android:layout_height="wrap_content"
             android:background="#0066A2"
             android:layout_gravity="center"
@@ -168,7 +172,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="保存数据"/>
+                android:text="@string/save_data"/>
         </LinearLayout>
 
         <LinearLayout
@@ -176,7 +180,10 @@
             android:layout_marginRight="@dimen/dp_40"
             android:layout_marginBottom="@dimen/dp_20"
             android:layout_marginTop="@dimen/dp_20"
-            android:layout_width="@dimen/dp_150"
+            android:layout_width="wrap_content"
+            android:minWidth="@dimen/dp_150"
+            android:paddingLeft="@dimen/dp_6"
+            android:paddingRight="@dimen/dp_6"
             android:layout_height="wrap_content"
             android:background="#0066A2"
             android:layout_gravity="center"
@@ -195,7 +202,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/white"
-                android:text="返回上页"/>
+                android:text="@string/previous_page"/>
         </LinearLayout>
     </LinearLayout>
 

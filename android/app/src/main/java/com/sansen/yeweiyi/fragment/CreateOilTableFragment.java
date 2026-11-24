@@ -132,18 +132,18 @@ public class CreateOilTableFragment extends BaseFragment {
 
         if (tableType == TableType.THETANK) {
             createtable_iv_icon.setImageDrawable(ContextCompat.getDrawable(main, R.drawable.guanbiao_liguan));
-            create_iv_guanchang.setText("H:");
-            createtable_tv_diameter.setText("R:");
+            create_iv_guanchang.setText(R.string.tank_dimension_h);
+            createtable_tv_diameter.setText(R.string.tank_dimension_r);
             mly_UprightOil.setVisibility(View.GONE);
 
         } else if (tableType == TableType.HORIZONTALTANK) {
             createtable_iv_icon.setImageDrawable(ContextCompat.getDrawable(main, R.drawable.guanbiao_woguan));
-            create_iv_guanchang.setText(SystemUtils.getRsStr(R.string.oilcan_length));
+            create_iv_guanchang.setText(R.string.tank_dimension_l);
 
         } else {
             createtable_iv_icon.setImageDrawable(ContextCompat.getDrawable(main, R.drawable.guanbiao_lifangti));
-            createtable_tv_diameter.setText("R:");
-            dished_head_a.setText(SystemUtils.getRsStr(R.string.oilcan_height));
+            createtable_tv_diameter.setText(R.string.tank_dimension_r);
+            dished_head_a.setText(R.string.tank_dimension_h);
         }
 
         createtable_bt_build.setOnClickListener(this);

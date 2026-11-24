@@ -221,10 +221,6 @@
     <string name="createtable_multi_import_success">Tank charts imported for tank(s) %1$s</string>
     <string name="createtable_sheet_name_invalid">Invalid sheet name \"%1$s\": use tank No. 1–%2$d. Nothing imported.</string>
     <string name="oilcantable_copy_success">Copy successfully</string>
-    <string name="oilcan_height">Tank height H：</string>
-    <string name="oilcan_length">Tank length L：</string>
-    <string name="oilcan_diameter">Tank diameter D：</string>
-    <string name="head_a">End socket A：</string>
     <string name="head_b">End socket B：</string>
     <string name="impor_u_disk">Import into USB</string>
     <string name="into_the_tank">Import into tank</string>
@@ -618,4 +614,31 @@
     <string name="rpc_oil_color_not_in_palette">Colour %1$s is not in the palette on this device; choose one from the palette</string>
     <string name="rpc_threshold_over_height">Alarm thresholds cannot exceed the tank height (%1$d mm): %2$s</string>
     <string name="rpc_low_temp_not_below_high">Low temperature alarm (%1$d ℃) must be below the high temperature alarm (%2$d ℃)</string>
+    <!-- 云平台文案：2026-11-24 AI 翻译，待 review。 -->
+    <string name="tb_settings">Cloud</string>
+    <string name="tb_connection_settings">Cloud connection</string>
+    <string name="tb_address">Host</string>
+    <string name="tb_port">Port</string>
+    <string name="tb_device_id">Device ID</string>
+    <string name="tb_access_token">Token</string>
+    <string name="tb_address_hint">e.g. 192.168.1.10</string>
+    <string name="tb_port_hint">e.g. 1883</string>
+    <string name="tb_device_id_hint">ID on device label</string>
+    <string name="tb_access_token_hint">Blank: get token from cloud</string>
+    <string name="tb_broker_host_empty">Enter host</string>
+    <string name="tb_port_not_number">Port must be a number</string>
+    <string name="tb_port_out_of_range">Port: 1–65535</string>
+    <string name="tb_device_id_empty">Enter device ID</string>
+    <string name="tb_saved">Saved. Reconnecting…</string>
+    <string name="tb_saved_provisioning">Saved. Getting cloud token…</string>
+    <string name="tb_confirm_device_id_title">Confirm device ID</string>
+    <string name="tb_confirm_device_id_message">Match the ID to the device label:\n\n%1$s\n\nA wrong ID claims another device’s identity.</string>
+    <string name="tb_status_connected">Cloud: connected</string>
+    <string name="tb_status_disconnected">Cloud: disconnected</string>
+    <string name="tb_provision_in_progress">Getting token…</string>
+    <string name="tb_provision_success">Token received</string>
+    <string name="tb_provision_rejected">Token denied: ID unknown or already registered. Contact cloud admin.%1$s</string>
+    <string name="tb_provision_network_error">Token: network error. Will retry.</string>
+    <string name="tb_provision_not_configured">No provisioning key. Enter token manually.</string>
+    <string name="tb_provision_token_unreadable">Saved token unreadable (other device or backup). Auto-fetch disabled. Check device ID and save again.</string>
 </resources>

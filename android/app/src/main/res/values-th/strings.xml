@@ -194,10 +194,6 @@
     <string name="createtable_daorudao">ถ่ายเข้า</string>
     <string name="createtable_tanksucess">ถังน้ำมันเบอร์ </string>
     <string name="oilcantable_copy_success">คัดเลือกสำเร็จ</string>
-    <string name="oilcan_height">ความสูงถัง H:</string>
-    <string name="oilcan_length">ความยาวถังL:</string>
-    <string name="oilcan_diameter">เส้นผ่าศูนย์กลาง D:</string>
-    <string name="head_a">หัวปิด A:</string>
     <string name="head_b">หัวปิB :</string>
     <string name="impor_u_disk">ถ่ายเขา USB</string>
     <string name="into_the_tank">ถ่ายเข้าถังน้ำมัน</string><!-- ข้อมูลแจ้งเตือน -->

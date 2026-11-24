@@ -19,7 +19,6 @@
     <string name="createtable_import_success">Importar para o tanque Nº %1$d</string>
     <string name="createtable_oillengtg_nonull">Comprimento do tanque não pode ser vazio</string>
     <string name="datamanager_chek_out">Caminho inexistente, verifique o dispositivo externo</string>
-    <string name="oilcan_height">H:</string>
     <string name="oilcantableset">Config. tabela tanque</string>
     <string name="authorization_toast_noauth">Sem permissão de abertura</string>
     <string name="record_settings">Config. registros</string>
@@ -107,10 +106,7 @@
     <string name="color_picker">Sel. cor</string>
     <string name="bianhao">Nº</string>
     <string name="copy">Copiar para</string>
-    <string name="head_a">R:</string>
     <string name="height_mm">Alt. (mm)</string>
-    <string name="oilcan_diameter">H:</string>
-    <string name="oilcan_length">L:</string>
     <string name="preview_data">Vis. dados</string>
     <string name="rongji_u">Vol. (L)</string>
     <string name="usb_export">Export. p/ USB</string>
@@ -238,4 +234,31 @@
     <string name="rpc_oil_color_not_in_palette">A cor %1$s não está na paleta deste dispositivo; selecione uma cor da paleta.</string>
     <string name="rpc_threshold_over_height">Os limites de alarme não podem exceder a altura do tanque (%1$d mm): %2$s</string>
     <string name="rpc_low_temp_not_below_high">O alarme de temperatura baixa (%1$d ℃) deve ser inferior ao de temperatura alta (%2$d ℃)</string>
+    <!-- 云平台文案：2026-11-24 AI 翻译，待 review。 -->
+    <string name="tb_settings">Nuvem</string>
+    <string name="tb_connection_settings">Conexão nuvem</string>
+    <string name="tb_address">Servidor</string>
+    <string name="tb_port">Porta</string>
+    <string name="tb_device_id">ID equip.</string>
+    <string name="tb_access_token">Token</string>
+    <string name="tb_address_hint">Ex. 192.168.1.10</string>
+    <string name="tb_port_hint">Ex. 1883</string>
+    <string name="tb_device_id_hint">ID da etiqueta</string>
+    <string name="tb_access_token_hint">Vazio: obter da nuvem</string>
+    <string name="tb_broker_host_empty">Digite o servidor</string>
+    <string name="tb_port_not_number">Porta: só números</string>
+    <string name="tb_port_out_of_range">Porta: 1–65535</string>
+    <string name="tb_device_id_empty">Digite o ID do equip.</string>
+    <string name="tb_saved">Salvo. Reconectando…</string>
+    <string name="tb_saved_provisioning">Salvo. Obtendo token…</string>
+    <string name="tb_confirm_device_id_title">Confirmar ID</string>
+    <string name="tb_confirm_device_id_message">Confira o ID da etiqueta:\n\n%1$s\n\nUm ID errado usa a identidade de outro equipamento.</string>
+    <string name="tb_status_connected">Nuvem: conectada</string>
+    <string name="tb_status_disconnected">Nuvem: desconectada</string>
+    <string name="tb_provision_in_progress">Obtendo token…</string>
+    <string name="tb_provision_success">Token recebido</string>
+    <string name="tb_provision_rejected">Token negado: ID desconhecido ou já registrado. Contate o admin.%1$s</string>
+    <string name="tb_provision_network_error">Token: erro de rede. Nova tentativa em breve.</string>
+    <string name="tb_provision_not_configured">Sem chave de registro. Digite o token manualmente.</string>
+    <string name="tb_provision_token_unreadable">Token ilegível (outro equip. ou cópia). Busca automática desativada. Confira o ID e salve novamente.</string>
 </resources>

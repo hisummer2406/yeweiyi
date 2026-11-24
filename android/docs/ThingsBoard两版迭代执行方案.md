@@ -49,7 +49,7 @@ V2 内部再按风险拆两步：**V2a** 非物理动作（改配置、消音、
 | 离线补发队列（报警/出入库/命令结果共用） | `PendingAlarmStore` | 6 |
 | RPC 分发、去重、断电恢复、ACK/结果分离、独立线程 | `logic/thingsboard/rpc/` | 13 + 9 + 6 |
 | `config.setAlarmThresholds` 真实执行 | `SetAlarmThresholdHandler` | 9 |
-| 现场配网入口（仅中文界面） | `ThingsBoardSetFragment` | 无（依赖 Android） |
+| 现场配网入口（七种可选语言） | `ThingsBoardSetFragment` | 无（依赖 Android） |
 
 ### 2.2 待补齐（按版本归属）
 
@@ -192,7 +192,7 @@ CloudAlarmReporter（胶水层）→ ActiveAlarmTracker（纯 Java，JVM 单测�
 1. 在 Mac 上用 `yeweiyi-cloud/docker-compose.thingsboard.yml` 起 ThingsBoard CE（明文 MQTT 端口 1884）。
 2. 用云端的 `cmd/tbdevicesim` 或 ThingsBoard 控制台建设备，拿到 `deviceId` 和 `accessToken`。按协议 §1，正式开通应走 `tbclient.EnsureDevice`，联调阶段可以手工建。
 3. 构建时 `sansen.thingsboardUseTls=false`，安装到设备（`192.168.0.111`，Android 13，系统自动对时已开、时钟与 Mac 误差 1 秒内）。安装前先确认设备上现有包的签名，签名不同需要卸载重装，会清空本地配置。
-4. 设备上"高级设置 → 云平台设置"（中文界面）填入 broker `Mac 的局域网 IP:1884` 和凭据。
+4. 设备上"高级设置 → 云平台设置"填入 broker `Mac 的局域网 IP:1884` 和凭据。
 5. 再起 Go 后台（`cmd/server`），用它的 REST 接口做验收，而不是只看 ThingsBoard 控制台——这样验证的是"云端能展示"，不只是"数据到了 ThingsBoard"。
 
 **验收清单**（两个探针，罐 1、罐 2）：
@@ -419,7 +419,7 @@ Android 目前返回 `PROTOCOL_VERSION_UNSUPPORTED`。实际影响很小：云�
 | 安装新包可能清空设备配置 | debug/release 签名不同只能卸载重装 | 安装前先核对签名，必要时先备份 `shared_prefs` 和数据库 |
 | 协议未冻结 | 云端可能还会改字段 | V1-T6 先做，用共享样例让两边改动都会在测试里暴露 |
 | 远程重启/泵阀属于高风险动作 | 误操作后果严重 | 重启按 §4.5 的"先记终态再重启"；泵阀单独发布，联锁和真机验证完成前保持拒绝 |
-| 云平台设置仅中文界面可见 | 英文/西语设备要先切中文才能配网 | 等设计稿文案后补多语言 |
+| 云平台多语言文案待 review | `ThingsBoardSetFragment` 已支持七种可选语言，六种外语为 AI 简译 | 文案表审核；未经真机验证 |
 
 ---
 

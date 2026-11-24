@@ -66,10 +66,6 @@
     <string name="createtable_multi_import_confirm">Таблицы резервуаров №%1$s будут перезаписаны. Импортировать?</string>
     <string name="createtable_multi_import_success">Импортированы таблицы резервуаров №%1$s</string>
     <string name="createtable_sheet_name_invalid">Недопустимое имя листа «%1$s»: укажите № резервуара 1–%2$d. Импорт отменён.</string>
-    <string name="oilcan_height">H：</string>
-    <string name="oilcan_length">L:</string>
-    <string name="oilcan_diameter">H:</string>
-    <string name="head_a">R:</string>
     <string name="height_oil_alarm">Резервуар №: высокий уровень!</string>
     <string name="hheight_oil_alarm">Резервуар №: предельно высокий уровень!</string>
     <string name="low_oil_alarm">Резервуар №: низкий уровень!</string>
@@ -239,4 +235,31 @@
     <string name="data_save_error">Не удалось сохранить</string>
     <string name="rpc_threshold_over_height">Пороги тревог не могут превышать высоту резервуара (%1$d мм): %2$s</string>
     <string name="rpc_low_temp_not_below_high">Порог низкой температуры (%1$d ℃) должен быть ниже порога высокой (%2$d ℃)</string>
+    <!-- 云平台文案：2026-11-24 AI 翻译，待 review。 -->
+    <string name="tb_settings">Облако</string>
+    <string name="tb_connection_settings">Связь с облаком</string>
+    <string name="tb_address">Сервер</string>
+    <string name="tb_port">Порт</string>
+    <string name="tb_device_id">ID устр.</string>
+    <string name="tb_access_token">Токен</string>
+    <string name="tb_address_hint">Напр. 192.168.1.10</string>
+    <string name="tb_port_hint">Напр. 1883</string>
+    <string name="tb_device_id_hint">Номер на наклейке</string>
+    <string name="tb_access_token_hint">Пусто: получить из облака</string>
+    <string name="tb_broker_host_empty">Укажите сервер</string>
+    <string name="tb_port_not_number">Порт должен быть числом</string>
+    <string name="tb_port_out_of_range">Порт: 1–65535</string>
+    <string name="tb_device_id_empty">Укажите номер устройства</string>
+    <string name="tb_saved">Сохранено. Подключение…</string>
+    <string name="tb_saved_provisioning">Сохранено. Получение токена…</string>
+    <string name="tb_confirm_device_id_title">Проверьте номер</string>
+    <string name="tb_confirm_device_id_message">Номер должен совпадать с наклейкой:\n\n%1$s\n\nОшибка займёт идентификатор другого устройства.</string>
+    <string name="tb_status_connected">Облако: подключено</string>
+    <string name="tb_status_disconnected">Облако: нет связи</string>
+    <string name="tb_provision_in_progress">Получение токена…</string>
+    <string name="tb_provision_success">Токен получен</string>
+    <string name="tb_provision_rejected">Токен отклонён: номер неизвестен или уже зарегистрирован. Обратитесь к администратору.%1$s</string>
+    <string name="tb_provision_network_error">Токен: ошибка сети. Повторим позже.</string>
+    <string name="tb_provision_not_configured">Нет ключа регистрации. Введите токен вручную.</string>
+    <string name="tb_provision_token_unreadable">Токен не читается (другое устройство или копия). Автополучение отключено. Проверьте номер и сохраните снова.</string>
 </resources>

@@ -66,10 +66,6 @@
     <string name="createtable_multi_import_confirm">%1$s-raqamli rezervuarlar jadvallari qayta yoziladi. Import qilinsinmi?</string>
     <string name="createtable_multi_import_success">%1$s-raqamli rezervuarlar jadvallari import qilindi</string>
     <string name="createtable_sheet_name_invalid">«%1$s» varaq nomi noto\'g\'ri: 1–%2$d rezervuar raqamini kiriting. Import qilinmadi.</string>
-    <string name="oilcan_height">H：</string>
-    <string name="oilcan_length">L：</string>
-    <string name="oilcan_diameter">H：</string>
-    <string name="head_a">R：</string>
     <string name="height_oil_alarm">№ rezervuar: Yuqori daraja!</string>
     <string name="hheight_oil_alarm">№ rezervuar: Daraja juda yuqori!</string>
     <string name="low_oil_alarm">№ rezervuar: Past daraja!</string>
@@ -236,4 +232,31 @@
     <string name="data_save_error">Saqlash amalga oshmadi</string>
     <string name="rpc_threshold_over_height">Signal chegaralari rezervuar balandligidan (%1$d mm) oshmasligi kerak: %2$s</string>
     <string name="rpc_low_temp_not_below_high">Past harorat signali (%1$d ℃) yuqori harorat signalidan (%2$d ℃) past boʻlishi kerak</string>
+    <!-- 云平台文案：2026-11-24 AI 翻译，待 review。 -->
+    <string name="tb_settings">Bulut</string>
+    <string name="tb_connection_settings">Bulut ulanishi</string>
+    <string name="tb_address">Server</string>
+    <string name="tb_port">Port</string>
+    <string name="tb_device_id">Qurilma ID</string>
+    <string name="tb_access_token">Token</string>
+    <string name="tb_address_hint">Mas. 192.168.1.10</string>
+    <string name="tb_port_hint">Mas. 1883</string>
+    <string name="tb_device_id_hint">Yorliqdagi raqam</string>
+    <string name="tb_access_token_hint">Bo‘sh: bulutdan olish</string>
+    <string name="tb_broker_host_empty">Serverni kiriting</string>
+    <string name="tb_port_not_number">Port raqam bo‘lishi kerak</string>
+    <string name="tb_port_out_of_range">Port: 1–65535</string>
+    <string name="tb_device_id_empty">Qurilma raqamini kiriting</string>
+    <string name="tb_saved">Saqlandi. Qayta ulanish…</string>
+    <string name="tb_saved_provisioning">Saqlandi. Token olinmoqda…</string>
+    <string name="tb_confirm_device_id_title">Raqamni tasdiqlang</string>
+    <string name="tb_confirm_device_id_message">Raqam yorliqdagiga mos bo‘lsin:\n\n%1$s\n\nXato raqam boshqa qurilma identifikatorini band qiladi.</string>
+    <string name="tb_status_connected">Bulut: ulangan</string>
+    <string name="tb_status_disconnected">Bulut: ulanmagan</string>
+    <string name="tb_provision_in_progress">Token olinmoqda…</string>
+    <string name="tb_provision_success">Token olindi</string>
+    <string name="tb_provision_rejected">Token rad etildi: raqam noma’lum yoki ro‘yxatdan o‘tgan. Adminga murojaat qiling.%1$s</string>
+    <string name="tb_provision_network_error">Token: tarmoq xatosi. Qayta uriniladi.</string>
+    <string name="tb_provision_not_configured">Ro‘yxat kaliti yo‘q. Tokenni qo‘lda kiriting.</string>
+    <string name="tb_provision_token_unreadable">Token o‘qilmadi (boshqa qurilma yoki nusxa). Avtomatik olish o‘chiq. Raqamni tekshirib qayta saqlang.</string>
 </resources>

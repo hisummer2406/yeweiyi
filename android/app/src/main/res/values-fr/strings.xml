@@ -19,7 +19,6 @@
     <string name="createtable_import_success">Importer dans le réservoir n° %1$d</string>
     <string name="createtable_oillengtg_nonull">La longueur de la cuve ne peut pas être vide</string>
     <string name="datamanager_chek_out">Chemin introuvable, vérifiez le périphérique externe</string>
-    <string name="oilcan_height">H：</string>
     <string name="oilcantableset">Régl. jauges</string>
     <string name="authorization_toast_noauth">Accès refusé</string>
     <string name="record_settings">Régl. enreg.</string>
@@ -107,10 +106,7 @@
     <string name="color_picker">Choix de la couleur</string>
     <string name="bianhao">N°</string>
     <string name="copy">Copier vers</string>
-    <string name="head_a">R：</string>
     <string name="height_mm">Hauteur (mm)</string>
-    <string name="oilcan_diameter">H：</string>
-    <string name="oilcan_length">L：</string>
     <string name="preview_data">Aperçu des données</string>
     <string name="rongji_u">Vol. (L)</string>
     <string name="usb_export">Export USB</string>
@@ -232,4 +228,31 @@
     <string name="data_save_error">Échec de l’enregistrement</string>
     <string name="rpc_threshold_over_height">Les seuils d’alarme ne peuvent pas dépasser la hauteur de la cuve (%1$d mm) : %2$s</string>
     <string name="rpc_low_temp_not_below_high">L’alarme de température basse (%1$d ℃) doit être inférieure à l’alarme de température haute (%2$d ℃)</string>
+    <!-- 云平台文案：2026-11-24 AI 翻译，待 review。 -->
+    <string name="tb_settings">Cloud</string>
+    <string name="tb_connection_settings">Connexion cloud</string>
+    <string name="tb_address">Serveur</string>
+    <string name="tb_port">Port</string>
+    <string name="tb_device_id">ID appareil</string>
+    <string name="tb_access_token">Jeton</string>
+    <string name="tb_address_hint">Ex. 192.168.1.10</string>
+    <string name="tb_port_hint">Ex. 1883</string>
+    <string name="tb_device_id_hint">N° sur l’étiquette</string>
+    <string name="tb_access_token_hint">Vide : obtenir du cloud</string>
+    <string name="tb_broker_host_empty">Saisir le serveur</string>
+    <string name="tb_port_not_number">Port : nombre requis</string>
+    <string name="tb_port_out_of_range">Port : 1–65535</string>
+    <string name="tb_device_id_empty">Saisir l’ID appareil</string>
+    <string name="tb_saved">Enregistré. Reconnexion…</string>
+    <string name="tb_saved_provisioning">Enregistré. Obtention du jeton…</string>
+    <string name="tb_confirm_device_id_title">Confirmer l’ID</string>
+    <string name="tb_confirm_device_id_message">Vérifiez l’ID sur l’étiquette :\n\n%1$s\n\nUn ID erroné prend l’identité d’un autre appareil.</string>
+    <string name="tb_status_connected">Cloud : connecté</string>
+    <string name="tb_status_disconnected">Cloud : déconnecté</string>
+    <string name="tb_provision_in_progress">Obtention du jeton…</string>
+    <string name="tb_provision_success">Jeton obtenu</string>
+    <string name="tb_provision_rejected">Jeton refusé : ID inconnu ou déjà enregistré. Contactez l’admin.%1$s</string>
+    <string name="tb_provision_network_error">Jeton : erreur réseau. Nouvel essai prévu.</string>
+    <string name="tb_provision_not_configured">Clé d’enregistrement absente. Saisir le jeton.</string>
+    <string name="tb_provision_token_unreadable">Jeton illisible (autre appareil ou sauvegarde). Obtention auto désactivée. Vérifiez l’ID et enregistrez à nouveau.</string>
 </resources>

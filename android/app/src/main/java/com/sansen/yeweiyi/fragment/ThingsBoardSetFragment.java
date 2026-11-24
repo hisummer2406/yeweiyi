@@ -27,7 +27,7 @@ import bean.IPBean;
 /**
  * 云平台（ThingsBoard）连接设置：broker 地址/端口 + 设备编号（贴纸上的，设备自己读不到）。
  * 访问令牌留空时由 {@link ThingsBoardManager} 用编号自动领取；手填令牌是兜底。
- * 页面文案只有中文，入口只在中文界面显示（见 {@code SetSeniorFragment}）。
+ * 页面文案通过字符串资源显示，入口向全部可选语言开放。
  */
 public class ThingsBoardSetFragment extends BaseFragment {
 
@@ -83,7 +83,7 @@ public class ThingsBoardSetFragment extends BaseFragment {
         View headerView = rootView.findViewById(R.id.title_bar);
         tvTitle = headerView.findViewById(R.id.tv_title);
         tv_time = headerView.findViewById(R.id.main_time);
-        tvTitle.setText("云平台设置");
+        tvTitle.setText(R.string.tb_settings);
         SerialPortEntrity.time.addOnPropertyChangedCallback(callback);
     }
 

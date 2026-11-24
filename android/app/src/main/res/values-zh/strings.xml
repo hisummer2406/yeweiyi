@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-
-
+    <string name="tank_dimension_l" translatable="false">L：</string>
+    <string name="tank_dimension_h" translatable="false">H：</string>
+    <string name="tank_dimension_r" translatable="false">R：</string>
 </resources>
