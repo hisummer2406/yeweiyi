@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用法：deploy-image-identity.sh <ghcr.io/...@sha256:... | yeweiyi-local/cloud:sha-<提交>> <docker save 产生的 tar> <远端 driver-type>
+# 用法：deploy-image-identity.sh <ghcr.io/...@sha256:... | yeweiyi-local/cloud:sha-<提交>-r<运行>-<次>> <docker save 产生的 tar> <远端 driver-type>
 # 输出：远端 `docker load` 该 tar 之后，`docker image inspect --format '{{.Id}}'` 应当得到的值。
 #
 # 背景：`.Id` 的含义取决于 Docker 镜像存储——
@@ -21,7 +21,7 @@ CONTAINERD=io.containerd.snapshotter.v1
 store_of() { docker info --format '{{range .DriverStatus}}{{if eq (index . 0) "driver-type"}}{{index . 1}}{{end}}{{end}}'; }
 
 local_id="$(docker image inspect "$ref" --format '{{.Id}}')"
-if [[ "$ref" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}$ ]]; then
+if [[ "$ref" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}-r[0-9]+-[0-9]+$ ]]; then
   # Runner 本机构建（image_source=runner）：没有仓库 digest。containerd 存储时本机 .Id 就是 index digest，作为固定值；
   # 经典存储时只有 config digest，远端若是 containerd 存储就无从推导，下面会失败。
   pinned=""

@@ -10,19 +10,21 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: read
 
 defaults:
   run:
     working-directory: cloud
 
+# main 上每个提交一组、不取消：Cloud Deploy 要求所选提交的 Cloud CI 成功。同组只保留一个排队中的运行，
+# 若 main 共用一组，连续合并时排队的运行会被后来的替换，那个提交就无法部署；作业仍在唯一的 Runner 上依次执行。
 concurrency:
-  group: cloud-ci-${{ github.ref }}
-  # main 上不取消：Cloud Deploy 要求所选提交的 Cloud CI 成功，被取消的提交将无法部署。
+  group: cloud-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # 第一个作业：本次 cloud/、.github/ 与某次已成功的 Cloud CI 完全相同就复用，后面的作业全部跳过（跳过 = 成功，
-  # Cloud Deploy 门禁照常认）。单个自托管 Runner 上一次全量要 15–30 分钟，只改别的目录的推送不必再跑。
+  # 第一个作业：本次检出的 cloud/、.github/ 与某次已成功的 Cloud CI 实际测过的完全相同就复用，后面的作业全部跳过
+  # （跳过 = 成功，Cloud Deploy 门禁照常认）。单个自托管 Runner 上一次全量要 15–30 分钟，只改别的目录的推送不必再跑。
   reuse:
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 5
@@ -35,7 +37,7 @@ jobs:
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ../.github/scripts/ci-reuse.sh "Cloud CI" >> "$GITHUB_OUTPUT"
+        run: ../.github/scripts/ci-reuse.sh check "Cloud CI" >> "$GITHUB_OUTPUT"
 
   go:
     needs: reuse
@@ -210,3 +212,17 @@ jobs:
           if [[ -n "$left" ]]; then echo "::error::本次项目资源未清理干净：$left" >&2; exit 1; fi
           echo "已清理 Compose 项目 $CI_PROJECT（容器/网络/卷均为 0）"
           du -sh "$YEWEIYI_CI_CACHE/gomod" "$YEWEIYI_CI_CACHE/gobuild"
+
+  # 三个作业都真正跑过且成功，才把本次测过的目录树记到被测提交上，供之后的复用判定（复用时它们被跳过，这里也跳过）。
+  record:
+    needs: [go, deploy-files, integration]
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: ../.github/scripts/ci-reuse.sh record "Cloud CI"

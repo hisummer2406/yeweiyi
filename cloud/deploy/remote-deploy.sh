@@ -6,14 +6,14 @@ DIR="${1:?用法：$0 <部署目录> <固定镜像>}"
 IMAGE="${2:?用法：$0 <部署目录> <固定镜像>}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/healthz}"
 HEALTH_TRIES="${HEALTH_TRIES:-30}"
-# GHCR digest：照常 pull。yeweiyi-local/cloud:sha-<完整提交>：CI 已在 Runner 上构建并经 SSH 载入、核对过镜像标识
+# GHCR digest：照常 pull。yeweiyi-local/cloud:sha-<完整提交>-r<运行编号>-<重试次数>：CI 已在 Runner 上构建并经 SSH 载入、核对过镜像标识
 # （ghcr.io 推送不通时的发布路径，见 cloud-deploy.yml image_source=runner），这里不 pull，只要求它已在本机。
 if [[ "$IMAGE" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]]; then
   PULL=1
-elif [[ "$IMAGE" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}$ ]]; then
+elif [[ "$IMAGE" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}-r[0-9]+-[0-9]+$ ]]; then
   PULL=0
 else
-  echo '镜像必须是 GHCR sha256 digest 或 yeweiyi-local/cloud:sha-<提交>' >&2; exit 1
+  echo '镜像必须是 GHCR sha256 digest 或 yeweiyi-local/cloud:sha-<提交>-r<运行>-<次>' >&2; exit 1
 fi
 cd "$DIR"
 [[ -f .env.prod ]] || { echo '.env.prod 不存在' >&2; exit 1; }
@@ -45,6 +45,8 @@ wait_healthy() {
   return 1
 }
 PREV="$(grep '^API_IMAGE=' .env.prod | tail -n1 | cut -d= -f2- || true)"
+# 切换前记下正在运行的镜像：回滚时上一版引用若已改指别的镜像（被同名标签覆盖），不自动回滚。
+PREV_ID="$(docker_cmd inspect yeweiyi-api --format '{{.Image}}' 2>/dev/null || true)"
 # 拉取失败（或本机镜像不在）时旧环境与 API 完全不动。
 if [[ "$PULL" == 1 ]]; then docker_cmd pull "$IMAGE"; else docker_cmd image inspect "$IMAGE" >/dev/null; fi
 set_image "$IMAGE"
@@ -56,7 +58,9 @@ if compose run --rm --no-deps migrate && compose up -d --no-deps api && wait_hea
 fi
 compose logs --tail 50 api >&2 || true
 # 只回滚镜像，不执行数据库 down；迁移必须保持向后兼容。
-if [[ -n "$PREV" ]]; then
+if [[ -n "$PREV" && -n "$PREV_ID" && "$(docker_cmd image inspect "$PREV" --format '{{.Id}}' 2>/dev/null)" != "$PREV_ID" ]]; then
+  echo "前一版本引用 ${PREV} 已不指向原运行镜像 ${PREV_ID}，不自动回滚，需要人工介入" >&2
+elif [[ -n "$PREV" ]]; then
   set_image "$PREV"
   if compose up -d --no-deps api && wait_healthy "$PREV"; then
     echo '发布失败，已恢复前一 API 镜像；数据库迁移未回滚' >&2
