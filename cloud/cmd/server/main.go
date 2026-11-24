@@ -51,7 +51,6 @@ func main() {
 	var (
 		tbClient   *tbclient.Client
 		controlSvc *control.Service
-		purger     api.DevicePurger
 	)
 	if cfg.ThingsBoardEnabled() {
 		tbClient, err = tbclient.New(tbclient.Config{
@@ -94,8 +93,8 @@ func main() {
 		})
 		go ingester.Run(ctx)
 
-		// Device purge tasks (cloud#83). Tasks a previous process left running resume now; failed ones
-		// wait for an administrator to ask again.
+		// Device purge tasks (cloud#83). Tasks a previous process left running resume now. The web can no
+		// longer start or restart one (issue #69), so a failed task waits for operations.
 		purgeRunner := purge.New(purge.Config{
 			Pool: pool, Queries: queries, TB: tbClient,
 			StopDevice: ingester.StopDevice,
@@ -104,7 +103,6 @@ func main() {
 		if err := purgeRunner.Resume(ctx); err != nil {
 			log.Printf("purge: resume unfinished tasks: %v", err)
 		}
-		purger = purgeRunner
 
 		// Keeps the hourly telemetry summaries the business database holds for good (issue #30).
 		go rollup.New(rollup.Config{
@@ -161,7 +159,6 @@ func main() {
 		StockLegacyFormatBefore: cfg.Stock.LegacyFormatBefore.Time,
 		TelemetryRetention:      cfg.Telemetry.Retention.Std(),
 		DeviceCodePrefixes:      cfg.Pairing.CodePrefixes,
-		Purger:                  purger,
 	})
 
 	if cfg.Server.TLSCertFile != "" && cfg.Server.TLSKeyFile != "" {

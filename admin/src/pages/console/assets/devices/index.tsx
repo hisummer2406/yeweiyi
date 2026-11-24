@@ -2,15 +2,19 @@ import { PlusOutlined } from '@ant-design/icons';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { useAccess, useIntl } from '@umijs/max';
-import { Badge, Button, Space } from 'antd';
+import { Badge, Button, Popconfirm, Space, message } from 'antd';
 import type React from 'react';
 import { useRef, useState } from 'react';
 import { listCustomers } from '@/services/ant-design-pro/customers';
+import { ApiError } from '@/services/ant-design-pro/apiError';
 import { listDevices } from '@/services/ant-design-pro/devices';
-import { listStations } from '@/services/ant-design-pro/stations';
+import {
+  assignDeviceStation,
+  listStations,
+} from '@/services/ant-design-pro/stations';
+import { describeAssignStationError } from '../stations/errors';
 import AssignStationModal from './AssignStationModal';
 import { downloadMiniCode } from './downloadMiniCode';
-import PurgeDeviceModal from './PurgeDeviceModal';
 import RegisterDeviceModal from './RegisterDeviceModal';
 import ReplaceDeviceModal from './ReplaceDeviceModal';
 import TransferDeviceModal from './TransferDeviceModal';
@@ -23,15 +27,17 @@ import TransferDeviceModal from './TransferDeviceModal';
  *   字段缺失（云端旧版本）显示「未知」，不当作未分配。
  * - 平台管理员与客户管理员：行内「分配油站」（PUT /api/devices/:device/station）。没有客户的设备（customer_id 为 null）
  *   不提供，云端不允许；客户管理员的行没有 customer_id 字段，照常提供，由云端裁决。
- * - 平台管理员：行内「删除设备」（POST /api/devices/:device/purge，见 PurgeDeviceModal）：彻底删除设备及全部历史，不可撤销，
- *   云端异步执行，弹窗展示真实状态。
- * 登记/转移/删除只是 UI 上按角色隐藏，真正的权限边界在云端（客户管理员调用会被 403）。
+ * - 平台管理员与客户管理员：行内「解除油站关联」（同一个 PUT，stationId: null；#69）：设备回到「未分组」，可再分配。
+ *   设备档案、历史、ThingsBoard 实体与接入凭据都保留，终端照常上报。日常移除设备就用它；彻底删除已从网页端关闭，
+ *   云端对旧接口返回 410 device_purge_disabled。
+ * 登记/转移只是 UI 上按角色隐藏，真正的权限边界在云端（客户管理员调用会被 403）。
  */
 type Row = API.DeviceRow & { customerName?: string; stationName?: string };
 
 const AdminDevices: React.FC = () => {
   const intl = useIntl();
-  const t = (id: string) => intl.formatMessage({ id });
+  const t = (id: string, values?: Record<string, string>) =>
+    intl.formatMessage({ id }, values);
   const { canPlatformAdmin } = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -40,9 +46,31 @@ const AdminDevices: React.FC = () => {
   const [stations, setStations] = useState<API.Station[]>([]);
   const [stationTarget, setStationTarget] = useState<API.DeviceRow>();
   const [replaceTarget, setReplaceTarget] = useState<API.DeviceRow>();
-  const [purgeTarget, setPurgeTarget] = useState<Row>();
   // 最近一次加载的行：登记成功提示里的「分配油站」用它取到设备当前的油站（已登记的设备可能已有油站）
   const rowsRef = useRef<API.DeviceRow[]>([]);
+
+  // 解除油站关联（#69）：只清 station_id，设备档案、历史、ThingsBoard 实体与凭据都不动。
+  // 无论成败都刷新：400/404/409 说明页面已过期，刷新后让用户看到真实状态
+  const unassign = async (row: Row) => {
+    try {
+      // changed=false 是别人刚解除过，结果相同，同样提示已移出
+      await assignDeviceStation(row.device_name, null);
+      message.success(
+        t('pages.console.stations.assign.cleared', { device: row.device_name }),
+      );
+    } catch (err) {
+      const apiErr = err instanceof ApiError ? err : undefined;
+      if (apiErr?.authHandled) return; // 鉴权失败，已在回登录页
+      const m = describeAssignStationError(
+        apiErr?.status ?? -1,
+        apiErr?.error ?? (err as Error)?.message,
+        apiErr?.code,
+        apiErr?.occupiedBy,
+      );
+      message.error(t(m.id, { detail: m.detail ?? '' }));
+    }
+    actionRef.current?.reload();
+  };
 
   const customerColumn: ProColumns<Row> = {
     title: t('pages.ops.devices.col.customer'),
@@ -139,13 +167,18 @@ const AdminDevices: React.FC = () => {
               {t('pages.console.stations.devices.action.replace')}
             </a>
           )}
-          {canPlatformAdmin && (
-            <a
-              style={{ color: 'var(--ant-color-error, #ff4d4f)' }}
-              onClick={() => setPurgeTarget(row)}
+          {typeof row.station_id === 'number' && (
+            <Popconfirm
+              title={t('pages.ops.devices.unassign.title', {
+                device: row.device_name,
+              })}
+              description={t('pages.ops.devices.unassign.description')}
+              okText={t('pages.ops.devices.unassign.ok')}
+              cancelText={t('pages.console.stations.form.cancel')}
+              onConfirm={() => unassign(row)}
             >
-              {t('pages.ops.devices.purge.action')}
-            </a>
+              <a>{t('pages.ops.devices.unassign.action')}</a>
+            </Popconfirm>
           )}
         </Space>
       ),
@@ -236,11 +269,6 @@ const AdminDevices: React.FC = () => {
         devices={rowsRef.current}
         stations={stations}
         onClose={() => setReplaceTarget(undefined)}
-        onDone={() => actionRef.current?.reload()}
-      />
-      <PurgeDeviceModal
-        device={purgeTarget}
-        onClose={() => setPurgeTarget(undefined)}
         onDone={() => actionRef.current?.reload()}
       />
       <AssignStationModal

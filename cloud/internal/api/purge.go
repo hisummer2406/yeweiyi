@@ -6,32 +6,23 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"yeweiyi-cloud/internal/control"
 	"yeweiyi-cloud/internal/store/db"
 )
 
-// Device purge (cloud#83, contract docs/device-purge-contract.md): a platform administrator deletes one
-// device and all of its cloud history. The request only creates (or resumes) a task; internal/purge
-// does the deleting, and the task row says how far it got.
+// Device purge (cloud#83, contract docs/device-purge-contract.md): deletes one device and all of its
+// cloud history. internal/purge does the deleting and the task row says how far it got. Since issue #69
+// the web can no longer create or restart a task (see purgeDeviceHandler); the task list stays for audit.
 
 const (
 	auditDevicePurge  = "device.purge"
-	maxPurgeReasonLen = 500
 	recentPurgesLimit = 100
 )
-
-type purgeRequest struct {
-	ConfirmDeviceName string `json:"confirmDeviceName"`
-	Reason            string `json:"reason"`
-}
 
 type purgeUser struct {
 	ID       *int64 `json:"id"`
@@ -85,88 +76,21 @@ func requirePlatformAdmin(c *gin.Context, deps Deps) (db.User, bool) {
 	return actor, true
 }
 
-// purgeDeviceHandler is POST /api/devices/:device/purge.
+// purgeDeviceHandler is POST /api/devices/:device/purge. Starting or restarting a purge from the web is
+// switched off (issue #69): everyday removal is unassigning the device from its station, which keeps its
+// ThingsBoard entity, credentials and history. The route stays so an old page or a direct call gets a
+// clear refusal instead of a 404; every caller is answered before the body is read and nothing is
+// written except the denied audit. Existing tasks stay readable through the GET routes below, and a
+// task already running when the process restarts is still resumed by internal/purge.
 func purgeDeviceHandler(deps Deps) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		actor, ok := requirePlatformAdmin(c, deps)
 		if !ok {
 			return
 		}
-		if deps.Purger == nil {
-			apiError(c, http.StatusServiceUnavailable, "thingsboard_unavailable",
-				"device purge needs ThingsBoard, which is not configured on this deployment")
-			return
-		}
-		device := c.Param("device")
-		var req purgeRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			apiError(c, http.StatusBadRequest, "invalid_request", err.Error())
-			return
-		}
-		// Exact match: the confirmation exists to catch a wrong digit or a dropped leading zero.
-		if req.ConfirmDeviceName != device {
-			apiError(c, http.StatusBadRequest, "confirm_mismatch", "confirmDeviceName must repeat the device name exactly")
-			return
-		}
-		reason := strings.TrimSpace(req.Reason)
-		if reason == "" || utf8.RuneCountInString(reason) > maxPurgeReasonLen {
-			apiError(c, http.StatusBadRequest, "reason_required", "reason is required (at most 500 characters)")
-			return
-		}
-
-		ctx := c.Request.Context()
-		var task db.DevicePurge
-		var created, missing bool
-		err := withTx(ctx, deps, func(q *db.Queries) error {
-			dev, err := q.GetDeviceForUpdate(ctx, device)
-			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-				return err
-			}
-			// An unfinished task wins even when the device row is already gone: the business step
-			// deleted it and a later step failed. Asking again resumes that task.
-			open, err := q.GetOpenDevicePurge(ctx, device)
-			if err == nil {
-				task, err = q.RestartDevicePurge(ctx, open.ID)
-				return err
-			}
-			if !errors.Is(err, pgx.ErrNoRows) {
-				return err
-			}
-			if dev.DeviceName == "" {
-				missing = true
-				return nil
-			}
-			task, err = q.CreateDevicePurge(ctx, db.CreateDevicePurgeParams{
-				DeviceName: device, Reason: reason,
-				RequestedBy:       pgtype.Int8{Int64: actor.ID, Valid: true},
-				RequestedUsername: actor.Username,
-				CustomerID:        dev.CustomerID, StationID: dev.StationID,
-			})
-			if err != nil {
-				return err
-			}
-			created = true
-			return auditAdmin(ctx, q, actor, auditDevicePurge, device, dev.CustomerID, "allowed", map[string]any{
-				"purgeId": task.ID, "reason": reason,
-			})
-		})
-		if err != nil {
-			internalError(c, err)
-			return
-		}
-		if missing {
-			apiError(c, http.StatusNotFound, "device_not_found", "device not found")
-			return
-		}
-
-		// Detached from the request: the purge outlives the HTTP call by design.
-		deps.Purger.Start(context.WithoutCancel(ctx), task.ID)
-
-		status := http.StatusOK
-		if created {
-			status = http.StatusAccepted
-		}
-		c.JSON(status, gin.H{"purge": toPurgeResponse(task)})
+		auditRefusal(c, deps, actor, auditDevicePurge, "web purge disabled", map[string]any{"device": c.Param("device")})
+		apiError(c, http.StatusGone, "device_purge_disabled",
+			"device purge from the web is disabled; unassign the device from its station instead")
 	}
 }
 
