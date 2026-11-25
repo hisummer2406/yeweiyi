@@ -175,6 +175,16 @@ test('toTankViews: the fill and level stay the device ones, volume follows the t
   assert.equal(virt.raw.oilVolumeL, 10000);
 });
 
+test('toTankViews: a tank never read since boot (#75) is not looked up in the table', () => {
+  const res = { ts: '2026-11-25T08:00:00Z', tanks: [{ index: 1, oilLevelMm: 0, oilVolumeL: 0, oilWeightKg: 0, nullVolumeL: 0, waterVolumeL: 0, waterLevelMm: 0, tempC: 0, oilRatioPct: 0, waterRatioPct: 0, alarmState: 'NORMAL', probeConnected: true, hasReading: false }] };
+  const v = toTankViews(res, 'D1', undefined, () => big)[0];
+  assert.equal(v.noReading, true);
+  assert.equal(v.virtualState, '');
+  assert.equal(v.fillState, 'none');
+  const read = toTankViews({ ...res, tanks: [{ ...res.tanks[0], hasReading: true, oilLevelMm: 1300 }] }, 'D1', undefined, () => big)[0];
+  assert.equal(read.virtualState, 'virtual');
+});
+
 test('tableUsable / readVirtual refuse broken or tampered tables', () => {
   assert.equal(V.tableUsable(null), false);
   assert.equal(V.tableUsable({ heightMm: [10], volumeL: [1] }), false);

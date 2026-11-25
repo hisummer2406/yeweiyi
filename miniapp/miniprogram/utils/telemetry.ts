@@ -54,6 +54,7 @@ export function toTankViews(
   shapes?: TankShapeState,
   tableOf?: (tank: number) => TankTable | null,
 ): TankView[] {
+  // A tank never read (#75) has only placeholder zeros: no table lookup, so no 虚拟罐显示 / 设备原值 tag either.
   return (res.tanks || []).map((t) => applyVirtual({
     ...roundFields(t, TANK_NUMBER_FIELDS),
     raw: rawOf(t as unknown as Record<string, unknown>),
@@ -66,7 +67,7 @@ export function toTankViews(
     noReading: t.hasReading === false,
     ...tankFill(t),
     ...tankShapeFields(shapes, t.index),
-  }, tableOf?.(t.index) ?? null));
+  }, t.hasReading === false ? null : tableOf?.(t.index) ?? null));
 }
 
 // A failed telemetry/latest read is classified by utils/failureState.ts telemetryFailure: a 404 is
