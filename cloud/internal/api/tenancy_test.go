@@ -100,10 +100,6 @@ func (tn *tenancy) get(token, path string) *httptest.ResponseRecorder {
 func TestTenancy_AccessMatrix(t *testing.T) {
 	tn := newTenancy(t)
 
-	type who struct {
-		name  string
-		token string
-	}
 	allowed := map[string][]string{
 		"platform": {tn.devA1, tn.devA2, tn.devB1, tn.devUnassigned, tn.devGhost},
 		"adminA":   {tn.devA1, tn.devA2},
@@ -580,11 +576,6 @@ func TestTenancy_MintPairingSecret(t *testing.T) {
 		`SELECT customer_id FROM devices WHERE device_name = $1`, fresh).Scan(&owner); err != nil || owner != tn.custB {
 		t.Errorf("new device customer = %d (%v), want %d", owner, err, tn.custB)
 	}
-}
-
-func (tn *tenancy) bindAs(token, device, secret string) *httptest.ResponseRecorder {
-	body, _ := json.Marshal(map[string]string{"deviceName": device, "pairingToken": secret})
-	return tn.env.do("POST", "/api/devices/bind", []byte(token), body)
 }
 
 // --- commands and audit -----------------------------------------------------------------------
