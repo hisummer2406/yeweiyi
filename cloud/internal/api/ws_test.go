@@ -293,7 +293,7 @@ func TestWSAlarms_ConnectionEndsWhenTheTokenExpires(t *testing.T) {
 	if _, closed := readUntilClosed(conn, time.Until(exp)+5*time.Second); !closed {
 		t.Fatal("connection outlived its token")
 	}
-	if early := exp.Sub(time.Now()); early > 0 {
+	if early := time.Until(exp); early > 0 {
 		t.Errorf("closed %s before the token's exp %s", early, exp.Format(time.RFC3339Nano))
 	}
 }
