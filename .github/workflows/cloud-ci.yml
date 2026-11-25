@@ -103,8 +103,10 @@ jobs:
 
   # 集成测试：真实 PostgreSQL / Redis / ThingsBoard CE。这些测试在基础设施缺失时会自行 Skip，
   # 而 Skip 在 CI 里等于“没测”却显示绿色，所以这里把任何 SKIP 都当成失败。
+  # 排在 go 作业之后：单个 Runner 串行，若 integration 先抢到 Runner，go 作业里几分钟就能发现的问题
+  # （格式、vet、staticcheck、漏洞、sqlc）要等它跑完 15–25 分钟才报出来。go 失败时 integration 不再跑。
   integration:
-    needs: reuse
+    needs: [reuse, go]
     if: needs.reuse.outputs.reuse != 'true'
     runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     # 含最多 20 分钟的资源等待（见下）；测试本身与托管 Runner 时一样约 10–15 分钟。
