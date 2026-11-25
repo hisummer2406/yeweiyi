@@ -63,7 +63,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `customerId` 建油站与客户不存在同为 `400 unknown customerId`（#54）。**`403 {"error":"not authorized"}` 只留给角色/账号
   问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页（#79 起体不变、追加 `code`：`account_unavailable` | `role_not_allowed`，见
   [错误码契约](docs/error-codes-contract.md)），
-  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObject`/`refuseObjectCode`；两者都写 `denied` 审计）。
+  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObjectCode`；两者都写 `denied` 审计）。
   记录表不带 `station_id`，历史跟着设备所属油站走。加锁顺序固定：油站行 → 设备行（按名升序）。
 - 油罐授权与扫码（#63，契约见 [docs/tank-grants-contract.md](docs/tank-grants-contract.md)）：员工（`customer_user`）按
   `(device_name, 罐号)` 获得**只读**查看权，存于 `user_tank_grants`；管理员（客户/平台）看其范围内全部罐。

@@ -41,15 +41,6 @@ func TestMintPairingSecret_ForbiddenForNonAdmin(t *testing.T) {
 	}
 }
 
-func mustUserID(t *testing.T, env *testEnv) int64 {
-	t.Helper()
-	var id int64
-	if err := env.pool.QueryRow(context.Background(), `SELECT id FROM users WHERE username = $1`, env.username).Scan(&id); err != nil {
-		t.Fatalf("look up user id: %v", err)
-	}
-	return id
-}
-
 func TestListDevices_ReturnsOnlyBoundDevices(t *testing.T) {
 	env := newTestEnv(t)
 	const boundDevice = "api-test-list-devices-bound"

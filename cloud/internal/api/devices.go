@@ -83,20 +83,9 @@ type deviceNameRequest struct {
 	DeviceName string `json:"deviceName" binding:"required"`
 }
 
-// bindDeviceRequest is bindDeviceHandler's body. PairingToken must be a secret minted for
-// deviceName via mintPairingSecretHandler — see bindDeviceHandler's doc comment for why deviceName
-// alone is no longer sufficient, and why this is not the device's ThingsBoard access token.
-type bindDeviceRequest struct {
-	DeviceName   string `json:"deviceName" binding:"required"`
-	PairingToken string `json:"pairingToken"`
-}
-
 // shortCodePattern is what a scanned short code may look like. Anything else is refused before it
 // reaches SQL or a log line.
 var shortCodePattern = regexp.MustCompile(`^[0-9A-Za-z_-]{1,64}$`)
-
-// shortCodeRefusedMessage is the single answer to a refused short-code bind.
-const shortCodeRefusedMessage = "未找到可绑定的设备"
 
 // shortCodeCandidates is the ordered list of device names a scanned code may mean: the text itself
 // (exact match wins), then each configured model prefix + text. Nil when the text is not a valid code.

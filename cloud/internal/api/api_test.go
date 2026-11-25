@@ -257,38 +257,6 @@ func (e *testEnv) userIn(role string, customerID int64) (string, int64) {
 	return e.login(username, "e2e-test-pass"), id
 }
 
-// secondUserToken is otherUserToken with the schema's default role (customer_user).
-func (e *testEnv) secondUserToken() string {
-	e.t.Helper()
-	return e.otherUserToken("")
-}
-
-// mintPairingSecret mints a fresh pairing secret for deviceName the way a real installer would:
-// authenticated as a (throwaway) platform_admin, through the real
-// POST /api/devices/:device/pairing-secret endpoint — not by inserting into
-// device_pairing_secrets directly, so these tests also exercise mintPairingSecretHandler itself.
-func (e *testEnv) mintPairingSecret(deviceName string) string {
-	e.t.Helper()
-	admin := e.otherUserToken(control.RolePlatformAdmin)
-
-	// Minted for the default customer, like every device these tests seed.
-	body, _ := json.Marshal(map[string]int64{"customerId": e.defaultCustomerID()})
-	rec := e.do("POST", "/api/devices/"+deviceName+"/pairing-secret", []byte(admin), body)
-	if rec.Code != http.StatusOK {
-		e.t.Fatalf("mint pairing secret for %s: expected 200, got %d: %s", deviceName, rec.Code, rec.Body.String())
-	}
-	var resp struct {
-		PairingSecret string `json:"pairingSecret"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		e.t.Fatalf("decode mint response: %v", err)
-	}
-	if resp.PairingSecret == "" {
-		e.t.Fatal("mint response carried no pairingSecret")
-	}
-	return resp.PairingSecret
-}
-
 // login returns a token for username. Platform and customer admins go through the real /api/login
 // (username and phone respectively); staff have no password, so theirs is signed by tokenFor.
 func (e *testEnv) login(username, password string) string {
