@@ -1,8 +1,7 @@
 # 设备协议 V1 共享 fixture
 
-这批文件是 **云端（`cloud/`）与设备端（`android/`）的共同契约**，不是云端的测试数据。
-两侧的测试都应当读**同一批字节**：任一侧改了字段名或单位，两端的构建应该同时变红，
-而不是等到真实设备上才发现。
+这批文件是 **云端（`cloud/`）与设备端（`android/`）的共同契约**。
+两侧的测试都应当读**同一批字节**，用于在真机验收前发现字段名或单位不一致。
 
 > **为什么要有这份 README 和 `MANIFEST.json`。** 2026-09-01 两个仓库在同一天各自实现了
 > "ThingsBoard 单栈设备协议 V1"，两边的 fixture 注释都写着"对方的还不存在，先自定义一套"，
@@ -10,9 +9,9 @@
 > 挡不住这件事重演；能挡住的是一个双方都跑、且改动必须显式同步的校验。
 > 完整经过见 [`../../../docs/protocol-v1-reconciliation.md`](../../../docs/protocol-v1-reconciliation.md)。
 
-> **当前状态（2026-11-06 起）：两端共用这一份。** 合并为单仓库后，Android 单测直接读本目录（无副本），
-> Android CI 与 Cloud CI 都会校验 `MANIFEST.json`，改 fixture 会同时触发两端测试。
-> 限制：私有仓库没有分支保护，CI 变红不会在技术上阻止合并。Android 侧覆盖情况见 [`ANDROID.md`](ANDROID.md)。
+> **两端共用这一份。** Cloud CI 校验 `MANIFEST.json`，Android 单测直接读本目录。
+> 2026-11-26 确认，Android 侧验证交由专门的 Android 开发同事，仓库应停止自动触发 Android 单测。
+> 工作流停用进度见 [CI 运维说明](../../../../.github/ci/README.md#android-单测交接)，设备侧覆盖见 [`ANDROID.md`](ANDROID.md)。
 
 **协议尚未冻结。** 仍待双方负责人确认的条目见
 [`docs/protocol-v1-open-items.md`](../../../docs/protocol-v1-open-items.md)。
@@ -33,7 +32,7 @@
 ——没有人读的 fixture 钉不住任何东西，只会悄悄烂掉。
 
 **Android（已接入）：** `android/app/build.gradle` 把 `cloud/fixtures` 挂到测试 classpath，
-`FixtureLoader.loadProtocolV1` 按 `/protocol/v1/<name>` 读取；Android CI 先跑 `verify-manifest.sh` 再跑单测。
+`FixtureLoader.loadProtocolV1` 按 `/protocol/v1/<name>` 读取；Android 同事按 [`ANDROID.md`](ANDROID.md) 执行校验和单测。
 Android 的契约测试逐 key 比对产出与 fixture，尚未缺口的 key 以 `GAP_*` 显式登记。
 
 **手动：**
@@ -47,7 +46,7 @@ sh fixtures/protocol/v1/verify-manifest.sh
 1. 改 `*.json`；
 2. 重算并更新 `MANIFEST.json` 里那一条的 `sha256`
    （`shasum -a 256 <file>` 或 `sha256sum <file>`）；
-3. 在同一个 PR 里改好两端代码，让 Cloud CI 与 Android CI 都通过。
+3. 在同一个 PR 里改好两端代码，核对 Cloud CI，并把提交 SHA 和变更的 fixture 交给 Android 同事验证。
 
 第 2 步刻意没有做成自动生成。这点摩擦就是机制本身：它保证一次单方面的改名不会悄无声息地通过。
 

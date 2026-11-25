@@ -218,8 +218,9 @@ docs/                 当前规范与历史归档
   命令（部分唯一索引，`409 config_command_in_flight`）。开关只有部署级 `allowConfigCommands`，**生产自 2026-11-09 常开**
   （用户决定：管理员直接修改；设备级白名单 000038 已由 000039 删除，不要加回）。命令 INSERT 语句内再判访问规则与方法等级。迟到的 `cmdResult` 只写一次 `control.result_late` 审计，不改状态。
   整机设置镜像 `device_settings`（`GET /api/devices/:device/device-settings`，仅管理员）。**未真机验证。**
-- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 与 Android CI 都校验
-  `MANIFEST.json`。改 fixture 要在同一个 PR 里让两端测试都通过；没有分支保护，CI 红了不会阻止合并，见 open-items §C-1。
+- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 自动校验 `MANIFEST.json`。
+  Android CI 自 2026-11-26 起不再自动运行，改 fixture 后把提交 SHA 交给 Android 单测负责人在其环境验证；
+  没有分支保护，CI 红了不会阻止合并，见 open-items §C-1 与 [CI 运维说明](../.github/ci/README.md#android-单测交接)。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
 - 多租户**阶段 1（隔离）与阶段 2（管理 API）均已落地**：`customers` 表；非平台管理员用户恰好属于一个

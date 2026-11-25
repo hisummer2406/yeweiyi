@@ -13,7 +13,7 @@ Lima 虚拟机 `ci-runner` 上（Ubuntu 24.04，x86_64，3 vCPU / 5 GiB / 60 GiB
 | systemd 服务 | `actions.runner.hisummer2406-yeweiyi.mbp2017-yeweiyi.service` | `actions.runner.hisummer2406-KeywordIQ.mbp2017-ci.service` |
 | 本地缓存 | `/home/yeweiyi-ci/ci-cache` | Runner `.env` 中的 uv / pnpm 目录 |
 
-工作流写 `runs-on: [self-hosted, linux, x64, yeweiyi-ci]`。Android CI 仍在托管 Runner 上（见文末）。
+上述工作流使用 `runs-on: [self-hosted, linux, x64, yeweiyi-ci]`。设备端单测的协作分工与当前工作流状态见文末。
 
 ## 缓存：本机持久目录，不上传 GitHub
 
@@ -94,9 +94,8 @@ limactl shell ci-runner -- sudo bash -c 'cd /home/yeweiyi-ci/actions-runner && .
 #   --name mbp2017-yeweiyi --labels yeweiyi-ci --work _work，再 sudo ./svc.sh install yeweiyi-ci && sudo ./svc.sh start
 ```
 
-## Android CI（暂不迁移）
+## Android 单测交接
 
-需要 JDK 11（Gradle 6.7.1 / AGP 4.2 不支持 17）、Android SDK（compileSdk 27）与 Gradle 依赖缓存，
-单元测试约需 2–3 GiB 内存。虚拟机里目前没有 JDK 和 Android SDK，且与 ThingsBoard 集成测试、
-KeywordIQ 共用 5 GiB 内存。迁移前需要：安装 Temurin 11 与 SDK 到 yeweiyi-ci 用户目录、
-Gradle 缓存放 `ci-cache/gradle`、把它纳入上面的资源门禁。
+- 2026-11-26 确认，用户负责 Android 设备端开发，专门的 Android 开发同事负责单测。单测在同事的环境执行，仓库应停止自动触发 Android 单测，Lima Runner 不接管该作业。
+- 现状（2026-11-26）：[`android-ci.yml`](../workflows/android-ci.yml) 已去掉 PR 和 `main` 推送触发，只保留 `workflow_dispatch` 手动入口（仍是 `ubuntu-latest`，受 Actions 预算限制）。现有单测源文件、Gradle 测试入口和共享协议 fixture 保留，供同事验证。停用前的历史红灯（如 PR #76 上因预算未启动的 `unit-test`）按原运行记录保留，不代表应用测试失败。
+- `cloud/fixtures/protocol/v1/MANIFEST.json` 的 `enforcement.crossRepoGate` 相应改为 `false`，Android 一侧标为人工校验；Cloud CI 仍自动校验 fixture。
