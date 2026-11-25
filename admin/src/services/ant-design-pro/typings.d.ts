@@ -372,6 +372,8 @@ declare namespace API {
     waterRatioPct: number;
     alarmState: TankAlarmState | string;
     probeConnected: boolean;
+    /** #75：false = 设备开机（或罐配置重载）以来没采到过读数，读数是占位 0；旧固件/旧云端不带，按有读数处理。 */
+    hasReading?: boolean;
   };
 
   /** GET /api/devices/:device/telemetry/latest 成功响应 */

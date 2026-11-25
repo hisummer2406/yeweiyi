@@ -118,7 +118,7 @@ describe('ConsoleDevices (overview) after extracting TankCard', () => {
     getLatestTelemetry.mockResolvedValue(telemetry('D1'));
     render(<ConsoleDevices />);
     expect(await screen.findByText('报警')).toBeTruthy();
-    expect(screen.getByText('探针未连接')).toBeTruthy();
+    expect(screen.getByText('通讯异常')).toBeTruthy();
   });
 
   it('still opens the device detail with an escaped name when a card is clicked', async () => {

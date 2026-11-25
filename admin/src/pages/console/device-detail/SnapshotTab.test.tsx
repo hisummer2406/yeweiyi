@@ -281,7 +281,8 @@ describe('SnapshotTab one tank at a time', () => {
     render(<SnapshotTab device="D" />);
     await screen.findByRole('heading', { name: '1号 92#' });
     expect(screen.getByText(/报警状态：/)).toBeTruthy();
-    expect(screen.getByText(/探针：未连接/)).toBeTruthy();
+    expect(screen.getByText(/探针：通讯异常/)).toBeTruthy();
+    expect(screen.getByText('上次读数')).toBeTruthy();
     expect(screen.getAllByText('--').length).toBeGreaterThan(0);
   });
 
