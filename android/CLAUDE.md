@@ -21,14 +21,13 @@ Within `app/src/main/java` itself there are also several non-namespaced top-leve
 
 ## Build
 
+The user owns Android development. A dedicated Android developer owns unit testing. For work in this checkout, keep Android unit testing out of the default development checks and repository automation. Hand off test scenarios and the commit SHA to that developer. APK review and device acceptance are handled by Android colleagues.
+
 `gradlew`/`gradlew.bat` are present, targeting Gradle 6.7.1 via the Tencent Cloud mirror in `gradle/wrapper/gradle-wrapper.properties`.
 
 ```bash
 # Build debug APK
 ./gradlew :app:assembleDebug
-
-# Run the JVM unit tests (no device needed)
-./gradlew :app:testDebugUnitTest
 ```
 
 ### Toolchain is present on this machine — but still verify before claiming a build passed
@@ -39,10 +38,11 @@ This macOS checkout builds with JDK 11 (Oracle 11.0.2 at `/Library/Java/JavaVirt
 JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-11.0.2.jdk/Contents/Home ./gradlew :app:assembleDebug
 ```
 
-Three caveats that have already bitten:
+Two toolchain caveats:
 - **Always set `JAVA_HOME` explicitly, and don't judge which JDKs exist from `/usr/libexec/java_home` alone.** The JDK installed here has changed (2026-11-02 `java_home` listed only a Temurin 17 while the JDK 11 was an unregistered tarball; 2026-11-08 it lists only the Oracle 11.0.2 above). Gradle 6.7.1 fails on 17 (`Unsupported class file major version 61`). Concluding "no JDK 11 here" from `java_home` alone got PR #38 merged without a build on 2026-11-02 (verified only afterwards).
 - Commits `6ae4e3f` through `ada562e` (阶段 0 and 阶段 1) were written *before* the toolchain existed and were merged unverified. Later commits are compile-verified.
-- `testDebugUnitTest` reports `UP-TO-DATE` and prints nothing when inputs haven't changed — a stale pass looks identical to a fresh one. Run `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest`, or read `app/build/test-results/testDebugUnitTest/*.xml`, before claiming tests passed.
+
+For the Android colleague running JVM tests in their own environment, a fresh run is `./gradlew :app:cleanTestDebugUnitTest :app:testDebugUnitTest`. Report against the tested commit and use `app/build/test-results/testDebugUnitTest/*.xml` to verify the result. An `UP-TO-DATE` message alone does not establish a fresh run.
 
 A green build here proves compilation only. **Nothing about serial/probe hardware behavior can be verified on this machine** — protocol changes still need a real device.
 
@@ -74,7 +74,7 @@ Key `app/build.gradle` facts:
 - Dependencies are a large pile of local jars in `app/libs/` (Baidu Maps/TTS/Push SDKs, Apache POI 3.10 for Excel export, Tencent TBS X5 webview kernel, MQTT client, AndServer, Apache httpclient/mina, `sun.misc.BASE64Decoder`, an internal `xzjh_interface_*.jar`). Treat these as fixed/vendored artifacts — most have no current Maven-hosted release, so don't try to "upgrade" them without checking hardware/vendor SDK compatibility first.
 - Repositories are mirrored through Aliyun (`build.gradle`) for mainland China connectivity — don't remove without checking.
 
-There is no real unit/instrumented test suite.
+The existing JVM unit tests live under `app/src/test/` and are maintained by the Android developer responsible for unit testing.
 
 ## Architecture
 

@@ -1,4 +1,5 @@
 import { ProCard } from '@ant-design/pro-components';
+import { useIntl } from '@umijs/max';
 import { Tag, theme } from 'antd';
 import type React from 'react';
 import { tankShapeOf } from '@/utils/tankShape';
@@ -15,6 +16,9 @@ export const TankCard: React.FC<{
   shapeInfo?: TankShapeInfo;
 }> = ({ tank, onClick, shapeInfo = tankShapeOf(undefined, tank.index) }) => {
   const { token } = theme.useToken();
+  const intl = useIntl();
+  const s = (name: string) =>
+    intl.formatMessage({ id: `pages.console.tank.status.${name}` });
   return (
     <ProCard
       className={styles.card}
@@ -43,7 +47,16 @@ export const TankCard: React.FC<{
                   {alarmLabel(tank.alarmState)}
                 </Tag>
               )}
-              {!tank.probeConnected && <Tag color="error">探针未连接</Tag>}
+              {!tank.probeConnected && (
+                <Tag color="error">{s('commFault')}</Tag>
+              )}
+              {tank.hasReading === false ? (
+                <Tag color="warning">{s('noReading')}</Tag>
+              ) : (
+                !tank.probeConnected && (
+                  <Tag color="warning">{s('lastReading')}</Tag>
+                )
+              )}
             </>
           }
         />

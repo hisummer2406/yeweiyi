@@ -33,6 +33,17 @@ public class TelemetrySnapshotBuilderTest {
 
     // 报文整体形状跟共享 fixture 的逐 key 比对在 ProtocolV1ContractTest，这里不重复。
 
+    /** #75：开机后还没采到读数的罐报 hasReading=false，读数照常发占位 0，由云端/小程序区分。 */
+    @Test
+    public void tankWithoutReadingReportsHasReadingFalse() {
+        NetOilCan tank = fixtureTank();
+        Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(Collections.singletonList(tank), 0L, 1L);
+        assertEquals(Boolean.FALSE, values.get("tank1.hasReading"));
+        tank.setHasReading(true);
+        values = TelemetrySnapshotBuilder.buildValues(Collections.singletonList(tank), 0L, 1L);
+        assertEquals(Boolean.TRUE, values.get("tank1.hasReading"));
+    }
+
     @Test
     public void heightRatioPctKeepsOneDecimalWithoutFloatDrift() {
         assertEquals(Double.valueOf(94.8), TelemetrySnapshotBuilder.heightRatioPct(948, 1000));

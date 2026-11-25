@@ -58,7 +58,7 @@
           <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel || '—'}}</text>
         </view>
         <view class="dt-probe {{item.probeConnected ? '' : 'dt-probe-off'}}">
-          {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}
+          {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}<text wx:if="{{item.noReading}}"> · {{text.noReadingNote}}</text><text wx:elif="{{!item.probeConnected}}"> · {{text.lastReadingNote}}</text>
         </view>
         <view class="dt-probe">{{item.shapeLabel}}<text wx:if="{{item.shapeTime}}"> · {{item.shapeTime}}</text></view>
         <!-- 虚拟罐表（#56）：容积、质量、水体积、空容按本机虚拟表算出，标出来并在下方给出设备原值；算不了时说明原因 -->

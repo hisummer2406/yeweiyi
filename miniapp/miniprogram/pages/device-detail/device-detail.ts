@@ -83,7 +83,7 @@ function rawText(v: TankView, field: keyof TankView['raw']): string {
 }
 
 function tankFields(v: TankView): TankField[] {
-  return [
+  const fields: TankField[] = [
     { label: tr('detail.level'), value: num(v.oilLevelMm), unit: tr('detail.unitMm'), strong: true },
     { label: tr('detail.volume'), value: num(v.oilVolumeL), unit: tr('detail.unitL'), strong: true, raw: rawText(v, 'oilVolumeL') },
     { label: tr('detail.mass'), value: num(v.oilWeightKg), unit: tr('detail.unitKg'), raw: rawText(v, 'oilWeightKg') },
@@ -94,6 +94,8 @@ function tankFields(v: TankView): TankField[] {
     { label: tr('detail.oilRatio'), value: num(v.oilRatioPct), unit: '%' },
     { label: tr('detail.waterRatio'), value: num(v.waterRatioPct), unit: '%' },
   ];
+  // #75: a tank the device has never read reports placeholder zeros; show dashes, not a real 0.
+  return v.noReading ? fields.map((f) => ({ ...f, value: '—', raw: '' })) : fields;
 }
 
 Page({

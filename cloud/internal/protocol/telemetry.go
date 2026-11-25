@@ -36,6 +36,9 @@ const (
 	KeyWaterRatioPct  = "waterRatioPct"  // double, 水占罐容比例, percent 0-100
 	KeyAlarmState     = "alarmState"     // string, one of the AlarmState constants below
 	KeyProbeConnected = "probeConnected" // bool, 探针通信状态
+	// KeyHasReading: bool, 本次开机（或罐配置重载）以来是否采到过有效读数（#75）。false 时读数是占位 0，
+	// 不是真实液位；旧固件不发此键，读作未知（Tank.HasReading == nil），按有读数处理。
+	KeyHasReading = "hasReading"
 )
 
 // AggregatableTankFields are the numeric per-tank fields that can be averaged, minimised and maximised:
@@ -56,7 +59,7 @@ const (
 
 // MaxTankCount bounds how many tanks a snapshot may claim to have. This is a sanity ceiling, not a
 // hardware spec — real terminals in the field are nowhere near it — chosen to keep SnapshotKeys'
-// output (12 keys per tank) and anything built from it (a ThingsBoard query string, a parsed
+// output (13 keys per tank) and anything built from it (a ThingsBoard query string, a parsed
 // Snapshot) bounded even if a tankCount value is corrupted or comes from a compromised device.
 // tankCount is device-reported and untrusted; callers building keys from it (SnapshotKeys' own
 // callers, notably tbclient.Client.LatestSnapshot) must clamp against this rather than trust it
@@ -95,6 +98,8 @@ type Tank struct {
 	WaterRatioPct  float64 `json:"waterRatioPct"`
 	AlarmState     string  `json:"alarmState"`
 	ProbeConnected bool    `json:"probeConnected"`
+	// HasReading is nil when the device did not report it (firmware before #75): unknown, not "no reading".
+	HasReading *bool `json:"hasReading,omitempty"`
 }
 
 // Snapshot is one full report of every tank on a device.
@@ -119,7 +124,7 @@ func TankKey(index int, field string) string {
 var tankKeyFields = []string{
 	KeyOilType, KeyOilLevelMm, KeyWaterLevelMm, KeyTempC,
 	KeyOilVolumeL, KeyWaterVolumeL, KeyOilWeightKg, KeyNullVolumeL,
-	KeyOilRatioPct, KeyWaterRatioPct, KeyAlarmState, KeyProbeConnected,
+	KeyOilRatioPct, KeyWaterRatioPct, KeyAlarmState, KeyProbeConnected, KeyHasReading,
 }
 
 // SnapshotKeys returns every telemetry key a snapshot of tankCount tanks produces, which is what a
@@ -155,6 +160,9 @@ func (s Snapshot) Values() map[string]any {
 		v[TankKey(t.Index, KeyWaterRatioPct)] = t.WaterRatioPct
 		v[TankKey(t.Index, KeyAlarmState)] = t.AlarmState
 		v[TankKey(t.Index, KeyProbeConnected)] = t.ProbeConnected
+		if t.HasReading != nil {
+			v[TankKey(t.Index, KeyHasReading)] = *t.HasReading
+		}
 	}
 	return v
 }
@@ -231,6 +239,11 @@ func ParseSnapshot(ts int64, values map[string]any) (Snapshot, error) {
 			t.AlarmState, err = toString(raw)
 		case KeyProbeConnected:
 			t.ProbeConnected, err = toBool(raw)
+		case KeyHasReading:
+			var b bool
+			if b, err = toBool(raw); err == nil {
+				t.HasReading = &b
+			}
 		default:
 			continue // unrecognised per-tank field from a newer protocol version
 		}

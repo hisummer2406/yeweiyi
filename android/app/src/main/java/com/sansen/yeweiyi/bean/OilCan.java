@@ -462,6 +462,17 @@ public class OilCan {
 
 	private int errorTimes;
 
+	/** 本对象创建（开机或罐配置重载）以来是否采到过有效应答；未采到时读数是占位 0（#75）。 */
+	private boolean hasReading;
+
+	public boolean isHasReading() {
+		return hasReading;
+	}
+
+	public void setHasReading(boolean hasReading) {
+		this.hasReading = hasReading;
+	}
+
 	public int[] getHightArray() {
 		return hightArray;
 	}

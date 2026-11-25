@@ -17,6 +17,8 @@ const OIL_COLOR = {
   normal: '#faad14',
   alarm: '#ff4d4f',
   fault: '#8c8c8c',
+  // 通讯异常：保留上次液位，油水都画成浅灰，与「上次读数」标签一起表示不是实时值（#75）
+  stale: '#bfbfbf',
 } as const;
 const WATER_COLOR = '#1677ff';
 
@@ -25,7 +27,7 @@ const WATER_COLOR = '#1677ff';
 
 /**
  * 罐型来自设备配置镜像，未上报按卧罐；填充只来自这个罐自己的读数。
- * 状态不只靠颜色：报警、探针未连接都在卡片上有文字标签，悬停有「油 x% 水 y%」。
+ * 状态不只靠颜色：报警、通讯异常、上次读数、暂无读数都在卡片上有文字标签，悬停有「油 x% 水 y%」。
  */
 const TankPicture: React.FC<{
   tank: API.Tank;
@@ -105,7 +107,11 @@ const TankPicture: React.FC<{
           >
             <div
               data-fill="water"
-              style={{ height: `${f.fillWaterPct}%`, background: WATER_COLOR }}
+              style={{
+                height: `${f.fillWaterPct}%`,
+                background:
+                  f.fillState === 'stale' ? OIL_COLOR.stale : WATER_COLOR,
+              }}
             />
             <div
               data-fill="oil"
@@ -114,7 +120,7 @@ const TankPicture: React.FC<{
                 background:
                   f.fillState === 'normal' && oilColor
                     ? oilColor
-                    : OIL_COLOR[f.fillState],
+                    : OIL_COLOR[f.fillState as keyof typeof OIL_COLOR],
               }}
             />
           </div>

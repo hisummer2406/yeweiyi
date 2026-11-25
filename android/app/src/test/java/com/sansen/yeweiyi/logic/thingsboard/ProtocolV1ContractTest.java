@@ -57,6 +57,7 @@ public class ProtocolV1ContractTest {
         t.setOilRatioPct(oilRatioPct);
         t.setAlarmState(alarmState);
         t.setConnect(connected);
+        t.setHasReading(true);
         return t;
     }
 

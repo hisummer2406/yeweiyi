@@ -1,7 +1,7 @@
 import { useIntl } from '@umijs/max';
 import { theme } from 'antd';
 import type React from 'react';
-import { fmt } from '@/utils/telemetry';
+import { displayReadings, fmt } from '@/utils/telemetry';
 import styles from './TankDisplay.module.less';
 
 /** 五行主读数，顺序与设备显示器一致。 */
@@ -24,6 +24,7 @@ const TankReadout: React.FC<{
   const t = (id: string, values?: Record<string, string | number>) =>
     intl.formatMessage({ id }, values);
   const medium = tank.oilType?.trim() ? tank.oilType : '--';
+  const shown = displayReadings(tank);
   return (
     <div
       className={`${styles.readout} ${size === 'large' ? styles.large : ''}`}
@@ -44,7 +45,7 @@ const TankReadout: React.FC<{
               <th scope="row" style={{ color: token.colorTextSecondary }}>
                 {t(`pages.console.detail.snapshot.field.${label}`)}
               </th>
-              <td>{fmt(tank[field])}</td>
+              <td>{fmt(shown[field])}</td>
               <td style={{ color: token.colorTextSecondary }}>
                 {t(`pages.console.tank.unit.${unit}`)}
               </td>

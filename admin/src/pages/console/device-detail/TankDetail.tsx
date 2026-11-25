@@ -2,7 +2,12 @@ import { useIntl } from '@umijs/max';
 import { Descriptions, Tag, Typography, theme } from 'antd';
 import type React from 'react';
 import { tankShapeOf } from '@/utils/tankShape';
-import { alarmColor, alarmLabel, fmt } from '@/utils/telemetry';
+import {
+  alarmColor,
+  alarmLabel,
+  displayReadings,
+  fmt,
+} from '@/utils/telemetry';
 import styles from '../components/TankDisplay.module.less';
 import TankPicture from '../components/TankPicture';
 import TankReadout from '../components/TankReadout';
@@ -23,11 +28,12 @@ const TankDetail: React.FC<{ tank: API.Tank; shapeInfo?: TankShapeInfo }> = ({
   const { token } = theme.useToken();
   const t = (id: string) => intl.formatMessage({ id });
   const k = (name: string) => t(`pages.console.detail.snapshot.${name}`);
+  const shown = displayReadings(tank);
   const items = [
-    ['waterVolume', fmt(tank.waterVolumeL), 'L'],
-    ['nullVolume', fmt(tank.nullVolumeL), 'L'],
-    ['oilRatio', fmt(tank.oilRatioPct), '%'],
-    ['waterRatio', fmt(tank.waterRatioPct), '%'],
+    ['waterVolume', fmt(shown.waterVolumeL), 'L'],
+    ['nullVolume', fmt(shown.nullVolumeL), 'L'],
+    ['oilRatio', fmt(shown.oilRatioPct), '%'],
+    ['waterRatio', fmt(shown.waterRatioPct), '%'],
   ] as const;
   return (
     <div className={styles.detail}>
@@ -56,6 +62,17 @@ const TankDetail: React.FC<{ tank: API.Tank; shapeInfo?: TankShapeInfo }> = ({
                 {k('field.probe')}：
                 {k(tank.probeConnected ? 'probe.on' : 'probe.off')}
               </Tag>
+              {tank.hasReading === false ? (
+                <Tag color="warning">
+                  {t('pages.console.tank.status.noReading')}
+                </Tag>
+              ) : (
+                !tank.probeConnected && (
+                  <Tag color="warning">
+                    {t('pages.console.tank.status.lastReading')}
+                  </Tag>
+                )
+              )}
             </>
           }
         />
