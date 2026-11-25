@@ -89,7 +89,8 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
 | `tank{n}.oilRatioPct` | double | **百分比 0–100** |
 | `tank{n}.waterRatioPct` | double | **百分比 0–100** |
 | `tank{n}.alarmState` | string | `NORMAL` / `ALARM` / `FAULT` |
-| `tank{n}.probeConnected` | bool | 探针通信状态 |
+| `tank{n}.probeConnected` | bool | 探针通信状态：连续轮询失败达到设备断线阈值（常用探针 5 次）才为 false，单次失败不算（#75） |
+| `tank{n}.hasReading` | bool | 本次开机或罐配置重载以来是否采到过有效读数（#75）。false 时读数是占位 0，不是真实液位；缺失（旧固件）按未知处理 |
 
 **单位写进 key 名是刻意的。** #7 的验收要求"不存在未定义单位"，把单位放进 key 名让"一个没有单位的
 数字"在结构上不可能出现，而且 ThingsBoard 仪表盘直接拿 key 名当曲线标签，单位不会丢。

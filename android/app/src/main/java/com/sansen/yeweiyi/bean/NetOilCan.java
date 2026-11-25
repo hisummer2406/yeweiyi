@@ -155,6 +155,17 @@ public class NetOilCan implements Serializable {
         return isConnect;
     }
 
+    /** 遥测 tank{N}.hasReading，见 OilCan.hasReading。 */
+    private boolean hasReading;
+
+    public boolean isHasReading() {
+        return hasReading;
+    }
+
+    public void setHasReading(boolean hasReading) {
+        this.hasReading = hasReading;
+    }
+
     public void setConnect(boolean connect) {
         isConnect = connect;
     }

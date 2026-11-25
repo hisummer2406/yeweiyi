@@ -17,6 +17,7 @@ import com.sansen.yeweiyi.factory.IParseDataListener;
 import com.sansen.yeweiyi.factory.LD2Company;
 import com.sansen.yeweiyi.factory.LDCompany;
 import com.sansen.yeweiyi.factory.ModbusTcpServer;
+import com.sansen.yeweiyi.logic.probe.ProbeLink;
 import com.sansen.yeweiyi.applog.ExternalLog;
 import com.sansen.yeweiyi.factory.PCDataFactory;
 import com.sansen.yeweiyi.factory.VR350Factory;
@@ -435,6 +436,7 @@ public class SerialPortManager implements IParseDataListener {
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
                                             if (isRight) {
                                                 mOilCan.setErrorTimes(0);
+                                                mOilCan.setHasReading(true);
                                                 // 通讯恢复 → 若此罐之前上报过"探头断线"报警，则上报其恢复（CLEARED）；没有则什么都不发。
                                                 // 第三个参数是恢复时的读数，探头断线没有读数，填 0（与失败计数无关）。
                                                 CloudAlarmReporter.getInstance().onRecovered(mOilCan.getOilCanPos(),
@@ -499,53 +501,15 @@ public class SerialPortManager implements IParseDataListener {
     }
 
     private void crcError(OilCan mOilCan) {
-//        Log.i(TAG, "crcError: " + mOilCan.getErrorTimes());
-
-        if ((mOilCan.getProbeType() == 0 || mOilCan.getProbeType() == 1) && mOilCan.getErrorTimes() >= 5) {
+        int probeType = mOilCan.getProbeType();
+        boolean lost = ProbeLink.isLost(probeType, mOilCan.getErrorTimes());
+        if ((probeType == 0 || probeType == 1) && lost) {
             // 达到本机故障阈值即失效该探针缓存；其他探针和原有报警处理继续运行。
             ProbeProxyManager.probeLost(mOilCan.getProbeAddressByte());
         }
-        switch (mOilCan.getProbeType()) {
-            case 0:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 1:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 2:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 3:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }//05 16 08 49 11 10 00 00 00 08 24 FF FF
-                break;
-            case 4:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 5:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 6:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 20:
-                if (mOilCan.getErrorTimes() >= 20) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
+        // 断线报警（含泵联动保护）与遥测 probeConnected 同一阈值，见 ProbeLink。
+        if (ProbeLink.raisesLostAlarm(probeType) && lost) {
+            handler.sendEmptyMessage(mOilCan.getOilCanPos());
         }
     }
 

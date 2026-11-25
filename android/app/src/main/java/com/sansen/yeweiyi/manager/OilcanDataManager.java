@@ -5,6 +5,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.logic.probe.ProbeLink;
 import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -472,7 +473,9 @@ public class OilcanDataManager {
             netOilcan.setProbeAddress(oilCan.getProbeAdr());
             netOilcan.setOilWeight(oilCan.getOilWeight());
             netOilcan.setOilColor(oilCan.getOilColor());
-            netOilcan.setConnect(oilCan.getErrorTimes() == 0);
+            // 与断线报警同一阈值：单次轮询失败不算断线，免得上报撞在失败与恢复之间时读数被标成未连接（#75）。
+            netOilcan.setConnect(ProbeLink.isConnected(oilCan.getProbeType(), oilCan.getErrorTimes()));
+            netOilcan.setHasReading(oilCan.isHasReading());
 
             //每次发送一共有多少个探针
             netOilcan.setFatherAllProbe(mOilCanData.size());

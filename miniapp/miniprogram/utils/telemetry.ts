@@ -19,7 +19,7 @@ import type { LatestTelemetryResponse, Tank } from '../types/api';
 // 首页和详情实时数据 tab 可见时静默重读 telemetry/latest 的间隔；设备液位变化时最快每 5 秒上报一次。
 export const LIVE_REFRESH_MS = 5_000;
 
-export type TankView = Tank & { alarmStateLabel: string; tankNoLabel: string; key: string } & TankFill & ReturnType<typeof tankShapeFields> & Virtualized;
+export type TankView = Tank & { alarmStateLabel: string; tankNoLabel: string; key: string; noReading: boolean } & TankFill & ReturnType<typeof tankShapeFields> & Virtualized;
 
 export function tankShapeFields(state: TankShapeState | undefined, tank: number) {
   const info = tankShapeOf(state, tank);
@@ -62,6 +62,8 @@ export function toTankViews(
     alarmStateLabel: label(TANK_ALARM_STATE_KEYS, t.alarmState),
     tankNoLabel: tr('tank.no', { n: t.index }),
     key: tankKey(deviceName, t.index),
+    // #75: never read since boot — the readings are placeholder zeros and are shown as dashes.
+    noReading: t.hasReading === false,
     ...tankFill(t),
     ...tankShapeFields(shapes, t.index),
   }, tableOf?.(t.index) ?? null));
