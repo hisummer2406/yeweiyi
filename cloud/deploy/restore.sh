@@ -28,10 +28,10 @@ API_URL="${API_URL:-http://localhost:8080}"
 on_error() {
   local ec=$?
   echo >&2
-  echo "!!! 恢复未完成（退出码 $ec）。" >&2
+  echo "!!! 恢复未完成（退出码 ${ec}）。" >&2
   echo "    ThingsBoard 容器此时应仍是停止状态（本脚本没有在失败路径上启动它）。" >&2
   echo "    业务库与 ThingsBoard 内置库这次是否都已恢复完成是不确定的——先查清上面报错的" >&2
-  echo "    原因，不要在没搞清楚之前手动 docker start $TB_CONTAINER，以免在不一致的数据上" >&2
+  echo "    原因，不要在没搞清楚之前手动 docker start ${TB_CONTAINER}，以免在不一致的数据上" >&2
   echo "    冷启动。确认业务后台仍处于停止状态，修好问题后重新执行：" >&2
   echo "      ./restore.sh $DIR" >&2
 }
@@ -66,7 +66,7 @@ want="$(grep '^thingsboard_image=' "$DIR/manifest.txt" | cut -d= -f2-)"
 have="$(docker inspect "$TB_CONTAINER" --format '{{.Config.Image}}' 2>/dev/null || echo '')"
 if [[ -n "$have" && "$want" != "$have" ]]; then
   echo
-  echo "!!! ThingsBoard 版本不一致：备份来自 $want，当前为 $have"
+  echo "!!! ThingsBoard 版本不一致：备份来自 ${want}，当前为 $have"
   echo "    跨大版本恢复其内置库可能导致 schema 不匹配。确认要继续请输入 yes。"
   read -r -p "    继续？[yes/N] " reply
   [[ "$reply" == "yes" ]] || { echo "已取消。"; exit 1; }

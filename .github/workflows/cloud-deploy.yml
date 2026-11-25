@@ -99,11 +99,12 @@ jobs:
           echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
       # ghcr.io 出境推送反复超时时用（2026-11-23）：按已检出的同一提交在 Runner 上构建（复用 Cloud Image 的本机缓存，
       # 只读），镜像不进任何仓库；身份以本机 .Id 为准，下一步照常核对远端载入后的标识。
+      # 标签带运行编号：同一提交重发时 docker load 不会改写服务器上已有标签，回滚引用的上一版镜像保持不变。
       - name: 在 Runner 上构建镜像（image_source=runner）
         if: inputs.image_source == 'runner'
         run: |
           set -euo pipefail
-          image="yeweiyi-local/cloud:sha-$RELEASE_SHA"
+          image="yeweiyi-local/cloud:sha-$RELEASE_SHA-r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           args=()
           for v in HTTPS_PROXY HTTP_PROXY NO_PROXY; do [[ -n "${!v:-}" ]] && args+=(--build-arg "$v=${!v}"); done
           # 不带证明：导出包只含一个镜像，身份核对才有唯一的 digest。

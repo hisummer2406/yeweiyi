@@ -20,8 +20,8 @@
 - 跨子项目的协议/接口变更可以放在同一个 PR，但仍须获得相关负责人确认（见 `cloud/CLAUDE.md`）。
 - CI 在根目录 `.github/workflows/`，按目录触发：`cloud-*` 只看 `cloud/`，`admin-ci` 只看 `admin/`。
   云端发布（Cloud Deploy）须选一个改过 `cloud/` 且 Cloud CI/Image 通过的 main 提交。
-  复用（`.github/scripts/ci-reuse.sh`）：main 上的合并提交与 PR 头同一棵树且该 PR 的 Cloud CI 已通过，或 PR 新推送的
-  `cloud/`、`.github/` 及 base 都与上次成功时相同，则 Cloud CI 全部作业跳过（PR 上的 Cloud Image 同理）。只改 `cloud/` 文档不触发 Cloud CI。
+  复用（`.github/scripts/ci-reuse.sh`）：本次检出的 `cloud/`、`.github/` 目录树与某次成功运行实际测过的相同（记在 PR 头的
+  提交状态「已测树/<工作流>」里），则 Cloud CI 全部作业跳过（PR 上的 Cloud Image 同理）。只改 `cloud/` 文档不触发 Cloud CI。
   Cloud CI/Image/Deploy 与 Admin CI/CD 跑在本机 Lima 虚拟机上的自托管 Runner（标签 `yeweiyi-ci`，与 KeywordIQ 的 Runner
   同机但独立），缓存放本机持久目录、不上传 GitHub；目录、隔离与运维见 [.github/ci/README.md](.github/ci/README.md)。
   Android CI 仍用托管 Runner。
