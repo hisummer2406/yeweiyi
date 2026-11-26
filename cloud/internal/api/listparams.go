@@ -82,7 +82,8 @@ func parseListParams(c *gin.Context) (listParams, bool) {
 
 	offset := int32(0)
 	if v := c.Query("offset"); v != "" {
-		n, err := strconv.Atoi(v)
+		// 32-bit parse: offset is an int32 query parameter; a larger value must be rejected, not wrapped.
+		n, err := strconv.ParseInt(v, 10, 32)
 		if err != nil || n < 0 {
 			apiError(c, http.StatusBadRequest, "invalid_paging", "offset must be a non-negative integer")
 			return listParams{}, false
