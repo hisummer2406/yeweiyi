@@ -22,8 +22,9 @@
   云端发布（Cloud Deploy）须选一个改过 `cloud/` 且 Cloud CI/Image 通过的 main 提交。
   复用（`.github/scripts/ci-reuse.sh`）：本次检出的 `cloud/`、`.github/` 目录树与某次成功运行实际测过的相同（记在 PR 头的
   提交状态「已测树/<工作流>」里），则 Cloud CI 全部作业跳过（PR 上的 Cloud Image 同理）。只改 `cloud/` 文档不触发 Cloud CI。
-  Cloud CI/Image/Deploy 与 Admin CI/CD 跑在本机 Lima 虚拟机上的自托管 Runner（标签 `yeweiyi-ci`，与 KeywordIQ 的 Runner
-  同机但独立），缓存放本机持久目录、不上传 GitHub；目录、隔离与运维见 [.github/ci/README.md](.github/ci/README.md)。
+  仓库 2026-11-26 起公开（许可证 [LICENSE.md](LICENSE.md)：PolyForm Noncommercial，禁止商用），全部工作流跑在 GitHub
+  托管的 `ubuntu-latest` 上；不要再注册自托管 Runner。Action 钉 SHA，部署作业走 `production` 环境；
+  缓存、隔离与运维见 [.github/ci/README.md](.github/ci/README.md)。
 - Android 设备端由用户负责开发，单测交由专门的 Android 开发同事。当前协作默认不编写、运行或重跑 Android 单测，也不将其纳入仓库的自动 CI。现有托管工作流及停用要求见 [CI 运维说明](.github/ci/README.md#android-单测交接)。
 - 合并前的 issue/PR 编号（如 `#85`、`zhongchengyeweiyi#39`）指原仓库（已归档，只读可查）。合并时仍开着的已迁来，
   新编号：cloud#79→#2、cloud#93→#3、admin#38→#4、miniapp#12→#5、miniapp#26→#6、

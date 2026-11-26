@@ -1,11 +1,11 @@
-# Cloud CI 集成测试专用的 Compose 覆盖文件（自托管 Runner）。
+# Cloud CI 集成测试专用的 Compose 覆盖文件（GitHub 托管 Runner，也可在本机复现）。
 #
 # 叠加在 cloud/docker-compose.yml 与 docker-compose.thingsboard.yml 之上，配合每次运行唯一的
 # `-p <project>` 使用。目的：本次运行的容器、网络、卷、端口都只属于这一个 Compose 项目，
 # 结束时 `down -v` 只删自己的东西，不需要也不允许全局 prune。
 #
 # 为什么共享网络命名空间而不是改宿主端口：
-# - 同一台虚拟机上 KeywordIQ 的 CI 也会把 PostgreSQL 发布到宿主 5432，两边抢端口会让对方失败；
+# - 宿主（本机复现时）上可能已有别的 PostgreSQL 占着 5432；
 # - 部分集成测试无条件探测 localhost:8081（见 internal/api/alarms_test.go、internal/ingest/ingest_test.go），
 #   换宿主端口就会 Skip，而 Skip 在 CI 里按失败处理。
 # 所以 PostgreSQL / Redis / ThingsBoard 和跑 go test 的容器共用 `netns` 服务的网络命名空间：
@@ -60,8 +60,7 @@ services:
     environment:
       HTTP_BIND_PORT: "8081"
       MQTT_BIND_PORT: "1884"
-    # 这台虚拟机与 KeywordIQ 共用（3 vCPU / 5 GiB）。设上限，避免 ThingsBoard 把对方挤到 OOM；
-    # JAVA_OPTS 仍是 -Xmx2G，额外留给自带 PostgreSQL 与 JVM 非堆内存。
+    # 设上限，避免 ThingsBoard 挤占同机其他进程；JAVA_OPTS 仍是 -Xmx2G，额外留给自带 PostgreSQL 与 JVM 非堆内存。
     mem_limit: 3g
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8081/login || exit 1"]

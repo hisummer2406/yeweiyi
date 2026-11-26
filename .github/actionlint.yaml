@@ -1,4 +1,0 @@
-self-hosted-runner:
-  # 本机 Lima 虚拟机上的 yeweiyi 专用 Runner（仓库级注册），见 .github/ci/README.md。
-  labels:
-    - yeweiyi-ci

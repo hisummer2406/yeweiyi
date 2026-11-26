@@ -1,6 +1,6 @@
 name: Cloud Deploy
 
-# 私有仓库当前计划不支持分支保护；在工作流里强制核对同一 main 提交的 CI 与镜像。
+# 在工作流里强制核对同一 main 提交的 CI 与镜像；部署密钥所在的 production 环境只允许 main 使用。
 # 首次生产运行前需完成部署目录、基础服务、HTTPS 和业务验收。
 on:
   workflow_dispatch:
@@ -30,11 +30,10 @@ concurrency:
 
 jobs:
   deploy:
-    # 自托管 Runner（Ubuntu 24.04 + Docker 29，containerd 镜像存储）。托管 ubuntu-latest 换成 26.04 时，
-    # Runner 的 docker image inspect .Id 与服务器 docker load 后口径不一致，「远端预载镜像标识不一致」
-    # 门禁误拦（2026-11-02）；现由 .github/scripts/deploy-image-identity.sh 按两端存储类型从固定 digest
-    # 推导期望值，校验强度不变。
-    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    # Runner 与服务器的镜像存储类型可能不同（containerd / 经典），docker image inspect .Id 口径不一致；
+    # 由 .github/scripts/deploy-image-identity.sh 按两端存储类型从固定 digest 推导期望值（2026-11-02 曾误拦）。
+    runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     env:
       RELEASE_SHA: ${{ inputs.release_sha }}
@@ -55,11 +54,10 @@ jobs:
           [[ "$RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || { echo '需要完整提交 SHA'; exit 1; }
           [[ "$TARGET_HOST" =~ ^[A-Za-z0-9.-]+$ && "$TARGET_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || exit 1
           [[ "${TARGET_PORT:-22}" =~ ^[0-9]+$ && "$DEPLOY_DIR" =~ ^/[A-Za-z0-9_/-]+$ ]] || exit 1
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      # 自托管 Runner 的 HOME 跨 job 持久：镜像仓库凭证、SSH 私钥与 known_hosts 都只放本 job 的
-      # RUNNER_TEMP，最后一步 always 删除，避免残留到之后的 job。
+      # 镜像仓库凭证、SSH 私钥与 known_hosts 都只放本 job 的 RUNNER_TEMP，最后一步 always 删除。
       - name: 临时凭证目录
         working-directory: .
         run: |
@@ -81,7 +79,7 @@ jobs:
           git checkout --detach "$RELEASE_SHA"
       - name: 部署配置检查
         run: bash deploy/check-compose.sh
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         if: inputs.image_source != 'runner'
         with:
           registry: ghcr.io
@@ -97,19 +95,15 @@ jobs:
           [[ "$digest_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || exit 1
           echo "DEPLOY_IMAGE=$digest_image" >> "$GITHUB_ENV"
           echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
-      # ghcr.io 出境推送反复超时时用（2026-11-23）：按已检出的同一提交在 Runner 上构建（复用 Cloud Image 的本机缓存，
-      # 只读），镜像不进任何仓库；身份以本机 .Id 为准，下一步照常核对远端载入后的标识。
+      # ghcr.io 推送不通时用（2026-11-23）：按已检出的同一提交在 Runner 上构建，镜像不进任何仓库；身份以本机 .Id 为准，下一步照常核对远端载入后的标识。
       # 标签带运行编号：同一提交重发时 docker load 不会改写服务器上已有标签，回滚引用的上一版镜像保持不变。
       - name: 在 Runner 上构建镜像（image_source=runner）
         if: inputs.image_source == 'runner'
         run: |
           set -euo pipefail
           image="yeweiyi-local/cloud:sha-$RELEASE_SHA-r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          args=()
-          for v in HTTPS_PROXY HTTP_PROXY NO_PROXY; do [[ -n "${!v:-}" ]] && args+=(--build-arg "$v=${!v}"); done
           # 不带证明：导出包只含一个镜像，身份核对才有唯一的 digest。
-          docker buildx build --load --provenance=false --sbom=false "${args[@]}" \
-            --cache-from "type=local,src=${YEWEIYI_CI_CACHE:?}/buildx/cloud-image" -t "$image" .
+          docker buildx build --load --provenance=false --sbom=false -t "$image" .
           echo "DEPLOY_IMAGE=$image" >> "$GITHUB_ENV"
           echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
       - name: 配置 SSH
