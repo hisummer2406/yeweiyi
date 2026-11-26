@@ -774,6 +774,33 @@ export default {
     '设备收到后会写入配置并重新上报；现场在设备上保存设置会覆盖远程修改。',
   'pages.console.settings.submit.reason': '修改原因（必填）',
   'pages.ops.customers.action.media': '专属介质',
+  'pages.ops.customers.action.brand': '品牌设置',
+  'pages.ops.customers.brand.title': '品牌设置：{name}',
+  'pages.ops.customers.brand.state.default': '当前使用中成电气默认 Logo',
+  'pages.ops.customers.brand.state.custom':
+    '当前使用自定义 Logo（{size} 像素）',
+  'pages.ops.customers.brand.state.draft': '预览待保存的新 Logo，保存后生效',
+  'pages.ops.customers.brand.preview.title': '智能液位管理系统',
+  'pages.ops.customers.brand.preview.role': '客户管理员',
+  'pages.ops.customers.brand.upload': '上传 Logo',
+  'pages.ops.customers.brand.replace': '替换 Logo',
+  'pages.ops.customers.brand.hint':
+    'PNG 格式，不超过 256 KB，宽高各 64–1024 像素；建议正方形透明底。小程序用户下次打开或刷新时显示新 Logo。',
+  'pages.ops.customers.brand.save': '保存',
+  'pages.ops.customers.brand.close': '关闭',
+  'pages.ops.customers.brand.reset': '恢复默认',
+  'pages.ops.customers.brand.reset.confirm':
+    '恢复「{name}」为中成电气默认 Logo？',
+  'pages.ops.customers.brand.saved': '已保存「{name}」的 Logo',
+  'pages.ops.customers.brand.resetDone': '「{name}」已恢复默认 Logo',
+  'pages.ops.customers.brand.problem.type': '请选择 PNG 图片',
+  'pages.ops.customers.brand.problem.size': '图片不能超过 256 KB',
+  'pages.ops.customers.brand.problem.dimensions':
+    '图片宽高须在 64–1024 像素之间',
+  'pages.ops.customers.brand.error.invalid': '图片不符合要求：{detail}',
+  'pages.ops.customers.brand.error.notFound': '客户不存在，请刷新列表',
+  'pages.ops.customers.brand.error.network': '网络异常，请重试',
+  'pages.ops.customers.brand.error.generic': '操作失败（{detail}）',
   'pages.console.media.note':
     '这里只保存介质名称。要让设备生效，请到设备的参数设置里为油罐选择并下发。',
   'pages.console.media.loadFailed': '介质列表加载失败。',

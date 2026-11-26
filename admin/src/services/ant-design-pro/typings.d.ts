@@ -80,6 +80,20 @@ declare namespace API {
     onboardedAt?: string | null;
   };
 
+  /** 客户品牌 Logo（#86，云端 docs/brand-logo-contract.md §3）。未配置时只有 customerId、configured */
+  type BrandLogo = {
+    customerId: number | null;
+    configured: boolean;
+    version?: string;
+    contentType?: string;
+    width?: number;
+    height?: number;
+    size?: number;
+    updatedAt?: string;
+    /** base64 图片 */
+    data?: string;
+  };
+
   /** 开通还缺的条件（customer-onboarding-contract §2） */
   type OnboardingMissing = 'customer_admin' | 'station' | 'device_in_station';
 

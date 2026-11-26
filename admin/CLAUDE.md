@@ -61,6 +61,11 @@
 换客户（清设备绑定）、停用/启用（不能停用自己）。云端**没有改角色接口**（`PUT /api/users/:id` 只收 `disabled`
 和 `password`），角色只能在创建时定，建错了只能停用后重建。密码限制是 8-72 **字节**，不是字符数。
 
+**品牌设置（#86，云端契约 `cloud/docs/brand-logo-contract.md`）**：客户行「品牌设置」（仅平台管理员，`BrandLogoModal`）上传/替换/恢复小程序 Logo，
+`GET/PUT/DELETE /api/customers/:id/brand-logo`，图片以 base64 收发。预览按小程序首页蓝底标题栏、设置页白底账号行两种样式；默认图
+`public/images/brand-default-{mark,avatar}.png` 是小程序同名默认图的拷贝，换默认图两边一起换。本地预检（`utils/brandLogo.ts`：PNG 文件头、
+≤256 KiB、宽高 64–1024）只为早提示，云端整图解码才是裁决。审计由云端写。只有 mock/组件测试，未对真实云端联调。
+
 **手机号账号（GitHub issue #13，云端 yeweiyi-cloud#59，契约 `docs/account-phone-wechat-contract.md`）**：
 
 - 客户侧账号（`customer_admin`/`customer_user`）以**手机号**标识，没有用户名；平台管理员仍是用户名。登录框一个输入，

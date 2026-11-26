@@ -20,6 +20,7 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   wx.removeStorageSync(TOKEN_KEY);
   clearLocalDrafts();
+  clearBrandLogoCache();
   try {
     wx.removeStorageSync(PROFILE_KEY);
   } catch {
@@ -39,6 +40,29 @@ function clearLocalDrafts(): void {
     } catch {
       // nothing to clear
     }
+  }
+}
+
+// The signed-in customer's brand logo (#86, utils/brandLogo.ts): the cache entry and the picture file it
+// points to. Cleared with the session so another account never opens on the previous customer's logo.
+export const BRAND_LOGO_CACHE_KEY = 'brand-logo';
+
+export function removeLocalFile(path: string | undefined): void {
+  if (!path || !path.startsWith(wx.env.USER_DATA_PATH)) return;
+  try {
+    wx.getFileSystemManager().unlinkSync(path);
+  } catch {
+    // already gone
+  }
+}
+
+function clearBrandLogoCache(): void {
+  try {
+    const c = wx.getStorageSync<{ src?: string }>(BRAND_LOGO_CACHE_KEY);
+    removeLocalFile(c?.src);
+    wx.removeStorageSync(BRAND_LOGO_CACHE_KEY);
+  } catch {
+    // nothing to clear
   }
 }
 

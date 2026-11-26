@@ -498,7 +498,8 @@ export default {
   'pages.console.miniCode.error.unknown':
     'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.unassign.action': 'Unassign station',
-  'pages.ops.devices.unassign.title': 'Unassign device {device} from its station?',
+  'pages.ops.devices.unassign.title':
+    'Unassign device {device} from its station?',
   'pages.ops.devices.unassign.description':
     'The device becomes "Ungrouped" and can be assigned again. Its records, history and access credentials are kept and the terminal keeps reporting.',
   'pages.ops.devices.unassign.ok': 'Unassign',
@@ -761,6 +762,35 @@ export default {
     'The device writes the settings and reports them back. Saving settings on the device itself overrides remote changes.',
   'pages.console.settings.submit.reason': 'Reason (required)',
   'pages.ops.customers.action.media': 'Media',
+  'pages.ops.customers.action.brand': 'Branding',
+  'pages.ops.customers.brand.title': 'Branding: {name}',
+  'pages.ops.customers.brand.state.default':
+    'Using the default Zhongcheng logo',
+  'pages.ops.customers.brand.state.custom': 'Using a custom logo ({size} px)',
+  'pages.ops.customers.brand.state.draft':
+    'Previewing an unsaved logo; it takes effect once saved',
+  'pages.ops.customers.brand.preview.title': 'Smart Level Management',
+  'pages.ops.customers.brand.preview.role': 'Customer admin',
+  'pages.ops.customers.brand.upload': 'Upload logo',
+  'pages.ops.customers.brand.replace': 'Replace logo',
+  'pages.ops.customers.brand.hint':
+    'PNG, up to 256 KB, 64-1024 px on each side; a square image with a transparent background works best. Mini-program users see it the next time they open or refresh.',
+  'pages.ops.customers.brand.save': 'Save',
+  'pages.ops.customers.brand.close': 'Close',
+  'pages.ops.customers.brand.reset': 'Restore default',
+  'pages.ops.customers.brand.reset.confirm':
+    'Restore the default logo for "{name}"?',
+  'pages.ops.customers.brand.saved': 'Logo saved for "{name}"',
+  'pages.ops.customers.brand.resetDone': '"{name}" now uses the default logo',
+  'pages.ops.customers.brand.problem.type': 'Choose a PNG image',
+  'pages.ops.customers.brand.problem.size': 'The image must not exceed 256 KB',
+  'pages.ops.customers.brand.problem.dimensions':
+    'Width and height must be 64-1024 px',
+  'pages.ops.customers.brand.error.invalid': 'The image was rejected: {detail}',
+  'pages.ops.customers.brand.error.notFound':
+    'The customer no longer exists; refresh the list',
+  'pages.ops.customers.brand.error.network': 'Network error, please retry',
+  'pages.ops.customers.brand.error.generic': 'Failed ({detail})',
   'pages.console.media.note':
     'This only saves the name. To apply it, select it for a tank in the device settings and send it.',
   'pages.console.media.loadFailed': 'Failed to load media.',

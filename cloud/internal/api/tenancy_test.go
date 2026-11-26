@@ -307,6 +307,10 @@ var exemptRoutes = map[string]string{
 
 	"GET /api/customers/:id/onboarding":           "no device; platform admin only, see TestOnboarding_*",
 	"POST /api/customers/:id/onboarding/complete": "no device; platform admin only, see TestOnboarding_*",
+	"GET /api/customers/:id/brand-logo":           "no device; platform admin only, see TestBrandLogo_*",
+	"PUT /api/customers/:id/brand-logo":           "no device; platform admin only, see TestBrandLogo_*",
+	"DELETE /api/customers/:id/brand-logo":        "no device; platform admin only, see TestBrandLogo_*",
+	"GET /api/me/brand-logo":                      "no device; the caller's own customer only, see TestBrandLogo_Lifecycle",
 
 	"POST /api/auth/wechat/login":           "no device, no session yet; see TestWeChat_*",
 	"POST /api/auth/wechat/phone-login":     "no device, no session yet; binds only to the account of the WeChat-verified phone, see TestWeChat_*",

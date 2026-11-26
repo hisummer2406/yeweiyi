@@ -1,7 +1,7 @@
 <view class="container">
   <view class="card">
     <view class="list-row" style="border-bottom:none;padding-top:8rpx;">
-      <image class="avatar" src="/assets/icons/avatar-logo.png" mode="aspectFit" />
+      <image class="avatar" src="{{brandAvatar}}" mode="aspectFit" binderror="onBrandLogoError" />
       <view class="list-row-body">
         <text>{{account || '--'}}</text>
         <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>

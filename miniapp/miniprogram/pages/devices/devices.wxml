@@ -2,7 +2,7 @@
 
 <!-- 没有任何可查看的设备（员工尚未被分配油罐，或账号下确实没有设备）：首次使用的空状态 -->
 <view wx:elif="{{deviceTotal === 0 && !listError}}" class="center-page">
-  <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+  <image class="brand-logo" src="{{brandMark}}" mode="aspectFit" binderror="onBrandLogoError" />
   <view class="brand-title">{{text.emptyTitle}}</view>
   <view class="brand-subtitle">{{text.emptySubtitle}}</view>
   <button class="btn-primary center-card" bindtap="onScanDevice">{{text.scan}}</button>
@@ -19,7 +19,8 @@
        左侧写"我的设备"。不要用客户名或本地写死的油站名冒充油站。 -->
   <view class="home-header" style="padding-top:{{statusBarRpx}}rpx;">
     <view class="home-brand">
-      <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+      <!-- 客户品牌 Logo（#86）：登录账号所属客户配置的 Logo，未配置/失败时为默认图 -->
+      <image class="home-brand-mark" src="{{brandMark}}" mode="aspectFit" binderror="onBrandLogoError" />
       <text class="home-brand-title">{{text.title}}</text>
     </view>
     <view class="home-station">

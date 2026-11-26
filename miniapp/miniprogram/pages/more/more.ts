@@ -1,6 +1,7 @@
-import { roleFromToken } from '../../utils/auth';
+import { roleFromToken, userKeyFromToken } from '../../utils/auth';
 import { maskPhone } from '../../utils/loginFlow';
 import { getProfile, getToken } from '../../utils/storage';
+import { DEFAULT_BRAND_AVATAR, brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
 import { showComingSoon } from '../../utils/comingSoon';
 import { LOCALE_NAMES, applyTabBar, currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
 import { ROLE_KEYS, label } from '../../utils/labels';
@@ -31,6 +32,8 @@ const ITEMS: MoreItem[] = [
 
 Page({
   data: {
+    // 客户品牌 Logo（#86），未配置/失败时为默认头像
+    brandAvatar: DEFAULT_BRAND_AVATAR,
     text: texts('more'),
     items: [] as { titleKey: string; title: string; icon: string; page?: string }[],
     account: '',
@@ -40,6 +43,7 @@ Page({
   },
 
   onShow() {
+    this.showBrandLogo();
     applyTabBar();
     setNavTitle('more.navTitle');
     const token = getToken();
@@ -53,6 +57,23 @@ Page({
       langLabel: t('lang.label'),
       langName: LOCALE_NAMES[currentLocale()],
     });
+  },
+
+  showBrandLogo() {
+    const token = getToken();
+    const account = token ? userKeyFromToken(token) : '';
+    this.setData({ brandAvatar: brandLogoFor(DEFAULT_BRAND_AVATAR) });
+    void refreshBrandLogo().then(() => {
+      const now = getToken();
+      if (!now || userKeyFromToken(now) !== account) return; // signed out or another account meanwhile
+      const brandAvatar = brandLogoFor(DEFAULT_BRAND_AVATAR);
+      if (brandAvatar !== this.data.brandAvatar) this.setData({ brandAvatar });
+    });
+  },
+
+  onBrandLogoError() {
+    forgetBrokenBrandLogo(this.data.brandAvatar);
+    this.setData({ brandAvatar: DEFAULT_BRAND_AVATAR });
   },
 
   onItemTap(e: WechatMiniprogram.BaseEvent) {
