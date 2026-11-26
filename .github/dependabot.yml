@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # 工作流里的 Action 都钉在提交 SHA 上，由 Dependabot 每月提升级 PR。
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

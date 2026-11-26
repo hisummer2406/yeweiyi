@@ -7,7 +7,7 @@
 #   containerd 镜像存储（driver-type io.containerd.snapshotter.v1，Docker 29 新装默认）：
 #     .Id = 镜像 index/manifest 的 digest，也就是 RepoDigests 里固定的那个 digest。
 # 2026-11-02 托管 Runner 换到 26.04 后，就是两端口径不一致导致「远端预载镜像标识不一致」误拦。
-# 自托管 Runner（Ubuntu 24.04 + Docker 29）用的是 containerd 存储，生产服务器此前与托管 24.04 一致。
+# 两端存储类型都可能是任一种，所以按实际类型推导，不假设。
 #
 # 这里不放宽校验：期望值一律从已固定的 digest 推导，链路上每一步都要对上，否则失败——
 #   1. 本机 containerd 存储时：本机 .Id 必须等于固定 digest；
