@@ -1,17 +1,19 @@
 import { PlusOutlined } from '@ant-design/icons';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { useAccess, useIntl } from '@umijs/max';
-import { Badge, Button, Popconfirm, Space, message } from 'antd';
+import { Badge, Button, message, Popconfirm, Space } from 'antd';
 import type React from 'react';
-import { useRef, useState } from 'react';
-import { listCustomers } from '@/services/ant-design-pro/customers';
+import { useEffect, useRef, useState } from 'react';
+import { KeywordSearchBox, useKeywordSearch } from '@/components/KeywordSearch';
 import { ApiError } from '@/services/ant-design-pro/apiError';
+import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import {
   assignDeviceStation,
   listStations,
 } from '@/services/ant-design-pro/stations';
+import { filterByKeyword, matchDevice } from '@/utils/listSearch';
 import { describeAssignStationError } from '../stations/errors';
 import AssignStationModal from './AssignStationModal';
 import { downloadMiniCode } from './downloadMiniCode';
@@ -39,7 +41,9 @@ const AdminDevices: React.FC = () => {
   const t = (id: string, values?: Record<string, string>) =>
     intl.formatMessage({ id }, values);
   const { canPlatformAdmin } = useAccess();
-  const actionRef = useRef<ActionType>(undefined);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(false);
+  const search = useKeywordSearch();
   const [registerOpen, setRegisterOpen] = useState(false);
   const [customers, setCustomers] = useState<API.Customer[]>([]);
   const [transferTarget, setTransferTarget] = useState<API.DeviceRow>();
@@ -48,6 +52,48 @@ const AdminDevices: React.FC = () => {
   const [replaceTarget, setReplaceTarget] = useState<API.DeviceRow>();
   // 最近一次加载的行：登记成功提示里的「分配油站」用它取到设备当前的油站（已登记的设备可能已有油站）
   const rowsRef = useRef<API.DeviceRow[]>([]);
+
+  const fetchRows = async (): Promise<Row[]> => {
+    const [deviceRows, cs, ss] = await Promise.all([
+      listDevices(),
+      // 客户名只是显示用，加载失败时退化成 #id，不拖垮设备列表；
+      // 云端只允许平台管理员读客户列表，客户管理员不请求（否则必然 403 并弹全局错误）
+      canPlatformAdmin
+        ? listCustomers().catch(() => [] as API.Customer[])
+        : Promise.resolve([] as API.Customer[]),
+      listStations({ silent: true }).catch(() => [] as API.Station[]),
+    ]);
+    rowsRef.current = deviceRows;
+    setCustomers(cs);
+    setStations(ss);
+    const stationNames = new Map(ss.map((x) => [x.id, x.name]));
+    const names = new Map(cs.map((c) => [c.id, c.name]));
+    return deviceRows.map((r) => ({
+      ...r,
+      customerName:
+        r.customer_id == null ? undefined : names.get(r.customer_id),
+      stationName:
+        r.station_id == null ? undefined : stationNames.get(r.station_id),
+    }));
+  };
+  // 一次取全后在前端搜索、分页（#108）；失败提示已由全局请求错误处理弹出，这里只保留旧列表
+  const load = async () => {
+    setLoading(true);
+    try {
+      setRows(await fetchRows());
+    } catch {
+      // 已由全局处理
+    } finally {
+      setLoading(false);
+    }
+  };
+  const reload = () => {
+    void load();
+  };
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 解除油站关联（#69）：只清 station_id，设备档案、历史、ThingsBoard 实体与凭据都不动。
   // 无论成败都刷新：400/404/409 说明页面已过期，刷新后让用户看到真实状态
@@ -69,7 +115,7 @@ const AdminDevices: React.FC = () => {
       );
       message.error(t(m.id, { detail: m.detail ?? '' }));
     }
-    actionRef.current?.reload();
+    reload();
   };
 
   const customerColumn: ProColumns<Row> = {
@@ -189,42 +235,29 @@ const AdminDevices: React.FC = () => {
     <PageContainer>
       <ProTable<Row>
         rowKey="device_name"
-        actionRef={actionRef}
         columns={columns}
         search={false}
-        options={{ density: false, setting: false }}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-        request={async () => {
-          const [rows, cs, ss] = await Promise.all([
-            listDevices(),
-            // 客户名只是显示用，加载失败时退化成 #id，不拖垮设备列表；
-            // 云端只允许平台管理员读客户列表，客户管理员不请求（否则必然 403 并弹全局错误）
-            canPlatformAdmin
-              ? listCustomers().catch(() => [] as API.Customer[])
-              : Promise.resolve([] as API.Customer[]),
-            listStations({ silent: true }).catch(() => [] as API.Station[]),
-          ]);
-          rowsRef.current = rows;
-          setCustomers(cs);
-          setStations(ss);
-          const stationNames = new Map(ss.map((x) => [x.id, x.name]));
-          const names = new Map(cs.map((c) => [c.id, c.name]));
-          return {
-            data: rows.map((r) => ({
-              ...r,
-              customerName:
-                r.customer_id == null ? undefined : names.get(r.customer_id),
-              stationName:
-                r.station_id == null
-                  ? undefined
-                  : stationNames.get(r.station_id),
-            })),
-            success: true,
-          };
+        loading={loading}
+        dataSource={filterByKeyword(rows, search.keyword, matchDevice)}
+        options={{ density: false, setting: false, reload }}
+        pagination={search.pagination}
+        locale={{
+          emptyText: t(
+            search.searching && rows.length > 0
+              ? 'pages.assets.search.empty'
+              : 'pages.ops.devices.empty',
+          ),
         }}
-        // 失败提示已由全局请求错误处理弹出；这里不吞成空列表，只避免重复提示
-        onRequestError={() => undefined}
-        locale={{ emptyText: t('pages.ops.devices.empty') }}
+        headerTitle={
+          <KeywordSearchBox
+            placeholder={t(
+              canPlatformAdmin
+                ? 'pages.ops.devices.search.platform'
+                : 'pages.ops.devices.search',
+            )}
+            onSearch={search.onSearch}
+          />
+        }
         toolBarRender={() =>
           canPlatformAdmin
             ? [
@@ -243,7 +276,7 @@ const AdminDevices: React.FC = () => {
       <RegisterDeviceModal
         open={registerOpen}
         onClose={() => setRegisterOpen(false)}
-        onRegistered={() => actionRef.current?.reload()}
+        onRegistered={() => reload()}
         onAssignStation={(o) =>
           // 登记成功提示里的「分配油站」：目标是刚登记的设备与其所属客户，候选为该客户的油站
           setStationTarget(
@@ -262,21 +295,21 @@ const AdminDevices: React.FC = () => {
         device={transferTarget}
         customers={customers}
         onClose={() => setTransferTarget(undefined)}
-        onDone={() => actionRef.current?.reload()}
+        onDone={() => reload()}
       />
       <ReplaceDeviceModal
         device={replaceTarget}
         devices={rowsRef.current}
         stations={stations}
         onClose={() => setReplaceTarget(undefined)}
-        onDone={() => actionRef.current?.reload()}
+        onDone={() => reload()}
       />
       <AssignStationModal
         device={stationTarget}
         stations={stations}
         devices={rowsRef.current}
         onClose={() => setStationTarget(undefined)}
-        onDone={() => actionRef.current?.reload()}
+        onDone={() => reload()}
       />
     </PageContainer>
   );
