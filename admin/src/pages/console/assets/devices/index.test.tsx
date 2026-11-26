@@ -305,8 +305,12 @@ describe('AdminDevices unassign station (#69)', () => {
 
   it('offers 解除油站关联 only on a device in a station, and no delete entry anywhere', async () => {
     render(<AdminDevices />);
-    expect(within(await rowOf('000123')).getByText('解除油站关联')).toBeTruthy();
-    expect(within(await rowOf('000124')).queryByText('解除油站关联')).toBeNull();
+    expect(
+      within(await rowOf('000123')).getByText('解除油站关联'),
+    ).toBeTruthy();
+    expect(
+      within(await rowOf('000124')).queryByText('解除油站关联'),
+    ).toBeNull();
     expect(screen.queryByText('删除设备')).toBeNull();
   });
 
@@ -326,6 +330,72 @@ describe('AdminDevices unassign station (#69)', () => {
     canPlatformAdmin = false;
     listDevices.mockResolvedValue([dev('000123', undefined, 3)]);
     render(<AdminDevices />);
-    expect(within(await rowOf('000123')).getByText('解除油站关联')).toBeTruthy();
+    expect(
+      within(await rowOf('000123')).getByText('解除油站关联'),
+    ).toBeTruthy();
+  });
+});
+
+describe('AdminDevices keyword search (#108)', () => {
+  const search = (v: string) => {
+    const box = screen.getByPlaceholderText('搜索设备编号/所属油站/所属客户');
+    fireEvent.change(box, { target: { value: v } });
+    fireEvent.keyDown(box, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    fireEvent.keyUp(box, { key: 'Enter', code: 'Enter', keyCode: 13 });
+  };
+  const many = () =>
+    Array.from({ length: 25 }, (_, i) =>
+      dev(`ZCT${String(i).padStart(6, '0')}`, 1),
+    );
+
+  it('finds a device that sits on page 2 and jumps back to page 1', async () => {
+    listDevices.mockResolvedValue(many());
+    render(<AdminDevices />);
+    await screen.findByText('ZCT000000');
+    expect(screen.queryByText('ZCT000024')).toBeNull();
+    fireEvent.click(screen.getByTitle('2'));
+    await screen.findByText('ZCT000024');
+    search('  000024 ');
+    expect(await screen.findByText('ZCT000024')).toBeTruthy();
+    expect(screen.queryByText('ZCT000000')).toBeNull();
+    // 只剩一条，回到第 1 页（没有第 2 页按钮）
+    expect(screen.queryByTitle('2')).toBeNull();
+  });
+
+  it('matches by station and customer name, shows「无搜索结果」, and clearing restores the list', async () => {
+    listStations.mockResolvedValue([
+      { id: 7, customerId: 1, name: '西湖站', address: '', createdAt: '' },
+    ]);
+    listDevices.mockResolvedValue([dev('D-1', 1, 7), dev('D-2', null, null)]);
+    render(<AdminDevices />);
+    await screen.findByText('D-2');
+    search('西湖');
+    await screen.findByText('D-1');
+    expect(screen.queryByText('D-2')).toBeNull();
+    search('A 油站');
+    await screen.findByText('D-1');
+    expect(screen.queryByText('D-2')).toBeNull();
+    search('nothing');
+    expect(await screen.findByText('无搜索结果')).toBeTruthy();
+    search('');
+    expect(await screen.findByText('D-2')).toBeTruthy();
+    expect(screen.getByText('D-1')).toBeTruthy();
+  });
+
+  it('customer admin has no customer field in the placeholder and the row actions still work', async () => {
+    canPlatformAdmin = false;
+    listDevices.mockResolvedValue([dev('D-1', undefined, 7), dev('D-2')]);
+    listStations.mockResolvedValue([
+      { id: 7, customerId: 1, name: '西湖站', address: '', createdAt: '' },
+    ]);
+    render(<AdminDevices />);
+    await screen.findByText('D-2');
+    const box = screen.getByPlaceholderText('搜索设备编号/所属油站');
+    fireEvent.change(box, { target: { value: 'D-1' } });
+    fireEvent.keyDown(box, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    fireEvent.keyUp(box, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    const row = await rowOf('D-1');
+    expect(screen.queryByText('D-2')).toBeNull();
+    expect(within(row).getByText('解除油站关联')).toBeTruthy();
   });
 });

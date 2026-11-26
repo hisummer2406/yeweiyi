@@ -243,6 +243,8 @@ export default {
   'pages.ops.customers.col.id': 'Customer ID',
   'pages.ops.customers.col.name': 'Customer name',
   'pages.ops.customers.col.createdAt': 'Created at',
+  'pages.assets.search.empty': 'No search results',
+  'pages.ops.customers.search': 'Search customer name / ID',
   'pages.ops.customers.empty': 'No customers yet',
   'pages.ops.customers.form.name.label': 'Customer name',
   'pages.ops.customers.form.name.required': 'Enter a customer name',
@@ -378,6 +380,9 @@ export default {
   'pages.ops.devices.status.online': 'Online',
   'pages.ops.devices.status.offline': 'Offline',
   'pages.ops.devices.status.neverOnline': 'Never online',
+  'pages.ops.devices.search': 'Search device code / station',
+  'pages.ops.devices.search.platform':
+    'Search device code / station / customer',
   'pages.ops.devices.empty': 'No devices registered yet',
   'pages.ops.devices.load.error': 'Failed to load devices',
   'pages.ops.devices.form.title': 'Register device',
@@ -424,6 +429,9 @@ export default {
   'pages.ops.devices.form.code.invalid':
     'Invalid code: use a full code (e.g. ZCT000001) or a numeric short code',
   'pages.console.stations.create': 'New station',
+  'pages.console.stations.search': 'Search station name / address',
+  'pages.console.stations.search.platform':
+    'Search station name / address / customer',
   'pages.console.stations.empty': 'No stations yet',
   'pages.console.stations.col.name': 'Station name',
   'pages.console.stations.col.address': 'Address',
@@ -551,6 +559,7 @@ export default {
   'pages.console.staff.status.enabled': 'Active',
   'pages.console.staff.status.disabled': 'Disabled',
   'pages.console.staff.action.assign': 'Assign tanks',
+  'pages.console.staff.search': 'Search phone / customer',
   'pages.console.staff.empty':
     'No staff accounts. Staff accounts are created by a platform admin.',
   'pages.console.staff.modal.title': 'Assign tanks: {phone}',

@@ -1,10 +1,11 @@
 import { PlusOutlined } from '@ant-design/icons';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
 import { useAccess, useIntl } from '@umijs/max';
 import { Button, message, Popconfirm, Space, Tag, Tooltip } from 'antd';
 import type React from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { KeywordSearchBox, useKeywordSearch } from '@/components/KeywordSearch';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
@@ -14,6 +15,7 @@ import {
   listStations,
   updateStation,
 } from '@/services/ant-design-pro/stations';
+import { filterByKeyword, matchStation } from '@/utils/listSearch';
 import { occupantsByStation } from '@/utils/stationOccupancy';
 import { downloadMiniCode } from '../devices/downloadMiniCode';
 import { describeDeleteStationError, describeStationError } from './errors';
@@ -35,11 +37,55 @@ const StationsTab: React.FC = () => {
   const t = (id: string, values?: Record<string, string>) =>
     intl.formatMessage({ id }, values);
   const { canPlatformAdmin } = useAccess();
-  const actionRef = useRef<ActionType>(undefined);
   const [customers, setCustomers] = useState<API.Customer[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Row>();
-  const reload = () => actionRef.current?.reload();
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(false);
+  const search = useKeywordSearch();
+
+  const fetchRows = async (): Promise<Row[]> => {
+    const [stations, deviceRows] = await Promise.all([
+      listStations(),
+      // 当前大屏只是显示用，设备列表失败不拖垮油站列表，退化为「未知」
+      listDevices().catch(() => undefined),
+    ]);
+    // 旧版云端的设备行没有 station_id，推不出占用关系，同样退化为「未知」
+    const occupants = deviceRows?.some((d) => d.station_id !== undefined)
+      ? occupantsByStation(deviceRows)
+      : undefined;
+    const withDevices = stations.map((s) => ({
+      ...s,
+      devices: occupants ? (occupants.get(s.id) ?? []) : undefined,
+    }));
+    if (!canPlatformAdmin) return withDevices;
+    // 客户名只是显示用，加载失败时退化成 #id，不拖垮油站列表
+    const cs = await listCustomers().catch(() => [] as API.Customer[]);
+    setCustomers(cs);
+    const names = new Map(cs.map((c) => [c.id, c.name]));
+    return withDevices.map((s) => ({
+      ...s,
+      customerName: names.get(s.customerId),
+    }));
+  };
+  // 一次取全后在前端搜索、分页（#108）；失败提示已由全局请求错误处理弹出，这里只保留旧列表
+  const load = async () => {
+    setLoading(true);
+    try {
+      setRows(await fetchRows());
+    } catch {
+      // 已由全局处理
+    } finally {
+      setLoading(false);
+    }
+  };
+  const reload = () => {
+    void load();
+  };
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const remove = async (station: Row) => {
     try {
@@ -135,41 +181,29 @@ const StationsTab: React.FC = () => {
     <>
       <ProTable<Row>
         rowKey="id"
-        actionRef={actionRef}
         columns={columns}
         search={false}
-        options={{ density: false, setting: false }}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-        request={async () => {
-          const [stations, deviceRows] = await Promise.all([
-            listStations(),
-            // 当前大屏只是显示用，设备列表失败不拖垮油站列表，退化为「未知」
-            listDevices().catch(() => undefined),
-          ]);
-          // 旧版云端的设备行没有 station_id，推不出占用关系，同样退化为「未知」
-          const occupants = deviceRows?.some((d) => d.station_id !== undefined)
-            ? occupantsByStation(deviceRows)
-            : undefined;
-          const withDevices = stations.map((s) => ({
-            ...s,
-            devices: occupants ? (occupants.get(s.id) ?? []) : undefined,
-          }));
-          if (!canPlatformAdmin) return { data: withDevices, success: true };
-          // 客户名只是显示用，加载失败时退化成 #id，不拖垮油站列表
-          const cs = await listCustomers().catch(() => [] as API.Customer[]);
-          setCustomers(cs);
-          const names = new Map(cs.map((c) => [c.id, c.name]));
-          return {
-            data: withDevices.map((s) => ({
-              ...s,
-              customerName: names.get(s.customerId),
-            })),
-            success: true,
-          };
+        loading={loading}
+        dataSource={filterByKeyword(rows, search.keyword, matchStation)}
+        options={{ density: false, setting: false, reload }}
+        pagination={search.pagination}
+        locale={{
+          emptyText: t(
+            search.searching && rows.length > 0
+              ? 'pages.assets.search.empty'
+              : 'pages.console.stations.empty',
+          ),
         }}
-        // 失败提示已由全局请求错误处理弹出；这里不吞成空列表，只避免重复提示
-        onRequestError={() => undefined}
-        locale={{ emptyText: t('pages.console.stations.empty') }}
+        headerTitle={
+          <KeywordSearchBox
+            placeholder={t(
+              canPlatformAdmin
+                ? 'pages.console.stations.search.platform'
+                : 'pages.console.stations.search',
+            )}
+            onSearch={search.onSearch}
+          />
+        }
         toolBarRender={() => [
           <Button
             key="create"
