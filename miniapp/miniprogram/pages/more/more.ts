@@ -1,7 +1,8 @@
 import { roleFromToken, userKeyFromToken } from '../../utils/auth';
 import { maskPhone } from '../../utils/loginFlow';
 import { getProfile, getToken } from '../../utils/storage';
-import { DEFAULT_BRAND_AVATAR, brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { DEFAULT_BRAND_AVATAR } from '../../utils/brandLogoCore';
 import { showComingSoon } from '../../utils/comingSoon';
 import { LOCALE_NAMES, applyTabBar, currentLocale, setNavTitle, t, texts } from '../../utils/i18n';
 import { ROLE_KEYS, label } from '../../utils/labels';

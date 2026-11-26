@@ -3,7 +3,8 @@ import { maskPhone } from '../../utils/loginFlow';
 import { setNavTitle, texts } from '../../utils/i18n';
 import { ROLE_KEYS, label } from '../../utils/labels';
 import { clearToken, getProfile, getToken, setAutoLogin } from '../../utils/storage';
-import { DEFAULT_BRAND_AVATAR, brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { DEFAULT_BRAND_AVATAR } from '../../utils/brandLogoCore';
 
 Page({
   data: {
