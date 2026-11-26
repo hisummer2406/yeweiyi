@@ -14,7 +14,12 @@ export const attachAuth = (config: RequestOptions): RequestOptions => {
   if ((config as { skipAuth?: boolean }).skipAuth) return config;
   const token = getToken();
   if (token) {
-    config.headers = { ...config.headers, Authorization: `Bearer ${token}` };
+    // axios 0.28+ 的 headers 类型是 AxiosHeaders；展开成普通对象再交回，运行时 axios 会重新规整。
+    const headers = (config.headers ?? {}) as Record<string, unknown>;
+    config.headers = {
+      ...headers,
+      Authorization: `Bearer ${token}`,
+    } as RequestOptions['headers'];
   }
   return config;
 };
