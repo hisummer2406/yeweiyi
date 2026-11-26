@@ -13,7 +13,8 @@ import { applyVirtual } from '../../utils/virtualTable';
 import { dropLegacyScale, loadVirtual } from '../../utils/virtualTableStore';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
-import { DEFAULT_BRAND_MARK, brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { DEFAULT_BRAND_MARK } from '../../utils/brandLogoCore';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
 import { stationIdFromKey, stationParam } from '../../utils/stationDevice';
 import {

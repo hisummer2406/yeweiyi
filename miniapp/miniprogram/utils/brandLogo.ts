@@ -19,7 +19,6 @@ import {
   parseBrandLogo,
 } from './brandLogoCore';
 
-export { DEFAULT_BRAND_AVATAR, DEFAULT_BRAND_MARK } from './brandLogoCore';
 
 const CACHE_KEY = BRAND_LOGO_CACHE_KEY;
 
