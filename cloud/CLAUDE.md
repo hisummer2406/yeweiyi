@@ -98,6 +98,10 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
 - 介质库（#27，契约见 [docs/media-library-contract.md](docs/media-library-contract.md)）：`media` 字典 + `device_media_slots` 位置映射；字典维护仅平台管理员，**选用**（`media-options`、提交 `mediaId`）平台与客户管理员都可（2026-11-14，所有修改只限管理员、员工只读）。客户端只提交 `mediaId`，云端换算；直接提交 `oilTypeIndex` 被拒。
 - 罐颜色与密度（2026-11-14）：`tankN.oilColor`（0xRRGGBB，20 色色板见 `fixtures/protocol/v1/oil_color_palette.json`）可经 `config.setTankSettings` 写入，设备未上报 `oilColorSync=1` 时 `409 color_sync_unsupported`；`density` 单位定为 g/cm³（kg/L），可写 0<v≤2。
 - 罐高与低温报警（#65，2026-11-23）：`tankHeightMm`、`alarmLowTempC` 可经 `config.setTankSettings` 写入，设备未上报 `tankHeightLowTempSync=1` 时 `409 height_low_temp_unsupported`；新报警类型 `LOW_TEMPERATURE`。**未真机验证。**
+- 客户品牌 Logo（#86，契约见 [docs/brand-logo-contract.md](docs/brand-logo-contract.md)，迁移 000044）：每客户至多一张 PNG（≤256 KiB、
+  宽高 64–1024，按实际内容整图解码校验）存业务库 `customer_brand_logos`，客户删除时级联删除。读写
+  `/api/customers/:id/brand-logo` 仅平台管理员（写审计）；客户账号只经 `GET /api/me/brand-logo` 读自己客户的，图片以 base64 放在 JSON 里，
+  `version` 为内容哈希，`?known=` 命中时不回图。没有行 = 客户端默认 Logo。
 - 设备端仓库是 `../android/`，小程序仓库是
   `../miniapp/`。跨仓库协议变更必须获得相关负责人确认。
 

@@ -11,6 +11,7 @@ import {
   listCustomers,
   renameCustomer,
 } from '@/services/ant-design-pro/customers';
+import BrandLogoModal from './BrandLogoModal';
 import CreateCustomerModal from './CreateCustomerModal';
 import CustomerNameModal from './CustomerNameModal';
 import {
@@ -31,6 +32,7 @@ const AdminCustomers: React.FC = () => {
   const actionRef = useRef<ActionType>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<API.Customer>();
+  const [brandTarget, setBrandTarget] = useState<API.Customer>();
   // 新建成功后直接进入该客户的开通向导（新客户一定是配置中，cloud#60）
   const openOnboarding = (id: number) =>
     history.push(`/assets/customers/${id}/onboarding`);
@@ -98,6 +100,9 @@ const AdminCustomers: React.FC = () => {
             <a onClick={() => history.push(`/assets/media?customer=${row.id}`)}>
               {t('pages.ops.customers.action.media')}
             </a>
+            <a onClick={() => setBrandTarget(row)}>
+              {t('pages.ops.customers.action.brand')}
+            </a>
             <a onClick={() => setRenameTarget(row)}>
               {t('pages.ops.customers.action.rename')}
             </a>
@@ -149,6 +154,10 @@ const AdminCustomers: React.FC = () => {
           else reload();
         }}
         onPartial={reload}
+      />
+      <BrandLogoModal
+        customer={brandTarget}
+        onClose={() => setBrandTarget(undefined)}
       />
       <CustomerNameModal
         open={!!renameTarget}

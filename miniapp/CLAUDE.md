@@ -391,6 +391,15 @@ No bundler and no `npm run build` — WeChat DevTools compiles `.ts` → `.js` i
     pages and keep going (bounded) until enough rows were added; only the cloud's end ends them. Times are shown in the phone's local zone (`formatLocalTime`),
     not as the cloud's raw UTC strings. Page behaviour is **not verified in DevTools**.
 
+## 客户品牌 Logo（#86，云端契约 `cloud/docs/brand-logo-contract.md`）
+
+首页顶部标题左侧（`brandMark`，含无设备空状态）、设置页账号行与账号详情页头像（`brandAvatar`）显示登录账号所属客户的 Logo；
+登录页、未配置、请求失败、图片加载失败（`binderror`）显示默认图（`brand-mark.png` / `avatar-logo.png`），首页标题文案不变。
+`GET /api/me/brand-logo` 返回 base64，写到 `USER_DATA_PATH` 下按「账号 + 版本」命名的文件（写不了时用 data URL），缓存项 `brand-logo`
+记账号、版本、路径，下次带 `?known=<版本>`。首页每次显示/下拉刷新都向云端核对（不阻塞、不影响读数），设置页/账号页每次运行核对一次。
+晚到的响应按账号丢弃（`brandLogoStep`，`utils/brandLogoCore.ts`，`scripts/brand-logo.check.mjs`）；断网时保留同一账号上次确认的 Logo；
+`clearToken` 删除缓存项和文件。走现有业务请求域名，不需要配置 downloadFile 域名。**未在开发者工具、真机或 Donut 安装包里验证。**
+
 ## Remote configuration and 补录 (miniapp#6, 2026-11-08; openspec `tank-settings-remote-apply`)
 
 Cloud contracts: `yeweiyi-cloud docs/config-command-contract.md` (cloud PR #13: `requestId`, `expectedStationId`,

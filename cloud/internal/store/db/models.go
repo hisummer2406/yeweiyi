@@ -138,6 +138,26 @@ type Customer struct {
 	OnboardedAt pgtype.Timestamptz `json:"onboarded_at"`
 }
 
+// 客户品牌 Logo（#86）。没有行 = 使用中成电气默认 Logo。
+type CustomerBrandLogo struct {
+	// 所属客户，每个客户至多一张
+	CustomerID int64 `json:"customer_id"`
+	// 图片类型，首版只收 PNG（按实际内容解码判定，不信扩展名）
+	ContentType string `json:"content_type"`
+	// 图片原始字节，上限 256 KiB
+	Image []byte `json:"image"`
+	// 图片宽度（像素），64–1024
+	Width int32 `json:"width"`
+	// 图片高度（像素），64–1024
+	Height int32 `json:"height"`
+	// 图片版本（内容 SHA-256 前 16 位十六进制），客户端据此判断缓存是否过期
+	Version string `json:"version"`
+	// 最近一次上传时间
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	// 最近一次上传的平台管理员，账号删除后置空
+	UpdatedBy pgtype.Int8 `json:"updated_by"`
+}
+
 // 设备在线状态表，记录 thing/event/isOline 的最新状态（design doc §4.2）。
 type Device struct {
 	// 设备名（阿里云 IoT deviceName），主键，MQTT topic 中的设备标识。

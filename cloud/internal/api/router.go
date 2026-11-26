@@ -90,6 +90,7 @@ func NewRouter(deps Deps) *gin.Engine {
 		// /api/shifts (设备协议 V1 has no 交班 uplink on either side, so it could only return
 		// an empty list — see docs/protocol-v1-reconciliation.md).
 		authorized.GET("/me", meHandler(deps))
+		authorized.GET("/me/brand-logo", myBrandLogoHandler(deps))
 		authorized.GET("/alarms", listAlarmsHandler(deps))
 		authorized.GET("/oil-in-out", listOilInOutHandler(deps))
 		authorized.GET("/shift-records", listShiftRecordsHandler(deps))
@@ -131,6 +132,9 @@ func NewRouter(deps Deps) *gin.Engine {
 		authorized.DELETE("/customers/:id", deleteCustomerHandler(deps))
 		authorized.GET("/customers/:id/onboarding", getOnboardingHandler(deps))
 		authorized.POST("/customers/:id/onboarding/complete", completeOnboardingHandler(deps))
+		authorized.GET("/customers/:id/brand-logo", getBrandLogoHandler(deps))
+		authorized.PUT("/customers/:id/brand-logo", putBrandLogoHandler(deps))
+		authorized.DELETE("/customers/:id/brand-logo", deleteBrandLogoHandler(deps))
 		authorized.GET("/media", listMediaHandler(deps))
 		authorized.POST("/media", createMediaHandler(deps))
 		authorized.PUT("/media/:id", updateMediaHandler(deps))

@@ -94,3 +94,53 @@ export async function completeCustomerOnboarding(
     throw toApiError(err);
   }
 }
+
+/**
+ * GET /api/customers/:id/brand-logo：客户品牌 Logo（#86，仅平台管理员，云端 docs/brand-logo-contract.md）。
+ * 未配置时 configured 为 false；客户不存在 404 customer_not_found。失败抛 ApiError。
+ */
+export async function getCustomerBrandLogo(
+  id: number,
+): Promise<API.BrandLogo> {
+  try {
+    return await request<API.BrandLogo>(`/api/customers/${id}/brand-logo`, {
+      method: 'GET',
+      skipErrorHandler: true,
+    });
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+/**
+ * PUT /api/customers/:id/brand-logo {data: base64 PNG}：保存或替换。云端按实际内容校验（PNG、≤256 KiB、
+ * 宽高 64–1024），不合格 400/413 brand_logo_invalid。失败抛 ApiError。
+ */
+export async function putCustomerBrandLogo(
+  id: number,
+  data: string,
+): Promise<API.BrandLogo> {
+  try {
+    return await request<API.BrandLogo>(`/api/customers/${id}/brand-logo`, {
+      method: 'PUT',
+      data: { data },
+      skipErrorHandler: true,
+    });
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+/** DELETE /api/customers/:id/brand-logo：恢复默认 Logo，幂等。失败抛 ApiError。 */
+export async function resetCustomerBrandLogo(
+  id: number,
+): Promise<API.BrandLogo> {
+  try {
+    return await request<API.BrandLogo>(`/api/customers/${id}/brand-logo`, {
+      method: 'DELETE',
+      skipErrorHandler: true,
+    });
+  } catch (err) {
+    throw toApiError(err);
+  }
+}

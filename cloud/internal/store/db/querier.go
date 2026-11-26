@@ -84,6 +84,7 @@ type Querier interface {
 	// Refused by the foreign keys (ON DELETE RESTRICT) while any user, device, command or audit row still
 	// references the customer; the handler turns that into 409. `default` is protected as above.
 	DeleteCustomer(ctx context.Context, id int64) (int64, error)
+	DeleteCustomerBrandLogo(ctx context.Context, customerID int64) (int64, error)
 	DeleteDeviceMediaSlot(ctx context.Context, arg DeleteDeviceMediaSlotParams) error
 	DeleteDeviceMediaSlots(ctx context.Context, deviceName string) (int64, error)
 	// A station that still has devices fails with 23503 (devices_station_customer_fk); the handler turns
@@ -123,6 +124,7 @@ type Querier interface {
 	// One command, by id, under exactly the visibility rule of ListControlCommandsVisibleToUser.
 	GetControlCommandVisibleToUser(ctx context.Context, arg GetControlCommandVisibleToUserParams) (ControlCommand, error)
 	GetCustomer(ctx context.Context, id int64) (Customer, error)
+	GetCustomerBrandLogo(ctx context.Context, customerID int64) (CustomerBrandLogo, error)
 	// Completing onboarding locks the row so the readiness check and the status write see one state.
 	GetCustomerForUpdate(ctx context.Context, id int64) (Customer, error)
 	GetDevice(ctx context.Context, deviceName string) (Device, error)
@@ -400,6 +402,7 @@ type Querier interface {
 	UnbindUserDevice(ctx context.Context, arg UnbindUserDeviceParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	UpdateStation(ctx context.Context, arg UpdateStationParams) (Station, error)
+	UpsertCustomerBrandLogo(ctx context.Context, arg UpsertCustomerBrandLogoParams) (CustomerBrandLogo, error)
 	// Minting always rotates: replaces any existing secret for this device outright. A leaked or lost
 	// secret is fixed by minting a fresh one, not by keeping multiple valid secrets around.
 	//
