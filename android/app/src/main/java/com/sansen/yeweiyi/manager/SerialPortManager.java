@@ -436,7 +436,8 @@ public class SerialPortManager implements IParseDataListener {
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
                                             if (isRight) {
                                                 mOilCan.setErrorTimes(0);
-                                                mOilCan.setHasReading(true);
+                                                // hasReading 不在这里置：isRight 也包括只回了温度（45）的应答，
+                                                // 那时油位仍是占位 0。由各解析器在真正写入油位时置（#75 评审）。
                                                 // 通讯恢复 → 若此罐之前上报过"探头断线"报警，则上报其恢复（CLEARED）；没有则什么都不发。
                                                 // 第三个参数是恢复时的读数，探头断线没有读数，填 0（与失败计数无关）。
                                                 CloudAlarmReporter.getInstance().onRecovered(mOilCan.getOilCanPos(),
