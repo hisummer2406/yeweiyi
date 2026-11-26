@@ -67,9 +67,12 @@ describe('BrandLogoModal', () => {
     vi.stubGlobal('Image', FakeImage);
     nextSize = { width: 128, height: 128 };
   });
+  // message 必须替换成空实现：真弹出的提示在单独的 React 根里，cleanup 清不掉，
+  // 慢机器上测试环境拆掉后它的动画还在跑，会报 window is not defined（CI 上复现过）。
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('shows the customer, the default logo, and saves an uploaded PNG', async () => {
@@ -84,7 +87,9 @@ describe('BrandLogoModal', () => {
       height: 128,
       data: 'AAAA',
     });
-    const success = vi.spyOn(message, 'success');
+    const success = vi
+      .spyOn(message, 'success')
+      .mockImplementation((() => {}) as never);
     render(<BrandLogoModal customer={customer} onClose={() => {}} />);
 
     expect(await screen.findByText('品牌设置：A 油站')).toBeTruthy();
@@ -110,7 +115,9 @@ describe('BrandLogoModal', () => {
       customerId: 7,
       configured: false,
     });
-    const error = vi.spyOn(message, 'error');
+    const error = vi
+      .spyOn(message, 'error')
+      .mockImplementation((() => {}) as never);
     render(<BrandLogoModal customer={customer} onClose={() => {}} />);
     await screen.findByText('当前使用中成电气默认 Logo');
 
@@ -162,7 +169,9 @@ describe('BrandLogoModal', () => {
     putCustomerBrandLogo.mockRejectedValue(
       new ApiError(400, 'image must be a PNG', false, 'brand_logo_invalid'),
     );
-    const error = vi.spyOn(message, 'error');
+    const error = vi
+      .spyOn(message, 'error')
+      .mockImplementation((() => {}) as never);
     render(<BrandLogoModal customer={customer} onClose={() => {}} />);
     await screen.findByText('当前使用中成电气默认 Logo');
     choose(pngFile());
