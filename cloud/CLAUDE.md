@@ -63,7 +63,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `customerId` 建油站与客户不存在同为 `400 unknown customerId`（#54）。**`403 {"error":"not authorized"}` 只留给角色/账号
   问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页（#79 起体不变、追加 `code`：`account_unavailable` | `role_not_allowed`，见
   [错误码契约](docs/error-codes-contract.md)），
-  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObject`/`refuseObjectCode`；两者都写 `denied` 审计）。
+  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObjectCode`；两者都写 `denied` 审计）。
   记录表不带 `station_id`，历史跟着设备所属油站走。加锁顺序固定：油站行 → 设备行（按名升序）。
 - 油罐授权与扫码（#63，契约见 [docs/tank-grants-contract.md](docs/tank-grants-contract.md)）：员工（`customer_user`）按
   `(device_name, 罐号)` 获得**只读**查看权，存于 `user_tank_grants`；管理员（客户/平台）看其范围内全部罐。
@@ -81,9 +81,10 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   仅平台管理员可 `GET /api/customers/:id/onboarding`、`POST .../onboarding/complete`（事务内锁客户行复检：有未停用且有手机号
   密码的客户管理员、至少一个油站、至少一台在该客户油站内的设备；不全 `409 onboarding_incomplete` + `missing`；重复幂等）。
   不使用 `users.disabled_at` 模拟客户状态；测试里 `newCustomer` 直接种为 `active`。
-- 设备彻底删除（#83，契约见 [docs/device-purge-contract.md](docs/device-purge-contract.md)）：仅平台管理员，
-  `POST /api/devices/:device/purge`（体须重复完整编号 + 原因）建异步任务，`internal/purge` 按 `thingsboard → business →
-  verify` 执行，每步幂等，失败停在 `failed` 等再次发起，`running` 的启动时续跑。`device_purges` 未完成的任务就是该设备的
+- 设备彻底删除（#83，契约见 [docs/device-purge-contract.md](docs/device-purge-contract.md)）：**网页端发起已关闭（#69）**，
+  `POST /api/devices/:device/purge` 对平台管理员恒 `410 device_purge_disabled`（其他角色仍 403），日常移除设备用解除油站关联
+  （`PUT /api/devices/:device/station` + `stationId: null`）；`GET /api/device-purges` 保留供审计。`internal/purge` 引擎保留，按 `thingsboard → business →
+  verify` 执行，每步幂等，`running` 的启动时续跑，`failed` 的由运维处理（无网页重试）。`device_purges` 未完成的任务就是该设备的
   **写入栅栏**：业务记录、小时汇总、回补标记的写入语句经 `device_record_writable` 判定（迁移 000032），`ListAllDeviceNames`
   不再列出它，登记/配对密钥/油站/换机/罐授权/发命令返回 `409 device_purge_in_progress`。完成后同编号可重新登记，但信封
   `ts` 不晚于删除完成时刻的记录一律不写入（挡设备重放）。**新增按设备编号存数据的表，必须同时加进删除清单
@@ -94,6 +95,9 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   最大者胜，永久保存（同约束 5）。`GET /api/shift-records`、`/api/stock-records` 每 (记录, 罐) 一行，规则同 `/api/oil-in-out`（#84），
   缺失值一律 `null` 不当 0，`syncStatus` 为 `UNSUPPORTED|SYNCING|SYNCED`，客户端只在 `SYNCED` 且无行时显示"暂无记录"。
   `oilTypeIndex` 是与界面语言无关的油品标识，`oilType` 只是显示名。**设备端与云端都未真机验证。**
+- 介质库（#27，契约见 [docs/media-library-contract.md](docs/media-library-contract.md)）：`media` 字典 + `device_media_slots` 位置映射；字典维护仅平台管理员，**选用**（`media-options`、提交 `mediaId`）平台与客户管理员都可（2026-11-14，所有修改只限管理员、员工只读）。客户端只提交 `mediaId`，云端换算；直接提交 `oilTypeIndex` 被拒。
+- 罐颜色与密度（2026-11-14）：`tankN.oilColor`（0xRRGGBB，20 色色板见 `fixtures/protocol/v1/oil_color_palette.json`）可经 `config.setTankSettings` 写入，设备未上报 `oilColorSync=1` 时 `409 color_sync_unsupported`；`density` 单位定为 g/cm³（kg/L），可写 0<v≤2。
+- 罐高与低温报警（#65，2026-11-23）：`tankHeightMm`、`alarmLowTempC` 可经 `config.setTankSettings` 写入，设备未上报 `tankHeightLowTempSync=1` 时 `409 height_low_temp_unsupported`；新报警类型 `LOW_TEMPERATURE`。**未真机验证。**
 - 设备端仓库是 `../android/`，小程序仓库是
   `../miniapp/`。跨仓库协议变更必须获得相关负责人确认。
 
@@ -157,8 +161,8 @@ docs/                 当前规范与历史归档
    目标部署上按 `deploy/README.md`"启用 ThingsBoard 遥测 TTL 之前"完成出入库/报警回补（`cmd/backfill`）和小时汇总回补
    （`cmd/backfill -telemetry`）并核对无误——否则这些数据会被永久删除。小时汇总（#30）已实现：`internal/rollup`
    每小时由 ThingsBoard 的聚合结果写入 `telemetry_hourly`；`telemetry/history` 在 `telemetry.retention`
-   之内读 ThingsBoard，更早的部分读汇总表（仅 `interval=1h`）。**唯一例外**：平台管理员的设备彻底删除（#83，
-   [契约](docs/device-purge-contract.md)）清掉该设备在业务库与 ThingsBoard 的全部数据；换机、客户转移仍不删任何历史。
+   之内读 ThingsBoard，更早的部分读汇总表（仅 `interval=1h`）。**唯一例外**：设备彻底删除（#83，
+   [契约](docs/device-purge-contract.md)，#69 起网页端不能发起）清掉该设备在业务库与 ThingsBoard 的全部数据；换机、客户转移仍不删任何历史。
 6. 必须先授权、后检查设备是否存在，避免设备名枚举。
 7. 设备配对密钥必须与 ThingsBoard/MQTT 设备凭据隔离。
 8. 仅使用 ThingsBoard CE 功能，且部署必须支持完全离线环境。
@@ -214,8 +218,9 @@ docs/                 当前规范与历史归档
   命令（部分唯一索引，`409 config_command_in_flight`）。开关只有部署级 `allowConfigCommands`，**生产自 2026-11-09 常开**
   （用户决定：管理员直接修改；设备级白名单 000038 已由 000039 删除，不要加回）。命令 INSERT 语句内再判访问规则与方法等级。迟到的 `cmdResult` 只写一次 `control.result_late` 审计，不改状态。
   整机设置镜像 `device_settings`（`GET /api/devices/:device/device-settings`，仅管理员）。**未真机验证。**
-- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 与 Android CI 都校验
-  `MANIFEST.json`。改 fixture 要在同一个 PR 里让两端测试都通过；没有分支保护，CI 红了不会阻止合并，见 open-items §C-1。
+- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 自动校验 `MANIFEST.json`。
+  Android CI 自 2026-11-26 起不再自动运行，改 fixture 后把提交 SHA 交给 Android 单测负责人在其环境验证；
+  没有分支保护，CI 红了不会阻止合并，见 open-items §C-1 与 [CI 运维说明](../.github/ci/README.md#android-单测交接)。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
 - 多租户**阶段 1（隔离）与阶段 2（管理 API）均已落地**：`customers` 表；非平台管理员用户恰好属于一个

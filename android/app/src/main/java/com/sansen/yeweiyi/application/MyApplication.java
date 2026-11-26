@@ -25,6 +25,7 @@ import com.sansen.yeweiyi.manager.OilcanDataManager;
 import com.sansen.yeweiyi.manager.SaveOilManager;
 import com.sansen.yeweiyi.manager.SerialPortManager;
 import com.sansen.yeweiyi.manager.SocketManager;
+import com.sansen.yeweiyi.manager.PumpIoManager;
 import com.sansen.yeweiyi.manager.SoundManager;
 import com.sansen.yeweiyi.utils.CRCheck;
 
@@ -100,11 +101,18 @@ public class MyApplication extends Application {
 		CrashApphandler.getInstance().init(this.getApplicationContext());
 		LogCatHelper.getInstance(this.getApplicationContext(),null).start();
 		CRCheck.getInstance().init_all_tab();
+		// 先固定串口 2/4 的启动配置，再启动 HAL 与采集线程，避免双显端口发出控制指令。
+		// Singleton 同步这份运行配置；设置页保存的新协议在完整重启 App 后生效。
+		com.sansen.yeweiyi.manager.ProbeProxyManager.init(this);
+		com.sansen.yeweiyi.utils.Singleton.getInstance().getSetData(com.sansen.yeweiyi.utils.Constans.ChuanKou2);
+		com.sansen.yeweiyi.utils.Singleton.getInstance().getSetData(com.sansen.yeweiyi.utils.Constans.ChuanKou4);
 		//RMC
 		serialport.manager.SerialPortManager.getInstance();
 
 		mDaoHelp.getInstance(instance);
 		SoundManager.getInstance().init(this);
+		// 开机先断开 IO2（单罐开关量输出），再按设置联动
+		PumpIoManager.init(this);
 
 		mDBManager = DBDataManager.getInstance();
 

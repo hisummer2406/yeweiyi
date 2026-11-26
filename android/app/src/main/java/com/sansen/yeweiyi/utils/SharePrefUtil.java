@@ -34,6 +34,9 @@ public class SharePrefUtil {
     public static final String AUTO_LOGIN = "autoLogin";//自动登录
     public static final String SHOW_VOLUME = "showVolume";//显示体积
     public static final String TEST_DATA = "isTestData";
+    /** 单罐开关量输出（IO2 联动）开关、绑定罐号（0 = 未选），见 PumpIoManager */
+    public static final String PUMP_LINK_ENABLED = "pumpLinkEnabled";
+    public static final String PUMP_LINK_TANK = "pumpLinkTank";
     public static final String CONNECT_PROBE = "isConnectProbe";
     public static final String LIGHT_TIME = "lightTime";
     public static final String LIGHT_AUTO = "isAutoBlack";
@@ -97,6 +100,13 @@ public class SharePrefUtil {
             sp = context.getSharedPreferences(SP_NAME, 0);
         sp.edit().putString(key, value).commit();
 
+    }
+
+    /** 需要自己 commit 并判断是否落盘时使用。 */
+    public static SharedPreferences preferences(Context context) {
+        if (sp == null)
+            sp = context.getSharedPreferences(SP_NAME, 0);
+        return sp;
     }
 
     /** 多个键值一次 commit 写入，读方不会看到只写了一半的组合。参数按 key, value, key, value… 排列。 */

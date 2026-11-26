@@ -18,6 +18,7 @@ export default {
   'menu.assets.stations': '油站管理',
   'menu.assets.devices': '设备管理',
   'menu.assets.staff': '员工授权',
+  'menu.assets.media': '油品管理',
   'menu.welcome': '欢迎',
   'menu.more-blocks': '更多区块',
   'menu.home': '首页',

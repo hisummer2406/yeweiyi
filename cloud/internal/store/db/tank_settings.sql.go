@@ -12,7 +12,7 @@ import (
 )
 
 const listTankSettings = `-- name: ListTankSettings :many
-SELECT device_name, tank, tank_height_mm, sensor_length_mm, tank_shape, oil_type, oil_type_index, alarm_high_high_level_mm, alarm_high_level_mm, alarm_low_level_mm, alarm_low_low_level_mm, alarm_high_water_mm, alarm_high_temp_c, alarm_low_temp_c, level_correction_mm, water_correction_mm, temp_correction_c, density, reported_at, updated_at, capacity_l FROM tank_settings WHERE device_name = $1 ORDER BY tank
+SELECT device_name, tank, tank_height_mm, sensor_length_mm, tank_shape, oil_type, oil_type_index, alarm_high_high_level_mm, alarm_high_level_mm, alarm_low_level_mm, alarm_low_low_level_mm, alarm_high_water_mm, alarm_high_temp_c, alarm_low_temp_c, level_correction_mm, water_correction_mm, temp_correction_c, density, reported_at, updated_at, capacity_l, oil_color FROM tank_settings WHERE device_name = $1 ORDER BY tank
 `
 
 // 一台设备的全部罐镜像（罐号升序）。员工只能看被授权的罐，由调用方按 ListGrantedTanks 过滤。
@@ -47,6 +47,7 @@ func (q *Queries) ListTankSettings(ctx context.Context, deviceName string) ([]Ta
 			&i.ReportedAt,
 			&i.UpdatedAt,
 			&i.CapacityL,
+			&i.OilColor,
 		); err != nil {
 			return nil, err
 		}
@@ -64,14 +65,14 @@ INSERT INTO tank_settings (
     device_name, tank, tank_height_mm, sensor_length_mm, tank_shape, oil_type, oil_type_index,
     alarm_high_high_level_mm, alarm_high_level_mm, alarm_low_level_mm, alarm_low_low_level_mm,
     alarm_high_water_mm, alarm_high_temp_c, alarm_low_temp_c,
-    level_correction_mm, water_correction_mm, temp_correction_c, density, capacity_l, reported_at
+    level_correction_mm, water_correction_mm, temp_correction_c, density, capacity_l, oil_color, reported_at
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
     $8, $9, $10,
     $11, $12, $13,
     $14, $15, $16,
-    $17, $18, $19, $20
+    $17, $18, $19, $20, $21
 )
 ON CONFLICT (device_name, tank) DO UPDATE SET
     tank_height_mm = EXCLUDED.tank_height_mm,
@@ -91,9 +92,11 @@ ON CONFLICT (device_name, tank) DO UPDATE SET
     temp_correction_c = EXCLUDED.temp_correction_c,
     density = EXCLUDED.density,
     capacity_l = EXCLUDED.capacity_l,
+    oil_color = EXCLUDED.oil_color,
     reported_at = EXCLUDED.reported_at,
     updated_at = now()
-WHERE tank_settings.reported_at IS DISTINCT FROM EXCLUDED.reported_at
+WHERE (tank_settings.tank_height_mm, tank_settings.sensor_length_mm, tank_settings.tank_shape, tank_settings.oil_type, tank_settings.oil_type_index, tank_settings.alarm_high_high_level_mm, tank_settings.alarm_high_level_mm, tank_settings.alarm_low_level_mm, tank_settings.alarm_low_low_level_mm, tank_settings.alarm_high_water_mm, tank_settings.alarm_high_temp_c, tank_settings.alarm_low_temp_c, tank_settings.level_correction_mm, tank_settings.water_correction_mm, tank_settings.temp_correction_c, tank_settings.density, tank_settings.capacity_l, tank_settings.oil_color, tank_settings.reported_at)
+    IS DISTINCT FROM (EXCLUDED.tank_height_mm, EXCLUDED.sensor_length_mm, EXCLUDED.tank_shape, EXCLUDED.oil_type, EXCLUDED.oil_type_index, EXCLUDED.alarm_high_high_level_mm, EXCLUDED.alarm_high_level_mm, EXCLUDED.alarm_low_level_mm, EXCLUDED.alarm_low_low_level_mm, EXCLUDED.alarm_high_water_mm, EXCLUDED.alarm_high_temp_c, EXCLUDED.alarm_low_temp_c, EXCLUDED.level_correction_mm, EXCLUDED.water_correction_mm, EXCLUDED.temp_correction_c, EXCLUDED.density, EXCLUDED.capacity_l, EXCLUDED.oil_color, EXCLUDED.reported_at)
 `
 
 type UpsertTankSettingsParams struct {
@@ -116,11 +119,13 @@ type UpsertTankSettingsParams struct {
 	TempCorrectionC      pgtype.Float8      `json:"temp_correction_c"`
 	Density              pgtype.Float8      `json:"density"`
 	CapacityL            pgtype.Float8      `json:"capacity_l"`
+	OilColor             pgtype.Int4        `json:"oil_color"`
 	ReportedAt           pgtype.Timestamptz `json:"reported_at"`
 }
 
 // 设备上报的油罐配置镜像（迁移 000033，cloud#70）。只由 internal/ingest 写入，API 只读。
-// 整行以设备最新上报为准。reported_at 没变就不写（属性每次被设备重发，lastUpdateTs 都会前进）。
+// 整行以设备最新上报为准；内容与 reported_at 都没变才不写。不能只比 reported_at：ThingsBoard 逐键存属性，一次读取可能
+// 新旧键混杂且时间已是新的，只比时间会让下一次完整读取被跳过、镜像停在半新状态（2026-11-24）。
 func (q *Queries) UpsertTankSettings(ctx context.Context, arg UpsertTankSettingsParams) error {
 	_, err := q.db.Exec(ctx, upsertTankSettings,
 		arg.DeviceName,
@@ -142,6 +147,7 @@ func (q *Queries) UpsertTankSettings(ctx context.Context, arg UpsertTankSettings
 		arg.TempCorrectionC,
 		arg.Density,
 		arg.CapacityL,
+		arg.OilColor,
 		arg.ReportedAt,
 	)
 	return err

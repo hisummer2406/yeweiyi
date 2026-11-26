@@ -1,4 +1,9 @@
 export default {
+  'pages.console.tank.shape.horizontal': '卧罐',
+  'pages.console.tank.shape.vertical': '立罐',
+  'pages.console.tank.shape.reportedAt': '罐型上报时间 {time}',
+  'pages.console.tank.shape.picture': '{index}号罐示意图（{shape}）',
+
   'pages.layouts.userLayout.title': '液位仪云平台管理后台',
   'pages.login.accountLogin.errorMessage': '账号或密码错误',
   'pages.login.failure': '登录失败，请重试！',
@@ -100,7 +105,7 @@ export default {
     '有 {count} 条记录的来源异常，未显示。',
   'pages.console.records.notice.folded': '有 {count} 条更正记录已合并。',
   'pages.console.records.notice.firmware':
-    '设备固件尚未升级，部分记录无法读取。',
+    '设备软件版本较旧，部分记录无法读取，请升级设备软件。',
   'pages.console.records.notice.firmware.detail':
     '设备 {device}，样例：{sample}',
   'pages.console.records.empty.alarms': '该时间范围内没有报警',
@@ -129,7 +134,8 @@ export default {
   'pages.console.detail.tab.stock': '出入库记录',
   'pages.console.records.title.shift': '交班记录',
   'pages.console.records.title.inventory': '库存记录',
-  'pages.console.records.notice.unsupported': '设备暂不支持该类记录',
+  'pages.console.records.notice.unsupported':
+    '设备软件版本较旧，暂不支持该类记录，请升级设备软件',
   'pages.console.records.notice.syncing': '记录同步中，列表可能不完整',
   'pages.console.records.notice.syncUnknown':
     '无法确认记录是否已同步完整，列表可能不完整',
@@ -163,7 +169,7 @@ export default {
   'pages.console.oil.7': '98#',
   'pages.console.oil.8': '甲醇',
   'pages.console.oil.9': '甲苯',
-  'pages.console.oil.10': '米糠油',
+  'pages.console.oil.10': '煤油',
   'pages.console.oil.11': '硫酸',
   'pages.console.oil.12': '二甲苯',
   'pages.console.oil.13': '正丁酯',
@@ -197,6 +203,9 @@ export default {
   'pages.console.detail.snapshot.switch': '切换油罐',
   'pages.console.tank.title': '{index}号 {medium}',
   'pages.console.tank.readings': '主要读数',
+  'pages.console.tank.status.commFault': '通讯异常',
+  'pages.console.tank.status.lastReading': '上次读数',
+  'pages.console.tank.status.noReading': '暂无读数',
   'pages.console.tank.unit.mm': '毫米',
   'pages.console.tank.unit.L': '升',
   'pages.console.tank.unit.C': '℃',
@@ -214,7 +223,7 @@ export default {
   'pages.console.detail.snapshot.field.alarm': '报警状态',
   'pages.console.detail.snapshot.field.probe': '探针',
   'pages.console.detail.snapshot.probe.on': '已连接',
-  'pages.console.detail.snapshot.probe.off': '未连接',
+  'pages.console.detail.snapshot.probe.off': '通讯异常',
   'pages.console.detail.snapshot.reportedAt': '上报时间 {time}',
   'pages.ops.customers.create': '新建客户',
   'pages.ops.customers.col.id': '客户编号',
@@ -265,7 +274,7 @@ export default {
   'pages.ops.users.form.phone.invalid': '请输入有效的 11 位大陆手机号',
   'pages.ops.users.form.password.optional': '初始密码（可选）',
   'pages.ops.users.form.staff.hint':
-    '员工不能登录网页后台，密码仅用于小程序／App；手机号员工可不设密码（只能微信登录）。忘记密码请由平台管理员重置。创建后在「资产管理 → 员工授权」为其分配油罐。',
+    '员工不能登录网页后台，密码仅用于小程序／App；手机号员工可不设密码（只能手机号快捷登录）。忘记密码请由平台管理员重置。创建后在「资产管理 → 员工授权」为其分配油罐。',
   'pages.ops.users.form.password.label': '初始密码',
   'pages.ops.users.form.password.new': '新密码',
   'pages.ops.users.form.password.required': '请输入密码',
@@ -281,7 +290,7 @@ export default {
   'pages.ops.users.edit.nothing': '没有需要保存的修改',
   'pages.ops.users.edit.passwordHint': '不修改密码请留空。',
   'pages.ops.users.changePhone.hint':
-    '修改后该账号须用新手机号登录；已有的微信绑定会被清除，需重新用微信授权登录；已签发的登录状态不受影响（要让其下线请停用账号）。',
+    '修改后该账号须用新手机号登录；已有的手机号授权会被清除，需重新授权登录；已签发的登录状态不受影响（要让其下线请停用账号）。',
   'pages.ops.users.form.submit.move': '确认换客户',
   'pages.ops.users.move.warning':
     '换客户会同时清掉该账号已绑定的设备，需要重新绑定。',
@@ -321,48 +330,6 @@ export default {
   'pages.ops.devices.transfer.success': '设备 {device} 已转移到 {customer}',
   'pages.ops.devices.transfer.unchanged':
     '该设备本来就属于 {customer}，未做改动',
-  'pages.ops.devices.purge.title': '彻底删除设备',
-  'pages.ops.devices.purge.warning':
-    '将彻底删除该设备及全部历史数据，无法在系统内撤销',
-  'pages.ops.devices.purge.warningDetail':
-    '包括遥测、小时汇总、报警、出入库、命令、员工授权等；所在油站保留并显示为未安装。设备本机存储和服务器备份里的副本不在清理范围。',
-  'pages.ops.devices.purge.reason': '删除原因（必填）',
-  'pages.ops.devices.purge.typeName': '请输入完整设备编号 {device} 以确认：',
-  'pages.ops.devices.purge.confirmLabel': '确认设备编号',
-  'pages.ops.devices.purge.submit': '彻底删除',
-  'pages.ops.devices.purge.retry': '重试',
-  'pages.ops.devices.purge.close': '关闭',
-  'pages.ops.devices.purge.running':
-    '云端正在删除，请稍候；可以关闭本窗口，删除会继续进行。',
-  'pages.ops.devices.purge.pollFailing': '暂时取不到最新状态，正在重试。',
-  'pages.ops.devices.purge.completed': '设备 {device} 已彻底删除',
-  'pages.ops.devices.purge.completedHint':
-    '同一编号以后要重新接入，需先在 ThingsBoard 重新预登记，再在这里重新登记；它是全新设备，没有任何旧历史与授权。',
-  'pages.ops.devices.purge.failed': '删除未完成：停在「{step}」',
-  'pages.ops.devices.purge.failedHint':
-    '已完成的步骤不会重做，点「重试」从失败处继续。',
-  'pages.ops.devices.purge.step.thingsboard': '清理 ThingsBoard',
-  'pages.ops.devices.purge.step.business': '清理业务数据',
-  'pages.ops.devices.purge.step.verify': '核对',
-  'pages.ops.devices.purge.step.done': '完成',
-  'pages.ops.devices.purge.action': '删除设备',
-  'pages.ops.devices.purge.count.stockEvents': '出入库',
-  'pages.ops.devices.purge.count.alarmEvents': '报警',
-  'pages.ops.devices.purge.count.recordRejects': '拒收原文',
-  'pages.ops.devices.purge.count.telemetryHourly': '小时汇总',
-  'pages.ops.devices.purge.count.controlCommands': '命令',
-  'pages.ops.devices.purge.count.tankGrants': '罐授权',
-  'pages.ops.devices.purge.error.confirmMismatch': '确认编号与设备编号不一致。',
-  'pages.ops.devices.purge.error.reasonRequired':
-    '请填写删除原因（不超过 500 字）。',
-  'pages.ops.devices.purge.error.notFound':
-    '设备不存在或已被删除，请刷新列表。',
-  'pages.ops.devices.purge.error.unavailable':
-    '云端未配置 ThingsBoard，无法删除设备；未创建删除任务。',
-  'pages.ops.devices.purge.error.network':
-    '网络不通或请求超时，结果未知：云端可能已经受理。请关闭后重新打开本窗口查看；确认没有任务后再手动提交。',
-  'pages.ops.devices.purge.error.unknown':
-    '删除失败，请稍后重试；持续失败请联系平台管理员。',
   'pages.ops.devices.error.notFound': '设备不存在，请刷新列表。',
   'pages.ops.customers.col.actions': '操作',
   'pages.ops.customers.action.rename': '重命名',
@@ -557,13 +524,18 @@ export default {
   'pages.console.stations.assign.occupied': '{station}（已有设备 {device}）',
   'pages.console.stations.assign.occupiedHint':
     '已有设备的油站不能直接分配，一个油站同时只有一台大屏；需要更换请在原设备行使用「换机」。',
-  'pages.console.miniCode.action': '下载小程序码',
+  'pages.console.miniCode.action': '下载二维码',
   'pages.console.miniCode.error.notFound': '设备不存在，请刷新列表。',
   'pages.console.miniCode.error.unavailable':
-    '云端未启用微信，无法生成小程序码。',
-  'pages.console.miniCode.error.upstream': '微信服务返回失败，请稍后重试。',
+    '云端未启用小程序服务，无法生成小程序码。',
+  'pages.console.miniCode.error.upstream': '小程序码服务返回失败，请稍后重试。',
   'pages.console.miniCode.error.unknown':
     '下载小程序码失败，请稍后重试；持续失败请联系平台管理员。',
+  'pages.ops.devices.unassign.action': '解除油站关联',
+  'pages.ops.devices.unassign.title': '解除设备 {device} 与油站的关联？',
+  'pages.ops.devices.unassign.description':
+    '设备将显示为「未分组」，可重新分配；设备档案、历史数据和接入凭据都保留，终端照常上报。',
+  'pages.ops.devices.unassign.ok': '解除关联',
   'pages.console.stations.devices.action.replace': '换机',
   'pages.console.stations.replace.title': '换机：{station}',
   'pages.console.stations.replace.station': '油站',
@@ -735,8 +707,10 @@ export default {
   'pages.console.settings.tankTitle': '油罐参数',
   'pages.console.settings.deviceTitle': '整机设置（出入库判定）',
   'pages.console.settings.reportedAt': '设备上报于 {time}',
-  'pages.console.settings.notReported': '设备尚未上报油罐配置。',
-  'pages.console.settings.deviceNotReported': '设备尚未上报整机设置。',
+  'pages.console.settings.notReported':
+    '设备尚未上报油罐配置。如长时间未上报，请确认设备软件已升级。',
+  'pages.console.settings.deviceNotReported':
+    '设备尚未上报整机设置。如长时间未上报，请确认设备软件已升级。',
   'pages.console.settings.devicePlatformOnly': '整机设置只能由平台管理员修改。',
   'pages.console.settings.tankN': '{tank} 号罐',
   'pages.console.settings.col.field': '参数',
@@ -744,11 +718,12 @@ export default {
   'pages.console.settings.col.new': '新值',
   'pages.console.settings.readOnly': '（只读）',
   'pages.console.settings.readOnlyNote':
-    '只读参数不能远程修改：罐高、罐型、传感器长度需在设备上设置；密度单位尚未与设备确认；低温报警在设备上不生效。',
+    '只读参数不能远程修改：罐高、罐型、传感器长度需在设备上设置；低温报警在设备上不生效。',
   'pages.console.settings.send': '下发到设备',
   'pages.console.settings.reset': '清空修改',
   'pages.console.settings.aboveTankHeight':
     '{fields} 超过罐高，设备可能会拒绝。',
+  'pages.console.settings.toggleSign': '切换正负号',
   'pages.console.settings.problem.range': '超出范围（{min}～{max}）',
   'pages.console.settings.problem.integer': '必须是整数',
   'pages.console.settings.problem.order':
@@ -773,6 +748,13 @@ export default {
   'pages.console.settings.field.tankShape': '罐型',
   'pages.console.settings.field.sensorLengthMm': '传感器长度',
   'pages.console.settings.field.density': '密度',
+  'pages.console.settings.field.oilColor': '颜色',
+  'pages.console.settings.color.unsupported':
+    '设备软件版本较旧，暂不支持远程修改颜色，请升级设备软件。',
+  'pages.console.settings.color.nonStandard': '（非色板颜色）',
+  'pages.console.settings.density.check':
+    '数值超出 g/cm³ 常见范围，可能是按 kg/m³ 填写的，请核对。',
+  'pages.console.settings.problem.color': '请从色板中选择',
   'pages.console.settings.field.inStockHeightThresholdMm': '入库判定高度',
   'pages.console.settings.field.inStockTimeThresholdSec': '入库判定时间',
   'pages.console.settings.field.outStockHeightThresholdMm': '出库判定高度',
@@ -791,6 +773,51 @@ export default {
   'pages.console.settings.submit.note':
     '设备收到后会写入配置并重新上报；现场在设备上保存设置会覆盖远程修改。',
   'pages.console.settings.submit.reason': '修改原因（必填）',
+  'pages.ops.customers.action.media': '专属介质',
+  'pages.console.media.note':
+    '这里只保存介质名称。要让设备生效，请到设备的参数设置里为油罐选择并下发。',
+  'pages.console.media.loadFailed': '介质列表加载失败。',
+  'pages.console.media.retry': '重试',
+  'pages.console.media.add': '新增介质',
+  'pages.console.media.edit': '编辑',
+  'pages.console.media.enable': '启用',
+  'pages.console.media.disable': '停用',
+  'pages.console.media.saved': '已保存到介质库，尚未下发到设备。',
+  'pages.console.media.filter.all': '全部',
+  'pages.console.media.col.name': '名称',
+  'pages.console.media.col.nameEn': '英文名称（选填）',
+  'pages.console.media.col.owner': '所属',
+  'pages.console.media.col.scope': '使用范围',
+  'pages.console.media.col.status': '状态',
+  'pages.console.media.col.actions': '操作',
+  'pages.console.media.scope.public': '公共介质',
+  'pages.console.media.scope.customer': '客户专属',
+  'pages.console.media.status.on': '启用',
+  'pages.console.media.status.off': '已停用',
+  'pages.console.media.error.invalid_media_name':
+    '名称不符合要求（1–20 个字符）。',
+  'pages.console.media.error.invalid_media_scope': '使用范围和客户不匹配。',
+  'pages.console.media.error.unknown_customer': '客户不存在，请刷新。',
+  'pages.console.media.error.media_not_found': '介质不存在，请刷新。',
+  'pages.console.media.error.media_name_exists': '同一范围内已有这个名称。',
+  'pages.console.media.error.media_builtin_readonly': '内置介质不能改名。',
+  'pages.console.media.error.other': '操作失败，请稍后重试。',
+  'pages.console.settings.medium.public': '公共介质',
+  'pages.console.settings.medium.customer': '本客户专属',
+  'pages.console.settings.medium.noSync':
+    '设备软件版本较旧，不支持同步介质名称：手动新增的介质和编号 18 以上的介质暂不可选，请升级设备软件。',
+  'pages.console.settings.medium.loadFailed':
+    '介质选项加载失败，暂时不能修改介质。',
+  'pages.console.settings.medium.slots':
+    '本设备动态介质位置：已用 {used}/{total}',
+  'pages.console.settings.submit.error.mediaNotSelectable':
+    '这个介质已停用或不属于该设备的客户，请刷新后重选。',
+  'pages.console.settings.submit.error.mediaSyncUnsupported':
+    '设备软件版本较旧，不支持这个介质，请升级设备软件。',
+  'pages.console.settings.submit.error.colorSyncUnsupported':
+    '设备软件版本较旧，暂不支持远程修改颜色，请升级设备软件。',
+  'pages.console.settings.submit.error.mediaSlotsExhausted':
+    '该设备的 8 个动态介质位置已用完，未下发。',
   'pages.console.settings.submit.error.deploymentDisabled':
     '系统暂未开放远程配置。',
   'pages.console.settings.submit.error.deviceDisabled':
@@ -825,12 +852,16 @@ export default {
   'pages.console.settings.echo.timedOut':
     '执行成功，但长时间未收到设备回报，可稍后手动刷新',
   'pages.console.settings.echo.refresh': '刷新回报',
-  'pages.console.settings.result.ignored': '设备忽略了：{fields}',
+  'pages.console.settings.result.ignored':
+    '设备忽略了：{fields}。设备软件版本较旧，请升级设备软件。',
+  'pages.console.settings.refusal.unknownMethod':
+    '设备软件版本较旧，不支持该操作，请升级设备软件。',
   'pages.console.settings.commandId': '命令编号 {id}',
   'pages.console.settings.pollFailing': '状态读取失败，正在重试…',
   'pages.console.settings.dismiss': '关闭',
   'pages.console.settings.calibration.title': '标定表（只读）',
-  'pages.console.settings.calibration.none': '设备尚未上报标定表。',
+  'pages.console.settings.calibration.none':
+    '设备尚未上报标定表。如长时间未上报，请确认设备软件已升级。',
   'pages.console.settings.calibration.failed': '读取标定表失败',
   'pages.console.settings.calibration.meta':
     '共 {n} 点，设备上报于 {time}（设备仅在重新连接时上报）',

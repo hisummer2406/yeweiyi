@@ -6,7 +6,11 @@ import { ApiError, get } from '../../utils/request';
 import { getToken } from '../../utils/storage';
 import { scanAndLocate } from '../../utils/scan';
 import { showComingSoon } from '../../utils/comingSoon';
-import { toTankViews, type TankView } from '../../utils/telemetry';
+import { LIVE_REFRESH_MS, toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
+import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
+import { getTankSettings } from '../../utils/remoteConfigApi';
+import { applyVirtual } from '../../utils/virtualTable';
+import { dropLegacyScale, loadVirtual } from '../../utils/virtualTableStore';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
@@ -37,6 +41,7 @@ type DeviceGroup = {
   // Set when the last refresh failed but an earlier one succeeded: the tanks on screen are kept and the
   // card says they may be out of date, and since when (the phone's clock at the last success).
   staleText: string;
+  shapes: TankShapeState;
 };
 
 const emptyGroup = (deviceName: string): DeviceGroup => ({
@@ -48,6 +53,14 @@ const emptyGroup = (deviceName: string): DeviceGroup => ({
   error: '',
   note: '',
   staleText: '',
+  shapes: emptyTankShapes(),
+});
+
+// Re-applied from the raw readings with the virtual table stored right now (#56): a table enabled or stopped
+// in 罐表设置 shows at once, and a reading is never converted twice.
+const revirtualized = (g: DeviceGroup): DeviceGroup => ({
+  ...g,
+  tanks: g.tanks.map((t) => applyVirtual(t, loadVirtual(g.deviceName, t.index))),
 });
 
 const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale());
@@ -55,6 +68,7 @@ const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale())
 Page({
   data: {
     text: texts('home'),
+    homeLanguage: currentLocale(),
     groups: [] as DeviceGroup[],
     // Distinguishes "still asking which devices I have" from "I have none", so the first-run empty
     // state does not flash while /api/devices is in flight.
@@ -75,6 +89,9 @@ Page({
     // The header is drawn under the status bar (navigationStyle: custom), so it needs the status
     // bar's height in rpx. Falls back to the design draft's 88rpx if the API is unavailable.
     statusBarRpx: 88,
+    // 每个罐占首页可用高度的四分之一；测量前沿用设计稿行高。
+    tankRowHeightRpx: 293,
+    compactHome: false,
   },
 
   // Bumped on every reload; a telemetry response from an older reload is dropped instead of
@@ -90,12 +107,19 @@ Page({
 
   // Stops listening for the network coming back.
   stopNet: null as (() => void) | null,
+  shapeTimer: null as ReturnType<typeof setInterval> | null,
+  liveTimer: null as ReturnType<typeof setInterval> | null,
+  // Devices whose telemetry/latest read has not come back yet; the live refresh skips them.
+  telemetryInFlight: {} as Record<string, number>,
+  activeAccount: '',
+  shapeRequests: {} as Record<string, number>,
+  pageHidden: false,
 
   onLoad() {
     // Network back (airplane mode off, wifi to mobile data ...): read again at once instead of waiting for
     // the user to pull down. onShow only fires when the page comes into view.
     this.stopNet = onNetworkBack(() => {
-      if (getToken()) this.loadHome();
+      if (!this.pageHidden && getToken()) this.loadHome();
     });
     try {
       const info = wx.getWindowInfo();
@@ -105,17 +129,93 @@ Page({
     }
   },
 
+  onReady() {
+    this.measureHomeLayout();
+  },
+
+  onResize() {
+    try {
+      const info = wx.getWindowInfo();
+      this.setData(
+        { statusBarRpx: Math.round((info.statusBarHeight * 750) / info.windowWidth) },
+        () => this.measureHomeLayout(),
+      );
+    } catch {
+      // 无窗口信息时保留当前排版。
+    }
+  },
+
+  // windowHeight 已是小程序可用窗口，不再重复扣除微信原生 tabBar / 底部安全区。
+  // 只量头部和第一组上报时间的高度，滚动后刷新也不会因坐标变化把罐行越算越高。
+  measureHomeLayout() {
+    wx.createSelectorQuery()
+      .select('.home-header').boundingClientRect()
+      .select('.group-head').boundingClientRect()
+      .exec((rects) => {
+        const [header, group] = rects as (WechatMiniprogram.BoundingClientRectResult | null)[];
+        if (!header) return;
+        try {
+          const info = wx.getWindowInfo();
+          const available = info.windowHeight - header.height - (group?.height || 0);
+          if (available <= 0 || info.windowWidth <= 0) return;
+          // 向下取两位小数，避免四行累计舍入误差把第四罐推入底部导航。
+          const tankRowHeightRpx = Math.floor((available * 750 * 100) / info.windowWidth / 4) / 100;
+          const compactHome = tankRowHeightRpx < 274;
+          if (tankRowHeightRpx !== this.data.tankRowHeightRpx || compactHome !== this.data.compactHome) {
+            this.setData({ tankRowHeightRpx, compactHome });
+          }
+        } catch {
+          // 旧运行环境无法测量时保留设计稿尺寸，全部罐仍可自然滚动查看。
+        }
+      });
+  },
+
   onShow() {
+    this.pageHidden = false;
     if (!getToken()) {
       wx.reLaunch({ url: '/pages/login/login' });
       return;
     }
     applyTabBar();
-    this.setData({ text: texts('home') });
+    const account = this.currentUserKey();
+    if (account !== this.activeAccount) this.setData({ groups: [] });
+    this.activeAccount = account;
+    this.setData({ text: texts('home'), homeLanguage: currentLocale() });
+    // 从罐表设置启用/停用虚拟罐表后回来：先按本机当前的表重算已显示的罐，断网刷新失败也和详情一致
+    this.revirtualizeShown();
+    // 旧显示倍率（#44）已下线：本账号还留着倍率配置的，清掉并提示一次去罐表设置启用虚拟罐表（#56）
+    if (dropLegacyScale()) {
+      wx.showModal({ title: t('home.scaleRetiredTitle'), content: t('home.scaleRetired'), showCancel: false });
+    }
     this.loadHome();
+    this.stopShapePoll();
+    this.shapeTimer = setInterval(() => {
+      for (const g of this.data.groups) void this.loadShapes(g.deviceName, this.loadSeq);
+    }, 60_000);
+    this.liveTimer = setInterval(() => {
+      for (const g of this.data.groups) {
+        if (!this.telemetryInFlight[g.deviceName]) void this.loadTelemetry(g.deviceName, this.loadSeq);
+      }
+    }, LIVE_REFRESH_MS);
+  },
+
+  onHide() {
+    this.pageHidden = true;
+    this.loadSeq++;
+    this.stopShapePoll();
+  },
+
+  stopShapePoll() {
+    if (this.shapeTimer) clearInterval(this.shapeTimer);
+    this.shapeTimer = null;
+    if (this.liveTimer) clearInterval(this.liveTimer);
+    this.liveTimer = null;
   },
 
   onUnload() {
+    this.pageHidden = true;
+    this.loadSeq++;
+    this.stopShapePoll();
     this.stopNet?.();
     this.stopNet = null;
   },
@@ -130,12 +230,13 @@ Page({
   // device of the SELECTED station, in parallel — there is no batch endpoint.
   loadHome(): Promise<unknown> {
     const seq = ++this.loadSeq;
+    const account = this.currentUserKey();
     return Promise.all([
       get<{ rows: Device[] }>('/api/devices'),
       get<{ rows: Station[] }>('/api/stations').catch(() => ({ rows: [] as Station[] })),
     ])
       .then(([devRes, stRes]) => {
-        if (seq !== this.loadSeq) return;
+        if (seq !== this.loadSeq || account !== this.currentUserKey()) return;
         this.allDevices = devRes.rows;
         this.allStations = stRes.rows;
         this.stationOptions = buildStationOptions(stRes.rows, devRes.rows, t('station.ungrouped'));
@@ -169,7 +270,9 @@ Page({
     const before = new Map((this.data.groups as DeviceGroup[]).map((g) => [g.deviceName, g]));
     const groups = visible.map((d: Device) => {
       const prev = before.get(d.device_name);
-      return prev && prev.state === 'ok' && prev.tanks.length > 0 ? { ...prev, staleText: '' } : emptyGroup(d.device_name);
+      return prev && prev.state === 'ok' && prev.tanks.length > 0
+        ? { ...revirtualized(prev), staleText: '' }
+        : emptyGroup(d.device_name);
     });
     this.setData({
       groups,
@@ -181,8 +284,13 @@ Page({
       stationKey: current ? current.key : '',
       deviceTotal: this.allDevices.length,
       stationNotice: lostStation ? t('home.lostStation') : '',
-    });
+    }, () => this.measureHomeLayout());
     return Promise.all(groups.map((g: DeviceGroup) => this.loadDevice(g.deviceName, seq)));
+  },
+
+  revirtualizeShown() {
+    const groups = this.data.groups as DeviceGroup[];
+    if (groups.some((g) => g.tanks.length > 0)) this.setData({ groups: groups.map(revirtualized) });
   },
 
   onPickStation() {
@@ -205,6 +313,12 @@ Page({
   },
 
   loadDevice(deviceName: string, seq: number): Promise<void> {
+    return Promise.all([this.loadTelemetry(deviceName, seq), this.loadShapes(deviceName, seq)]).then(() => undefined);
+  },
+
+  // Also the 5 s live refresh: it shows no loading state, and a failure keeps the readings marked out of date.
+  loadTelemetry(deviceName: string, seq: number): Promise<void> {
+    this.telemetryInFlight[deviceName] = (this.telemetryInFlight[deviceName] || 0) + 1;
     return get<LatestTelemetryResponse>(
       `/api/devices/${encodeURIComponent(deviceName)}/telemetry/latest`,
     )
@@ -212,7 +326,12 @@ Page({
         this.patchGroup(deviceName, seq, {
           state: 'ok',
           ts: formatLocalTime(res.ts, currentLocale()),
-          tanks: toTankViews(res, deviceName),
+          tanks: toTankViews(
+            res,
+            deviceName,
+            this.data.groups.find((g) => g.deviceName === deviceName)?.shapes,
+            (tank) => loadVirtual(deviceName, tank),
+          ),
           error: '',
           staleText: '',
           fetchedAt: nowText(),
@@ -229,31 +348,58 @@ Page({
           this.patchGroup(deviceName, seq, { state: 'never', ts: '', tanks: [], error: '', note, staleText: '' });
         } else {
           const shown = (this.data.groups as DeviceGroup[]).find((g) => g.deviceName === deviceName);
-          if (shown && shown.fetchedAt && shown.tanks.length > 0) {
+          if (![401, 403, 404].includes(err.status) && shown && shown.fetchedAt && shown.tanks.length > 0) {
             // Keep what was shown and say how old it is, rather than replacing readings with an error.
             this.patchGroup(deviceName, seq, { state: 'ok', staleText: t('home.stale', { time: shown.fetchedAt }) });
           } else {
             this.patchGroup(deviceName, seq, { state: 'error', ts: '', tanks: [], error: describeError(err), staleText: '' });
           }
         }
+      })
+      .finally(() => {
+        this.telemetryInFlight[deviceName] -= 1;
       });
   },
 
+  loadShapes(deviceName: string, seq: number): Promise<void> {
+    const account = this.currentUserKey();
+    const mine = (this.shapeRequests[deviceName] ?? 0) + 1;
+    this.shapeRequests[deviceName] = mine;
+    const apply = (shapes: TankShapeState) => {
+      if (seq !== this.loadSeq || mine !== this.shapeRequests[deviceName] || account !== this.currentUserKey()) return;
+      const group = this.data.groups.find((g) => g.deviceName === deviceName);
+      if (!group) return;
+      this.patchGroup(deviceName, seq, { shapes, tanks: group.tanks.map((t) => ({ ...t, ...tankShapeFields(shapes, t.index) })) });
+    };
+    return getTankSettings(deviceName).then((rows) => apply({ rows, status: 'ok' })).catch((error: ApiError) => {
+      const old = this.data.groups.find((g) => g.deviceName === deviceName)?.shapes ?? emptyTankShapes();
+      apply(tankShapeFailure(old, error.status));
+    });
+  },
+
   patchGroup(deviceName: string, seq: number, patch: Partial<DeviceGroup>) {
-    if (seq !== this.loadSeq) return;
+    if (seq !== this.loadSeq || this.activeAccount !== this.currentUserKey()) return;
     const index = this.data.groups.findIndex((g: DeviceGroup) => g.deviceName === deviceName);
     if (index < 0) return;
     const update: Record<string, unknown> = {};
     for (const key of Object.keys(patch) as (keyof DeviceGroup)[]) {
       update[`groups[${index}].${key}`] = patch[key];
     }
-    this.setData(update);
+    this.setData(update, () => this.measureHomeLayout());
   },
 
   onRetryDevice(e: WechatMiniprogram.BaseEvent) {
     const deviceName = e.currentTarget.dataset.device as string;
     this.patchGroup(deviceName, this.loadSeq, { state: 'loading', error: '' });
     this.loadDevice(deviceName, this.loadSeq);
+  },
+
+  onShowStale(e: WechatMiniprogram.BaseEvent) {
+    wx.showModal({
+      title: t('home.staleBadge'),
+      content: e.currentTarget.dataset.message,
+      showCancel: false,
+    });
   },
 
   onTapTank(e: WechatMiniprogram.BaseEvent) {
@@ -264,7 +410,9 @@ Page({
     // The station the card was shown under travels with the device, so the detail page can follow the
     // station if its device is replaced while the page is open (see device-detail refreshAssociation).
     const station = stationParam(stationIdFromKey(this.data.stationKey));
-    const stationQuery = station ? `&station=${station}` : '';
+    // Display only: the detail page's info bar shows 油站 · 设备 · 罐号 (#43).
+    const name = station && this.data.stationName ? `&stationName=${encodeURIComponent(this.data.stationName as string)}` : '';
+    const stationQuery = station ? `&station=${station}${name}` : '';
     wx.navigateTo({
       url: `/pages/device-detail/device-detail?device=${encodeURIComponent(device)}${tankQuery}${stationQuery}`,
     });

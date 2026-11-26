@@ -1,0 +1,23 @@
+{
+  "appName": "中成电气",
+  "packageName": "com.zhongchengelec.yeweiyi",
+  "versionName": "1.0.3",
+  "versionCode": 103,
+  "buildType": "release",
+  "apk": "com.zhongchengelec.yeweiyi-1.0.3.apk",
+  "sizeBytes": 55363629,
+  "sha256": "56a373e2260a71fba835a1080cd64f7f5c74908f5768e9451cd6a998e63867cc",
+  "signerCertificateSha256": "06cfca6aeea8b9a05a37c2dff990ebff8e11a311dcfe36ea2e23a8eb215008e1",
+  "signatureVerification": "apksigner passed v2/v3",
+  "sameCertificateAsVersion1_0_0": true,
+  "zipIntegrity": "passed",
+  "minAndroidSdk": 24,
+  "abi": [
+    "arm64-v8a"
+  ],
+  "checks": [
+    "npm run typecheck passed",
+    "npm run check passed"
+  ],
+  "realDeviceAcceptance": "尚未进行本版本真机安装及覆盖升级验收"
+}

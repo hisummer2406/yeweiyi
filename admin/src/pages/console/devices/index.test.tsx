@@ -12,6 +12,8 @@ import zhPages from '@/locales/zh-CN/pages';
 const push = vi.fn();
 const listDevices = vi.fn();
 const getLatestTelemetry = vi.fn();
+const getTankSettings = vi.fn().mockResolvedValue([]);
+vi.mock('@/services/ant-design-pro/deviceConfig', () => ({ getTankSettings }));
 const listStations = vi.fn();
 const listCustomers = vi.fn();
 let initialSearch = '';
@@ -80,6 +82,7 @@ const telemetry = (name: string): API.LatestTelemetry => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getTankSettings.mockReset().mockResolvedValue([]);
   initialSearch = '';
   canPlatformAdmin = false;
   listStations.mockResolvedValue([]);
@@ -88,12 +91,34 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ConsoleDevices (overview) after extracting TankCard', () => {
+  it('merges device configuration by tank number and renders both reported shapes', async () => {
+    listDevices.mockResolvedValue([device('D1')]);
+    const base = telemetry('D1');
+    getLatestTelemetry.mockResolvedValue({
+      ...base,
+      tanks: [{ ...base.tanks[0], index: 3 }, base.tanks[0]],
+    });
+    getTankSettings.mockResolvedValue([
+      { tank: 1, tankShape: 1, reportedAt: '2026-01-01T00:00:00Z' },
+      { tank: 3, tankShape: 0, reportedAt: '2026-01-01T00:00:00Z' },
+    ]);
+    render(<ConsoleDevices />);
+    expect(
+      (await screen.findByAltText('1号罐示意图（立罐）')).getAttribute('src'),
+    ).toBe('/images/tank-vertical.png');
+    expect(screen.getByAltText('3号罐示意图（卧罐）').getAttribute('src')).toBe(
+      '/images/tank-generic.png',
+    );
+    expect(getTankSettings).toHaveBeenCalledTimes(1);
+    expect(getTankSettings).toHaveBeenCalledWith('D1');
+  });
+
   it('still shows the alarm and probe tags on the card', async () => {
     listDevices.mockResolvedValue([device('D1')]);
     getLatestTelemetry.mockResolvedValue(telemetry('D1'));
     render(<ConsoleDevices />);
     expect(await screen.findByText('报警')).toBeTruthy();
-    expect(screen.getByText('探针未连接')).toBeTruthy();
+    expect(screen.getByText('通讯异常')).toBeTruthy();
   });
 
   it('still opens the device detail with an escaped name when a card is clicked', async () => {
@@ -344,6 +369,56 @@ describe('ConsoleDevices (overview) paging and request control', () => {
       setHidden(false);
       document.dispatchEvent(new Event('visibilitychange'));
       await waitFor(() => expect(listDevices).toHaveBeenCalledTimes(2));
+    });
+
+    it('refreshes readings of the current page every 5 seconds without relisting', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(30));
+      render(<ConsoleDevices />);
+      await screen.findByText('D012');
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(12));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(24));
+      expect(listDevices).toHaveBeenCalledTimes(1);
+      const asked = getLatestTelemetry.mock.calls.map((c) => c[0]);
+      expect(asked).not.toContain('D013');
+    });
+
+    it('does not pile up requests for a device whose last request is pending', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(1));
+      let resolveSlow!: (v: API.LatestTelemetry) => void;
+      getLatestTelemetry
+        .mockResolvedValueOnce(telemetry('D001'))
+        .mockImplementationOnce(
+          () =>
+            new Promise((r) => {
+              resolveSlow = r;
+            }),
+        );
+      render(<ConsoleDevices />);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(2));
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(getLatestTelemetry).toHaveBeenCalledTimes(2);
+      resolveSlow(telemetry('D001'));
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(3));
+    });
+
+    it('keeps the last reading and report time when a refresh fails', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      listDevices.mockResolvedValue(many(1));
+      getLatestTelemetry
+        .mockResolvedValueOnce(telemetry('D001'))
+        .mockRejectedValue({ message: 'Network Error' });
+      render(<ConsoleDevices />);
+      expect(await screen.findByText(/上报时间/)).toBeTruthy();
+      await vi.advanceTimersByTimeAsync(5_000);
+      await waitFor(() => expect(getLatestTelemetry).toHaveBeenCalledTimes(2));
+      expect(screen.getByText(/上报时间/)).toBeTruthy();
+      expect(screen.queryByRole('alert')).toBeNull();
     });
 
     it('keeps polling while the tab is visible', async () => {

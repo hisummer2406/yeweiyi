@@ -15,6 +15,15 @@ public final class DeviceSettingsAttributeBuilder {
     public static final String KEY_OUT_HEIGHT_MM = "outStockHeightThresholdMm";
     public static final String KEY_OUT_TIME_SEC = "outStockTimeThresholdSec";
 
+    /** 本固件支持随 config.setTankSettings 写入介质名称（#27）；旧固件不上报，云端据此不向其下发新含义编号。 */
+    public static final String KEY_CUSTOM_MEDIA_SYNC = "customMediaSync";
+
+    /** 本固件支持随 config.setTankSettings 写入 oilColor；旧固件会忽略该字段，云端据此不向其下发颜色。 */
+    public static final String KEY_OIL_COLOR_SYNC = "oilColorSync";
+
+    /** 本固件支持远程写入 tankHeightMm、alarmLowTempC 且低温报警已接通（#65）；旧固件拒绝这两个字段。 */
+    public static final String KEY_TANK_HEIGHT_LOW_TEMP_SYNC = "tankHeightLowTempSync";
+
     private DeviceSettingsAttributeBuilder() {
     }
 

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 
 	"yeweiyi-cloud/internal/api"
@@ -267,11 +268,21 @@ func TestWSAlarms_RevokedUserIsDisconnectedEvenWithoutNewAlarms(t *testing.T) {
 // A token is only good until it expires; a stream must not outlive it.
 func TestWSAlarms_ConnectionEndsWhenTheTokenExpires(t *testing.T) {
 	env := newTestEnvWith(t, func(d *api.Deps) {
-		d.TokenTTL = 2 * time.Second
+		// Long enough that a slow CI runner still completes the handshake before the token (whose
+		// exp is truncated to whole seconds) runs out.
+		d.TokenTTL = 3 * time.Second
 		d.WSRevalidateInterval = time.Hour // so only the expiry can be what closes it
 	})
 	device := "ws-token-expiry"
 	env.ownDevice(device)
+
+	// Measure against the token's own exp claim, not against when the handshake finished: the TTL
+	// runs from signing, so on a slow machine the handshake itself can eat most of it.
+	var claims jwt.RegisteredClaims
+	if _, _, err := jwt.NewParser().ParseUnverified(env.token, &claims); err != nil || claims.ExpiresAt == nil {
+		t.Fatalf("read exp from the test token: %v", err)
+	}
+	exp := claims.ExpiresAt.Time
 
 	conn, _, err := dialAlarmsWS(t, env, device)
 	if err != nil {
@@ -279,12 +290,11 @@ func TestWSAlarms_ConnectionEndsWhenTheTokenExpires(t *testing.T) {
 	}
 	defer conn.Close()
 
-	start := time.Now()
-	if _, closed := readUntilClosed(conn, 6*time.Second); !closed {
+	if _, closed := readUntilClosed(conn, time.Until(exp)+5*time.Second); !closed {
 		t.Fatal("connection outlived its token")
 	}
-	if elapsed := time.Since(start); elapsed < time.Second {
-		t.Errorf("closed after %s, well before the token's 2s lifetime was up", elapsed)
+	if early := time.Until(exp); early > 0 {
+		t.Errorf("closed %s before the token's exp %s", early, exp.Format(time.RFC3339Nano))
 	}
 }
 

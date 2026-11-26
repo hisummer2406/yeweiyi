@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -91,7 +92,6 @@ func newPurgeEnv(t *testing.T, tb *fakeTB) *purgeEnv {
 	pe := &purgeEnv{tb: tb}
 	pe.testEnv = newTestEnvWith(t, func(d *api.Deps) {
 		pe.runner = purge.New(purge.Config{Pool: d.Pool, Queries: d.Queries, TB: tb, Logf: t.Logf})
-		d.Purger = pe.runner
 	})
 	pe.admin = pe.otherUserToken(control.RolePlatformAdmin)
 	return pe
@@ -112,13 +112,26 @@ type purgeBody struct {
 	Code string `json:"code"`
 }
 
-func (pe *purgeEnv) purge(token, device, confirm, reason string) (purgeBody, int) {
+// startPurge creates (or, when the device has an unfinished task, restarts) a purge task the way
+// operations would and runs it in the background. The web route can no longer do this (issue #69).
+func (pe *purgeEnv) startPurge(device, reason string) int64 {
 	pe.t.Helper()
-	rec := pe.do("POST", "/api/devices/"+device+"/purge", []byte(token),
-		jsonBody(pe.t, map[string]string{"confirmDeviceName": confirm, "reason": reason}))
-	var out purgeBody
-	_ = json.Unmarshal(rec.Body.Bytes(), &out)
-	return out, rec.Code
+	ctx := context.Background()
+	var id int64
+	if open, err := pe.queries.GetOpenDevicePurge(ctx, device); err == nil {
+		task, err := pe.queries.RestartDevicePurge(ctx, open.ID)
+		if err != nil {
+			pe.t.Fatal(err)
+		}
+		id = task.ID
+	} else if err := pe.pool.QueryRow(ctx, `
+		INSERT INTO device_purges (device_name, reason, requested_username, customer_id, station_id)
+		SELECT device_name, $2, 'ops', customer_id, station_id FROM devices WHERE device_name = $1
+		RETURNING id`, device, reason).Scan(&id); err != nil {
+		pe.t.Fatal(err)
+	}
+	pe.runner.Start(ctx, id)
+	return id
 }
 
 func (pe *purgeEnv) getPurge(id int64) purgeBody {
@@ -249,14 +262,27 @@ func (pe *purgeEnv) historyRows(device string) int64 {
 	return total + pe.count(`SELECT COUNT(*) FROM audit_log WHERE device_name = $1 AND action <> 'device.purge'`, device)
 }
 
-func TestDevicePurge_RefusesEveryoneButPlatformAdmin(t *testing.T) {
-	pe := newPurgeEnv(t, newFakeTB())
-	customer := pe.newCustomer("purge-deny")
+// TestDevicePurge_WebRouteIsDisabled is issue #69: no caller, platform administrators included, can
+// start or restart a purge over HTTP. Customer-side callers keep the role 403; a platform administrator
+// gets 410 device_purge_disabled. Nothing is written but the denied audit, and earlier tasks stay listed.
+func TestDevicePurge_WebRouteIsDisabled(t *testing.T) {
 	device := "ZCT" + newBindDeviceName(t)
+	tb := newFakeTB(device)
+	pe := newPurgeEnv(t, tb)
+	customer := pe.newCustomer("purge-deny")
 	pe.cleanupPurges(device)
 	pe.seedDeviceIn(device, customer)
+	_, staffID := pe.userIn(control.RoleCustomerUser, customer)
+	pe.seedHistory(device, customer, customer, staffID)
 	adminTok, _ := pe.userIn(control.RoleCustomerAdmin, customer)
 	staffTok, _ := pe.userIn(control.RoleCustomerUser, customer)
+
+	// An earlier task that failed: the web must not be able to restart it either.
+	tb.fail(errors.New("thingsboard: 503"))
+	old := pe.startPurge(device, "earlier")
+	pe.runner.Wait()
+	tb.fail(nil)
+	historyBefore := pe.historyRows(device)
 
 	for name, tok := range map[string]string{"customer_admin": adminTok, "customer_user": staffTok} {
 		rec := pe.do("POST", "/api/devices/"+device+"/purge", []byte(tok), []byte(`not even json`))
@@ -267,42 +293,34 @@ func TestDevicePurge_RefusesEveryoneButPlatformAdmin(t *testing.T) {
 			t.Errorf("%s list: %d, want 403", name, rec.Code)
 		}
 	}
-	if n := pe.count(`SELECT COUNT(*) FROM device_purges WHERE device_name = $1`, device); n != 0 {
-		t.Fatalf("%d task(s) created by refused callers", n)
+	for _, body := range []string{`{"confirmDeviceName":"` + device + `","reason":"r"}`, `not even json`} {
+		rec := pe.do("POST", "/api/devices/"+device+"/purge", []byte(pe.admin), []byte(body))
+		var got struct{ Code string }
+		_ = json.Unmarshal(rec.Body.Bytes(), &got)
+		if rec.Code != http.StatusGone || got.Code != "device_purge_disabled" {
+			t.Errorf("platform admin %s: %d %s, want 410 device_purge_disabled", body, rec.Code, rec.Body.String())
+		}
 	}
-	if n := pe.count(`SELECT COUNT(*) FROM devices WHERE device_name = $1`, device); n != 1 {
-		t.Fatal("device touched by refused callers")
-	}
-	if n := pe.count(`SELECT COUNT(*) FROM audit_log WHERE action = 'device.purge' AND outcome = 'denied' AND customer_id = $1`, customer); n < 2 {
-		t.Fatalf("denied audits = %d, want at least 2", n)
-	}
-}
+	pe.runner.Wait()
 
-func TestDevicePurge_ValidatesRequest(t *testing.T) {
-	pe := newPurgeEnv(t, newFakeTB())
-	customer := pe.newCustomer("purge-val")
-	device := "0012" + newBindDeviceName(t)
-	pe.cleanupPurges(device)
-	pe.seedDeviceIn(device, customer)
-
-	if body, code := pe.purge(pe.admin, device, device[2:], "r"); code != http.StatusBadRequest || body.Code != "confirm_mismatch" {
-		t.Errorf("dropped leading zeros: %d %q", code, body.Code)
+	if n := pe.count(`SELECT COUNT(*) FROM device_purges WHERE device_name = $1`, device); n != 1 {
+		t.Fatalf("%d task(s), want only the earlier one", n)
 	}
-	if body, code := pe.purge(pe.admin, device, device, "   "); code != http.StatusBadRequest || body.Code != "reason_required" {
-		t.Errorf("blank reason: %d %q", code, body.Code)
+	if got := pe.getPurge(old).Purge; got.Status != purge.StatusFailed {
+		t.Errorf("earlier task was restarted: %+v", got)
 	}
-	if body, code := pe.purge(pe.admin, device+"x", device+"x", "r"); code != http.StatusNotFound || body.Code != "device_not_found" {
-		t.Errorf("missing device: %d %q", code, body.Code)
+	if n := pe.historyRows(device); n != historyBefore {
+		t.Errorf("business rows %d, had %d", n, historyBefore)
 	}
-	if n := pe.count(`SELECT COUNT(*) FROM device_purges WHERE device_name = $1`, device); n != 0 {
-		t.Fatalf("rejected requests created %d task(s)", n)
+	if !pe.tb.has(device) {
+		t.Error("ThingsBoard lost the device")
 	}
-
-	noTB := newTestEnv(t)
-	rec := noTB.do("POST", "/api/devices/"+device+"/purge", []byte(noTB.otherUserToken(control.RolePlatformAdmin)),
-		jsonBody(t, map[string]string{"confirmDeviceName": device, "reason": "r"}))
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("without ThingsBoard: %d, want 503", rec.Code)
+	if n := pe.count(`SELECT COUNT(*) FROM audit_log WHERE action = 'device.purge' AND outcome = 'denied' AND detail->>'device' = $1`, device); n != 4 {
+		t.Errorf("denied audits = %d, want 4", n)
+	}
+	rec := pe.do("GET", "/api/device-purges?deviceName="+device, []byte(pe.admin), nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), fmt.Sprintf(`"id":%d`, old)) {
+		t.Errorf("earlier task no longer listed: %d %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -329,16 +347,10 @@ func TestDevicePurge_DeletesEverythingOfTheDeviceAndNothingElse(t *testing.T) {
 	pe.pool.Exec(ctx, `UPDATE devices SET station_id = $2 WHERE device_name = $1`, target, station)
 	otherBefore := pe.historyRows(other)
 
-	body, code := pe.purge(pe.admin, target, target, "误登记")
-	if code != http.StatusAccepted || body.Purge.Status != purge.StatusRunning {
-		t.Fatalf("POST: %d %+v", code, body)
-	}
-	if body.Purge.CustomerID == nil || *body.Purge.CustomerID != customer || body.Purge.StationID == nil || *body.Purge.StationID != station {
-		t.Errorf("snapshot of customer/station: %+v", body.Purge)
-	}
+	purgeID := pe.startPurge(target, "误登记")
 	pe.runner.Wait()
 
-	got := pe.getPurge(body.Purge.ID).Purge
+	got := pe.getPurge(purgeID).Purge
 	if got.Status != purge.StatusCompleted || got.Step != purge.StepDone || got.FinishedAt == nil {
 		t.Fatalf("task after run: %+v", got)
 	}
@@ -371,14 +383,8 @@ func TestDevicePurge_DeletesEverythingOfTheDeviceAndNothingElse(t *testing.T) {
 	if n := pe.count(`SELECT COUNT(*) FROM users WHERE id = $1`, staffID); n != 1 {
 		t.Error("the employee went with the device")
 	}
-	if n := pe.count(`SELECT COUNT(*) FROM audit_log WHERE device_name = $1 AND action = 'device.purge' AND outcome = 'allowed'`, target); n != 1 {
-		t.Errorf("purge audit rows = %d, want 1", n)
-	}
 
-	// Done means gone: asking again is a 404, and the result is still found by name.
-	if _, code := pe.purge(pe.admin, target, target, "again"); code != http.StatusNotFound {
-		t.Errorf("purge after completion: %d, want 404", code)
-	}
+	// The result is still found by name.
 	rec := pe.do("GET", "/api/device-purges?deviceName="+target, []byte(pe.admin), nil)
 	var list struct {
 		Rows []struct {
@@ -387,7 +393,7 @@ func TestDevicePurge_DeletesEverythingOfTheDeviceAndNothingElse(t *testing.T) {
 		} `json:"rows"`
 	}
 	json.Unmarshal(rec.Body.Bytes(), &list)
-	if len(list.Rows) != 1 || list.Rows[0].ID != body.Purge.ID || list.Rows[0].Status != purge.StatusCompleted {
+	if len(list.Rows) != 1 || list.Rows[0].ID != purgeID || list.Rows[0].Status != purge.StatusCompleted {
 		t.Errorf("list by device: %s", rec.Body.String())
 	}
 }
@@ -408,12 +414,9 @@ func TestDevicePurge_FailureIsVisibleFencedAndResumable(t *testing.T) {
 	t.Cleanup(func() { pe.pool.Exec(context.Background(), `DELETE FROM stations WHERE id = $1`, station) })
 
 	tb.fail(errors.New("thingsboard: 503"))
-	first, code := pe.purge(pe.admin, device, device, "作废")
-	if code != http.StatusAccepted {
-		t.Fatalf("POST: %d", code)
-	}
+	first := pe.startPurge(device, "作废")
 	pe.runner.Wait()
-	failed := pe.getPurge(first.Purge.ID).Purge
+	failed := pe.getPurge(first).Purge
 	if failed.Status != purge.StatusFailed || failed.Step != purge.StepThingsBoard || failed.Error == nil {
 		t.Fatalf("after ThingsBoard failure: %+v", failed)
 	}
@@ -456,52 +459,12 @@ func TestDevicePurge_FailureIsVisibleFencedAndResumable(t *testing.T) {
 
 	// Asking again resumes the same task and finishes it.
 	tb.fail(nil)
-	again, code := pe.purge(pe.admin, device, device, "作废")
-	if code != http.StatusOK || again.Purge.ID != first.Purge.ID {
-		t.Fatalf("retry: %d id=%d, want 200 and task %d", code, again.Purge.ID, first.Purge.ID)
+	if again := pe.startPurge(device, "作废"); again != first {
+		t.Fatalf("retry made task %d, want %d", again, first)
 	}
 	pe.runner.Wait()
-	if done := pe.getPurge(first.Purge.ID).Purge; done.Status != purge.StatusCompleted {
+	if done := pe.getPurge(first).Purge; done.Status != purge.StatusCompleted {
 		t.Fatalf("after retry: %+v", done)
-	}
-}
-
-// TestDevicePurge_ConcurrentRequestsMakeOneTask: the device row lock and the partial unique index leave
-// exactly one task however many requests race.
-func TestDevicePurge_ConcurrentRequestsMakeOneTask(t *testing.T) {
-	device := "ZCT" + newBindDeviceName(t)
-	tb := newFakeTB(device)
-	tb.fail(errors.New("hold the task open"))
-	pe := newPurgeEnv(t, tb)
-	customer := pe.newCustomer("purge-race")
-	pe.cleanupPurges(device)
-	pe.seedDeviceIn(device, customer)
-
-	var wg sync.WaitGroup
-	ids := make(chan int64, 8)
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			body, code := pe.purge(pe.admin, device, device, "race")
-			if code != http.StatusOK && code != http.StatusAccepted {
-				t.Errorf("code %d", code)
-			}
-			ids <- body.Purge.ID
-		}()
-	}
-	wg.Wait()
-	close(ids)
-	pe.runner.Wait()
-	seen := map[int64]bool{}
-	for id := range ids {
-		seen[id] = true
-	}
-	if len(seen) != 1 {
-		t.Errorf("tasks returned: %v, want one", seen)
-	}
-	if n := pe.count(`SELECT COUNT(*) FROM device_purges WHERE device_name = $1`, device); n != 1 {
-		t.Errorf("%d tasks in the table", n)
 	}
 }
 
@@ -548,9 +511,9 @@ func TestDevicePurge_ReRegisteredDeviceDoesNotGetItsHistoryBack(t *testing.T) {
 	_, staffID := pe.userIn(control.RoleCustomerUser, customer)
 	pe.seedHistory(device, customer, customer, staffID)
 
-	body, _ := pe.purge(pe.admin, device, device, "重装")
+	id := pe.startPurge(device, "重装")
 	pe.runner.Wait()
-	if got := pe.getPurge(body.Purge.ID).Purge; got.Status != purge.StatusCompleted {
+	if got := pe.getPurge(id).Purge; got.Status != purge.StatusCompleted {
 		t.Fatalf("purge: %+v", got)
 	}
 
@@ -591,7 +554,7 @@ func TestDevicePurge_DisabledPlatformAdminIsRefused(t *testing.T) {
 	if _, err := pe.pool.Exec(context.Background(), `UPDATE users SET disabled_at = now() WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if _, code := pe.purge(tok, device, device, "r"); code != http.StatusForbidden {
+	if code := pe.do("POST", "/api/devices/"+device+"/purge", []byte(tok), []byte(`{}`)).Code; code != http.StatusForbidden {
 		t.Errorf("disabled platform admin: %d, want 403", code)
 	}
 	if n := pe.count(`SELECT COUNT(*) FROM device_purges WHERE device_name = $1`, device); n != 0 {
@@ -629,9 +592,9 @@ func TestDevicePurge_BusinessFailureRollsBackAndResumes(t *testing.T) {
 	}
 	t.Cleanup(drop)
 
-	body, _ := pe.purge(pe.admin, device, device, "db fault")
+	id := pe.startPurge(device, "db fault")
 	pe.runner.Wait()
-	failed := pe.getPurge(body.Purge.ID).Purge
+	failed := pe.getPurge(id).Purge
 	if failed.Status != purge.StatusFailed || failed.Step != purge.StepBusiness || failed.Error == nil {
 		t.Fatalf("after injected failure: %+v", failed)
 	}
@@ -640,11 +603,11 @@ func TestDevicePurge_BusinessFailureRollsBackAndResumes(t *testing.T) {
 	}
 
 	drop()
-	if _, code := pe.purge(pe.admin, device, device, "db fault"); code != http.StatusOK {
-		t.Fatalf("retry: %d", code)
+	if again := pe.startPurge(device, "db fault"); again != id {
+		t.Fatalf("retry made task %d, want %d", again, id)
 	}
 	pe.runner.Wait()
-	done := pe.getPurge(body.Purge.ID).Purge
+	done := pe.getPurge(id).Purge
 	if done.Status != purge.StatusCompleted || done.Counts["telemetryHourly"] != 3 || done.Counts["tbDevice"] != 1 {
 		t.Fatalf("after retry: %+v", done)
 	}

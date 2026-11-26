@@ -10,7 +10,7 @@
         android:id="@+id/title_bar"
         layout="@layout/layout_title_bar2" />
 
-    <LinearLayout
+    <ScrollView
         android:layout_marginLeft="@dimen/dp_104"
         android:layout_marginRight="@dimen/dp_104"
         android:layout_marginTop="@dimen/dp_50"
@@ -18,6 +18,11 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:background="#e6eeff"
         android:orientation="vertical"
         android:padding="@dimen/dp_54">
@@ -71,7 +76,7 @@
 
         <!-- 串口4设置 -->
         <TextView
-            android:layout_marginTop="@dimen/dp_80"
+            android:layout_marginTop="@dimen/dp_40"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/serial_port_4_settings"
@@ -105,8 +110,90 @@
                 android:textSize="20sp" />
         </RadioGroup>
 
+        <RadioGroup
+            android:id="@+id/rg_serial4_proxy"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <RadioButton
+                android:id="@+id/rb_serial4_proxy_zhongcheng"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/serial_proxy_zhongcheng"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+
+            <RadioButton
+                android:id="@+id/rb_serial4_proxy_modbus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="80dp"
+                android:text="@string/serial_proxy_modbus"
+                android:textColor="#222222"
+                android:textSize="20sp" />
+        </RadioGroup>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/serial_proxy_restart"
+            android:textColor="#666666"
+            android:textSize="18sp" />
+
+        <!-- 单罐开关量输出（IO2 联动，PumpIoManager）；开关图标同记录设置页 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/dp_40"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/pump_link_title"
+                android:textColor="#1a1a1a"
+                android:textSize="22sp" />
+
+            <CheckBox
+                android:id="@+id/cb_pump_link"
+                android:layout_width="@dimen/dp_55"
+                android:layout_height="@dimen/dp_25"
+                android:layout_marginStart="24dp"
+                android:button="@drawable/custom_track_selector"
+                android:checked="false" />
+        </LinearLayout>
+
+        <!-- 未选罐时显示"罐号"，选后显示 oilcanArray 对应项；点击弹出罐号选择 -->
+        <TextView
+            android:id="@+id/tv_pump_link_tank"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/shape_input_border"
+            android:gravity="center"
+            android:minWidth="160dp"
+            android:paddingLeft="20dp"
+            android:paddingTop="8dp"
+            android:paddingRight="20dp"
+            android:paddingBottom="8dp"
+            android:text="@string/tank_no"
+            android:textColor="#222222"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/pump_link_desc"
+            android:textColor="#666666"
+            android:textSize="18sp" />
 
     </LinearLayout>
+    </ScrollView>
 
     <LinearLayout
         android:layout_marginBottom="@dimen/dp_60"

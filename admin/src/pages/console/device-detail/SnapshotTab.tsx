@@ -19,8 +19,9 @@ import {
   telemetryEmptyMessageId,
 } from '@/services/ant-design-pro/telemetry';
 import { parseTankParam, pickTank } from '@/utils/tankPick';
-import { fmtTime } from '@/utils/telemetry';
-import { REFRESH_MS } from '../components/useRecordsQuery';
+import { tankShapeOf } from '@/utils/tankShape';
+import { fmtTime, LIVE_TELEMETRY_MS } from '@/utils/telemetry';
+import { useTankShapes } from '../components/useTankShapes';
 import TankDetail from './TankDetail';
 
 type State =
@@ -48,7 +49,8 @@ const forbiddenOrSilent = (e: unknown): 'forbidden' | 'silent' | 'error' => {
  * 设备详情的「实时数据」页签：最新遥测（GET /api/devices/:device/telemetry/latest）。**一次只显示一个罐**（同小程序）：
  * `?tank=` 是总览里点的那个罐的协议罐号，缺省显示最小罐号；请求的罐不可见就提示并改显示最小罐号。多个罐时上方有切换，
  * 切换只改 URL 的 tank。404 是正常状态「从未上报」，403 是「无权查看」，两者都不是普通错误。
- * 每 30 秒自动刷新；刷新时保留旧数据不闪回骨架屏，迟到的旧响应丢弃。
+ * 前台每 5 秒自动刷新（#62）；上次请求未回时跳过本轮（不堆积、不让慢请求被后来者作废而永远刷不出来）；
+ * 刷新时保留旧数据不闪回骨架屏，失败时静默保留上次成功的读数与上报时间，迟到的旧响应丢弃。
  */
 const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
   const intl = useIntl();
@@ -59,10 +61,15 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
   const [params, setParams] = useSearchParams();
   const requestedTank = parseTankParam(params.get('tank'));
   const seq = useRef(0);
+  // 在途请求的序号；自动刷新遇到在途请求就跳过
+  const pending = useRef<number | null>(null);
+  const shapes = useTankShapes([device]);
 
   const load = useCallback(
-    async (fresh: boolean) => {
+    async (fresh: boolean, auto = false) => {
+      if (auto && pending.current === seq.current) return;
       const mine = ++seq.current;
+      pending.current = mine;
       if (fresh) setState({ kind: 'loading' });
       setRefreshing(true);
       try {
@@ -79,9 +86,14 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
         if (why === 'forbidden') setState({ kind: 'forbidden' });
         else if (why === 'error') {
           // 后台刷新失败时保留上一次成功的数据，只有没有数据时才显示错误
-          setState((prev) => (prev.kind === 'ok' ? prev : { kind: 'error' }));
+          setState((prev) =>
+            prev.kind === 'ok' || prev.kind === 'never'
+              ? prev
+              : { kind: 'error' },
+          );
         }
       } finally {
+        if (pending.current === mine) pending.current = null;
         if (mine === seq.current) setRefreshing(false);
       }
     },
@@ -90,9 +102,16 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
 
   useEffect(() => {
     void load(true);
-    const timer = setInterval(() => void load(false), REFRESH_MS);
+    const timer = setInterval(() => {
+      if (!document.hidden) void load(false, true);
+    }, LIVE_TELEMETRY_MS);
+    const visible = () => {
+      if (!document.hidden) void load(false, true);
+    };
+    document.addEventListener('visibilitychange', visible);
     return () => {
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', visible);
       seq.current++; // 卸载或换设备后丢弃在途响应
     };
   }, [load]);
@@ -164,6 +183,7 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
           {tanks.length > 1 && (
             <Segmented
               aria-label={t('pages.console.detail.snapshot.switch')}
+              style={{ maxWidth: '100%', overflowX: 'auto' }}
               value={pick.tank}
               options={tanks.map((x) => ({
                 value: x.index,
@@ -177,7 +197,10 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
             />
           )}
           {/* 罐号 + 介质在 TankDetail 的显示器样式标题条里（#21），这里不再重复一行标题 */}
-          <TankDetail tank={tank} />
+          <TankDetail
+            tank={tank}
+            shapeInfo={tankShapeOf(shapes.states[device], tank.index)}
+          />
         </Space>
       );
       break;
@@ -190,7 +213,10 @@ const SnapshotTab: React.FC<{ device: string }> = ({ device }) => {
         <Button
           icon={<ReloadOutlined />}
           loading={refreshing}
-          onClick={() => void load(false)}
+          onClick={() => {
+            void load(false);
+            shapes.refresh();
+          }}
         >
           {t('pages.console.records.refresh')}
         </Button>

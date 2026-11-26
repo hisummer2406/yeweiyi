@@ -2,28 +2,29 @@
 //
 // 只用该罐自己的占比（oilRatioPct / waterRatioPct，占罐容积的百分比）：水在最下面、油在水上面，两者不重叠，
 // 合起来不超过整罐。读数异常不照单全收：不是数字或超出 0..100 的占比被夹到范围内（NaN 当 0），不画破图。
-// 探针未连接的罐没有读数，什么都不画（卡片已写「探针未连接」）。
+// 探针断线（设备按自己的断线阈值才报，#75）保留上次液位，画成灰色 stale；从未采到读数（hasReading=false）不画。
 
 export type TankFill = {
   fillOilPct: number;
   fillWaterPct: number;
-  fillState: 'normal' | 'alarm' | 'fault' | 'none';
+  fillState: 'normal' | 'alarm' | 'fault' | 'stale' | 'none';
 };
 
 export function tankFill(
   t: Pick<
     API.Tank,
-    'oilRatioPct' | 'waterRatioPct' | 'alarmState' | 'probeConnected'
+    'oilRatioPct' | 'waterRatioPct' | 'alarmState' | 'probeConnected' | 'hasReading'
   >,
 ): TankFill {
   const clamp = (n: number) =>
     Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 0;
-  if (!t.probeConnected)
+  if (t.hasReading === false)
     return { fillOilPct: 0, fillWaterPct: 0, fillState: 'none' };
   const water = clamp(t.waterRatioPct);
   const oil = Math.min(clamp(t.oilRatioPct), 100 - water);
-  const fillState =
-    t.alarmState === 'ALARM'
+  const fillState = !t.probeConnected
+    ? 'stale'
+    : t.alarmState === 'ALARM'
       ? 'alarm'
       : t.alarmState === 'FAULT'
         ? 'fault'

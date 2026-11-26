@@ -15,6 +15,7 @@ import java.util.Map;
 class FakeOilTankRepository implements OilTankRepository {
     final Map<Integer, OilCanSet> byId = new HashMap<>();
     OilCanSet lastSaved;
+    boolean failNextSave;
     boolean throwOnUpdate = false;
 
     @Override
@@ -34,6 +35,9 @@ class FakeOilTankRepository implements OilTankRepository {
 
     @Override
     public void updateOilCanSetSync(OilCanSet oilCanSet) throws com.lidroid.xutils.exception.DbException {
+            if (failNextSave) {
+                throw new RuntimeException("disk full");
+            }
         if (throwOnUpdate) {
             throw new com.lidroid.xutils.exception.DbException("模拟数据库写入失败");
         }
@@ -51,7 +55,18 @@ class FakeOilTankRepository implements OilTankRepository {
 
     @Override
     public void updateOilCanTable(OilCanTable oilCanTable) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("handler 应该调用同步版本 updateOilCanTableSync");
+    }
+
+    OilCanTable lastSavedTable;
+    boolean throwOnTableUpdate = false;
+
+    @Override
+    public void updateOilCanTableSync(OilCanTable oilCanTable) throws com.lidroid.xutils.exception.DbException {
+        if (throwOnTableUpdate) {
+            throw new com.lidroid.xutils.exception.DbException("模拟数据库写入失败");
+        }
+        lastSavedTable = oilCanTable;
     }
 
     @Override

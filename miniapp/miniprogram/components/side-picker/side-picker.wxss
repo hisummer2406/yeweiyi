@@ -1,3 +1,5 @@
+@import "../../styles/typography.wxss";
+
 /* 数值取自设计稿「储罐设置-下拉框储罐类型13」「-物料颜色14」PNG：面板 278 宽、右缘距屏幕 55、圆角约 16；
    药丸 202×57、行距 77；色块 64×57、行距 87、圆角 4、两列。 */
 .sp-mask {
@@ -36,7 +38,7 @@
   line-height: 57rpx;
   margin-bottom: 20rpx;
   text-align: center;
-  font-size: 32rpx;
+  font-size: var(--font-body);
   color: #131313;
   background-color: #f5f6f8;
   border-radius: 29rpx;

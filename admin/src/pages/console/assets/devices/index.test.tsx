@@ -13,6 +13,7 @@ const listDevices = vi.fn();
 const listCustomers = vi.fn();
 const listStations = vi.fn();
 const downloadMiniCode = vi.fn();
+const assignDeviceStation = vi.fn();
 
 vi.mock('@umijs/max', () => ({
   useAccess: () => ({ canPlatformAdmin }),
@@ -28,9 +29,6 @@ vi.mock('@/services/ant-design-pro/devices', () => ({
   listDevices,
   registerDevice: vi.fn(),
   assignDeviceCustomer: vi.fn(),
-  purgeDevice: vi.fn(),
-  getDevicePurge: vi.fn(),
-  listDevicePurges: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/services/ant-design-pro/customers', () => ({
   listCustomers,
@@ -38,7 +36,7 @@ vi.mock('@/services/ant-design-pro/customers', () => ({
 }));
 vi.mock('@/services/ant-design-pro/stations', () => ({
   listStations,
-  assignDeviceStation: vi.fn(),
+  assignDeviceStation,
   replaceStationDevice: vi.fn(),
 }));
 
@@ -90,7 +88,7 @@ describe('AdminDevices mini-program code', () => {
   it('platform admin downloads the code of that row', async () => {
     listDevices.mockResolvedValue([dev('000123', 1)]);
     render(<AdminDevices />);
-    fireEvent.click(within(await rowOf('000123')).getByText('下载小程序码'));
+    fireEvent.click(within(await rowOf('000123')).getByText('下载二维码'));
     expect(downloadMiniCode).toHaveBeenCalledWith(
       '000123',
       expect.any(Function),
@@ -101,9 +99,7 @@ describe('AdminDevices mini-program code', () => {
     canPlatformAdmin = false;
     listDevices.mockResolvedValue([dev('000123')]);
     render(<AdminDevices />);
-    expect(
-      within(await rowOf('000123')).queryByText('下载小程序码'),
-    ).toBeNull();
+    expect(within(await rowOf('000123')).queryByText('下载二维码')).toBeNull();
   });
 });
 
@@ -299,26 +295,37 @@ describe('AdminDevices replace action (one station : one device)', () => {
   });
 });
 
-describe('AdminDevices delete entry (cloud#83)', () => {
-  it('platform admin sees 删除设备 on every row and it opens the dialog for that row', async () => {
-    listDevices.mockResolvedValue([dev('000123', 1, 3), dev('000124', 1)]);
+describe('AdminDevices unassign station (#69)', () => {
+  beforeEach(() => {
     listStations.mockResolvedValue([
       { id: 3, customerId: 1, name: '甲站', address: '', createdAt: '' },
     ]);
-    render(<AdminDevices />);
-    expect(within(await rowOf('000124')).getByText('删除设备')).toBeTruthy();
-    fireEvent.click(within(await rowOf('000123')).getByText('删除设备'));
-    expect(await screen.findByText('彻底删除设备：000123')).toBeTruthy();
-    // 带出客户与油站名，供核对
-    const dialog = within(screen.getByRole('dialog'));
-    expect(dialog.getByText('A 油站')).toBeTruthy();
-    expect(dialog.getByText('甲站')).toBeTruthy();
+    listDevices.mockResolvedValue([dev('000123', 1, 3), dev('000124', 1)]);
   });
 
-  it('customer admin gets no delete entry', async () => {
-    canPlatformAdmin = false;
-    listDevices.mockResolvedValue([dev('000123')]);
+  it('offers 解除油站关联 only on a device in a station, and no delete entry anywhere', async () => {
     render(<AdminDevices />);
-    expect(within(await rowOf('000123')).queryByText('删除设备')).toBeNull();
+    expect(within(await rowOf('000123')).getByText('解除油站关联')).toBeTruthy();
+    expect(within(await rowOf('000124')).queryByText('解除油站关联')).toBeNull();
+    expect(screen.queryByText('删除设备')).toBeNull();
+  });
+
+  it('after confirming, clears the station with an explicit null and reloads the list', async () => {
+    assignDeviceStation.mockResolvedValue({ changed: true });
+    render(<AdminDevices />);
+    fireEvent.click(within(await rowOf('000123')).getByText('解除油站关联'));
+    expect(assignDeviceStation).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: '解除关联' }));
+    await vi.waitFor(() =>
+      expect(assignDeviceStation).toHaveBeenCalledWith('000123', null),
+    );
+    await vi.waitFor(() => expect(listDevices).toHaveBeenCalledTimes(2));
+  });
+
+  it('customer admin can unassign too', async () => {
+    canPlatformAdmin = false;
+    listDevices.mockResolvedValue([dev('000123', undefined, 3)]);
+    render(<AdminDevices />);
+    expect(within(await rowOf('000123')).getByText('解除油站关联')).toBeTruthy();
   });
 });

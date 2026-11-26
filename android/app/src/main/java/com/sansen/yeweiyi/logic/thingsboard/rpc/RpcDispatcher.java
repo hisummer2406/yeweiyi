@@ -22,14 +22,51 @@ public final class RpcDispatcher {
         long nowMillis();
     }
 
+    /**
+     * 关键节点回调，只用来记日志（真机接 {@code applog.CloudCmdLog}），不影响处理流程。
+     * 回调里抛的异常由实现方自己吞掉。
+     */
+    public interface Listener {
+        void onMalformed(String mqttRequestId, String error, String payload);
+
+        void onReceived(RpcRequestEnvelope request);
+
+        void onDuplicate(RpcRequestEnvelope request, RpcResultStatus previousStatus, RpcErrorCode previousErrorCode);
+
+        /** 执行前就已确定的终态（协议版本/过期/未知方法/受理记录写盘失败），{@code internalStatus} 为去重表里的真实状态。 */
+        void onRejected(RpcRequestEnvelope request, RpcResultStatus internalStatus, RpcErrorCode errorCode, String message);
+
+        /** handler 已执行；{@code error} 为 handler 抛出的异常，正常返回时为 null。 */
+        void onExecuted(RpcRequestEnvelope request, RpcResult result, Throwable error, long costMillis);
+
+        void onTerminalPersistFailed(RpcRequestEnvelope request, RpcResultStatus status);
+    }
+
+    public static final Listener NO_LISTENER = new Listener() {
+        @Override public void onMalformed(String mqttRequestId, String error, String payload) { }
+        @Override public void onReceived(RpcRequestEnvelope request) { }
+        @Override public void onDuplicate(RpcRequestEnvelope request, RpcResultStatus s, RpcErrorCode c) { }
+        @Override public void onRejected(RpcRequestEnvelope request, RpcResultStatus s, RpcErrorCode c, String m) { }
+        @Override public void onExecuted(RpcRequestEnvelope request, RpcResult result, Throwable error, long cost) { }
+        @Override public void onTerminalPersistFailed(RpcRequestEnvelope request, RpcResultStatus status) { }
+    };
+
     private final RpcMethodRegistry registry;
     private final ProcessedCommandStore commandStore;
     private final RpcAckPublisher ackPublisher;
     private final RpcResultPublisher resultPublisher;
     private final Clock clock;
+    private final Listener listener;
 
     public RpcDispatcher(RpcMethodRegistry registry, ProcessedCommandStore commandStore,
                           RpcAckPublisher ackPublisher, RpcResultPublisher resultPublisher, Clock clock) {
+        this(registry, commandStore, ackPublisher, resultPublisher, clock, NO_LISTENER);
+    }
+
+    public RpcDispatcher(RpcMethodRegistry registry, ProcessedCommandStore commandStore,
+                          RpcAckPublisher ackPublisher, RpcResultPublisher resultPublisher, Clock clock,
+                          Listener listener) {
+        this.listener = listener;
         this.registry = registry;
         this.commandStore = commandStore;
         this.ackPublisher = ackPublisher;
@@ -48,12 +85,14 @@ public final class RpcDispatcher {
         } catch (RpcRequestEnvelope.MalformedRpcRequestException e) {
             // 连 commandId 都拿不到，没法做幂等记录，只能就这一次 ACK 拒绝，不重试；
             // commandId 传 null——云端这时候也没有可关联的 commandId。
+            listener.onMalformed(mqttRequestId, e.getMessage(), payload);
             long now = clock.nowMillis();
             ackPublisher.publishAck(mqttRequestId, null, RpcResultStatus.REJECTED, RpcErrorCode.MALFORMED_PARAMS,
                     e.getMessage(), false, now);
             return;
         }
 
+        listener.onReceived(request);
         long now = clock.nowMillis();
 
         ProcessedCommandStore.Record existing = commandStore.find(request.getCommandId());
@@ -61,6 +100,7 @@ public final class RpcDispatcher {
             // 重复投递：回放上一次的终态，不重新执行 handler。这是 Ack.Status 契约里唯一
             // 允许携带非 received/rejected 值的例外——duplicate=true 标出来，云端不会误当成
             // 一次新的执行结果。
+            listener.onDuplicate(request, existing.status, existing.errorCode);
             ackPublisher.publishAck(mqttRequestId, request.getCommandId(), existing.status, existing.errorCode,
                     existing.message, true, now);
             return;
@@ -104,18 +144,23 @@ public final class RpcDispatcher {
                 "已受理", false, now);
 
         RpcResult result;
+        Exception handlerError = null;
         try {
             result = handler.handle(request);
         } catch (Exception e) {
+            handlerError = e;
             result = RpcResult.failed(RpcErrorCode.INTERNAL_ERROR, "handler 执行异常: " + e.getMessage());
         }
 
         long finishedAt = clock.nowMillis();
+        listener.onExecuted(request, result, handlerError, finishedAt - now);
         // 终态这一条写盘失败只能认了：动作已经做完，不存在"回退成没执行"这个选项。
         // 代价是重启后这条命令看起来停在 RECEIVED，被 recoverAfterRestart 改判 FAILED——
         // 对云端来说是"执行结果不明"，比谎报成功安全，也比重新执行一遍安全。
-        commandStore.record(request.getCommandId(), result.getStatus(), result.getErrorCode(),
-                result.getMessage(), finishedAt);
+        if (!commandStore.record(request.getCommandId(), result.getStatus(), result.getErrorCode(),
+                result.getMessage(), finishedAt)) {
+            listener.onTerminalPersistFailed(request, result.getStatus());
+        }
         commandStore.evictExpired(finishedAt);
         resultPublisher.publishResult(request.getCommandId(), result.getStatus(), result.getErrorCode(),
                 result.getMessage(), result.getData(), finishedAt);
@@ -131,6 +176,7 @@ public final class RpcDispatcher {
     private void terminateBeforeExecution(RpcRequestEnvelope request, String mqttRequestId,
                                            RpcResultStatus internalStatus, RpcErrorCode errorCode, String message,
                                            long now) {
+        listener.onRejected(request, internalStatus, errorCode, message);
         commandStore.record(request.getCommandId(), internalStatus, errorCode, message, now);
         commandStore.evictExpired(now);
         ackPublisher.publishAck(mqttRequestId, request.getCommandId(), RpcResultStatus.REJECTED, errorCode, message,

@@ -10,6 +10,7 @@ export const ALARM_TYPE_LABELS: Record<string, string> = {
   LOW_LOW_LEVEL: '低低液位',
   HIGH_WATER_LEVEL: '高水位',
   HIGH_TEMPERATURE: '高油温',
+  LOW_TEMPERATURE: '低油温',
   PROBE_DISCONNECTED: '探针断线',
   LEAK_SUSPECTED: '疑似泄漏',
   OVERFILL_RISK: '溢罐风险',

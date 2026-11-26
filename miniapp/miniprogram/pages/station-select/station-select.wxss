@@ -21,7 +21,7 @@
 
 .ss-search-input {
   flex: 1;
-  font-size: 36rpx;
+  font-size: var(--font-body);
 }
 
 .ss-item {
@@ -38,7 +38,7 @@
 }
 
 .ss-item-name {
-  font-size: 40rpx;
+  font-size: var(--font-heading);
   color: #131313;
 }
 
@@ -48,12 +48,12 @@
 
 .ss-item-addr {
   margin-top: 8rpx;
-  font-size: 32rpx;
+  font-size: var(--font-caption);
   color: #8a8a8a;
 }
 
 .ss-item-check {
   margin-left: 24rpx;
   color: #066daa;
-  font-size: 42rpx;
+  font-size: var(--font-title);
 }

@@ -6,8 +6,8 @@
   <view class="card center-card">
     <!-- WeChat sign-in exists only in the mini-program (utils/platform.ts); the app has the password form alone. -->
     <view class="mode-tabs" wx:if="{{wechatLogin}}">
-      <view class="mode-tab {{mode === 'wechat' ? 'active' : ''}}" data-mode="wechat" bindtap="onSwitchMode">{{text.tabWechat}}</view>
       <view class="mode-tab {{mode === 'password' ? 'active' : ''}}" data-mode="password" bindtap="onSwitchMode">{{text.tabPassword}}</view>
+      <view class="mode-tab {{mode === 'wechat' ? 'active' : ''}}" data-mode="wechat" bindtap="onSwitchMode">{{text.tabWechat}}</view>
     </view>
 
     <block wx:if="{{wechatLogin && mode === 'wechat'}}">

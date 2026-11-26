@@ -41,6 +41,8 @@ vi.mock('@umijs/max', () => ({
 }));
 vi.mock('@/services/ant-design-pro/devices', () => ({ listDevices }));
 vi.mock('@/services/ant-design-pro/stations', () => ({ listStations }));
+const getDeviceMediaOptions = vi.hoisted(() => vi.fn());
+vi.mock('@/services/ant-design-pro/media', () => ({ getDeviceMediaOptions }));
 vi.mock('@/services/ant-design-pro/deviceConfig', () => ({
   getTankSettings,
   getDeviceSettings,
@@ -72,6 +74,7 @@ const tank1: API.TankSettings = {
   tempCorrectionC: 0,
   density: 0.56,
   capacityL: 30000,
+  oilColor: null,
 };
 
 const deviceRow = (over: Partial<API.DeviceRow> = {}): API.DeviceRow => ({
@@ -102,6 +105,14 @@ const command = (
 });
 
 beforeEach(() => {
+  getDeviceMediaOptions.mockResolvedValue({
+    public: [],
+    customer: [],
+    customMediaSync: false,
+    oilColorSync: false,
+    slotsUsed: 0,
+    slotsTotal: 8,
+  });
   vi.clearAllMocks();
   // antd 的静态 message 自建渲染根，cleanup 卸不掉，动画定时器会在环境拆除后才触发（CI 上报 window is not defined）
   for (const m of ['success', 'error', 'warning'] as const) {
@@ -165,6 +176,111 @@ describe('SettingsTab', () => {
     expect(body.expectedStationId).toBe(7);
     expect(body.requestId).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
     expect(await screen.findByText('设备已接收，等待执行结果')).toBeTruthy();
+  });
+
+  it('keeps a 1000 mm correction through blur, confirm and submit (#28)', async () => {
+    issueConfigCommand.mockResolvedValue({
+      command: command(),
+      replayed: false,
+    });
+    render(<SettingsTab device="D1" />);
+    const input = (await screen.findByLabelText(
+      '液位修正',
+    )) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '1000' } });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 });
+    fireEvent.blur(input);
+    expect(input.value).toBe('1000');
+    const dialog = await openConfirm();
+    expect(within(dialog).getByText('1000 mm')).toBeTruthy();
+    await confirm(dialog);
+    expect(issueConfigCommand.mock.calls[0][1].args).toEqual({
+      tank: 1,
+      levelCorrectionMm: 1000,
+    });
+  });
+
+  it('keeps an out-of-range value, explains it and blocks the submit (#28)', async () => {
+    render(<SettingsTab device="D1" />);
+    const input = (await screen.findByLabelText(
+      '高温报警',
+    )) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '120' } });
+    fireEvent.blur(input);
+    expect(input.value).toBe('120');
+    expect(screen.getByText('超出范围（-50～100）')).toBeTruthy();
+    expect(
+      (
+        screen.getAllByRole('button', {
+          name: '下发到设备',
+        })[0] as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+  });
+
+  it('flips a correction with the sign button, no keyboard minus needed (#30)', async () => {
+    render(<SettingsTab device="D1" />);
+    const input = (await screen.findByLabelText(
+      '水位修正',
+    )) as HTMLInputElement;
+    const sign = screen.getByRole('button', { name: '水位修正 切换正负号' });
+    expect((sign as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(input, { target: { value: '1.5' } });
+    fireEvent.click(sign);
+    expect(input.value).toBe('-1.5');
+    fireEvent.click(sign);
+    expect(input.value).toBe('1.5');
+  });
+
+  it('lets a customer admin choose the medium (2026-11-14)', async () => {
+    role = 'customer_admin';
+    render(<SettingsTab device="D1" />);
+    expect(await screen.findByLabelText('油品')).toBeTruthy();
+    expect(getDeviceMediaOptions).toHaveBeenCalledWith('D1');
+  });
+
+  it('sends a palette colour when the device supports it', async () => {
+    getDeviceMediaOptions.mockResolvedValue({
+      public: [],
+      customer: [],
+      customMediaSync: true,
+      oilColorSync: true,
+      slotsUsed: 0,
+      slotsTotal: 8,
+    });
+    issueConfigCommand.mockResolvedValue({
+      command: command({ args: { tank: 1, oilColor: 0xff0000 } }),
+      replayed: false,
+    });
+    render(<SettingsTab device="D1" />);
+    fireEvent.click(await screen.findByRole('radio', { name: '颜色 #FF0000' }));
+    await confirm(await openConfirm());
+    expect(issueConfigCommand.mock.calls[0][1].args).toEqual({
+      tank: 1,
+      oilColor: 0xff0000,
+    });
+  });
+
+  it('keeps the colour read-only on firmware without colour sync', async () => {
+    getTankSettings.mockResolvedValue([{ ...tank1, oilColor: 0x123456 }]);
+    render(<SettingsTab device="D1" />);
+    expect(
+      await screen.findByText(
+        zhPages['pages.console.settings.color.unsupported'],
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('radio', { name: '颜色 #FF0000' })).toBeNull();
+    expect(
+      screen.getByText(zhPages['pages.console.settings.color.nonStandard']),
+    ).toBeTruthy();
+  });
+
+  it('asks to check a density that looks like kg/m³', async () => {
+    getTankSettings.mockResolvedValue([{ ...tank1, density: 840 }]);
+    render(<SettingsTab device="D1" />);
+    expect(
+      await screen.findByText(zhPages['pages.console.settings.density.check']),
+    ).toBeTruthy();
   });
 
   it('sends nothing when the confirmation is cancelled', async () => {

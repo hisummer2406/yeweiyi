@@ -1,71 +1,24 @@
-<!-- 设计稿「参数修正07/08/09」。这是传感器读数的校准偏移量，不是修正已有出入库记录。
-     「保存到手机」只存本机；「保存到控制器」= 管理员直接下发三项修正（#6，见 calibration.ts）。样式见 calibration.wxss。 -->
-<view wx:if="{{state !== 'ok' && state !== 'loading'}}" class="card banner-warning cb-banner">
+<!-- 设置页的参数入口（#43）：与罐详情页签共用 param-editor。对象：首页当前油站 → 其唯一设备 → 可见罐。 -->
+<view wx:if="{{state !== 'ok' && state !== 'loading'}}" class="card banner-warning pp-banner">
   <text class="text-warning">{{notice}}</text>
   <button wx:if="{{state === 'no-station'}}" class="btn-primary" size="mini" bindtap="onGoHome" style="margin-top:16rpx;">{{text.goHome}}</button>
   <button wx:if="{{state === 'error'}}" class="btn-primary" size="mini" bindtap="onRetry" style="margin-top:16rpx;">{{text.retry}}</button>
 </view>
 
 <block wx:if="{{state === 'ok'}}">
-  <!-- 编辑对象 -->
-  <view class="fc cb" style="padding:12rpx 0;">
+  <view class="fc" style="padding:8rpx 0;">
     <view class="fr">
-      <text class="fl">{{text.device}}</text>
-      <text class="cb-text">{{stationName}} · {{device}}</text>
+      <text class="fl">{{text.target}}</text>
+      <text class="pp-text">{{stationName}} · {{device}}</text>
     </view>
     <view class="fr" id="row-tank" bindtap="onOpenTank">
       <text class="fl">{{form.tankNo}}</text>
-      <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}" style="text-align:right;">{{tankIndex < 0 ? form.select : tankOptions[tankIndex]}}</text>
+      <text class="fv {{tankIndex < 0 ? 'fv-ph' : ''}}" style="text-align:right;">{{tankIndex < 0 ? text.pickTank : tankOptions[tankIndex]}}</text>
       <image class="fc-chevron" src="/assets/icons/chevron-right.png" mode="aspectFit" />
     </view>
   </view>
-
-  <!-- 设备当前修正值（云端镜像，只读） -->
-  <view class="fc cb" style="padding:4rpx 0 0;">
-    <view class="cb-head">
-      <text class="cb-head-title">{{text.current}}</text>
-      <button wx:if="{{mirrorKnown}}" class="btn-primary" size="mini" bindtap="onImport">{{text.import}}</button>
-    </view>
-    <view class="fr"><text class="fl">{{text.levelOffset}}</text><view class="fv"></view><text class="cb-num">{{current.levelOffset}}</text><text class="fu">{{form.mm}}</text></view>
-    <view class="fr"><text class="fl">{{text.waterOffset}}</text><view class="fv"></view><text class="cb-num">{{current.waterOffset}}</text><text class="fu">{{form.mm}}</text></view>
-    <view class="fr"><text class="fl">{{text.tempOffset}}</text><view class="fv"></view><text class="cb-num">{{current.tempOffset}}</text><text class="fu">℃</text></view>
-    <view class="muted cb-note">{{currentTime}}</view>
-  </view>
-
-  <view wx:if="{{sendHint}}" class="card banner-warning cb-banner">
-    <text class="text-warning">{{sendHint}}</text>
-  </view>
-
-  <!-- 要改成的值 -->
-  <view class="fc cb" style="padding:12rpx 0;">
-    <view class="fr">
-      <text class="fl">{{text.levelOffset}}</text>
-      <view class="fv"></view>
-      <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{levelOffset}}" bindinput="onLevelInput" />
-      <text class="fu">{{form.mm}}</text>
-    </view>
-    <view class="fr">
-      <text class="fl">{{text.waterOffset}}</text>
-      <view class="fv"></view>
-      <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{waterOffset}}" bindinput="onWaterInput" />
-      <text class="fu">{{form.mm}}</text>
-    </view>
-    <view class="fr">
-      <text class="fl">{{text.tempOffset}}</text>
-      <view class="fv"></view>
-      <input class="fi" type="text" placeholder="{{text.unset}}" placeholder-class="fv-ph" value="{{tempOffset}}" bindinput="onTempInput" />
-      <text class="fu">℃</text>
-    </view>
-    <view wx:if="{{canSend}}" class="fr">
-      <text class="fl">{{text.reason}}</text>
-      <input class="cb-reason" type="text" maxlength="200" placeholder="{{text.reasonPlaceholder}}" placeholder-class="fv-ph" value="{{reason}}" bindinput="onReasonInput" />
-    </view>
-  </view>
-
-  <view class="pill-row" style="margin-top:80rpx;">
-    <button class="pill pill-lite" bindtap="onSaveLocal">{{form.saveLocal}}</button>
-    <button class="pill pill-deep" bindtap="onSaveDevice" disabled="{{sending}}" loading="{{sending}}">{{form.saveDevice}}</button>
-  </view>
+  <view wx:if="{{tank < 0}}" class="muted pp-note">{{text.pickTankHint}}</view>
+  <param-editor wx:else id="editor" kind="{{kind}}" device="{{device}}" tank="{{tank}}" station="{{station}}" active="{{true}}" />
 </block>
 
 <grid-picker show="{{pickerShow}}" top="{{pickerTop}}" options="{{tankOptions}}" value="{{tankIndex}}" bind:pick="onPickTank" bind:close="onClosePicker" />

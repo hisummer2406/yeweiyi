@@ -10,6 +10,7 @@
 | `telemetry_expired` | 404 | `GET /devices/:device/telemetry/latest` | 设备上报过，但距今超过 ThingsBoard 保留期，快照已被清理（cloud#28）。体里带 `lastReportedAt`（最后一次上报时间）。**不返回旧值**：遥测不复制进业务库，按 key 拼最新值会让已不存在的罐复活。状态码仍是 404，只看状态码的客户端行为不变，只是可以多说一句「已超过保留期」。 |
 | `device_not_provisioned` | 404 | 遥测/历史读取 | 业务库有该设备，ThingsBoard 里没有（接入信息未就绪）。 |
 | `device_platform_unavailable` | 503 | 遥测/历史读取 | ThingsBoard 未配置或不可达。 |
+| `device_purge_disabled` | 410 | `POST /api/devices/:device/purge`（平台管理员） | 网页端彻底删除已关闭（#69），不建/不重启任务；其他角色仍 403。改用解除油站关联。 |
 
 后三个码只在通过授权校验之后返回，不泄露设备存在性；无权限仍是统一的 403。
 `/ws/alarms` 已建立连接后的 `token expired` 关闭帧不变。
@@ -91,3 +92,17 @@
 
 `username_taken` 沿用，现也适用于用户名账号。`password_not_allowed`、`no_password_for_role` 不再返回（员工可以有密码）。
 没有自助改密，也就没有 `wrong_password`/`password_unchanged`。
+
+## 罐颜色（2026-11-14）
+
+| code | HTTP | 场景 |
+| --- | --- | --- |
+| `color_sync_unsupported` | 409 | `config.setTankSettings` 带 `oilColor`，但设备未上报 `oilColorSync = 1`（旧固件会静默忽略该字段）。整条不派发 |
+
+## 罐高与低温报警（#65，2026-11-23）
+
+| code | HTTP | 场景 |
+| --- | --- | --- |
+| `height_low_temp_unsupported` | 409 | `config.setTankSettings` 带 `tankHeightMm` 或 `alarmLowTempC`，但设备未上报 `tankHeightLowTempSync = 1`（旧固件拒绝这两个字段、不检测低温）。整条不派发 |
+
+参数错误另有 `fields[].code = temp_order_violation`（同一命令里低温 ≥ 高温，两者都非 0），见罐设置契约。

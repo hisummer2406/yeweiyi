@@ -91,7 +91,10 @@ public class OilTankRepositoryImpl implements OilTankRepository {
 
     private volatile Runnable oilCanSetChangedListener;
 
-    /** 所有罐设置保存入口（设置页、下拉框、复制、报警开关、RPC）都经过本类，挂在这里一处即可。 */
+    /**
+     * 所有罐设置保存入口（设置页、下拉框、复制、报警开关、RPC）都经过本类，挂在这里一处即可。
+     * 罐表（OilCanTable）写入也触发（现场生成、U 盘导入、远程下发，#41），让云端标定镜像不必等到下次重连。
+     */
     @Override
     public void setOilCanSetChangedListener(Runnable listener) {
         this.oilCanSetChangedListener = listener;
@@ -111,7 +114,13 @@ public class OilTankRepositoryImpl implements OilTankRepository {
 
     @Override
     public void updateOilCanTable(final OilCanTable oilCanTable) {
-        update(oilCanTable);
+        update(oilCanTable, this::notifyOilCanSetChanged);
+    }
+
+    @Override
+    public void updateOilCanTableSync(OilCanTable oilCanTable) throws DbException {
+        db.update(oilCanTable);
+        notifyOilCanSetChanged();
     }
 
     @Override

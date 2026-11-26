@@ -4,15 +4,20 @@ import { onNetworkBack } from '../../utils/network';
 import { ApiError, get } from '../../utils/request';
 import { FOLLOW_NOTICES, followStationDevice, stationIdFromKey } from '../../utils/stationDevice';
 import { AlarmSocket, type SocketState } from '../../utils/ws';
-import { roleFromToken } from '../../utils/auth';
+import { roleFromToken, userKeyFromToken } from '../../utils/auth';
 import { isReadOnlyRole } from '../../utils/roles';
 import { getToken } from '../../utils/storage';
 import { describeResolveError, resolveDevice } from '../../utils/scan';
 import { classifyEntry, loginUrlForScene, setActiveScene } from '../../utils/sceneEntry';
-import { formatLocalTime } from '../../utils/format';
+import { formatLocalTime, round2 } from '../../utils/format';
+import { applyVirtual } from '../../utils/virtualTable';
+import { loadVirtual } from '../../utils/virtualTableStore';
 import { parseTankParam, pickTank, visibleTanks } from '../../utils/tankPick';
-import { toTankViews, type TankView } from '../../utils/telemetry';
+import { LIVE_REFRESH_MS, toTankViews, tankShapeFields, type TankView } from '../../utils/telemetry';
+import { emptyTankShapes, tankShapeFailure, type TankShapeState } from '../../utils/tankShape';
+import { getTankSettings } from '../../utils/remoteConfigApi';
 import { telemetryFailure } from '../../utils/failureState';
+import type { ParamEditorRef } from '../../utils/paramSwitch';
 import {
   ALARM_TYPE_KEYS,
   COMMAND_STATUS_KEYS,
@@ -31,10 +36,15 @@ import type {
 // the live-alarm banner follow the tank selected here. Records — alarms as well as stock in/out — are not
 // on this page: they have one entry only, under 我的记录 (pages/record-list), bound to the home page's
 // station. An old `tab=alarms` link simply opens 实时数据.
-type TabKey = 'snapshot' | 'commands';
+// 参数修正 / 储罐设置（#43）：同一设备、同一罐的编辑页签（components/param-editor）。页内没有罐切换：首页点哪个罐就是哪个罐。
+type TabKey = 'snapshot' | 'calibration' | 'settings' | 'commands';
+
+const EDITOR_TABS: TabKey[] = ['calibration', 'settings'];
 
 const TABS: { key: TabKey; labelKey: string }[] = [
   { key: 'snapshot', labelKey: 'detail.tabSnapshot' },
+  { key: 'calibration', labelKey: 'detail.tabCalibration' },
+  { key: 'settings', labelKey: 'detail.tabSettings' },
   // 控制命令 tab 入口已于 2026-10-17 关闭（页面、轮询和 issue-command 都保留，没有别的入口能进）。
   // 想起来再开时把下面这项加回 TABS：
   // { key: 'commands', labelKey: 'detail.tabCommands' },
@@ -59,24 +69,33 @@ const NO_TANK = -1;
 // rows: the detail page shows all of them, the home card only five. Missing or non-numeric values are a
 // dash, never 0. The tank number and oil type are in the header; snapshotSeq is a transport counter and
 // is not shown.
-type TankField = { label: string; value: string; unit: string; strong?: boolean };
+// `raw`: the device's reading next to one read from the virtual tank table (#56), '' otherwise.
+type TankField = { label: string; value: string; unit: string; strong?: boolean; raw?: string };
 
 function num(v: unknown): string {
   return typeof v === 'number' && Number.isFinite(v) ? String(v) : '—';
 }
 
+// The device's value of a reading shown from the virtual table, rounded for display only.
+function rawText(v: TankView, field: keyof TankView['raw']): string {
+  const raw = v.raw[field];
+  return v.virtualState === 'virtual' ? num(typeof raw === 'number' ? round2(raw) : undefined) : '';
+}
+
 function tankFields(v: TankView): TankField[] {
-  return [
+  const fields: TankField[] = [
     { label: tr('detail.level'), value: num(v.oilLevelMm), unit: tr('detail.unitMm'), strong: true },
-    { label: tr('detail.volume'), value: num(v.oilVolumeL), unit: tr('detail.unitL'), strong: true },
-    { label: tr('detail.mass'), value: num(v.oilWeightKg), unit: tr('detail.unitKg') },
+    { label: tr('detail.volume'), value: num(v.oilVolumeL), unit: tr('detail.unitL'), strong: true, raw: rawText(v, 'oilVolumeL') },
+    { label: tr('detail.mass'), value: num(v.oilWeightKg), unit: tr('detail.unitKg'), raw: rawText(v, 'oilWeightKg') },
     { label: tr('detail.temp'), value: num(v.tempC), unit: '℃' },
     { label: tr('detail.water'), value: num(v.waterLevelMm), unit: tr('detail.unitMm') },
-    { label: tr('detail.waterVolume'), value: num(v.waterVolumeL), unit: tr('detail.unitL') },
-    { label: tr('detail.ullage'), value: num(v.nullVolumeL), unit: tr('detail.unitL') },
+    { label: tr('detail.waterVolume'), value: num(v.waterVolumeL), unit: tr('detail.unitL'), raw: rawText(v, 'waterVolumeL') },
+    { label: tr('detail.ullage'), value: num(v.nullVolumeL), unit: tr('detail.unitL'), raw: rawText(v, 'nullVolumeL') },
     { label: tr('detail.oilRatio'), value: num(v.oilRatioPct), unit: '%' },
     { label: tr('detail.waterRatio'), value: num(v.waterRatioPct), unit: '%' },
   ];
+  // #75: a tank the device has never read reports placeholder zeros; show dashes, not a real 0.
+  return v.noReading ? fields.map((f) => ({ ...f, value: '—', raw: '' })) : fields;
 }
 
 Page({
@@ -110,7 +129,7 @@ Page({
     // All readings of the current tank, see tankFields.
     tankFields: [] as TankField[],
     snapshotLoaded: false,
-    // Visible tanks of this device, for the switcher; currentTank is a protocol tank number or NO_TANK.
+    // Visible tanks of this device; currentTank (the tapped one, else the lowest) is a protocol tank number or NO_TANK.
     tankOptions: [] as { tank: number; label: string }[],
     currentTank: NO_TANK,
     currentTankLabel: '',
@@ -119,6 +138,13 @@ Page({
 
     commands: [] as CommandView[],
     commandsLoaded: false,
+    // The device row's station_id for the editors' submission check: -1 = on no station, -2 = not known yet.
+    deviceStation: -2,
+    // Info bar (#43): the station name the home page showed (display only; '' for a scan entry).
+    stationName: '',
+
+    // 虚拟罐表（#56）：当前罐按本机虚拟表显示时的说明（'' = 设备原值）
+    virtualNote: '',
   },
 
   socket: null as AlarmSocket | null,
@@ -127,6 +153,12 @@ Page({
   // old device can write into the new device's view.
   deviceGen: 0,
   snapshotSeq: 0,
+  shapeSeq: 0,
+  shapeState: emptyTankShapes(),
+  shapeAccount: '',
+  shapeTimer: null as ReturnType<typeof setInterval> | null,
+  liveTimer: null as ReturnType<typeof setInterval> | null,
+  snapshotInFlight: 0,
   commandsSeq: 0,
   // The station this page was opened from (contract v1.2 §8.1): a number only when opened from a
   // station entry on the home page; the device then follows the station's current device
@@ -169,7 +201,8 @@ Page({
     const tab: TabKey = tabs.some((x) => x.key === requestedTab) ? (requestedTab as TabKey) : 'snapshot';
     this.requestedTank = parseTankParam(query.tank);
     this.stationId = stationIdFromKey(query.station);
-    this.setData({ device, tabs: tabsView(tabs), activeTab: tab });
+    const stationName = typeof this.stationId === 'number' && query.stationName ? decodeURIComponent(query.stationName) : '';
+    this.setData({ device, tabs: tabsView(tabs), activeTab: tab, stationName });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     // Opened from a device mini-program code: the scene is the device's printed code, not yet a device
     // name. Locate it first; nothing is queried until the cloud has answered.
@@ -359,6 +392,8 @@ Page({
           if (this.data.device || this.data.notice !== notice) this.switchDevice('', notice);
         } else {
           this.grantedTanks = grantsOf(devices, device);
+          const deviceStation = stationOf(devices, device);
+          if (deviceStation !== this.data.deviceStation) this.setData({ deviceStation });
         }
       })
       // A failed re-read changes nothing: the current device stays as it was.
@@ -377,11 +412,14 @@ Page({
     if (this.unloaded) return;
     this.deviceGen++;
     this.snapshotSeq++;
+    this.shapeSeq++;
+    this.shapeState = emptyTankShapes();
     this.commandsSeq++;
     this.requestedTank = undefined;
     this.allTanks = [];
     this.neverReported = false;
     this.grantedTanks = devices ? grantsOf(devices, device) : null;
+    const deviceStation = devices ? stationOf(devices, device) : -2;
     this.stopCommandsPoll();
     this.socket?.close();
     this.socket = null;
@@ -406,6 +444,8 @@ Page({
       tankless: '',
       commands: [],
       commandsLoaded: false,
+      deviceStation,
+      virtualNote: '',
     });
     wx.setNavigationBarTitle({ title: device || tr('detail.navTitle') });
     if (!device) return;
@@ -415,6 +455,15 @@ Page({
 
   onShow() {
     this.setData({ text: texts('detail') });
+    if (this.allTanks.length) this.applyTanks(this.allTanks, this.neverReported);
+    this.stopShapePoll();
+    this.shapeTimer = setInterval(() => { if (this.data.deviceActive) void this.loadShapes(); }, 60_000);
+    // Only the 实时数据 tab, once something was loaded; the editor tabs are not refreshed under the user.
+    this.liveTimer = setInterval(() => {
+      if (this.data.deviceActive && this.data.activeTab === 'snapshot' && this.data.snapshotLoaded && !this.snapshotInFlight) {
+        void this.loadSnapshot(true);
+      }
+    }, LIVE_REFRESH_MS);
     // Back from another page (or the app was in the background): the back office may have replaced the
     // station's device meanwhile.
     this.refreshAssociation();
@@ -429,14 +478,24 @@ Page({
 
   onHide() {
     this.wasHidden = true;
+    this.shapeSeq++;
+    this.stopShapePoll();
     this.stopCommandsPoll();
+  },
+
+  stopShapePoll() {
+    if (this.shapeTimer) clearInterval(this.shapeTimer);
+    this.shapeTimer = null;
+    if (this.liveTimer) clearInterval(this.liveTimer);
+    this.liveTimer = null;
   },
 
   // Reads the tab on screen again (nothing happens for a tab not loaded yet or without a device).
   refreshActiveTab(): void {
     if (!this.data.deviceActive || !this.data.device) return;
     const tab = this.data.activeTab as TabKey;
-    if (tab === 'snapshot' && this.data.snapshotLoaded) this.loadSnapshot();
+    // The editors re-read the device's settings themselves (on show); the snapshot decides the tanks.
+    if ((tab === 'snapshot' || EDITOR_TABS.includes(tab)) && this.data.snapshotLoaded) this.loadSnapshot();
     else if (tab === 'commands' && this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -446,6 +505,8 @@ Page({
   },
 
   onUnload() {
+    this.shapeSeq++;
+    this.stopShapePoll();
     this.stopNet?.();
     this.stopNet = null;
     setActiveScene(null);
@@ -468,7 +529,8 @@ Page({
   },
 
   loadTabIfNeeded(tab: TabKey) {
-    if (tab === 'snapshot' && !this.data.snapshotLoaded) this.loadSnapshot();
+    // The editor tabs need the visible tanks, which come with the snapshot.
+    if ((tab === 'snapshot' || EDITOR_TABS.includes(tab)) && !this.data.snapshotLoaded) this.loadSnapshot();
     if (tab === 'commands' && !this.data.commandsLoaded) this.loadCommands();
   },
 
@@ -478,8 +540,15 @@ Page({
       return;
     }
     this.refreshAssociation();
+    const editor = (tab: TabKey) => () => {
+      const ed = this.editorOf(tab) as unknown as { refresh?: () => void } | null;
+      ed?.refresh?.();
+      return this.loadSnapshot();
+    };
     const reload: Record<TabKey, () => Promise<unknown>> = {
       snapshot: () => this.loadSnapshot(),
+      calibration: editor('calibration'),
+      settings: editor('settings'),
       commands: () => this.loadCommands(),
     };
     reload[this.data.activeTab as TabKey]().finally(() => wx.stopPullDownRefresh());
@@ -502,7 +571,9 @@ Page({
     this.requestedTank = undefined;
     const pick = pickTank(visible, requested);
     const tank = pick.kind === 'tank' ? pick.tank : NO_TANK;
-    const view = all.find((v) => v.index === tank);
+    const found = all.find((v) => v.index === tank);
+    // Always from the raw readings, with the virtual table stored right now for this account/device/tank (#56).
+    const view = found ? applyVirtual(found, loadVirtual(this.data.device as string, tank)) : undefined;
     let tankless = '';
     if (pick.kind === 'none') tankless = neverReported || all.length === 0 ? tr('detail.noTankInfo') : tr('detail.noVisibleTank');
     this.setData({
@@ -512,29 +583,32 @@ Page({
       tanks: view ? [view] : [],
       tankFields: view ? tankFields(view) : [],
       tankless,
+      virtualNote: !view || !view.virtualState ? '' : view.virtualState === 'virtual' ? tr('detail.virtualNote') : tr(view.virtualReason === 'range' ? 'detail.virtualFallbackRange' : 'detail.virtualFallbackMissing'),
       ...(pick.hidden !== undefined ? { infoNotice: tr('detail.tankHidden', { n: pick.hidden }) } : {}),
     });
   },
 
-  onPickTank(e: WechatMiniprogram.BaseEvent) {
-    const tank = Number(e.currentTarget.dataset.tank);
-    if (tank === this.data.currentTank) return;
-    this.setData({ currentTank: tank, liveAlarm: '', infoNotice: '' });
-    // Re-render from the last snapshot; the next refresh reads it again.
-    this.applyTanks(this.allTanks, this.neverReported);
+  editorOf(tab: TabKey): ParamEditorRef | null {
+    return this.selectComponent(`#ed-${tab}`) as unknown as ParamEditorRef | null;
   },
 
+
   // GET /api/devices/:device/telemetry/latest — the cloud answers the granted tanks only.
-  loadSnapshot() {
+  // `silent` is the 5 s live refresh: no loading state, no shapes reload, no toast on failure.
+  loadSnapshot(silent = false) {
     if (!this.data.device) return Promise.resolve();
     const device = this.data.device as string;
     const seq = ++this.snapshotSeq;
-    this.setData({ loading: true });
+    this.snapshotInFlight++;
+    if (!silent) {
+      void this.loadShapes();
+      this.setData({ loading: true });
+    }
     return get<LatestTelemetryResponse>(`/api/devices/${encodeURIComponent(device)}/telemetry/latest`)
       .then((res) => {
         if (seq !== this.snapshotSeq) return;
         this.setData({ snapshotTs: formatLocalTime(res.ts, currentLocale()), snapshotLoaded: true, snapshotError: '', emptyNote: '' });
-        this.applyTanks(toTankViews(res, device), false);
+        this.applyTanks(toTankViews(res, device, this.shapeState), false);
         this.markSnapshotFresh();
       })
       .catch((err: ApiError) => {
@@ -551,6 +625,12 @@ Page({
           this.applyTanks([], true);
           this.markSnapshotFresh();
         } else {
+          if ([401, 403].includes(err.status)) {
+            this.shapeSeq++;
+            this.shapeState = emptyTankShapes();
+            this.applyTanks([], false);
+            this.setData({ snapshotLoaded: false, snapshotTs: '' });
+          }
           // Nothing was ever loaded: say that reading failed (not "no data"), with a retry. Something was: keep
           // it and mark it out of date.
           if (this.data.snapshotLoaded) {
@@ -560,19 +640,40 @@ Page({
           }
           // 403 here is "not authorized for this device": no assignment for this device. Say what to do
           // instead of the cloud's English text; nothing in the app can grant it.
-          wx.showToast({
-            title: err.status === 403 ? tr('detail.noAccess') : describeError(err),
-            icon: 'none',
-            duration: 3000,
-          });
+          if (!silent || err.status === 403) {
+            wx.showToast({
+              title: err.status === 403 ? tr('detail.noAccess') : describeError(err),
+              icon: 'none',
+              duration: 3000,
+            });
+          }
           // "not authorized for this device" is an object-level refusal, not a dead session (request.ts
           // keeps the session): the device may have left this user's scope, so re-resolve the station.
           if (err.status === 403) this.refreshAssociation();
         }
       })
       .finally(() => {
-        if (seq === this.snapshotSeq) this.setData({ loading: false });
+        this.snapshotInFlight--;
+        if (seq === this.snapshotSeq && !silent) this.setData({ loading: false });
       });
+  },
+
+  loadShapes(): Promise<void> {
+    const device = this.data.device;
+    if (!device || this.wasHidden) return Promise.resolve();
+    const seq = ++this.shapeSeq;
+    const account = userKeyFromToken(getToken());
+    if (account !== this.shapeAccount) {
+      this.shapeAccount = account;
+      this.shapeState = emptyTankShapes();
+      if (this.allTanks.length) this.applyTanks(this.allTanks.map((t) => ({ ...t, ...tankShapeFields(this.shapeState, t.index) })), this.neverReported);
+    }
+    const apply = (state: TankShapeState) => {
+      if (seq !== this.shapeSeq || device !== this.data.device || account !== userKeyFromToken(getToken()) || this.unloaded) return;
+      this.shapeState = state;
+      if (this.allTanks.length) this.applyTanks(this.allTanks.map((t) => ({ ...t, ...tankShapeFields(state, t.index) })), this.neverReported);
+    };
+    return getTankSettings(device).then((rows) => apply({ rows, status: 'ok' })).catch((error: ApiError) => apply(tankShapeFailure(this.shapeState, error.status)));
   },
 
   markSnapshotFresh() {
@@ -634,6 +735,13 @@ Page({
     });
   },
 });
+
+// The device row's station_id (-1 = on no station; -2 = the device is not in the list).
+function stationOf(devices: Device[], device: string): number {
+  const row = devices.find((d) => d.device_name === device);
+  if (!row) return -2;
+  return typeof row.station_id === 'number' ? row.station_id : -1;
+}
 
 // customer_user rows carry the tanks granted on that device; null for administrators or when not known.
 function grantsOf(devices: Device[], device: string): number[] | null {

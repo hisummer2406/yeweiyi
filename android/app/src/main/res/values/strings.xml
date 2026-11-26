@@ -16,6 +16,7 @@
     <string name="oilllow_alarm">%1$d 号储罐 低低液位报警</string>
     <string name="waterheight_alarm">%1$d 号储罐 高水位报警</string>
     <string name="tempheight_alarm">%1$d 号储罐高温度报警</string>
+    <string name="templow_alarm">%1$d 号储罐低温度报警</string>
     <string name="oil_rise">升</string>
     <string name="fyf_connect_error">驱动板连接中断</string>
     <string name="open_external_lighting">打开外接声光</string>
@@ -595,9 +596,11 @@
     <string name="oilcan_short_label_format">%1$d号 </string>
 
     <!-- ThingsBoardSetFragment 云平台设置页：页面只在中文界面开放，en/es 待设计稿文案 -->
+    <string name="tb_connection_settings" tools:ignore="MissingTranslation">云平台连接设置</string>
+    <string name="tb_address" tools:ignore="MissingTranslation">地址</string>
     <string name="tb_device_id_hint" tools:ignore="MissingTranslation">设备贴纸上的编号</string>
     <string name="tb_access_token_hint" tools:ignore="MissingTranslation">留空则自动从云平台领取</string>
-    <string name="tb_broker_host_empty" tools:ignore="MissingTranslation">Broker地址不能为空</string>
+    <string name="tb_broker_host_empty" tools:ignore="MissingTranslation">地址不能为空</string>
     <string name="tb_port_not_number" tools:ignore="MissingTranslation">端口必须是数字</string>
     <string name="tb_port_out_of_range" tools:ignore="MissingTranslation">端口必须在 1-65535 之间</string>
     <string name="tb_device_id_empty" tools:ignore="MissingTranslation">设备编号不能为空</string>
@@ -642,4 +645,14 @@
     <string name="vendor_logo_reset_done" tools:ignore="MissingTranslation">已恢复默认 logo</string>
     <string name="vendor_log_diag" tools:ignore="MissingTranslation">日志诊断</string>
     <string name="vendor_log_diag_summary" tools:ignore="MissingTranslation">查看、修改日志级别，清空日志</string>
+    <!-- 串口设置页：单罐开关量输出（IO2 联动，PumpIoManager）；罐号框复用 tank_no、oilcanArray -->
+    <string name="pump_link_title">单罐开关量输出</string>
+    <string name="pump_link_desc">低低液位闭合，高高液位断开</string>
+
+    <string name="serial_proxy_zhongcheng">中成探针双显</string>
+    <string name="serial_proxy_modbus">Modbus双显</string>
+    <string name="serial_proxy_restart">切换双显模式后，请重启应用使设置生效。</string>
+    <string name="rpc_oil_color_not_in_palette">颜色 %1$s 不在本机色板内，请从色板中选择</string>
+    <string name="rpc_threshold_over_height">报警阈值不能超过罐高（%1$d mm）：%2$s</string>
+    <string name="rpc_low_temp_not_below_high">低温报警（%1$d ℃）须低于高温报警（%2$d ℃）</string>
 </resources>

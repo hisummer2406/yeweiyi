@@ -13,22 +13,15 @@
     <text class="text-warning">{{text.socketDown}}</text>
   </view>
 
-  <!-- 当前罐：首页点中的罐；可在可见罐之间切换，实时数据与实时报警只看这个罐（单罐时只显示罐名）。 -->
+  <!-- 当前罐：首页点中的罐，页内不再切换（用户 2026-11-14）；实时数据、参数页签与实时报警只看这个罐。 -->
+  <!-- 共同信息栏（#43）：油站 · 设备 · 当前罐；三个页签都作用于这里选中的罐 -->
   <view class="tank-bar" wx:if="{{deviceActive && snapshotLoaded}}">
+    <view class="muted tank-bar-target">{{stationName ? stationName + ' · ' : ''}}{{device}}</view>
     <view wx:if="{{currentTankLabel}}" class="tank-bar-current">{{currentTankLabel}}</view>
     <view wx:if="{{tankless && activeTab !== 'snapshot'}}" class="muted">{{tankless}}</view>
-    <view wx:if="{{tankOptions.length > 1}}" class="range-chips">
-      <view
-        wx:for="{{tankOptions}}"
-        wx:key="tank"
-        class="range-chip {{currentTank === item.tank ? 'range-chip-on' : ''}}"
-        data-tank="{{item.tank}}"
-        bindtap="onPickTank"
-      >{{item.label}}</view>
-    </view>
   </view>
 
-  <!-- 只剩一个页签（实时数据）时不显示页签栏；报警、出入库记录只从「我的记录」进入 -->
+  <!-- 实时数据 / 参数修正 / 储罐设置（#43）；报警、出入库记录只从「我的记录」进入 -->
   <view class="tabs" wx:if="{{deviceActive && tabs.length > 1}}">
     <view
       wx:for="{{tabs}}"
@@ -65,15 +58,32 @@
           <text class="badge {{item.alarmState === 'ALARM' ? 'badge-failed' : (item.alarmState === 'FAULT' ? 'badge-offline' : 'badge-online')}}">{{item.alarmStateLabel || '—'}}</text>
         </view>
         <view class="dt-probe {{item.probeConnected ? '' : 'dt-probe-off'}}">
-          {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}
+          {{text.probe}}：{{item.probeConnected ? text.probeOn : text.probeNotOn}}<text wx:if="{{item.noReading}}"> · {{text.noReadingNote}}</text><text wx:elif="{{!item.probeConnected}}"> · {{text.lastReadingNote}}</text>
+        </view>
+        <view class="dt-probe">{{item.shapeLabel}}<text wx:if="{{item.shapeTime}}"> · {{item.shapeTime}}</text></view>
+        <!-- 虚拟罐表（#56）：容积、质量、水体积、空容按本机虚拟表算出，标出来并在下方给出设备原值；算不了时说明原因 -->
+        <view wx:if="{{virtualNote}}" class="dt-scale-tag">
+          <text class="badge {{item.virtualState === 'virtual' ? 'badge-scale' : 'badge-offline'}}">{{item.virtualState === 'virtual' ? text.virtual : text.virtualFallbackTag}}</text>
+          <view class="muted dt-virtual-note">{{virtualNote}}</view>
         </view>
         <view class="dt-grid">
           <view wx:for="{{tankFields}}" wx:for-item="f" wx:key="label" class="dt-cell">
             <view class="dt-label">{{f.label}}</view>
             <view class="dt-value {{f.strong ? 'dt-value-strong' : ''}}">{{f.value}}<text class="dt-unit">{{f.unit}}</text></view>
+            <view wx:if="{{f.raw}}" class="dt-raw">{{text.virtualRaw}} {{f.raw}} {{f.unit}}</view>
           </view>
         </view>
       </view>
+    </view>
+
+    <!-- 参数修正 / 储罐设置（#43）：作用于上方选中的罐；组件常驻（hidden 切换），切页签不丢输入 -->
+    <view hidden="{{activeTab !== 'calibration'}}">
+      <view wx:if="{{currentTank === -1}}" class="empty">{{snapshotError || tankless || text.pickTank}}</view>
+      <param-editor wx:else id="ed-calibration" kind="calibration" device="{{device}}" tank="{{currentTank}}" station="{{deviceStation}}" active="{{activeTab === 'calibration'}}" />
+    </view>
+    <view hidden="{{activeTab !== 'settings'}}">
+      <view wx:if="{{currentTank === -1}}" class="empty">{{snapshotError || tankless || text.pickTank}}</view>
+      <param-editor wx:else id="ed-settings" kind="tank" device="{{device}}" tank="{{currentTank}}" station="{{deviceStation}}" active="{{activeTab === 'settings'}}" />
     </view>
 
     <!-- 控制命令：POST /api/devices/:device/commands 下发，GET 轮询结果 -->

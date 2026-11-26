@@ -36,8 +36,9 @@ public class AlarmEventBuilderTest {
     }
 
     @Test
-    public void lowTemperatureIsNotReportable() {
-        assertFalse(AlarmEventBuilder.isReportable(OilMessage.LOW_TEMPER));
+    public void lowTemperatureMapsToLowTemperature() {
+        assertTrue(AlarmEventBuilder.isReportable(OilMessage.LOW_TEMPER));
+        assertEquals("LOW_TEMPERATURE-1-5", AlarmEventBuilder.alarmIdFor(OilMessage.LOW_TEMPER, 1, 5L));
     }
 
     @Test

@@ -1,0 +1,16 @@
+/* 小程序统一字号（750rpx 基准）。page 供页面继承，两个面板根节点供隔离组件使用。
+   首页沿用已确认的品牌/状态小字和短屏字号，不改变四罐首屏比例。 */
+page,
+.gp-panel,
+.sp-panel {
+  --font-title: 36rpx;
+  --font-heading: 32rpx;
+  --font-body: 30rpx;
+  --font-label: 28rpx;
+  --font-caption: 26rpx;
+  --font-meta: 24rpx;
+  --font-number: 36rpx;
+  --font-number-compact: 32rpx;
+  --font-brand: 34rpx;
+  --font-status: 22rpx;
+}

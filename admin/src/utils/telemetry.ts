@@ -19,6 +19,27 @@ export const alarmColor = (state: string): string => {
 export const fmt = (n: number | null | undefined): string =>
   typeof n === 'number' && Number.isFinite(n) ? n.toFixed(1) : '--';
 
+const READING_FIELDS = [
+  'oilLevelMm',
+  'waterLevelMm',
+  'tempC',
+  'oilVolumeL',
+  'waterVolumeL',
+  'oilWeightKg',
+  'nullVolumeL',
+  'oilRatioPct',
+  'waterRatioPct',
+] as const;
+
+/** #75：从未采到读数的罐，设备发的是占位 0；显示前换成 NaN，让 fmt 显示「--」而不是像真实的 0。 */
+export const displayReadings = (tank: API.Tank): API.Tank =>
+  tank.hasReading === false
+    ? {
+        ...tank,
+        ...Object.fromEntries(READING_FIELDS.map((f) => [f, Number.NaN])),
+      }
+    : tank;
+
 /** RFC3339 时间显示为本地 "YYYY-MM-DD HH:mm:ss"；空或非法显示 "--"。 */
 export const fmtTime = (iso: string | null | undefined): string => {
   if (!iso) return '--';
@@ -27,3 +48,9 @@ export const fmtTime = (iso: string | null | undefined): string => {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
+
+/**
+ * 实时读数（总览、详情「实时数据」）的取数间隔（#62）：设备液位变化 ≥1 mm 会提前上报（两次至少隔 5 秒），
+ * 稳定时每 30 秒一份快照；后台每 5 秒读一次最新遥测，同小程序。
+ */
+export const LIVE_TELEMETRY_MS = 5_000;

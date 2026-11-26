@@ -5,6 +5,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.sansen.yeweiyi.application.MyApplication;
+import com.sansen.yeweiyi.logic.probe.ProbeLink;
 import com.sansen.yeweiyi.bean.AlarmState;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -64,6 +65,7 @@ public class OilcanDataManager {
         getData();
         getTestData();
         setProbeData(mOilCanData, "nomar");
+        configureProxyAddresses(mOilCanData);
         setProbeData(testOilCanData, "test");
 //		Log.i("在什么线程下执行啊+++",Thread.currentThread().getName());
 //
@@ -107,6 +109,8 @@ public class OilcanDataManager {
         setProbeData(newTestOilCanData, "test");
         mOilCanData = newOilCanData;
         testOilCanData = newTestOilCanData;
+        // 配置重载先使代理旧缓存及在途请求失效，原有云端配置回调仍独立执行。
+        configureProxyAddresses(newOilCanData);
         Runnable listener = configChangedListener;
         if (listener != null) {
             listener.run();
@@ -118,6 +122,15 @@ public class OilcanDataManager {
 
     public void setConfigChangedListener(Runnable listener) {
         this.configChangedListener = listener;
+    }
+
+    /** 代理范围取本机真实采集配置的探针地址，而非油罐编号；不使用演示数据。 */
+    private void configureProxyAddresses(SparseArray<OilCan> data) {
+        int[] addresses = new int[data.size()];
+        for (int i = 0; i < data.size(); i++) {
+            addresses[i] = data.valueAt(i).getProbeAddressByte();
+        }
+        ProbeProxyManager.configureAddresses(addresses);
     }
 
     /**
@@ -460,7 +473,9 @@ public class OilcanDataManager {
             netOilcan.setProbeAddress(oilCan.getProbeAdr());
             netOilcan.setOilWeight(oilCan.getOilWeight());
             netOilcan.setOilColor(oilCan.getOilColor());
-            netOilcan.setConnect(oilCan.getErrorTimes() == 0);
+            // 与断线报警同一阈值：单次轮询失败不算断线，免得上报撞在失败与恢复之间时读数被标成未连接（#75）。
+            netOilcan.setConnect(ProbeLink.isConnected(oilCan.getProbeType(), oilCan.getErrorTimes()));
+            netOilcan.setHasReading(oilCan.isHasReading());
 
             //每次发送一共有多少个探针
             netOilcan.setFatherAllProbe(mOilCanData.size());

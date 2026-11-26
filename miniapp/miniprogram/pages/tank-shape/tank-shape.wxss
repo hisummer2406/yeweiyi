@@ -31,6 +31,115 @@ page {
   margin-top: 7rpx;
   line-height: 44rpx;
   text-align: center;
-  font-size: 32rpx;
+  font-size: var(--font-body);
   color: #131313;
+}
+
+/* 设备当前罐表（#41）：设计稿没有这一块，表格沿用尺寸页生成结果的样式。 */
+.ts-device {
+  margin: 16rpx 38rpx 48rpx;
+}
+
+.ts-device-title {
+  font-size: var(--font-heading);
+  font-weight: 600;
+  color: #131313;
+}
+
+.ts-device-hint,
+.ts-reported {
+  margin-top: 8rpx;
+  font-size: var(--font-caption);
+  color: #6b7280;
+}
+
+.ts-notice {
+  margin-top: 24rpx;
+  padding: 28rpx 24rpx;
+  background-color: #f5f6f8;
+  border-radius: 16rpx;
+  font-size: var(--font-body);
+  color: #4a4f57;
+}
+
+.ts-retry {
+  margin-left: 16rpx;
+  color: #0066a2;
+}
+
+.ts-tanks {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 20rpx;
+}
+
+.ts-tank {
+  margin: 0 16rpx 16rpx 0;
+  padding: 10rpx 28rpx;
+  background-color: #f5f6f8;
+  border-radius: 999rpx;
+  font-size: var(--font-label);
+  color: #4a4f57;
+}
+
+.ts-tank-on {
+  background-color: #0066a2;
+  color: #ffffff;
+}
+
+.ts-summary {
+  margin-top: 12rpx;
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: #131313;
+  word-break: break-all;
+}
+
+.ts-table-head,
+.ts-table-row {
+  display: flex;
+  padding: 14rpx 24rpx;
+}
+
+.ts-table-head {
+  margin-top: 20rpx;
+  background-color: #f5f6f8;
+  border-radius: 16rpx 16rpx 0 0;
+  font-size: var(--font-label);
+  color: #4a4f57;
+}
+
+.ts-table {
+  max-height: 640rpx;
+  border: 1rpx solid #f0f1f3;
+  border-top: none;
+  border-radius: 0 0 16rpx 16rpx;
+}
+
+.ts-table-row {
+  font-size: var(--font-body);
+  color: #131313;
+  font-variant-numeric: tabular-nums;
+  border-top: 1rpx solid #f0f1f3;
+}
+
+.ts-table-row:first-child {
+  border-top: none;
+}
+
+.ts-col {
+  flex: 1;
+}
+
+/* 本机虚拟罐表（#56） */
+.ts-virtual {
+  margin-top: 40rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #e5e8ee;
+}
+
+.ts-virtual-off {
+  display: inline-block;
+  margin-top: 16rpx;
+  margin-left: 0;
 }

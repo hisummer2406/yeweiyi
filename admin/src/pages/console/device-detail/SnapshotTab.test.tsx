@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
 const getLatestTelemetry = vi.fn();
+const getTankSettings = vi.fn().mockResolvedValue([]);
+vi.mock('@/services/ant-design-pro/deviceConfig', () => ({ getTankSettings }));
 
 let query = '';
 const setParams = vi.fn();
@@ -29,7 +31,7 @@ vi.mock('@/services/ant-design-pro/telemetry', async (importOriginal) => ({
 }));
 
 const { default: SnapshotTab } = await import('./SnapshotTab');
-const { REFRESH_MS } = await import('../components/useRecordsQuery');
+const { LIVE_TELEMETRY_MS: REFRESH_MS } = await import('@/utils/telemetry');
 
 const telemetryOf = (oilType: string): API.LatestTelemetry => ({
   deviceName: 'x',
@@ -56,6 +58,7 @@ const telemetryOf = (oilType: string): API.LatestTelemetry => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getTankSettings.mockReset().mockResolvedValue([]);
   query = '';
 });
 afterEach(() => {
@@ -64,6 +67,17 @@ afterEach(() => {
 });
 
 describe('SnapshotTab', () => {
+  it('shows readings even when the independent configuration read fails', async () => {
+    getLatestTelemetry.mockResolvedValue(telemetryOf('READINGS-AVAILABLE'));
+    getTankSettings.mockRejectedValue({ status: 503 });
+    render(<SnapshotTab device="D1" />);
+    expect(await screen.findByText(/READINGS-AVAILABLE/)).toBeTruthy();
+    expect(
+      (await screen.findByAltText('1号罐示意图（卧罐）')).getAttribute('src'),
+    ).toBe('/images/tank-generic.png');
+    expect(screen.queryByText(/罐型未知|罐型读取失败/)).toBeNull();
+  });
+
   it('drops a late response of the previous device after switching', async () => {
     let resolveD1!: (v: API.LatestTelemetry) => void;
     getLatestTelemetry.mockImplementation((d: string) =>
@@ -81,7 +95,7 @@ describe('SnapshotTab', () => {
     expect(screen.getByText(/OIL-OF-D2/)).toBeTruthy();
   });
 
-  it('refreshes every 30 seconds without falling back to the skeleton', async () => {
+  it('refreshes every 5 seconds without falling back to the skeleton', async () => {
     vi.useFakeTimers();
     getLatestTelemetry.mockResolvedValue(telemetryOf('OIL'));
     render(<SnapshotTab device="D1" />);
@@ -106,6 +120,35 @@ describe('SnapshotTab', () => {
     });
     expect(screen.getByText(/GOOD-OIL/)).toBeTruthy();
     expect(screen.queryByText('实时数据加载失败')).toBeNull();
+  });
+
+  it('skips a tick while the previous request is still pending, then updates', async () => {
+    vi.useFakeTimers();
+    let resolveSlow!: (v: API.LatestTelemetry) => void;
+    getLatestTelemetry
+      .mockResolvedValueOnce(telemetryOf('FIRST-OIL'))
+      .mockImplementationOnce(
+        () =>
+          new Promise((r) => {
+            resolveSlow = r;
+          }),
+      )
+      .mockResolvedValue(telemetryOf('LATER-OIL'));
+    render(<SnapshotTab device="D1" />);
+    await act(async () => {});
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS * 3);
+    });
+    // 慢请求未回：后两轮都跳过，不堆积
+    expect(getLatestTelemetry).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/FIRST-OIL/)).toBeTruthy();
+    await act(async () => resolveSlow(telemetryOf('SLOW-OIL')));
+    expect(screen.getByText(/SLOW-OIL/)).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REFRESH_MS);
+    });
+    expect(getLatestTelemetry).toHaveBeenCalledTimes(3);
+    expect(screen.getByText(/LATER-OIL/)).toBeTruthy();
   });
 
   it('stops polling after unmount', async () => {
@@ -238,7 +281,8 @@ describe('SnapshotTab one tank at a time', () => {
     render(<SnapshotTab device="D" />);
     await screen.findByRole('heading', { name: '1号 92#' });
     expect(screen.getByText(/报警状态：/)).toBeTruthy();
-    expect(screen.getByText(/探针：未连接/)).toBeTruthy();
+    expect(screen.getByText(/探针：通讯异常/)).toBeTruthy();
+    expect(screen.getByText('上次读数')).toBeTruthy();
     expect(screen.getAllByText('--').length).toBeGreaterThan(0);
   });
 

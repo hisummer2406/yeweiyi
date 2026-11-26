@@ -6,24 +6,24 @@
   "frozenNote": "尚未冻结。仍待双方负责人确认的条目见 docs/protocol-v1-open-items.md；在那份清单清空之前，不要往任一侧的协议实现里新增字段。",
   "openItems": "docs/protocol-v1-open-items.md",
   "enforcement": {
-    "crossRepoGate": true,
-    "_comment": "2026-11-06 起两端在同一个单仓库：Android 单测直接读本目录（android/app/build.gradle 挂到测试 classpath，无副本），Android CI 在 android/** 或 cloud/fixtures/** 变动时先跑 verify-manifest.sh 再跑单测，Cloud CI 跑 manifest_test.go。限制：私有仓库当前没有分支保护，CI 变红不会在技术上阻止合并；Android 侧仍是逐 key 比对 JSON，不是字节比对。",
+    "crossRepoGate": false,
+    "_comment": "两端在同一个单仓库，Android 单测直接读本目录（android/app/build.gradle 挂到测试 classpath，无副本）。2026-11-26 起 Android CI 不再自动运行（只留手动入口），Android 侧由专门的 Android 开发同事按交接的提交 SHA 在自己的环境跑 verify-manifest.sh 与单测，因此 crossRepoGate 改为 false；Cloud CI 仍自动跑 manifest_test.go。限制：私有仓库没有分支保护，CI 变红不会在技术上阻止合并；Android 侧是逐 key 比对 JSON，不是字节比对。",
     "cloud": "enforced: internal/protocol/manifest_test.go + verify-manifest.sh (Cloud CI)",
-    "android": "enforced: tests read cloud/fixtures directly + verify-manifest.sh (Android CI, .github/workflows/android-ci.yml)",
-    "androidVerifiedAt": "hisummer2406/yeweiyi@ead2ee2, Android CI run 42111474770 (363 tests, 0 failures)"
+    "android": "manual: tests read cloud/fixtures directly; the Android unit-test owner runs verify-manifest.sh + :app:testDebugUnitTest per handed-off commit (android-ci.yml is workflow_dispatch only since 2026-11-26)",
+    "androidVerifiedAt": "历史记录（自动门禁时期）：hisummer2406/yeweiyi@ead2ee2, Android CI run 42111474770 (363 tests, 0 failures)"
   },
   "source": "yeweiyi-cloud/fixtures/protocol/v1",
-  "updated": "2026-11-08",
+  "updated": "2026-11-25",
   "fixtures": [
     {
       "file": "telemetry_snapshot.json",
-      "sha256": "dd15d0c3d420e985acba90b54d8eaef43920a5d49a3e709e16cfca87cdeaead6",
+      "sha256": "dbff899eb5d4656bfbf8a89d92d74b364c1c40934fe869c26170f653178523f0",
       "direction": "uplink",
       "pins": "30 秒周期遥测快照，扁平罐键 tank{n}.*，单位写在键名里"
     },
     {
       "file": "telemetry_snapshot_rest.json",
-      "sha256": "fbc51f133f6711232eaa3af04d40ea8ffe18ed9bf5d387c699d31084663f21c0",
+      "sha256": "61e566ab5fb6015294f3f3a53daa6e840a8b7e52c0d15ce09751e37c5fe6234c",
       "direction": "uplink",
       "pins": "同一快照经 ThingsBoard REST 读回的形状——数值被字符串化，属性不会"
     },
@@ -41,7 +41,7 @@
     },
     {
       "file": "rpc_request_set_tank_settings.json",
-      "sha256": "e8557026b9738c310b46441503b3277165503194c90ef6f98b36ae05b304becb",
+      "sha256": "53e1c9a31e86c1e673a3eb72c427ab67022e3c844f3448fded72067bcdcc48f6",
       "direction": "downlink",
       "pins": "config.setTankSettings 请求（cloud#71，未冻结）：args 字段名同客户端属性，部分更新"
     },
@@ -53,7 +53,7 @@
     },
     {
       "file": "client_attributes_tank_settings.json",
-      "sha256": "dfdeaa239d887b9077147d3c283d0debc35c55c29bb479e2f873100b5b40b40a",
+      "sha256": "fcf08d1452a0cd8fbea0e68c2e4ad15f41672d4cf9336756dacfd82cd6e902a8",
       "direction": "uplink",
       "pins": "罐设置客户端属性 tank{N}.*（cloud#70，未冻结）：罐高/形状/油品序号/报警阈值/修正值/密度；0 = 不启用"
     },
@@ -167,9 +167,15 @@
     },
     {
       "file": "oil_type_index.json",
-      "sha256": "4c0a18f0eba1003d9d07029ee56662fc450e655d6cf2dbfb1eb7dc5c35fd2b76",
+      "sha256": "fb4ac667a0c05b2f0f3193b336309e3ee50ad47e565e53d6eb5e435d6c692e3b",
       "direction": "uplink",
       "pins": "oilTypeIndex 对照表（字典，非报文）：0 未设置，1–31 内置，32–39 自定义（#11 扩容）；英文名照抄设备（#52 修正、#11 缩写）"
+    },
+    {
+      "file": "oil_color_palette.json",
+      "sha256": "0581ade7c7a0ac8ef83428757f974349e50d0ab1e20057f04aa8b1125b4b4b6c",
+      "direction": "downlink",
+      "pins": "罐颜色色板（字典，非报文）：0xRRGGBB 整数，序号 1–20 对应设备 ColorFragment.yanseId；config.setTankSettings 的 oilColor 只接受色板内的值，tankN.oilColor 上报可不在色板内"
     }
   ]
 }

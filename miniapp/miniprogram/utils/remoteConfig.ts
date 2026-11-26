@@ -5,47 +5,117 @@
 // The cloud and the device decide; the checks here only say "no" earlier.
 
 export type SendField = {
-  // Key in the page form (tankDraft keys for 储罐设置, calibration keys for 参数修正)
+  // Key in the page form (储罐设置 / 参数修正 field keys, see editFields)
   form: string;
   // Field name on the wire / in the tank-settings mirror
   cloud: string;
   integer: boolean;
   min: number;
   max: number;
+  // min itself is not allowed (density > 0)
+  exclMin?: boolean;
 };
 
 const INT_MAX = 2147483647;
 
-// 储罐设置 → config.setTankSettings. Not here on purpose: density (unit not aligned with the device,
-// read-only this release), height (the cloud refuses it), waterLow (the device has no such alarm),
-// tempLow (the device never checks it), colour and the free-text medium (no device field).
+// 储罐设置 → config.setTankSettings. Not here: waterLow (the device has no such alarm). Medium (mediaId) and colour
+// (oilColor) are chosen, not typed: buildMediumArgs. Density is g/cm³ (= kg/L; 2026-11-14), 0 < v ≤ 2.
+// height / tempLow (#65) are editable only on firmware reporting tankHeightLowTempSync (HEIGHT_LOW_TEMP_FORMS).
 export const TANK_SEND_FIELDS: readonly SendField[] = [
+  { form: 'height', cloud: 'tankHeightMm', integer: true, min: 1, max: 100_000 },
   { form: 'highHigh', cloud: 'alarmHighHighLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'high', cloud: 'alarmHighLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'low', cloud: 'alarmLowLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'lowLow', cloud: 'alarmLowLowLevelMm', integer: true, min: 0, max: INT_MAX },
   { form: 'waterHigh', cloud: 'alarmHighWaterMm', integer: true, min: 0, max: INT_MAX },
   { form: 'tempHigh', cloud: 'alarmHighTempC', integer: true, min: -50, max: 100 },
+  { form: 'tempLow', cloud: 'alarmLowTempC', integer: true, min: -50, max: 100 },
   { form: 'capacity', cloud: 'capacityL', integer: true, min: 0, max: 1_000_000 },
+  { form: 'density', cloud: 'density', integer: false, min: 0, max: 2, exclMin: true },
 ];
 
-// Draft fields shown next to the device's value but never sent.
-export const TANK_DISPLAY_ONLY: Readonly<Record<string, string>> = {
-  density: 'density',
-  height: 'tankHeightMm',
-  tempLow: 'alarmLowTempC',
+// Older firmware refuses these (cloud 409 height_low_temp_unsupported): shown read-only, never sent there.
+export const HEIGHT_LOW_TEMP_FORMS: readonly string[] = ['height', 'tempLow'];
+
+// The tank fields an administrator may send to this device.
+export function sendableTankFields<T extends SendField>(fields: readonly T[], heightLowTemp: boolean): T[] {
+  return heightLowTemp ? [...fields] : fields.filter((f) => !HEIGHT_LOW_TEMP_FORMS.includes(f.form));
+}
+
+// 参数修正 → config.setTankSettings. No range limit on purpose (#28): the device just adds them to the reading.
+export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
+  { form: 'levelOffset', cloud: 'levelCorrectionMm', integer: false, min: -Infinity, max: Infinity },
+  { form: 'waterOffset', cloud: 'waterCorrectionMm', integer: false, min: -Infinity, max: Infinity },
+  { form: 'tempOffset', cloud: 'tempCorrectionC', integer: false, min: -Infinity, max: Infinity },
+];
+
+// ---- 编辑表单字段（Issue #43：罐详情参数页签与设置页共用） ----
+
+export type ParamKind = 'calibration' | 'tank';
+
+export type Unit = 'mm' | 'L' | '℃' | 'g/cm³';
+
+export type EditField = SendField & { unit: Unit; signed: boolean; labelKey: string };
+
+const UNITS: Record<string, Unit> = {
+  levelOffset: 'mm',
+  waterOffset: 'mm',
+  tempOffset: '℃',
+  capacity: 'L',
+  highHigh: 'mm',
+  high: 'mm',
+  lowLow: 'mm',
+  low: 'mm',
+  waterHigh: 'mm',
+  tempHigh: '℃',
+  tempLow: '℃',
+  height: 'mm',
+  density: 'g/cm³',
 };
 
-// 参数修正 → config.setTankSettings
-export const CORRECTION_SEND_FIELDS: readonly SendField[] = [
-  { form: 'levelOffset', cloud: 'levelCorrectionMm', integer: false, min: -100, max: 100 },
-  { form: 'waterOffset', cloud: 'waterCorrectionMm', integer: false, min: -100, max: 100 },
-  { form: 'tempOffset', cloud: 'tempCorrectionC', integer: false, min: -10, max: 10 },
-];
+// 储罐设置 order as on the old form (capacity first, then the four levels high → low, water, temperature).
+const TANK_ORDER = ['capacity', 'height', 'highHigh', 'high', 'lowLow', 'low', 'waterHigh', 'tempHigh', 'tempLow', 'density'];
+
+export function editFields(kind: ParamKind): EditField[] {
+  if (kind === 'calibration') {
+    return CORRECTION_SEND_FIELDS.map((f) => ({ ...f, unit: UNITS[f.form], signed: true, labelKey: `calibration.${f.form}` }));
+  }
+  return TANK_ORDER.map((k) => TANK_SEND_FIELDS.find((f) => f.form === k) as SendField).map((f) => ({
+    ...f,
+    unit: UNITS[f.form],
+    // Temperatures can be below zero; the digit keyboard has no minus sign on every phone (#30).
+    signed: f.min < 0,
+    labelKey: `tankCfg.${f.form}`,
+  }));
+}
+
+// The ± button beside a correction: some phone keyboards have no usable minus (#30). It only flips the sign of
+// the text — never a step — and '' → '-' lets the user tap first and type after; buildArgs still refuses a bare '-'.
+export function toggleSign(text: string): string {
+  const t = text.trim();
+  return t.startsWith('-') ? t.slice(1) : `-${t}`;
+}
+
+// 数字键盘（#56）：带符号的字段用支持小数点的数字键盘（type=digit），很多手机的数字键盘没有负号，
+// 程序写进去的「-」在部分系统上也会被数字键盘过滤。所以符号不放进输入框：输入框只显示数值部分，
+// 符号由 ± 按钮控制、显示在输入框前。splitSigned 拆开表单文字，joinSigned 把键盘输入接回原来的符号。
+export function splitSigned(text: string): { neg: boolean; mag: string } {
+  const s = String(text ?? '');
+  const t = s.trimStart();
+  return t.startsWith('-') ? { neg: true, mag: t.slice(1) } : { neg: false, mag: s };
+}
+
+// 键盘上若真能打出「-」（个别输入法），以打出的为准；否则沿用原来的符号。清空数值时保留单独的「-」，
+// 不补成 0，buildArgs 照样拒绝。
+export function joinSigned(prev: string, typed: string): string {
+  const t = String(typed ?? '');
+  if (t.trimStart().startsWith('-')) return t.trimStart();
+  return splitSigned(prev).neg ? `-${t}` : t;
+}
 
 const NUMBER = /^-?\d+(\.\d+)?$/;
 
-export type SendProblem = { form: string; reason: 'number' | 'integer' | 'range' | 'order' };
+export type SendProblem = { form: string; reason: 'number' | 'integer' | 'range' | 'order' | 'overHeight' | 'tempOrder' };
 
 export type BuiltArgs = { args: Record<string, number>; problems: SendProblem[] };
 
@@ -69,15 +139,21 @@ export function buildArgs(
       continue;
     }
     const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      problems.push({ form: f.form, reason: 'number' });
+      continue;
+    }
+    // The device's own value, untouched: not ours to refuse (a density of 840 typed in kg/m³ must not block the
+    // rest of the form), and nothing to send.
+    if (mirror && mirror[f.cloud] === n) continue;
     if (f.integer && !Number.isInteger(n)) {
       problems.push({ form: f.form, reason: 'integer' });
       continue;
     }
-    if (n < f.min || n > f.max) {
+    if (n < f.min || n > f.max || (f.exclMin && n <= f.min)) {
       problems.push({ form: f.form, reason: 'range' });
       continue;
     }
-    if (mirror && mirror[f.cloud] === n) continue;
     args[f.cloud] = n;
   }
   if (LEVELS.some((k) => k in args)) {
@@ -94,7 +170,52 @@ export function buildArgs(
       }
     }
   }
+  // The device checks these too, against what it holds; asking here saves a round trip. Same scope as the device:
+  // a new height checks every non-zero threshold, a new threshold only itself (#65).
+  const num = (k: string): number | undefined => {
+    const v = k in args ? args[k] : mirror?.[k];
+    return typeof v === 'number' ? v : undefined;
+  };
+  const height = num('tankHeightMm');
+  if (height !== undefined) {
+    for (const k of [...LEVELS].reverse().concat('alarmHighWaterMm')) {
+      const v = num(k);
+      if (('tankHeightMm' in args || k in args) && v !== undefined && v > height) {
+        const f = fields.find((x) => x.cloud === k) ?? fields.find((x) => x.cloud === 'tankHeightMm');
+        problems.push({ form: f ? f.form : k, reason: 'overHeight' });
+        break;
+      }
+    }
+  }
+  // Only where low temp is editable: older firmware never checks it, and its read-only value must not block high temp.
+  if (fields.some((f) => f.cloud === 'alarmLowTempC') && ('alarmHighTempC' in args || 'alarmLowTempC' in args)) {
+    const hi = num('alarmHighTempC');
+    const lo = num('alarmLowTempC');
+    if (hi && lo && lo >= hi) {
+      const f = fields.find((x) => x.cloud === ('alarmLowTempC' in args ? 'alarmLowTempC' : 'alarmHighTempC'));
+      problems.push({ form: f ? f.form : 'tempLow', reason: 'tempOrder' });
+    }
+  }
   return { args, problems };
+}
+
+// Medium and colour are picked, not typed (2026-11-14): send the medium chosen (the cloud turns mediaId into the
+// device's number) and the colour if it differs from the report. Nothing chosen = nothing sent.
+export function buildMediumArgs(
+  mediaId: number | undefined,
+  oilColor: number | undefined,
+  mirror: Record<string, unknown> | null | undefined,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (typeof mediaId === 'number') out.mediaId = mediaId;
+  if (typeof oilColor === 'number' && mirror?.oilColor !== oilColor) out.oilColor = oilColor;
+  return out;
+}
+
+// Fields the device left untouched in a succeeded command (cmdResult detail.ignored), e.g. an older firmware.
+export function ignoredFields(cmd: { resultDetail?: unknown }): string[] {
+  const d = cmd.resultDetail as { ignored?: unknown } | null | undefined;
+  return d && Array.isArray(d.ignored) ? d.ignored.filter((x): x is string => typeof x === 'string') : [];
 }
 
 // The mirror's value as form text ('' for not reported), for 导入设备值.
@@ -125,6 +246,27 @@ export function commandPhase(status: string): Phase {
   return 'unknown';
 }
 
+// What the record shows after the status (#42). Only a device refusal or failure has an explanation: the
+// device's own reason as is (data, not translated), else the error code's key. A received ACK carries
+// "已受理" in errorReason; on an expired/in-flight command that is not an explanation of anything and
+// must not be shown ("结果无法确认：已受理" read as if the device had accepted the change).
+export const KNOWN_ERROR_CODES = [
+  'UNKNOWN_METHOD', 'INVALID_PARAMS', 'EXPIRED', 'INTERLOCK_BLOCKED', 'BUSY', 'NOT_SUPPORTED', 'HARDWARE_FAULT', 'LOCAL_MODE_LOCKED',
+];
+
+export type CommandError = { text: string } | { key: string } | null;
+
+export function commandError(status: string, errorCode?: string, errorReason?: string): CommandError {
+  if (status !== 'rejected' && status !== 'failed') return null;
+  // The device does not know the method: its software is older than the command. Say so and ask to upgrade.
+  if (errorCode === 'UNKNOWN_METHOD') return { key: 'cmdLog.code.UNKNOWN_METHOD' };
+  const reason = (errorReason || '').trim();
+  if (reason) return { text: reason };
+  if (errorCode && KNOWN_ERROR_CODES.includes(errorCode)) return { key: `cmdLog.code.${errorCode}` };
+  if (errorCode) return { text: errorCode };
+  return null;
+}
+
 export type Echo = 'matched' | 'waiting' | 'mismatch';
 
 // After succeeded: only a report strictly later than the command's finishedAt can be the device's answer
@@ -142,7 +284,8 @@ export function echoState(
   const finished = Date.parse(finishedAt);
   if (!Number.isFinite(reported) || !Number.isFinite(finished) || reported <= finished) return 'waiting';
   for (const k of Object.keys(args)) {
-    if (k === 'tank') continue;
+    // The custom medium's names travel with its index (the cloud adds them) but are not mirrored; the index is.
+    if (k === 'tank' || k === 'customOilName' || k === 'customOilNameEn') continue;
     if (mirror?.[k] !== args[k]) return 'mismatch';
   }
   return 'matched';
@@ -156,6 +299,8 @@ export type SubmitError =
   | 'requestIdReused'
   | 'invalidArgs'
   | 'unconfirmed'
+  // the device software is too old for what was chosen (medium name / colour): ask to upgrade it
+  | 'firmwareOutdated'
   | 'other';
 
 function codeOf(body: unknown): string | undefined {
@@ -179,6 +324,10 @@ export function classifySubmit(status: number, body: unknown): SubmitError {
       return 'invalidArgs';
     case 'command_delivery_unconfirmed':
       return 'unconfirmed';
+    case 'media_sync_unsupported':
+    case 'color_sync_unsupported':
+    case 'height_low_temp_unsupported':
+      return 'firmwareOutdated';
   }
   return status === 0 ? 'unconfirmed' : 'other';
 }
@@ -266,12 +415,19 @@ export function buildBackfill(
 // too). Before anything new is sent to that target the kept one is looked up again and, if still not
 // found, only resent *as it was* with its own requestId — the cloud replays it if it had taken it.
 
+// Configuration methods the send flow may carry (#49 adds the tank table; absent = config.setTankSettings,
+// which is what every snapshot kept before #49 is).
+export const SEND_METHODS = ['config.setTankSettings', 'config.setTankTable'] as const;
+export type SendMethod = (typeof SEND_METHODS)[number];
+export type SendArgs = Record<string, number | string>;
+
 export type PendingSubmit = {
   requestId: string;
+  method?: SendMethod;
   device: string;
   stationId: number | null;
   tank: number;
-  args: Record<string, number>;
+  args: SendArgs;
   reason: string;
   lines: { label: string; before: string; after: string }[];
   savedAt: number;
@@ -285,8 +441,11 @@ export function pendingTargetKey(device: string, tank: number): string {
   return `${device}#${tank}`;
 }
 
-function isNumberRecord(v: unknown): v is Record<string, number> {
-  return !!v && typeof v === 'object' && Object.values(v as object).every((x) => typeof x === 'number' && Number.isFinite(x));
+// Settings carry numbers only; the tank table also carries its shape as text (#49).
+function isArgsRecord(v: unknown, method: string | undefined): v is SendArgs {
+  const textOk = method === 'config.setTankTable';
+  return !!v && typeof v === 'object' &&
+    Object.values(v as object).every((x) => (typeof x === 'number' && Number.isFinite(x)) || (textOk && typeof x === 'string'));
 }
 
 // Reads one kept submission out of a stored map, dropping anything malformed (an unreadable entry
@@ -298,7 +457,8 @@ export function readPending(store: unknown, device: string, tank: number): Pendi
   if (typeof p.requestId !== 'string' || !p.requestId) return undefined;
   if (p.device !== device || p.tank !== tank) return undefined;
   if (!(p.stationId === null || (typeof p.stationId === 'number' && Number.isFinite(p.stationId)))) return undefined;
-  if (!isNumberRecord(p.args) || typeof p.reason !== 'string' || !Array.isArray(p.lines)) return undefined;
+  if (p.method !== undefined && !(SEND_METHODS as readonly string[]).includes(p.method)) return undefined;
+  if (!isArgsRecord(p.args, p.method) || typeof p.reason !== 'string' || !Array.isArray(p.lines)) return undefined;
   return p as PendingSubmit;
 }
 
@@ -323,7 +483,8 @@ export function pendingAfter(kind: SubmitError | 'ok' | 'notSent', retry = false
   if (kind === 'ok' || kind === 'notSent') return 'clear';
   if (kind === 'unconfirmed') return 'keep';
   if (!retry) return 'clear';
-  return kind === 'stationChanged' || kind === 'inFlight' || kind === 'requestIdReused' || kind === 'invalidArgs'
+  return kind === 'stationChanged' || kind === 'inFlight' || kind === 'requestIdReused' || kind === 'invalidArgs' ||
+    kind === 'firmwareOutdated'
     ? 'clear'
     : 'keep';
 }

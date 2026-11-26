@@ -4,6 +4,8 @@ import android.util.Log;
 import android.support.v4.util.ArrayMap;
 
 import com.sansen.yeweiyi.applog.RelayLog;
+import com.sansen.yeweiyi.applog.ProbeProxyLog;
+import com.sansen.yeweiyi.manager.ProbeProxyManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 
 import java.util.Set;
@@ -13,13 +15,9 @@ import serialport.help.SerialPortHelper;
 import serialport.thread.IThread;
 
 /**
- * HAL：底层 JNI 串口字节收发，零 UI 依赖，几乎无调用方（263 行）。这是硬件访问边界——
- * UI/业务层禁止直接调用本类，一律经 {@code com.sansen.yeweiyi.manager.SerialPortManager}
- * （协议编排层，负责厂商协议分发、报警联动、经 {@code DataRefreshCallback} 回调 UI）。
- * 两个同名类容易混淆，见 openspec/changes/archive/2026-11-02-layer-data-and-hardware-boundaries §8、
- * `CLAUDE.md` "Known landmines"。
- *
- * Created by Administrator on 2019-04-28.
+ * HAL：底层 JNI 字节收发，按启动模式将串口 4 数据路由到控制板或探针代理。
+ * UI/业务层经 com.sansen.yeweiyi.manager.SerialPortManager 访问硬件。
+ * 代理解码与缓存由 ProbeProxyManager 提供，HAL 不解析探针协议。
  */
 
 public class SerialPortManager {
@@ -148,6 +146,29 @@ public class SerialPortManager {
         @Override
         public void run() {
             while (!isStop) {
+                // 复用串口 4 唯一接收线程；双显应答不受继电器开关控制，也不进入控制板解析。
+                if (ProbeProxyManager.isProxyMode()) {
+                    try {
+                        // 客户端采集只等待 100ms；沿用控制路径的 250ms 间隔可能错过本次读取。
+                        Thread.sleep(10);
+                        if (isPause) continue;
+                        if (!mainSerialPort.isOpen) {
+                            ProbeProxyManager.invalidate();
+                            ProbeProxyLog.notice("serial4-closed");
+                            continue;
+                        }
+                        byte[] request = mainSerialPort.receiveData();
+                        if (request != null && request.length > 0) {
+                            byte[] reply = ProbeProxyManager.serial4Request(request);
+                            // 缓存命中即回原串口，避开控制消息队列每秒一次的发送节奏。
+                            if (reply != null && mainSerialPort.isOpen) mainSerialPort.sendData(reply);
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    continue;
+                }
                 if (SharePreManager.getRelaySwitch()) {
                     try {
                         Thread.sleep(250);
@@ -229,12 +250,16 @@ public class SerialPortManager {
 
     ProbeReciveDataListener reciveDataListener;
 
+    /** 控制输出入口；双显响应由接收线程直接发送，不能经此入口混入控制帧。 */
     public void sendByteProbe(byte[] datas) {
+        if (!ProbeProxyManager.allowsControl()) return;
         mainSerialPort.sendData(datas);
 //        Log.i("发送的数据", DataUtils.bytesToHexString(datas, datas.length));
     }
 
+    /** 与另一控制输出入口保持相同的串口 4 模式限制。 */
     public void sendMsgMain(byte[] data) {
+        if (!ProbeProxyManager.allowsControl()) return;
         //        LogUtils.i(TAG, "发送" + DataUtils.bytesToHexString(bytes, bytes.length));
         mainSerialPort.sendData(data);
     }

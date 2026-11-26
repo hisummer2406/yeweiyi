@@ -1,7 +1,7 @@
 /* 首页当前油站：记录页的全部入口都属于它 */
 .records-station {
   padding: 24rpx 32rpx 8rpx;
-  font-size: 40rpx;
+  font-size: var(--font-title);
   font-weight: 600;
   color: #131313;
 }

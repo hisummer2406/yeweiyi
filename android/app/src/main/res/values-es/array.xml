@@ -85,15 +85,7 @@
         <item>Temp.</item>
     </string-array>
 
-    <!-- [AI待review-2026-09-24] 油品/介质类型全列表——ActivityDialog value==1（可达）和
-         DataUtils.getOilType() 共用，后者被 OilCanFragment/OilCanSetFragment/InOilFragment/
-         AlarmDetection 等一大批活页面直接拿来显示储罐介质类型，是全仓库调用面最广的数组之一。
-         ⚠️ 翻译时按中文（values/array.xml）逐项对出来的，因为发现 values-en/array.xml 自己数据
-         就有错位，不能当权威基准抄：第 3 项中文是"-10#"，英文却写成"Sulfuric Acid"（跟第 12 项
-         重复）；第 11 项中文是"米糠油"（米糠榨的油），英文却写成"Kerosene"（煤油，完全不同的
-         东西）。这两处错位是这次核查西语数组时顺带发现的，不属于这次任务范围，建议另外找人核实
-         values-en/array.xml 该怎么改，这里只是不要把英文的错误也抄进西语。
-         [已更正-2026-11-04] 英文这两项已改为 -10# Diesel / Rice Bran Oil（issue #52），中英西现已逐项对应。 -->
+    <!-- 介质编号与默认中文表保持一致；显示名改变时不得移动自定义位置。 -->
     <string-array name="oiltypeArray">
         <item>No configurado</item>
         <item>Diésel 0#</item>
@@ -105,7 +97,7 @@
         <item>Gasolina 98#</item>
         <item>Metanol</item>
         <item>Tolueno</item>
-        <item>Aceite de Salvado de Arroz</item>
+        <item>Queroseno</item>
         <item>Ácido Sulfúrico</item>
         <item>Xileno</item>
         <item>n-Butilo</item>

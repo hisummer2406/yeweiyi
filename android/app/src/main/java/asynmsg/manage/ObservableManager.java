@@ -3,6 +3,7 @@ package asynmsg.manage;
 import android.util.Log;
 
 import com.sansen.yeweiyi.applog.RelayLog;
+import com.sansen.yeweiyi.manager.ProbeProxyManager;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.DataUtils;
 
@@ -36,8 +37,15 @@ public class ObservableManager {
     private int errorCount;
     private IErrorCodeListener errorListener;
     private UpdateListener updateListener;
+    // 仅串口 4 队列需要模式隔离；AsyManager2 使用默认 false，不受双显开关影响。
+    private final boolean ownsSerial4;
 
     public ObservableManager() {
+        this(false);
+    }
+
+    public ObservableManager(boolean ownsSerial4) {
+        this.ownsSerial4 = ownsSerial4;
         Log.i(TAG, "启动了");
         mDisposable = getDisposable();
         mCompositeDisposable.add(mDisposable);
@@ -54,6 +62,8 @@ public class ObservableManager {
                 .subscribe(new Consumer<Long>() {
                     @Override
                     public void accept(Long aLong) throws Exception {
+                        // 双显时停止控制队列的发送、超时判断及状态查询回调。
+                        if (ownsSerial4 && !ProbeProxyManager.allowsControl()) return;
 //                        Log.i(TAG, "accept: "+aLong);
                         if (SharePreManager.getRelaySwitch()) {
                             for (int key : listeners.keySet()) {
@@ -92,6 +102,8 @@ public class ObservableManager {
     }
 
     private void sendMsg(byte[] bytes) {
+        // 实际写串口处也校验模式，防止绕过入队入口占用双显线路。
+        if (ownsSerial4 && !ProbeProxyManager.allowsControl()) return;
         if (mainSerialPort == null) {
             throw new RuntimeException();
         }
@@ -141,6 +153,8 @@ public class ObservableManager {
     }
 
     public void sendData(byte[] address, byte[] content, int waitTime, ObservableManager.ReciveListener listener) {
+        // 入队前拒绝控制请求，避免双显模式积压消息和无应答监听。
+        if (ownsSerial4 && !ProbeProxyManager.allowsControl()) return;
         addListener(address, listener, waitTime);
         addMsgPool(address, content);
     }

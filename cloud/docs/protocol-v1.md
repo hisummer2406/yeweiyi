@@ -55,7 +55,7 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
 
 - **Topic**：`v1/devices/me/telemetry`（ThingsBoard 原生，不可配置）
 - **QoS**：1
-- **周期**：默认 30 秒，可由共享属性 `reportIntervalSec` 覆盖
+- **周期**：默认 30 秒，可由共享属性 `reportIntervalSec` 覆盖。另外，任一罐 `oilLevelMm`/`waterLevelMm` 与上一条快照相差 ≥1 mm 时，设备会提前发一条完整快照（两条之间至少 5 秒），发出后周期重新计时。云端不能假设快照严格等间隔
 - **方向**：设备 → 云。**后台不再逐台轮询**（旧设计的 `requestOilcan` 轮询已废弃）
 
 报文使用 ThingsBoard 的显式时间戳形式：
@@ -89,7 +89,8 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
 | `tank{n}.oilRatioPct` | double | **百分比 0–100** |
 | `tank{n}.waterRatioPct` | double | **百分比 0–100** |
 | `tank{n}.alarmState` | string | `NORMAL` / `ALARM` / `FAULT` |
-| `tank{n}.probeConnected` | bool | 探针通信状态 |
+| `tank{n}.probeConnected` | bool | 探针通信状态：连续轮询失败达到设备断线阈值（常用探针 5 次）才为 false，单次失败不算（#75） |
+| `tank{n}.hasReading` | bool | 本次开机或罐配置重载以来是否采到过有效读数（#75）。false 时读数是占位 0，不是真实液位；缺失（旧固件）按未知处理 |
 
 **单位写进 key 名是刻意的。** #7 的验收要求"不存在未定义单位"，把单位放进 key 名让"一个没有单位的
 数字"在结构上不可能出现，而且 ThingsBoard 仪表盘直接拿 key 名当曲线标签，单位不会丢。
@@ -157,7 +158,7 @@ V1 不认识的 key，双方的解析器都必须接受它并正确解出其余�
   仅靠 `(tank, type)` 配对是不够的——断网补传时两次重叠的同类报警会配错。
 - `tank`：1 起的罐号；`0` 表示设备级报警。
 - `type`：`HIGH_HIGH_LEVEL`、`HIGH_LEVEL`、`LOW_LEVEL`、`LOW_LOW_LEVEL`、`HIGH_WATER_LEVEL`、
-  `HIGH_TEMPERATURE`、`PROBE_DISCONNECTED`、`LEAK_SUSPECTED`、`OVERFILL_RISK`
+  `HIGH_TEMPERATURE`、`LOW_TEMPERATURE`（#65）、`PROBE_DISCONNECTED`、`LEAK_SUSPECTED`、`OVERFILL_RISK`
 - `severity`：`CRITICAL` / `MAJOR` / `MINOR` / `WARNING` / `INDETERMINATE`
   （**照抄 ThingsBoard 自己的枚举拼写**，这样规则链可以直接透传，不需要翻译表）
 - `status`：`ACTIVE` / `CLEARED`。**确认（acknowledge）是云端代操作员做的动作，设备永远不上报它。**
@@ -358,7 +359,16 @@ ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttrib
   } } }
 ```
 
-`rejected` 是 ACK 阶段的终态，**不再发 `cmdResult`**。
+`rejected` 是 ACK 阶段的终态，**不再发 `cmdResult`**。设备应在 ACK 前完成参数预检，非法参数直接回
+`rejected` ACK。
+
+**兼容规则（#42，云端单方面落地，待设备端负责人确认）**：现场旧固件先回 `received` ACK、再校验参数，
+把拒绝作为 `cmdResult` `status: "rejected"`（带 `errorCode`/`reason`，如 `INVALID_PARAMS`）上报。云端接受这种
+结果：命令从 `pending`/`sent`/`received`/`executing` 进入终态 `rejected`，错误码与原因取自该结果（覆盖 ACK 的
+"已受理"），审计 `control.result` 为 `denied`。设备不得以此表示"已部分执行"——`rejected` 一律视为未写入任何字段。
+命令已终态后才到的 `rejected` 结果按迟到结果处理（只写 `control.result_late`，状态不变）。
+`cmdResult` 里的其他非法状态（`expired`、`received` 等）或不可解析的 `commandId` 被丢弃并记日志，不阻断同一设备其他
+结果的回读。
 
 ### 6.7 错误码
 

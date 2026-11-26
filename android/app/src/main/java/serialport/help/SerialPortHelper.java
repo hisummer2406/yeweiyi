@@ -113,10 +113,8 @@ public class SerialPortHelper {
     }
 
 
-    /**
-     * 发送数据
-     */
-    public void sendData(byte[] datas) {
+    /** 同一端口实例的读写共用锁，避免并发写入交错成无效帧。 */
+    public synchronized void sendData(byte[] datas) {
        Log.i(TAG, "串口:" + serialportopt.mDevNum + "\n发送到串口中的数据: " + DataUtils.bytesToHexString(datas, datas.length));
         try {
 //            出错了

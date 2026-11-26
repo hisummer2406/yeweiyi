@@ -9,6 +9,11 @@ on:
         description: "已通过 main Cloud CI/Cloud Image 的完整 40 位提交 SHA"
         required: true
         type: string
+      image_source:
+        description: "registry = 从 GHCR 拉取已推送的镜像（默认）；runner = ghcr.io 推送不通时在 Runner 上按该提交构建、经 SSH 载入"
+        type: choice
+        options: [registry, runner]
+        default: registry
 
 permissions:
   contents: read
@@ -25,12 +30,15 @@ concurrency:
 
 jobs:
   deploy:
-    # 固定 24.04：ubuntu-latest 换成 26.04 后 Runner 的 docker image inspect .Id 与服务器 docker load 后不一致，
-    # 「远端预载镜像标识不一致」门禁误拦（2026-11-02）。换回 latest 前先确认两端 .Id 口径一致。
-    runs-on: ubuntu-24.04
+    # 自托管 Runner（Ubuntu 24.04 + Docker 29，containerd 镜像存储）。托管 ubuntu-latest 换成 26.04 时，
+    # Runner 的 docker image inspect .Id 与服务器 docker load 后口径不一致，「远端预载镜像标识不一致」
+    # 门禁误拦（2026-11-02）；现由 .github/scripts/deploy-image-identity.sh 按两端存储类型从固定 digest
+    # 推导期望值，校验强度不变。
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 15
     env:
       RELEASE_SHA: ${{ inputs.release_sha }}
+      IMAGE_SOURCE: ${{ inputs.image_source }}
       GH_TOKEN: ${{ github.token }}
       TARGET_HOST: ${{ secrets.CLOUD_DEPLOY_HOST }}
       TARGET_USER: ${{ secrets.CLOUD_DEPLOY_USER }}
@@ -50,12 +58,21 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # 自托管 Runner 的 HOME 跨 job 持久：镜像仓库凭证、SSH 私钥与 known_hosts 都只放本 job 的
+      # RUNNER_TEMP，最后一步 always 删除，避免残留到之后的 job。
+      - name: 临时凭证目录
+        working-directory: .
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/docker-config" "$RUNNER_TEMP/ssh"
+          echo "DOCKER_CONFIG=$RUNNER_TEMP/docker-config" >> "$GITHUB_ENV"
       - name: 校验版本与 CI/Image 门禁
         run: |
           git fetch origin main
           git merge-base --is-ancestor "$RELEASE_SHA" origin/main
           # 单仓库按目录触发：只改别的目录的提交不会跑 Cloud CI/Image，选 SHA 时要选改过 cloud/ 的提交。
-          for wf in "Cloud CI" "Cloud Image"; do
+          # runner 模式镜像在本作业里按同一提交构建，不要求 Cloud Image（推送）成功；Cloud CI 照常必须成功。
+          wfs=("Cloud CI"); [[ "$IMAGE_SOURCE" == runner ]] || wfs+=("Cloud Image")
+          for wf in "${wfs[@]}"; do
             runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&event=push&per_page=100")"
             printf '%s' "$runs" | jq -e --arg wf "$wf" '
               [.workflow_runs[] | select(.name == $wf and .head_branch == "main")]
@@ -65,42 +82,69 @@ jobs:
       - name: 部署配置检查
         run: bash deploy/check-compose.sh
       - uses: docker/login-action@v4
+        if: inputs.image_source != 'runner'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+          logout: true
       - name: 将已构建镜像固定到 digest
+        if: inputs.image_source != 'runner'
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
           docker pull "$image"
           digest_image="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           [[ "$digest_image" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]] || exit 1
           echo "DEPLOY_IMAGE=$digest_image" >> "$GITHUB_ENV"
+          echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
+      # ghcr.io 出境推送反复超时时用（2026-11-23）：按已检出的同一提交在 Runner 上构建（复用 Cloud Image 的本机缓存，
+      # 只读），镜像不进任何仓库；身份以本机 .Id 为准，下一步照常核对远端载入后的标识。
+      # 标签带运行编号：同一提交重发时 docker load 不会改写服务器上已有标签，回滚引用的上一版镜像保持不变。
+      - name: 在 Runner 上构建镜像（image_source=runner）
+        if: inputs.image_source == 'runner'
+        run: |
+          set -euo pipefail
+          image="yeweiyi-local/cloud:sha-$RELEASE_SHA-r$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          args=()
+          for v in HTTPS_PROXY HTTP_PROXY NO_PROXY; do [[ -n "${!v:-}" ]] && args+=(--build-arg "$v=${!v}"); done
+          # 不带证明：导出包只含一个镜像，身份核对才有唯一的 digest。
+          docker buildx build --load --provenance=false --sbom=false "${args[@]}" \
+            --cache-from "type=local,src=${YEWEIYI_CI_CACHE:?}/buildx/cloud-image" -t "$image" .
+          echo "DEPLOY_IMAGE=$image" >> "$GITHUB_ENV"
+          echo "SAVE_IMAGE=$image" >> "$GITHUB_ENV"
       - name: 配置 SSH
         env:
           KEY: ${{ secrets.CLOUD_DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.CLOUD_DEPLOY_KNOWN_HOSTS }}
         run: |
           [[ -n "$KEY" && -n "$KNOWN_HOSTS" ]] || { echo 'SSH 密钥或主机公钥未设置'; exit 1; }
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          (umask 077; printf '%s\n' "$KEY" > "$RUNNER_TEMP/ssh/id_deploy")
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
+          # 只用这把专用密钥、这份主机公钥；不读 Runner 用户的 ~/.ssh 和 ssh-agent。
+          echo "SSH_OPTS=-F /dev/null -i $RUNNER_TEMP/ssh/id_deploy -o IdentitiesOnly=yes -o IdentityAgent=none -o UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts -o GlobalKnownHostsFile=/dev/null -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6" >> "$GITHUB_ENV"
       - name: 经 SSH 预载已验证 API 镜像
         run: |
           set -o pipefail
-          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/yeweiyi/cloud:sha-${RELEASE_SHA:0:7}"
-          expected="$(docker image inspect "$DEPLOY_IMAGE" --format '{{.Id}}')"
+          read -ra SSH_OPTS_ARR <<< "$SSH_OPTS"
+          SSH=(ssh "${SSH_OPTS_ARR[@]}" -p "${TARGET_PORT:-22}")
+          image="$SAVE_IMAGE"
+          archive="$RUNNER_TEMP/cloud-image.tar"
+          docker save "$image" -o "$archive"
+          remote_store="$("${SSH[@]}" "$TARGET_USER@$TARGET_HOST" \
+            "sudo -n docker info --format '{{range .DriverStatus}}{{if eq (index . 0) \"driver-type\"}}{{index . 1}}{{end}}{{end}}'")"
+          expected="$(../.github/scripts/deploy-image-identity.sh "$DEPLOY_IMAGE" "$archive" "$remote_store")"
           [[ "$expected" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "远端镜像存储：${remote_store:-经典}；期望远端 .Id：$expected"
           # ECS 跨境下载大层缓慢；Runner 已按 digest 拉取，通过 SSH 预热缓存。
           # 远端仍 pull 原 digest，镜像身份与版本门禁不变。
-          docker save "$image" | gzip | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" 'gzip -dc | sudo -n docker load'
+          gzip -c "$archive" | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" 'gzip -dc | sudo -n docker load'
+          rm -f "$archive"
           actual="$("${SSH[@]}" "$TARGET_USER@$TARGET_HOST" "sudo -n docker image inspect '$image' --format '{{.Id}}'")"
           [[ "$actual" == "$expected" ]] || { echo '远端预载镜像标识不一致'; exit 1; }
       - name: 同步同一提交的部署文件
         run: |
-          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          read -ra SSH_OPTS_ARR <<< "$SSH_OPTS"
+          SSH=(ssh "${SSH_OPTS_ARR[@]}" -p "${TARGET_PORT:-22}")
           tar -czf - docker-compose.yml docker-compose.prod.yml docker-compose.thingsboard.yml \
             docker-compose.thingsboard-tls.yml db/migrations deploy/remote-deploy.sh deploy/profiles/small.yml \
             | "${SSH[@]}" "$TARGET_USER@$TARGET_HOST" "test -f '$DEPLOY_DIR/.env.prod' && tar -xzf - -C '$DEPLOY_DIR'"
@@ -109,12 +153,23 @@ jobs:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USER: ${{ github.actor }}
         run: |
-          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          read -ra SSH_OPTS_ARR <<< "$SSH_OPTS"
+          SSH=(ssh "${SSH_OPTS_ARR[@]}" -p "${TARGET_PORT:-22}")
           TARGET="$TARGET_USER@$TARGET_HOST"
           AUTH_DIR="$DEPLOY_DIR/.docker-ci"
           trap '"${SSH[@]}" "$TARGET" "sudo -n rm -rf -- '\''$AUTH_DIR'\''" || true' EXIT
           "${SSH[@]}" "$TARGET" "mkdir -p '$AUTH_DIR' && chmod 700 '$AUTH_DIR'"
-          printf '%s' "$REGISTRY_TOKEN" | "${SSH[@]}" "$TARGET" \
-            "sudo -n docker --config '$AUTH_DIR' login ghcr.io -u '$REGISTRY_USER' --password-stdin"
+          # runner 模式远端不 pull（镜像已载入），不需要仓库凭据。
+          if [[ "$IMAGE_SOURCE" != runner ]]; then
+            printf '%s' "$REGISTRY_TOKEN" | "${SSH[@]}" "$TARGET" \
+              "sudo -n docker --config '$AUTH_DIR' login ghcr.io -u '$REGISTRY_USER' --password-stdin"
+          fi
           "${SSH[@]}" "$TARGET" \
             "DOCKER_CONFIG='$AUTH_DIR' bash '$DEPLOY_DIR/deploy/remote-deploy.sh' '$DEPLOY_DIR' '$DEPLOY_IMAGE'"
+      - name: 清理 Runner 凭据与本次镜像
+        if: always()
+        working-directory: .
+        run: |
+          rm -rf "$RUNNER_TEMP/ssh" "$RUNNER_TEMP/docker-config" "$RUNNER_TEMP/cloud-image.tar"
+          [[ -n "${DEPLOY_IMAGE:-}" ]] && docker image rm "$DEPLOY_IMAGE" "${SAVE_IMAGE:-}" >/dev/null 2>&1 || true
+          [[ ! -e "$RUNNER_TEMP/ssh" && ! -e "$RUNNER_TEMP/docker-config" ]] && echo "SSH 私钥与镜像仓库凭证已删除"

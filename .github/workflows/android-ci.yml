@@ -1,12 +1,9 @@
 name: Android CI
 
-# 改 android/ 或共享 fixture（cloud/fixtures/）都要跑：fixture 只有一份，两端测试共用。
+# 2026-11-26 起不再随 PR 或 main 推送自动运行：Android 单测由专门的 Android 开发同事在自己的环境执行，
+# 见 .github/ci/README.md「Android 单测交接」。只保留手动入口；作业仍在托管 Runner 上，受 Actions 预算限制。
 on:
-  push:
-    branches: [main]
-    paths: ["android/**", "cloud/fixtures/**", ".github/workflows/android-ci.yml"]
-  pull_request:
-    paths: ["android/**", "cloud/fixtures/**", ".github/workflows/android-ci.yml"]
+  workflow_dispatch:
 
 permissions:
   contents: read

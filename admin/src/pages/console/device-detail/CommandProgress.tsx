@@ -1,7 +1,7 @@
 import { useIntl } from '@umijs/max';
 import { Alert, Button, Space, Typography } from 'antd';
 import type React from 'react';
-import { commandPhase } from '@/utils/deviceConfig';
+import { commandPhase, commandRefusal } from '@/utils/deviceConfig';
 import type { TrackerState } from './useCommandTracker';
 
 type Props = TrackerState & {
@@ -56,7 +56,12 @@ const CommandProgress: React.FC<Props> = ({
     }
   } else if (phase === 'rejected' || phase === 'failed') {
     type = 'error';
-    description = command.errorReason || command.errorCode;
+    const refusal = commandRefusal(command.errorCode, command.errorReason);
+    description = refusal
+      ? 'key' in refusal
+        ? t(refusal.key)
+        : refusal.text
+      : undefined;
   } else if (phase === 'expired') {
     type = 'warning';
   }

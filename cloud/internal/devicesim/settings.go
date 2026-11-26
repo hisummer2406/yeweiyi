@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"yeweiyi-cloud/internal/protocol"
@@ -77,6 +78,14 @@ func oilTypeName(index int) string {
 func (d *Device) SetLocalControlMode(on bool) {
 	d.mu.Lock()
 	d.localMode = on
+	d.mu.Unlock()
+}
+
+// SetLegacyRejectAfterAck switches parameter refusals (INVALID_PARAMS) to what field firmware does
+// (#42): ACK 'received' first, then cmdResult 'rejected' with the code and reason.
+func (d *Device) SetLegacyRejectAfterAck(on bool) {
+	d.mu.Lock()
+	d.legacyReject = on
 	d.mu.Unlock()
 }
 
@@ -165,6 +174,16 @@ func (d *Device) configPolicy(method string, env protocol.Envelope) (protocol.Ac
 		detail, reason, err = d.applyDeviceSettings(env.Args)
 	}
 	if err != nil {
+		d.mu.Lock()
+		legacy := d.legacyReject
+		d.mu.Unlock()
+		if legacy {
+			ack.Status = protocol.CmdStatusReceived
+			return ack, &protocol.CmdResult{
+				CommandID: env.CommandID, Status: protocol.CmdStatusRejected,
+				ErrorCode: protocol.ErrInvalidParams, Reason: err.Error(),
+			}, 50 * time.Millisecond
+		}
 		return reject(protocol.ErrInvalidParams, err.Error())
 	}
 
@@ -235,7 +254,7 @@ func (d *Device) applyTankSettings(rawArgs json.RawMessage) (map[string]any, str
 	cur := d.cfgTanks[tank-1]
 	next := cur // validate everything against a copy; commit only if all of it passes
 
-	closed := map[string]bool{"alarmLowTempC": true, "tankHeightMm": true, "probeAddress": true, "tankShape": true, "sensorLengthMm": true}
+	closed := map[string]bool{"probeAddress": true, "tankShape": true, "sensorLengthMm": true}
 	fields := make([]string, 0, len(args))
 	for f := range args {
 		if f != "tank" {
@@ -245,7 +264,8 @@ func (d *Device) applyTankSettings(rawArgs json.RawMessage) (map[string]any, str
 	sort.Strings(fields)
 
 	var updated, ignored []string
-	levelsTouched := false
+	levelsTouched, heightTouched, tempsTouched := false, false, false
+	thresholdTouched := map[string]bool{}
 	intIn := func(f string, lo, hi int) (int, error) {
 		v, ok := integer(args[f])
 		if !ok {
@@ -269,22 +289,31 @@ func (d *Device) applyTankSettings(rawArgs json.RawMessage) (map[string]any, str
 	for _, f := range fields {
 		var err error
 		switch f {
+		// "≤ 罐高" is checked below against the merged height, so a command may change both (#65).
 		case "alarmLowLowLevelMm":
-			next.LowLow, err = intIn(f, 0, cur.HeightMm)
-			levelsTouched = true
+			next.LowLow, err = intIn(f, 0, math.MaxInt32)
+			levelsTouched, thresholdTouched[f] = true, true
 		case "alarmLowLevelMm":
-			next.Low, err = intIn(f, 0, cur.HeightMm)
-			levelsTouched = true
+			next.Low, err = intIn(f, 0, math.MaxInt32)
+			levelsTouched, thresholdTouched[f] = true, true
 		case "alarmHighLevelMm":
-			next.High, err = intIn(f, 0, cur.HeightMm)
-			levelsTouched = true
+			next.High, err = intIn(f, 0, math.MaxInt32)
+			levelsTouched, thresholdTouched[f] = true, true
 		case "alarmHighHighLevelMm":
-			next.HighHigh, err = intIn(f, 0, cur.HeightMm)
-			levelsTouched = true
+			next.HighHigh, err = intIn(f, 0, math.MaxInt32)
+			levelsTouched, thresholdTouched[f] = true, true
 		case "alarmHighWaterMm":
-			next.HighWaterMm, err = intIn(f, 0, cur.HeightMm)
+			next.HighWaterMm, err = intIn(f, 0, math.MaxInt32)
+			thresholdTouched[f] = true
+		case "tankHeightMm":
+			next.HeightMm, err = intIn(f, 1, 100_000)
+			heightTouched = true
 		case "alarmHighTempC":
 			next.HighTempC, err = intIn(f, -50, 100)
+			tempsTouched = true
+		case "alarmLowTempC":
+			next.LowTempC, err = intIn(f, -50, 100)
+			tempsTouched = true
 		case "levelCorrectionMm":
 			next.LevelCorrMm, err = numIn(f, -100, 100)
 		case "waterCorrectionMm":
@@ -319,10 +348,27 @@ func (d *Device) applyTankSettings(rawArgs json.RawMessage) (map[string]any, str
 		}
 		return nil, "", fmt.Errorf("%s", msg)
 	}
+	var over []string
+	for _, th := range []struct {
+		key, name string
+		v         int
+	}{{"alarmLowLowLevelMm", "低低液位", next.LowLow}, {"alarmLowLevelMm", "低液位", next.Low},
+		{"alarmHighLevelMm", "高液位", next.High}, {"alarmHighHighLevelMm", "高高液位", next.HighHigh},
+		{"alarmHighWaterMm", "高水位", next.HighWaterMm}} {
+		if (heightTouched || thresholdTouched[th.key]) && th.v > next.HeightMm {
+			over = append(over, fmt.Sprintf("%s(%d)", th.name, th.v))
+		}
+	}
+	if len(over) > 0 {
+		return nil, "", fmt.Errorf("报警阈值不能超过罐高(%d): %s", next.HeightMm, strings.Join(over, "、"))
+	}
 	if levelsTouched {
 		if msg := levelOrder([]int{next.LowLow, next.Low, next.High, next.HighHigh}); msg != "" {
 			return nil, "", fmt.Errorf("%s", msg)
 		}
+	}
+	if tempsTouched && next.HighTempC != 0 && next.LowTempC != 0 && next.LowTempC >= next.HighTempC {
+		return nil, "", fmt.Errorf("低温报警(%d) 须低于高温报警(%d)", next.LowTempC, next.HighTempC)
 	}
 
 	d.cfgTanks[tank-1] = next

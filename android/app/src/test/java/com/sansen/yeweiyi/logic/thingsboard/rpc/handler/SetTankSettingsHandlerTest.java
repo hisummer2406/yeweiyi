@@ -10,6 +10,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -37,7 +40,86 @@ public class SetTankSettingsHandlerTest {
         tank1.setDensity(0.56);
         repo.byId.put(1, tank1);
         refreshCount = 0;
-        handler = new SetTankSettingsHandler(repo, () -> refreshCount++);
+        names = new FakeNames();
+        handler = new SetTankSettingsHandler(repo, () -> refreshCount++, names, hex -> "not in palette: " + hex,
+                new TankSettingsRejectText() {
+                    @Override
+                    public String overHeight(int heightMm, List<String> conflicts) {
+                        return "over " + heightMm + ": " + conflicts;
+                    }
+
+                    @Override
+                    public String thresholdName(int slot) {
+                        return "slot" + slot;
+                    }
+
+                    @Override
+                    public String lowTempNotBelowHigh(int lowC, int highC) {
+                        return "low " + lowC + " >= high " + highC;
+                    }
+                });
+    }
+
+    private static final class FakeNames implements CustomOilNameStore {
+        final Map<Integer, String[]> saved = new HashMap<>();
+        int writes;
+
+        @Override
+        public String[] save(int index, String zh, String en) {
+            writes++;
+            String[] old = saved.getOrDefault(index, new String[]{"", ""});
+            saved.put(index, new String[]{zh, en});
+            return old;
+        }
+    }
+
+    private FakeNames names;
+
+    @Test
+    public void writesAPaletteColorAsArgb() {
+        RpcResult result = call("{\"tank\":1,\"oilColor\":16711680}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(0xFFFF0000, repo.lastSaved.getOilColor());
+    }
+
+    @Test
+    public void refusesAColorOutsideThePalette() {
+        RpcResult result = call("{\"tank\":1,\"oilColor\":1193046}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("界面语言的提示文字（strings.xml），不是写死的中文", "not in palette: #123456", result.getMessage());
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":\"#FF0000\"}"));
+    }
+
+    @Test
+    public void colorAndAnInvalidFieldAreRefusedTogether() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilColor\":16711680,\"density\":3}"));
+        assertEquals(0, tank1.getOilColor());
+    }
+
+    @Test
+    public void writesTheNameAndTheIndexTogether() {
+        RpcResult result = call("{\"tank\":1,\"oilTypeIndex\":32,\"customOilName\":\"二厂盐酸\",\"customOilNameEn\":\"HCl\"}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(32, repo.lastSaved.getOilType());
+        assertEquals("二厂盐酸", names.saved.get(32)[0]);
+        assertEquals("HCl", names.saved.get(32)[1]);
+    }
+
+    @Test
+    public void refusesANameWithoutACustomIndex() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":5,\"customOilName\":\"盐酸\"}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"density\":0.8,\"customOilName\":\"盐酸\"}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":32,\"customOilName\":\" \"}"));
+        assertEquals(0, names.writes);
+    }
+
+    @Test
+    public void restoresTheOldNameWhenTheTankWriteFails() {
+        names.saved.put(33, new String[]{"旧", "Old"});
+        repo.failNextSave = true;
+        RpcResult result = call("{\"tank\":1,\"oilTypeIndex\":33,\"customOilName\":\"新\"}");
+        assertEquals(RpcResultStatus.FAILED, result.getStatus());
+        assertEquals("旧", names.saved.get(33)[0]);
     }
 
     private RpcResult call(String argsJson) {
@@ -91,9 +173,67 @@ public class SetTankSettingsHandlerTest {
 
     @Test
     public void rejectsClosedFieldsEvenAlongsideValidOnes() {
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmLowTempC\":-5}"));
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":3000}"));
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":650,\"probeAddress\":2}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankShape\":1}"));
+    }
+
+    @Test
+    public void changesTankHeightAlone() {
+        RpcResult result = call("{\"tank\":1,\"tankHeightMm\":2600}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(2600, repo.lastSaved.getHeight());
+        assertEquals(1, repo.lastSaved.getEnable());
+    }
+
+    @Test
+    public void lowerTankHeightIsRejectedWhenAStoredThresholdWouldExceedIt() {
+        // #65 验收：高高 1500 时把罐高降到 1400 被拒，原值保留，错误里列出冲突阈值
+        RpcResult result = call("{\"tank\":1,\"tankHeightMm\":1400}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("界面语言的提示文字（strings.xml）", "over 1400: [slot3(1500)]", result.getMessage());
+        assertEquals(2000, tank1.getHeight());
+        tank1.setHeightWaterAlarm(1450);
+        assertEquals("over 1400: [slot3(1500), slot4(1450)]", call("{\"tank\":1,\"tankHeightMm\":1400}").getMessage());
+    }
+
+    @Test
+    public void lowerTankHeightPassesWhenTheConflictingThresholdIsFixedInTheSameCommand() {
+        RpcResult result = call("{\"tank\":1,\"tankHeightMm\":1400,\"alarmHighHighLevelMm\":1300}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(1400, repo.lastSaved.getHeight());
+        assertEquals(1300, repo.lastSaved.getHheightOilAlarm());
+    }
+
+    @Test
+    public void thresholdIsCheckedAgainstTheNewTankHeight() {
+        assertEquals(RpcResultStatus.SUCCEEDED,
+                call("{\"tank\":1,\"tankHeightMm\":3000,\"alarmHighHighLevelMm\":2800}").getStatus());
+    }
+
+    @Test
+    public void rejectsZeroNegativeAndFractionalTankHeight() {
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":0}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":-1}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tankHeightMm\":2600.5}"));
+    }
+
+    @Test
+    public void changesLowTempIncludingNegativeAndZero() {
+        assertEquals(RpcResultStatus.SUCCEEDED, call("{\"tank\":1,\"alarmLowTempC\":-40}").getStatus());
+        assertEquals(-40, repo.lastSaved.getLowTempAlarm());
+        assertEquals(RpcResultStatus.SUCCEEDED, call("{\"tank\":1,\"alarmLowTempC\":0}").getStatus());
+        assertEquals(0, repo.lastSaved.getLowTempAlarm());
+    }
+
+    @Test
+    public void lowTempMustBeBelowHighTempWhenBothEnabled() {
+        tank1.setHighTempAlarm(40);
+        RpcResult result = call("{\"tank\":1,\"alarmLowTempC\":40}");
+        assertRejectedWithoutWrite(result);
+        assertEquals("low 40 >= high 40", result.getMessage());
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmLowTempC\":-51}"));
+        assertEquals(RpcResultStatus.SUCCEEDED,
+                call("{\"tank\":1,\"alarmLowTempC\":50,\"alarmHighTempC\":0}").getStatus());
     }
 
     @Test
@@ -127,10 +267,20 @@ public class SetTankSettingsHandlerTest {
     }
 
     @Test
+    public void correctionsHaveNoRangeLimit() {
+        RpcResult result = call("{\"tank\":1,\"levelCorrectionMm\":1000,\"waterCorrectionMm\":-1000.5,\"tempCorrectionC\":-100.5}");
+        assertEquals(RpcResultStatus.SUCCEEDED, result.getStatus());
+        assertEquals(1000, repo.lastSaved.getOilCorrection(), 1e-9);
+        assertEquals(-1000.5, repo.lastSaved.getWaterCorrection(), 1e-9);
+        assertEquals(-100.5, repo.lastSaved.getTempCorrection(), 1e-9);
+    }
+
+    @Test
     public void rejectsOutOfRangeAndNonNumericValues() {
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighWaterMm\":2001}")); // 超过罐高
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighTempC\":101}"));
-        assertRejectedWithoutWrite(call("{\"tank\":1,\"tempCorrectionC\":10.5}"));
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"tempCorrectionC\":\"1\"}")); // 字符串
+        assertRejectedWithoutWrite(call("{\"tank\":1,\"levelCorrectionMm\":1e999}")); // 超出 double
         assertRejectedWithoutWrite(call("{\"tank\":1,\"oilTypeIndex\":40}"));
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":\"650\"}")); // 字符串
         assertRejectedWithoutWrite(call("{\"tank\":1,\"alarmHighLevelMm\":650.5}")); // 整数字段带小数

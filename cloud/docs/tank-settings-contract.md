@@ -16,7 +16,7 @@
 
 - 每个设备的订阅建立时立即读一次（即设备连接后），之后每 `ingest.tankSettingsInterval`（默认 `1m`）重读一次；
   设备改配置后云端最迟晚一个间隔看到。读失败不改动现有镜像。
-- 整行以最新上报为准；`reported_at` 没变则不写库。设备停用某个罐，旧行保留（最后一次镜像）。
+- 整行以最新上报为准；内容与 `reported_at` 都没变才不写库（ThingsBoard 逐键存属性，一次读取可能新旧混杂，下一次完整读取时间相同也要写入）。设备停用某个罐，旧行保留（最后一次镜像）。
 - 键类型不对（如 `density` 是字符串、`tankHeightMm` 带小数）的值被跳过并记日志，不影响同一罐的其他键。
   罐号超出 1–16 的属性被忽略。云端不补默认值：设备没报的键为 `null`，与上报的 `0`（= 不启用）不同。
 
@@ -64,12 +64,13 @@
 | `oilTypeIndex` | 0 未设置，1–31 内置，32–39 自定义（旧固件 18–25 为自定义，见 #11）；**以它为准** |
 | `oilType` | 设备界面语言下的名称，仅供展示。**云端不内置名称表**（产品决定 2026-10-17） |
 | `alarm*Mm` / `alarmHighTempC` | `0` = 不启用 |
-| `alarmLowTempC` | 设备上报，但设备端低温检测从未被调用，**改了不生效** |
+| `alarmLowTempC` | `0` = 不启用。只有上报 `tankHeightLowTempSync = 1` 的固件会检测低温（#65），旧固件存而不用 |
 | `capacityL` | 油罐公称容积，L（#71 起镜像，因可远程修改） |
-| `density` | **原样透传，单位未与设备端对齐**（设置页标 kg/m³，实际存 0.56 这类值）；不要据此换算 |
+| `density` | g/cm³（= kg/L）。设备设置页标的 kg/m³ 有误：存的是 0.56 这类值，设备按 `升 × 密度 = 千克` 计算（2026-11-14 核实）。现场可能有按 kg/m³ 填的旧值（如 840），客户端照原样显示并提示核对 |
+| `oilColor` | 罐颜色，`0xRRGGBB` 整数；设备未设置（0）时不上报为 `null`；旧数据可不在色板内（2026-11-14） |
 | 任一字段 `null` | 设备未上报该键 |
 
-不提供：低水位报警、物料颜色（设备端没有，也不上报）。标定表见下一节，不在本接口。
+不提供：低水位报警（设备端没有）。标定表见下一节，不在本接口。
 
 ## 授权与错误
 
@@ -125,14 +126,17 @@
 | `alarmHighHighLevelMm` `alarmHighLevelMm` `alarmLowLevelMm` `alarmLowLowLevelMm` | int, mm | ≥ 0（设备另限 ≤ 罐高） | 0 = 不启用；非 0 的必须 低低 < 低 < 高 < 高高 |
 | `alarmHighWaterMm` | int, mm | ≥ 0（设备另限 ≤ 罐高） | 0 = 不启用 |
 | `alarmHighTempC` | int, ℃ | −50～100 | 0 = 不启用 |
-| `levelCorrectionMm` `waterCorrectionMm` | number, mm | −100～100 | |
-| `tempCorrectionC` | number, ℃ | −10～10 | |
-| `density` | number | > 0 且 ≤ 2 | **单位未对齐，原样写入**，云端不换算 |
-| `oilTypeIndex` | int | 0～39 | 1–31 内置，32–39 自定义；自定义油品为空时是否允许由设备决定（产品未定）。旧固件把 18–25 当自定义，向旧固件下发 18–31 的含义不同（#11） |
+| `alarmLowTempC` | int, ℃ | −50～100 | 0 = 不启用；同一命令里与高温都非 0 时须低于高温（`temp_order_violation`），与设备现存高温的比较由设备做。需设备上报 `tankHeightLowTempSync = 1`，否则 `409 height_low_temp_unsupported`（#65） |
+| `tankHeightMm` | int, mm | 1～100,000 | 不能为 0（设备上 0 表示停用罐，远程不开放）。设备用合并后的罐高校验所有非 0 液位、水位阈值，冲突整条拒绝并列出冲突阈值；同一命令可同时改罐高与阈值。能力位要求同上 |
+| `levelCorrectionMm` `waterCorrectionMm` | number, mm | 不限（有限数字，可负可小数） | 设备把它直接加到读数上；旧固件仍拒绝 ±100 以外的值（#28） |
+| `tempCorrectionC` | number, ℃ | 不限（有限数字，可负可小数） | 旧固件仍拒绝 ±10 以外的值（#28） |
+| `density` | number, g/cm³ | > 0 且 ≤ 2 | 云端不换算 |
+| `oilColor` | int, 0xRRGGBB | 必须在色板内（`fixtures/protocol/v1/oil_color_palette.json`，20 色） | 设备整机属性 `oilColorSync` 不为 1 时云端 `409 color_sync_unsupported`，不派发（旧固件会静默忽略该字段） |
+| `oilTypeIndex` | int | 0～39 | **客户端不得直接提交**，经 `mediaId` 由云端换算（见 [media-library-contract.md](media-library-contract.md)）。1–31 内置，32–39 自定义；自定义油品为空时是否允许由设备决定（产品未定）。旧固件把 18–25 当自定义，向旧固件下发 18–31 的含义不同（#11） |
 | `capacityL` | int, L | 0～1,000,000 | 只影响空容/可添油量计算 |
 
-**认识但不开放远程修改的字段会被拒绝，不是忽略**：`alarmLowTempC`（设备低温检测从未被调用）、`tankHeightMm`、
-`probeAddress`、`tankShape`、`sensorLengthMm`。不认识的字段云端也拒绝（拼错字段名不会静默无效）；设备端对未知字段
+**认识但不开放远程修改的字段会被拒绝，不是忽略**：`probeAddress`、`tankShape`、`sensorLengthMm`
+（`tankHeightMm`、`alarmLowTempC` 自 #65 起开放）。不认识的字段云端也拒绝（拼错字段名不会静默无效）；设备端对未知字段
 是忽略并列在 `cmdResult.detail.ignored`。
 
 ### `config.setDeviceSettings` args
@@ -144,7 +148,7 @@
 ## 错误
 
 - 参数不合法：`400 {"code":"invalid_args","error":"...","fields":[{"field","code","message"}]}`，`fields[].code` 为
-  `tank_required` `unknown_field` `field_not_editable` `invalid_value` `no_editable_fields` `level_order_violation`
+  `tank_required` `unknown_field` `field_not_editable` `invalid_value` `no_editable_fields` `level_order_violation` `temp_order_violation`
   `invalid_args`。校验在授权之后、记录/发送之前：无权的调用者看不到参数问题，被拒的参数不产生命令行、不发给 ThingsBoard
   （写一条 `denied` 审计）。
 - 设备拒绝（ACK 阶段，`status=rejected`）：`errorCode` + `reason` 在命令里，例如 `INVALID_PARAMS`（超过罐高、

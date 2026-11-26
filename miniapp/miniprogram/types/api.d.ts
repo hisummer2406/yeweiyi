@@ -260,6 +260,9 @@ export interface Tank {
   waterRatioPct: number;
   alarmState: 'NORMAL' | 'ALARM' | 'FAULT' | '';
   probeConnected: boolean;
+  // #75: false = no valid reading since the device booted (or reloaded its tank config); the numbers are
+  // placeholder zeros. Absent from older firmware/cloud: unknown, treated as having a reading.
+  hasReading?: boolean;
 }
 
 // GET /api/devices/:device/telemetry/latest. Replaces the deleted /api/oilcan/latest entirely —
@@ -346,10 +349,29 @@ export interface TankSettings {
   waterCorrectionMm: number | null;
   tempCorrectionC: number | null;
   density: number | null;
+  // 0xRRGGBB; null = not set on the device, or firmware that does not report it
+  oilColor?: number | null;
   capacityL: number | null;
 }
 
 export interface TankSettingsResponse {
   deviceName: string;
   tanks: TankSettings[];
+}
+
+// GET /api/devices/:device/media-options (administrators only; cloud docs/media-library-contract.md)
+export interface MediaOption {
+  id: number;
+  name: string;
+  builtinIndex: number | null;
+}
+export interface MediaOptions {
+  public: MediaOption[];
+  customer: MediaOption[];
+  customMediaSync: boolean;
+  oilColorSync: boolean;
+  // #65: firmware accepts tankHeightMm / alarmLowTempC (absent on an older cloud = false)
+  tankHeightLowTempSync?: boolean;
+  slotsUsed: number;
+  slotsTotal: number;
 }

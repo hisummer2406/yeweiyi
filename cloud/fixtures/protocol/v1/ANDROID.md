@@ -1,10 +1,12 @@
 # 协议 V1 共享 fixture 的 Android 覆盖情况
 
 Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/fixtures` 挂到测试 classpath，
-按 `/protocol/v1/<name>` 读取），**不再有副本**，也就不需要同步。改这里的 fixture 后两端测试都要跑：
+按 `/protocol/v1/<name>` 读取）。变更 fixture 后由 Cloud CI 校验云端，专门的 Android 开发同事按交接的提交 SHA
+在自己的环境验证设备侧。以下是两侧的验证命令：
 
 ```bash
 (cd cloud && go test ./internal/protocol/)
+(cd cloud && sh fixtures/protocol/v1/verify-manifest.sh)
 (cd android && ./gradlew :app:testDebugUnitTest)
 ```
 
@@ -25,6 +27,7 @@ Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/f
 | `stock_event_in_delivered_weight.json` | stockEvent 新增 `oilTypeIndex`、`deliveredWeightKg` | `StockEventMapperTest` |
 | `alarm_active_oil_type.json` | alarm 新增 `oilType`、`oilTypeIndex` | `ProtocolV1ContractTest` |
 | `oil_type_index.json` | `oilTypeIndex` 对照表（字典，不是报文） | `OilTypeIndexFixtureTest`（与 `res/values*/array.xml` 比对） |
+| `oil_color_palette.json` | 罐颜色色板（0xRRGGBB，序号 1–20） | `OilColorsTest`（与 `OilColors.PALETTE_RGB` 比对） |
 
 
 ## 各 fixture 在 Android 侧的覆盖情况

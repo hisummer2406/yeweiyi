@@ -106,7 +106,7 @@ describe('StockRecords', () => {
     expect(kg).toBeGreaterThan(0);
     expect(a[kg]).toBe('5600.12');
     expect((await cellsOf('B'))[kg]).toBe('—');
-    expect(await screen.findByText('米糠油')).toBeTruthy();
+    expect(await screen.findByText('煤油')).toBeTruthy();
   });
 
   it('requests the given device for the last 24 hours', async () => {
@@ -211,7 +211,7 @@ describe('StockRecords', () => {
     );
     render(<StockRecords device="D1" />);
     expect(
-      await screen.findByText(/设备固件尚未升级，部分记录无法读取/),
+      await screen.findByText(/设备软件版本较旧，部分记录无法读取，请升级设备软件/),
     ).toBeTruthy();
     expect(
       screen.getByText(/设备 D1，样例：DetailInoutRecord\{x\}/),
@@ -228,7 +228,7 @@ describe('StockRecords', () => {
       }),
     );
     render(<StockRecords device="D1" />);
-    expect(await screen.findByText(/设备固件尚未升级/)).toBeTruthy();
+    expect(await screen.findByText(/请升级设备软件/)).toBeTruthy();
     expect(screen.getByText('92#')).toBeTruthy();
     expect(screen.getByText('95#')).toBeTruthy();
   });

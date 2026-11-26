@@ -482,3 +482,31 @@ func TestConfigSubmission_ReplayIsCustomerScoped(t *testing.T) {
 		t.Fatalf("replay across customers: replayed=%v cmd=%v err=%v, want ErrRequestIDReused and nothing returned", replayed, cmd.CommandID.Valid, err)
 	}
 }
+
+// #27 → 2026-11-14 用户决定：管理员（平台、客户）都能改介质；员工任何修改都被拒（铁律）。
+func TestConfigSubmission_MediumIsAdminOnly(t *testing.T) {
+	ctx := context.Background()
+	admin := newFixture(t, control.RoleCustomerAdmin, configOn)
+	for _, args := range []string{`{"tank":1,"oilTypeIndex":5}`, `{"tank":2,"alarmHighLevelMm":610,"oilTypeIndex":5}`} {
+		if _, _, err := admin.svc.IssueDetailed(ctx, tankReq(admin, args, newRequestID())); err != nil {
+			t.Errorf("customer admin %s: %v", args, err)
+		}
+	}
+
+	emp := newFixture(t, control.RoleCustomerUser, configOn)
+	for _, args := range []string{`{"tank":1,"oilTypeIndex":5}`, `{"tank":1,"oilColor":16711680}`, `{"tank":1,"density":0.84}`} {
+		if _, _, err := emp.svc.IssueDetailed(ctx, tankReq(emp, args, newRequestID())); !errors.Is(err, control.ErrForbidden) {
+			t.Errorf("employee %s: err = %v, want ErrForbidden", args, err)
+		}
+	}
+	if emp.sender.calls != 0 {
+		t.Fatalf("employee changes were sent %d time(s)", emp.sender.calls)
+	}
+}
+
+func TestConfigSubmission_PlatformAdminMayChangeMedium(t *testing.T) {
+	f := newFixture(t, control.RolePlatformAdmin, configOn)
+	if _, _, err := f.svc.IssueDetailed(context.Background(), tankReq(f, `{"tank":1,"oilTypeIndex":5}`, newRequestID())); err != nil {
+		t.Fatal(err)
+	}
+}

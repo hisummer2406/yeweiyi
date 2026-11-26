@@ -7,6 +7,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"yeweiyi-cloud/internal/ingest"
+	"yeweiyi-cloud/internal/protocol"
+	"yeweiyi-cloud/internal/store/db"
 )
 
 // cloud#70: GET /api/devices/:device/tank-settings serves the mirror of the device-reported tank
@@ -24,6 +28,7 @@ type tankSettingsBody struct {
 		AlarmLowLowLevelMm *int     `json:"alarmLowLowLevelMm"`
 		Density            *float64 `json:"density"`
 		TankHeightMm       *int     `json:"tankHeightMm"`
+		OilColor           *int     `json:"oilColor"`
 	} `json:"tanks"`
 }
 
@@ -151,5 +156,65 @@ func TestTankCalibration_VisibilityAndShape(t *testing.T) {
 	}
 	if code, _ := g.call(t, "GET", url("2"), g.emp, nil); code != http.StatusOK {
 		t.Errorf("granted employee: %d, want 200", code)
+	}
+}
+
+// The colour and the colour-sync capability come in through ingest like every other mirrored key, and the
+// colour is served as reported (0xRRGGBB), null when the device did not report one.
+func TestTankSettings_OilColorRoundTrip(t *testing.T) {
+	g := newGrantEnv(t)
+	ctx := context.Background()
+	q := db.New(g.env.pool)
+	red, sync := int32(0xFF0000), int32(1)
+	reported := time.Now().Add(-time.Minute).UnixMilli()
+	if err := ingest.SaveTankSettings(ctx, q, g.device, protocol.TankSettings{Tank: 1, OilColor: &red, ReportedAtMs: reported}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ingest.SaveTankSettings(ctx, q, g.device, protocol.TankSettings{Tank: 2, ReportedAtMs: reported}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ingest.SaveDeviceSettings(ctx, q, g.device, protocol.DeviceSettings{OilColorSync: &sync, ReportedAtMs: reported}); err != nil {
+		t.Fatal(err)
+	}
+	code, body := g.call(t, "GET", "/api/devices/"+g.device+"/tank-settings", g.admin, nil)
+	if code != http.StatusOK {
+		t.Fatalf("%d %s", code, body)
+	}
+	v := decodeTankSettings(t, body)
+	if len(v.Tanks) != 2 || v.Tanks[0].OilColor == nil || *v.Tanks[0].OilColor != 0xFF0000 || v.Tanks[1].OilColor != nil {
+		t.Errorf("oilColor not served as reported: %s", body)
+	}
+	ds, err := q.GetDeviceSettings(ctx, g.device)
+	if err != nil || !ds.OilColorSync.Valid || ds.OilColorSync.Int32 != 1 {
+		t.Errorf("oil_color_sync = %+v, %v", ds.OilColorSync, err)
+	}
+}
+
+// ThingsBoard stores attributes key by key, so one read can mix new and old keys under the new timestamp. The
+// next, complete read carries the same timestamp and must still land, or the mirror stays half-new (2026-11-24).
+func TestTankSettings_CompleteReadWithSameTimestampStillLands(t *testing.T) {
+	g := newGrantEnv(t)
+	ctx := context.Background()
+	q := db.New(g.env.pool)
+	reported := time.Now().Add(-time.Minute).UnixMilli()
+	high, oldDensity, newDensity := int32(2700), 0.56, 0.7
+	for _, d := range []*float64{&oldDensity, &newDensity} {
+		if err := ingest.SaveTankSettings(ctx, q, g.device, protocol.TankSettings{
+			Tank: 1, AlarmHighLevelMm: &high, Density: d, ReportedAtMs: reported}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, err := q.ListTankSettings(ctx, g.device)
+	if err != nil || len(rows) != 1 || rows[0].Density.Float64 != 0.7 {
+		t.Fatalf("mirror = %+v, %v; want density 0.7", rows, err)
+	}
+	oldSync, newSync := int32(0), int32(1)
+	for _, v := range []*int32{&oldSync, &newSync} {
+		if err := ingest.SaveDeviceSettings(ctx, q, g.device, protocol.DeviceSettings{TankHeightLowTempSync: v, ReportedAtMs: reported}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if ds, err := q.GetDeviceSettings(ctx, g.device); err != nil || ds.TankHeightLowTempSync.Int32 != 1 {
+		t.Errorf("device settings = %+v, %v; want tank_height_low_temp_sync 1", ds.TankHeightLowTempSync, err)
 	}
 }

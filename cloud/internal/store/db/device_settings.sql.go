@@ -12,7 +12,7 @@ import (
 )
 
 const getDeviceSettings = `-- name: GetDeviceSettings :one
-SELECT device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec, out_stock_height_threshold_mm, out_stock_time_threshold_sec, reported_at, updated_at FROM device_settings WHERE device_name = $1
+SELECT device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec, out_stock_height_threshold_mm, out_stock_time_threshold_sec, reported_at, updated_at, custom_media_sync, oil_color_sync, tank_height_low_temp_sync FROM device_settings WHERE device_name = $1
 `
 
 func (q *Queries) GetDeviceSettings(ctx context.Context, deviceName string) (DeviceSetting, error) {
@@ -26,6 +26,9 @@ func (q *Queries) GetDeviceSettings(ctx context.Context, deviceName string) (Dev
 		&i.OutStockTimeThresholdSec,
 		&i.ReportedAt,
 		&i.UpdatedAt,
+		&i.CustomMediaSync,
+		&i.OilColorSync,
+		&i.TankHeightLowTempSync,
 	)
 	return i, err
 }
@@ -34,19 +37,23 @@ const upsertDeviceSettings = `-- name: UpsertDeviceSettings :exec
 
 INSERT INTO device_settings (
     device_name, in_stock_height_threshold_mm, in_stock_time_threshold_sec,
-    out_stock_height_threshold_mm, out_stock_time_threshold_sec, reported_at
+    out_stock_height_threshold_mm, out_stock_time_threshold_sec, custom_media_sync, oil_color_sync, tank_height_low_temp_sync, reported_at
 ) VALUES (
     $1, $2, $3,
-    $4, $5, $6
+    $4, $5, $6, $7, $8, $9
 )
 ON CONFLICT (device_name) DO UPDATE SET
     in_stock_height_threshold_mm = EXCLUDED.in_stock_height_threshold_mm,
     in_stock_time_threshold_sec = EXCLUDED.in_stock_time_threshold_sec,
     out_stock_height_threshold_mm = EXCLUDED.out_stock_height_threshold_mm,
     out_stock_time_threshold_sec = EXCLUDED.out_stock_time_threshold_sec,
+    custom_media_sync = EXCLUDED.custom_media_sync,
+    oil_color_sync = EXCLUDED.oil_color_sync,
+    tank_height_low_temp_sync = EXCLUDED.tank_height_low_temp_sync,
     reported_at = EXCLUDED.reported_at,
     updated_at = now()
-WHERE device_settings.reported_at IS DISTINCT FROM EXCLUDED.reported_at
+WHERE (device_settings.in_stock_height_threshold_mm, device_settings.in_stock_time_threshold_sec, device_settings.out_stock_height_threshold_mm, device_settings.out_stock_time_threshold_sec, device_settings.custom_media_sync, device_settings.oil_color_sync, device_settings.tank_height_low_temp_sync, device_settings.reported_at)
+    IS DISTINCT FROM (EXCLUDED.in_stock_height_threshold_mm, EXCLUDED.in_stock_time_threshold_sec, EXCLUDED.out_stock_height_threshold_mm, EXCLUDED.out_stock_time_threshold_sec, EXCLUDED.custom_media_sync, EXCLUDED.oil_color_sync, EXCLUDED.tank_height_low_temp_sync, EXCLUDED.reported_at)
 `
 
 type UpsertDeviceSettingsParams struct {
@@ -55,11 +62,14 @@ type UpsertDeviceSettingsParams struct {
 	InStockTimeThresholdSec   pgtype.Int4        `json:"in_stock_time_threshold_sec"`
 	OutStockHeightThresholdMm pgtype.Int4        `json:"out_stock_height_threshold_mm"`
 	OutStockTimeThresholdSec  pgtype.Int4        `json:"out_stock_time_threshold_sec"`
+	CustomMediaSync           pgtype.Int4        `json:"custom_media_sync"`
+	OilColorSync              pgtype.Int4        `json:"oil_color_sync"`
+	TankHeightLowTempSync     pgtype.Int4        `json:"tank_height_low_temp_sync"`
 	ReportedAt                pgtype.Timestamptz `json:"reported_at"`
 }
 
 // 设备上报的整机设置镜像（迁移 000038，config-command-delivery）。只由 internal/ingest 写入，API 只读。
-// 整行以设备最新上报为准；reported_at 没变就不写。
+// 整行以设备最新上报为准；内容与 reported_at 都没变才不写（理由同 UpsertTankSettings）。
 func (q *Queries) UpsertDeviceSettings(ctx context.Context, arg UpsertDeviceSettingsParams) error {
 	_, err := q.db.Exec(ctx, upsertDeviceSettings,
 		arg.DeviceName,
@@ -67,6 +77,9 @@ func (q *Queries) UpsertDeviceSettings(ctx context.Context, arg UpsertDeviceSett
 		arg.InStockTimeThresholdSec,
 		arg.OutStockHeightThresholdMm,
 		arg.OutStockTimeThresholdSec,
+		arg.CustomMediaSync,
+		arg.OilColorSync,
+		arg.TankHeightLowTempSync,
 		arg.ReportedAt,
 	)
 	return err

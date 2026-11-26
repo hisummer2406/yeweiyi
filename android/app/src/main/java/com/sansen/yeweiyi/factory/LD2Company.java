@@ -166,6 +166,7 @@ public class LD2Company implements AbstractCompany {
 
                                 oilCan.setOilRatio(oilRoate > 100 ? 100 : oilRoate);
                                 oilCan.setLastTime(System.currentTimeMillis());
+                                oilCan.setHasReading(true);
                                 if (parseDataListener != null) {
                                     parseDataListener.hexDataParseFinish(oilCan);
                                 }

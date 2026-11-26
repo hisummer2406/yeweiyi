@@ -93,11 +93,13 @@ public class SoundLightManager {
 
     int modeType = 0;
 
+    /** 串口 4 双显时跳过防溢阀输出；本机声光报警及 IO 联动由各自路径处理。 */
     public void FYF(int oilCanId, boolean isHHeightAlarm) {
+        if (!ProbeProxyManager.allowsControl()) return;
         if (fyfMap.get(oilCanId) == null) {
             fyfMap.put(oilCanId, false);
         }
-        if (Singleton.getInstance().ChuanKou4) {
+        if (ProbeProxyManager.getMode() == com.sansen.yeweiyi.logic.probe.Serial4Mode.RELAY_MODBUS) {
             modeType = 0;
         } else {
             modeType = 4;
@@ -118,8 +120,10 @@ public class SoundLightManager {
 
     }
 
+    /** 低低液位同样受串口 4 模式约束，不能向双显线路发送阀控报文。 */
     public void FYFL(int oilCanId, boolean isLLowAlarm) {
-        if (!Singleton.getInstance().ChuanKou4) {
+        if (!ProbeProxyManager.allowsControl()) return;
+        if (ProbeProxyManager.getMode() == com.sansen.yeweiyi.logic.probe.Serial4Mode.OVERFLOW) {
             if (isLLowAlarm) {
                 RelayLog.onSkipped(oilCanId, "低低液位", "防溢柜协议下低低不下发");
             }
@@ -279,13 +283,13 @@ public class SoundLightManager {
         AsyManager.getInstance().openOne(oilCanId, mod, new ObservableManager.ReciveListener() {
             @Override
             public void recive(int id, IAsyData object) {
-                RelayLog.onResult(oilCanId, true, Singleton.getInstance().ChuanKou4);
+                RelayLog.onResult(oilCanId, true, ProbeProxyManager.getMode() == com.sansen.yeweiyi.logic.probe.Serial4Mode.RELAY_MODBUS);
                 ToastUtils.showToastLong("Open Success " + oilCanId);
             }
 
             @Override
             public void error(int id) {
-                RelayLog.onResult(oilCanId, false, Singleton.getInstance().ChuanKou4);
+                RelayLog.onResult(oilCanId, false, ProbeProxyManager.getMode() == com.sansen.yeweiyi.logic.probe.Serial4Mode.RELAY_MODBUS);
                 ToastUtils.showToastLong("Open error " + oilCanId);
             }
         });

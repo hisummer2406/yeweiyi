@@ -87,10 +87,11 @@ describe('TankCard', () => {
   it('shows no tags for a normal tank with a connected probe', () => {
     render(<TankCard tank={tank()} onClick={() => {}} />);
     expect(screen.queryByText('报警')).toBeNull();
-    expect(screen.queryByText('探针未连接')).toBeNull();
+    expect(screen.queryByText('通讯异常')).toBeNull();
+    expect(screen.queryByText('上次读数')).toBeNull();
   });
 
-  it('shows the alarm tag and the probe-disconnected tag', () => {
+  it('shows the alarm tag, the comm-fault tag and marks the last reading', () => {
     render(
       <TankCard
         tank={tank({ alarmState: 'ALARM', probeConnected: false })}
@@ -98,7 +99,21 @@ describe('TankCard', () => {
       />,
     );
     expect(screen.getByText('报警')).toBeTruthy();
-    expect(screen.getByText('探针未连接')).toBeTruthy();
+    expect(screen.getByText('通讯异常')).toBeTruthy();
+    expect(screen.getByText('上次读数')).toBeTruthy();
+  });
+
+  it('shows dashes and 暂无读数 for a tank never read since boot (#75)', () => {
+    render(
+      <TankCard
+        tank={tank({ hasReading: false, oilLevelMm: 0, tempC: 0 })}
+        onClick={() => {}}
+      />,
+    );
+    expect(screen.getByText('暂无读数')).toBeTruthy();
+    expect(screen.queryByText('上次读数')).toBeNull();
+    expect(screen.queryByText('0.0')).toBeNull();
+    expect(screen.getAllByText('--').length).toBe(5);
   });
 
   it('shows -- for a missing oil type', () => {
@@ -113,7 +128,7 @@ describe('TankCard', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('puts one generic picture on each tank, labelled with its own number', () => {
+  it('draws a tank without a reported shape as horizontal, with no shape text', () => {
     render(
       <>
         <TankCard tank={tank({ index: 1 })} onClick={() => {}} />
@@ -122,9 +137,10 @@ describe('TankCard', () => {
     );
     const imgs = screen.getAllByRole('img');
     expect(imgs).toHaveLength(2);
-    expect(imgs[0].getAttribute('alt')).toBe('1号罐示意图（通用，非实际罐型）');
-    expect(imgs[1].getAttribute('alt')).toBe('3号罐示意图（通用，非实际罐型）');
+    expect(imgs[0].getAttribute('alt')).toBe('1号罐示意图（卧罐）');
+    expect(imgs[1].getAttribute('alt')).toBe('3号罐示意图（卧罐）');
     expect(imgs[0].getAttribute('src')).toBe('/images/tank-generic.png');
+    expect(screen.queryByText('卧罐')).toBeNull();
   });
 
   it('keeps the picture neutral: no-data, alarm and probe state stay as text', () => {
@@ -141,7 +157,8 @@ describe('TankCard', () => {
     const img = screen.getByRole('img');
     expect(img.getAttribute('style') ?? '').not.toMatch(/filter|color/);
     expect(screen.getByText('报警')).toBeTruthy();
-    expect(screen.getByText('探针未连接')).toBeTruthy();
+    expect(screen.getByText('通讯异常')).toBeTruthy();
+    expect(screen.getByText('上次读数')).toBeTruthy();
   });
 
   it('still navigates when the card is clicked', () => {

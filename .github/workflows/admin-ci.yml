@@ -18,20 +18,23 @@ defaults:
 # 不取消正在切换线上版本的发布；旧提交在部署前检查是否仍为 main 最新版本。
 concurrency:
   group: admin-${{ github.ref }}
-  cancel-in-progress: false
+  # 只在 PR 上取消旧运行（不占唯一的自托管 Runner）；main 上不取消，保证每次合并都发布。
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check-build:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+      # 不用 setup-node 的 GitHub 缓存：npm 缓存由 Runner .env 的 npm_config_cache 固定在本机持久目录。
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: admin/package-lock.json
-      - run: npm ci
+      - name: 本地缓存路径与命中
+        run: ../.github/scripts/ci-cache-check.sh npm before
+      # 仍按锁文件安装（npm ci），离线优先只是先查本地缓存，缺的照常联网下载。
+      - run: npm ci --prefer-offline --no-audit --no-fund
       - run: npm run lint
       - run: npm run test
       - name: 发布脚本检查和回滚测试
@@ -52,6 +55,8 @@ jobs:
           cd ..
           # exportStatic 动态路由目录含冒号，artifact 不接受此类文件名。
           tar -czf admin-dist.tar.gz -C dist .
+      # 这是 check-build → deploy 之间交付同一构建产物的通道（部署前校验 release.txt 与 SHA256SUMS），
+      # 不是缓存，保留。
       - uses: actions/upload-artifact@v4
         with:
           name: admin-dist
@@ -62,7 +67,7 @@ jobs:
   deploy:
     needs: check-build
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
@@ -106,15 +111,18 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.ADMIN_DEPLOY_KNOWN_HOSTS }}
         run: |
           [[ -n "$KEY" && -n "$KNOWN_HOSTS" ]]
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # 自托管 Runner 的 HOME 跨 job 持久：私钥与主机公钥只放本 job 的 RUNNER_TEMP，最后 always 删除。
+          install -m 700 -d "$RUNNER_TEMP/ssh"
+          (umask 077; printf '%s\n' "$KEY" > "$RUNNER_TEMP/ssh/id_deploy")
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
       - name: 上传已验证产物并发布
         if: steps.gate.outputs.current == 'true'
         run: |
           set -euo pipefail
-          SSH=(ssh -i "$HOME/.ssh/id_deploy" -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
+          # 只用这把专用密钥、这份主机公钥；不读 Runner 用户的 ~/.ssh 和 ssh-agent。
+          SSH=(ssh -F /dev/null -i "$RUNNER_TEMP/ssh/id_deploy" -o IdentitiesOnly=yes -o IdentityAgent=none
+               -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null
+               -p "${TARGET_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
           TARGET="$TARGET_USER@$TARGET_HOST"
           RELEASE="${RELEASE_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           STAGING="$("${SSH[@]}" "$TARGET" 'mktemp -d /home/www/yeweiyi-admin/ci-XXXXXXXX')"
@@ -124,4 +132,6 @@ jobs:
           "${SSH[@]}" "$TARGET" "set -eu; cd '$STAGING/dist'; sha256sum -c SHA256SUMS >/dev/null; mkdir '/var/www/yeweiyi-admin/releases/$RELEASE'; cp -R . '/var/www/yeweiyi-admin/releases/$RELEASE/'; chmod -R a+rX '/var/www/yeweiyi-admin/releases/$RELEASE'; bash '$STAGING/deploy/remote-deploy.sh' '$RELEASE'"
       - name: 清理 Runner SSH 凭据
         if: always()
-        run: rm -f ~/.ssh/id_deploy
+        run: |
+          rm -rf "$RUNNER_TEMP/ssh"
+          [[ ! -e "$RUNNER_TEMP/ssh" ]] && echo "SSH 私钥与主机公钥已删除"

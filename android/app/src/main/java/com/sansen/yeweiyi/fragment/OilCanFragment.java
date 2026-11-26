@@ -250,6 +250,16 @@ public class OilCanFragment extends BaseFragment {
             oilcan_tv_oiladdible.setText(" " + UnitPref.Volume.parse(RongJiUnit).format(DataUtils.doubleFoment(oilCan.getSurPlus())) + "  " + SystemUtils.localizedUnit(RongJiUnit));
             oilcan_tv_waterlevel.setText(" " + (UnitPref.Length.parse(YeWeiUnit) == UnitPref.Length.MM ? DataUtils.doubleFomentStr(oilCan.getWaterLevel()) : DataUtils.doubleFomentStr2(oilCan.getWaterLevel() / 1000)) + "  " + SystemUtils.localizedUnit(YeWeiUnit));
             oilcan_tv_temperature.setText(" " + DataUtils.doubleFomentStr(oilCan.getTemper() )+ " ℃");
+        } else {
+            // 罐配置被移除时清空复用页面，避免继续显示上一罐的数据。
+            for (TextView value : new TextView[]{oilcan_tv_tankno, oilcan_tv_oiltype,
+                    oilcan_tv_oillevel, oilcan_tv_oilvolume, oilcan_tv_oilweight,
+                    oilcan_tv_oiladdible, oilcan_tv_waterlevel, oilcan_tv_temperature,
+                    oilcan_tv_zhiliang, oilcan_tv_midu}) {
+                value.setText("");
+            }
+            oilcan_view_progress.setCoord(0, 0, 0);
+            oilcan_view_progress.invalidate();
         }
     }
 
@@ -275,6 +285,9 @@ public class OilCanFragment extends BaseFragment {
     public void UpdatePostion(int position) {
 
         oilCanPos = position;
+        if (oilcan_tv_tankno != null) {
+            setData();
+        }
     }
 
 }

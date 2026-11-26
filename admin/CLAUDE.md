@@ -100,6 +100,8 @@
 - **设备总览分页与请求控制**（`pages/console/devices`，纯函数 `src/utils/overviewPaging.ts`）：设备列表一次取全，前端每页 12 台，
   **只对当前页取遥测**（翻到才取，已取过的沿用缓存），遥测请求并发上限 5；按油站分段时分页单位是油站（不拆开，超过一页的分段切开并重复标题）；
   标签页不可见时不轮询，回到前台立即刷新。云端没有批量遥测接口，有了再把「逐台请求」换成一次请求。
+  **读数 5 秒一刷（#62，`LIVE_TELEMETRY_MS`）**：总览只刷当前页遥测、不重拉列表（列表仍 30 秒），并发闸门 `createLimiter` 跨轮共享；
+  详情「实时数据」同为 5 秒。同一台设备上次请求未回就跳过本轮（不堆积，也不让慢请求被后来者作废），失败静默保留上次读数和上报时间。
 - **交班记录、库存记录（cloud#85，契约 `docs/shift-stock-records-contract.md` §4/§5；小程序 miniapp PR #24 同规则）**：
   `/records/shift`、`/records/inventory`，设备详情也有同名页签（`?tab=shift|inventory`）。接口 `GET /api/shift-records`、
   `GET /api/stock-records`，参数同出入库（device 必填、tank 可选，显式 `sort=false`，`limit`/`offset` 云端分页），响应 `{rows, truncated, partial,
@@ -118,11 +120,11 @@
 - 未做：历史趋势图（没装图表库）、WebSocket 报警推送。
 - **远程配置（#4，云端契约 `cloud/docs/config-command-contract.md` 与 `tank-settings-contract.md`，依赖 cloud PR #13；OpenSpec
   `device-parameter-settings`）**：设备详情新增「参数设置」（`?tab=settings`）、「操作记录」（`?tab=commands`）；菜单「远程控制」
-  （`/console/issue-command`）是设备列表入口。本期只有配置类，动作类（消音/清警/重启/泵阀）不提供入口；**密度只读**。
+  （`/console/issue-command`）是设备列表入口。本期只有配置类，动作类（消音/清警/重启/泵阀）不提供入口。密度可写（g/cm³，0<v≤2；回报 >2 多半是按旧标注 kg/m³ 填的，只提示核对）；颜色（`oilColor`，20 色色板 `utils/oilColor.ts`，对照云端共享 fixture）只在 `media-options.oilColorSync` 为真时可改（2026-11-14）。
   - 当前值只来自设备回报（`tank-settings` / `device-settings` + `reportedAt`），null 显示「—」、0 照常显示，**不乐观更新**。
   - **没有逐台开放**（2026-11-09 用户决定）：管理员打开参数页即可直接修改；云端只剩部署级总闸，关闭时提交得到
     `config_commands_disabled`。整机设置只有平台管理员能改。
-  - 只发改动字段；本地预检在 `utils/deviceConfig.ts`（范围同云端 `config_args.go`，四级液位顺序用当前值+改动合并，0 = 不启用），云端/设备才是裁决。
+  - 只发改动字段；本地预检在 `utils/deviceConfig.ts`（范围同云端 `config_args.go`，四级液位顺序用当前值+改动合并，0 = 不启用），云端/设备才是裁决。三项修正不限范围（#28，用户决定）。`InputNumber` 不传 `min/max` 和小数 `step`（否则失焦静默改值、1000 显示成 1000.0）；修正框带 ± 切换（#30）。
   - 提交（`ConfigSubmitModal`）：打开确认弹窗生成一次 `requestId`，这次确认的重试都复用；确认时重读设备列表，油站变了就不发并刷新；
     `expectedStationId` 发**表单打开时**的值。超时/`command_delivery_unconfirmed`：先 `?requestId=` 找回，找不到只给「用同一提交编号重试」，
     **绝不换新编号自动重发**。`config_command_in_flight` 跳到在途命令。
@@ -175,23 +177,17 @@
   （`{deviceName, expectedCurrentDeviceName}`，后者必填，传页面看到的旧设备码；空油站传显式 `null`）。云端事务化，没有半成品，
   所以前端**没有**两步编排。新设备必须已按完整出厂编码**独立登记**（未登记 → 404），弹窗候选只列同客户、未分配油站的已登记设备；
   不提供改旧编码模拟换机的入口。弹窗显示旧/新编码和「新设备重新采集，不接续旧设备历史」，授权不自动复制。`changed:false` 是幂等重试。
-- **彻底删除设备（GitHub issue #29，云端 yeweiyi-cloud#83，契约 `docs/device-purge-contract.md` v1.0）**：设备页行内「删除设备」，只对平台管理员显示
-  （`canPlatformAdmin`，权限边界在云端）。`PurgeDeviceModal`：显示完整编号、所属客户、油站和「将彻底删除该设备及全部历史数据，无法在系统内撤销」，
-  要写删除原因并**逐字输入完整设备编号**才能点「彻底删除」；取消/关闭不发请求。`POST /api/devices/:device/purge` 的 200/202 只表示任务存在，
-  弹窗每 2 秒 `GET /api/device-purges/:id` 展示云端真实状态，**只有 `completed` 才提示已删除**；`failed` 显示失败步骤与云端原因，「重试」就是再发一次
-  同一请求（云端返回原任务并继续）；状态读取失败只提示、继续取，不当完成也不当失败。请求超时（status 0）结果未知：先按设备编号
-  `GET /api/device-purges?deviceName=` 找回任务，找不到也**不自动重发**。打开弹窗时先找这台设备未完成的任务，页面刷新或上次中途关闭后能接着看。
-  后台不编排多个删除请求、不碰数据库/ThingsBoard；完成后重新接入同一编号要先在 ThingsBoard 重新预登记（弹窗完成页有提示）。
-- **油罐示意图（GitHub issue #28）**：`TankCard`（设备总览与详情实时数据共用）每个罐卡片左侧放一张通用卧罐图
-  `public/images/tank-generic.png`，取自安卓端 `app/src/main/res/drawable-mdpi/max_oilcan.png`（裁掉空白、缩到 240 宽）。它**只是示意**：
-  云端没有罐型字段（cloud#45），所以不声称是真实罐型，alt 写明「通用，非实际罐型」；图不随液位/状态变色（不画假液位），
-  无数据、报警、探针未连接都靠标题里的文字标签。窄屏下图自动换到读数上方（`Col flex` 换行）。
-  **右侧读数按设备显示器样式（#21，`components/TankReadout.tsx`，总览与详情共用）**：深蓝底白字标题条「罐号 + 介质」（报警/探针标签也在条里），
+- **解除油站关联（#69，取代原「删除设备」）**：设备页行内「解除油站关联」（`station_id` 是数字的行，两种管理员都有），Popconfirm 确认后
+  `PUT /api/devices/:device/station {stationId: null}`，设备显示「未分组」、可再分配；设备档案、历史、ThingsBoard 实体与接入凭据都保留，终端照常上报。
+  原「删除设备」`PurgeDeviceModal` 及 purge 请求函数已删除：云端对 `POST /api/devices/:device/purge` 恒 `410 device_purge_disabled`（平台管理员也是），
+  永久清除由运维单独处理。`device_purge_in_progress` 的提示仍保留（运维执行中的任务仍会挡写入）。
+- **油罐罐型展示（Issue #40，2026-11-10）**：监控页通过现有 `tank-settings` 独立读取设备回报罐型，由 `useTankShapes` 每分钟复核当前可见设备，隐藏停止、恢复／手动刷新重读，账号或设备切换丢弃旧响应。总览与详情复用 `TankPicture`：卧罐用 `tank-generic.png`，立罐用从设备端复制的 `tank-vertical.png`（CSS 裁掉透明边）；未上报、未知值或读取失败一律按卧罐，不出现「罐型未知」。总览罐卡不显示罐型文字，详情显示罐型与上报时间；配置读取失败不阻断遥测，401/403/404 清除罐型缓存。配置时间来自 `reportedAt`。
+  缺失读数用「--」，报警、探针未连接用读数下方文字；保持 `TankDisplay.module.less` 布局与总览 `xl` 起每行四罐（#29）。实现及验证边界见 `openspec/changes/sync-reported-tank-shape/`。
+  **右侧读数按设备显示器样式（#21，`components/TankReadout.tsx`，总览与详情共用）**：深蓝底白字标题条「罐号 + 介质」，报警/探针标签置于读数下方，避免挤压标题；
   下面固定五行 液位 → 容积 → 水高 → 温度 → 质量，标签/数值/单位三列对齐（真 `<table>`），一位小数，0 显示 0.0、缺失「--」；
-  中文单位 毫米/升/℃/千克，英文 mm/L/℃/kg（`pages.console.tank.unit.*`）。详情页的水体积、空容、占比放在下方「更多读数」。罐型有了再按 `gunType` 换立罐图
-  （安卓 `min_oilcan.png`）。
+  中文单位 毫米/升/℃/千克，英文 mm/L/℃/kg（`pages.console.tank.unit.*`）。详情页的水体积、空容、占比放在下方「更多读数」。
   **液位填充（2026-11-02）**：`TankPicture` 在两道箍之间的窗口里按该罐真实的 `oilRatioPct`/`waterRatioPct` 画油和水（水在下、油在上，
-  `utils/tankFill.ts`，规则同小程序）：探针未连接不画，占比异常夹到 0..100，报警红、故障灰；窗口位置是对着 `tank-generic.png` 逐像素量的，
+  `utils/tankFill.ts`，规则同小程序）：探针断线（`probeConnected=false`，设备按自身断线阈值才报，#75）灰色保留上次液位并标「通讯异常」「上次读数」，`hasReading=false`（开机后未采到读数）不画、读数显示「--」并标「暂无读数」，占比异常夹到 0..100；正常时油按 `tank-settings` 回报的罐颜色 `oilColor` 画（同设备，未上报用默认橙），报警红、故障灰；窗口位置是对着 `tank-generic.png` 逐像素量的，
   **换图要重新量**（`TankPicture.tsx` 里的 `WINDOW`）。
   **设备详情一次只显示一个罐（同小程序「点谁是谁」）**：总览点哪个罐就带 `?tank=<协议罐号>`（不是列表位置）进详情，`SnapshotTab` 只显示这个罐
   （`TankDetail`：液位、容积、质量、温度、水高、水体积、空容、油品占比、水占比、报警状态、探针），缺省最小罐号；请求的罐不可见就提示并改显示最小罐号
@@ -229,6 +225,7 @@
   向导页本身也只有一个动作：管理员已建时第 2 步按钮是「添加并开通」，油站和大屏建好、条件一齐就自动 `complete` 并回客户列表；「完成开通」按钮只在条件已齐但上次开通没成功时出现，不再有灰着的第二个按钮。
 - **开通向导合并「油站」与「设备」（2026-10-15）**：一油站一台大屏，所以向导只有两步——1 客户管理员、2 油站与大屏。第 2 步一次提交 = 新建油站 + 登记设备 + 分配油站（云端没有一次建三样的接口，前端串起来）：
   设备登记失败就 `DELETE` 刚建的空油站回滚，分配失败时设备已登记、提示去设备页重试。已有油站列在下面并标出各自的大屏。「完成开通」成功后回客户列表。
+- **介质库（#27，契约 `cloud/docs/media-library-contract.md`）**：`/assets/media` 仅平台管理员，手动维护公共/客户专属介质，保存不影响设备；客户列表有「专属介质」入口（`?customer=` 锁定）。参数设置里介质由管理员（平台、客户，2026-11-14 起）选，提交 `mediaId`，回显按命令实际的 `oilTypeIndex`（`trackedArgs`）；`media-options` 两种管理员都请求。
 - 没做：扫码导航（归 #63）。短码跨前缀多重匹配风险 R1 归 #63，后台不处理。
 
 `src/services/ant-design-pro/` 按页面逐个补请求函数和类型，先读 `yeweiyi-cloud` 的

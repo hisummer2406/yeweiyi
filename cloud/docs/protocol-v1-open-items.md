@@ -220,10 +220,13 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 
 ## C. 共用 fixture 的机制（2026-11-06 起已成为门禁，**但无分支保护**）
 
+> **2026-11-26 分工更新。** Cloud CI 继续校验共享 fixture。Android 单测改由专门的 Android 开发同事负责，
+> 仓库应停止自动触发 Android 单测。下面的接入记录保留作历史，工作流状态见 [CI 运维说明](../../.github/ci/README.md#android-单测交接)。
+
 > **2026-11-08 校对：** 本节下面的正文是 2026-09 的原文，保留作背景；其中"Android 尚未引入""14 个 fixture"
 > "Android 侧需要做的三步"都已过时。现状：fixture 共 25 份、单仓库内只有 `cloud/fixtures/protocol/v1/` 一份，
 > Android 单测直接读它（`android/app/build.gradle` 挂到测试 classpath），Android CI 先跑 `verify-manifest.sh`；
-> `MANIFEST.json` 的 `crossRepoGate` 已为 `true`。现状以 C-1 表为准。
+> `MANIFEST.json` 的 `crossRepoGate` 已为 `true`（2026-11-26 起改回 `false`，见本节开头的分工更新）。现状以 C-1 表为准。
 
 对账文档给出的做法是"以 `yeweiyi-cloud/fixtures/protocol/v1/` 为准，Android 侧通过 submodule
 或构建期拷贝引入"。**做法对，但缺一步**：光是拷贝一遍，无法保证之后两侧读的还是同一批字节——
@@ -424,3 +427,46 @@ args 与 cmdResult 的共享 fixture 为 `rpc_request_set_tank_settings.json`、
 - 既有事件新增**可选、向后兼容**字段：`stockEvent.deliveredWeightKg`、`stockEvent.oilTypeIndex`、`alarm.oilType`、`alarm.oilTypeIndex`。
 - 共享 fixture 已由设备端起草、云端收录（2026-11-03，8 份，见 MANIFEST），两端已按其实现并测试。仍待：设备端分支合并、
   真机联调；Android 侧 fixture 已与云端共用一份并接入 CI（同 §C-1）。
+
+## G. 参数拒绝经 `cmdResult` 上报（#42）—— 云端已兼容，待设备端确认
+
+现场旧固件（`RpcDispatcher` 先回 `received` ACK，`SetTankSettingsHandler.invalid` 再把 `rejected`/`INVALID_PARAMS` 经
+`cmdResult` 上报）与契约"`rejected` 只在 ACK 阶段"不一致，云端曾拒收该结果，命令被扫成 `expired`。云端已按
+[协议 §6.6 兼容规则](protocol-v1.md#66-最终结果) 接受它并结束为 `rejected`。
+
+- 【待确认·设备端】是否把参数预检移到 ACK 之前（契约推荐），还是把"`received` → `cmdResult rejected`"写入协议成为正式路径。
+  兼容规则不论哪种都保留，以覆盖已安装的固件。
+- 【待确认·设备端】`rejected` 结果必须保证未发生部分写入（多字段请求整条拒绝）。
+- 共享 fixture 暂未新增；设备端确认形状后补 `cmd_result_rejected.json`。
+
+## H. 罐表远程生成 `config.setTankTable`（#49）—— 三端同 PR 实现，待设备端负责人确认、待真机验证
+
+只下发罐型 + 尺寸，设备用现场同一套公式（`EllipseTable`）生成并写入罐表，回显走已有标定属性
+`tank{N}.calibrationHeightMm/VolumeL`（cloud#14 镜像）。参数与范围见 Android `docs/远程配置下发-字段清单.md` §3a、
+[config-command-contract.md](config-command-contract.md) §8。
+
+- 【待确认·设备端】字段名（`shape` + `diameterMm/lengthMm/headMm/heightMm/widthMm`）、范围（100～20000 mm，封头 0～20000）。
+  立罐的 R 输入框在现场按**直径**参与计算，协议据此命名为 `diameterMm`。
+- 【待确认·设备端/产品】现场卧罐公式只计一侧封头、高度累加有浮点误差（如 2600 mm 直径末点 2599）；远程与现场一致，要改须两端同改。
+- 【选择·云端】与 `config.setTankSettings` 共用 `tank:<n>` 在途目标：同一罐同时至多一条配置命令。
+- 共享 fixture 暂未新增；字段确认后补 `rpc_request_set_tank_table.json`。设备模拟器（`internal/devicesim`）未实现此方法。
+
+## G. 罐颜色 `oilColor` 与能力位 `oilColorSync`（2026-11-14）—— 云端发起，**待 android 负责同事确认**
+
+用户要求介质设置（介质类型、密度、颜色）三端同步，颜色此前只存在设备本地。云端发起的新字段，两端已在同一分支实现
+（设计：`docs/superpowers/specs/2026-11-14-tank-medium-sync-design.md`）：
+
+- 上报 `tankN.oilColor`：`0xRRGGBB` 整数，设备存值为 0 时不上报；
+- 整机能力位 `oilColorSync = 1`：新固件上报；没有它云端拒绝下发 `oilColor`（旧固件会静默忽略未知字段）；
+- `config.setTankSettings` 新增 `oilColor`，只接受 `oil_color_palette.json` 里的 20 色，与其他字段同一命令原子生效；
+- `density` 单位定为 g/cm³（kg/L），设备设置页 kg/m³ 文案一并改正。
+
+待办：android 负责同事审核字段名与形状，并做真机验收（远程改颜色/密度/介质、重启保留、旧固件颜色只读）。
+
+## H. 远程修改罐高、低温报警与能力位 `tankHeightLowTempSync`（#65，2026-11-23）—— 两端同分支实现，**待 android 负责同事确认**
+
+- `config.setTankSettings` 开放 `tankHeightMm`（1～100000 mm，不可为 0）与 `alarmLowTempC`（−50～100 ℃，0 = 不启用）；
+  设备按合并后的值校验 阈值 ≤ 罐高、低温 < 高温。产品决定（2026-11-23）：0 表示停用、存量阈值升级后直接生效、范围同高温。
+- 整机能力位 `tankHeightLowTempSync = 1`：新固件上报，没有它云端 `409 height_low_temp_unsupported`、不派发。
+- 新报警类型 `LOW_TEMPERATURE`（MAJOR）：设备低温需持续 5 秒确认，恢复到阈值及以上时 CLEARED。
+- 待办：android 负责同事审核；真机验收"下发 → 写入 → 回显 → 重启仍生效"及低温触发/去重/恢复/再触发。

@@ -1,11 +1,15 @@
 package com.sansen.yeweiyi.manager;
 
 import android.content.Context;
+import android.os.SystemClock;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseArray;
 
 import com.google.gson.Gson;
+import com.sansen.yeweiyi.R;
 import com.sansen.yeweiyi.config.ApiConfig;
+import com.sansen.yeweiyi.utils.SystemUtils;
 import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.bean.NetOilCan;
 import com.sansen.yeweiyi.bean.OilCan;
@@ -21,11 +25,13 @@ import com.sansen.yeweiyi.logic.thingsboard.ProvisionMessages;
 import com.sansen.yeweiyi.logic.thingsboard.ProvisionResult;
 import com.sansen.yeweiyi.logic.thingsboard.ReconnectBackoff;
 import com.sansen.yeweiyi.logic.thingsboard.SharedAttributesParser;
+import com.sansen.yeweiyi.logic.thingsboard.SnapshotTrigger;
 import com.sansen.yeweiyi.logic.thingsboard.TankCalibrationAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TankSettingsAttributeBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetryScheduler;
 import com.sansen.yeweiyi.logic.thingsboard.TelemetrySnapshotBuilder;
 import com.sansen.yeweiyi.logic.thingsboard.UniqueTimestampAllocator;
+import com.sansen.yeweiyi.applog.CloudCmdLog;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.ProcessedCommandStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcDispatcher;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcErrorCode;
@@ -35,6 +41,11 @@ import com.sansen.yeweiyi.logic.thingsboard.rpc.RpcWirePayloads;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.HighRiskActionHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetDeviceSettingsHandler;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankSettingsHandler;
+import com.sansen.yeweiyi.utils.DateUtils;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetTankTableHandler;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.TankSettingsRejectText;
+import com.sansen.yeweiyi.factory.EllipseTable;
+import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SharePrefCustomOilNameStore;
 import com.sansen.yeweiyi.logic.thingsboard.rpc.handler.SetAlarmThresholdHandler;
 import com.sansen.yeweiyi.repository.OilTankRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
@@ -75,6 +86,8 @@ public final class ThingsBoardManager {
 
     private static final String TAG = "ThingsBoardManager";
     private static final long TELEMETRY_PERIOD_MILLIS = 30_000L;
+    /** 每秒检查一次是否该发快照（保底周期或液位变化），见 {@link SnapshotTrigger}。 */
+    private static final long SNAPSHOT_CHECK_MILLIS = 1_000L;
     private static final long COMMAND_RETENTION_MILLIS = 24L * 60 * 60 * 1000; // 24 小时
     private static final int MAX_PENDING_ALARMS = 200;
     /** 交班/库存上报通道容量：16 罐每小时一条库存，离线约 40 天才会开始丢最旧的。 */
@@ -104,6 +117,7 @@ public final class ThingsBoardManager {
     private String boundDeviceId;
     private final ThingsBoardMqttConnection connection;
     private final TelemetryScheduler telemetryScheduler;
+    private final SnapshotTrigger snapshotTrigger = new SnapshotTrigger(TELEMETRY_PERIOD_MILLIS);
     private final PendingAlarmStore pendingAlarmStore;
     private final RecordOutbox recordOutbox;
     private final ProcessedCommandStore commandStore;
@@ -193,8 +207,35 @@ public final class ThingsBoardManager {
                         () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
         registry.register(SetTankSettingsHandler.METHOD,
                 new SetTankSettingsHandler(OilTankRepositoryImpl.getInstance(),
-                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh()));
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
+                        new SharePrefCustomOilNameStore(MyApplication.getInstance()),
+                        hex -> SystemUtils.getRsStr(R.string.rpc_oil_color_not_in_palette, hex),
+                        new TankSettingsRejectText() {
+                            private final int[] names = {R.string.llow_oil_alarm_value, R.string.low_oil_alarm_value,
+                                    R.string.height_oil_alarm_value, R.string.hheight_oil_alarm_value,
+                                    R.string.height_water_alarm_value};
+
+                            @Override
+                            public String overHeight(int heightMm, List<String> conflicts) {
+                                return SystemUtils.getRsStr(R.string.rpc_threshold_over_height, heightMm,
+                                        TextUtils.join(", ", conflicts));
+                            }
+
+                            @Override
+                            public String thresholdName(int slot) {
+                                return SystemUtils.getRsStr(names[slot]);
+                            }
+
+                            @Override
+                            public String lowTempNotBelowHigh(int lowC, int highC) {
+                                return SystemUtils.getRsStr(R.string.rpc_low_temp_not_below_high, lowC, highC);
+                            }
+                        }));
         registry.register(SetDeviceSettingsHandler.METHOD, new SetDeviceSettingsHandler(this::saveDeviceSettings));
+        registry.register(SetTankTableHandler.METHOD,
+                new SetTankTableHandler(OilTankRepositoryImpl.getInstance(), new EllipseTable(),
+                        () -> OilcanDataManager.getInstance(MyApplication.getInstance()).refresh(),
+                        DateUtils::getYYYMMddHHmmss));
         HighRiskActionHandler highRiskActionHandler = new HighRiskActionHandler();
         registry.register(HighRiskActionHandler.METHOD_START_PUMP, highRiskActionHandler);
         registry.register(HighRiskActionHandler.METHOD_STOP_PUMP, highRiskActionHandler);
@@ -205,10 +246,10 @@ public final class ThingsBoardManager {
         registry.register(HighRiskActionHandler.METHOD_DEVICE_REBOOT, highRiskActionHandler);
 
         this.rpcDispatcher = new RpcDispatcher(registry, commandStore, this::publishRpcAck, this::publishRpcResult,
-                System::currentTimeMillis);
+                System::currentTimeMillis, CloudCmdLog.INSTANCE);
 
-        this.telemetryScheduler = new TelemetryScheduler(this::buildAndPublishSnapshot, TELEMETRY_PERIOD_MILLIS,
-                error -> Log.e(TAG, "30 秒快照发布失败", error));
+        this.telemetryScheduler = new TelemetryScheduler(this::buildAndPublishSnapshot, SNAPSHOT_CHECK_MILLIS,
+                error -> Log.e(TAG, "遥测快照发布失败", error));
     }
 
     public synchronized void start() {
@@ -217,7 +258,7 @@ public final class ThingsBoardManager {
         }
         int recovered = commandStore.recoverAfterRestart(System.currentTimeMillis());
         if (recovered > 0) {
-            Log.w(TAG, "重启恢复：" + recovered + " 条未完成命令按 FAILED 处理");
+            CloudCmdLog.onRecoveredAfterRestart(recovered);
         }
         telemetryScheduler.start();
         // 罐配置变更（保存罐设置、RPC 改阈值等都会 refresh）后：清理已删除/停用罐的报警，并立即重发
@@ -511,7 +552,7 @@ public final class ThingsBoardManager {
     /**
      * 客户端属性合成一条发出：协议 §5.1 设备配置 + 标定表 + 罐设置页各项 + 出入库阈值。
      * 静态配置，不走补投队列，断线时没发出去下次连上会重发。触发：连接成功后；设置变化后经
-     * {@link #requestClientAttributesPublish()} 防抖重发。标定表保存不触发，要等下次重连或设置变化。
+     * {@link #requestClientAttributesPublish()} 防抖重发（罐设置和罐表写库都会触发，见 OilTankRepositoryImpl）。
      */
     private void publishClientAttributes() {
         // 连接成功后紧跟着要请求共享属性；这里抛异常会让那一步被跳过，所以就地吞掉并记日志
@@ -525,6 +566,9 @@ public final class ThingsBoardManager {
             Singleton settings = Singleton.getInstance();
             attributes.putAll(DeviceSettingsAttributeBuilder.build(
                     settings.InHight, settings.InTime, settings.OutHight, settings.OutTime));
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_CUSTOM_MEDIA_SYNC, 1);
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_OIL_COLOR_SYNC, 1);
+            attributes.put(DeviceSettingsAttributeBuilder.KEY_TANK_HEIGHT_LOW_TEMP_SYNC, 1);
             connection.publishAttributes(gson.toJson(attributes));
         } catch (RuntimeException e) {
             Log.e(TAG, "客户端属性发布失败", e);
@@ -591,12 +635,16 @@ public final class ThingsBoardManager {
      * {@code newPeriodMillis} 为 {@code null}（缺失/非法/非正）时什么都不做，保持当前周期——
      * 由 {@link SharedAttributesParser} 保证只有合法的正数才会走到这里。
      */
-    private void applySharedAttributes(Long newPeriodMillis) {
+    private void applySharedAttributes(Long newPeriodMillis, String source) {
         if (newPeriodMillis == null) {
             return;
         }
-        Log.i(TAG, "共享属性下发 reportIntervalSec，快照周期改为 " + newPeriodMillis + "ms");
-        telemetryScheduler.updatePeriod(newPeriodMillis);
+        long oldPeriodMillis = snapshotTrigger.getPeriodMillis();
+        if (oldPeriodMillis != newPeriodMillis) {
+            // 每次重连都会拉一次，值没变不记
+            CloudCmdLog.onSharedAttributeApplied("reportIntervalSec", oldPeriodMillis + "ms", newPeriodMillis + "ms", source);
+        }
+        snapshotTrigger.setPeriodMillis(newPeriodMillis);
     }
 
     /**
@@ -609,28 +657,48 @@ public final class ThingsBoardManager {
     private final class SharedAttributesListener implements ThingsBoardMqttConnection.AttributesListener {
         @Override
         public void onSharedAttributesPush(String payloadJson) {
-            applySharedAttributes(SharedAttributesParser.parsePushedReportIntervalMillis(payloadJson));
+            applySharedAttributes(SharedAttributesParser.parsePushedReportIntervalMillis(payloadJson), "push");
         }
 
         @Override
         public void onAttributesResponse(String requestId, String payloadJson) {
-            applySharedAttributes(SharedAttributesParser.parseResponseReportIntervalMillis(payloadJson));
+            applySharedAttributes(SharedAttributesParser.parseResponseReportIntervalMillis(payloadJson), "response");
         }
     }
 
-    // ---- 30 秒快照 ----
+    // ---- 遥测快照 ----
 
     private void buildAndPublishSnapshot() {
         if (!connection.isConnected()) {
-            // 明确策略：断线期间的普通快照直接丢弃，不补投——见 PendingAlarmStore 类注释,
-            // 网络恢复后下一个 30 秒周期会带着最新状态重新上报。
+            // 断线期间的普通快照直接丢弃、不补投（见 PendingAlarmStore 类注释），重连后下一次检查即上报最新状态。
             return;
         }
-        List<NetOilCan> tanks = OilcanDataManager.getInstance(MyApplication.getInstance()).getNetOilcans();
+        OilcanDataManager dataManager = OilcanDataManager.getInstance(MyApplication.getInstance());
+        Map<Integer, SnapshotTrigger.TankLevel> levels = currentLevels(dataManager.getData());
+        long monotonicNow = SystemClock.elapsedRealtime();
+        if (!snapshotTrigger.shouldPublish(monotonicNow, levels)) {
+            return;
+        }
+        List<NetOilCan> tanks = dataManager.getNetOilcans();
         long now = System.currentTimeMillis();
         Map<String, Object> values = TelemetrySnapshotBuilder.buildValues(tanks, now, snapshotSeq.incrementAndGet());
         Map<String, Object> payload = TelemetrySnapshotBuilder.wrapWithTimestamp(values, now);
-        connection.publishTelemetry(gson.toJson(payload));
+        if (connection.publishTelemetry(gson.toJson(payload))) {
+            snapshotTrigger.onPublished(monotonicNow, levels);
+        }
+    }
+
+    /** 每秒调用，只读液位，不走 {@code getNetOilcans()}（它每次都反序列化 SharedPreferences）。 */
+    private static Map<Integer, SnapshotTrigger.TankLevel> currentLevels(SparseArray<OilCan> data) {
+        Map<Integer, SnapshotTrigger.TankLevel> levels = new java.util.HashMap<>();
+        for (int i = 0; i < data.size(); i++) {
+            OilCan oilCan = data.valueAt(i);
+            if (oilCan != null) {
+                levels.put(oilCan.getOilCanPos(),
+                        new SnapshotTrigger.TankLevel(oilCan.getOilLevel(), oilCan.getWaterLevel()));
+            }
+        }
+        return levels;
     }
 
     // ---- RPC ----
@@ -643,7 +711,13 @@ public final class ThingsBoardManager {
      * 下一条 MQTT 消息（PR #38 Codex 第三轮审核 P1）。
      */
     private void onRpcRequest(String mqttRequestId, String payloadJson) {
-        rpcDispatchExecutor.execute(guarded("RPC 处理", () -> rpcDispatcher.dispatch(mqttRequestId, payloadJson)));
+        rpcDispatchExecutor.execute(() -> {
+            try {
+                rpcDispatcher.dispatch(mqttRequestId, payloadJson);
+            } catch (RuntimeException e) {
+                CloudCmdLog.onDispatchCrashed(mqttRequestId, e);
+            }
+        });
     }
 
     /**
@@ -655,7 +729,9 @@ public final class ThingsBoardManager {
     private void publishRpcAck(String mqttRequestId, String commandId, RpcResultStatus status,
                                 RpcErrorCode errorCode, String message, boolean duplicate, long tsMillis) {
         Map<String, Object> ack = RpcWirePayloads.ack(commandId, status, errorCode, message, duplicate, tsMillis);
-        connection.publishRpcAck(mqttRequestId, gson.toJson(ack));
+        if (!connection.publishRpcAck(mqttRequestId, gson.toJson(ack))) {
+            CloudCmdLog.onAckPublishFailed(mqttRequestId, commandId, status, errorCode);
+        }
     }
 
     /**

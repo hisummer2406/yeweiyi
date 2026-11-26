@@ -68,6 +68,27 @@ public class TankSettingsAttributeBuilderTest {
     }
 
     @Test
+    public void reportsOilColorAsRgbAndOmitsUnset() {
+        OilCanSet set = tank(1, 1);
+        set.setOilColor(0xFFFF0000);
+        OilCanSet unset = tank(2, 1);
+        List<OilCanSet> sets = new ArrayList<>();
+        sets.add(set);
+        sets.add(unset);
+
+        Map<String, Object> a = TankSettingsAttributeBuilder.build(sets, NAMES);
+
+        assertEquals(0xFF0000, a.get("tank1.oilColor"));
+        assertFalse("未设置（0）不上报", a.containsKey("tank2.oilColor"));
+    }
+
+    @Test
+    public void deviceSettingsDeclareColorSync() {
+        assertEquals("oilColorSync", DeviceSettingsAttributeBuilder.KEY_OIL_COLOR_SYNC);
+        assertEquals("tankHeightLowTempSync", DeviceSettingsAttributeBuilder.KEY_TANK_HEIGHT_LOW_TEMP_SYNC);
+    }
+
+    @Test
     public void skipsDisabledTanksAndUsesTankPositionInKey() {
         List<OilCanSet> sets = new ArrayList<>();
         sets.add(tank(1, 0));

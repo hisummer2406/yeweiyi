@@ -20,11 +20,13 @@ import {
   getTankSettings,
 } from '@/services/ant-design-pro/deviceConfig';
 import { listDevices } from '@/services/ant-design-pro/devices';
+import { getDeviceMediaOptions } from '@/services/ant-design-pro/media';
 import { listStations } from '@/services/ant-design-pro/stations';
 import {
   DEVICE_FIELDS,
   type FieldDef,
   TANK_FIELDS,
+  trackedArgs,
 } from '@/utils/deviceConfig';
 import CommandProgress from './CommandProgress';
 import ConfigSubmitModal, { type SubmitRequest } from './ConfigSubmitModal';
@@ -122,6 +124,25 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device, reload]);
 
+  // 介质选项与颜色能力：两种管理员都可读（2026-11-14；员工没有网页后台）
+  const [media, setMedia] = useState<API.MediaOptions>();
+  const [mediaFailed, setMediaFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getDeviceMediaOptions(device)
+      .then((m) => {
+        if (!alive) return;
+        setMedia(m);
+        setMediaFailed(false);
+      })
+      .catch(() => {
+        if (alive) setMediaFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [device, reload]);
+
   const target = tracked?.command.configTarget;
   const readMirror = useCallback(async () => {
     if (target === 'device') return (await getDeviceSettings(device)) as never;
@@ -161,6 +182,18 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
         before: fmt(f, current?.[f.key], current?.oilType),
         after: fmt(f, args[f.key]),
       }));
+    const medium = [...(media?.public ?? []), ...(media?.customer ?? [])].find(
+      (m) => m.id === args.mediaId,
+    );
+    const mediumField = fields.find((f) => f.kind === 'oil');
+    if (medium && mediumField) {
+      rows.push({
+        field: mediumField.key,
+        label: t(`pages.console.settings.field.${mediumField.key}`),
+        before: fmt(mediumField, current?.[mediumField.key], current?.oilType),
+        after: medium.name,
+      });
+    }
     setRequest({
       method,
       args: tankNumber !== undefined ? { tank: tankNumber, ...args } : args,
@@ -235,12 +268,31 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
                 }))}
               />
             )}
+            {mediaFailed && (
+              <Alert
+                style={{ marginBottom: 12 }}
+                type="warning"
+                showIcon
+                message={t('pages.console.settings.medium.loadFailed')}
+              />
+            )}
+            {media && (
+              <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+                {media.customMediaSync
+                  ? t('pages.console.settings.medium.slots', {
+                      used: media.slotsUsed,
+                      total: media.slotsTotal,
+                    })
+                  : t('pages.console.settings.medium.noSync')}
+              </Typography.Paragraph>
+            )}
             {tank && (
               <SettingsForm
                 fields={TANK_FIELDS}
                 current={tank as unknown as Record<string, unknown>}
                 tank={tank}
                 canEdit={canSubmitBase}
+                media={media}
                 readOnlyNote="pages.console.settings.readOnlyNote"
                 resetKey={`${session}-${data.row?.station_id}-${tank.tank}-${tank.reportedAt}`}
                 onSubmit={(args) =>
@@ -328,7 +380,9 @@ const SettingsTab: React.FC<{ device: string }> = ({ device }) => {
         stationLabel={data.stationLabel}
         request={request}
         onClose={() => setRequest(undefined)}
-        onTracked={(command, args) => setTracked({ command, args })}
+        onTracked={(command, args) =>
+          setTracked({ command, args: trackedArgs(command, args) })
+        }
         onStale={() => {
           setRequest(undefined);
           setSession((n) => n + 1);

@@ -63,7 +63,8 @@ object RecordExportUi {
         }
     }
 
-    private fun showLoading(activity: Activity): Dialog =
+    /** 不可取消的透明底转圈 loading；导出日志（LogExportUi）也用这个 */
+    internal fun showLoading(activity: Activity): Dialog =
         Dialog(activity).apply {
             requestWindowFeature(Window.FEATURE_NO_TITLE)
             setContentView(ProgressBar(activity))

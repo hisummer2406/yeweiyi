@@ -12,6 +12,7 @@
     <string name="oilllow_alarm">Рез. №%1$d: тревога пред. низ. уровня</string>
     <string name="waterheight_alarm">Рез. №%1$d: тревога выс. ур. воды</string>
     <string name="tempheight_alarm">Рез. №%1$d: тревога выс. темп.</string>
+    <string name="templow_alarm">Рез. №%1$d: тревога низк. темп.</string>
     <string name="fyf_connect_error">Обрыв связи с драйвером</string>
     <string name="login_password_hint">Пароль</string>
     <string name="login_tv_password">Введите пароль</string>
@@ -229,4 +230,13 @@
     <string name="log_op_failed">Операция не выполнена, подробности записаны в журнал</string>
     <string name="createtable_a_nonull">R не может быть пустым</string>
     <string name="unit_gallon">гал.</string>
+    <!-- 以下 2 项 2026-11-08 AI 翻译，待 review（串口设置页：单罐开关量输出） -->
+    <string name="pump_link_title">Дискретный выход бака</string>
+    <string name="pump_link_desc">Замыкается при аварийно низком уровне, размыкается при аварийно высоком</string>
+    <string name="serial_proxy_zhongcheng">Два экрана Zhongcheng</string>
+    <string name="serial_proxy_modbus">Два экрана Modbus</string>
+    <string name="serial_proxy_restart">После переключения режима двух экранов перезапустите приложение, чтобы применить настройку.</string>
+    <string name="data_save_error">Не удалось сохранить</string>
+    <string name="rpc_threshold_over_height">Пороги тревог не могут превышать высоту резервуара (%1$d мм): %2$s</string>
+    <string name="rpc_low_temp_not_below_high">Порог низкой температуры (%1$d ℃) должен быть ниже порога высокой (%2$d ℃)</string>
 </resources>

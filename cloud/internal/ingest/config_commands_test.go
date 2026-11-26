@@ -78,6 +78,10 @@ func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T
 		t.Fatalf("initial mirror = %+v", before)
 	}
 
+	// Subscribe first: the simulator answers within ~50 ms, and a cmdResult published before the subscription
+	// exists is only picked up by the periodic reconcile, which this test does not run (CI flake 2026-11-23).
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
 	cmd, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings,
 		`{"tank":1,"alarmHighLevelMm":2700,"density":0.7,"capacityL":40000}`)
 	if err != nil {
@@ -87,8 +91,6 @@ func TestConfigTankSettings_AppliedByDeviceAndMirroredFromItsReport(t *testing.T
 		t.Fatalf("after ACK status = %q, want received (an ACK is not success)", cmd.Status)
 	}
 
-	s.ing.StartDevice(ctx, s.device)
-	waitForSubscription(t, s, ctx)
 	final := awaitStatus(t, s, uuidText(cmd.CommandID.Bytes), 25*time.Second, protocol.CmdStatusSucceeded)
 	var detail struct {
 		Tank    int      `json:"tank"`
@@ -161,7 +163,7 @@ func TestConfigTankSettings_CloudRejectsBadArgsBeforeAnythingIsSent(t *testing.T
 	for name, args := range map[string]string{
 		"closed field":   `{"tank":1,"tankShape":1}`,
 		"unknown field":  `{"tank":1,"densty":0.5}`,
-		"out of range":   `{"tank":1,"tempCorrectionC":11}`,
+		"out of range":   `{"tank":1,"alarmHighTempC":101}`,
 		"density zero":   `{"tank":1,"density":0}`,
 		"fractional int": `{"tank":1,"alarmHighLevelMm":650.5}`,
 		"string number":  `{"tank":1,"alarmHighLevelMm":"650"}`,
@@ -216,5 +218,76 @@ func TestConfigDeviceSettings_PlatformAdminOnly(t *testing.T) {
 			t.Fatalf("device settings mirror = %+v, err = %v; want outStock 30 mm / 90 s", got, err)
 		}
 		time.Sleep(300 * time.Millisecond)
+	}
+}
+
+// #42: field firmware ACKs 'received' before validating and then reports the refusal as cmdResult
+// 'rejected' / INVALID_PARAMS. That must close the command as rejected with the device's reason —
+// not leave it to expire with the ACK's "已受理" as the only explanation — and write nothing.
+func TestConfigTankSettings_LegacyRejectAfterAckClosesAsRejected(t *testing.T) {
+	s := newStack(t, control.Config{AllowConfigCommands: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.ing.StartDevice(ctx, s.device)
+	waitForSubscription(t, s, ctx)
+	s.sim.SetLegacyRejectAfterAck(true)
+
+	// A multi-field request with one out-of-range field is refused whole.
+	cmd, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings, `{"tank":1,"levelCorrectionMm":200,"waterCorrectionMm":0}`)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if cmd.Status != protocol.CmdStatusReceived && cmd.Status != protocol.CmdStatusRejected {
+		t.Fatalf("after ACK status = %q", cmd.Status)
+	}
+	final := awaitStatus(t, s, uuidText(cmd.CommandID.Bytes), 25*time.Second, protocol.CmdStatusRejected)
+	if final.ErrorCode.String != protocol.ErrInvalidParams || final.ErrorReason.String == "" || final.ErrorReason.String == "已受理" {
+		t.Errorf("code=%q reason=%q, want INVALID_PARAMS with the device's reason", final.ErrorCode.String, final.ErrorReason.String)
+	}
+	if !final.FinishedAt.Valid {
+		t.Error("rejected must set finished_at")
+	}
+	if got, _ := s.sim.TankSettings(1); got.LevelCorrMm != 0 || got.WaterCorrMm != 0 {
+		t.Errorf("a refused command wrote level=%v water=%v", got.LevelCorrMm, got.WaterCorrMm)
+	}
+
+	// The tank is free again: the next command is not blocked by config_command_in_flight.
+	if _, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings, `{"tank":1,"levelCorrectionMm":50}`); err != nil {
+		t.Fatalf("follow-up command: %v", err)
+	}
+}
+
+// #42: an unusable cmdResult point must not stop the read-back of later points. The scan reads oldest
+// first, so a malformed point older than a valid result used to abort the scan before the valid one
+// and leave its command to expire.
+func TestReconcileCommands_SkipsInvalidResultPoints(t *testing.T) {
+	s := newStack(t, control.Config{AllowConfigCommands: true})
+	s.sim.SetLegacyRejectAfterAck(true) // no live subscription: only the reconcile pass can apply it
+
+	cmd, err := s.issue(t, s.actor, protocol.MethodConfigTankSettings, `{"tank":1,"levelCorrectionMm":200}`)
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	commandID := uuidText(cmd.CommandID.Bytes)
+	// Older than the device's result but inside the scan window (issue time minus the skew).
+	bad := map[string]any{protocol.KeyCmdResult: map[string]any{"commandId": "not-a-uuid", "status": "succeeded"}}
+	if err := s.sim.PublishRawTelemetry(cmd.IssuedAt.Time.Add(-time.Second).UnixMilli(), bad); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		s.ing.ReconcileCommands(context.Background())
+		stored, err := s.q.GetControlCommand(context.Background(), cmd.CommandID)
+		if err == nil && stored.Status == protocol.CmdStatusRejected {
+			if stored.ErrorCode.String != protocol.ErrInvalidParams {
+				t.Errorf("code = %q", stored.ErrorCode.String)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("command %s still %q: the malformed point blocked the read-back", commandID, stored.Status)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }

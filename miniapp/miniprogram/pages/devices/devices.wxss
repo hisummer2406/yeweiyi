@@ -1,7 +1,7 @@
 /* 数值取自设计稿「首页-卧罐01」PNG（750 宽，1px = 1rpx）的像素实测，不是目测：
    头部渐变 #05629B → #004873；分隔线 #C5C9D0；标签 156×32 #03355E；读数 22rpx，行高 40rpx，
    标签/数值 #131313，单位 #505050；单台罐行高 293rpx。差异见 openspec/changes/home-by-station/tasks.md 3.8。
-   罐行的字号、行高、罐图尺寸已按适老化（miniapp#13）偏离设计稿，见下方 .tank-row 起的说明。 */
+   按设计图恢复图文比例；每罐高度由可用窗口减去实测头部和上报时间后四等分，不裁切第五罐以后的内容。 */
 page {
   background-color: #edf0f7;
 }
@@ -12,7 +12,7 @@ page {
 
 /* 头部：自定义导航栏，渐变一直铺到状态栏下面（padding-top 由 TS 按状态栏高度写入） */
 .home-header {
-  padding: 0 30rpx 30rpx;
+  padding: 0 30rpx 22rpx;
   background: linear-gradient(180deg, #05629b 0%, #004873 100%);
   color: #ffffff;
 }
@@ -20,41 +20,49 @@ page {
 .home-brand {
   display: flex;
   align-items: center;
-  min-height: 56rpx;
-  margin-top: 17rpx;
+  min-height: 72rpx;
+  margin-top: 16rpx;
+  padding-right: 190rpx;
 }
 
 .home-brand-mark {
   width: 56rpx;
   height: 56rpx;
-  margin-right: 24rpx;
+  flex-shrink: 0;
+  margin-right: 12rpx;
 }
 
 .home-brand-title {
-  font-size: 46rpx;
+  font-size: var(--font-brand);
+  line-height: 1.3;
 }
 
 .home-station {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 58rpx;
-  margin-top: 55rpx;
+  min-height: 64rpx;
+  margin-top: 32rpx;
 }
 
 .home-station-name {
-  font-size: 46rpx;
+  font-size: var(--font-title);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 
 .home-station-pick {
   display: flex;
   align-items: center;
+  min-width: 0;
+  margin-right: 20rpx;
 }
 
 /* 下拉三角：用边框画，仓库里没有现成的白色下拉图标；尺寸未对照设计稿像素校准 */
 .home-station-arrow {
   width: 0;
   height: 0;
+  flex-shrink: 0;
   margin-left: 16rpx;
   border-left: 10rpx solid transparent;
   border-right: 10rpx solid transparent;
@@ -62,69 +70,185 @@ page {
 }
 
 .home-plus {
-  width: 42rpx;
-  height: 42rpx;
+  width: 56rpx;
+  height: 56rpx;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .home-list {
-  padding-bottom: 24rpx;
+  padding-bottom: 0;
 }
 
-/* 设计稿没有"上报时间"这一行；它必须显示（快照不是实时流）。适老化（miniapp#13）后放大到 26rpx 并加深颜色 */
+.home-status {
+  padding: 0 8rpx;
+  border-radius: 4rpx;
+  background-color: #dfe9f2;
+  color: #345570;
+  font-size: var(--font-status);
+  font-weight: 600;
+  line-height: 26rpx;
+  white-space: nowrap;
+}
+
+.home-status-danger {
+  background-color: #fbe7e7;
+  color: #a62c2c;
+}
+
+.home-status-warning {
+  background-color: #fff3d6;
+  color: #80560b;
+}
+
+/* 上报时间始终显示：快照不是实时流。收紧上下留白，为罐数据留出空间。 */
 .group-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  padding: 20rpx 30rpx 0;
+  padding: 10rpx 30rpx 0;
+  line-height: 32rpx;
 }
 
 .group-name {
-  font-size: 36rpx;
+  font-size: var(--font-label);
   font-weight: 600;
   color: #131313;
 }
 
 .group-ts {
-  font-size: 30rpx;
+  font-size: var(--font-meta);
   color: #4a4f57;
+}
+
+.group-head-stale {
+  flex-wrap: nowrap;
+  align-items: center;
+  column-gap: 12rpx;
+}
+
+.group-head-stale .group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-head-stale .group-ts {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+button.group-stale {
+  flex-shrink: 0;
+  width: auto;
+  margin: 0 0 0 auto;
+  line-height: 32rpx;
+}
+
+button.group-stale::after {
+  border: 0;
 }
 
 .group-note {
   padding: 40rpx 30rpx;
   text-align: center;
-  font-size: 32rpx;
+  font-size: var(--font-heading);
   color: #4a4f57;
 }
 
-/* 罐行（miniapp#13 适老化）：字号与全小程序同一档（见 app.wxss 顶部的放大对照表：正文 36、说明 30），
-   读数最突出（40 加粗）。行高随内容撑开（不再固定 293rpx），多出的提示（探针未连接）不会溢出；
-   罐图从 240 缩到 200rpx 给读数腾出宽度，标签列按三种语言里最长的「Volumen」定宽。需真机对比后再定。 */
+.group-note-status {
+  margin: 12rpx 30rpx 16rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 8rpx;
+  background-color: #fff;
+  font-size: var(--font-caption);
+}
+
+.group-note-status .btn-primary {
+  margin: 12rpx auto 0;
+}
+
+/* 每罐占首屏可用高度的 1/4，内容垂直居中。长介质名/异常文字仍可撑开，保留自然滚动。 */
 .tank-row {
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  min-height: 360rpx;
+  min-height: 293rpx;
   margin: 0 30rpx;
-  padding: 24rpx 0;
+  padding: 4rpx 0;
   border-bottom: 1rpx solid #c5c9d0;
 }
 
-/* 图片 240×176 原尺寸按 200rpx 宽等比缩放 */
+/* 图片 240×176 原尺寸等比显示，填充窗口仍按百分比定位。 */
 .home-tank {
   position: relative;
-  width: 200rpx;
-  height: 147rpx;
+  width: 240rpx;
+  height: 176rpx;
   flex-shrink: 0;
-  margin-left: 8rpx;
+  margin-left: 50rpx;
+}
+
+.home-tank-alerts,
+.home-tank-source {
+  position: absolute;
+  z-index: 1;
+  left: -12rpx;
+}
+
+.home-tank-alerts {
+  top: -14rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4rpx 6rpx;
+  width: calc(100% + 48rpx);
+}
+
+.home-tank-source {
+  bottom: -10rpx;
 }
 
 .home-tank-img {
   width: 100%;
   height: 100%;
+}
+
+.home-tank-crop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+/* 原始设备素材 500×320，非透明范围 x=70..266、y=24..317（196×293）。用视口裁掉透明边，不重绘素材。
+   立罐细长，限在 176rpx 框高里只有卧罐一半面积、显得小：视口放到 200rpx 高（宽 200×196/293≈134rpx），
+   上下各超出罐框 12rpx、水平居中；首页罐行最矮 274rpx，放得下。内部百分比相对视口，比例不变。 */
+.home-tank-crop-vertical {
+  top: -12rpx;
+  bottom: -12rpx;
+  left: 22.13%;
+  right: 22.13%;
+}
+
+.home-tank-crop-vertical .home-tank-img {
+  position: absolute;
+  width: 255.1%;
+  height: 109.22%;
+  left: -35.71%;
+  top: -8.19%;
+  max-width: none;
+}
+
+.home-tank-crop-vertical .home-tank-body {
+  left: 19.9%;
+  width: 41.33%;
+  top: 10.92%;
+  height: 82.94%;
 }
 
 /* 填充只在罐身中间两道箍之间的那一列（不铺满整个罐、不含顶部人孔和底座），按 tank-horizontal-home.png 实测：
@@ -159,6 +283,11 @@ page {
   background-color: #d93a3a;
 }
 
+.fill-oil.fill-stale,
+.fill-water.fill-water-stale {
+  background-color: #b8bdc4;
+}
+
 .fill-oil.fill-fault {
   background-color: #8a8f98;
 }
@@ -166,70 +295,109 @@ page {
 .tank-info {
   flex: 1;
   min-width: 0;
-  margin-left: 28rpx;
+  margin-left: 64rpx;
 }
 
 .tank-tag-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  margin-bottom: 8rpx;
+  margin-bottom: 4rpx;
+  font-size: 0;
+  line-height: 1;
 }
 
 /* 罐号 + 油品：允许换行，长油品名不截断 */
-.tank-tag {
-  box-sizing: border-box;
-  max-width: 100%;
-  padding: 4rpx 12rpx;
-  line-height: 44rpx;
-  background-color: #03355e;
-  color: #ffffff;
-  font-size: 32rpx;
-  border-radius: 6rpx;
-  word-break: break-all;
+.tank-last-reading {
+  margin-left: 8rpx;
+  line-height: 36rpx;
 }
 
-.tank-tag-row .badge {
-  margin: 4rpx 0 4rpx 12rpx;
-  font-size: 28rpx;
+.tank-tag {
+  box-sizing: border-box;
+  min-width: 156rpx;
+  max-width: 100%;
+  padding: 0 8rpx;
+  line-height: 36rpx;
+  background-color: #03355e;
+  color: #ffffff;
+  font-size: var(--font-label);
+  border-radius: 4rpx;
+  word-break: break-all;
 }
 
 .hs-row {
   display: flex;
-  align-items: baseline;
-  min-height: 60rpx;
+  align-items: center;
+  min-height: 40rpx;
+  line-height: 40rpx;
+  font-size: var(--font-body);
   color: #131313;
 }
 
+.hs-row + .hs-row {
+  margin-top: 5rpx;
+}
+
 .hs-label {
-  width: 128rpx;
+  width: 2em;
   flex-shrink: 0;
-  font-size: 32rpx;
+  margin-right: 14rpx;
+  font-size: var(--font-body);
   color: #2f3540;
 }
 
-/* 读数最突出：大号加粗、等宽数字、右对齐便于上下比较；不截断，太长时换行 */
+/* 标签和单位定宽，数值与单位各自在列内左对齐。 */
 .hs-value {
   flex: 1;
   min-width: 0;
-  font-size: 40rpx;
-  font-weight: 700;
+  font-size: var(--font-body);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  text-align: right;
-  word-break: break-all;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .hs-unit {
-  width: 64rpx;
+  width: 56rpx;
   flex-shrink: 0;
-  margin-left: 10rpx;
-  font-size: 28rpx;
+  margin-left: 6rpx;
+  font-size: var(--font-label);
+  text-align: left;
+  white-space: nowrap;
   color: #3d434c;
 }
 
-.hs-probe-off {
-  margin-top: 6rpx;
-  font-size: 32rpx;
-  font-weight: 600;
-  color: #c62828;
+/* 较短屏幕只收紧读数，不压缩整页；正常屏幕按上方设计图比例显示。 */
+.home-compact .tank-row {
+  padding: 2rpx 0;
+}
+
+.home-compact .hs-row {
+  min-height: 33rpx;
+  line-height: 33rpx;
+  font-size: var(--font-label);
+}
+
+.home-compact .hs-value {
+  font-size: var(--font-label);
+}
+
+.home-compact .hs-label {
+  font-size: var(--font-label);
+}
+
+.home-compact .hs-unit {
+  width: 48rpx;
+  font-size: var(--font-meta);
+}
+
+.home-compact .tank-tag {
+  line-height: 32rpx;
+  font-size: var(--font-caption);
+}
+
+.home-wide-labels .hs-label {
+  width: 136rpx;
+  margin-right: 0;
 }

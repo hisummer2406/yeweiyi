@@ -6,6 +6,13 @@
 
 这是"业务记录永久保存"（`CLAUDE.md` 约束 5）的**唯一例外**。换机、客户转移仍不删除任何历史。
 
+> **2026-11-24 起网页端发起已关闭（#69）。** `POST /api/devices/:device/purge` 对平台管理员恒返回
+> `410 {"code":"device_purge_disabled"}`（不读请求体、不建也不重启任务，只写 `denied` 审计）；其他角色仍是原来的
+> `403`。日常移除设备改为**解除油站关联**（`PUT /api/devices/:device/station`，`{"stationId": null}`，见
+> [油站与换机契约 §3.1](station-device-replacement-contract.md)），保留设备档案、业务历史、ThingsBoard 实体、凭据与遥测。
+> `GET /api/device-purges[/:id]` 保留供审计；进程重启时仍续跑 `running` 任务；`failed` 任务（仍是写入栅栏）与确需的永久清除
+> 由授权运维单独处理，目前没有命令行工具。下文 §2.1、§7 描述的发起与后台对接流程已停用，留作历史。
+
 ## 1. 谁能删
 
 - 【需求】只有数据库中当前角色为 `platform_admin` 且未停用的账号。其他角色在解析请求体之前得到

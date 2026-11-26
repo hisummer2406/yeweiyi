@@ -104,7 +104,7 @@ func TestParseTankSettings_SharedFixture(t *testing.T) {
 		t1.OilTypeIndex == nil || t1.AlarmHighHighLevelMm == nil || t1.AlarmHighLevelMm == nil ||
 		t1.AlarmLowLevelMm == nil || t1.AlarmLowLowLevelMm == nil || t1.AlarmHighWaterMm == nil ||
 		t1.AlarmHighTempC == nil || t1.AlarmLowTempC == nil || t1.LevelCorrectionMm == nil ||
-		t1.WaterCorrectionMm == nil || t1.TempCorrectionC == nil || t1.Density == nil || t1.CapacityL == nil {
+		t1.WaterCorrectionMm == nil || t1.TempCorrectionC == nil || t1.Density == nil || t1.CapacityL == nil || t1.OilColor == nil {
 		t.Errorf("every documented tank1 key should parse to a value: %+v", t1)
 	}
 	if *got[1].OilTypeIndex != 19 || *got[1].Density != 0.84 {
@@ -147,7 +147,13 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		`{"tank":16,"density":2}`,
 		`{"tank":1,"alarmLowLowLevelMm":0,"alarmLowLevelMm":0,"alarmHighLevelMm":500,"alarmHighHighLevelMm":600}`, // 0 = off, no order
 		`{"tank":2,"alarmHighTempC":-50,"levelCorrectionMm":-100,"tempCorrectionC":10,"oilTypeIndex":39,"capacityL":0}`,
-		`{"tank":1,"alarmHighLevelMm":650.0}`, // integral value written with a fraction is still an integer
+		`{"tank":1,"levelCorrectionMm":1000,"waterCorrectionMm":-1000.5,"tempCorrectionC":-100.5}`, // #28: 修正值不设上下限
+		`{"tank":1,"oilTypeIndex":32,"customOilName":"二厂盐酸","customOilNameEn":"HCl"}`,
+		`{"tank":1,"alarmHighLevelMm":650.0}`,                        // integral value written with a fraction is still an integer
+		`{"tank":1,"tankHeightMm":2600,"alarmHighHighLevelMm":2400}`, // #65
+		`{"tank":1,"alarmLowTempC":-40}`,                             // #65
+		`{"tank":1,"alarmLowTempC":30,"alarmHighTempC":0}`,           // 高温不启用时不比较
+		`{"tank":1,"alarmLowTempC":0,"alarmHighTempC":-10}`,          // 0 = 低温不启用
 	} {
 		if err := protocol.ValidateArgs(m, json.RawMessage(ok)); err != nil {
 			t.Errorf("%s: %v", ok, err)
@@ -162,8 +168,12 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		{`{"tank":1}`, "args", protocol.ArgNothingToChange},
 		{`[]`, "args", protocol.ArgInvalidJSON},
 		{`null`, "args", protocol.ArgInvalidJSON},
-		{`{"tank":1,"alarmLowTempC":-5}`, "alarmLowTempC", protocol.ArgFieldNotEditable},
-		{`{"tank":1,"tankHeightMm":3000}`, "tankHeightMm", protocol.ArgFieldNotEditable},
+		{`{"tank":1,"tankHeightMm":0}`, "tankHeightMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"tankHeightMm":-1}`, "tankHeightMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"tankHeightMm":2600.5}`, "tankHeightMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"alarmLowTempC":-51}`, "alarmLowTempC", protocol.ArgInvalidValue},
+		{`{"tank":1,"alarmLowTempC":-5.5}`, "alarmLowTempC", protocol.ArgInvalidValue},
+		{`{"tank":1,"alarmLowTempC":40,"alarmHighTempC":40}`, "alarmTemps", protocol.ArgTempOrder},
 		{`{"tank":1,"probeAddress":"02"}`, "probeAddress", protocol.ArgFieldNotEditable},
 		{`{"tank":1,"tankShape":1}`, "tankShape", protocol.ArgFieldNotEditable},
 		{`{"tank":1,"sensorLengthMm":10}`, "sensorLengthMm", protocol.ArgFieldNotEditable},
@@ -174,7 +184,11 @@ func TestValidateArgs_TankSettings(t *testing.T) {
 		{`{"tank":1,"alarmHighLevelMm":650.5}`, "alarmHighLevelMm", protocol.ArgInvalidValue},
 		{`{"tank":1,"alarmHighLevelMm":-1}`, "alarmHighLevelMm", protocol.ArgInvalidValue},
 		{`{"tank":1,"alarmHighTempC":101}`, "alarmHighTempC", protocol.ArgInvalidValue},
-		{`{"tank":1,"tempCorrectionC":-10.1}`, "tempCorrectionC", protocol.ArgInvalidValue},
+		{`{"tank":1,"tempCorrectionC":"1"}`, "tempCorrectionC", protocol.ArgInvalidValue},
+		{`{"tank":1,"levelCorrectionMm":null}`, "levelCorrectionMm", protocol.ArgInvalidValue},
+		{`{"tank":1,"oilTypeIndex":5,"customOilName":"盐酸"}`, "customOilName", protocol.ArgInvalidValue},
+		{`{"tank":1,"density":0.5,"customOilNameEn":"HCl"}`, "customOilNameEn", protocol.ArgInvalidValue},
+		{`{"tank":1,"oilTypeIndex":32,"customOilName":""}`, "customOilName", protocol.ArgInvalidValue},
 		{`{"tank":1,"oilTypeIndex":40}`, "oilTypeIndex", protocol.ArgInvalidValue},
 		{`{"tank":1,"capacityL":1000001}`, "capacityL", protocol.ArgInvalidValue},
 		{`{"tank":1,"alarmHighLevelMm":null}`, "alarmHighLevelMm", protocol.ArgInvalidValue},

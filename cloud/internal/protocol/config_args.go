@@ -7,6 +7,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // Configuration commands (cloud#71, phase 2 of the tank settings mirror). Field names are the same as
@@ -38,9 +39,12 @@ const (
 	ArgInvalidValue      = "invalid_value"         // wrong type or out of range
 	ArgNothingToChange   = "no_editable_fields"    // only `tank` (or nothing) was sent
 	ArgLevelOrder        = "level_order_violation" // 低低 < 低 < 高 < 高高 broken
+	ArgTempOrder         = "temp_order_violation"  // 低温 >= 高温（两者都非 0）
 	capacityLMax         = 1_000_000
+	customOilFrom        = 32
 	maxOilTypeIndex      = 39 // 0 未设置，1–31 内置，32–39 自定义（#11）
 	deviceThresholdMaxMm = 10000
+	tankHeightMaxMm      = 100_000 // 只防误输入；罐高 0 在设备上表示停用罐，远程不开放
 	deviceThresholdMaxS  = 86400
 )
 
@@ -70,6 +74,22 @@ type numRule struct {
 	exclMin  bool // min itself is not allowed (density > 0)
 }
 
+// anyFiniteNumber is for the sensor corrections: the device simply adds them to the reading and its local
+// settings page has no limit either, so the remote path does not invent one (#28).
+// Medium fields (#27). ArgMediaID is the client's choice and never reaches a device: the API turns it into
+// oilTypeIndex plus, for a medium without a fixed number, its names.
+const (
+	ArgMediaID          = "mediaId"
+	AttrCustomOilName   = "customOilName"
+	AttrCustomOilNameEn = "customOilNameEn"
+	AttrCustomMediaSync = "customMediaSync"
+	AttrOilColorSync    = "oilColorSync"
+	// AttrTankHeightLowTempSync: firmware without it refuses tankHeightMm and alarmLowTempC (#65).
+	AttrTankHeightLowTempSync = "tankHeightLowTempSync"
+)
+
+var anyFiniteNumber = numRule{-math.MaxFloat64, math.MaxFloat64, false, false}
+
 var tankSettingRules = map[string]numRule{
 	AttrAlarmHighHighLevel: {0, math.MaxInt32, true, false},
 	AttrAlarmHighLevel:     {0, math.MaxInt32, true, false},
@@ -77,9 +97,11 @@ var tankSettingRules = map[string]numRule{
 	AttrAlarmLowLowLevel:   {0, math.MaxInt32, true, false},
 	AttrAlarmHighWater:     {0, math.MaxInt32, true, false},
 	AttrAlarmHighTempC:     {-50, 100, true, false},
-	AttrLevelCorrectionMm:  {-100, 100, false, false},
-	AttrWaterCorrectionMm:  {-100, 100, false, false},
-	AttrTempCorrectionC:    {-10, 10, false, false},
+	AttrAlarmLowTempC:      {-50, 100, true, false}, // 0 = 不启用，同高温（#65）
+	AttrTankHeightMm:       {1, tankHeightMaxMm, true, false},
+	AttrLevelCorrectionMm:  anyFiniteNumber,
+	AttrWaterCorrectionMm:  anyFiniteNumber,
+	AttrTempCorrectionC:    anyFiniteNumber,
 	AttrDensity:            {0, 2, false, true},
 	AttrOilTypeIndex:       {0, maxOilTypeIndex, true, false},
 	AttrCapacityL:          {0, capacityLMax, true, false},
@@ -88,8 +110,6 @@ var tankSettingRules = map[string]numRule{
 // tankSettingsClosed are fields the device knows but refuses to change remotely; sending one is an
 // error, not a no-op, because a caller who sent it expects it to take effect.
 var tankSettingsClosed = map[string]string{
-	AttrAlarmLowTempC:  "低温检测在设备端从未被调用，改了不生效",
-	AttrTankHeightMm:   "罐高决定罐的启用/停用，不开放远程修改",
 	AttrProbeAddress:   "改错会与探针断开通讯，不开放远程修改",
 	AttrTankShape:      "影响罐体图示与计算口径，安装阶段一次性设置",
 	AttrSensorLengthMm: "设备本地设置页尚不能保存该值，暂不开放",
@@ -110,6 +130,8 @@ func ValidateArgs(method string, args json.RawMessage) error {
 		return validateConfigArgs(args, true, tankSettingRules, tankSettingsClosed)
 	case MethodConfigDeviceSettings:
 		return validateConfigArgs(args, false, deviceSettingRules, nil)
+	case MethodConfigTankTable:
+		return validateTankTableArgs(args)
 	}
 	return nil
 }
@@ -136,8 +158,23 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 
 	editable := 0
 	levels := map[string]int{}
+	temps := map[string]int{}
 	for _, k := range keys {
 		if needTank && k == "tank" {
+			continue
+		}
+		if needTank && (k == AttrCustomOilName || k == AttrCustomOilNameEn) {
+			if msg := checkCustomOilName(args[k], k); msg != "" {
+				errs = append(errs, FieldError{k, ArgInvalidValue, k + " " + msg})
+			}
+			continue
+		}
+		if needTank && k == AttrOilColor {
+			if f, ok := args[k].(float64); !ok || f != math.Trunc(f) || f < 0 || f > maxRGB || !IsPaletteColor(int32(f)) {
+				errs = append(errs, FieldError{k, ArgInvalidValue, "oilColor 必须是色板中的颜色（0xRRGGBB 整数）"})
+				continue
+			}
+			editable++
 			continue
 		}
 		if why, isClosed := closed[k]; isClosed {
@@ -157,7 +194,16 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 		switch k {
 		case AttrAlarmLowLowLevel, AttrAlarmLowLevel, AttrAlarmHighLevel, AttrAlarmHighHighLevel:
 			levels[k] = int(args[k].(float64))
+		case AttrAlarmHighTempC, AttrAlarmLowTempC:
+			temps[k] = int(args[k].(float64))
 		}
+	}
+	if _, named := args[AttrCustomOilName]; named {
+		if n, ok := args[AttrOilTypeIndex].(float64); !ok || n < customOilFrom || n > maxOilTypeIndex {
+			errs = append(errs, FieldError{AttrCustomOilName, ArgInvalidValue, "名称只能和 32–39 的 oilTypeIndex 一起下发"})
+		}
+	} else if _, onlyEn := args[AttrCustomOilNameEn]; onlyEn {
+		errs = append(errs, FieldError{AttrCustomOilNameEn, ArgInvalidValue, "英文名称不能单独下发"})
 	}
 	if len(errs) == 0 && editable == 0 {
 		errs = append(errs, FieldError{"args", ArgNothingToChange, "没有可修改的字段"})
@@ -166,11 +212,31 @@ func validateConfigArgs(raw json.RawMessage, needTank bool, rules map[string]num
 		if msg := levelOrderError(levels); msg != "" {
 			errs = append(errs, FieldError{"alarmLevels", ArgLevelOrder, msg})
 		}
+		// Only when both are in this command; against the stored value the device checks (it merges).
+		hi, hasHi := temps[AttrAlarmHighTempC]
+		lo, hasLo := temps[AttrAlarmLowTempC]
+		if hasHi && hasLo && hi != 0 && lo != 0 && lo >= hi {
+			errs = append(errs, FieldError{"alarmTemps", ArgTempOrder, fmt.Sprintf("低温报警(%d) 须低于高温报警(%d)", lo, hi)})
+		}
 	}
 	if len(errs) > 0 {
 		return &ArgsError{Fields: errs}
 	}
 	return nil
+}
+
+// checkCustomOilName: the medium name travels with the index in one command so the device applies both or
+// neither (#27).
+func checkCustomOilName(v any, field string) string {
+	s, ok := v.(string)
+	limit := 20
+	if field == AttrCustomOilNameEn {
+		limit = 40
+	}
+	if !ok || strings.TrimSpace(s) == "" || utf8.RuneCountInString(s) > limit {
+		return fmt.Sprintf("必须是 1～%d 个字符的文本", limit)
+	}
+	return ""
 }
 
 func checkNumber(v any, r numRule) string {

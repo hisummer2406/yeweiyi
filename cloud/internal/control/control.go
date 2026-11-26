@@ -74,6 +74,11 @@ var (
 	// who asked for it cannot be reconstructed afterwards; refusing is the safe side, and the
 	// operator can simply try again.
 	ErrAuditUnavailable = errors.New("control: audit trail unavailable, command not sent")
+	// ErrInvalidResult means a cmdResult can never apply (unparseable commandId, a status a device
+	// may not report). Unlike a database error, retrying it is pointless: callers reading results
+	// back from ThingsBoard must skip it rather than stop, or one bad point blocks every other open
+	// command on that device until it expires (#42).
+	ErrInvalidResult = errors.New("control: invalid cmdResult")
 )
 
 // Actor is who an action — and therefore its audit row — is attributed to.
@@ -243,6 +248,12 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		return db.ControlCommand{}, false, err
 	}
 
+	if err := authorizeFields(req.Actor, req.Method, req.Args); err != nil {
+		s.audit(ctx, req.Actor, "control.issue", req.DeviceName, pgtype.UUID{}, "denied",
+			map[string]any{"method": req.Method, "error": err.Error()})
+		return db.ControlCommand{}, false, err
+	}
+
 	// Checked after authorization (a caller who may not issue the method learns nothing about its
 	// argument shape) and before anything is recorded or sent.
 	if err := protocol.ValidateArgs(req.Method, req.Args); err != nil {
@@ -330,9 +341,13 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		cmd, err = s.q.CreateControlCommand(ctx, params)
 	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) && req.RequestID != "" {
-			// Either a concurrent submission with the same requestId won the insert (ON CONFLICT DO
-			// NOTHING), or access changed. The first is answered as a replay, under the same visibility.
+		var dupFlightErr *InFlightError
+		if (errors.Is(err, pgx.ErrNoRows) || errors.As(err, &dupFlightErr)) && req.RequestID != "" {
+			// Either a concurrent submission with the same requestId won the insert, or access
+			// changed. The winner shows up two ways: ON CONFLICT DO NOTHING (no row), or — when this
+			// insert's arbiter pre-check ran before the winner's row existed — as a violation of the
+			// in-flight index, which ON CONFLICT does not cover, once the winner commits. Both are the
+			// same submission and are answered as a replay, under the same visibility.
 			existing, found, hidden, lookErr := s.lookupOwnSubmission(ctx, req)
 			if lookErr == nil && found {
 				return s.replay(ctx, existing, req, args)
@@ -452,12 +467,13 @@ func (s *Service) ackGuardRefused(ctx context.Context, cmd db.ControlCommand, re
 	return cmd
 }
 
-// resultAlreadyArrived reports whether a status can only have been written by ApplyResult, i.e. by
-// the device reporting back. 'rejected' is excluded because the ACK path itself writes it, and
-// 'expired' because the sweep does.
+// resultAlreadyArrived reports whether, on the guard-refused ACK path, the stored status was written
+// by ApplyResult, i.e. by the device reporting back. 'rejected' counts: this path runs only when our
+// own ACK write matched zero rows, so a stored 'rejected' came from a cmdResult (legacy firmware
+// reports parameter rejection that way, #42). 'expired' is excluded because the sweep writes it.
 func resultAlreadyArrived(status string) bool {
 	switch status {
-	case protocol.CmdStatusExecuting, protocol.CmdStatusSucceeded, protocol.CmdStatusFailed:
+	case protocol.CmdStatusExecuting, protocol.CmdStatusSucceeded, protocol.CmdStatusFailed, protocol.CmdStatusRejected:
 		return true
 	}
 	return false
@@ -520,14 +536,18 @@ func (s *Service) handleSendFailure(ctx context.Context, cmd db.ControlCommand, 
 func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protocol.CmdResult) (db.ControlCommand, bool, error) {
 	commandID, err := parseUUID(res.CommandID)
 	if err != nil {
-		return db.ControlCommand{}, false, fmt.Errorf("cmdResult carried an unparseable commandId %q: %w", res.CommandID, err)
+		return db.ControlCommand{}, false, fmt.Errorf("%w: unparseable commandId %q: %v", ErrInvalidResult, res.CommandID, err)
 	}
 
+	// 'rejected' is accepted here for compatibility (#42): field firmware ACKs 'received' before
+	// validating, then reports the validation refusal (INVALID_PARAMS) as cmdResult 'rejected'.
+	// Refusing it used to leave the command to expire, showing an explicit refusal as "unknown".
+	// It closes the command as 'rejected' — the device did not apply anything.
 	status := res.Status
 	switch status {
-	case protocol.CmdStatusExecuting, protocol.CmdStatusSucceeded, protocol.CmdStatusFailed:
+	case protocol.CmdStatusExecuting, protocol.CmdStatusSucceeded, protocol.CmdStatusFailed, protocol.CmdStatusRejected:
 	default:
-		return db.ControlCommand{}, false, fmt.Errorf("cmdResult carried status %q, which a device may not report", status)
+		return db.ControlCommand{}, false, fmt.Errorf("%w: status %q, which a device may not report", ErrInvalidResult, status)
 	}
 
 	updated, err := s.q.MarkControlCommandFinished(ctx, db.MarkControlCommandFinishedParams{
@@ -556,8 +576,11 @@ func (s *Service) ApplyResult(ctx context.Context, deviceName string, res protoc
 	}
 
 	outcome := "succeeded"
-	if status == protocol.CmdStatusFailed {
+	switch status {
+	case protocol.CmdStatusFailed:
 		outcome = "failed"
+	case protocol.CmdStatusRejected:
+		outcome = "denied"
 	}
 	// The actor on a result is the device, not a user — this row is the device reporting back.
 	s.audit(ctx, Actor{Username: "device:" + deviceName, CustomerID: updated.CustomerID}, "control.result", deviceName, commandID, outcome,
@@ -633,8 +656,29 @@ func (s *Service) authorize(actor Actor, spec protocol.MethodSpec) error {
 	return nil
 }
 
+// authorizeFields is the per-field tier on top of the per-method one. Since 2026-11-14 (user decision) the
+// medium is changed by administrators — platform and customer — like every other tank field; employees never
+// reach this point because roleAllows refuses them every command. Kept as the one place a field-level rule
+// would go: a mixed submission is refused whole. Malformed args are left to ValidateArgs.
+func authorizeFields(actor Actor, method string, args json.RawMessage) error {
+	if method != protocol.MethodConfigTankSettings || actor.Role == RolePlatformAdmin || actor.Role == RoleCustomerAdmin {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(args, &fields) != nil {
+		return nil
+	}
+	for _, medium := range []string{protocol.AttrOilTypeIndex, protocol.AttrCustomOilName, protocol.AttrCustomOilNameEn} {
+		if _, found := fields[medium]; found {
+			return fmt.Errorf("%w: role %q may not change the medium", ErrForbidden, actor.Role)
+		}
+	}
+	return nil
+}
+
 func isConfigWriteMethod(method string) bool {
-	return method == protocol.MethodConfigTankSettings || method == protocol.MethodConfigDeviceSettings
+	return method == protocol.MethodConfigTankSettings || method == protocol.MethodConfigDeviceSettings ||
+		method == protocol.MethodConfigTankTable
 }
 
 // isRetiredConfigMethod: the configuration writes that predate config.setTankSettings (see ErrMethodRetired).

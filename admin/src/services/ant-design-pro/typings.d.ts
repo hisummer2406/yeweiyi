@@ -62,25 +62,6 @@ declare namespace API {
     station_id?: number | null;
   };
 
-  /**
-   * 设备彻底删除任务（yeweiyi-cloud docs/device-purge-contract.md §2.3）。status 只有 running / failed / completed，
-   * completed 才算删完；step 是下一个要做（failed 时为失败）的步骤。counts 只有数字，随步骤逐项出现。
-   */
-  type DevicePurge = {
-    id: number;
-    deviceName: string;
-    status: 'running' | 'failed' | 'completed';
-    step: 'thingsboard' | 'business' | 'verify' | 'done';
-    error?: string;
-    counts: Record<string, number>;
-    requestedBy: { id: number | null; username: string };
-    reason: string;
-    customerId: number | null;
-    stationId: number | null;
-    startedAt: string;
-    finishedAt: string | null;
-  };
-
   /** PUT /api/devices/:device/customer 响应：changed=false 表示本来就属于该客户 */
   type AssignDeviceResult = {
     deviceName: string;
@@ -376,7 +357,7 @@ declare namespace API {
 
   type TankAlarmState = 'NORMAL' | 'ALARM' | 'FAULT';
 
-  /** telemetry/latest 的一个罐；tankShape 缺失表示未知 */
+  /** telemetry/latest 的一个罐；罐型另读 tank-settings，不在遥测结构中。 */
   type Tank = {
     index: number;
     oilType: string;
@@ -391,7 +372,8 @@ declare namespace API {
     waterRatioPct: number;
     alarmState: TankAlarmState | string;
     probeConnected: boolean;
-    tankShape?: string;
+    /** #75：false = 设备开机（或罐配置重载）以来没采到过读数，读数是占位 0；旧固件/旧云端不带，按有读数处理。 */
+    hasReading?: boolean;
   };
 
   /** GET /api/devices/:device/telemetry/latest 成功响应 */
@@ -425,6 +407,8 @@ declare namespace API {
     tempCorrectionC: number | null;
     density: number | null;
     capacityL: number | null;
+    /** 0xRRGGBB；null = 设备未设置或旧固件不上报 */
+    oilColor: number | null;
   };
 
   /** 整机设置镜像（cloud docs/config-command-contract.md §4）；0 = 设备未配置，null = 未上报 */
@@ -458,6 +442,33 @@ declare namespace API {
     | 'expired';
 
   /** 控制命令（cloud internal/api/control.go commandResponse）。terminal 由云端计算，是否继续轮询只看它。 */
+  type Medium = {
+    id: number;
+    name: string;
+    nameEn: string | null;
+    scope: 'public' | 'customer';
+    customerId: number | null;
+    builtinIndex: number | null;
+    enabled: boolean;
+    updatedAt: string;
+  };
+  type MediumCreate = {
+    name: string;
+    nameEn?: string;
+    scope: 'public' | 'customer';
+    customerId?: number;
+  };
+  type MediumUpdate = { name?: string; nameEn?: string; enabled?: boolean };
+  type MediaOptions = {
+    public: Medium[];
+    customer: Medium[];
+    customMediaSync: boolean;
+    /** 设备支持远程改颜色（新固件上报 oilColorSync=1） */
+    oilColorSync: boolean;
+    slotsUsed: number;
+    slotsTotal: number;
+  };
+
   type ControlCommand = {
     commandId: string;
     deviceName: string;

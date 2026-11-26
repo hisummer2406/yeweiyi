@@ -183,6 +183,8 @@ public class OilTestFragment extends BaseFragment {
             @Override
             public void onCheckedChanged(CompoundButton compoundButton, boolean b) {
                 SharePrefUtil.saveInt(MyApplication.getInstance(), Constans.isTestStatus,b ? 1:0);
+                // 两个切换方向都清掉旧采样；退出演示后等下一次真实采集再恢复双显。
+                com.sansen.yeweiyi.manager.ProbeProxyManager.setSourceAvailable(false);
                 Singleton.getInstance().getSetData(Constans.isTestStatus);
             }
         });

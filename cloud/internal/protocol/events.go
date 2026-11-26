@@ -25,6 +25,7 @@ const (
 	AlarmLowLowLevel       = "LOW_LOW_LEVEL"      // 低低液位
 	AlarmHighWaterLevel    = "HIGH_WATER_LEVEL"   // 高水位
 	AlarmHighTemperature   = "HIGH_TEMPERATURE"   // 高油温
+	AlarmLowTemperature    = "LOW_TEMPERATURE"    // 低油温（#65）
 	AlarmProbeDisconnected = "PROBE_DISCONNECTED" // 探针断线
 	AlarmLeakSuspected     = "LEAK_SUSPECTED"     // 疑似泄漏
 	AlarmOverfillRisk      = "OVERFILL_RISK"      // 溢罐风险
@@ -79,7 +80,7 @@ func (a AlarmEvent) MarshalTelemetry() ([]byte, error) {
 // once this arrives.
 type CmdResult struct {
 	CommandID string          `json:"commandId"`
-	Status    string          `json:"status"` // CmdStatusExecuting/Succeeded/Failed
+	Status    string          `json:"status"` // CmdStatusExecuting/Succeeded/Failed; Rejected from legacy firmware (#42)
 	ErrorCode string          `json:"errorCode,omitempty"`
 	Reason    string          `json:"reason,omitempty"`
 	Detail    json.RawMessage `json:"detail,omitempty"` // method-specific, e.g. the resulting config

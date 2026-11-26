@@ -1,4 +1,9 @@
 export default {
+  'pages.console.tank.shape.horizontal': 'Horizontal tank',
+  'pages.console.tank.shape.vertical': 'Vertical tank',
+  'pages.console.tank.shape.reportedAt': 'Shape reported {time}',
+  'pages.console.tank.shape.picture': 'Tank {index} illustration ({shape})',
+
   'pages.layouts.userLayout.title': 'Level gauge cloud platform admin',
   'pages.login.accountLogin.errorMessage': 'Incorrect username or password',
   'pages.login.failure': 'Login failed, please try again!',
@@ -109,7 +114,7 @@ export default {
   'pages.console.records.notice.folded':
     '{count} corrected records were merged.',
   'pages.console.records.notice.firmware':
-    'The device firmware has not been upgraded; some records cannot be read.',
+    'The device software is out of date; some records cannot be read. Please upgrade the device software.',
   'pages.console.records.notice.firmware.detail':
     'Device {device}, sample: {sample}',
   'pages.console.records.empty.alarms': 'No alarms in this time range',
@@ -139,7 +144,7 @@ export default {
   'pages.console.records.title.shift': 'Shift records',
   'pages.console.records.title.inventory': 'Inventory records',
   'pages.console.records.notice.unsupported':
-    'This device does not support this kind of record yet',
+    'The device software is out of date and does not support this kind of record yet. Please upgrade the device software',
   'pages.console.records.notice.syncing':
     'Records are still syncing; the list may be incomplete',
   'pages.console.records.notice.syncUnknown':
@@ -175,7 +180,7 @@ export default {
   'pages.console.oil.7': '98# Gasoline',
   'pages.console.oil.8': 'Methanol',
   'pages.console.oil.9': 'Toluene',
-  'pages.console.oil.10': 'Rice Bran Oil',
+  'pages.console.oil.10': 'Kerosene',
   'pages.console.oil.11': 'Sulfuric Acid',
   'pages.console.oil.12': 'Xylene',
   'pages.console.oil.13': 'n-Butyl Ester',
@@ -212,6 +217,9 @@ export default {
   'pages.console.detail.snapshot.switch': 'Switch tank',
   'pages.console.tank.title': 'Tank {index} · {medium}',
   'pages.console.tank.readings': 'Main readings',
+  'pages.console.tank.status.commFault': 'Comm. fault',
+  'pages.console.tank.status.lastReading': 'Last reading',
+  'pages.console.tank.status.noReading': 'No reading yet',
   'pages.console.tank.unit.mm': 'mm',
   'pages.console.tank.unit.L': 'L',
   'pages.console.tank.unit.C': '℃',
@@ -229,7 +237,7 @@ export default {
   'pages.console.detail.snapshot.field.alarm': 'Alarm state',
   'pages.console.detail.snapshot.field.probe': 'Probe',
   'pages.console.detail.snapshot.probe.on': 'Connected',
-  'pages.console.detail.snapshot.probe.off': 'Not connected',
+  'pages.console.detail.snapshot.probe.off': 'Comm. fault',
   'pages.console.detail.snapshot.reportedAt': 'Reported at {time}',
   'pages.ops.customers.create': 'New customer',
   'pages.ops.customers.col.id': 'Customer ID',
@@ -283,7 +291,7 @@ export default {
     'Enter a valid 11-digit mainland China mobile number',
   'pages.ops.users.form.password.optional': 'Initial password (optional)',
   'pages.ops.users.form.staff.hint':
-    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (WeChat sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
+    'Staff cannot sign in to the web console; their password is only for the mini program / app. A phone-number staff account may have no password (phone sign-in only). A forgotten password is reset by a platform admin. Assign their tanks afterwards under Assets → Staff grants.',
   'pages.ops.users.form.password.label': 'Initial password',
   'pages.ops.users.form.password.new': 'New password',
   'pages.ops.users.form.password.required': 'Enter a password',
@@ -300,7 +308,7 @@ export default {
   'pages.ops.users.edit.passwordHint':
     'Leave blank to keep the current password.',
   'pages.ops.users.changePhone.hint':
-    'The account must sign in with the new number afterwards. Its WeChat binding is removed and must be re-authorized; existing sessions are not affected (disable the account to sign it out).',
+    'The account must sign in with the new number afterwards. Its phone authorization is removed and must be granted again; existing sessions are not affected (disable the account to sign it out).',
   'pages.ops.users.form.submit.move': 'Move',
   'pages.ops.users.move.warning':
     'Moving the account also clears its device bindings; they must be bound again.',
@@ -344,53 +352,6 @@ export default {
   'pages.ops.devices.transfer.success': 'Device {device} moved to {customer}',
   'pages.ops.devices.transfer.unchanged':
     'The device already belongs to {customer}; nothing changed',
-  'pages.ops.devices.purge.title': 'Delete device permanently',
-  'pages.ops.devices.purge.warning':
-    'This permanently deletes the device and all of its history. It cannot be undone in this system.',
-  'pages.ops.devices.purge.warningDetail':
-    'Includes telemetry, hourly summaries, alarms, stock records, commands and staff grants. The station is kept and shown as not installed. Copies on the device itself and in server backups are not covered.',
-  'pages.ops.devices.purge.reason': 'Reason (required)',
-  'pages.ops.devices.purge.typeName':
-    'Type the full device code {device} to confirm:',
-  'pages.ops.devices.purge.confirmLabel': 'Confirm device code',
-  'pages.ops.devices.purge.submit': 'Delete permanently',
-  'pages.ops.devices.purge.retry': 'Retry',
-  'pages.ops.devices.purge.close': 'Close',
-  'pages.ops.devices.purge.running':
-    'The cloud is deleting. You can close this window; the deletion continues.',
-  'pages.ops.devices.purge.pollFailing':
-    'Cannot get the latest status right now. Retrying.',
-  'pages.ops.devices.purge.completed':
-    'Device {device} has been permanently deleted',
-  'pages.ops.devices.purge.completedHint':
-    'To connect this code again, pre-register it in ThingsBoard first, then register it here. It is a new device with no history or grants.',
-  'pages.ops.devices.purge.failed':
-    'Deletion did not finish: stopped at "{step}"',
-  'pages.ops.devices.purge.failedHint':
-    'Finished steps are not repeated. Click Retry to continue from the failed step.',
-  'pages.ops.devices.purge.step.thingsboard': 'ThingsBoard',
-  'pages.ops.devices.purge.step.business': 'Business data',
-  'pages.ops.devices.purge.step.verify': 'Verify',
-  'pages.ops.devices.purge.step.done': 'Done',
-  'pages.ops.devices.purge.action': 'Delete device',
-  'pages.ops.devices.purge.count.stockEvents': 'Stock records',
-  'pages.ops.devices.purge.count.alarmEvents': 'Alarms',
-  'pages.ops.devices.purge.count.recordRejects': 'Rejected raw records',
-  'pages.ops.devices.purge.count.telemetryHourly': 'Hourly summaries',
-  'pages.ops.devices.purge.count.controlCommands': 'Commands',
-  'pages.ops.devices.purge.count.tankGrants': 'Tank grants',
-  'pages.ops.devices.purge.error.confirmMismatch':
-    'The confirmation does not match the device code.',
-  'pages.ops.devices.purge.error.reasonRequired':
-    'Enter a reason (at most 500 characters).',
-  'pages.ops.devices.purge.error.notFound':
-    'The device does not exist or is already deleted. Refresh the list.',
-  'pages.ops.devices.purge.error.unavailable':
-    'ThingsBoard is not configured in the cloud, so the device cannot be deleted. No task was created.',
-  'pages.ops.devices.purge.error.network':
-    'Network failure or timeout, the result is unknown: the cloud may have accepted it. Close and reopen this window to check; submit again only if there is no task.',
-  'pages.ops.devices.purge.error.unknown':
-    'Deletion failed. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.error.notFound': 'Device not found, refresh the list.',
   'pages.ops.customers.col.actions': 'Actions',
   'pages.ops.customers.action.users': 'Accounts',
@@ -531,11 +492,16 @@ export default {
   'pages.console.miniCode.error.notFound':
     'Device not found; please refresh the list.',
   'pages.console.miniCode.error.unavailable':
-    'WeChat is not enabled on the cloud; cannot generate the code.',
+    'The mini program service is not enabled on the cloud; cannot generate the code.',
   'pages.console.miniCode.error.upstream':
-    'WeChat service failed; please retry later.',
+    'The mini program code service failed; please retry later.',
   'pages.console.miniCode.error.unknown':
     'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
+  'pages.ops.devices.unassign.action': 'Unassign station',
+  'pages.ops.devices.unassign.title': 'Unassign device {device} from its station?',
+  'pages.ops.devices.unassign.description':
+    'The device becomes "Ungrouped" and can be assigned again. Its records, history and access credentials are kept and the terminal keeps reporting.',
+  'pages.ops.devices.unassign.ok': 'Unassign',
   'pages.console.stations.devices.action.replace': 'Replace',
   'pages.console.stations.replace.title': 'Replace device: {station}',
   'pages.console.stations.replace.station': 'Station',
@@ -723,9 +689,9 @@ export default {
     'Device settings (in/out-stock detection)',
   'pages.console.settings.reportedAt': 'Reported by the device at {time}',
   'pages.console.settings.notReported':
-    'The device has not reported tank settings yet.',
+    'The device has not reported tank settings yet. If this persists, make sure the device software is up to date.',
   'pages.console.settings.deviceNotReported':
-    'The device has not reported its device settings yet.',
+    'The device has not reported its device settings yet. If this persists, make sure the device software is up to date.',
   'pages.console.settings.devicePlatformOnly':
     'Only platform administrators can change device settings.',
   'pages.console.settings.tankN': 'Tank {tank}',
@@ -734,11 +700,12 @@ export default {
   'pages.console.settings.col.new': 'New value',
   'pages.console.settings.readOnly': '(read-only)',
   'pages.console.settings.readOnlyNote':
-    'Read-only parameters cannot be changed remotely: tank height, shape and sensor length are set on the device; the density unit is not yet confirmed with the device; the low-temperature alarm has no effect on the device.',
+    'Read-only parameters cannot be changed remotely: tank height, shape and sensor length are set on the device; the low-temperature alarm has no effect on the device.',
   'pages.console.settings.send': 'Send to device',
   'pages.console.settings.reset': 'Clear changes',
   'pages.console.settings.aboveTankHeight':
     '{fields} exceed the tank height; the device may refuse.',
+  'pages.console.settings.toggleSign': 'Toggle sign',
   'pages.console.settings.problem.range': 'Out of range ({min}–{max})',
   'pages.console.settings.problem.integer': 'Must be an integer',
   'pages.console.settings.problem.order':
@@ -763,6 +730,13 @@ export default {
   'pages.console.settings.field.tankShape': 'Tank shape',
   'pages.console.settings.field.sensorLengthMm': 'Sensor length',
   'pages.console.settings.field.density': 'Density',
+  'pages.console.settings.field.oilColor': 'Colour',
+  'pages.console.settings.color.unsupported':
+    'The device software is out of date and cannot change the colour remotely. Please upgrade the device software.',
+  'pages.console.settings.color.nonStandard': '(not in the palette)',
+  'pages.console.settings.density.check':
+    'Outside the usual g/cm³ range; it may have been entered in kg/m³. Please check.',
+  'pages.console.settings.problem.color': 'Choose a colour from the palette',
   'pages.console.settings.field.inStockHeightThresholdMm':
     'In-stock height threshold',
   'pages.console.settings.field.inStockTimeThresholdSec':
@@ -786,6 +760,55 @@ export default {
   'pages.console.settings.submit.note':
     'The device writes the settings and reports them back. Saving settings on the device itself overrides remote changes.',
   'pages.console.settings.submit.reason': 'Reason (required)',
+  'pages.ops.customers.action.media': 'Media',
+  'pages.console.media.note':
+    'This only saves the name. To apply it, select it for a tank in the device settings and send it.',
+  'pages.console.media.loadFailed': 'Failed to load media.',
+  'pages.console.media.retry': 'Retry',
+  'pages.console.media.add': 'Add medium',
+  'pages.console.media.edit': 'Edit',
+  'pages.console.media.enable': 'Enable',
+  'pages.console.media.disable': 'Disable',
+  'pages.console.media.saved':
+    'Saved to the library; not sent to any device yet.',
+  'pages.console.media.filter.all': 'All',
+  'pages.console.media.col.name': 'Name',
+  'pages.console.media.col.nameEn': 'English name (optional)',
+  'pages.console.media.col.owner': 'Owner',
+  'pages.console.media.col.scope': 'Scope',
+  'pages.console.media.col.status': 'Status',
+  'pages.console.media.col.actions': 'Actions',
+  'pages.console.media.scope.public': 'Public',
+  'pages.console.media.scope.customer': 'Customer-only',
+  'pages.console.media.status.on': 'Enabled',
+  'pages.console.media.status.off': 'Disabled',
+  'pages.console.media.error.invalid_media_name':
+    'Invalid name (1–20 characters).',
+  'pages.console.media.error.invalid_media_scope':
+    'Scope and customer do not match.',
+  'pages.console.media.error.unknown_customer': 'Customer not found; refresh.',
+  'pages.console.media.error.media_not_found': 'Medium not found; refresh.',
+  'pages.console.media.error.media_name_exists':
+    'This name already exists in this scope.',
+  'pages.console.media.error.media_builtin_readonly':
+    'Built-in media cannot be renamed.',
+  'pages.console.media.error.other': 'Operation failed; try again later.',
+  'pages.console.settings.medium.public': 'Public',
+  'pages.console.settings.medium.customer': 'This customer',
+  'pages.console.settings.medium.noSync':
+    'The device software is out of date and cannot sync medium names: custom media and numbers from 18 are unavailable. Please upgrade the device software.',
+  'pages.console.settings.medium.loadFailed':
+    'Failed to load media options; the medium cannot be changed now.',
+  'pages.console.settings.medium.slots':
+    'Custom positions on this device: {used}/{total} used',
+  'pages.console.settings.submit.error.mediaNotSelectable':
+    'This medium is disabled or not available to this device; refresh and choose again.',
+  'pages.console.settings.submit.error.mediaSyncUnsupported':
+    'The device software is out of date and does not support this medium. Please upgrade the device software.',
+  'pages.console.settings.submit.error.colorSyncUnsupported':
+    'The device software is out of date and cannot change the colour remotely. Please upgrade the device software.',
+  'pages.console.settings.submit.error.mediaSlotsExhausted':
+    'All 8 custom positions on this device are in use; nothing was sent.',
   'pages.console.settings.submit.error.deploymentDisabled':
     'Remote configuration is not enabled on this system.',
   'pages.console.settings.submit.error.deviceDisabled':
@@ -825,13 +848,16 @@ export default {
   'pages.console.settings.echo.timedOut':
     'Applied, but no report from the device for a while; refresh later',
   'pages.console.settings.echo.refresh': 'Refresh report',
-  'pages.console.settings.result.ignored': 'Ignored by the device: {fields}',
+  'pages.console.settings.result.ignored':
+    'Ignored by the device: {fields}. The device software is out of date; please upgrade it.',
+  'pages.console.settings.refusal.unknownMethod':
+    'The device software is out of date and does not support this operation. Please upgrade the device software.',
   'pages.console.settings.commandId': 'Command {id}',
   'pages.console.settings.pollFailing': 'Failed to read status, retrying…',
   'pages.console.settings.dismiss': 'Close',
   'pages.console.settings.calibration.title': 'Calibration table (read-only)',
   'pages.console.settings.calibration.none':
-    'The device has not reported a calibration table.',
+    'The device has not reported a calibration table. If this persists, make sure the device software is up to date.',
   'pages.console.settings.calibration.failed':
     'Failed to load the calibration table',
   'pages.console.settings.calibration.meta':
