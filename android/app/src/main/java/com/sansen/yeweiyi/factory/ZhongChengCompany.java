@@ -199,6 +199,7 @@ public class ZhongChengCompany implements AbstractCompany {
 
                     oilCan.setOilRatio(oilRoate > 100 ? 100 : oilRoate);
                     oilCan.setLastTime(System.currentTimeMillis());
+                    oilCan.setHasReading(true);
                     if (parseDataListener != null) {
                         parseDataListener.hexDataParseFinish(oilCan);
                     }

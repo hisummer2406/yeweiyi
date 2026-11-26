@@ -462,7 +462,10 @@ public class OilCan {
 
 	private int errorTimes;
 
-	/** 本对象创建（开机或罐配置重载）以来是否采到过有效应答；未采到时读数是占位 0（#75）。 */
+	/**
+	 * 本对象创建（开机或罐配置重载）以来是否解析到过油位读数；未解析到时油位是占位 0（#75）。
+	 * 由 factory/ 下各解析器在写入油位时置 true；只回温度的应答不算（中成 45 帧）。
+	 */
 	private boolean hasReading;
 
 	public boolean isHasReading() {
