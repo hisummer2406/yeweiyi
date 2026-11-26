@@ -10,6 +10,13 @@ Runner，任何人的 fork PR 都可能在本机执行代码。**不要再给本
 - 部署密钥（`CLOUD_DEPLOY_*`、`ADMIN_DEPLOY_*`）只给部署作业用；两个部署作业都走 `production` 环境，环境只允许 `main`。
   fork PR 拿不到任何 secret；外部贡献者的 PR 要维护者批准后才运行工作流。
 - 工作流默认 `contents: read`，只在需要的作业里加 `statuses: write` / `packages: write`。
+- **允许的 Action**（仓库设置，2026-11-26）：只允许 GitHub 官方（`actions/*`、`github/*`）和
+  `docker/setup-buildx-action`、`docker/login-action`、`docker/metadata-action`、`docker/build-push-action`，且必须钉 SHA。
+  新增其他第三方 Action 前，先在 Settings → Actions → General 把它加进白名单，否则工作流直接启动失败。
+- **规则集**：`main` 禁止删除、强推，改动须走 PR（0 审批）；`cloud-v*` 标签禁止删除、改动、强推。仓库管理员可绕过。
+- **扫描**：Dependabot 告警与安全更新 PR、CodeQL 默认配置（extended 规则集，PR 与每周；Android Java/Kotlin 需编译，
+  默认配置跑不了已自动排除）、密钥扫描与推送拦截、漏洞私报均已开启。
+  `android/app/src/main/cpp/bspatch/bizp/` 里上游 bzip2 命令行工具代码的告警已按「不可达」忽略。
 
 ## 缓存
 
