@@ -55,7 +55,7 @@
                     android:id="@+id/create_table_guanchang"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/oilcan_length"
+                    android:text="@string/tank_dimension_l"
                     android:textSize="@dimen/sp_28" />
 
                 <android.support.v7.widget.AppCompatEditText
@@ -83,7 +83,7 @@
                     android:id="@+id/createtable_tv_diameter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/oilcan_diameter"
+                    android:text="@string/tank_dimension_h"
                     android:textSize="@dimen/sp_28" />
 
                 <android.support.v7.widget.AppCompatEditText
@@ -123,7 +123,7 @@
                     android:id="@+id/dished_head_a"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/head_a"
+                    android:text="@string/tank_dimension_r"
                     android:textSize="@dimen/sp_28" />
 
                 <android.support.v7.widget.AppCompatEditText

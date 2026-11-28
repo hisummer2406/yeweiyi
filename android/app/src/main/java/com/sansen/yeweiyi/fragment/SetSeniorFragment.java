@@ -13,12 +13,10 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.sansen.yeweiyi.R;
-import com.sansen.yeweiyi.application.MyApplication;
 import com.sansen.yeweiyi.applog.LogExportUi;
 import com.sansen.yeweiyi.base.BaseFragment;
 import com.sansen.yeweiyi.bean.SerialPortEntrity;
 import com.sansen.yeweiyi.fragment.SetPawFragment.SetType;
-import com.sansen.yeweiyi.languageUtil.LanguageUtil;
 
 public class SetSeniorFragment extends BaseFragment {
 
@@ -102,9 +100,6 @@ public class SetSeniorFragment extends BaseFragment {
         ly_chuankou.setOnClickListener(this);
         ly_yanshi.setOnClickListener(this);
         ly_thingsboard.setOnClickListener(this);
-        // 云平台设置页（ThingsBoardSetFragment）的文案目前写死中文、还没有多语言版本，
-        // 暂时只在中文界面下开放入口；GONE 让同行其余按钮按权重重新铺满，非中文界面布局和加这个入口之前一致
-        ly_thingsboard.setVisibility(LanguageUtil.isChinese(MyApplication.getInstance().getApplicationContext()) ? View.VISIBLE : View.GONE);
         ly_export_log = rootView.findViewById(R.id.ly_export_log);
         ly_export_log.setOnClickListener(this);
         // 长按进入日志诊断页（改级别、清空），给技术支持用；现场人员只需要点按导出
