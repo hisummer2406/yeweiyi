@@ -1,0 +1,46 @@
+{
+  "_comment": "应用更新 V1：base 为 TB 设备属性 GET 响应；patch 递归覆盖，null 删除键。reset=true 从空 shared 开始。",
+  "base": {
+    "shared": {
+      "sw_title": "com.sansen.yeweiyi",
+      "sw_version": "6",
+      "sw_size": 3,
+      "sw_checksum_algorithm": "SHA256",
+      "sw_checksum": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "appUpdateManifest": {
+        "schemaVersion": 1,
+        "enabled": true,
+        "releaseId": "release-6",
+        "tbPackageId": "12345678-1234-4234-8234-123456789abc",
+        "assignmentRevision": 1,
+        "title": "com.sansen.yeweiyi",
+        "versionCode": 6,
+        "versionName": "1.0.6",
+        "packageName": "com.sansen.yeweiyi",
+        "sizeBytes": 3,
+        "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "minSdk": 21,
+        "supportedAbis": ["armeabi-v7a", "arm64-v8a"],
+        "releaseNotes": {"zh": "修复液位显示", "en": "Fix level display"},
+        "releasedAt": "2026-11-28T00:00:00+08:00"
+      }
+    }
+  },
+  "cases": [
+    {"name": "available", "patch": {}, "currentVersionCode": 5, "expected": "AVAILABLE"},
+    {"name": "same_code", "patch": {}, "currentVersionCode": 6, "expected": "CURRENT"},
+    {"name": "older_target", "patch": {}, "currentVersionCode": 7, "expected": "OLDER"},
+    {"name": "no_assignment", "reset": true, "patch": {}, "currentVersionCode": 5, "expected": "NOT_ASSIGNED"},
+    {"name": "disabled", "patch": {"appUpdateManifest": {"enabled": false}}, "currentVersionCode": 5, "expected": "DISABLED"},
+    {"name": "missing_checksum", "patch": {"sw_checksum": null}, "currentVersionCode": 5, "expected": "INFO_PENDING"},
+    {"name": "mixed_revision", "patch": {"appUpdateManifest": {"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}, "currentVersionCode": 5, "expected": "INFO_PENDING"},
+    {"name": "future_schema", "patch": {"appUpdateManifest": {"schemaVersion": 2}}, "currentVersionCode": 5, "expected": "UNSUPPORTED_SCHEMA"},
+    {"name": "string_size", "patch": {"sw_size": "3"}, "currentVersionCode": 5, "expected": "INVALID_INFO"},
+    {"name": "leading_zero_code", "patch": {"sw_version": "06"}, "currentVersionCode": 5, "expected": "INVALID_INFO"},
+    {"name": "missing_enabled", "patch": {"appUpdateManifest": {"enabled": null}}, "currentVersionCode": 5, "expected": "INVALID_INFO"},
+    {"name": "float_revision", "patch": {"appUpdateManifest": {"assignmentRevision": 1.5}}, "currentVersionCode": 5, "expected": "INVALID_INFO"},
+    {"name": "wrong_package", "patch": {"appUpdateManifest": {"packageName": "other.application"}}, "currentVersionCode": 5, "expected": "INVALID_INFO"},
+    {"name": "unknown_fields", "patch": {"futureKey": "ignored", "appUpdateManifest": {"future": true}}, "currentVersionCode": 5, "expected": "AVAILABLE"},
+    {"name": "case_sensitive_fields", "patch": {"appUpdateManifest": {"VersionCode": 99, "RELEASEID": "ignored", "SCHEMAVERSION": 2}}, "currentVersionCode": 5, "expected": "AVAILABLE"}
+  ]
+}

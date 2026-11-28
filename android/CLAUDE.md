@@ -192,6 +192,10 @@ Each of these is pinned by an assertion in `CRCheckTest`/`DataUtilsTest`, so cha
 
 ## Signing
 
+应用更新基础模块位于 `logic/update/AppUpdateContract.kt`、`manager/AppUpdateHttpClient.kt` 和 `AppUpdateDownloader.kt`：
+解析完整 TB SOFTWARE 属性、HTTPS 分块和私有 checkpoint，已编译，尚未接入高级设置、能力上报或安装。
+验证交接见 `../cloud/docs/app-update-contract.md`；本协作不编写或运行 Android 单测。
+
 Release builds are signed via `app/build.gradle`'s `signingConfigs.release`, wired up 2026-08-16. The keystore file itself (`app/keystore/release.jks`) is untracked (`.gitignore`) and generated locally with `tools/generate-release-keystore.sh`; its store/key passwords and alias go through the same `local.properties`-injection channel as the other secrets (`sansen.releaseStorePassword`, `sansen.releaseKeyAlias`, `sansen.releaseKeyPassword` — see `local.properties.template`). If any of the three properties or the keystore file itself is missing, `assembleRelease` still succeeds (unsigned APK, same as before this existed) but logs a `[配置缺失]` warning — it does not hard-fail, matching the project's existing secret-handling convention.
 
 Test builds (bump the `versionName` letter, `assembleRelease`, verify signing/flags, commit `[chore]测试包X；`, write the changelog since the last test build) follow the `release-test-build` skill (`.agents/skills/release-test-build/SKILL.md`).

@@ -88,6 +88,8 @@ type Config struct {
 	Password string
 	// HTTPClient is optional; a 30s-timeout client is used when nil.
 	HTTPClient *http.Client
+	// OTAUploadTimeout isolates large APK uploads from the ordinary REST timeout; default 3 minutes.
+	OTAUploadTimeout time.Duration
 }
 
 // Client is a ThingsBoard REST client. It is safe for concurrent use — the JWT it holds is guarded

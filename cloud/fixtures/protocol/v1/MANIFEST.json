@@ -13,8 +13,14 @@
     "androidVerifiedAt": "历史记录（自动门禁时期）：hisummer2406/yeweiyi@ead2ee2, Android CI run 42111474770 (363 tests, 0 failures)"
   },
   "source": "yeweiyi-cloud/fixtures/protocol/v1",
-  "updated": "2026-11-25",
+  "updated": "2026-11-28",
   "fixtures": [
+    {
+      "file": "app_update_cases.json",
+      "sha256": "ca09912c4770f0617912a7a328620e1caf133f74d17f1bbd7c8e0bb3a2f440b5",
+      "direction": "downlink",
+      "pins": "应用更新 SOFTWARE：完整设备属性响应、发布说明一致性、禁用、版本排序及非法输入；Android 同事待验证"
+    },
     {
       "file": "telemetry_snapshot.json",
       "sha256": "dbff899eb5d4656bfbf8a89d92d74b364c1c40934fe869c26170f653178523f0",

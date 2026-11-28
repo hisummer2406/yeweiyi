@@ -254,6 +254,12 @@ ThingsBoard API 行为不一致，已实测确认并在 `TestUplink_ClientAttrib
 > 校验、刷写的客户端逻辑在 `../android/` 中**目前完全不存在**，选用 ThingsBoard
 > 并不会凭空产生它。这仍是设备侧的待办工作。
 
+#### 5.3.1 APK 软件更新
+
+用户确认的应用内更新采用 TB SOFTWARE 和 `sw_*`，与固件 `fw_*` 分开。
+字段和实施边界见 [应用更新契约](app-update-contract.md)。`appUpdateManifest` 为新增可选共享属性，
+只作用于更新候选，不修改油罐配置。两端解析和下载基础库已有代码；页面、安装和回报尚未接入，未经真机验证。
+
 ---
 
 ## 6. 远程控制：RPC + ACK + 最终结果

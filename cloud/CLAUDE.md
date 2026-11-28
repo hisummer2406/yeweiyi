@@ -24,6 +24,8 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
 
 - 不要引入 EMQX、Alink/Paho 兼容层、第二个 MQTT 客户端或本地遥测库。
 - 不要直接访问 ThingsBoard 数据库；只能使用其公开 REST/WebSocket API。
+- APK 更新基础网关位于 `internal/tbclient/ota.go`，提供 SOFTWARE 元数据、流式上传与完整设备对象读改写，见
+  [应用更新契约](docs/app-update-contract.md)。管理 API、发布审计和设备安装闭环尚未接入。
 - 登录令牌滑动续期（#51）：受保护接口在令牌剩余有效期不足 `auth.tokenTTL` 一半时，于响应头
   `X-Renewed-Token` 下发新令牌，客户端覆盖本地令牌即可；没有该头则行为不变。已过期（401）、已停用/已删除
   （403）不续期。令牌带 `authAt`（上次输入密码的时间），续期时沿用，且新令牌的 `exp` 不会超过

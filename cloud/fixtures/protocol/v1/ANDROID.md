@@ -34,6 +34,7 @@ Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/f
 
 | fixture | Android 方向 | 覆盖 |
 |---|---|---|
+| `app_update_cases.json` | 解码 | `AppUpdateContract` 已实现并编译；15 个用例及严格解析/深度/并发取消交 Android 同事验证，本轮未新增/运行 Android 单测 |
 | `telemetry_snapshot.json` | 编码 | ✅（`waterRatioPct` 暂不上报，为已知缺口） |
 | `alarm_active.json` / `alarm_cleared.json` | 编码 | ✅ |
 | `stock_event_in.json` / `stock_event_out.json` | 编码 | ✅ |
