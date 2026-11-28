@@ -19,6 +19,13 @@
 本文档也**不代表云端单方面的定稿**：下面每一条都标了决定人，云端能自己决定的只有标着
 "云端"的那几条。
 
+## 2026-11-28 应用内更新联合实施
+
+用户已确认 TB 选型并授权执行 Android/cloud 联合计划，新增可选 `appUpdateManifest` 与 SOFTWARE 解析，
+不改动既有业务字段。契约见 [app-update-contract.md](app-update-contract.md)，执行清单在 Android OpenSpec。
+负责人范围为 Android/cloud 联合；Android 单测交专门同事，SOFTWARE 实际通道和安装恢复仍待 P0 验收。
+这项授权只覆盖应用更新计划，不代表其余协议问题已冻结或解决。
+
 ## 2026-10-06 复核：设备端 PR #38
 
 核对基准：zhongchengyeweiyi `origin/feature/thingsboard-device-protocol`@`d2a44ac`（当时领先其 `main` 27 个
