@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 泰语来自腾讯文档「数组文案对照」（2026-11-28）；language 共用默认语言自称。 -->
+    <string-array name="set_array">
+        <item>ตั้งค่าถัง</item>
+        <item>ตั้งค่าตารางถัง</item>
+        <item>ตั้งค่ารหัสผ่าน</item>
+        <item>ตั้งค่าพื้นฐาน</item>
+        <item>ตั้งค่าบันทึก</item>
+        <item>ตั้งค่าขั้นสูง</item>
+    </string-array>
+    <string-array name="guan_type">
+        <item>ถังนอน</item>
+        <item>ถังตั้ง</item>
+    </string-array>
+    <string-array name="yewei_unit">
+        <item>มม.</item>
+        <item>ม.</item>
+    </string-array>
+    <string-array name="rongji_unit">
+        <item>ล.</item>
+        <item>ลบ.ม.</item>
+        <item>แกล.</item>
+    </string-array>
+    <string-array name="zhiliang_unit">
+        <item>กก.</item>
+        <item>ตัน</item>
+    </string-array>
+    <string-array name="oilcanArray">
+        <item>ถัง 1</item>
+        <item>ถัง 2</item>
+        <item>ถัง 3</item>
+        <item>ถัง 4</item>
+        <item>ถัง 5</item>
+        <item>ถัง 6</item>
+        <item>ถัง 7</item>
+        <item>ถัง 8</item>
+        <item>ถัง 9</item>
+        <item>ถัง 10</item>
+        <item>ถัง 11</item>
+        <item>ถัง 12</item>
+    </string-array>
+    <string-array name="oilcanItem">
+        <item>น้ำมัน</item>
+        <item>ระดับน้ำมัน</item>
+        <item>ปริมาตร</item>
+        <item>น้ำหนัก</item>
+        <item>ปริมาตรว่าง</item>
+        <item>ระดับน้ำ</item>
+        <item>ปริมาตรน้ำ</item>
+        <item>อุณหภูมิ</item>
+    </string-array>
+    <string-array name="oiltypeArray">
+        <item>ไม่ตั้งค่า</item>
+        <item>0#</item>
+        <item>-10#</item>
+        <item>-20#</item>
+        <item>-35#</item>
+        <item>92#</item>
+        <item>95#</item>
+        <item>98#</item>
+        <item>เมทานอล</item>
+        <item>โทลูอีน</item>
+        <item>น้ำมันรำข้าว</item>
+        <item>กรดกำมะถัน</item>
+        <item>ไซลีน</item>
+        <item>บิวทิลปกติ</item>
+        <item>บิวทิลรอง</item>
+        <item>เมทิลเอส</item>
+        <item>ไดเมทิลเอส</item>
+        <item>น้ำมันละลาย</item>
+        <item>โพรพิลีน</item>
+        <item>เอทานอล</item>
+        <item>น้ำมันถั่วเหลือง</item>
+        <item>น้ำมันปาล์ม</item>
+        <item>น้ำมันยาง</item>
+        <item>พาราฟิน</item>
+        <item>ไดคลอโรมีเทน</item>
+        <item>รง.2 กรด HCl</item>
+        <item>รง.2 กรดกัด</item>
+        <item>รง.2 โซดาเหลว</item>
+        <item>รง.2 กรดกำมะถัน</item>
+        <item>เครื่องระบายน้ำ</item>
+        <item>น้ำออก ตะวันออก</item>
+        <item>น้ำออก ตะวันตก</item>
+        <item>ว่าง</item>
+    </string-array>
+</resources>
