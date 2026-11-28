@@ -2,7 +2,7 @@
      各入口暂未接云端时点击统一提示「功能开发中」（见 more.ts），原因不写在界面上。语言入口也是设计稿没有的，放在菜单下方，点进独立的语言页。 -->
 <view class="menu-list" style="margin-bottom:20rpx;">
   <view class="menu-row" bindtap="onAccountTap">
-    <image class="avatar" style="margin-right:19rpx;" src="/assets/icons/avatar-logo.png" mode="aspectFit" />
+    <image class="avatar" style="margin-right:19rpx;" src="{{brandAvatar}}" mode="aspectFit" binderror="onBrandLogoError" />
     <view class="menu-title">
       <text>{{account || '--'}}</text>
       <view class="muted" style="margin-top:4rpx;">{{roleLabel || '--'}}</view>

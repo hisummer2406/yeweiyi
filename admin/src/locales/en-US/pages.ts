@@ -217,6 +217,9 @@ export default {
   'pages.console.detail.snapshot.switch': 'Switch tank',
   'pages.console.tank.title': 'Tank {index} · {medium}',
   'pages.console.tank.readings': 'Main readings',
+  'pages.console.tank.status.commFault': 'Comm. fault',
+  'pages.console.tank.status.lastReading': 'Last reading',
+  'pages.console.tank.status.noReading': 'No reading yet',
   'pages.console.tank.unit.mm': 'mm',
   'pages.console.tank.unit.L': 'L',
   'pages.console.tank.unit.C': '℃',
@@ -234,12 +237,14 @@ export default {
   'pages.console.detail.snapshot.field.alarm': 'Alarm state',
   'pages.console.detail.snapshot.field.probe': 'Probe',
   'pages.console.detail.snapshot.probe.on': 'Connected',
-  'pages.console.detail.snapshot.probe.off': 'Not connected',
+  'pages.console.detail.snapshot.probe.off': 'Comm. fault',
   'pages.console.detail.snapshot.reportedAt': 'Reported at {time}',
   'pages.ops.customers.create': 'New customer',
   'pages.ops.customers.col.id': 'Customer ID',
   'pages.ops.customers.col.name': 'Customer name',
   'pages.ops.customers.col.createdAt': 'Created at',
+  'pages.assets.search.empty': 'No search results',
+  'pages.ops.customers.search': 'Search customer name / ID',
   'pages.ops.customers.empty': 'No customers yet',
   'pages.ops.customers.form.name.label': 'Customer name',
   'pages.ops.customers.form.name.required': 'Enter a customer name',
@@ -375,6 +380,9 @@ export default {
   'pages.ops.devices.status.online': 'Online',
   'pages.ops.devices.status.offline': 'Offline',
   'pages.ops.devices.status.neverOnline': 'Never online',
+  'pages.ops.devices.search': 'Search device code / station',
+  'pages.ops.devices.search.platform':
+    'Search device code / station / customer',
   'pages.ops.devices.empty': 'No devices registered yet',
   'pages.ops.devices.load.error': 'Failed to load devices',
   'pages.ops.devices.form.title': 'Register device',
@@ -421,6 +429,9 @@ export default {
   'pages.ops.devices.form.code.invalid':
     'Invalid code: use a full code (e.g. ZCT000001) or a numeric short code',
   'pages.console.stations.create': 'New station',
+  'pages.console.stations.search': 'Search station name / address',
+  'pages.console.stations.search.platform':
+    'Search station name / address / customer',
   'pages.console.stations.empty': 'No stations yet',
   'pages.console.stations.col.name': 'Station name',
   'pages.console.stations.col.address': 'Address',
@@ -495,7 +506,8 @@ export default {
   'pages.console.miniCode.error.unknown':
     'Failed to download the code. Try again later; if it keeps failing, contact the platform administrator.',
   'pages.ops.devices.unassign.action': 'Unassign station',
-  'pages.ops.devices.unassign.title': 'Unassign device {device} from its station?',
+  'pages.ops.devices.unassign.title':
+    'Unassign device {device} from its station?',
   'pages.ops.devices.unassign.description':
     'The device becomes "Ungrouped" and can be assigned again. Its records, history and access credentials are kept and the terminal keeps reporting.',
   'pages.ops.devices.unassign.ok': 'Unassign',
@@ -547,6 +559,7 @@ export default {
   'pages.console.staff.status.enabled': 'Active',
   'pages.console.staff.status.disabled': 'Disabled',
   'pages.console.staff.action.assign': 'Assign tanks',
+  'pages.console.staff.search': 'Search phone / customer',
   'pages.console.staff.empty':
     'No staff accounts. Staff accounts are created by a platform admin.',
   'pages.console.staff.modal.title': 'Assign tanks: {phone}',
@@ -758,6 +771,35 @@ export default {
     'The device writes the settings and reports them back. Saving settings on the device itself overrides remote changes.',
   'pages.console.settings.submit.reason': 'Reason (required)',
   'pages.ops.customers.action.media': 'Media',
+  'pages.ops.customers.action.brand': 'Branding',
+  'pages.ops.customers.brand.title': 'Branding: {name}',
+  'pages.ops.customers.brand.state.default':
+    'Using the default Zhongcheng logo',
+  'pages.ops.customers.brand.state.custom': 'Using a custom logo ({size} px)',
+  'pages.ops.customers.brand.state.draft':
+    'Previewing an unsaved logo; it takes effect once saved',
+  'pages.ops.customers.brand.preview.title': 'Smart Level Management',
+  'pages.ops.customers.brand.preview.role': 'Customer admin',
+  'pages.ops.customers.brand.upload': 'Upload logo',
+  'pages.ops.customers.brand.replace': 'Replace logo',
+  'pages.ops.customers.brand.hint':
+    'PNG, up to 256 KB, 64-1024 px on each side; a square image with a transparent background works best. Mini-program users see it the next time they open or refresh.',
+  'pages.ops.customers.brand.save': 'Save',
+  'pages.ops.customers.brand.close': 'Close',
+  'pages.ops.customers.brand.reset': 'Restore default',
+  'pages.ops.customers.brand.reset.confirm':
+    'Restore the default logo for "{name}"?',
+  'pages.ops.customers.brand.saved': 'Logo saved for "{name}"',
+  'pages.ops.customers.brand.resetDone': '"{name}" now uses the default logo',
+  'pages.ops.customers.brand.problem.type': 'Choose a PNG image',
+  'pages.ops.customers.brand.problem.size': 'The image must not exceed 256 KB',
+  'pages.ops.customers.brand.problem.dimensions':
+    'Width and height must be 64-1024 px',
+  'pages.ops.customers.brand.error.invalid': 'The image was rejected: {detail}',
+  'pages.ops.customers.brand.error.notFound':
+    'The customer no longer exists; refresh the list',
+  'pages.ops.customers.brand.error.network': 'Network error, please retry',
+  'pages.ops.customers.brand.error.generic': 'Failed ({detail})',
   'pages.console.media.note':
     'This only saves the name. To apply it, select it for a tank in the device settings and send it.',
   'pages.console.media.loadFailed': 'Failed to load media.',

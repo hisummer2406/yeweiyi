@@ -10,59 +10,63 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: read
 
 defaults:
   run:
     working-directory: cloud
 
+# main 上每个提交一组、不取消：Cloud Deploy 要求所选提交的 Cloud CI 成功。同组只保留一个排队中的运行，
+# 若 main 共用一组，连续合并时排队的运行会被后来的替换，那个提交就无法部署。
 concurrency:
-  group: cloud-ci-${{ github.ref }}
-  # main 上不取消：Cloud Deploy 要求所选提交的 Cloud CI 成功，被取消的提交将无法部署。
+  group: cloud-ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # 第一个作业：本次 cloud/、.github/ 与某次已成功的 Cloud CI 完全相同就复用，后面的作业全部跳过（跳过 = 成功，
-  # Cloud Deploy 门禁照常认）。单个自托管 Runner 上一次全量要 15–30 分钟，只改别的目录的推送不必再跑。
+  # 第一个作业：本次检出的 cloud/、.github/ 与某次已成功的 Cloud CI 实际测过的完全相同就复用，后面的作业全部跳过
+  # （跳过 = 成功，Cloud Deploy 门禁照常认）。一次全量要 10–20 分钟，只改别的目录的推送不必再跑。
   reuse:
-    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       reuse: ${{ steps.check.outputs.reuse }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 2
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ../.github/scripts/ci-reuse.sh "Cloud CI" >> "$GITHUB_OUTPUT"
+        run: ../.github/scripts/ci-reuse.sh check "Cloud CI" >> "$GITHUB_OUTPUT"
 
   go:
     needs: reuse
     if: needs.reuse.outputs.reuse != 'true'
-    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: cloud/go.mod
-          # 自托管 Runner：模块与构建缓存在本机持久目录（Runner .env 的 GOMODCACHE/GOCACHE），
-          # 不再上传 GitHub 缓存（大缓存经代理上传曾卡住收尾步骤，见 KeywordIQ 的同类问题）。
-          cache: false
-      - name: 本地缓存路径与命中
-        run: ../.github/scripts/ci-cache-check.sh go before
+          cache-dependency-path: cloud/go.sum
       - name: gofmt
         run: |
           out=$(gofmt -l .)
           if [ -n "$out" ]; then echo "未格式化的文件:"; echo "$out"; exit 1; fi
       - run: go build ./...
       - run: go vet ./...
+      # 两个工具都固定版本（理由同下面的 sqlc）。
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+      # 只对代码实际调用到的漏洞失败。漏洞库每天更新，没改代码也可能因新公告变红：按提示升级依赖即可。
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - name: 协议契约测试（无容器依赖）
         run: go test ./internal/protocol/
       # 版本固定：@latest 会让某天 sqlc 一升级，没人改过任何代码 CI 就变红（或悄悄生成不同的输出）。
       # 要升级就改这里（版本号和 sha256 一起改），并在同一个提交里重新生成 internal/store/db。
-      # 用官方预编译二进制（go install 要 2 分多钟）；压缩包缓存在本机、每次校验 sha256，二进制只放 RUNNER_TEMP。
+      # 用官方预编译二进制（go install 要 2 分多钟），校验 sha256，二进制只放 RUNNER_TEMP。
       - name: sqlc 输出必须与提交一致
         run: |
           set -euo pipefail
@@ -77,10 +81,10 @@ jobs:
   deploy-files:
     needs: reuse
     if: needs.reuse.outputs.reuse != 'true'
-    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: docker compose version
       - name: 部署脚本语法
         run: |
@@ -95,35 +99,17 @@ jobs:
 
   # 集成测试：真实 PostgreSQL / Redis / ThingsBoard CE。这些测试在基础设施缺失时会自行 Skip，
   # 而 Skip 在 CI 里等于“没测”却显示绿色，所以这里把任何 SKIP 都当成失败。
+  # 托管 Runner 上与 go 作业并行。
   integration:
     needs: reuse
     if: needs.reuse.outputs.reuse != 'true'
-    runs-on: [self-hosted, linux, x64, yeweiyi-ci]
-    # 含最多 20 分钟的资源等待（见下）；测试本身与托管 Runner 时一样约 10–15 分钟。
-    timeout-minutes: 50
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       # 每次运行唯一的 Compose 项目：容器、网络、卷都带这个前缀，收尾时只删它们。
       CI_PROJECT: ywy-ci-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v7
-      # 这台虚拟机（3 vCPU / 5 GiB）与 KeywordIQ 的 Runner 共用。ThingsBoard 自身要 2–3 GiB，
-      # 与对方的重任务并发容易 OOM，所以等对方当前 job 结束、可用内存足够再启动。
-      # 等不到就失败，不降级、不跳过。
-      - name: 资源门禁（与同机其他 Runner 错开）
-        run: |
-          # 本 Runner 装在 $HOME/actions-runner；其他路径下的 Runner.Worker 即同机其他项目正在跑的 job。
-          for i in $(seq 1 120); do
-            # 按进程名精确匹配（-x），不能用 -f：任何命令行里带这串字符的进程（如监控脚本）都会被误判。
-            others="$(for p in $(pgrep -x Runner.Worker); do ps -o args= -p "$p"; done | grep -v -F "$HOME/actions-runner/" || true)"
-            avail_mb="$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)"
-            if [[ -z "$others" && "$avail_mb" -ge 3000 ]]; then
-              echo "可以启动：其他 Runner 空闲，可用内存 ${avail_mb} MiB"; exit 0
-            fi
-            (( i % 6 == 1 )) && echo "等待：其他 Runner 作业=${others:+忙} 可用内存=${avail_mb} MiB"
-            sleep 10
-          done
-          echo "::error::20 分钟内同机其他 Runner 未空闲或内存不足 3000 MiB" >&2
-          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: 准备测试容器参数与工具
         run: |
           set -euo pipefail
@@ -135,13 +121,14 @@ jobs:
             echo "CI_UID=$(id -u)"
             echo "CI_GID=$(id -g)"
             echo "CI_BIN_DIR=$RUNNER_TEMP/bin"
+            # 托管 Runner 每次都是新机器：Go 模块与构建缓存放本次 RUNNER_TEMP，挂载进测试容器。
+            echo "YEWEIYI_CI_CACHE=$RUNNER_TEMP/ci-cache"
           } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ci-cache/gomod" "$RUNNER_TEMP/ci-cache/gobuild"
           # migrate 版本与 deploy/images.txt、docker-compose.prod.yml 里的镜像一致。
           ../.github/scripts/ci-fetch-tool.sh \
             https://github.com/golang-migrate/migrate/releases/download/v4.18.1/migrate.linux-amd64.tar.gz \
             2a08137b4720aa457bc760540723e313783f1fab27473463bdcc5fc2e9252959 migrate "$RUNNER_TEMP/bin"
-          echo "本地缓存（宿主路径，挂载进测试容器）："
-          du -sh "$YEWEIYI_CI_CACHE/gomod" "$YEWEIYI_CI_CACHE/gobuild"
       - name: 启动 PostgreSQL / Redis / ThingsBoard（本次运行独立的网络命名空间）
         run: |
           set -euo pipefail
@@ -169,7 +156,7 @@ jobs:
           "${C[@]}" logs --tail 80 thingsboard
           exit 1
       # 迁移 up / down / up 往返也在这里做：复用本次已启动的 PostgreSQL。原先单独作业用 services: 起的
-      # PostgreSQL 在本 Runner 上多次卡在 Initialize containers 直到超时（2026-11-23）。
+      # PostgreSQL 在原自托管 Runner 上多次卡在 Initialize containers 直到超时（2026-11-23）。
       - name: 业务库迁移往返与 ThingsBoard 设备配置
         run: |
           docker compose -p "$CI_PROJECT" -f docker-compose.yml -f docker-compose.thingsboard.yml -f ../.github/ci/cloud-integration.compose.yml \
@@ -178,8 +165,7 @@ jobs:
               migrate -database "$DATABASE_URL" -path db/migrations down -all
               migrate -database "$DATABASE_URL" -path db/migrations up
               go run ./cmd/tbconfig apply'
-      # -count=1：GOCACHE 在本机持久，若不禁用测试结果缓存，依赖 ThingsBoard/PostgreSQL 的测试会直接
-      # 复用上一次运行的结果（显示 "ok (cached)"），并没有针对本次启动的基础设施执行。
+      # -count=1：禁用测试结果缓存，依赖 ThingsBoard/PostgreSQL 的测试必须针对本次启动的基础设施执行。
       - name: 全量测试（串行）
         run: |
           set -o pipefail
@@ -209,4 +195,17 @@ jobs:
                   docker network ls -q --filter "label=com.docker.compose.project=$CI_PROJECT")"
           if [[ -n "$left" ]]; then echo "::error::本次项目资源未清理干净：$left" >&2; exit 1; fi
           echo "已清理 Compose 项目 $CI_PROJECT（容器/网络/卷均为 0）"
-          du -sh "$YEWEIYI_CI_CACHE/gomod" "$YEWEIYI_CI_CACHE/gobuild"
+
+  # 三个作业都真正跑过且成功，才把本次测过的目录树记到被测提交上，供之后的复用判定（复用时它们被跳过，这里也跳过）。
+  record:
+    needs: [go, deploy-files, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: ../.github/scripts/ci-reuse.sh record "Cloud CI"

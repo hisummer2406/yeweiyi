@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import zhPages from '@/locales/zh-CN/pages';
 
@@ -71,5 +77,27 @@ describe('StaffGrants', () => {
     render(<StaffGrants />);
     await screen.findByText('13900139000');
     expect(screen.queryByText(/grant-modal/)).toBeNull();
+  });
+
+  it('searches by phone fragment (keeping leading zeros) and clears back to the full list', async () => {
+    listUsers.mockResolvedValue([
+      staff(3, '13900139000'),
+      staff(4, '01370137000'),
+    ]);
+    render(<StaffGrants />);
+    await screen.findByText('13900139000');
+    const box = screen.getByPlaceholderText('搜索手机号/所属客户');
+    const submit = (v: string) => {
+      fireEvent.change(box, { target: { value: v } });
+      fireEvent.keyDown(box, { key: 'Enter', code: 'Enter', keyCode: 13 });
+      fireEvent.keyUp(box, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    };
+    submit(' 0137 ');
+    await screen.findByText('01370137000');
+    expect(screen.queryByText('13900139000')).toBeNull();
+    submit('999999');
+    expect(await screen.findByText('无搜索结果')).toBeTruthy();
+    submit('');
+    expect(await screen.findByText('13900139000')).toBeTruthy();
   });
 });

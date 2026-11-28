@@ -100,10 +100,6 @@ func (tn *tenancy) get(token, path string) *httptest.ResponseRecorder {
 func TestTenancy_AccessMatrix(t *testing.T) {
 	tn := newTenancy(t)
 
-	type who struct {
-		name  string
-		token string
-	}
 	allowed := map[string][]string{
 		"platform": {tn.devA1, tn.devA2, tn.devB1, tn.devUnassigned, tn.devGhost},
 		"adminA":   {tn.devA1, tn.devA2},
@@ -311,6 +307,10 @@ var exemptRoutes = map[string]string{
 
 	"GET /api/customers/:id/onboarding":           "no device; platform admin only, see TestOnboarding_*",
 	"POST /api/customers/:id/onboarding/complete": "no device; platform admin only, see TestOnboarding_*",
+	"GET /api/customers/:id/brand-logo":           "no device; platform admin only, see TestBrandLogo_*",
+	"PUT /api/customers/:id/brand-logo":           "no device; platform admin only, see TestBrandLogo_*",
+	"DELETE /api/customers/:id/brand-logo":        "no device; platform admin only, see TestBrandLogo_*",
+	"GET /api/me/brand-logo":                      "no device; the caller's own customer only, see TestBrandLogo_Lifecycle",
 
 	"POST /api/auth/wechat/login":           "no device, no session yet; see TestWeChat_*",
 	"POST /api/auth/wechat/phone-login":     "no device, no session yet; binds only to the account of the WeChat-verified phone, see TestWeChat_*",
@@ -580,11 +580,6 @@ func TestTenancy_MintPairingSecret(t *testing.T) {
 		`SELECT customer_id FROM devices WHERE device_name = $1`, fresh).Scan(&owner); err != nil || owner != tn.custB {
 		t.Errorf("new device customer = %d (%v), want %d", owner, err, tn.custB)
 	}
-}
-
-func (tn *tenancy) bindAs(token, device, secret string) *httptest.ResponseRecorder {
-	body, _ := json.Marshal(map[string]string{"deviceName": device, "pairingToken": secret})
-	return tn.env.do("POST", "/api/devices/bind", []byte(token), body)
 }
 
 // --- commands and audit -----------------------------------------------------------------------

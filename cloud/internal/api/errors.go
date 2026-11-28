@@ -38,7 +38,8 @@ const internalErrorMessage = "internal server error"
 // internalError logs err and answers 500 with a stable code and a safe message. It aborts, so it is
 // also correct inside middleware; in a terminal handler aborting changes nothing.
 func internalError(c *gin.Context, err error) {
-	log.Printf("api: %s %s: %v", c.Request.Method, c.FullPath(), err)
+	// %q: the error can carry request input; quoting keeps a newline in it from forging log lines.
+	log.Printf("api: %s %s: %q", c.Request.Method, c.FullPath(), err.Error())
 	c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": internalErrorMessage, "code": codeInternalError})
 }
 

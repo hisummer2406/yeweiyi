@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用法：deploy-image-identity.sh <ghcr.io/...@sha256:... | yeweiyi-local/cloud:sha-<提交>> <docker save 产生的 tar> <远端 driver-type>
+# 用法：deploy-image-identity.sh <ghcr.io/...@sha256:... | yeweiyi-local/cloud:sha-<提交>-r<运行>-<次>> <docker save 产生的 tar> <远端 driver-type>
 # 输出：远端 `docker load` 该 tar 之后，`docker image inspect --format '{{.Id}}'` 应当得到的值。
 #
 # 背景：`.Id` 的含义取决于 Docker 镜像存储——
@@ -7,7 +7,7 @@
 #   containerd 镜像存储（driver-type io.containerd.snapshotter.v1，Docker 29 新装默认）：
 #     .Id = 镜像 index/manifest 的 digest，也就是 RepoDigests 里固定的那个 digest。
 # 2026-11-02 托管 Runner 换到 26.04 后，就是两端口径不一致导致「远端预载镜像标识不一致」误拦。
-# 自托管 Runner（Ubuntu 24.04 + Docker 29）用的是 containerd 存储，生产服务器此前与托管 24.04 一致。
+# 两端存储类型都可能是任一种，所以按实际类型推导，不假设。
 #
 # 这里不放宽校验：期望值一律从已固定的 digest 推导，链路上每一步都要对上，否则失败——
 #   1. 本机 containerd 存储时：本机 .Id 必须等于固定 digest；
@@ -21,7 +21,7 @@ CONTAINERD=io.containerd.snapshotter.v1
 store_of() { docker info --format '{{range .DriverStatus}}{{if eq (index . 0) "driver-type"}}{{index . 1}}{{end}}{{end}}'; }
 
 local_id="$(docker image inspect "$ref" --format '{{.Id}}')"
-if [[ "$ref" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}$ ]]; then
+if [[ "$ref" =~ ^yeweiyi-local/cloud:sha-[a-f0-9]{40}-r[0-9]+-[0-9]+$ ]]; then
   # Runner 本机构建（image_source=runner）：没有仓库 digest。containerd 存储时本机 .Id 就是 index digest，作为固定值；
   # 经典存储时只有 config digest，远端若是 containerd 存储就无从推导，下面会失败。
   pinned=""

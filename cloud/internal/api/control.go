@@ -443,7 +443,8 @@ func pageParams(c *gin.Context, defaultLimit int32) (limit, offset int32) {
 		}
 	}
 	if v := c.Query("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+		// 32-bit parse: a larger value is ignored like any other invalid offset, not wrapped.
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil && n >= 0 {
 			offset = int32(n)
 		}
 	}

@@ -367,7 +367,9 @@ func splitTankKey(key string) (tank int, field string, ok bool) {
 	for i := 4; i < len(key); i++ {
 		if key[i] == '.' {
 			n, err := strconv.Atoi(key[4:i])
-			if err != nil || n < 1 {
+			// Upper bound too: the key comes from the device, and tank is stored as int32 — an
+			// out-of-range number would wrap onto a real tank's hourly rows.
+			if err != nil || n < 1 || n > protocol.MaxTankCount {
 				return 0, "", false
 			}
 			return n, key[i+1:], true

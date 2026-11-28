@@ -616,8 +616,7 @@ func TestApplyResult_RejectsStatusesOnlyTheBackendMayWrite(t *testing.T) {
 
 // TestExpireStale_ClosesCommandsPastTheirWindow covers the cloud-side half of the validity window.
 func TestExpireStale_ClosesCommandsPastTheirWindow(t *testing.T) {
-	// A 1ms TTL so the command is already expired by the time the sweep runs.
-	f := newFixture(t, control.RoleCustomerAdmin, control.Config{CommandTTL: time.Millisecond})
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{CommandTTL: time.Minute})
 	ctx := context.Background()
 	f.sender.sendErr = fmt.Errorf("%w: no session", tbclient.ErrDeviceOffline)
 
@@ -626,7 +625,7 @@ func TestExpireStale_ClosesCommandsPastTheirWindow(t *testing.T) {
 	}
 	commandID := f.sender.lastEnv.CommandID
 
-	time.Sleep(20 * time.Millisecond)
+	moveWindowIntoThePast(t, f, commandID)
 	if _, err := f.svc.ExpireStale(ctx); err != nil {
 		t.Fatalf("ExpireStale: %v", err)
 	}
@@ -652,6 +651,20 @@ func TestExpireStale_ClosesCommandsPastTheirWindow(t *testing.T) {
 }
 
 // --- helpers ---
+
+// moveWindowIntoThePast shifts a command's validity window an hour back, so the expiry sweep sees it
+// as stale. Shortening CommandTTL to a millisecond and sleeping instead is flaky: expires_at comes
+// from the Go clock but the sweep compares it with the database's now(), and on a loaded CI runner
+// (or with the containers' clock a little behind) a few milliseconds is not a reliable margin.
+func moveWindowIntoThePast(t *testing.T, f *fixture, commandID string) {
+	t.Helper()
+	tag, err := f.pool.Exec(context.Background(),
+		`UPDATE control_commands SET issued_at = issued_at - interval '1 hour', expires_at = expires_at - interval '1 hour'
+		 WHERE command_id = $1::uuid`, commandID)
+	if err != nil || tag.RowsAffected() != 1 {
+		t.Fatalf("backdate command %s: rows=%d err=%v", commandID, tag.RowsAffected(), err)
+	}
+}
 
 func getCommand(t *testing.T, f *fixture, commandID string) db.ControlCommand {
 	t.Helper()
@@ -891,15 +904,18 @@ func TestIssue_RejectedResultBeforeAckIsKept(t *testing.T) {
 // #42: a rejection reported after the command already expired stays expired (no silent rewrite) but
 // leaves one diagnostic control.result_late audit row.
 func TestApplyResult_LateRejectedKeepsExpiredAndAudits(t *testing.T) {
-	f := newFixture(t, control.RoleCustomerAdmin, control.Config{CommandTTL: time.Millisecond})
+	f := newFixture(t, control.RoleCustomerAdmin, control.Config{CommandTTL: time.Minute})
 	ctx := context.Background()
 	if _, err := f.svc.Issue(ctx, issueReq(f, protocol.MethodAlarmMute)); err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
 	commandID := f.sender.lastEnv.CommandID
-	time.Sleep(10 * time.Millisecond)
+	moveWindowIntoThePast(t, f, commandID)
 	if _, err := f.svc.ExpireStale(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if got := getCommand(t, f, commandID); got.Status != protocol.CmdStatusExpired {
+		t.Fatalf("status before the late result = %q, want expired", got.Status)
 	}
 
 	res := protocol.CmdResult{CommandID: commandID, Status: protocol.CmdStatusRejected, ErrorCode: protocol.ErrInvalidParams, Reason: "越界"}

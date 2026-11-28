@@ -13,6 +13,8 @@ import { applyVirtual } from '../../utils/virtualTable';
 import { dropLegacyScale, loadVirtual } from '../../utils/virtualTableStore';
 import { telemetryFailure } from '../../utils/failureState';
 import { userKeyFromToken } from '../../utils/auth';
+import { brandLogoFor, forgetBrokenBrandLogo, refreshBrandLogo } from '../../utils/brandLogo';
+import { DEFAULT_BRAND_MARK } from '../../utils/brandLogoCore';
 import { getRememberedStation, rememberStation } from '../../utils/stationPref';
 import { stationIdFromKey, stationParam } from '../../utils/stationDevice';
 import {
@@ -67,6 +69,8 @@ const nowText = () => formatLocalTime(new Date().toISOString(), currentLocale())
 
 Page({
   data: {
+    // 客户品牌 Logo（#86）：先显示本机已确认的，再异步向云端核对；失败不影响读数加载
+    brandMark: DEFAULT_BRAND_MARK,
     text: texts('home'),
     homeLanguage: currentLocale(),
     groups: [] as DeviceGroup[],
@@ -220,6 +224,22 @@ Page({
     this.stopNet = null;
   },
 
+  // Never awaited by loadHome: the logo is decoration, the readings must not wait for it or fail with it.
+  loadBrandLogo(force: boolean) {
+    const account = this.currentUserKey();
+    this.setData({ brandMark: brandLogoFor(DEFAULT_BRAND_MARK) });
+    void refreshBrandLogo(force).then(() => {
+      if (account !== this.currentUserKey()) return; // answer for an account no longer signed in
+      const brandMark = brandLogoFor(DEFAULT_BRAND_MARK);
+      if (brandMark !== this.data.brandMark) this.setData({ brandMark });
+    });
+  },
+
+  onBrandLogoError() {
+    forgetBrokenBrandLogo(this.data.brandMark);
+    this.setData({ brandMark: DEFAULT_BRAND_MARK });
+  },
+
   onPullDownRefresh() {
     this.loadHome().finally(() => wx.stopPullDownRefresh());
   },
@@ -231,6 +251,7 @@ Page({
   loadHome(): Promise<unknown> {
     const seq = ++this.loadSeq;
     const account = this.currentUserKey();
+    this.loadBrandLogo(true);
     return Promise.all([
       get<{ rows: Device[] }>('/api/devices'),
       get<{ rows: Station[] }>('/api/stations').catch(() => ({ rows: [] as Station[] })),

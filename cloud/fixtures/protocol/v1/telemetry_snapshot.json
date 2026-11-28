@@ -15,6 +15,7 @@
     "tank1.waterRatioPct": 0.7,
     "tank1.alarmState": "NORMAL",
     "tank1.probeConnected": true,
+    "tank1.hasReading": true,
     "tank2.oilType": "92号汽油",
     "tank2.oilLevelMm": 402.0,
     "tank2.waterLevelMm": 0.0,
@@ -26,6 +27,7 @@
     "tank2.oilRatioPct": 20.1,
     "tank2.waterRatioPct": 0.0,
     "tank2.alarmState": "FAULT",
-    "tank2.probeConnected": false
+    "tank2.probeConnected": false,
+    "tank2.hasReading": true
   }
 }

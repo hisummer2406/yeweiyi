@@ -283,6 +283,11 @@ button.group-stale::after {
   background-color: #d93a3a;
 }
 
+.fill-oil.fill-stale,
+.fill-water.fill-water-stale {
+  background-color: #b8bdc4;
+}
+
 .fill-oil.fill-fault {
   background-color: #8a8f98;
 }
@@ -303,6 +308,11 @@ button.group-stale::after {
 }
 
 /* 罐号 + 油品：允许换行，长油品名不截断 */
+.tank-last-reading {
+  margin-left: 8rpx;
+  line-height: 36rpx;
+}
+
 .tank-tag {
   box-sizing: border-box;
   min-width: 156rpx;

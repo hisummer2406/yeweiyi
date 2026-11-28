@@ -1,14 +1,16 @@
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { history, useIntl } from '@umijs/max';
 import { Tag } from 'antd';
 import type React from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { KeywordSearchBox, useKeywordSearch } from '@/components/KeywordSearch';
 import { userLabel } from '@/pages/ops/users/errors';
 import { listCustomers } from '@/services/ant-design-pro/customers';
 import { listDevices } from '@/services/ant-design-pro/devices';
 import { listStations } from '@/services/ant-design-pro/stations';
 import { listUsers } from '@/services/ant-design-pro/users';
+import { filterByKeyword, matchStaff } from '@/utils/listSearch';
 import TankGrantsModal from './TankGrantsModal';
 
 type Row = API.AdminUser & { customerName?: string };
@@ -23,7 +25,9 @@ type Row = API.AdminUser & { customerName?: string };
 const StaffGrants: React.FC = () => {
   const intl = useIntl();
   const t = (id: string) => intl.formatMessage({ id });
-  const actionRef = useRef<ActionType>(undefined);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loading, setLoading] = useState(false);
+  const search = useKeywordSearch();
   const [devices, setDevices] = useState<API.DeviceRow[]>([]);
   const [stations, setStations] = useState<API.Station[]>([]);
   const [target, setTarget] = useState<Row>();
@@ -34,6 +38,47 @@ const StaffGrants: React.FC = () => {
       return v && /^\d+$/.test(v) ? Number(v) : undefined;
     })(),
   );
+
+  // 一次取全后在前端搜索、分页（#108）；失败提示已由全局请求错误处理弹出，这里只保留旧列表
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [users, ds, ss, cs] = await Promise.all([
+        listUsers(),
+        listDevices(),
+        // 油站/客户名只是显示用，失败退化，不拖垮员工列表
+        listStations({ silent: true }).catch(() => [] as API.Station[]),
+        listCustomers().catch(() => [] as API.Customer[]),
+      ]);
+      setDevices(ds);
+      setStations(ss);
+      const names = new Map(cs.map((c) => [c.id, c.name]));
+      // 只列员工：管理员账号不属于油罐授权（云端对管理员目标 409 grant_not_applicable）
+      const staff = users
+        .filter((u) => u.role === 'customer_user')
+        .map((u) => ({
+          ...u,
+          customerName:
+            u.customerId == null ? undefined : names.get(u.customerId),
+        }));
+      setRows(staff);
+      const pending = pendingUser.current;
+      if (pending != null) {
+        pendingUser.current = undefined;
+        history.replace(window.location.pathname);
+        const row = staff.find((u) => u.id === pending);
+        if (row) setTarget(row);
+      }
+    } catch {
+      // 已由全局处理
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const columns: ProColumns<Row>[] = [
     {
@@ -72,44 +117,25 @@ const StaffGrants: React.FC = () => {
     <PageContainer>
       <ProTable<Row>
         rowKey="id"
-        actionRef={actionRef}
         columns={columns}
         search={false}
-        options={{ density: false, setting: false }}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-        request={async () => {
-          const [users, ds, ss, cs] = await Promise.all([
-            listUsers(),
-            listDevices(),
-            // 油站/客户名只是显示用，失败退化，不拖垮员工列表
-            listStations({ silent: true }).catch(() => [] as API.Station[]),
-            listCustomers().catch(() => [] as API.Customer[]),
-          ]);
-          setDevices(ds);
-          setStations(ss);
-          const names = new Map(cs.map((c) => [c.id, c.name]));
-          const staff = users
-            .filter((u) => u.role === 'customer_user')
-            .map((u) => ({
-              ...u,
-              customerName:
-                u.customerId == null ? undefined : names.get(u.customerId),
-            }));
-          const pending = pendingUser.current;
-          if (pending != null) {
-            pendingUser.current = undefined;
-            history.replace(window.location.pathname);
-            const row = staff.find((u) => u.id === pending);
-            if (row) setTarget(row);
-          }
-          return {
-            // 只列员工：管理员账号不属于油罐授权（云端对管理员目标 409 grant_not_applicable）
-            data: staff,
-            success: true,
-          };
+        loading={loading}
+        dataSource={filterByKeyword(rows, search.keyword, matchStaff)}
+        options={{ density: false, setting: false, reload: load }}
+        pagination={search.pagination}
+        locale={{
+          emptyText: t(
+            search.searching && rows.length > 0
+              ? 'pages.assets.search.empty'
+              : 'pages.console.staff.empty',
+          ),
         }}
-        onRequestError={() => undefined}
-        locale={{ emptyText: t('pages.console.staff.empty') }}
+        headerTitle={
+          <KeywordSearchBox
+            placeholder={t('pages.console.staff.search')}
+            onSearch={search.onSearch}
+          />
+        }
       />
       <TankGrantsModal
         user={target}

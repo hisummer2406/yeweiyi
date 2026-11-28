@@ -220,10 +220,13 @@ issue #1 要求的降采样功能产出一条贴着零的假曲线，而原始�
 
 ## C. 共用 fixture 的机制（2026-11-06 起已成为门禁，**但无分支保护**）
 
+> **2026-11-26 分工更新。** Cloud CI 继续校验共享 fixture。Android 单测改由专门的 Android 开发同事负责，
+> 仓库应停止自动触发 Android 单测。下面的接入记录保留作历史，工作流状态见 [CI 运维说明](../../.github/ci/README.md#android-单测交接)。
+
 > **2026-11-08 校对：** 本节下面的正文是 2026-09 的原文，保留作背景；其中"Android 尚未引入""14 个 fixture"
 > "Android 侧需要做的三步"都已过时。现状：fixture 共 25 份、单仓库内只有 `cloud/fixtures/protocol/v1/` 一份，
 > Android 单测直接读它（`android/app/build.gradle` 挂到测试 classpath），Android CI 先跑 `verify-manifest.sh`；
-> `MANIFEST.json` 的 `crossRepoGate` 已为 `true`。现状以 C-1 表为准。
+> `MANIFEST.json` 的 `crossRepoGate` 已为 `true`（2026-11-26 起改回 `false`，见本节开头的分工更新）。现状以 C-1 表为准。
 
 对账文档给出的做法是"以 `yeweiyi-cloud/fixtures/protocol/v1/` 为准，Android 侧通过 submodule
 或构建期拷贝引入"。**做法对，但缺一步**：光是拷贝一遍，无法保证之后两侧读的还是同一批字节——

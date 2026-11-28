@@ -1,16 +1,19 @@
 import { PlusOutlined } from '@ant-design/icons';
-import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import type { ProColumns } from '@ant-design/pro-components';
 import { PageContainer, ProTable } from '@ant-design/pro-components';
 import { history, useIntl } from '@umijs/max';
 import { Button, message, Popconfirm, Space, Tag } from 'antd';
 import type React from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { KeywordSearchBox, useKeywordSearch } from '@/components/KeywordSearch';
 import { ApiError } from '@/services/ant-design-pro/apiError';
 import {
   deleteCustomer,
   listCustomers,
   renameCustomer,
 } from '@/services/ant-design-pro/customers';
+import { filterByKeyword, matchCustomer } from '@/utils/listSearch';
+import BrandLogoModal from './BrandLogoModal';
 import CreateCustomerModal from './CreateCustomerModal';
 import CustomerNameModal from './CustomerNameModal';
 import {
@@ -28,13 +31,32 @@ const AdminCustomers: React.FC = () => {
   const intl = useIntl();
   const t = (id: string, values?: Record<string, string>) =>
     intl.formatMessage({ id }, values);
-  const actionRef = useRef<ActionType>(undefined);
+  const [rows, setRows] = useState<API.Customer[]>([]);
+  const [loading, setLoading] = useState(false);
+  const search = useKeywordSearch();
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<API.Customer>();
+  const [brandTarget, setBrandTarget] = useState<API.Customer>();
   // 新建成功后直接进入该客户的开通向导（新客户一定是配置中，cloud#60）
   const openOnboarding = (id: number) =>
     history.push(`/assets/customers/${id}/onboarding`);
-  const reload = () => actionRef.current?.reload();
+  // 一次取全后在前端搜索、分页；失败提示已由全局请求错误处理弹出，这里只保留旧列表
+  const load = async () => {
+    setLoading(true);
+    try {
+      setRows(await listCustomers());
+    } catch {
+      // 已由全局处理
+    } finally {
+      setLoading(false);
+    }
+  };
+  const reload = () => {
+    void load();
+  };
+  useEffect(() => {
+    void load();
+  }, []);
 
   const remove = async (customer: API.Customer) => {
     try {
@@ -98,6 +120,9 @@ const AdminCustomers: React.FC = () => {
             <a onClick={() => history.push(`/assets/media?customer=${row.id}`)}>
               {t('pages.ops.customers.action.media')}
             </a>
+            <a onClick={() => setBrandTarget(row)}>
+              {t('pages.ops.customers.action.brand')}
+            </a>
             <a onClick={() => setRenameTarget(row)}>
               {t('pages.ops.customers.action.rename')}
             </a>
@@ -119,15 +144,25 @@ const AdminCustomers: React.FC = () => {
     <PageContainer>
       <ProTable<API.Customer>
         rowKey="id"
-        actionRef={actionRef}
         columns={columns}
         search={false}
-        options={{ density: false, setting: false }}
-        pagination={{ pageSize: 20, showSizeChanger: false }}
-        request={async () => ({ data: await listCustomers(), success: true })}
-        // 失败提示已由全局请求错误处理弹出；这里不吞成空列表，只避免重复提示
-        onRequestError={() => undefined}
-        locale={{ emptyText: t('pages.ops.customers.empty') }}
+        loading={loading}
+        dataSource={filterByKeyword(rows, search.keyword, matchCustomer)}
+        options={{ density: false, setting: false, reload }}
+        pagination={search.pagination}
+        locale={{
+          emptyText: t(
+            search.searching && rows.length > 0
+              ? 'pages.assets.search.empty'
+              : 'pages.ops.customers.empty',
+          ),
+        }}
+        headerTitle={
+          <KeywordSearchBox
+            placeholder={t('pages.ops.customers.search')}
+            onSearch={search.onSearch}
+          />
+        }
         toolBarRender={() => [
           <Button
             key="create"
@@ -149,6 +184,10 @@ const AdminCustomers: React.FC = () => {
           else reload();
         }}
         onPartial={reload}
+      />
+      <BrandLogoModal
+        customer={brandTarget}
+        onClose={() => setBrandTarget(undefined)}
       />
       <CustomerNameModal
         open={!!renameTarget}

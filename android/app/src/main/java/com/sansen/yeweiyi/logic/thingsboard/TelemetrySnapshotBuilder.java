@@ -84,6 +84,8 @@ public final class TelemetrySnapshotBuilder {
             values.put(tankKey(index, "alarmState"), tank.getAlarmState());
         }
         values.put(tankKey(index, "probeConnected"), tank.isConnect());
+        // false：开机或罐配置重载后还没采到过有效应答，上面的读数是占位 0，不是真实液位（#75）。
+        values.put(tankKey(index, "hasReading"), tank.isHasReading());
     }
 
     /**

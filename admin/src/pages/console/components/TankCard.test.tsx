@@ -87,10 +87,11 @@ describe('TankCard', () => {
   it('shows no tags for a normal tank with a connected probe', () => {
     render(<TankCard tank={tank()} onClick={() => {}} />);
     expect(screen.queryByText('报警')).toBeNull();
-    expect(screen.queryByText('探针未连接')).toBeNull();
+    expect(screen.queryByText('通讯异常')).toBeNull();
+    expect(screen.queryByText('上次读数')).toBeNull();
   });
 
-  it('shows the alarm tag and the probe-disconnected tag', () => {
+  it('shows the alarm tag, the comm-fault tag and marks the last reading', () => {
     render(
       <TankCard
         tank={tank({ alarmState: 'ALARM', probeConnected: false })}
@@ -98,7 +99,21 @@ describe('TankCard', () => {
       />,
     );
     expect(screen.getByText('报警')).toBeTruthy();
-    expect(screen.getByText('探针未连接')).toBeTruthy();
+    expect(screen.getByText('通讯异常')).toBeTruthy();
+    expect(screen.getByText('上次读数')).toBeTruthy();
+  });
+
+  it('shows dashes and 暂无读数 for a tank never read since boot (#75)', () => {
+    render(
+      <TankCard
+        tank={tank({ hasReading: false, oilLevelMm: 0, tempC: 0 })}
+        onClick={() => {}}
+      />,
+    );
+    expect(screen.getByText('暂无读数')).toBeTruthy();
+    expect(screen.queryByText('上次读数')).toBeNull();
+    expect(screen.queryByText('0.0')).toBeNull();
+    expect(screen.getAllByText('--').length).toBe(5);
   });
 
   it('shows -- for a missing oil type', () => {
@@ -142,7 +157,8 @@ describe('TankCard', () => {
     const img = screen.getByRole('img');
     expect(img.getAttribute('style') ?? '').not.toMatch(/filter|color/);
     expect(screen.getByText('报警')).toBeTruthy();
-    expect(screen.getByText('探针未连接')).toBeTruthy();
+    expect(screen.getByText('通讯异常')).toBeTruthy();
+    expect(screen.getByText('上次读数')).toBeTruthy();
   });
 
   it('still navigates when the card is clicked', () => {

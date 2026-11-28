@@ -65,9 +65,20 @@ describe('TankPicture liquid level', () => {
     expect(heights(b.container).oil).toBe('80%');
   });
 
-  it('draws nothing when the probe is not connected', () => {
+  it('keeps the last level in grey when the probe is lost (#75)', () => {
     const { container } = render(
-      <TankPicture shape="horizontal" tank={tank({ probeConnected: false })} />,
+      <TankPicture
+        shape="horizontal"
+        tank={tank({ probeConnected: false, oilRatioPct: 40 })}
+      />,
+    );
+    expect(container.querySelector('[data-fill-state="stale"]')).not.toBeNull();
+    expect(heights(container).oil).toBe('40%');
+  });
+
+  it('draws nothing for a tank never read since boot (#75)', () => {
+    const { container } = render(
+      <TankPicture shape="horizontal" tank={tank({ hasReading: false })} />,
     );
     expect(container.querySelector('[data-fill-state]')).toBeNull();
   });

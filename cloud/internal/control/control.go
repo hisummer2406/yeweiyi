@@ -341,9 +341,13 @@ func (s *Service) IssueDetailed(ctx context.Context, req IssueRequest) (db.Contr
 		cmd, err = s.q.CreateControlCommand(ctx, params)
 	}
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) && req.RequestID != "" {
-			// Either a concurrent submission with the same requestId won the insert (ON CONFLICT DO
-			// NOTHING), or access changed. The first is answered as a replay, under the same visibility.
+		var dupFlightErr *InFlightError
+		if (errors.Is(err, pgx.ErrNoRows) || errors.As(err, &dupFlightErr)) && req.RequestID != "" {
+			// Either a concurrent submission with the same requestId won the insert, or access
+			// changed. The winner shows up two ways: ON CONFLICT DO NOTHING (no row), or — when this
+			// insert's arbiter pre-check ran before the winner's row existed — as a violation of the
+			// in-flight index, which ON CONFLICT does not cover, once the winner commits. Both are the
+			// same submission and are answered as a replay, under the same visibility.
 			existing, found, hidden, lookErr := s.lookupOwnSubmission(ctx, req)
 			if lookErr == nil && found {
 				return s.replay(ctx, existing, req, args)

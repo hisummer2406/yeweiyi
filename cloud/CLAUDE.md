@@ -63,7 +63,7 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
   `customerId` 建油站与客户不存在同为 `400 unknown customerId`（#54）。**`403 {"error":"not authorized"}` 只留给角色/账号
   问题**（`customer_user` 调管理接口、事务内发现权限已变、账号停用/删除）——客户端把它当作"账号失效"并回登录页（#79 起体不变、追加 `code`：`account_unavailable` | `role_not_allowed`，见
   [错误码契约](docs/error-codes-contract.md)），
-  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObject`/`refuseObjectCode`；两者都写 `denied` 审计）。
+  对象级拒绝不得再用它（`refuse` 返回 403，对象级用 `refuseObjectCode`；两者都写 `denied` 审计）。
   记录表不带 `station_id`，历史跟着设备所属油站走。加锁顺序固定：油站行 → 设备行（按名升序）。
 - 油罐授权与扫码（#63，契约见 [docs/tank-grants-contract.md](docs/tank-grants-contract.md)）：员工（`customer_user`）按
   `(device_name, 罐号)` 获得**只读**查看权，存于 `user_tank_grants`；管理员（客户/平台）看其范围内全部罐。
@@ -98,6 +98,10 @@ Android 设备 <-> ThingsBoard 原生 MQTT <-> Go 后端 <-> PostgreSQL / Redis 
 - 介质库（#27，契约见 [docs/media-library-contract.md](docs/media-library-contract.md)）：`media` 字典 + `device_media_slots` 位置映射；字典维护仅平台管理员，**选用**（`media-options`、提交 `mediaId`）平台与客户管理员都可（2026-11-14，所有修改只限管理员、员工只读）。客户端只提交 `mediaId`，云端换算；直接提交 `oilTypeIndex` 被拒。
 - 罐颜色与密度（2026-11-14）：`tankN.oilColor`（0xRRGGBB，20 色色板见 `fixtures/protocol/v1/oil_color_palette.json`）可经 `config.setTankSettings` 写入，设备未上报 `oilColorSync=1` 时 `409 color_sync_unsupported`；`density` 单位定为 g/cm³（kg/L），可写 0<v≤2。
 - 罐高与低温报警（#65，2026-11-23）：`tankHeightMm`、`alarmLowTempC` 可经 `config.setTankSettings` 写入，设备未上报 `tankHeightLowTempSync=1` 时 `409 height_low_temp_unsupported`；新报警类型 `LOW_TEMPERATURE`。**未真机验证。**
+- 客户品牌 Logo（#86，契约见 [docs/brand-logo-contract.md](docs/brand-logo-contract.md)，迁移 000044）：每客户至多一张 PNG（≤256 KiB、
+  宽高 64–1024，按实际内容整图解码校验）存业务库 `customer_brand_logos`，客户删除时级联删除。读写
+  `/api/customers/:id/brand-logo` 仅平台管理员（写审计）；客户账号只经 `GET /api/me/brand-logo` 读自己客户的，图片以 base64 放在 JSON 里，
+  `version` 为内容哈希，`?known=` 命中时不回图。没有行 = 客户端默认 Logo。
 - 设备端仓库是 `../android/`，小程序仓库是
   `../miniapp/`。跨仓库协议变更必须获得相关负责人确认。
 
@@ -218,8 +222,9 @@ docs/                 当前规范与历史归档
   命令（部分唯一索引，`409 config_command_in_flight`）。开关只有部署级 `allowConfigCommands`，**生产自 2026-11-09 常开**
   （用户决定：管理员直接修改；设备级白名单 000038 已由 000039 删除，不要加回）。命令 INSERT 语句内再判访问规则与方法等级。迟到的 `cmdResult` 只写一次 `control.result_late` 审计，不改状态。
   整机设置镜像 `device_settings`（`GET /api/devices/:device/device-settings`，仅管理员）。**未真机验证。**
-- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 与 Android CI 都校验
-  `MANIFEST.json`。改 fixture 要在同一个 PR 里让两端测试都通过；没有分支保护，CI 红了不会阻止合并，见 open-items §C-1。
+- 共享 fixture（`fixtures/protocol/v1/`）两端共用一份：Android 单测直接读它，Cloud CI 自动校验 `MANIFEST.json`。
+  Android CI 自 2026-11-26 起不再自动运行，改 fixture 后把提交 SHA 交给 Android 单测负责人在其环境验证；
+  没有分支保护，CI 红了不会阻止合并，见 open-items §C-1 与 [CI 运维说明](../.github/ci/README.md#android-单测交接)。
 - 单位以及 `config.setTank` / `config.setProbe` 的参数形状需产品和设备端负责人决定；
   不得单方面冻结或扩展。
 - 多租户**阶段 1（隔离）与阶段 2（管理 API）均已落地**：`customers` 表；非平台管理员用户恰好属于一个

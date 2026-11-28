@@ -63,6 +63,15 @@ GitHub 此次返回 8 个开放 Issue（不含 PR）。议题正文大多仍保�
 
 本节是 GitHub 与 Git 状态同步，本次没有修复 CI、重跑业务测试或进行线上验收。下一步如开展实现，应先处理已有 CI 阻塞，再按各议题验收边界推进；本节不授权合并或部署。
 
+## 仓库公开与 CI 安全（2026-11-26）
+
+- **仓库已公开，许可证禁止商用。** 为了免费使用 GitHub Actions，`hisummer2406/yeweiyi` 改为 public，根目录 [LICENSE.md](LICENSE.md) 采用 PolyForm Noncommercial 1.0.0，[SECURITY.md](SECURITY.md) 说明私下报告漏洞。公开前已确认：历史里有旧签名库 `xinchen.jks`、生产 IP、旧 MQTT 服务器的默认账号，没有云密钥或 JWT 密钥；用户接受这些暴露。客户项目公开的合同风险由用户判断。
+- **公开仓库不挂自托管 Runner。** 任何人的 fork PR 都可能在自托管机器上执行代码。全部工作流已改为 `ubuntu-latest`，原 Lima Runner `mbp2017-yeweiyi` 已从 GitHub 注销，Lima 里的服务需在那台机器上手动停用。详见 [CI 运维说明](.github/ci/README.md)。
+- **仓库设置**：Action 只允许 GitHub 官方和 4 个 docker Action，且必须钉 SHA；新增第三方 Action 前先加白名单。部署作业走 `production` 环境（只允许 `main`）。`main` 规则集禁止删除和强推、改动走 PR（管理员可绕过）；`cloud-v*` 标签不可改删。外部贡献者的 PR 需批准后才运行工作流。已开启 Dependabot 告警与安全更新、CodeQL（extended）、密钥扫描与推送拦截。密钥扫描的通用规则和有效性检查需要付费的 Secret Protection，未开启。
+- **安全告警处理原则**：先判断是否可达，再决定修还是忽略。CodeQL 报的 bzip2 命令行代码（JNI 不调用）和本地 i18n 脚本已注明理由后忽略；Go 的 int32 回绕和日志注入已修。
+- **admin 依赖**：Dependabot 的多个小版本 PR 都只改 lock，逐个合并会反复冲突并触发多次生产发布，应合到一个 PR。umi 4 把 vite、react-router、axios 钉在旧版，用 `package.json` 的 `overrides` 升补丁版本；react-router v7、dva 里的 immer、开发工具链的告警在 umi 4 下修不掉。axios 0.28+ 的 headers 类型更严，`attachAuth` 需要显式转换。
+- **`window is not defined` 的一个确认根因**：测试里 `vi.spyOn(message, …)` 没有 `mockImplementation`，antd 的提示框真实渲染在 RTL `cleanup` 清不到的独立 React 根里；慢机器上测试环境拆掉后它的动画仍在执行。本地通常复现不了，CI 上会稳定复现。监视 antd 的 `message`/`notification` 一律替换成空实现。上方「CI 与发布记录」中 2026-11-09 的同类失败可先按这个方向排查。
+
 ## 继续沿用的业务决定
 
 - **客户和账号分离。** 客户是资产、数据归属单位，账号是登录身份，一个客户可有多个账号。分步开通顺序为“客户信息 → 客户管理员账号 → 油站 → 设备 → 确认开通”，并保留独立管理入口。设备在线、扫码、遥测和回补不是开通前提；配置中客户禁止业务登录，服务端校验不能被前端向导替代。来源：2026-10-12 客户开通讨论；当前契约 `cloud/docs/customer-onboarding-contract.md`。
@@ -120,6 +129,7 @@ GitHub 此次返回 8 个开放 Issue（不含 PR）。议题正文大多仍保�
 - 轻量实现、优先交付，复用已有功能；常规技术选择自行判断，影响核心规则、数据安全或确实阻塞时才询问。不要追加无关重构和反复验证。
 - 旧跨仓库、多窗口做法是历史组织方式；现在以一个单仓库主线和各目录边界推进，需要并行时遵守当前用户及仓库指令，不默认启动多代理。
 - 保留无关工作区变更；修改目标目录前先读其 `CLAUDE.md`。接口与协议变更仍按云端要求获得相关负责人确认。
+- **Android 开发和单测分工（2026-11-26 用户确认）。** 用户负责液位仪 Android 设备端开发，专门的 Android 开发同事负责单测。当前协作默认不编写、运行或重跑 Android 单测，仓库应停止自动触发该作业。交接时提供提交 SHA 和待验场景，现有测试留给同事使用。实施状态见 [CI 运维说明](.github/ci/README.md#android-单测交接)。
 - **仅用户要求时提交。** 历史任务中的提交、合并、部署或生产操作授权不自动延续；执行聚焦检查，如实报告通过、跳过和待真机验收项。
 - Cloud Deploy 按根目录规则选择改过 `cloud/` 且 Cloud CI/Image 通过的 main 提交，不能复用旧仓库发布结论。
 

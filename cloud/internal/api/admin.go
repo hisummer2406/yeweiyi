@@ -95,15 +95,11 @@ func refuse(c *gin.Context, deps Deps, actor db.User, action, reason string, det
 	c.JSON(http.StatusForbidden, gin.H{"error": notAuthorized, "code": refusalCode(c, deps, actor.ID)})
 }
 
-// refuseObject audits the attempt like refuse but answers with the status and message a missing
+// refuseObjectCode audits the attempt like refuse but answers with the status and message a missing
 // object would get, so another customer's object and a nonexistent one look identical to the caller
-// and the client does not mistake the refusal for a revoked account.
-func refuseObject(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any, status int, msg string) {
-	refuseObjectCode(c, deps, actor, action, reason, detail, status, msg, "")
-}
-
-// refuseObjectCode is refuseObject with a machine-readable code in the body. The code is the same
-// for "another customer's" and "does not exist", so it adds nothing a caller could probe with.
+// and the client does not mistake the refusal for a revoked account. The optional machine-readable
+// code is the same for "another customer's" and "does not exist", so it adds nothing a caller could
+// probe with.
 func refuseObjectCode(c *gin.Context, deps Deps, actor db.User, action, reason string, detail map[string]any, status int, msg, code string) {
 	auditRefusal(c, deps, actor, action, reason, detail)
 	body := gin.H{"error": msg}
@@ -411,14 +407,6 @@ func toUserResponse(u db.User, fullPhone bool) userResponse {
 		r.DisabledAt = &t
 	}
 	return r
-}
-
-func validRole(role string) bool {
-	switch role {
-	case control.RolePlatformAdmin, control.RoleCustomerAdmin, control.RoleCustomerUser:
-		return true
-	}
-	return false
 }
 
 func validPassword(p string) bool { return len(p) >= minPasswordLen && len(p) <= maxPasswordBytes }

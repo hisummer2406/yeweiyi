@@ -205,8 +205,11 @@ func newTank(index int) protocol.Tank {
 		WaterRatioPct:  0.6,
 		AlarmState:     protocol.AlarmStateNormal,
 		ProbeConnected: true,
+		HasReading:     ptrTrue(),
 	}
 }
+
+func ptrTrue() *bool { b := true; return &b }
 
 // Connect opens the MQTT session, publishes the client attributes and subscribes for RPC requests.
 func (d *Device) Connect(ctx context.Context) error {

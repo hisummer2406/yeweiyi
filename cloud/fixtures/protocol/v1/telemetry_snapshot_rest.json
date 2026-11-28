@@ -14,6 +14,7 @@
   "tank1.waterRatioPct": [{ "ts": 1756713600000, "value": "0.7" }],
   "tank1.alarmState": [{ "ts": 1756713600000, "value": "NORMAL" }],
   "tank1.probeConnected": [{ "ts": 1756713600000, "value": "true" }],
+  "tank1.hasReading": [{ "ts": 1756713600000, "value": "true" }],
   "tank2.oilType": [{ "ts": 1756713600000, "value": "92号汽油" }],
   "tank2.oilLevelMm": [{ "ts": 1756713600000, "value": "402.0" }],
   "tank2.waterLevelMm": [{ "ts": 1756713600000, "value": "0.0" }],
@@ -25,5 +26,6 @@
   "tank2.oilRatioPct": [{ "ts": 1756713600000, "value": "20.1" }],
   "tank2.waterRatioPct": [{ "ts": 1756713600000, "value": "0.0" }],
   "tank2.alarmState": [{ "ts": 1756713600000, "value": "FAULT" }],
-  "tank2.probeConnected": [{ "ts": 1756713600000, "value": "false" }]
+  "tank2.probeConnected": [{ "ts": 1756713600000, "value": "false" }],
+  "tank2.hasReading": [{ "ts": 1756713600000, "value": "true" }]
 }

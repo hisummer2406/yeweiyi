@@ -260,6 +260,9 @@ export interface Tank {
   waterRatioPct: number;
   alarmState: 'NORMAL' | 'ALARM' | 'FAULT' | '';
   probeConnected: boolean;
+  // #75: false = no valid reading since the device booted (or reloaded its tank config); the numbers are
+  // placeholder zeros. Absent from older firmware/cloud: unknown, treated as having a reading.
+  hasReading?: boolean;
 }
 
 // GET /api/devices/:device/telemetry/latest. Replaces the deleted /api/oilcan/latest entirely —

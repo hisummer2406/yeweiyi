@@ -17,12 +17,23 @@ describe('tankFill', () => {
       fillState: 'normal',
     });
   });
-  it('draws nothing for a tank without a probe, whatever the numbers say', () => {
+  it('keeps the last level, drawn as stale, when the probe is lost (#75)', () => {
     expect(tankFill(t({ probeConnected: false }))).toEqual({
+      fillOilPct: 50,
+      fillWaterPct: 5,
+      fillState: 'stale',
+    });
+    expect(
+      tankFill(t({ probeConnected: false, alarmState: 'FAULT' })).fillState,
+    ).toBe('stale');
+  });
+  it('draws nothing for a tank never read since boot; a missing field changes nothing', () => {
+    expect(tankFill(t({ hasReading: false }))).toEqual({
       fillOilPct: 0,
       fillWaterPct: 0,
       fillState: 'none',
     });
+    expect(tankFill(t({ hasReading: true })).fillState).toBe('normal');
   });
   it('never lets oil and water add up to more than the tank', () => {
     const f = tankFill(t({ oilRatioPct: 90, waterRatioPct: 30 }));

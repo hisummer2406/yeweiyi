@@ -2,7 +2,7 @@
 
 <!-- 没有任何可查看的设备（员工尚未被分配油罐，或账号下确实没有设备）：首次使用的空状态 -->
 <view wx:elif="{{deviceTotal === 0 && !listError}}" class="center-page">
-  <image class="brand-logo" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+  <image class="brand-logo" src="{{brandMark}}" mode="aspectFit" binderror="onBrandLogoError" />
   <view class="brand-title">{{text.emptyTitle}}</view>
   <view class="brand-subtitle">{{text.emptySubtitle}}</view>
   <button class="btn-primary center-card" bindtap="onScanDevice">{{text.scan}}</button>
@@ -19,7 +19,8 @@
        左侧写"我的设备"。不要用客户名或本地写死的油站名冒充油站。 -->
   <view class="home-header" style="padding-top:{{statusBarRpx}}rpx;">
     <view class="home-brand">
-      <image class="home-brand-mark" src="/assets/illustrations/brand-mark.png" mode="aspectFit" />
+      <!-- 客户品牌 Logo（#86）：登录账号所属客户配置的 Logo，未配置/失败时为默认图 -->
+      <image class="home-brand-mark" src="{{brandMark}}" mode="aspectFit" binderror="onBrandLogoError" />
       <text class="home-brand-title">{{text.title}}</text>
     </view>
     <view class="home-station">
@@ -66,9 +67,9 @@
         <view class="home-tank">
           <view class="home-tank-crop home-tank-crop-{{t.shape}}">
           <image class="home-tank-img" src="{{t.shapeImage}}" mode="scaleToFill" aria-label="{{t.tankNoLabel}} {{t.shapeLabel}}" />
-          <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化 -->
-          <view wx:if="{{t.fillState !== 'none'}}" class="home-tank-body">
-            <view class="fill fill-water" style="height:{{t.fillWaterPct}}%"></view>
+          <!-- 液位填充：水在底部、油在水之上；颜色随报警状态变化，通讯异常时灰色保留上次液位 -->
+          <view class="home-tank-body">
+            <view class="fill fill-water fill-water-{{t.fillState}}" style="height:{{t.fillWaterPct}}%"></view>
             <view class="fill fill-oil fill-{{t.fillState}}" style="bottom:{{t.fillWaterPct}}%;height:{{t.fillOilPct}}%;{{t.fillState === 'normal' && t.oilColor ? 'background-color:' + t.oilColor : ''}}"></view>
           </view>
           </view>
@@ -83,12 +84,14 @@
         <view class="tank-info">
           <view class="tank-tag-row">
             <text class="tank-tag">{{t.tankNoLabel}} {{t.oilType || '--'}}</text>
+            <text wx:if="{{t.noReading}}" class="home-status home-status-warning tank-last-reading">{{text.noReading}}</text>
+            <text wx:elif="{{!t.probeConnected}}" class="home-status home-status-warning tank-last-reading">{{text.lastReading}}</text>
           </view>
-          <view class="hs-row"><text class="hs-label">{{text.level}}</text><text class="hs-value">{{t.oilLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
-          <view class="hs-row"><text class="hs-label">{{text.volume}}</text><text class="hs-value">{{t.oilVolumeL}}</text><text class="hs-unit">{{text.unitL}}</text></view>
-          <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
-          <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.tempC}}</text><text class="hs-unit">℃</text></view>
-          <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.level}}</text><text class="hs-value">{{t.noReading ? '--' : t.oilLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.volume}}</text><text class="hs-value">{{t.noReading ? '--' : t.oilVolumeL}}</text><text class="hs-unit">{{text.unitL}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.water}}</text><text class="hs-value">{{t.noReading ? '--' : t.waterLevelMm}}</text><text class="hs-unit">{{text.unitMm}}</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.temp}}</text><text class="hs-value">{{t.noReading ? '--' : t.tempC}}</text><text class="hs-unit">℃</text></view>
+          <view class="hs-row"><text class="hs-label">{{text.mass}}</text><text class="hs-value">{{t.noReading ? '--' : t.oilWeightKg}}</text><text class="hs-unit">{{text.unitKg}}</text></view>
         </view>
       </view>
     </view>

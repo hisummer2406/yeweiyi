@@ -84,6 +84,8 @@ func assertSameJSON(t *testing.T, got, want []byte) {
 // telemetry_snapshot_rest.json. Writing it out longhand rather than deriving it from the fixture is
 // deliberate: a test that recomputed the expectation from the input would pass no matter what the
 // fixture said.
+func boolPtr(b bool) *bool { return &b }
+
 var wantSnapshot = protocol.Snapshot{
 	TS:          1756713600000,
 	SnapshotSeq: 4271,
@@ -93,14 +95,14 @@ var wantSnapshot = protocol.Snapshot{
 			OilLevelMm: 1842.5, WaterLevelMm: 18.3, TempC: 23.6,
 			OilVolumeL: 28450.2, WaterVolumeL: 210.4, OilWeightKg: 23901.7, NullVolumeL: 1549.8,
 			OilRatioPct: 94.8, WaterRatioPct: 0.7,
-			AlarmState: protocol.AlarmStateNormal, ProbeConnected: true,
+			AlarmState: protocol.AlarmStateNormal, ProbeConnected: true, HasReading: boolPtr(true),
 		},
 		{
 			Index: 2, OilType: "92号汽油",
 			OilLevelMm: 402.0, WaterLevelMm: 0, TempC: 22.1,
 			OilVolumeL: 6030.0, WaterVolumeL: 0, OilWeightKg: 4522.5, NullVolumeL: 23970.0,
 			OilRatioPct: 20.1, WaterRatioPct: 0,
-			AlarmState: protocol.AlarmStateFault, ProbeConnected: false,
+			AlarmState: protocol.AlarmStateFault, ProbeConnected: false, HasReading: boolPtr(true),
 		},
 	},
 }
@@ -688,5 +690,32 @@ func TestStockEvent_ParsesStringifiedValue(t *testing.T) {
 	}
 	if got.EventID != "in-1-1756713600000" || got.OilType != "0号柴油" {
 		t.Errorf("got %+v", got)
+	}
+}
+
+// #75: hasReading=false (never read since boot) must survive both wire shapes, and a snapshot from older
+// firmware that never sends the key must read as unknown (nil), not as "no reading".
+func TestSnapshot_HasReading(t *testing.T) {
+	cases := []struct {
+		name   string
+		values map[string]any
+		want   *bool
+	}{
+		{"device false", map[string]any{"tank1.hasReading": false}, boolPtr(false)},
+		{"rest string false", map[string]any{"tank1.hasReading": "false"}, boolPtr(false)},
+		{"rest string true", map[string]any{"tank1.hasReading": "true"}, boolPtr(true)},
+		{"old firmware", map[string]any{"tank1.probeConnected": false}, nil},
+	}
+	for _, c := range cases {
+		got, err := protocol.ParseSnapshot(1, c.values)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if !reflect.DeepEqual(got.Tanks[0].HasReading, c.want) {
+			t.Errorf("%s: HasReading = %v, want %v", c.name, got.Tanks[0].HasReading, c.want)
+		}
+		if _, sent := got.Values()["tank1.hasReading"]; sent != (c.want != nil) {
+			t.Errorf("%s: Values() sent hasReading = %v, want %v", c.name, sent, c.want != nil)
+		}
 	}
 }

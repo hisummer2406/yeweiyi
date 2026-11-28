@@ -3,6 +3,7 @@ package com.sansen.yeweiyi.manager;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.SparseArray;
 import android.util.SparseBooleanArray;
@@ -17,10 +18,12 @@ import com.sansen.yeweiyi.factory.IParseDataListener;
 import com.sansen.yeweiyi.factory.LD2Company;
 import com.sansen.yeweiyi.factory.LDCompany;
 import com.sansen.yeweiyi.factory.ModbusTcpServer;
+import com.sansen.yeweiyi.logic.probe.ProbeLink;
 import com.sansen.yeweiyi.applog.ExternalLog;
 import com.sansen.yeweiyi.factory.PCDataFactory;
 import com.sansen.yeweiyi.factory.VR350Factory;
 import com.sansen.yeweiyi.factory.ZhongChengCompany;
+import com.sansen.yeweiyi.logic.probe.AdaptiveReceive;
 import com.sansen.yeweiyi.repository.AlarmRepositoryImpl;
 import com.sansen.yeweiyi.sharepre.manager.SharePreManager;
 import com.sansen.yeweiyi.utils.Constans;
@@ -33,6 +36,8 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import kotlin.Unit;
 
 import serialport.help.SerialPortHelper;
 
@@ -205,10 +210,25 @@ public class SerialPortManager implements IParseDataListener {
         private int wenDuTurnPos = -1;
         //IoBufferManager buffManager;
 
+        private final AdaptiveReceive probeReceiver;
+
         public RequestThread(String name, SerialPortHelper serialPort) {
             super(name);
             this.name = name;
             this.serialPort = serialPort;
+            // 中断照旧只记日志、不恢复中断位（恢复属行为变更，需真机验证停机流程）。
+            this.probeReceiver = new AdaptiveReceive(
+                    serialPort::receiveData,
+                    ms -> {
+                        try {
+                            Thread.sleep(ms);
+                        } catch (InterruptedException e) {
+                            Log.w(TAG, "收包等待被中断", e);
+                        }
+                        return Unit.INSTANCE;
+                    },
+                    SystemClock::elapsedRealtime,
+                    AdaptiveReceive.POLL_MS, AdaptiveReceive.IDLE_POLLS, AdaptiveReceive.MAX_WAIT_MS);
         }
 
         public void run() {
@@ -351,17 +371,10 @@ public class SerialPortManager implements IParseDataListener {
                                         long proxyToken = ProbeProxyManager.sourceRequest(probeType, requestBytes);
                                         serialPort.sendData(requestBytes);
                                 Log.i(TAG, "发送到串口数据" + oilCanData);
-                                        try {
-                                            Thread.sleep(100);
-                                        } catch (InterruptedException e1) {
-                                            // 注：此处未调用 Thread.currentThread().interrupt() 恢复中断位。
-                                            // 恢复后本轮循环内后续的 sleep 会立即抛异常，属于行为变更，
-                                            // 需在真机上验证停机流程后再定。当前仅记录，便于排查。
-                                            Log.w(TAG, "发送后等待被中断, 油罐位=" + mOilCan.getOilCanPos(), e1);
-                                        }
 
+                                        // 自适应收包替代"固定睡 100ms 读一次"（issue #8），三种探针共用。
                                         data = null;
-                                        byte[] bytes = serialPort.receiveData();
+                                        byte[] bytes = probeReceiver.receive();
                                         // 共用现有串口 2 读结果，在本机协议解析与液位修正前缓存原始报文。
                                         // 缓存自行校验帧，不依赖厂商解析返回值，也不另启读取线程。
                                         ProbeProxyManager.sourceBytes(proxyToken, bytes);
@@ -435,6 +448,8 @@ public class SerialPortManager implements IParseDataListener {
 //                                    Log.i(TAG, "串口否判断正常" + mOilCan.getErrorTimes() + "  " + isRight);
                                             if (isRight) {
                                                 mOilCan.setErrorTimes(0);
+                                                // hasReading 不在这里置：isRight 也包括只回了温度（45）的应答，
+                                                // 那时油位仍是占位 0。由各解析器在真正写入油位时置（#75 评审）。
                                                 // 通讯恢复 → 若此罐之前上报过"探头断线"报警，则上报其恢复（CLEARED）；没有则什么都不发。
                                                 // 第三个参数是恢复时的读数，探头断线没有读数，填 0（与失败计数无关）。
                                                 CloudAlarmReporter.getInstance().onRecovered(mOilCan.getOilCanPos(),
@@ -499,53 +514,15 @@ public class SerialPortManager implements IParseDataListener {
     }
 
     private void crcError(OilCan mOilCan) {
-//        Log.i(TAG, "crcError: " + mOilCan.getErrorTimes());
-
-        if ((mOilCan.getProbeType() == 0 || mOilCan.getProbeType() == 1) && mOilCan.getErrorTimes() >= 5) {
+        int probeType = mOilCan.getProbeType();
+        boolean lost = ProbeLink.isLost(probeType, mOilCan.getErrorTimes());
+        if ((probeType == 0 || probeType == 1) && lost) {
             // 达到本机故障阈值即失效该探针缓存；其他探针和原有报警处理继续运行。
             ProbeProxyManager.probeLost(mOilCan.getProbeAddressByte());
         }
-        switch (mOilCan.getProbeType()) {
-            case 0:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 1:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 2:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 3:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }//05 16 08 49 11 10 00 00 00 08 24 FF FF
-                break;
-            case 4:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 5:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 6:
-                if (mOilCan.getErrorTimes() >= 5) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
-            case 20:
-                if (mOilCan.getErrorTimes() >= 20) {
-                    handler.sendEmptyMessage(mOilCan.getOilCanPos());
-                }
-                break;
+        // 断线报警（含泵联动保护）与遥测 probeConnected 同一阈值，见 ProbeLink。
+        if (ProbeLink.raisesLostAlarm(probeType) && lost) {
+            handler.sendEmptyMessage(mOilCan.getOilCanPos());
         }
     }
 

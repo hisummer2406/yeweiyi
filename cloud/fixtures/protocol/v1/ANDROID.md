@@ -1,10 +1,12 @@
 # 协议 V1 共享 fixture 的 Android 覆盖情况
 
 Android 单元测试直接读本目录（`android/app/build.gradle` 把 `cloud/fixtures` 挂到测试 classpath，
-按 `/protocol/v1/<name>` 读取），**不再有副本**，也就不需要同步。改这里的 fixture 后两端测试都要跑：
+按 `/protocol/v1/<name>` 读取）。变更 fixture 后由 Cloud CI 校验云端，专门的 Android 开发同事按交接的提交 SHA
+在自己的环境验证设备侧。以下是两侧的验证命令：
 
 ```bash
 (cd cloud && go test ./internal/protocol/)
+(cd cloud && sh fixtures/protocol/v1/verify-manifest.sh)
 (cd android && ./gradlew :app:testDebugUnitTest)
 ```
 
